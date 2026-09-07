@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>dz-pos — maquettes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./shared/tokens.css" />
+    <link rel="stylesheet" href="./shared/components.css" />
+    <style>
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: var(--space-12) var(--space-6);
+        display: grid;
+        gap: var(--space-8);
+      }
+      .hero h1 {
+        font-size: var(--text-3xl);
+        font-weight: 600;
+      }
+      .hero p {
+        color: var(--text-secondary);
+        margin-block-start: var(--space-2);
+        max-width: 60ch;
+      }
+      .links {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-4);
+      }
+      .links a {
+        text-decoration: none;
+        color: inherit;
+        display: grid;
+        gap: var(--space-2);
+        padding: var(--space-6);
+        transition: border-color 0.12s;
+      }
+      .links a:hover {
+        border-color: var(--border-focus);
+      }
+      .links h2 {
+        font-size: var(--text-xl);
+        font-weight: 600;
+      }
+      .frame {
+        height: 150px;
+        border-radius: var(--radius-md);
+        background: var(--surface-raised);
+        border: 1px solid var(--border-default);
+        display: grid;
+        place-items: center;
+        color: var(--text-tertiary);
+        font-size: var(--text-sm);
+      }
+      .frame.phone::before {
+        content: "";
+        width: 62px;
+        height: 118px;
+        border-radius: 12px;
+        border: 2px solid var(--border-strong);
+        background: var(--surface-card);
+      }
+      .frame.desk::before {
+        content: "";
+        width: 180px;
+        height: 104px;
+        border-radius: 8px;
+        border: 2px solid var(--border-strong);
+        background: var(--surface-card);
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-4);
+      }
+      .two h3 {
+        font-size: var(--text-sm);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-tertiary);
+        margin-block-end: var(--space-3);
+      }
+      ul {
+        margin: 0;
+        padding-inline-start: 1.2em;
+        display: grid;
+        gap: var(--space-1);
+      }
+      .decisions li {
+        display: flex;
+        justify-content: space-between;
+        gap: var(--space-4);
+        list-style: none;
+        padding-block: var(--space-2);
+        border-block-end: 1px solid var(--border-default);
+      }
+      .decisions {
+        padding: 0;
+      }
+      footer {
+        color: var(--text-tertiary);
+        font-size: var(--text-sm);
+      }
+      @media (max-width: 720px) {
+        .links,
+        .two {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <span class="tag">maquette · 2026-09-07 · v1</span>
+        <h1 style="margin-block-start: var(--space-3)">dz-pos</h1>
+        <p>
+          Caisse, stock et facturation pour les commerces algériens. Deux maquettes cliquables,
+          même jeu de données, mêmes règles de calcul (centimes entiers, TVA par taux, droit de
+          timbre sur espèces). Le nom <strong>dz-pos</strong> est provisoire.
+        </p>
+      </header>
+
+      <section class="links">
+        <a class="card" href="./desktop/#/till">
+          <div class="frame desk"></div>
+          <h2>Desktop (Tauri)</h2>
+          <p class="muted">Caisse → paiement → facture A4 / ticket. Tableau de bord, produits, clients, paramètres.</p>
+          <span class="tag tag-info">1366 px et plus</span>
+        </a>
+        <a class="card" href="./mobile/#/pair">
+          <div class="frame phone"></div>
+          <h2>Mobile (React Native)</h2>
+          <p class="muted">Appairage QR → caisse → panier → paiement → ticket 80 mm. Produits, clients.</p>
+          <span class="tag tag-info">390 × 844, ou plein écran sur téléphone</span>
+        </a>
+      </section>
+
+      <section class="card card-pad two">
+        <div>
+          <h3>Interactif</h3>
+          <ul>
+            <li>Recherche, scan simulé, catégories, ajout au panier, quantités</li>
+            <li>Remise globale, choix client, alerte plafond de crédit</li>
+            <li>Paiement : le timbre apparaît uniquement en espèces ; monnaie à rendre ; crédit bloqué au-delà du plafond</li>
+            <li>Facture A4 et ticket 80 mm générés depuis la vente, montant en lettres (fr, en)</li>
+            <li>Paramètres : timbre on/off change la caisse ; mode réseau ; pare-feu Windows</li>
+            <li>Langue ar / fr / en avec bascule RTL sur tout</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Statique (données fictives)</h3>
+          <ul>
+            <li>Tableau de bord, listes produits et clients, fiches, historique de dette</li>
+            <li>Achats, fournisseurs, utilisateurs</li>
+            <li>Montant en lettres en arabe</li>
+            <li>Le vrai QR, l'impression Bluetooth, la synchro</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="card card-pad">
+        <h3 style="font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary); margin-block-end: var(--space-3)">
+          Choix par défaut, à valider ou à inverser
+        </h3>
+        <ul class="decisions">
+          <li><span>Mode clair d'abord (magasins, lumière du jour, écrans bon marché)</span><span class="tag">défaut</span></li>
+          <li><span>Police IBM Plex Sans + IBM Plex Sans Arabic (arabe et chiffres alignés)</span><span class="tag">défaut</span></li>
+          <li><span>RTL dès la première maquette, propriétés CSS logiques uniquement</span><span class="tag">défaut</span></li>
+          <li><span>TVA par produit (19 / 9 / 0 %) avec un taux par défaut, pas un taux global</span><span class="tag tag-warn">décision 3</span></li>
+          <li><span>Droit de timbre 1 %, min 5 DA, max 2 500 DA, espèces uniquement — à confirmer par un comptable</span><span class="tag tag-warn">hypothèse</span></li>
+          <li><span>Arrondi : demi vers le haut, une fois par taux de TVA sur le sous-total</span><span class="tag tag-warn">hypothèse</span></li>
+          <li><span>Vente avec client = facture numérotée FA- ; sans client = ticket TK-</span><span class="tag">défaut</span></li>
+          <li><span>Le téléphone est un client de la caisse ; il ne possède jamais le stock</span><span class="tag">règle 4</span></li>
+        </ul>
+      </section>
+
+      <footer>
+        Source : <code>design/</code> dans le dépôt dz-pos · spec : <code>docs/features.md</code>, <code>docs/architecture.md</code>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,114 @@
+/* dz-pos design tokens — three tiers, same shape as the future
+   packages/shared/design/tokens.json → Tailwind @theme / RN theme.ts.
+   Tier 1 primitives: never used by components. Tier 2 semantic: the API. */
+
+:root {
+  /* ---- Tier 1: primitives ---- */
+  --p-stone-0: #ffffff;
+  --p-stone-50: #f8f7f4;
+  --p-stone-100: #f1efea;
+  --p-stone-200: #e5e2db;
+  --p-stone-300: #d3cfc5;
+  --p-stone-400: #a9a49a;
+  --p-stone-500: #7d786f;
+  --p-stone-600: #5c5850;
+  --p-stone-700: #443f38;
+  --p-stone-800: #2b2823;
+  --p-stone-900: #1a1815;
+
+  --p-teal-50: #eaf6f3;
+  --p-teal-100: #cfeae2;
+  --p-teal-300: #7fc7b3;
+  --p-teal-500: #1f8a70;
+  --p-teal-600: #17715b;
+  --p-teal-700: #125a49;
+  --p-teal-800: #0e463a;
+
+  --p-red-50: #fdeeed;
+  --p-red-100: #f9d6d3;
+  --p-red-500: #c9403a;
+  --p-red-600: #a8332e;
+  --p-red-700: #862a26;
+
+  --p-amber-50: #fdf5e6;
+  --p-amber-100: #f9e6bf;
+  --p-amber-500: #c98a1a;
+  --p-amber-700: #8a5e0f;
+
+  --p-blue-50: #eaf1fb;
+  --p-blue-500: #2f6fcf;
+  --p-blue-700: #1f4c90;
+
+  /* ---- Tier 2: semantic ---- */
+  --color-primary: var(--p-teal-600);
+  --color-primary-hover: var(--p-teal-700);
+  --color-primary-soft: var(--p-teal-50);
+  --color-on-primary: var(--p-stone-0);
+  --color-danger: var(--p-red-600);
+  --color-danger-soft: var(--p-red-50);
+  --color-warn: var(--p-amber-500);
+  --color-warn-soft: var(--p-amber-50);
+  --color-info: var(--p-blue-500);
+  --color-info-soft: var(--p-blue-50);
+  --color-success: var(--p-teal-500);
+
+  --surface-bg: var(--p-stone-50);
+  --surface-card: var(--p-stone-0);
+  --surface-raised: var(--p-stone-100);
+  --surface-hover: var(--p-stone-100);
+  --surface-selected: var(--p-teal-50);
+  --surface-scrim: rgb(26 24 21 / 0.45);
+  --surface-inverse: var(--p-stone-800);
+
+  --text-primary: var(--p-stone-900);
+  --text-secondary: var(--p-stone-600);
+  --text-tertiary: var(--p-stone-400);
+  --text-disabled: var(--p-stone-300);
+  --text-on-inverse: var(--p-stone-50);
+  --text-danger: var(--p-red-600);
+  --text-success: var(--p-teal-600);
+
+  --border-default: var(--p-stone-200);
+  --border-strong: var(--p-stone-300);
+  --border-focus: var(--p-teal-500);
+  --border-danger: var(--p-red-500);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(26 24 21 / 0.06);
+  --shadow-md: 0 4px 12px rgb(26 24 21 / 0.08);
+  --shadow-lg: 0 12px 32px rgb(26 24 21 / 0.14);
+
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-numeric: "IBM Plex Sans", system-ui, sans-serif;
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --text-3xl: 34px;
+
+  --touch-min: 44px;
+  --control-h: 40px;
+  --control-h-lg: 52px;
+}
+
+[dir="rtl"] {
+  --font-sans: "IBM Plex Sans Arabic", "IBM Plex Sans", system-ui, sans-serif;
+}
