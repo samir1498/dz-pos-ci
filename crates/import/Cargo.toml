@@ -1,8 +1,0 @@
-[package]
-name = "dzpos-import"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-dzpos-core = { path = "../core" }
-diesel = { workspace = true, features = ["sqlite"] }

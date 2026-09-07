@@ -1,48 +1,62 @@
-import fr from "./fr.json";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import ar from "./ar.json";
 import en from "./en.json";
-import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import fr from "./fr.json";
 
-export type Lang = "fr" | "en";
+export const LANGS = { ar, en, fr } as const;
+export type Lang = keyof typeof LANGS;
+export type Key = keyof typeof en;
 
-const messages: Record<Lang, Record<string, string>> = { fr, en };
+const RTL: ReadonlySet<Lang> = new Set(["ar"]);
+const STORAGE_KEY = "dzpos-lang";
 
-interface I18nContextType {
+type Ctx = {
   lang: Lang;
+  dir: "rtl" | "ltr";
   setLang: (l: Lang) => void;
-  toggleLang: () => void;
-  t: (key: string) => string;
+  t: (k: Key) => string;
+};
+
+const I18nContext = createContext<Ctx | null>(null);
+
+function isLang(v: string | null): v is Lang {
+  return v !== null && v in LANGS;
 }
 
-const I18nContext = createContext<I18nContextType | null>(null);
+function initialLang(): Lang {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (isLang(saved)) return saved;
+  } catch {
+    // no storage (tests, private mode): fall through
+  }
+  return "fr";
+}
 
-export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(() => {
-    const saved = localStorage.getItem("dzpos-lang");
-    return (saved === "fr" || saved === "en") ? saved : "fr";
-  });
-
-  const setLang = useCallback((l: Lang) => {
-    setLangState(l);
-    localStorage.setItem("dzpos-lang", l);
-  }, []);
-
-  const toggleLang = useCallback(() => {
-    setLang(lang === "fr" ? "en" : "fr");
-  }, [lang, setLang]);
-
-  const t = useCallback((key: string): string => {
-    return messages[lang][key] ?? key;
-  }, [lang]);
-
-  return (
-    <I18nContext.Provider value={{ lang, setLang, toggleLang, t }}>
-      {children}
-    </I18nContext.Provider>
+export function I18nProvider({ children, lang: forced }: { children: ReactNode; lang?: Lang }) {
+  const [lang, setLangState] = useState<Lang>(forced ?? initialLang());
+  const value = useMemo<Ctx>(
+    () => ({
+      lang,
+      dir: RTL.has(lang) ? "rtl" : "ltr",
+      setLang: (l) => {
+        setLangState(l);
+        try {
+          localStorage.setItem(STORAGE_KEY, l);
+        } catch {
+          // ignore
+        }
+      },
+      // Fall back to English so a missing key is visible, never blank.
+      t: (k) => LANGS[lang][k] ?? en[k],
+    }),
+    [lang],
   );
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 
-export function useTranslation() {
+export function useTranslation(): Ctx {
   const ctx = useContext(I18nContext);
-  if (!ctx) throw new Error("useTranslation must be used within I18nProvider");
+  if (!ctx) throw new Error("useTranslation outside I18nProvider");
   return ctx;
 }

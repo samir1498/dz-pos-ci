@@ -1,17 +1,16 @@
 [package]
 name = "dzpos-core"
-version = "0.3.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-diesel = { version = "2.2.0", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+diesel = { workspace = true, features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+diesel_migrations = "2.2"
+# bundled: one binary, no system sqlite on the shop's Windows PC
 libsqlite3-sys = { version = "0.37", features = ["bundled"] }
-
-diesel_migrations = "2.2.0"
-chrono = { version = "0.4", features = ["serde"] }
-serde = { version = "1", features = ["derive"] }
-thiserror = "1"
-dotenvy = "0.15"
+chrono = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+thiserror = "2"
 
 [dev-dependencies]
 tempfile = "3"

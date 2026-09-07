@@ -12,21 +12,19 @@ Research, competitor teardown and the architecture rules live in the
 
 ## Origin
 
-Code copied from [MonStock](https://github.com/samir1498/MonStock) at
-`33d2ab021a1cc3d27624a11771e1df709a069ca0` (2026-07-11), renamed, without
-history. Left behind on purpose: the egui desktop (`monstock-desktop`), the
-dev CLI (`dev`/`build`/`doctor`/`test`/`lint`/`clean`), the release
-workflows, docs, plans and changelog.
+Scaffold only. Nothing is copied from
+[MonStock](https://github.com/samir1498/MonStock); it stays a read-only
+reference at `33d2ab0` (2026-07-11). Anouar's call, 2026-09-07: document
+features and architecture first, then build fresh with tests from the first
+commit.
 
 ## Layout
 
 ```
 crates/core      Rust: models, diesel repos, services, migrations (SQLite)
-crates/backup    daily DB backup
-crates/import    import products from a backup file
-crates/seed      dev-only: `cargo run -p dzpos-seed` fills the local DB
 apps/desktop     Tauri 2 + React 19 + Vite; Rust side in src-tauri/
 apps/mobile      Expo / React Native — placeholder, not started
+docs/            features.md and architecture.md — the spec every task cites
 ```
 
 Cargo workspace at the root, pnpm workspace over `apps/*`.
@@ -39,7 +37,6 @@ cargo test --workspace                       # Rust
 cargo llvm-cov --workspace --lcov --output-path lcov.info
 pnpm install && pnpm -r build && pnpm -r test # web
 pnpm desktop tauri dev                       # desktop app (needs Linux webkit deps, see ci.yml)
-cargo run -p dzpos-seed                      # fake data into the local DB
 ```
 
 Over SSH: `ssh -L 5173:localhost:5173 <box>` then `pnpm desktop dev` shows the
@@ -57,8 +54,7 @@ From the architecture notes; the reasons are there.
 4. One source of truth at any time. The phone is a thin client with a retry
    queue; never bidirectional sync.
 5. In local mode exactly one desktop is the server.
-6. Money is integer centimes, never `REAL`. The schema still carries `REAL`
-   from MonStock — migrate before any fiscal code.
+6. Money is integer centimes, never `REAL`.
 
 ## Quality gates
 
