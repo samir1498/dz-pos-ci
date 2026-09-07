@@ -1,0 +1,22 @@
+[package]
+name = "dzpos-desktop"
+version = "0.2.0"
+edition = "2021"
+default-run = "dzpos-desktop"
+
+[dependencies]
+dzpos-core = { path = "../../../crates/core" }
+dzpos-backup = { path = "../../../crates/backup" }
+dzpos-import = { path = "../../../crates/import" }
+diesel = { version = "2.2", features = ["sqlite"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+dirs = "6.0"
+chrono = { workspace = true, features = ["serde"] }
+
+tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-updater = "2"
+tauri-build = { version = "2", features = [] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

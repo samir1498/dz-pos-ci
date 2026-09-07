@@ -1,0 +1,9 @@
+{
+  "name": "dz-pos",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "desktop": "pnpm --filter dzpos-desktop"
+  }
+}
