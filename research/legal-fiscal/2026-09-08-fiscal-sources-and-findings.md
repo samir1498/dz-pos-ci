@@ -14,6 +14,8 @@ remains.
 | `JO-2024-084-LF2025.pdf` | Journal Officiel n° 84/2024, loi de finances 2025 | joradp.dz/FTP/JO-FRANCAIS/2024/F2024084.pdf |
 | `JO-2024-084-LF2025-ar.pdf` | The same JO issue, Arabic edition (official Arabic spelling of amounts, read visually) | joradp.dz/FTP/JO-ARABE/2024/A2024084.pdf |
 | `BanqueAlgerie-Instruction-05-95-normalisation-du-cheque.pdf` | Cheque layout standard, amount in letters zone | bank-of-algeria.dz |
+| `Decret-05-468-facture.pdf` | Décret exécutif 05-468, facture / bon de livraison / facture récapitulative (JO n° 80, 2005) | commerce.gov.dz/fr/telecharger/reglementation/283/article |
+| `Loi-04-02-pratiques-commerciales.pdf` | Loi 04-02 on commercial practices (JO n° 41, 2004), excerpt | africa-laws.org copy; official copy on commerce.gov.dz/fr/reglementation/loi-n-deg-04-02 |
 | `Circulaire-14-MF-DGI-LF2025-timbre-de-quittance-2025-03-05.pdf` | DGI circular n° 14/MF/DGI/LF.2025 of 5 March 2025 on how to compute the droit de timbre de quittance (4 p., scanned; OCR text is rough) | copy hosted by aminahadji.com; the DGI lists it under legislation-fiscale/circulaires-et-instructions |
 
 | `CodedesImpotsDirectsetTaxesAssimilees2026fr.pdf` | Code des impôts directs et taxes assimilées (CIDTA), édition 2026 (241 p.) | DGI, mfdgi.gov.dz/files/803/2026/3726 |
@@ -130,24 +132,74 @@ Also noted while reading: the CIDTA "Codes fiscaux 2026" download is
 `.../files/803/2026/3726/CodedesImpotsDirectsetTaxesAssimilees2026fr`
 (saved in `sources/`, 241 p.).
 
-### Facture: mandatory mentions (read, official FAQ, decree text pending)
+### Facture and ticket: what the texts require (read, primary)
 
-commerce.gov.dz FAQ "Que doit comporter une facture ?", restating décret
-exécutif 05-468 (JO n° 80, 11 déc. 2005). Seller mentions: name / raison
-sociale, address + phone + fax + email, legal form and activity, capital
-social, RC number, NIS, mode and date of payment, date and numéro d'ordre,
-goods and quantities, unit price HT, total HT, nature and rate of taxes
-(TVA not shown if the buyer is exempt), **total TTC in figures and in
-words**. Buyer mentions: name / raison sociale, legal form and activity,
-address + phone, RC, NIS (the FAQ list continues; the decree text on
-commerce.gov.dz/fr/reglementation/decret-executif-n05-468 has the full
-articles, to be read for numbering rules, bon de livraison, facture
-récapitulative).
+Sources in `sources/`: `Decret-05-468-facture.pdf` (JO n° 80 of 11 Dec
+2005, from commerce.gov.dz) and `Loi-04-02-pratiques-commerciales.pdf`
+(JO n° 41 of 27 June 2004; the copy on hand is an excerpt, the 2010
+amendment by loi 10-06 is not in it).
 
-Related texts listed on the same page: arrêté du 1er août 2013 (fausses
-factures, sanctions). Consumer sales: the FAQ says the seller must issue a
-facture if the consumer asks; what a ticket de caisse must carry is in loi
-04-02 (pratiques commerciales), not yet read.
+Décret 05-468:
+
+- **Art. 3, seller mentions:** name / raison sociale; address, phone, fax,
+  email if any; legal form and activity; capital social if any; RC
+  number; NIS; payment mode and settlement date; date and *numéro
+  d'ordre*; goods and quantities; unit price HT; total HT; nature and
+  rate of taxes and duties (TVA omitted if the buyer is exempt); **total
+  TTC in figures and in words**.
+- **Art. 3, buyer mentions:** name / raison sociale; legal form and
+  activity; address, phone, fax, email; RC; NIS. **If the buyer is a
+  consumer: name, first name and address only.**
+- **Art. 4:** wet stamp (cachet humide) and seller's signature, except
+  when issued "par voie télématique" (art. 11, needs a joint arrêté).
+  For a printed facture from the till this means a stamp block and a
+  signature block on the layout.
+- **Art. 5 and 6:** the TTC total includes every remise, rabais and
+  ristourne decided at the sale; the three words are defined.
+- **Art. 7 to 9:** transport not in the unit price, price supplements
+  (interest on deferred payment, commissions), returnable packaging
+  deposits and costs advanced for a third party are shown as their own
+  lines on the facture.
+- **Art. 10, numbering and cancellation:** the facture is regular when it
+  comes from a *facturier*, a stub book with "une série ininterrompue et
+  chronologique de factures", or is produced "sous forme dématérialisée
+  à travers le recours à un procédé informatique". A new book cannot
+  start before the previous one is used up. **A cancelled facture keeps
+  its number and carries the mention "facture annulée" written
+  diagonally.** This is the text behind gapless numbering (plan R5):
+  numbers are never reused, a void is a state on the numbered document,
+  and the series has no holes.
+- **Art. 14 to 17:** bon de livraison instead of a facture only for
+  repeated regular sales to the same trader (three or more a week),
+  with prior authorisation from the wilaya's commerce directorate, and
+  a monthly facture récapitulative listing the bons. Not a v1 feature;
+  the data model should not forbid it.
+
+Loi 04-02:
+
+- **Art. 10:** every sale between economic agents needs a facture; the
+  seller must issue it and the buyer must ask for it, at the time of the
+  sale. The consumer case (ticket de caisse or any document proving the
+  transaction, facture on request) is what the ministry FAQ states and
+  what loi 10-06 of 2010 added to art. 10; the amended text is still to
+  be read from the JO (R3 stays open on that one line).
+- **Art. 12:** facture, bon de livraison, facture récapitulative and bon
+  de transfert follow the decree.
+- **Art. 33:** no facture where one was due: fine of 80 % of the amount.
+  **Art. 34:** non-conforming facture: 10 000 to 50 000 DA.
+
+Not in these texts: NIF and article d'imposition (AI). They come from the
+tax side (code des procédures fiscales, the NIF obligation on invoices)
+and are on every real facture in circulation; cite the article when the
+CPF is read (R3 follow-up).
+
+Consequence for the product: two document kinds. A **ticket** for a
+consumer at the till: shop identity, date, number, lines, totals, taxes,
+stamp, payment mode; no buyer block. A **facture** when the buyer is a
+trader or asks for one: everything in art. 3, buyer block with RC and
+NIS (or name and address for a consumer), amount in words, stamp and
+signature blocks, TTC including discounts, and the extra lines of arts 7
+to 9 when they apply.
 
 ### IFU regime (not yet read, product-shaping)
 
@@ -227,4 +279,5 @@ before the first printed facture.
 | Droit de timbre | 1 % of net, min 5, max 2 500, cash only | per 100 DA tranche rounded up, 1 / 1,5 / 2 DA by band on the whole amount, ≤ 300 DA free, min 5, no cap, electronic exempt (art. 100-I, circ. 14/2025) | Lumina outdated |
 | TVA | one global rate for the whole cart (`currentTVAPercentage`), applied in float to the discounted subtotal, printed with `toFixed(2)` | art. 21 / 23: the rate is per product by tariff line; no facture rounding rule (CIDTA 324 is for the return) | Lumina simplifies; a mixed 19/9 basket is wrong there |
 | Amount in words | own `numberToWords.js`, fr / ar / en, dinars and centimes | décret 05-468: TTC in figures and words | consistent in intent; we write our own |
-| Facture mentions | full field list in teardown | décret 05-468 | to be diffed |
+| Facture mentions | full field list in teardown (RC, NIF, NIS, AI, RIB, buyer block, words, stamp) | décret 05-468 art. 3 and 4; NIF/AI from tax texts | consistent on the decree fields; diff line by line in R7 |
+| Numbering | per-document-kind counters | 05-468 art. 10: uninterrupted chronological series, a cancelled facture keeps its number marked "facture annulée" | to check whether Lumina reuses a cancelled number |
