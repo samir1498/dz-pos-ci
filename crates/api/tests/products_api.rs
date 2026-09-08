@@ -188,12 +188,28 @@ async fn a_money_error_coming_out_of_a_read_is_a_storage_failure() {
 }
 
 #[tokio::test]
-async fn a_malformed_body_is_422_with_the_same_error_shape() {
+async fn a_malformed_body_is_422_with_a_message_that_quotes_no_serde() {
+    // The message used to be serde's own text, internals and all: "Failed to
+    // parse the request body as JSON: name: EOF while parsing...". It says
+    // nothing a caller can act on and it leaks the DTO's shape.
     let h = harness();
-    let (status, body) = call(&h.app, "POST", "/products", Some(json!({ "name": 3 }))).await;
+    for body in [json!({ "name": 3 }), json!({}), json!("nope")] {
+        let (status, got) = call(&h.app, "POST", "/products", Some(body)).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(got["error"]["code"], "bad_request");
+        assert_eq!(got["error"]["message"], "invalid JSON body");
+    }
+}
+
+#[tokio::test]
+async fn an_unknown_field_is_named_without_listing_the_ones_that_exist() {
+    let h = harness();
+    let mut d = draft();
+    d["couleur"] = json!("rouge");
+    let (status, body) = call(&h.app, "POST", "/products", Some(d)).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body["error"]["code"], "bad_request");
-    assert!(body["error"]["message"].is_string());
+    assert_eq!(body["error"]["message"], "unknown field couleur");
 }
 
 #[tokio::test]

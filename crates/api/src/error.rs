@@ -2,6 +2,7 @@
 //! leaves as `{ "error": { "code", "message" } }`; the UI translates the
 //! code and never shows the message.
 
+use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
@@ -66,6 +67,30 @@ const fn status_for(e: &CoreError) -> StatusCode {
             StatusCode::INTERNAL_SERVER_ERROR
         }
     }
+}
+
+/// serde's own rejection text carries its internals and the whole DTO field
+/// list ("Failed to parse the request body as JSON: name: EOF while
+/// parsing..."). None of it helps a caller and all of it describes the
+/// server, so the body a caller sees is one of two fixed sentences.
+impl From<JsonRejection> for ApiError {
+    fn from(rejection: JsonRejection) -> Self {
+        match unknown_field(&rejection.body_text()) {
+            Some(field) => ApiError::BadRequest(format!("unknown field {field}")),
+            None => ApiError::BadRequest("invalid JSON body".to_string()),
+        }
+    }
+}
+
+/// The field name serde names between backticks after "unknown field". serde
+/// gives no structured form of it, so the text is where it has to come from.
+fn unknown_field(text: &str) -> Option<String> {
+    let after = text.split_once("unknown field `")?.1;
+    let (name, _) = after.split_once('`')?;
+    if name.is_empty() || name.contains(char::is_whitespace) {
+        return None;
+    }
+    Some(name.to_string())
 }
 
 impl IntoResponse for ApiError {

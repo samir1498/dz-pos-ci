@@ -30,7 +30,7 @@ pub async fn create(
 ) -> Result<(StatusCode, Json<ProductDto>), ApiError> {
     // A body that does not parse is the caller's mistake, not a server
     // fault, and it leaves in the same error shape as everything else.
-    let Json(dto) = body.map_err(|e| ApiError::BadRequest(e.body_text()))?;
+    let Json(dto) = body.map_err(ApiError::from)?;
     let new = NewProduct::try_from(dto)?;
     let shop = state.shop_id;
     let made = state
