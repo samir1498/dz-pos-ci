@@ -30,3 +30,14 @@ Samir reviews between steps; one step in flight at a time.
   identifier change when the name is final.
 - Anouar worked on a similar product before: the law and the calculations
   are not simple; an accountant may be needed as the project grows (R8).
+
+## Decisions from Samir, 2026-09-08 (evening)
+
+- E2E: ObserveOne is the e2e tool for this product; outside skills only
+  if they prove better.
+- Tauri dev loop: web UI on the WSL box (`pnpm desktop dev`); the laptop
+  and the native window only when a feature is ready for a full-app pass.
+- Versioning from the first release: semver + git short hash + build date,
+  all three embedded in the binary and shown in About.
+- Payment modes v1: cash, credit (customer ledger), card on a TPE with no
+  integration; transfer and cheque later.
