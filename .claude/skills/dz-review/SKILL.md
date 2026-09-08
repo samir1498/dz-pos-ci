@@ -69,9 +69,9 @@ not supply the stake a finding lacks.
   service or the schema. Say what has to move; "medium" tells Samir
   nothing to triage on.
 - **Who is affected, in raw counts.** Shops, factures, centimes of debt,
-  rows in `sales` or `credit`, queried, not guessed. The mechanism and
-  the blast radius are separate claims, and only the mechanism was
-  verified by reading code.
+  rows in `sales` or `credit`, queried, not guessed, and never
+  adjectives. The mechanism and the blast radius are separate claims,
+  and only the mechanism was verified by reading code.
 
 ## Pass 3: five questions on the whole
 
@@ -85,7 +85,8 @@ repo or in a crate we already depend on. What can be deleted.
   fix, watch it go red, put it back.
 - Watch for a test that goes red for the wrong reason: if deleting the
   fix still satisfies the assertion by another route, the test is not
-  isolating the claim in its title.
+  isolating the claim in its title. Assert the call and the resulting
+  state.
 - Re-execute the real paths afterward: a real SQLite file, a real
   request against `crates/api`, a printed facture. A fix that changes a
   payload or a total invalidates the run done before it.
@@ -103,7 +104,8 @@ for it, otherwise as a short ranked list with file and line.
   `curl` and a replayed request skip all three. A guard that only holds
   within a time window or a lucky ordering is not a guard that holds.
   Say which case it misses before closing a finding on a debt or a
-  stamp-duty path.
+  stamp-duty path. Naming the limitation is not a fix, otherwise the
+  rule produces honest prose and ships the same code.
 - **A refusal for the wrong reason.** A probe against `crates/api` came
   back rejected, but the message shows a missing field, not the role or
   `shop_id` check the finding claimed to prove. Read the refusal, not
