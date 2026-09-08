@@ -92,6 +92,108 @@ fn money_columns_are_integer_centimes() {
 }
 
 #[test]
+fn the_bundled_sqlite_is_new_enough_for_strict_tables() {
+    // STRICT arrived in SQLite 3.37. libsqlite3-sys is pinned bundled, so the
+    // version is the crate's, not the machine's.
+    let (_dir, mut conn) = open_temp();
+    let rows: Vec<Name> = diesel::sql_query("SELECT sqlite_version() AS name")
+        .load(&mut conn)
+        .unwrap();
+    let version = rows[0].name.clone();
+    let parts: Vec<u32> = version.split('.').filter_map(|p| p.parse().ok()).collect();
+    assert!(
+        parts[0] > 3 || (parts[0] == 3 && parts[1] >= 37),
+        "bundled SQLite {version} is older than 3.37"
+    );
+}
+
+#[test]
+fn every_table_is_strict() {
+    // A STRICT table refuses text where an integer belongs, so a price can
+    // never be read back as something other than centimes.
+    let (_dir, mut conn) = open_temp();
+    for table in ["shops", "settings", "users", "categories", "products"] {
+        let n = count(
+            &mut conn,
+            &format!(
+                "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
+                 AND name = '{table}' AND sql LIKE '%STRICT%'"
+            ),
+        );
+        assert_eq!(n, 1, "{table} is not STRICT");
+    }
+}
+
+/// Inserts a product row with `cost_centimes` set to whatever SQL literal is
+/// given, bypassing every Rust type on the way in.
+fn insert_cost(conn: &mut SqliteConnection, literal: &str) -> QueryResult<usize> {
+    diesel::sql_query(format!(
+        "INSERT INTO products (shop_id, name, unit, cost_centimes, selling_centimes, \
+         qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+         VALUES (1, 'p', 'piece', {literal}, 0, 0, 0, 1900)"
+    ))
+    .execute(conn)
+}
+
+#[test]
+fn a_money_column_refuses_a_real_a_text_and_a_negative() {
+    // Rule 6: money is integer centimes. 19.99 was read back as Money(19).
+    let (_dir, mut conn) = open_temp();
+    assert!(
+        insert_cost(&mut conn, "0").is_ok(),
+        "an integer was refused"
+    );
+    assert!(
+        insert_cost(&mut conn, "19.99").is_err(),
+        "a real amount was accepted into a *_centimes column"
+    );
+    assert!(
+        insert_cost(&mut conn, "'19.99'").is_err(),
+        "a text amount was accepted into a *_centimes column"
+    );
+    assert!(
+        insert_cost(&mut conn, "-1").is_err(),
+        "a negative amount was accepted into a *_centimes column"
+    );
+}
+
+#[test]
+fn a_rate_column_refuses_anything_outside_zero_to_one_whole() {
+    let (_dir, mut conn) = open_temp();
+    let product = |conn: &mut SqliteConnection, rate: &str| {
+        diesel::sql_query(format!(
+            "INSERT INTO products (shop_id, name, unit, cost_centimes, selling_centimes, \
+             qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+             VALUES (1, 'p', 'piece', 0, 0, 0, 0, {rate})"
+        ))
+        .execute(conn)
+    };
+    assert!(product(&mut conn, "0").is_ok());
+    assert!(product(&mut conn, "10000").is_ok());
+    assert!(
+        product(&mut conn, "190000").is_err(),
+        "a rate above one whole was accepted"
+    );
+    assert!(
+        product(&mut conn, "-1").is_err(),
+        "a negative rate was accepted"
+    );
+
+    let category = |conn: &mut SqliteConnection, rate: &str| {
+        diesel::sql_query(format!(
+            "INSERT INTO categories (shop_id, name, default_rate_bps) \
+             VALUES (1, 'c{rate}', {rate})"
+        ))
+        .execute(conn)
+    };
+    assert!(category(&mut conn, "900").is_ok());
+    assert!(
+        category(&mut conn, "190000").is_err(),
+        "a category default rate above one whole was accepted"
+    );
+}
+
+#[test]
 fn one_shop_is_seeded_with_an_owner() {
     let (_dir, mut conn) = open_temp();
     assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);

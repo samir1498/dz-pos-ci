@@ -2,6 +2,13 @@
 -- from day one. Money is INTEGER centimes in *_centimes columns (rule 6).
 -- Quantities are INTEGER thousandths of the unit in *_milli columns, so a
 -- kilo product never needs a float.
+--
+-- Every table is STRICT (SQLite 3.37 and above; libsqlite3-sys is pinned
+-- bundled, so the version travels with the binary). STRICT refuses text or
+-- a real where an integer is declared, which is what keeps 19.99 out of a
+-- *_centimes column. STRICT accepts only INT, INTEGER, REAL, TEXT, BLOB and
+-- ANY as declared types, so timestamps are TEXT (SQLite stores them that
+-- way already) and the boolean is an INTEGER with a CHECK.
 
 CREATE TABLE shops (
     id         INTEGER PRIMARY KEY NOT NULL,
@@ -12,8 +19,8 @@ CREATE TABLE shops (
     ai         TEXT,
     address    TEXT,
     phone      TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-);
+    created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+) STRICT;
 
 -- Shop-level settings kept as a dated series: a row is valid from
 -- valid_from until the next row for the same key. A document reads the row
@@ -23,10 +30,10 @@ CREATE TABLE settings (
     shop_id    INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
     key        TEXT NOT NULL,
     value      TEXT NOT NULL,
-    valid_from TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    valid_from TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
     PRIMARY KEY (shop_id, key, valid_from),
     CHECK (key <> 'regime_fiscal' OR value IN ('ifu', 'reel'))
-);
+) STRICT;
 
 CREATE TABLE users (
     id         INTEGER PRIMARY KEY NOT NULL,
@@ -34,8 +41,8 @@ CREATE TABLE users (
     name       TEXT NOT NULL,
     role       TEXT NOT NULL CHECK (role IN ('owner', 'manager', 'cashier')),
     pin_hash   TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-);
+    created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+) STRICT;
 CREATE INDEX idx_users_shop ON users (shop_id);
 
 CREATE TABLE categories (
@@ -44,9 +51,9 @@ CREATE TABLE categories (
     name              TEXT NOT NULL,
     -- TVA rate in basis points a product inherits when it names no rate of
     -- its own. features.md, TVA rates row: 19 % standard, 9 % reduced.
-    default_rate_bps  INTEGER NOT NULL,
+    default_rate_bps  INTEGER NOT NULL CHECK (default_rate_bps BETWEEN 0 AND 10000),
     UNIQUE (shop_id, name)
-);
+) STRICT;
 
 CREATE TABLE products (
     id                 INTEGER PRIMARY KEY NOT NULL,
@@ -57,20 +64,29 @@ CREATE TABLE products (
     barcode            TEXT,
     category_id        INTEGER REFERENCES categories(id) ON DELETE SET NULL,
     unit               TEXT NOT NULL CHECK (unit IN ('piece', 'kg', 'litre', 'box')),
-    cost_centimes      INTEGER NOT NULL,
+    -- typeof() alongside STRICT because STRICT converts a lossless real
+    -- (19.0) to an integer, and a price that arrived as a float is a bug
+    -- upstream even when it converts cleanly.
+    cost_centimes      INTEGER NOT NULL
+        CHECK (typeof(cost_centimes) = 'integer' AND cost_centimes >= 0),
     -- Under the IFU régime this is the single price the customer pays and
     -- rate_bps is ignored: no HT/TTC split and no TVA line on any document
     -- (features.md, Régime fiscal row; CTCA 2026 art. 64).
-    selling_centimes   INTEGER NOT NULL,
-    wholesale_centimes INTEGER,
-    qty_on_hand_milli  INTEGER NOT NULL DEFAULT 0,
-    low_stock_at_milli INTEGER NOT NULL DEFAULT 0,
+    selling_centimes   INTEGER NOT NULL
+        CHECK (typeof(selling_centimes) = 'integer' AND selling_centimes >= 0),
+    wholesale_centimes INTEGER
+        CHECK (wholesale_centimes IS NULL
+               OR (typeof(wholesale_centimes) = 'integer' AND wholesale_centimes >= 0)),
+    qty_on_hand_milli  INTEGER NOT NULL DEFAULT 0
+        CHECK (typeof(qty_on_hand_milli) = 'integer'),
+    low_stock_at_milli INTEGER NOT NULL DEFAULT 0
+        CHECK (typeof(low_stock_at_milli) = 'integer' AND low_stock_at_milli >= 0),
     -- Ignored under IFU; see selling_centimes above.
-    rate_bps           INTEGER NOT NULL,
-    active             BOOLEAN NOT NULL DEFAULT 1,
-    created_at         TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    updated_at         TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-);
+    rate_bps           INTEGER NOT NULL CHECK (rate_bps BETWEEN 0 AND 10000),
+    active             INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+    created_at         TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+    updated_at         TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+) STRICT;
 CREATE UNIQUE INDEX idx_products_shop_barcode ON products (shop_id, barcode);
 CREATE INDEX idx_products_shop_name ON products (shop_id, name);
 

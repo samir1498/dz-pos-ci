@@ -1,5 +1,9 @@
 //! Diesel table definitions for `migrations/2026-09-08-000000_init`.
-//! Hand-written to match that SQL; `diesel print-schema` regenerates it.
+//! Hand-written to match that SQL. The tables are STRICT, so the migration
+//! declares timestamps as TEXT and the boolean as INTEGER: SQLite stores
+//! both that way already, and diesel reads `Timestamp` and `Bool` from
+//! them. `diesel print-schema` would name the storage type instead of the
+//! domain one, so it is a starting point here, not the source.
 
 diesel::table! {
     categories (id) {

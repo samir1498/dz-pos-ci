@@ -317,6 +317,12 @@ fn a_rate_above_one_whole_never_panics_on_the_way_out() {
     use diesel::prelude::*;
     let (_dir, mut conn) = open_temp();
     let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    // The migration's CHECK now refuses this row, which is the point of the
+    // constraint. The pragma stands in for the file this test is about: one
+    // written by an old import or a repair tool that never saw the CHECK.
+    diesel::sql_query("PRAGMA ignore_check_constraints = ON")
+        .execute(&mut conn)
+        .unwrap();
     diesel::sql_query(format!(
         "UPDATE products SET rate_bps = 190000 WHERE id = {}",
         made.id
