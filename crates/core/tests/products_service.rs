@@ -20,6 +20,32 @@ fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
     (dir, conn)
 }
 
+/// A second shop with a category of its own, and that category's id. There
+/// is no shops service yet (M7 pairs a second till), so the rows go in raw:
+/// what is under test is the service's scoping, never this seed.
+fn seed_second_shop(conn: &mut SqliteConnection) -> i32 {
+    use diesel::prelude::*;
+
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO categories (shop_id, name, default_rate_bps) VALUES (2, 'Autre', 900)",
+    )
+    .execute(conn)
+    .unwrap();
+    let row: Id = diesel::sql_query("SELECT id FROM categories WHERE shop_id = 2")
+        .get_result(conn)
+        .unwrap();
+    row.id
+}
+
 fn draft(name: &str) -> NewProduct {
     NewProduct {
         name: name.to_string(),
@@ -241,6 +267,38 @@ fn a_category_from_another_shop_is_rejected() {
     let mut d = draft("A");
     d.category_id = Some(4242);
     match products::create(&mut conn, SHOP, d) {
+        Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "category"),
+        other => panic!("expected a category NotFound, got {other:?}"),
+    }
+}
+
+#[test]
+fn another_shops_category_is_rejected_even_when_the_rate_is_explicit() {
+    // The category was only looked up when it had to supply a rate, so an
+    // explicit rate let a product point at another shop's category (rule 3).
+    let (_dir, mut conn) = open_temp();
+    let theirs = seed_second_shop(&mut conn);
+    let mut d = draft("A");
+    d.category_id = Some(theirs);
+    d.rate_bps = Some(Bps::new(1900).unwrap());
+    match products::create(&mut conn, SHOP, d) {
+        Err(CoreError::NotFound { entity, id }) => {
+            assert_eq!(entity, "category");
+            assert_eq!(id, theirs);
+        }
+        other => panic!("expected a category NotFound, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_update_onto_another_shops_category_is_rejected_too() {
+    let (_dir, mut conn) = open_temp();
+    let theirs = seed_second_shop(&mut conn);
+    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let mut d = draft("A");
+    d.category_id = Some(theirs);
+    d.rate_bps = Some(Bps::new(1900).unwrap());
+    match products::update(&mut conn, SHOP, made.id, d) {
         Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "category"),
         other => panic!("expected a category NotFound, got {other:?}"),
     }

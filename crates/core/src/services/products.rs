@@ -109,7 +109,19 @@ fn validate(
         .filter(|b| !b.is_empty())
         .map(str::to_string);
 
-    let rate = resolve_rate(conn, shop_id, new)?;
+    // The category is looked up whatever the rate says. It used to be read
+    // only when it had to supply a rate, so a caller who named its own rate
+    // could point a product at another shop's category (rule 3).
+    let category_rate = match new.category_id {
+        Some(id) => Some(repo::category_default_rate_bps(conn, shop_id, id)?.ok_or(
+            CoreError::NotFound {
+                entity: "category",
+                id,
+            },
+        )?),
+        None => None,
+    };
+    let rate = resolve_rate(new, category_rate)?;
 
     Ok(ProductRowWrite {
         shop_id,
@@ -129,28 +141,19 @@ fn validate(
     })
 }
 
-/// An explicit rate wins; otherwise the category's default. With neither,
-/// there is nothing to guess from, so the caller is told.
-fn resolve_rate(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    new: &NewProduct,
-) -> Result<Bps, CoreError> {
+/// An explicit rate wins; otherwise the category's default, already read and
+/// already proved to belong to this shop. With neither, there is nothing to
+/// guess from, so the caller is told.
+fn resolve_rate(new: &NewProduct, category_rate_bps: Option<i32>) -> Result<Bps, CoreError> {
     if let Some(rate) = new.rate_bps {
         return Ok(rate);
     }
-    let Some(category_id) = new.category_id else {
+    let Some(raw) = category_rate_bps else {
         return Err(CoreError::validation(
             "rate_bps",
             "a product without a category must name its TVA rate",
         ));
     };
-    let raw = repo::category_default_rate_bps(conn, shop_id, category_id)?.ok_or(
-        CoreError::NotFound {
-            entity: "category",
-            id: category_id,
-        },
-    )?;
     let raw = u32::try_from(raw).map_err(|_| crate::money::MoneyError::RateOutOfRange)?;
     Ok(Bps::new(raw)?)
 }
