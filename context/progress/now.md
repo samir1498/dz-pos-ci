@@ -22,3 +22,11 @@ Samir reviews between steps; one step in flight at a time.
 4. [ ] Stamp duty per step 1 (T3, T8)
 5. [ ] Amount in words fr/ar/en with golden files (T4, R6)
 6. [ ] `crates/api` with GET/POST /products and the products screen reading it, shown on the laptop
+
+## From Anouar, 2026-09-08 (Discord), to lock after the steps
+
+- Product name proposal: "Dinar".
+- GitHub organisation created; Samir invited. Repo transfer + bundle
+  identifier change when the name is final.
+- Anouar worked on a similar product before: the law and the calculations
+  are not simple; an accountant may be needed as the project grows (R8).

@@ -14,10 +14,11 @@ remains.
 | `JO-2024-084-LF2025.pdf` | Journal Officiel n° 84/2024, loi de finances 2025 | joradp.dz/FTP/JO-FRANCAIS/2024/F2024084.pdf |
 | `Circulaire-14-MF-DGI-LF2025-timbre-de-quittance-2025-03-05.pdf` | DGI circular n° 14/MF/DGI/LF.2025 of 5 March 2025 on how to compute the droit de timbre de quittance (4 p., scanned; OCR text is rough) | copy hosted by aminahadji.com; the DGI lists it under legislation-fiscale/circulaires-et-instructions |
 
-Not yet downloaded (server returned 500 on the first try): Code des impôts
-directs 2026 (`.../3726/CodedesImpotsDirectsetTaxesAssimilees2026fr`), needed
-for art. 324 (rounding). The DGI site's TLS chain is incomplete; fetch with
-certificate verification off and check the `%PDF` header.
+| `CodedesImpotsDirectsetTaxesAssimilees2026fr.pdf` | Code des impôts directs et taxes assimilées (CIDTA), édition 2026 (241 p.) | DGI, mfdgi.gov.dz/files/803/2026/3726 |
+
+The DGI site's TLS chain is incomplete and the file server answers 500 or
+refuses connections at times; fetch with certificate verification off, retry,
+and check the `%PDF` header.
 
 ## Findings
 
@@ -97,12 +98,35 @@ line, not a guess. The product form needs the rate per product (open
 decision 3 in features.md is settled by the law's shape) and a way to
 default it from a category.
 
-### Rounding (pointer found, target not yet read)
+### Rounding (read, primary): the law rounds the tax return, not the facture
 
-CTCA art. 80bis (p. 44): rounding of TVA bases and assessed duties follows
-art. 324 of the Code des impôts directs. Art. 324 not yet read (PDF fetch
-failed). Until then "half away from zero, once per rate" stays an
-assumption.
+CTCA 2026 art. 80bis (p. 44) sends TVA rounding to CIDTA art. 324. CIDTA
+2026 art. 324 (p. 120):
+
+> 1) Sauf dispositions spéciales précisées au présent code, les sommes
+> servant de base à l'assiette des impôts directs et taxes assimilées,
+> sont arrondies au dinar inférieur, si elles n'atteignent pas dix (10)
+> dinars, à la dizaine de dinars inférieure dans le cas contraire. [...]
+> Les cotisations relatives aux impôts directs et taxes assimilées, sont
+> arrondies à la dizaine de centimes la plus voisine, les fractions
+> inférieures à cinq (5) centimes étant négligées et les fractions égales
+> ou supérieures à cinq (5) centimes étant comptées pour dix (10) centimes.
+
+That is a rule for the tax base and the tax due on the monthly return
+(G50), where the base is rounded down to the dinar or the ten dinars and
+the duty to the nearest ten centimes. Nothing in the CTCA or in décret
+05-468 prescribes how a line or a TVA amount on a facture is rounded.
+
+Consequence for the product: on the facture, our rule stands as a design
+choice, not a legal one: integer centimes, TVA computed per rate group on
+the group's HT subtotal, rounded once, half away from zero, to the centime.
+The G50 rounding (art. 324) is a reporting feature for later, applied to
+the period totals, never to a document. The comptable review confirms the
+facture practice (many shops print TVA to the centime, some to the dinar).
+
+Also noted while reading: the CIDTA "Codes fiscaux 2026" download is
+`.../files/803/2026/3726/CodedesImpotsDirectsetTaxesAssimilees2026fr`
+(saved in `sources/`, 241 p.).
 
 ### Facture: mandatory mentions (read, official FAQ, decree text pending)
 
