@@ -1,7 +1,7 @@
 {
   "name": "words_ar_golden",
   "reviewed_by_native_speaker": false,
-  "note": "Written from modern standard Arabic number rules, not from a source. Research R6 sources the printed-facture convention from the JO Arabic edition and a native speaker corrects this file; the mockup shows a placeholder until then.",
+  "note": "First thing for the native reviewer to decide: a group ending in 01 or 02. This file puts the numeral before the noun, so 101 is مائة وواحد دينار جزائري, 201 is مائتان وواحد دينار جزائري and 1001 is ألف وواحد دينار جزائري, and 1 000 001, 80 001 and 2 000 002 take the same shape. Classical usage repeats the noun instead (مائة دينار ودينار) and modern invoice practice varies, so this is the open question, not a settled form. Second: the rest of the file. Every string here comes from modern standard Arabic counted-noun rules with no Algerian source behind it. Research R6 reads the printed-facture convention off the JO Arabic edition and a native speaker corrects this file; the mockup shows a placeholder until then.",
   "rule": "docs/features.md, fiscal rules, row \"Amount in words\": net_to_pay written out in the print language. Arabic uses the tamyiz of the last two digits: 1 the noun alone with واحد, 2 the dual, 3 to 10 the plural in the genitive, 11 to 99 the singular in the accusative, a round hundred or thousand the singular in the genitive. Duals lose the nun in the construct state (مائتان becomes مائتا before the noun it counts). Expected strings are written by hand, never computed.",
   "lang": "ar",
   "cases": [

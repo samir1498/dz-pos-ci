@@ -1,6 +1,6 @@
 {
   "name": "words_fr_golden",
-  "rule": "docs/features.md, fiscal rules, row \"Amount in words\": net_to_pay written out in the print language. French follows the 1990 rectification hyphenation used by the Journal Officiel (hyphens between every numeral element), the Academie agreement on vingt and cent, mille invariable, million and milliard as nouns with \"de dinars\" when nothing follows them. Expected strings are written by hand, never computed.",
+  "rule": "docs/features.md, fiscal rules, row \"Amount in words\": net_to_pay written out in the print language. French follows the 1990 rectification hyphenation used by the Journal Officiel (hyphens between every numeral element), the Academie agreement on vingt and cent, mille invariable, million and milliard as nouns with \"de dinars\" when nothing follows them. Expected strings are written by hand, never computed. Open: mille is hyphenated here (mille-un, huit-mille-cent), while the JO examples quoted in research/legal-fiscal/2026-09-08-fiscal-sources-and-findings.md lines 290 to 293 space it (\"mille cinq cents dinars\", \"cent cinquante-et-un mille dinars\") and hyphenate the rest. The comptable question decides which one prints; it is one match arm in fr_number and the cases in this file, either way.",
   "lang": "fr",
   "cases": [
     { "centimes": 0, "words": "zéro dinar" },
