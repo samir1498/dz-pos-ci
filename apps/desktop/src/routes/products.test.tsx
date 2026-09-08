@@ -133,6 +133,26 @@ describe("the add form", () => {
     expect(await screen.findByText("Ce code-barres est déjà utilisé.")).toBeInTheDocument();
   });
 
+  test("renders the money code the API now sends for a bad rate", async () => {
+    // The API returns the core's own code, so `money` reaches the UI where
+    // `validation` used to. error_money is the key that has to render.
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(json(200, []));
+    mount();
+    await screen.findByText("Aucun produit pour le moment.");
+
+    await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
+    await user.type(screen.getByLabelText("Nom"), "Taux impossible");
+    await user.type(screen.getByLabelText("Prix de vente"), "10");
+
+    fetchMock.mockResolvedValueOnce(
+      json(422, { error: { code: "money", message: "rate above 10 000 basis points" } }),
+    );
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(await screen.findByText("Montant ou taux invalide.")).toBeInTheDocument();
+  });
+
   test("refuses an empty name before it reaches the network", async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(json(200, []));

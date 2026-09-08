@@ -124,7 +124,7 @@ impl TryFrom<NewProductDto> for NewProduct {
             .rate_bps
             .map(Bps::new)
             .transpose()
-            .map_err(|e| ApiError::Core(e.into()))?;
+            .map_err(|e| ApiError::Request(e.into()))?;
         Ok(NewProduct {
             name: d.name,
             barcode: d.barcode,

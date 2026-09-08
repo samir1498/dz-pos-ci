@@ -15,6 +15,7 @@ const SHOP: i32 = 1;
 
 struct Harness {
     _dir: tempfile::TempDir,
+    path: std::path::PathBuf,
     app: axum::Router,
 }
 
@@ -24,6 +25,7 @@ fn harness() -> Harness {
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     Harness {
         _dir: dir,
+        path,
         app: dzpos_api::router(state),
     }
 }
@@ -147,13 +149,42 @@ async fn a_validation_failure_is_422() {
 }
 
 #[tokio::test]
-async fn a_rate_above_one_whole_is_422_not_a_panic() {
+async fn a_rate_above_one_whole_is_422_with_the_codes_own_name() {
+    // architecture.md: the API maps the core's code, it never derives one.
+    // The core calls this `money`, so the wire says `money` and the UI's
+    // error_money key is what renders.
     let h = harness();
     let mut d = draft();
     d["rate_bps"] = json!(190_000);
     let (status, body) = call(&h.app, "POST", "/products", Some(d)).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(body["error"]["code"], "validation");
+    assert_eq!(body["error"]["code"], "money");
+}
+
+#[tokio::test]
+async fn a_money_error_coming_out_of_a_read_is_a_storage_failure() {
+    // A rate the migration's CHECK refuses cannot be written any more, so a
+    // row carrying one is a file written by something else: 500, not a 422
+    // telling the user to correct a form they never filled in.
+    use diesel::prelude::*;
+
+    let h = harness();
+    let (status, made) = call(&h.app, "POST", "/products", Some(draft())).await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+
+    // diesel lives here only to plant a row no service can write; the
+    // product's own layers still reach the file through dzpos_core.
+    let mut planted = dzpos_core::db::open(&h.path).unwrap();
+    diesel::sql_query("PRAGMA ignore_check_constraints = ON")
+        .execute(&mut planted)
+        .unwrap();
+    diesel::sql_query("UPDATE products SET rate_bps = 190000")
+        .execute(&mut planted)
+        .unwrap();
+
+    let (status, body) = call(&h.app, "GET", "/products", None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "money");
 }
 
 #[tokio::test]
