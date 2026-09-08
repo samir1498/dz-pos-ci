@@ -14,4 +14,7 @@ type: 'daily'
 ## 2026-09-08 12:03 UTC
 
 - Research moved into research/ in this repo (PR #3). Stamp rule superseded by Code du timbre 2026 art. 100-I; plan legal-fiscal-and-tooling-research-for-dz-pos R1–R9 open. Samir reviewing.
+## 2026-09-08 16:50 UTC
+
+- EOD handoff written (docs/handoff-2026-09-08.md + handoffs/2026-09-08-eod). Next session opens in /home/samir/dz-pos; step in flight: Money newtype.
 

@@ -9,7 +9,7 @@ the same pages; this file is the index.
   stack, layout, commands, the files that decide things.
 - `docs/features.md` (spec, fiscal rules with fixture names) and
   `docs/architecture.md` (the six rules, layers, error policy).
-- `context/progress/now.md` and `ctx plan list --status active` for what is
+- `context/progress/now.md` and `ctx status` for what is
   in flight.
 
 ## Processes (`context/processes/`)

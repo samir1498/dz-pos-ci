@@ -19,7 +19,7 @@ Two front doors, and only one of them works from a given session:
   bootstrapped this repo): the MCP is bound to *that* workspace's store, and
   `plan_add` there writes to the wrong repo. Use the CLI instead, from inside
   the store: `cd /home/samir/dz-pos/context && ctx <cmd>`. Check which one
-  you are in before the first write; `ctx plan list` from `context/` shows
+  you are in before the first write; `ctx status` from `context/` shows
   the dz-pos plans, `plan_list` from the MCP shows whichever store it holds.
 
 Research (`research/` in the repo) needs the env var on the CLI:
@@ -33,7 +33,7 @@ CLI shapes that differ from the MCP: `ctx plan add-task <slug> <id> <text>
 ## Behaviour
 
 - **no args / "now"**: read `progress/now.md` and the active plans
-  (`ctx plan list --status active`); say what is in progress and what is
+  (`ctx status`); say what is in progress and what is
   next in two or three sentences.
 - **"plans"**: list plans as title then done/total. No slugs, no file names.
 - **"update <msg>"**: `progress_log` (or `ctx progress log`) with the

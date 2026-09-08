@@ -14,7 +14,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'Laptop setup: clone, pnpm install, webkit dev packages (Samir), warm cargo build'
-    status: 'pending'
+    status: 'in-progress'
   - id: 'T4'
     desc: 'Sonar: verify Rust support on the team server before promising a gate'
     status: 'pending'

@@ -106,7 +106,7 @@ Claude-Session: https://claude.ai/code/session_<id>
 
 ## Plan slugs in this repo
 
-`ctx plan list --status active` from `context/` is the source; the two that
+`ctx status` from `context/` is the source; the two that
 exist on 2026-09-08:
 
 - `money-module-centimes-tva-stamp-amount-in-words`
