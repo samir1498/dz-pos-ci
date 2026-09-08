@@ -58,14 +58,58 @@ Report only what survived, ranked by consequence on a real facture or a
 real customer's debt. Mechanism and blast radius are separate claims; do
 not supply the stake a finding lacks.
 
+## Three lines every surviving finding must carry
+
+- **Covered?** A test for this exact case, not just the function it
+  lives in. If none exists, say so; the missing test is part of the
+  finding, not a follow-up. Name the file it belongs in
+  (`crates/core/src/money/*`, `crates/api/*`, a fixture keyed to a row in
+  `docs/features.md`).
+- **Quick or not?** One line, one function, or a shape change to a
+  service or the schema. Say what has to move; "medium" tells Samir
+  nothing to triage on.
+- **Who is affected, in raw counts.** Shops, factures, centimes of debt,
+  rows in `sales` or `credit`, queried, not guessed, and never
+  adjectives. The mechanism and the blast radius are separate claims,
+  and only the mechanism was verified by reading code.
+
 ## Pass 3: five questions on the whole
 
 Did we build the right thing. Is there a materially simpler shape. How
 complicated is this honestly. Is any of it already solved elsewhere in the
 repo or in a crate we already depend on. What can be deleted.
 
-## Then fix, and review the fixes
+## Then fix, and prove the fix
 
-The fixes get their own round on the same lenses, aimed only at the diff
-the fixes produced. Report with `ReportFindings` when the host asks for
-it, otherwise as a short ranked list with file and line.
+- Every fix gets a test that fails against the unfixed code. Remove the
+  fix, watch it go red, put it back.
+- Watch for a test that goes red for the wrong reason: if deleting the
+  fix still satisfies the assertion by another route, the test is not
+  isolating the claim in its title. Assert the call and the resulting
+  state.
+- Re-execute the real paths afterward: a real SQLite file, a real
+  request against `crates/api`, a printed facture. A fix that changes a
+  payload or a total invalidates the run done before it.
+- Minimal diff: one finding, one focused change. Don't reformat, don't
+  rename in passing, don't fold a cleanup into a money fix.
+
+The fixes then get their own round on the same lenses, aimed only at the
+diff the fixes produced. Report with `ReportFindings` when the host asks
+for it, otherwise as a short ranked list with file and line.
+
+## Three traps seen in practice
+
+- **A client-side or probabilistic guard counted as coverage.** A
+  disabled button, a debounce or a UI validity check is not a defense;
+  `curl` and a replayed request skip all three. A guard that only holds
+  within a time window or a lucky ordering is not a guard that holds.
+  Say which case it misses before closing a finding on a debt or a
+  stamp-duty path. Naming the limitation is not a fix, otherwise the
+  rule produces honest prose and ships the same code.
+- **A refusal for the wrong reason.** A probe against `crates/api` came
+  back rejected, but the message shows a missing field, not the role or
+  `shop_id` check the finding claimed to prove. Read the refusal, not
+  just the fact of one.
+- **Environment-dependent tooling.** A gate that fails inside a worktree
+  and passes from the main checkout at the same commit is not a finding.
+  Reproduce it somewhere else before reporting it; CI is the authority.
