@@ -15,10 +15,14 @@ remains.
 | `JO-2024-084-LF2025-ar.pdf` | The same JO issue, Arabic edition (official Arabic spelling of amounts, read visually) | joradp.dz/FTP/JO-ARABE/2024/A2024084.pdf |
 | `BanqueAlgerie-Instruction-05-95-normalisation-du-cheque.pdf` | Cheque layout standard, amount in letters zone | bank-of-algeria.dz |
 | `Decret-05-468-facture.pdf` | Décret exécutif 05-468, facture / bon de livraison / facture récapitulative (JO n° 80, 2005) | commerce.gov.dz/fr/telecharger/reglementation/283/article |
-| `Loi-04-02-pratiques-commerciales.pdf` | Loi 04-02 on commercial practices (JO n° 41, 2004), excerpt | africa-laws.org copy; official copy on commerce.gov.dz/fr/reglementation/loi-n-deg-04-02 |
+| `Loi-04-02-pratiques-commerciales.pdf` | Loi 04-02 on commercial practices (JO n° 41, 2004). Full text, arts. 1 to 67, not an excerpt as first noted; the two-column layout defeats naive text extraction | africa-laws.org copy; matches the official joradp copy word for word on arts. 10, 33, 34 |
 | `Circulaire-14-MF-DGI-LF2025-timbre-de-quittance-2025-03-05.pdf` | DGI circular n° 14/MF/DGI/LF.2025 of 5 March 2025 on how to compute the droit de timbre de quittance (4 p., scanned; OCR text is rough) | copy hosted by aminahadji.com; the DGI lists it under legislation-fiscale/circulaires-et-instructions |
-
 | `CodedesImpotsDirectsetTaxesAssimilees2026fr.pdf` | Code des impôts directs et taxes assimilées (CIDTA), édition 2026 (241 p.) | DGI, mfdgi.gov.dz/files/803/2026/3726 |
+| `JO-2004-041-loi-04-02-pratiques-commerciales.pdf` | Official JO n° 41 of 27 June 2004, loi 04-02 at p. 3 | joradp.dz/FTP/JO-FRANCAIS/2004/F2004041.pdf, fetched 2026-09-08 |
+| `JO-2010-046-loi-10-06-modifiant-04-02.pdf` | JO n° 46 of 18 August 2010, loi 10-06 at p. 10; its art. 3 rewrites loi 04-02 art. 10 | joradp.dz/FTP/JO-FRANCAIS/2010/F2010046.pdf, fetched 2026-09-08 |
+| `JO-2005-080-decret-05-468-facture.pdf` | Official JO n° 80 of 11 December 2005, décret exécutif 05-468 at p. 16 | joradp.dz/FTP/JO-FRANCAIS/2005/F2005080.pdf, fetched 2026-09-08 |
+| `JO-2016-010-decret-16-66-bon-de-transaction-commerciale.pdf` | JO n° 10 of 22 February 2016, décret exécutif 16-66 at p. 3: the model of the document tenant lieu de facture, for agriculture, pêche, aquaculture, artisanat only | joradp.dz/FTP/JO-FRANCAIS/2016/F2016010.pdf, fetched 2026-09-08 |
+| `JO-2014-030-arrete-2013-08-01-fausses-factures.pdf` | JO n° 30 of 21 May 2014, arrêté of 1 August 2013 at p. 7: false factures and factures de complaisance, 50 % fiscal fine | joradp.dz/FTP/JO-FRANCAIS/2014/F2014030.pdf, fetched 2026-09-08 |
 
 The DGI site's TLS chain is incomplete and the file server answers 500 or
 refuses connections at times; fetch with certificate verification off, retry,
@@ -177,21 +181,27 @@ Décret 05-468:
 
 Loi 04-02:
 
-- **Art. 10:** every sale between economic agents needs a facture; the
-  seller must issue it and the buyer must ask for it, at the time of the
-  sale. The consumer case (ticket de caisse or any document proving the
-  transaction, facture on request) is what the ministry FAQ states and
-  what loi 10-06 of 2010 added to art. 10; the amended text is still to
-  be read from the JO (R3 stays open on that one line).
+- **Art. 10, as rewritten by loi 10-06 art. 3 (JO n° 46 of 18 August 2010):**
+  a sale between economic agents needs "une facture ou un document en tenant
+  lieu"; a sale to a consumer needs "un ticket de caisse ou un bon justifiant
+  la transaction", and a facture when the customer asks. No text says what a
+  ticket must carry. Full quote and the diff against the 2004 wording are in
+  `2026-09-08-facture-and-ticket.md`.
 - **Art. 12:** facture, bon de livraison, facture récapitulative and bon
   de transfert follow the decree.
 - **Art. 33:** no facture where one was due: fine of 80 % of the amount.
-  **Art. 34:** non-conforming facture: 10 000 to 50 000 DA.
+  **Art. 34:** non-conforming facture: 10 000 to 50 000 DA, except when the
+  omission hits the seller's or buyer's name, their NIF, their address, the
+  quantity, the precise designation or the unit price HT, which fall back to
+  art. 33 and the 80 % fine.
 
-Not in these texts: NIF and article d'imposition (AI). They come from the
-tax side (code des procédures fiscales, the NIF obligation on invoices)
-and are on every real facture in circulation; cite the article when the
-CPF is read (R3 follow-up).
+The NIF is required on a facture by loi 04-02 art. 34 itself, which names
+"leur numéro d'identification fiscale" among those six load-bearing mentions.
+Décret 05-468 art. 3 still says "numéro d'identification statistique"; loi
+05-16 (LF 2006) art. 42 replaced NIS by NIF across the tax codes, not across
+the commerce decree. The article d'imposition has no text making it a facture
+mention. CIDTA art. 183 ter asks a wholesaler to hold each client's AI for the
+état-clients, which is why it appears on factures in circulation.
 
 Consequence for the product: two document kinds. A **ticket** for a
 consumer at the till: shop identity, date, number, lines, totals, taxes,
