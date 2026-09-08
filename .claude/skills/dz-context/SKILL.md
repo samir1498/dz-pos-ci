@@ -32,7 +32,7 @@ CLI shapes that differ from the MCP: `ctx plan add-task <slug> <id> <text>
   (`ctx plan list --status active`); say what is in progress and what is
   next in two or three sentences.
 - **"plans"**: list plans as title then done/total. No slugs, no file names.
-- **"update <msg>"**: `progress_log` (or `ctx progress add`) with the
+- **"update <msg>"**: `progress_log` (or `ctx progress log`) with the
   message, then refresh `progress/now.md` if the priority changed.
 - **"handoff"**: `handoffs_add` with the resume block below first, then
   state, decisions, next task, open questions. Also update

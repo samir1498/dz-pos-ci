@@ -10,7 +10,11 @@ tldr: 'Branch + PR, ctx trailer, the context store and session rituals'
 
 ## Git
 - Branch off `origin/main` (`feature/`, `fix/`, `chore/`, `docs/`) and
-  open a PR with the `dz-pr` skill. Never commit to `main` directly.
+  open a PR with the `dz-pr` skill. Code never lands on `main` without a PR.
+- `context/` bookkeeping (plan status, progress entries, handoffs, a
+  reference page) commits straight to `main` with a `docs(context):`
+  subject, the way `observeone-context` pushes to its own main. A PR per
+  progress line is friction nobody reads.
 - WIP commits on a branch are fine; the laptop pulls them. Squash at merge.
 - Never `git reset --hard`, `git clean -fd` or force-push without asking.
 - Every commit carries `ctx: <plan-slug>[/T<n>] <start|progress|close>`

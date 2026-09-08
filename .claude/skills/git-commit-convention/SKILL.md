@@ -87,7 +87,7 @@ Run at the end of every session before signing off:
 
 1. `ctx reconcile --apply` — apply any unmatched `ctx: close` trailers to plan files
 2. `ctx stale` — verify nothing was left behind
-3. `ctx progress add "session summary"` (or `progress_log` via the MCP) — log what happened
+3. `ctx progress log "session summary"` (or `progress_log` via the MCP) — log what happened
 
 ## The trailer-block trap (hook rejects it)
 
