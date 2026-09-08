@@ -26,4 +26,7 @@ type: 'daily'
 ## 2026-09-08 18:40 UTC
 
 - Night build 20:40: tracks A (money rules), B (words), E (research R3/R7 closed, R6/R8 progress) and F (frontend conventions + packages/design) delivered and pushed. Reviews: A Rust centimes clean by hand recomputation, three mockup defects and two proptest gaps in fix round; B fr/en clean, round-trip proptest missing, in fix round; E and F reviews running; C (migration/api/screen) still building. (@night-build)
+## 2026-09-08 19:21 UTC
+
+- Night build 21:25: tracks G (Playwright e2e + products screenshot) and E fix round 1 (11 citation findings) merged into night/2026-09-08. Money plan T1-T6, T8 done, T7 (gates + PR) in progress; research R3, R7 done. Remaining: track C fix round 1 (16 findings), final whole-branch review, full gates, handoff. (@night-build, @money, @research, @e2e)
 
