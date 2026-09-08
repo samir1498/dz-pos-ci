@@ -85,8 +85,9 @@ non signés, faits sous signatures privées, qui comportent libération ou qui
 constatent des paiements ou des versements de sommes » and the DGI circular
 14/MF/DGI/LF.2025 names the ticket de caisse explicitly; and CTCA art. 64,
 which says that IFU sellers « ne peuvent pas mentionner la taxe sur la valeur
-ajoutée sur leurs factures ». The article says factures; that the rule reaches
-a ticket is our reading, since the ticket carries no TVA line either way.
+ajoutée sur leurs factures ». The article says factures. Extending it to
+every document kind, ticket included, is the reading of `docs/features.md`
+row "Régime fiscal", not the text's.
 
 ### Facture versus ticket, the trigger
 
