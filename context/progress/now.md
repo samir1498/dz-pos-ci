@@ -12,7 +12,7 @@ Run `bun run ctx show <slug>` for plan details.
 
 ## Not started
 
-## Ladder (dz-step)
+## Ladder (step-by-step)
 
 Samir reviews between steps; one step in flight at a time.
 

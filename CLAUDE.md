@@ -23,9 +23,9 @@ the same pages; this file is the index.
 - `git-and-planning`: branch + PR, the `ctx:` trailer, session rituals.
 
 ## Skills (`.claude/skills/`, symlinked into `~/.claude/skills/` on the WSL box)
-`dz-step` (one step, one PR, wait for Samir) · `dz-context` · `dz-money` ·
-`dz-review` · `dz-pr` · `dz-mockup` · `laptop-dev` · `git-commit-convention` ·
-`dont-sound-like-ai`. Every session opens with `dz-step status`.
+`step-by-step` (one step per message, wait for Samir; the ladder is in
+`context/progress/now.md`) · `dz-context` · `dz-money` · `dz-review` · `dz-pr` ·
+`dz-mockup` · `laptop-dev` · `git-commit-convention` · `dont-sound-like-ai`.
 
 ## Non-negotiables (repeated here because they are cheap to forget)
 - Money is integer centimes, checked arithmetic, no `f64` near a total.
