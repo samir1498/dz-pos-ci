@@ -58,7 +58,7 @@ export function renderA4(sale, lang) {
         .map(
           (l) => `<tr><td>${esc(lang === "ar" ? l.product.ar : l.product.name)}</td>
           <td class="n num">${l.qty}</td><td class="n num">${fmt(l.unitPrice, lang)}</td>
-          <td class="n num">${l.tvaRate}%</td><td class="n num">${fmt(l.qty * l.unitPrice - (l.lineDiscount || 0), lang)}</td></tr>`,
+          <td class="n num">${l.rateBps / 100}%</td><td class="n num">${fmt(l.qty * l.unitPrice - (l.lineDiscount || 0), lang)}</td></tr>`,
         )
         .join("")}</tbody>
     </table>

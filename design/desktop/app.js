@@ -15,7 +15,7 @@ const products = PRODUCTS.map((p) => ({ ...p }));
 const customers = CUSTOMERS.map((c) => ({ ...c }));
 const store = { ...STORE };
 const state = {
-  cart: [], // {product, qty, unitPrice, lineDiscount, tvaRate}
+  cart: [], // {product, qty, unitPrice, lineDiscount, rateBps}
   customerId: null,
   globalDiscount: 0,
   search: "",
@@ -47,6 +47,7 @@ function totals(mode = state.pay.mode) {
     globalDiscount: state.globalDiscount,
     paymentMode: mode,
     stampEnabled: store.stampEnabled,
+    regime: store.regime,
   });
 }
 const customer = () => customers.find((c) => c.id === state.customerId) ?? null;
@@ -167,7 +168,7 @@ function till() {
               <span class="cmeta">
                 <span class="qty"><button data-dec="${i}">−</button><span class="num">${l.qty}</span><button data-inc="${i}">+</button></span>
                 <span class="num">× ${fmt(l.unitPrice, lang())}</span>
-                <span class="tiny">${t("tva")} ${l.tvaRate}%</span>
+                <span class="tiny">${t("tva")} ${l.rateBps / 100}%</span>
               </span>
               <span style="text-align:end"><button class="btn btn-ghost btn-sm" data-del="${i}">✕</button></span>
             </div>`,
@@ -181,7 +182,7 @@ function till() {
         <div class="totals">
           <div><span class="muted">${t("total_ht")}</span><span class="num">${fmt(tot.totalHt, lang())}</span></div>
           ${tot.discount ? `<div><span class="muted">${t("discount")}</span><span class="num">−${fmt(tot.discount, lang())}</span></div>` : ""}
-          ${tot.tvaByRate.map((g) => `<div><span class="muted">${t("tva")} ${g.rate}%</span><span class="num">${fmt(g.amount, lang())}</span></div>`).join("")}
+          ${tot.tvaByRate.map((g) => `<div><span class="muted">${t("tva")} ${g.rateBps / 100}%</span><span class="num">${fmt(g.amount, lang())}</span></div>`).join("")}
           ${tot.stamp ? `<div><span class="muted">${t("stamp")}</span><span class="num">${fmt(tot.stamp, lang())}</span></div>` : ""}
           <div class="grand"><span>${t("net_to_pay")}</span><span class="num">${fmt(tot.netToPay, lang())}</span></div>
         </div>
@@ -210,9 +211,9 @@ function payModal() {
           <div>
             <div class="totals">
               <div><span class="muted">${t("subtotal_ht")}</span><span class="num">${fmt(tot.subtotalHt, lang())}</span></div>
-              ${tot.tvaByRate.map((g) => `<div><span class="muted">${t("tva")} ${g.rate}%</span><span class="num">${fmt(g.amount, lang())}</span></div>`).join("")}
+              ${tot.tvaByRate.map((g) => `<div><span class="muted">${t("tva")} ${g.rateBps / 100}%</span><span class="num">${fmt(g.amount, lang())}</span></div>`).join("")}
               <div><span class="muted">${t("total_ttc")}</span><span class="num">${fmt(tot.totalTtc, lang())}</span></div>
-              <div><span class="muted">${t("stamp")} ${mode === "cash" ? "(1 %)" : ""}</span><span class="num">${tot.stamp ? fmt(tot.stamp, lang()) : "—"}</span></div>
+              <div><span class="muted">${t("stamp")}</span><span class="num">${tot.stamp ? fmt(tot.stamp, lang()) : "—"}</span></div>
               <div class="grand"><span>${t("net_to_pay")}</span><span class="num">${fmt(tot.netToPay, lang())}</span></div>
             </div>
             ${cust ? `<div style="margin-block-start:var(--space-4)" class="tiny">${esc(cname(cust))} · ${t("debt")} <span class="num">${fmt(cust.debt, lang())}</span> / <span class="num">${fmt(cust.limit, lang())}</span></div>` : ""}
@@ -261,7 +262,7 @@ function productsScreen() {
   <tbody>${list
     .map(
       (p) => `<tr class="is-clickable" data-open-product="${p.id}"><td><strong>${esc(pname(p))}</strong></td><td class="num muted">${p.barcode}</td><td>${esc(catName(CATEGORIES.find((c) => c.id === p.cat)))}</td>
-      <td class="n num">${fmt(p.cost, lang())}</td><td class="n num">${fmt(p.price, lang())}</td><td class="n num">${p.tva} %</td><td class="n num">${p.qty}</td><td>${stockTag(p)}</td></tr>`,
+      <td class="n num">${fmt(p.cost, lang())}</td><td class="n num">${fmt(p.price, lang())}</td><td class="n num">${p.tvaBps / 100} %</td><td class="n num">${p.qty}</td><td>${stockTag(p)}</td></tr>`,
     )
     .join("")}</tbody></table></div>`;
 }
@@ -290,7 +291,7 @@ function settings() {
     </div>
     <div class="card card-pad"><h2>${t("tax_settings")}</h2>
       <div class="field-row">
-        <div class="field"><label>${t("default_tva")}</label><select class="select" data-tva>${[19, 9, 0].map((r) => `<option ${store.defaultTva === r ? "selected" : ""}>${r} %</option>`).join("")}</select></div>
+        <div class="field"><label>${t("default_tva")}</label><select class="select" data-tva>${[1900, 900, 0].map((r) => `<option ${store.defaultTvaBps === r ? "selected" : ""}>${r / 100} %</option>`).join("")}</select></div>
         <label class="switch" style="align-self:end"><input type="checkbox" data-stamp ${store.stampEnabled ? "checked" : ""} /> ${t("stamp_enabled")}</label>
       </div>
     </div>
@@ -326,13 +327,13 @@ function drawer() {
   let body = "";
   let title = "";
   if (d.type === "product") {
-    const p = products.find((x) => x.id === d.id) ?? { name: "", ar: "", barcode: "", cost: 0, price: 0, tva: store.defaultTva, qty: 0, min: 0, cat: "epicerie" };
+    const p = products.find((x) => x.id === d.id) ?? { name: "", ar: "", barcode: "", cost: 0, price: 0, tvaBps: store.defaultTvaBps, qty: 0, min: 0, cat: "epicerie" };
     title = d.id === "new" ? t("add_product") : pname(p);
     const f = (label, val, extra = "") => `<div class="field"><label>${label}</label><input class="input" value="${esc(val)}" ${extra} /></div>`;
     body = `${f(t("name"), p.name)}${f("الاسم", p.ar, 'dir="rtl"')}${f(t("barcode"), p.barcode)}
       <div class="field"><label>${t("category")}</label><select class="select">${CATEGORIES.map((c) => `<option ${p.cat === c.id ? "selected" : ""}>${esc(catName(c))}</option>`).join("")}</select></div>
       <div class="field-row">${f(t("cost"), p.cost / 100)}${f(t("price"), p.price / 100)}</div>
-      <div class="field-row"><div class="field"><label>${t("tva_rate")}</label><select class="select">${[19, 9, 0].map((r) => `<option ${p.tva === r ? "selected" : ""}>${r} %</option>`).join("")}</select></div>${f(t("stock"), p.qty)}${f(t("low_stock"), p.min)}</div>`;
+      <div class="field-row"><div class="field"><label>${t("tva_rate")}</label><select class="select">${[1900, 900, 0].map((r) => `<option ${p.tvaBps === r ? "selected" : ""}>${r / 100} %</option>`).join("")}</select></div>${f(t("stock"), p.qty)}${f(t("low_stock"), p.min)}</div>`;
   } else {
     const c = customers.find((x) => x.id === d.id);
     title = c ? cname(c) : t("add_customer");
@@ -380,7 +381,7 @@ function addToCart(id) {
   if (!p || p.qty === 0) return;
   const line = state.cart.find((l) => l.product.id === id);
   if (line) line.qty += 1;
-  else state.cart.push({ product: p, qty: 1, unitPrice: p.price, lineDiscount: 0, tvaRate: p.tva });
+  else state.cart.push({ product: p, qty: 1, unitPrice: p.price, lineDiscount: 0, rateBps: p.tvaBps });
 }
 
 function toast(msg) {
@@ -488,7 +489,7 @@ app.addEventListener("change", (e) => {
   const el = e.target;
   if (el.dataset.customer !== undefined) state.customerId = el.value ? Number(el.value) : null;
   else if (el.dataset.stamp !== undefined) store.stampEnabled = el.checked;
-  else if (el.dataset.tva !== undefined) store.defaultTva = parseInt(el.value, 10);
+  else if (el.dataset.tva !== undefined) store.defaultTvaBps = parseInt(el.value, 10) * 100;
   else return;
   render();
 });

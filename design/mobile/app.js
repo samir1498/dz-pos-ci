@@ -10,7 +10,7 @@ const esc = (s) =>
 const state = {
   paired: false,
   products: PRODUCTS.map((p) => ({ ...p })),
-  cart: [], // { product, qty, unitPrice, lineDiscount, tvaRate }
+  cart: [], // { product, qty, unitPrice, lineDiscount, rateBps }
   customerId: null,
   globalDiscount: 0,
   paymentMode: "cash",
@@ -56,6 +56,7 @@ function totals(mode = state.paymentMode) {
     globalDiscount: state.globalDiscount,
     paymentMode: mode,
     stampEnabled: STORE.stampEnabled,
+    regime: STORE.regime,
   });
 }
 
@@ -66,7 +67,7 @@ function cartCount() {
 function addToCart(p) {
   const line = state.cart.find((l) => l.product.id === p.id);
   if (line) line.qty += 1;
-  else state.cart.push({ product: p, qty: 1, unitPrice: p.price, lineDiscount: 0, tvaRate: p.tva });
+  else state.cart.push({ product: p, qty: 1, unitPrice: p.price, lineDiscount: 0, rateBps: p.tvaBps });
 }
 
 function toast(msg) {
@@ -194,7 +195,7 @@ function cartScreen() {
             .map(
               (l) => `<div class="cartline">
               <div class="main"><div class="title">${esc(pname(l.product))}</div>
-                <div class="tiny num">${l.qty} × ${fmt(l.unitPrice, lang())} · ${t("tva")} ${l.tvaRate}%</div>
+                <div class="tiny num">${l.qty} × ${fmt(l.unitPrice, lang())} · ${t("tva")} ${l.rateBps / 100}%</div>
                 <div class="price num">${fmt(l.qty * l.unitPrice - l.lineDiscount, lang())}</div></div>
               <div class="stepper">
                 <button type="button" data-dec="${l.product.id}" aria-label="−">−</button>
@@ -344,7 +345,7 @@ function sheet() {
       <div class="kv"><span>${t("category")}</span><span>${esc(catName(CATEGORIES.find((c) => c.id === p.cat)))}</span></div>
       <div class="kv"><span>${t("price")}</span><span class="num">${fmt(p.price, lang())}</span></div>
       <div class="kv"><span>${t("stock")}</span><span class="num">${p.qty} ${stockTag(p)}</span></div>
-      <div class="kv"><span>${t("tva_rate")}</span><span class="num">${p.tva}%</span></div>`;
+      <div class="kv"><span>${t("tva_rate")}</span><span class="num">${p.tvaBps / 100}%</span></div>`;
   } else {
     const c = CUSTOMERS.find((x) => x.id === state.sheet.id);
     if (!c) return "";
