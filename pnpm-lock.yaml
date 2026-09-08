@@ -10,6 +10,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@dzpos/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@tanstack/react-form':
         specifier: ^1.33.0
         version: 1.33.5(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

@@ -32,7 +32,11 @@ gates: fmt clippy types-check test build
 
 # ---- dev ----
 
-# web UI only, reachable from the laptop over Tailscale
+# the API against a development database; the browser UI talks to this one
+api port="4317" db=".dev/dev.db":
+    cargo run -p dzpos-api -- --db {{db}} --port {{port}}
+
+# web UI only, reachable from the laptop over Tailscale. Needs `just api`.
 dev:
     pnpm desktop dev --host
 

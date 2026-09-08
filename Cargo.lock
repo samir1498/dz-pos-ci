@@ -1007,7 +1007,9 @@ dependencies = [
 name = "dzpos-desktop"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "dirs",
+ "dzpos-api",
  "dzpos-core",
  "serde",
  "tauri",

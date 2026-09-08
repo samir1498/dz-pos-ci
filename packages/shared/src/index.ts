@@ -9,4 +9,4 @@ export type { UnitDto } from "./generated/UnitDto";
 
 export { ApiError, createClient, isApiErrorBody } from "./client";
 export type { ApiClient } from "./client";
-export { formatCentimes, formatQty, parseAmountToCentimes } from "./money";
+export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";

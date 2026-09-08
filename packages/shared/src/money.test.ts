@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { formatCentimes, formatQty, parseAmountToCentimes } from "./money";
+import {
+  formatCentimes,
+  formatQty,
+  parseAmountToCentimes,
+  parseQtyToMilli,
+} from "./money";
 
 // Thousands are grouped with a narrow no-break space, French and Algerian
 // typography. Written as an escape so it stays visible in a diff.
@@ -72,5 +77,25 @@ describe("parseAmountToCentimes", () => {
     expect(parseAmountToCentimes("abc")).toBeNull();
     expect(parseAmountToCentimes("12,345")).toBeNull();
     expect(parseAmountToCentimes("1,2,3")).toBeNull();
+  });
+});
+
+describe("parseQtyToMilli", () => {
+  test("reads up to three decimals into thousandths", () => {
+    expect(parseQtyToMilli("24")).toBe(24_000);
+    expect(parseQtyToMilli("1,5")).toBe(1_500);
+    expect(parseQtyToMilli("1,25")).toBe(1_250);
+    expect(parseQtyToMilli("0,001")).toBe(1);
+  });
+
+  test("round trips through formatQty", () => {
+    for (const milli of [0, 1, 1_250, 24_000, 1_000_000]) {
+      expect(parseQtyToMilli(formatQty(milli))).toBe(milli);
+    }
+  });
+
+  test("refuses more precision than the column holds", () => {
+    expect(parseQtyToMilli("1,2345")).toBeNull();
+    expect(parseQtyToMilli("kg")).toBeNull();
   });
 });

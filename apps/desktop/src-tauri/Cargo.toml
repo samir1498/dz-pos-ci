@@ -6,6 +6,8 @@ default-run = "dzpos-desktop"
 
 [dependencies]
 dzpos-core = { path = "../../../crates/core" }
+dzpos-api = { path = "../../../crates/api" }
+axum = "0.8.9"
 serde = { workspace = true, features = ["derive"] }
 dirs = "6.0"
 tauri = { version = "2", features = ["devtools"] }

@@ -32,20 +32,33 @@ export function formatQty(milli: number): string {
 }
 
 /**
- * "12,34" or "12.34" becomes 1234 centimes. Parsed digit by digit: a
- * `parseFloat` here would put a float on the path to a stored price.
- * Returns null when the text is not an amount.
+ * Reads a decimal typed by a person into a scaled integer. Parsed digit by
+ * digit: a `parseFloat` here would put a float on the path to a stored
+ * price. Returns null when the text is not a number at that precision.
  */
-export function parseAmountToCentimes(text: string): number | null {
-  const cleaned = text.trim().replace(/[\s  ]/g, "");
+function parseScaled(text: string, decimals: number): number | null {
+  const cleaned = text.trim().replace(/[\s\u202f\u00a0]/g, "");
   if (cleaned === "") return null;
-  const match = /^(-?)(\d*)(?:[.,](\d{0,2}))?$/.exec(cleaned);
+  const pattern = new RegExp(`^(-?)(\\d*)(?:[.,](\\d{0,${decimals}}))?$`);
+  const match = pattern.exec(cleaned);
   if (match === null) return null;
   const [, sign, whole, fraction] = match;
   if (whole === "" && (fraction === undefined || fraction === "")) return null;
-  const dinars = whole === "" ? 0 : Number(whole);
-  const centimes = Number((fraction ?? "").padEnd(2, "0") || "0");
-  const total = dinars * CENTIMES_PER_DINAR + centimes;
+  const scale = 10 ** decimals;
+  const units = whole === "" ? 0 : Number(whole);
+  const rest =
+    fraction === undefined || fraction === "" ? 0 : Number(fraction.padEnd(decimals, "0"));
+  const total = units * scale + rest;
   if (!Number.isSafeInteger(total)) return null;
   return sign === "-" ? -total : total;
+}
+
+/** "12,34" or "12.34" becomes 1234 centimes. */
+export function parseAmountToCentimes(text: string): number | null {
+  return parseScaled(text, 2);
+}
+
+/** "1,5" kilos becomes 1500 thousandths of a unit. */
+export function parseQtyToMilli(text: string): number | null {
+  return parseScaled(text, 3);
 }

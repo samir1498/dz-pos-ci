@@ -103,13 +103,16 @@ function narrow<T>(body: unknown, guard: (v: unknown) => v is T, what: string): 
 
 export type ApiClient = ReturnType<typeof createClient>;
 
-export function createClient(baseUrl: string, fetchImpl: typeof fetch = fetch) {
+export function createClient(baseUrl: string, fetchImpl?: typeof fetch) {
   const base = baseUrl.replace(/\/+$/, "");
+  // Resolved on each call, not captured at module load: a test that stubs
+  // globalThis.fetch after importing this module must still be seen.
+  const send0: typeof fetch = fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
 
   async function send(path: string, init?: RequestInit): Promise<unknown> {
     let res: Response;
     try {
-      res = await fetchImpl(`${base}${path}`, init);
+      res = await send0(`${base}${path}`, init);
     } catch (cause) {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
