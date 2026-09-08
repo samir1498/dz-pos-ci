@@ -12,6 +12,7 @@ remains.
 | `CodedeTimbre2026fr.pdf` | Code du timbre, édition 2026 (121 p.) | DGI, mfdgi.gov.dz/files/803/2026/3724 |
 | `CodedesTaxessurleChiffredAffaires2026fr.pdf` | Code des taxes sur le chiffre d'affaires (CTCA), édition 2026 (179 p.) | DGI, mfdgi.gov.dz/files/803/2026/3725 |
 | `JO-2024-084-LF2025.pdf` | Journal Officiel n° 84/2024, loi de finances 2025 | joradp.dz/FTP/JO-FRANCAIS/2024/F2024084.pdf |
+| `Circulaire-14-MF-DGI-LF2025-timbre-de-quittance-2025-03-05.pdf` | DGI circular n° 14/MF/DGI/LF.2025 of 5 March 2025 on how to compute the droit de timbre de quittance (4 p., scanned; OCR text is rough) | copy hosted by aminahadji.com; the DGI lists it under legislation-fiscale/circulaires-et-instructions |
 
 Not yet downloaded (server returned 500 on the first try): Code des impôts
 directs 2026 (`.../3726/CodedesImpotsDirectsetTaxesAssimilees2026fr`), needed
@@ -41,24 +42,49 @@ Art. 258 quinquies (p. 49):
 > présent code, les quittances de sommes réglées par des moyens de paiement
 > électronique.
 
+DGI circular n° 14/MF/DGI/LF.2025 (5 March 2025) settles how to apply it:
+
+- **Not progressive by tranche.** The whole amount takes the rate of its
+  band: "ce droit de timbre n'est pas soumis à une progressivité par
+  tranche". Example 2 in the circular: 35 000 DA cash → 350 tranches ×
+  1,5 DA = 525 DA. Example 3: 350 000 DA → 3 500 × 2 DA = 7 000 DA.
+  Example 1: 25 000 DA → 250 × 1 DA = 250 DA.
+- **300 DA or less: nothing to pay.** "Les sommes n'excédant pas 300 DA ne
+  donnent lieu à aucun droit."
+- Tranches: divide by 100 and round up (a fraction counts as a tranche).
+- Minimum 5 DA on anything above 300 DA.
+- Applies to any document recording a payment: "quittance, facture,
+  ticket de caisse".
+- Electronic payment of any form (cards, transfer, cheque, mobile) is
+  exempt, art. 258 quinquies.
+
+So the rule for the fixture `stamp_progressive_tranches`, in centimes:
+
+```
+if mode is electronic or amount <= 300 00      -> 0
+tranches = ceil(amount / 100 00)
+rate     = 100 if amount <= 30 000 00
+           150 if amount <= 100 000 00
+           200 otherwise                       (centimes per tranche)
+stamp    = max(tranches * rate, 5 00)
+```
+
+Cases to pin: 300 00 → 0; 300 01 → 5 00 (4 tranches × 1 DA = 4 DA, floor
+applies); 1 000 00 → 10 00; 1 000 01 → 11 00; 25 000 00 → 250 00;
+30 000 00 → 300 00; 30 000 01 → 451 00 (301 tranches × 1,5 = 451,5,
+rounded how? the circular's examples are all whole tranches; pin 451 50
+and ask); 35 000 00 → 525 00; 100 000 00 → 1 500 00; 100 000 01 → 2 002 00;
+350 000 00 → 7 000 00.
+
 What this changes against the Lumina-derived assumption in `docs/features.md`
 (`clamp(net × 1 %, 5, 2 500)`, cash only):
 
-- No 2 500 DA cap. The rate rises with the amount instead.
-- The unit is a tranche of 100 DA or fraction thereof, so 250 DA counts as
-  three tranches. A percentage on the exact amount is not the same number.
-- Amounts of 300 DA or less: the text says "supérieur à 300 DA", so
-  whether a 300 DA cash sale owes the 5 DA minimum or nothing needs a
-  reading of the whole title (art. 100-II and the exemptions in 258 ff.).
-  Open question for the comptable.
-- Whether the tranches are marginal (1 DA on the first 30 000, 1,5 DA on
-  the next 70 000, 2 DA above) or the whole amount takes the rate of its
-  band. The text reads as bands on "sommes dont le montant", i.e. the whole
-  amount; vendor calculators (Fatoura, IntelliX) apply it marginally.
-  Open question; the fixture must pin one and the comptable confirms.
-- Electronic payment is exempt. "Cash only" was right for the wrong
-  reason; card, CIB, Edahabia and transfer are exempt by art. 258
-  quinquies, not by absence of a rule.
+- No cap, and the rate rises with the amount.
+- The unit is a tranche of 100 DA rounded up, not a percentage of the
+  exact amount.
+- Card, transfer and cheque are exempt by law, not by our choice.
+- One question left for the comptable: a 1,5 DA rate on an odd number of
+  tranches gives half a dinar; the circular's examples avoid the case.
 
 ### TVA rates (read, primary)
 
@@ -117,6 +143,6 @@ sourced.
 
 | Rule | Lumina implements | Law says | Status |
 |---|---|---|---|
-| Droit de timbre | 1 % of net, min 5, max 2 500, cash only | progressive per 100 DA tranche, min 5, no cap, electronic exempt | Lumina outdated |
+| Droit de timbre | 1 % of net, min 5, max 2 500, cash only | per 100 DA tranche rounded up, 1 / 1,5 / 2 DA by band on the whole amount, ≤ 300 DA free, min 5, no cap, electronic exempt (art. 100-I, circ. 14/2025) | Lumina outdated |
 | TVA | 19 / 9 / 0 per product | art. 21 / 23, per tariff line | consistent |
 | Facture mentions | full field list in teardown | décret 05-468 | to be diffed |
