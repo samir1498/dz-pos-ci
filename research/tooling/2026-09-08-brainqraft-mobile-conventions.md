@@ -101,10 +101,12 @@ saying it is hand-added and why the Figma export will never produce it. So
 a regeneration does not quietly delete it, and nobody adds a second one
 next to it.
 
-Also worth keeping: `semantic.ts` records where the token disagreed with an
-earlier export ("Figma binds `semantic/text/secondary` to indigo/200. An
-earlier export of this file had it on indigo/300"). The pairing is the kind
-of thing that silently regresses.
+Also worth keeping: where a role once pointed at the wrong ramp step,
+`semantic.ts` carries a comment beside that entry naming the step the
+design file binds it to, saying which step an earlier export had, and
+telling the next person to re-check the pairing after a regeneration. A
+role that lands one step too dark renders every label in that role wrong
+and nothing fails, so the note is the only thing that catches it twice.
 
 Two gaps the skill names rather than papers over: shadow offsets exist as
 Figma effect styles but the code has only the colours, and the 19-style

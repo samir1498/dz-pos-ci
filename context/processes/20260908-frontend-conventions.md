@@ -142,8 +142,16 @@ the selector was for.
 |---|---|---|---|
 | Unit, pure functions | vitest, `src/**/*.test.ts` | Jest, `jest-expo` preset | vitest, `src/**/*.test.ts` |
 | Component | vitest + `@testing-library/react`, jsdom | Jest + `@testing-library/react-native` | n/a |
-| End to end | Playwright against the Vite dev server | Maestro flows in `.maestro/`, on a real build | n/a |
+| End to end | ObserveOne is the e2e tool for this product (Samir, 2026-09-08, `context/progress/now.md`). Playwright against the Vite dev server is the interim local driver for tonight's screens. `docs/architecture.md`'s Testing matrix still lists tauri-driver + WebDriver under `xvfb-run` for the native window. | Maestro flows in `.maestro/`, on a real build | n/a |
 | In production | ObserveOne, once there is a shop running it | ObserveOne | n/a |
+
+Those three are not alternatives to pick between. ObserveOne is the tool the
+product is committed to and it records the flows that matter; Playwright is
+what a session can run locally right now against the web UI, and it stops
+being needed once ObserveOne covers the same screens; tauri-driver is the
+only one of the three that drives the real Tauri window, so it stays in the
+architecture matrix until ObserveOne can do that, and one of the two pages
+gets corrected when it can.
 
 Coverage is collected from `lib/`, `hooks/` and `features/**/utils/`. A
 screen is covered by its e2e flow, not by a snapshot.
@@ -222,14 +230,39 @@ rules: {
 },
 ```
 
-Then an override that re-allows TanStack and the Tauri module where they
-belong. It restates the rule with the primitives pattern still in it rather
-than switching `no-restricted-imports` off, because tier 1 stays banned in
-a query hook and in `lib/` too:
+Then two overrides, one per folder, because the two folders lose different
+bans. Neither switches `no-restricted-imports` off: tier 1 stays banned in
+a query hook and in `lib/` as well.
+
+A query hook is the layer allowed to call TanStack. It still has no reason
+to reach the Tauri command layer directly, so it keeps that ban:
 
 ```js
 {
-  files: ["src/features/*/hooks/**", "src/lib/**"],
+  files: ["src/features/*/hooks/**"],
+  rules: {
+    "no-restricted-imports": ["error", {
+      patterns: [
+        {
+          group: ["@dzpos/design/primitives", "**/design/src/primitives"],
+          message: "Tier 1 is not a component API. Import { theme } from '@dzpos/design', or use the CSS custom property.",
+        },
+        {
+          group: ["@tauri-apps/api/core"],
+          message: "Call the wrapper in src/lib/tauri.ts. Only it talks to the command layer.",
+        },
+      ],
+    }],
+  },
+}
+```
+
+`src/lib/` holds the wrapper itself and the query client, so it loses both
+the TanStack and the Tauri ban and keeps only the primitives one:
+
+```js
+{
+  files: ["src/lib/**"],
   rules: {
     "no-restricted-imports": ["error", {
       patterns: [
