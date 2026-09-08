@@ -329,12 +329,13 @@ side as a second implementation to cross-check the golden files, never as
 a runtime dependency. A native speaker reviews the Arabic golden file
 before the first printed facture.
 
-## Lumina versus the law (to be completed as a table, task R7)
+## Lumina versus the law
 
-| Rule | Lumina implements | Law says | Status |
-|---|---|---|---|
-| Droit de timbre | 1 % of net, min 5, max 2 500, cash only | per 100 DA tranche rounded up, 1 / 1,5 / 2 DA by band on the whole amount, ≤ 300 DA free, min 5, no cap, electronic exempt (art. 100-I, circ. 14/2025) | Lumina outdated |
-| TVA | one global rate for the whole cart (`currentTVAPercentage`), applied in float to the discounted subtotal, printed with `toFixed(2)` | art. 21 / 23: the rate is per product by tariff line; no facture rounding rule (CIDTA 324 is for the return) | Lumina simplifies; a mixed 19/9 basket is wrong there |
-| Amount in words | own `numberToWords.js`, fr / ar / en, dinars and centimes | décret 05-468: TTC in figures and words | consistent in intent; we write our own |
-| Facture mentions | full field list in teardown (RC, NIF, NIS, AI, RIB, buyer block, words, stamp) | décret 05-468 art. 3 and 4; NIF/AI from tax texts | consistent on the decree fields; diff line by line in R7 |
-| Numbering | per-document-kind counters | 05-468 art. 10: uninterrupted chronological series, a cancelled facture keeps its number marked "facture annulée" | to check whether Lumina reuses a cancelled number |
+The full line-by-line diff is `2026-09-08-lumina-vs-law.md`: every legal
+mention and every calculation in the teardown, with the article, what Lumina
+does, and what `docs/features.md` says. The two calculations Lumina gets wrong
+are the droit de timbre, where it still uses the pre-2025 flat 1 % capped at
+2 500 DA, and the TVA, where one global rate cannot produce a correct total
+for a basket mixing 19 % and 9 % goods. Four mentions of décret 05-468 art. 3
+are missing from both products: forme juridique, nature de l'activité, capital
+social, and the settlement date.
