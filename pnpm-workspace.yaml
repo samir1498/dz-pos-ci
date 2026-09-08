@@ -1,4 +1,6 @@
 packages:
   - apps/*
+  - packages/*
+  - design
 allowBuilds:
   esbuild: true
