@@ -6,9 +6,9 @@ placeholder name**; the product name, GitHub org and bundle identifier
 Changing the identifier after a release means a data-path migration, so it
 does not change twice.
 
-Research, competitor teardown and the architecture rules live in the
-`Observeone-research` repo under
-`dz-pos/competitors/2026-09-07-lumina-and-market/`.
+Research (law, tooling, competitor teardown, market) lives in
+`research/` in this repo; the Lumina teardown is under
+`research/competitors/2026-09-07-lumina-and-market/`.
 
 ## Origin
 

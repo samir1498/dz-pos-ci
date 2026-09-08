@@ -22,6 +22,10 @@ Two front doors, and only one of them works from a given session:
   you are in before the first write; `ctx plan list` from `context/` shows
   the dz-pos plans, `plan_list` from the MCP shows whichever store it holds.
 
+Research (`research/` in the repo) needs the env var on the CLI:
+`PC_CTX_RESEARCH_DIR=/home/samir/dz-pos/research ctx research list`; the MCP
+gets it from `.mcp.json`.
+
 CLI shapes that differ from the MCP: `ctx plan add-task <slug> <id> <text>
 <status>` needs the fourth positional (`pending`), `ctx plan activate
 <slug>`, `ctx show <slug>`, `ctx plan task-status <slug> <id> done`.

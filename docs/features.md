@@ -2,8 +2,8 @@
 
 Normative. If a screen or a rule is not here, it is not in scope. The
 competitor teardown, the Algerian facture field list and the market notes
-live in the research repo (`Observeone-research`,
-`dz-pos/competitors/2026-09-07-lumina-and-market/`); this file says
+live in `research/` (competitor material under
+`research/competitors/2026-09-07-lumina-and-market/`); this file says
 what *we* build, and links there for *why*.
 
 Status legend: **v1** ships in the first release; **later** is agreed but
@@ -125,8 +125,8 @@ a cancelled facture gets an avoir, it is not deleted.
 
 Each row names the fixture that pins it and the source that decides it.
 "assumption" means nobody has read the law for it yet; a source cites code,
-article and edition. Primary sources and findings live in the research repo
-under `dz-pos/legal-fiscal/`. **Confirm each with a comptable before the
+article and edition. Primary sources and findings live in
+`research/legal-fiscal/`. **Confirm each with a comptable before the
 first release.**
 
 | Rule | Assumption | Fixture | Source |
