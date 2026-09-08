@@ -5,8 +5,9 @@
 //! boundary once, generated, never hand-written twice (architecture.md).
 //!
 //! This is a test rather than a `#[ts(export)]` attribute so the write
-//! happens in one named place: `just types-check` runs it and then asks git
-//! whether anything moved, which is what makes a stale checkout fail.
+//! happens in one named place: `just types-check` runs it into a temp
+//! directory and diffs that against the committed one both ways, which is
+//! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
     ApiErrorDto, ApiErrorPayloadDto, CategoryDto, HealthDto, NewProductDto, ProductDto, UnitDto,
@@ -23,8 +24,17 @@ const FILES: [&str; 7] = [
     "ApiErrorPayloadDto.ts",
 ];
 
+/// Where the bindings are written. `just types-check` points
+/// `DZPOS_TS_OUT_DIR` at a temp directory and diffs the result against the
+/// committed one in both directions, so a new or a deleted DTO fails the
+/// gate. With no override the test writes the committed directory in place,
+/// which is how a developer regenerates it.
 fn out_dir() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/shared/src/generated")
+    match std::env::var_os("DZPOS_TS_OUT_DIR") {
+        Some(dir) => std::path::PathBuf::from(dir),
+        None => std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packages/shared/src/generated"),
+    }
 }
 
 /// ts-rs calls an `i64` a `bigint` by default, which would not survive

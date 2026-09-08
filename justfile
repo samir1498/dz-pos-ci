@@ -22,10 +22,18 @@ test:
 build:
     pnpm -r build
 
-# regenerate the TS types from crates/api and fail if the commit is stale
+# regenerate the TS types from crates/api and fail if the commit is stale.
+# `git diff --exit-code` used to be the check and it ignores untracked files,
+# so a brand new DTO passed the gate; it also never noticed an orphan left
+# behind by a DTO that was deleted. Generating into a temp directory and
+# running `diff -r` both ways catches each of those.
 types-check:
-    cargo test -p dzpos-api --test export_bindings
-    git diff --exit-code packages/shared/src/generated
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    DZPOS_TS_OUT_DIR="$tmp" cargo test -p dzpos-api --test export_bindings
+    diff -r "$tmp" packages/shared/src/generated
 
 # everything a PR needs, in order; stops at the first failure
 gates: fmt clippy types-check test build
