@@ -1,56 +1,135 @@
-// Money in integer centimes. First draft of packages/shared.
+// Money in integer centimes. First draft of packages/shared; the Rust core
+// in crates/core/src/money is the reference and both are pinned by the same
+// files under fixtures/money/, loaded here by money.test.js.
 // Rules mirror docs/features.md "Fiscal rules"; fixture names in comments.
 
-export const STAMP_RATE_PCT = 1; // stamp_cash_only_clamped
-export const STAMP_MIN = 500; // 5 DZD
-export const STAMP_MAX = 250_000; // 2 500 DZD
+/** Basis points in one whole: 10 000 bps = 100 %. */
+export const BPS_PER_WHOLE = 10_000;
 
-// Half away from zero on an integer × percent. tva_rounding_once_per_rate
-export function pct(amount, ratePct) {
-  const raw = amount * ratePct;
-  const sign = raw < 0 ? -1 : 1;
-  return sign * Math.floor((Math.abs(raw) + 50) / 100);
+// ---- droit de timbre: stamp_progressive_tranches ----
+/** Nothing is due at or below 300,00 DA. */
+export const STAMP_FLOOR = 30_000;
+/** One tranche, 100,00 DA; the count is rounded up. */
+export const STAMP_TRANCHE = 10_000;
+/** Highest amount charged at 1,00 DA per tranche: 30 000,00 DA. */
+export const STAMP_BAND_LOW = 3_000_000;
+/** Highest amount charged at 1,50 DA per tranche: 100 000,00 DA. */
+export const STAMP_BAND_MID = 10_000_000;
+export const STAMP_RATE_LOW = 100;
+export const STAMP_RATE_MID = 150;
+export const STAMP_RATE_HIGH = 200;
+/** Nothing due is charged below 5,00 DA. */
+export const STAMP_MIN = 500;
+
+/** Refused input, named like the Rust MoneyError variant. */
+export class MoneyError extends Error {
+  constructor(variant) {
+    super(variant);
+    this.name = "MoneyError";
+    this.variant = variant;
+  }
 }
 
-export function clamp(v, lo, hi) {
-  return Math.min(hi, Math.max(lo, v));
+/** amount × rate, rounded once to the centime, half away from zero.
+ *  tva_rounding_once_per_rate */
+export function pct(amount, rateBps) {
+  if (rateBps < 0 || rateBps > BPS_PER_WHOLE) throw new MoneyError("RateOutOfRange");
+  const raw = amount * rateBps;
+  const sign = raw < 0 ? -1 : 1;
+  return sign * Math.floor((Math.abs(raw) + BPS_PER_WHOLE / 2) / BPS_PER_WHOLE);
+}
+
+/** Droit de timbre on total_ttc. Cash only; zero at or under 300,00 DA;
+ *  ceil(amount / 100,00 DA) tranches at the band rate of the whole amount;
+ *  minimum 5,00 DA; no cap. stamp_progressive_tranches */
+export function stamp(totalTtc, mode) {
+  if (mode !== "cash" || totalTtc <= STAMP_FLOOR) return 0;
+  const tranches = Math.ceil(totalTtc / STAMP_TRANCHE);
+  const rate =
+    totalTtc <= STAMP_BAND_LOW
+      ? STAMP_RATE_LOW
+      : totalTtc <= STAMP_BAND_MID
+        ? STAMP_RATE_MID
+        : STAMP_RATE_HIGH;
+  return Math.max(tranches * rate, STAMP_MIN);
+}
+
+/** HT per rate group, by rising rate, and the sum of the groups. */
+function groupByRate(lines) {
+  const groups = [];
+  let totalHt = 0;
+  for (const l of lines) {
+    const lineDiscount = l.lineDiscount || 0;
+    if (l.qty < 0) throw new MoneyError("NegativeQuantity");
+    if (l.unitPrice < 0) throw new MoneyError("NegativeUnitPrice");
+    if (lineDiscount < 0) throw new MoneyError("NegativeDiscount");
+    const gross = l.qty * l.unitPrice;
+    if (lineDiscount > gross) throw new MoneyError("LineDiscountAboveLine");
+    const net = gross - lineDiscount;
+    totalHt += net;
+    const g = groups.find((x) => x.rateBps === l.rateBps);
+    if (g) g.ht += net;
+    else groups.push({ rateBps: l.rateBps, ht: net });
+  }
+  groups.sort((a, b) => a.rateBps - b.rateBps);
+  return { groups, totalHt };
+}
+
+/** The global discount each group carries: its proportional share rounded
+ *  down, the leftover centimes all going to the group with the largest HT
+ *  subtotal, the lower rate winning a tie.
+ *  discount_spread_largest_remainder */
+function spreadDiscount(groups, totalHt, discount) {
+  const shares = groups.map(() => 0);
+  if (discount === 0 || groups.length === 0) return shares;
+  // BigInt keeps discount × ht exact past Number.MAX_SAFE_INTEGER.
+  const total = BigInt(totalHt);
+  let allocated = 0;
+  groups.forEach((g, i) => {
+    shares[i] = Number((BigInt(discount) * BigInt(g.ht)) / total);
+    allocated += shares[i];
+  });
+  const remainder = discount - allocated;
+  if (remainder !== 0) {
+    // Groups rise by rate, so the first strict maximum is the largest HT at
+    // the lowest rate.
+    let largest = 0;
+    groups.forEach((g, i) => {
+      if (g.ht > groups[largest].ht) largest = i;
+    });
+    shares[largest] += remainder;
+  }
+  return shares;
 }
 
 /**
- * lines: [{ qty, unitPrice, lineDiscount, tvaRate }]
- * opts: { globalDiscount, paymentMode, stampEnabled }
+ * Every column of the totals table in docs/features.md §3.
+ * lines: [{ qty, unitPrice, lineDiscount, rateBps }]
+ * opts: { globalDiscount, paymentMode, stampEnabled, regime }
  */
 export function computeTotals(lines, opts) {
-  const byRate = new Map();
-  let totalHt = 0;
-  for (const l of lines) {
-    const lineHt = l.qty * l.unitPrice - (l.lineDiscount || 0);
-    totalHt += lineHt;
-    byRate.set(l.tvaRate, (byRate.get(l.tvaRate) || 0) + lineHt);
-  }
-  const discount = clamp(opts.globalDiscount || 0, 0, totalHt);
-  // Global discount spread across rate groups proportionally, remainder to the largest.
-  let allocated = 0;
-  const subtotalByRate = [];
-  const groups = [...byRate.entries()].sort((a, b) => b[1] - a[1]);
-  groups.forEach(([rate, ht], i) => {
-    let share = totalHt === 0 ? 0 : Math.floor((discount * ht) / totalHt);
-    if (i === groups.length - 1) share = discount - allocated;
-    allocated += share;
-    subtotalByRate.push({ rate, subtotal: ht - share });
-  });
+  const { groups, totalHt } = groupByRate(lines);
+  const discount = opts.globalDiscount || 0;
+  if (discount < 0) throw new MoneyError("NegativeDiscount");
+  if (discount > totalHt) throw new MoneyError("GlobalDiscountAboveTotal");
   const subtotalHt = totalHt - discount;
+
+  // Under the IFU the unit price is the single price: no TVA row, no TVA.
+  // regime_ifu_prints_no_tva
+  const tvaByRate = [];
   let tva = 0;
-  const tvaByRate = subtotalByRate.map(({ rate, subtotal }) => {
-    const amount = pct(subtotal, rate);
-    tva += amount;
-    return { rate, base: subtotal, amount };
-  });
+  if ((opts.regime || "reel") === "reel") {
+    const shares = spreadDiscount(groups, totalHt, discount);
+    groups.forEach((g, i) => {
+      const base = g.ht - shares[i];
+      const amount = pct(base, g.rateBps);
+      tva += amount;
+      tvaByRate.push({ rateBps: g.rateBps, base, amount });
+    });
+  }
+
   const totalTtc = subtotalHt + tva;
-  const stamp =
-    opts.stampEnabled && opts.paymentMode === "cash" && totalTtc > 0
-      ? clamp(pct(totalTtc, STAMP_RATE_PCT), STAMP_MIN, STAMP_MAX)
-      : 0;
+  const due = opts.stampEnabled ? stamp(totalTtc, opts.paymentMode) : 0;
   return {
     totalHt,
     discount,
@@ -58,8 +137,8 @@ export function computeTotals(lines, opts) {
     tvaByRate,
     tva,
     totalTtc,
-    stamp,
-    netToPay: totalTtc + stamp,
+    stamp: due,
+    netToPay: totalTtc + due,
   };
 }
 

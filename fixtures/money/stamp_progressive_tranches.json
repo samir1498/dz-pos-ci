@@ -1,0 +1,118 @@
+{
+  "name": "stamp_progressive_tranches",
+  "rule": "docs/features.md, fiscal rules, Droit de timbre: cash only (card and credit pay nothing); nothing at 300,00 DA or less; tranches = ceil(amount / 100,00 DA); 1,00 DA per tranche when the whole amount is at or under 30 000,00 DA, 1,50 DA up to 100 000,00 DA, 2,00 DA above, the whole amount at its band's rate; minimum 5,00 DA; no cap. The base is total_ttc (assumption, see the doc row). Amounts and expectations are integer centimes written by hand.",
+  "note": "The half-dinar on an odd tranche count at 1,50 DA is exact in centimes (301 × 150 = 45 150). The open question in the doc row only exists if the tax must be paid in whole dinars; nothing here rounds.",
+  "cases": [
+    {
+      "name": "300,00 DA cash is at the floor, nothing due",
+      "input": { "total_ttc": 30000, "mode": "cash" },
+      "expected": { "stamp": 0 }
+    },
+    {
+      "name": "0,01 DA cash is under the floor, nothing due",
+      "input": { "total_ttc": 1, "mode": "cash" },
+      "expected": { "stamp": 0 }
+    },
+    {
+      "name": "a zero basket in cash owes nothing",
+      "input": { "total_ttc": 0, "mode": "cash" },
+      "expected": { "stamp": 0 }
+    },
+    {
+      "name": "300,01 DA: ceil(30 001 / 10 000) = 4 tranches x 1,00 DA = 4,00 DA, raised to the 5,00 DA minimum",
+      "input": { "total_ttc": 30001, "mode": "cash" },
+      "expected": { "stamp": 500 }
+    },
+    {
+      "name": "450,00 DA: ceil(45 000 / 10 000) = 5 tranches x 1,00 DA = 5,00 DA, exactly the minimum",
+      "input": { "total_ttc": 45000, "mode": "cash" },
+      "expected": { "stamp": 500 }
+    },
+    {
+      "name": "500,00 DA: 5 tranches x 1,00 DA = 5,00 DA, a whole number of tranches",
+      "input": { "total_ttc": 50000, "mode": "cash" },
+      "expected": { "stamp": 500 }
+    },
+    {
+      "name": "600,00 DA: 6 tranches x 1,00 DA = 6,00 DA, the first amount above the minimum",
+      "input": { "total_ttc": 60000, "mode": "cash" },
+      "expected": { "stamp": 600 }
+    },
+    {
+      "name": "1 000,00 DA: 10 tranches x 1,00 DA = 10,00 DA",
+      "input": { "total_ttc": 100000, "mode": "cash" },
+      "expected": { "stamp": 1000 }
+    },
+    {
+      "name": "29 999,99 DA: ceil(2 999 999 / 10 000) = 300 tranches x 1,00 DA = 300,00 DA",
+      "input": { "total_ttc": 2999999, "mode": "cash" },
+      "expected": { "stamp": 30000 }
+    },
+    {
+      "name": "30 000,00 DA: 300 tranches x 1,00 DA = 300,00 DA, the last amount in the 1,00 DA band",
+      "input": { "total_ttc": 3000000, "mode": "cash" },
+      "expected": { "stamp": 30000 }
+    },
+    {
+      "name": "30 000,01 DA: 301 tranches x 1,50 DA = 451,50 DA, the whole amount at the new band's rate",
+      "input": { "total_ttc": 3000001, "mode": "cash" },
+      "expected": { "stamp": 45150 }
+    },
+    {
+      "name": "30 100,00 DA: 301 tranches x 1,50 DA = 451,50 DA, an odd tranche count, exact in centimes",
+      "input": { "total_ttc": 3010000, "mode": "cash" },
+      "expected": { "stamp": 45150 }
+    },
+    {
+      "name": "50 000,00 DA: 500 tranches x 1,50 DA = 750,00 DA",
+      "input": { "total_ttc": 5000000, "mode": "cash" },
+      "expected": { "stamp": 75000 }
+    },
+    {
+      "name": "100 000,00 DA: 1 000 tranches x 1,50 DA = 1 500,00 DA, the last amount in the 1,50 DA band",
+      "input": { "total_ttc": 10000000, "mode": "cash" },
+      "expected": { "stamp": 150000 }
+    },
+    {
+      "name": "100 000,01 DA: 1 001 tranches x 2,00 DA = 2 002,00 DA",
+      "input": { "total_ttc": 10000001, "mode": "cash" },
+      "expected": { "stamp": 200200 }
+    },
+    {
+      "name": "1 000 000,00 DA: 10 000 tranches x 2,00 DA = 20 000,00 DA, no cap",
+      "input": { "total_ttc": 100000000, "mode": "cash" },
+      "expected": { "stamp": 2000000 }
+    },
+    {
+      "name": "1 000 000,01 DA: 10 001 tranches x 2,00 DA = 20 002,00 DA",
+      "input": { "total_ttc": 100000001, "mode": "cash" },
+      "expected": { "stamp": 2000200 }
+    },
+    {
+      "name": "card owes nothing on 1 000,00 DA",
+      "input": { "total_ttc": 100000, "mode": "card" },
+      "expected": { "stamp": 0 }
+    },
+    {
+      "name": "card owes nothing on 1 000 000,00 DA either",
+      "input": { "total_ttc": 100000000, "mode": "card" },
+      "expected": { "stamp": 0 }
+    },
+    {
+      "name": "credit owes nothing on 1 000,00 DA",
+      "input": { "total_ttc": 100000, "mode": "credit" },
+      "expected": { "stamp": 0 }
+    },
+    {
+      "name": "an avoir with a negative total owes nothing in cash",
+      "input": { "total_ttc": -100000, "mode": "cash" },
+      "expected": { "stamp": 0 }
+    }
+  ],
+  "overflow_cases": [
+    {
+      "name": "i64::MAX centimes in cash overflows the ceiling of the tranche count",
+      "input": { "total_ttc": 9223372036854775807, "mode": "cash" }
+    }
+  ]
+}

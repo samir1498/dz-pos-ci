@@ -28,7 +28,7 @@ function totalsRows(tot, lang, showTva = true) {
   if (tot.discount) r.push(`<div><span>${t("discount")}</span><span class="num">−${fmt(tot.discount, lang)}</span></div>`);
   if (showTva)
     for (const g of tot.tvaByRate)
-      r.push(`<div><span>${t("tva")} ${g.rate}%</span><span class="num">${fmt(g.amount, lang)}</span></div>`);
+      r.push(`<div><span>${t("tva")} ${g.rateBps / 100}%</span><span class="num">${fmt(g.amount, lang)}</span></div>`);
   else r.push(`<div><span>${t("tva")}</span><span class="num">${fmt(tot.tva, lang)}</span></div>`);
   r.push(`<div><span>${t("total_ttc")}</span><span class="num">${fmt(tot.totalTtc, lang)}</span></div>`);
   if (tot.stamp) r.push(`<div><span>${t("stamp")}</span><span class="num">${fmt(tot.stamp, lang)}</span></div>`);
@@ -58,7 +58,7 @@ export function renderA4(sale, lang) {
         .map(
           (l) => `<tr><td>${esc(lang === "ar" ? l.product.ar : l.product.name)}</td>
           <td class="n num">${l.qty}</td><td class="n num">${fmt(l.unitPrice, lang)}</td>
-          <td class="n num">${l.tvaRate}%</td><td class="n num">${fmt(l.qty * l.unitPrice - (l.lineDiscount || 0), lang)}</td></tr>`,
+          <td class="n num">${l.rateBps / 100}%</td><td class="n num">${fmt(l.qty * l.unitPrice - (l.lineDiscount || 0), lang)}</td></tr>`,
         )
         .join("")}</tbody>
     </table>

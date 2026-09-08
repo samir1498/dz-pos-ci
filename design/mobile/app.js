@@ -10,7 +10,7 @@ const esc = (s) =>
 const state = {
   paired: false,
   products: PRODUCTS.map((p) => ({ ...p })),
-  cart: [], // { product, qty, unitPrice, lineDiscount, tvaRate }
+  cart: [], // { product, qty, unitPrice, lineDiscount, rateBps }
   customerId: null,
   globalDiscount: 0,
   paymentMode: "cash",
@@ -51,11 +51,25 @@ function customer() {
   return CUSTOMERS.find((c) => c.id === state.customerId) ?? null;
 }
 
+// money.js refuses a discount above the basket instead of clamping it. The
+// field must not be able to ask for one, and removing a line can shrink the
+// basket under a discount already typed, so the clamp lives here.
+function cartHt() {
+  return computeTotals(state.cart, {
+    globalDiscount: 0,
+    paymentMode: "cash",
+    stampEnabled: false,
+    regime: STORE.regime,
+  }).totalHt;
+}
+
 function totals(mode = state.paymentMode) {
+  state.globalDiscount = Math.min(Math.max(state.globalDiscount, 0), cartHt());
   return computeTotals(state.cart, {
     globalDiscount: state.globalDiscount,
     paymentMode: mode,
     stampEnabled: STORE.stampEnabled,
+    regime: STORE.regime,
   });
 }
 
@@ -66,7 +80,7 @@ function cartCount() {
 function addToCart(p) {
   const line = state.cart.find((l) => l.product.id === p.id);
   if (line) line.qty += 1;
-  else state.cart.push({ product: p, qty: 1, unitPrice: p.price, lineDiscount: 0, tvaRate: p.tva });
+  else state.cart.push({ product: p, qty: 1, unitPrice: p.price, lineDiscount: 0, rateBps: p.tvaBps });
 }
 
 function toast(msg) {
@@ -126,7 +140,7 @@ function totalsBlock(tot) {
   rows.push(`<div><span>${t("total_ht")}</span><span class="num">${fmt(tot.totalHt, lang())}</span></div>`);
   if (tot.discount) rows.push(`<div><span>${t("discount")}</span><span class="num">−${fmt(tot.discount, lang())}</span></div>`);
   for (const g of tot.tvaByRate)
-    rows.push(`<div><span>${t("tva")} ${g.rate}%</span><span class="num">${fmt(g.amount, lang())}</span></div>`);
+    rows.push(`<div><span>${t("tva")} ${g.rateBps / 100}%</span><span class="num">${fmt(g.amount, lang())}</span></div>`);
   rows.push(`<div><span>${t("total_ttc")}</span><span class="num">${fmt(tot.totalTtc, lang())}</span></div>`);
   if (tot.stamp) rows.push(`<div><span>${t("stamp")}</span><span class="num">${fmt(tot.stamp, lang())}</span></div>`);
   rows.push(`<div class="grand"><span>${t("net_to_pay")}</span><span class="num">${fmt(tot.netToPay, lang())}</span></div>`);
@@ -194,7 +208,7 @@ function cartScreen() {
             .map(
               (l) => `<div class="cartline">
               <div class="main"><div class="title">${esc(pname(l.product))}</div>
-                <div class="tiny num">${l.qty} × ${fmt(l.unitPrice, lang())} · ${t("tva")} ${l.tvaRate}%</div>
+                <div class="tiny num">${l.qty} × ${fmt(l.unitPrice, lang())} · ${t("tva")} ${l.rateBps / 100}%</div>
                 <div class="price num">${fmt(l.qty * l.unitPrice - l.lineDiscount, lang())}</div></div>
               <div class="stepper">
                 <button type="button" data-dec="${l.product.id}" aria-label="−">−</button>
@@ -344,7 +358,7 @@ function sheet() {
       <div class="kv"><span>${t("category")}</span><span>${esc(catName(CATEGORIES.find((c) => c.id === p.cat)))}</span></div>
       <div class="kv"><span>${t("price")}</span><span class="num">${fmt(p.price, lang())}</span></div>
       <div class="kv"><span>${t("stock")}</span><span class="num">${p.qty} ${stockTag(p)}</span></div>
-      <div class="kv"><span>${t("tva_rate")}</span><span class="num">${p.tva}%</span></div>`;
+      <div class="kv"><span>${t("tva_rate")}</span><span class="num">${p.tvaBps / 100}%</span></div>`;
   } else {
     const c = CUSTOMERS.find((x) => x.id === state.sheet.id);
     if (!c) return "";
@@ -500,7 +514,10 @@ screenEl.addEventListener("input", (e) => {
     tmp.innerHTML = productsScreen();
     screenEl.querySelector(".list").innerHTML = tmp.querySelector(".list").innerHTML;
   } else if (role === "discount") {
-    state.globalDiscount = Math.max(0, Math.round(Number(e.target.value || 0) * 100));
+    const asked = Math.max(0, Math.round(Number(e.target.value || 0) * 100));
+    state.globalDiscount = Math.min(asked, cartHt());
+    // Show what is applied, so the field never claims more than the basket.
+    if (state.globalDiscount !== asked) e.target.value = state.globalDiscount / 100;
     screenEl.querySelector("[data-role=totals]").outerHTML = totalsBlock(totals("cash"));
   }
 });

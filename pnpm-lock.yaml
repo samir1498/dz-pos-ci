@@ -87,6 +87,12 @@ importers:
         specifier: ^4.1.9
         version: 4.1.11(@types/node@24.13.3)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0))
 
+  design:
+    devDependencies:
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.11(jsdom@29.1.1)(vite@8.2.2(esbuild@0.28.2)(jiti@2.7.0))
+
 packages:
 
   '@adobe/css-tools@4.5.0':

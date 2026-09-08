@@ -5,6 +5,12 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod stamp;
+pub mod totals;
+
+pub use stamp::{stamp, PaymentMode};
+pub use totals::{compute_totals, Line, Regime, Totals, TotalsOptions, TvaLine};
+
 /// Basis points in one whole: 10 000 bps = 100 %.
 pub const BPS_PER_WHOLE: i64 = 10_000;
 
@@ -30,6 +36,16 @@ pub enum MoneyError {
     Overflow,
     #[error("rate above 10 000 basis points (100 %)")]
     RateOutOfRange,
+    #[error("a line quantity is below zero")]
+    NegativeQuantity,
+    #[error("a line unit price is below zero")]
+    NegativeUnitPrice,
+    #[error("a discount is below zero")]
+    NegativeDiscount,
+    #[error("a line discount is above its line total")]
+    LineDiscountAboveLine,
+    #[error("the global discount is above the total HT")]
+    GlobalDiscountAboveTotal,
 }
 
 impl Money {
