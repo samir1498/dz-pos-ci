@@ -1,5 +1,6 @@
-/* dz-pos design tokens — three tiers, same shape as the future
-   packages/shared/design/tokens.json → Tailwind @theme / RN theme.ts.
+/* dz-pos design tokens, three tiers, mirrored in packages/design
+   (primitives.ts, semantic.ts, theme.ts); css.test.ts there fails when
+   this file and the package disagree on a variable.
    Tier 1 primitives: never used by components. Tier 2 semantic: the API. */
 
 :root {

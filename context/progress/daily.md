@@ -23,4 +23,7 @@ type: 'daily'
 ## 2026-09-08 18:18 UTC
 
 - Night build 20:17: T1 reviewed (two lenses) and fixed in 49e9e1a (Bps bounded to 10 000, no Default on Money, fixture and proptest gaps closed). Track D (tooling T5-T7) reviewed, three lost clauses restored, merged into night/2026-09-08. Traps: Agent worktrees start from main; a shared CARGO_TARGET_DIR across worktrees serves stale artifacts for same-named crates. Track F added on Samir's request: brainqraft-mobile conventions into a research page, a frontend-conventions process and a packages/design scaffold. (@night-build)
+## 2026-09-08 18:40 UTC
+
+- Night build 20:40: tracks A (money rules), B (words), E (research R3/R7 closed, R6/R8 progress) and F (frontend conventions + packages/design) delivered and pushed. Reviews: A Rust centimes clean by hand recomputation, three mockup defects and two proptest gaps in fix round; B fr/en clean, round-trip proptest missing, in fix round; E and F reviews running; C (migration/api/screen) still building. (@night-build)
 
