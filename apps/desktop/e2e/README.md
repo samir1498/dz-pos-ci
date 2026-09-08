@@ -40,11 +40,11 @@ minutes. The API webServer has a ten minute start timeout for that.
 
 ## Files
 
-- `products.spec.ts` — the two tests. Expected strings are read from
+- `products.spec.ts`: the two tests. Expected strings are read from
   `src/i18n/fr.json` at runtime, so a reworded message fails the test
   instead of quietly passing.
-- `screenshots/products.png` — committed, 1280x800, full page.
-- `.artifacts/` — gitignored: the temp database and failure traces.
+- `screenshots/products.png`: committed, 1280x800, full page.
+- `.artifacts/`: gitignored, holding the temp database and failure traces.
 
 ## Two things the screen does not do yet
 
