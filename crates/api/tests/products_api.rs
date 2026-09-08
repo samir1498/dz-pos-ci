@@ -55,6 +55,28 @@ async fn call(
     (status, value)
 }
 
+/// The CORS preflight a browser sends before a cross-origin POST, and the
+/// `access-control-allow-origin` the server answered with. `None` means the
+/// browser will refuse to hand the answer to the page.
+async fn preflight(app: &axum::Router, origin: &str) -> Option<String> {
+    let req = Request::builder()
+        .method("OPTIONS")
+        .uri("/products")
+        .header("origin", origin)
+        .header("access-control-request-method", "POST")
+        .header("access-control-request-headers", "content-type")
+        .body(Body::empty())
+        .unwrap();
+    allowed_origin(app.clone().oneshot(req).await.unwrap())
+}
+
+fn allowed_origin(res: axum::response::Response) -> Option<String> {
+    res.headers()
+        .get("access-control-allow-origin")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string)
+}
+
 fn draft() -> Value {
     json!({
         "name": "Huile Elio 5L",
@@ -241,6 +263,75 @@ async fn every_error_body_has_a_code_and_a_message() {
     assert_eq!(body["error"]["code"], "not_found");
     assert!(body["error"]["message"].is_string());
     assert_eq!(body.as_object().map(|o| o.len()), Some(1));
+}
+
+#[tokio::test]
+async fn only_the_apps_own_origins_may_call_it() {
+    // allow_origin(Any) let any page open in any browser on this machine
+    // read and write the till's database over loopback.
+    let h = harness();
+    for origin in [
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "tauri://localhost",
+        "http://tauri.localhost",
+    ] {
+        assert_eq!(
+            preflight(&h.app, origin).await.as_deref(),
+            Some(origin),
+            "{origin} is one of the app's own and was refused"
+        );
+    }
+    assert_eq!(
+        preflight(&h.app, "https://evil.example").await,
+        None,
+        "a stranger's page was cleared to call the till"
+    );
+}
+
+#[tokio::test]
+async fn an_answer_to_a_stranger_carries_no_cors_header() {
+    let h = harness();
+    let req = Request::builder()
+        .method("GET")
+        .uri("/products")
+        .header("origin", "https://evil.example")
+        .body(Body::empty())
+        .unwrap();
+    let res = h.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(
+        allowed_origin(res),
+        None,
+        "the browser would have handed this answer to a stranger's page"
+    );
+}
+
+#[tokio::test]
+async fn one_more_origin_can_be_named_for_the_ssh_case() {
+    // The UI served from the WSL box and opened on the laptop is a fourth
+    // origin, and it is the operator's to name, never a default.
+    use axum::http::HeaderValue;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    let app = dzpos_api::router_with_origin(
+        state,
+        Some(HeaderValue::from_static("http://100.111.55.62:5173")),
+    );
+
+    assert_eq!(
+        preflight(&app, "http://100.111.55.62:5173")
+            .await
+            .as_deref(),
+        Some("http://100.111.55.62:5173")
+    );
+    assert_eq!(preflight(&app, "https://evil.example").await, None);
+    assert_eq!(
+        preflight(&app, "http://127.0.0.1:5173").await.as_deref(),
+        Some("http://127.0.0.1:5173"),
+        "naming one more origin must not drop the built-in ones"
+    );
 }
 
 #[tokio::test]
