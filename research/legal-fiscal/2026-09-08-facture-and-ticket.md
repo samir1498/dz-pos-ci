@@ -22,15 +22,18 @@ a défaut de facturation, not because any text lists it among the mentions.
 | `CodedesTaxessurleChiffredAffaires2026fr.pdf` | CTCA 2026, art. 29 and the LF 2006 annex | already in `sources/` |
 | `CodedesImpotsDirectsetTaxesAssimilees2026fr.pdf` | CIDTA 2026, art. 183 ter | already in `sources/` |
 
-The ministry of commerce lists the texts in force per subject. Its recueil
-"Règles applicables aux Pratiques Commerciales" holds two entries, loi 04-02
-and loi 10-06, so 10-06 is the only amendment to date. Its recueil
-"Conditions et modalités d'établissement de la facture" holds four entries:
+The ministry of commerce's website lists the texts in force per subject. Its
+recueil "Règles applicables aux Pratiques Commerciales" lists two entries, loi
+04-02 and loi 10-06, so 10-06 is the only amendment to date. Its recueil
+"Conditions et modalités d'établissement de la facture" lists four entries:
 décret 05-468, the arrêté of 1 August 2013, décret 16-66, and décret exécutif
-20-389 of 19 December 2020 (JO n° 78 of 27 December 2020), which fixes the form
-and the mentions of the procès-verbal an inspector writes when he finds a
-commercial-practices offence. The joint arrêté that décret 05-468 art. 11 calls
-for, the one that would open the télématique facture, is not in that recueil.
+20-389 of 19 December 2020 (JO n° 78 of 27 December 2020), which the listing
+describes as fixing the form and the mentions of the procès-verbal an inspector
+writes when he finds a commercial-practices offence. Not opened: the two
+recueils themselves and décret 20-389 have no PDF in `sources/`; only the
+listing was read. The joint arrêté that décret 05-468 art. 11 calls for, the
+one that would set the modalities of the télématique facture, does not appear
+in that listing, which is not the same as knowing it was never published.
 
 Correction to the earlier findings note: `Loi-04-02-pratiques-commerciales.pdf`
 is not an excerpt. It is the full eight-page JO n° 41 extract, arts. 1 to 67,
@@ -77,9 +80,13 @@ bon de transaction commerciale only.
 
 That leaves the ticket's content to other rules that reach it from outside:
 the droit de timbre when the customer pays cash, because Code du timbre
-art. 100-I taxes any "titre qui constate un paiement" and the DGI circular
+art. 100-I taxes « les Titres de quelle que nature qu'ils soient, signés ou
+non signés, faits sous signatures privées, qui comportent libération ou qui
+constatent des paiements ou des versements de sommes » and the DGI circular
 14/MF/DGI/LF.2025 names the ticket de caisse explicitly; and CTCA art. 64,
-which forbids an IFU seller from printing a TVA amount on any document.
+which says that IFU sellers « ne peuvent pas mentionner la taxe sur la valeur
+ajoutée sur leurs factures ». The article says factures; that the rule reaches
+a ticket is our reading, since the ticket carries no TVA line either way.
 
 ### Facture versus ticket, the trigger
 
@@ -199,21 +206,30 @@ Seller mentions:
 
 Buyer mentions: nom et prénom(s) or raison sociale, forme juridique et nature
 de l'activité, adresse and phone, fax and email, numéro du registre du
-commerce, numéro d'identification statistique. The décret's buyer block
-assumes a trader. For a consumer buying on request, loi 04-02 art. 34 makes
-the name and the address the load-bearing pair, and the identifiers of a
-party who has none cannot be printed.
+commerce, numéro d'identification statistique. That list assumes a trader.
+The consumer case is the last alinéa of art. 3-2: « Si l'acheteur est un
+consommateur, la facture doit mentionner ses nom, prénom(s) et adresse. »
+Name and address, nothing else, and the identifiers of a party who has none
+are not asked for. Loi 04-02 art. 34 separately makes the buyer's name and
+address load-bearing, so omitting them is a défaut de facturation.
 
 Art. 4: cachet humide and the seller's signature, unless the facture is issued
-"par voie télématique" under art. 11, which is itself closed until the joint
-arrêté it calls for exists. Public-money payments cannot use the télématique
-route at all. Print layouts therefore keep a stamp block and a signature block.
+"par voie télématique" under art. 11. Art. 11 sends the modalities of that
+route to an « arrêté conjoint des ministres chargés du commerce, des finances
+et des télécommunications »; whether that arrêté was published was not
+searched tonight, so the route is open, not closed. Public-money payments
+cannot use it at all. Print layouts keep a stamp block and a signature block
+until that search is done.
 
 Art. 10: "La facture doit être lisible et ne comprendre aucune tâche, rature
 ou surcharge." A facture is regular when it comes from a carnet à souches with
-an uninterrupted chronological series, or is produced by a computer process; a
-new book cannot start before the previous one is exhausted; a cancelled facture
-keeps its number and is barred diagonally with the mention that it is cancelled.
+« une série ininterrompue et chronologique de factures », or is produced by a
+computer process; a new book cannot start before the previous one is
+exhausted; and « La facture régulièrement annulée doit faire l'objet d'une
+mention "facture annulée" inscrite clairement en diagonale. » The text stops
+there. That a cancelled facture keeps its number is our inference from the
+série ininterrompue of the same article, since reusing the number would break
+the series; question 4 of the comptable page asks whether practice agrees.
 
 ## Décret 16-66: the bon de transaction commerciale is not our document
 
@@ -241,9 +257,12 @@ cancellation mark:
 
 Its mention list is short: désignation, prix unitaire, quantité, montant par
 produit, montant total, plus the deposit on returnable packaging and costs
-advanced for a third party. No tax line, no identifiers. It is a transparency
-instrument for produce circuits, and it takes the seller's stamp and signature
-plus the buyer's signature.
+advanced for a third party. The annexed models carry more than the article
+lists: annexes 1, 1 bis and 2 have a "Numéro d'identification fiscal (NIF)"
+line for the seller, every model has a "montant total hors taxes" column, and
+annexes 2 and 3 add a "TVA (DA)" column. It is a transparency instrument for
+produce circuits, and it takes the seller's stamp and signature plus the
+buyer's signature.
 
 ## Arrêté of 1 August 2013: found, and it is about fraud
 
@@ -262,14 +281,22 @@ under art. 65 of loi 02-11 (LF 2003) and CIDTA art. 219 bis.
 > achat, une vente ou une prestation de service réel.
 
 > Art. 4. — L'établissement de fausses factures ou de factures de complaisance
-> entraîne l'application d'une amende fiscale égale à 50% de leur valeur [...]
-> tant à l'encontre des personnes ayant procédé à l'établissement des factures
-> qu'à l'encontre de celles ayant été destinataires desdites factures.
+> entraîne l'application d'une amende fiscale égale à 50% de leur valeur et ce,
+> conformément aux dispositions de l'article 65 de la loi n° 02-11 [...]
+>
+> L'amende fiscale citée précédemment s'applique, pour les cas de fraudes ayant
+> trait à l'émission des fausses factures, tant à l'encontre des personnes
+> ayant procédé à l'établissement des factures qu'à l'encontre de celles ayant
+> été destinataires desdites factures.
 
-The 50 % fine hits the buyer as well as the seller. A POS that lets an operator
-type a free-text buyer name onto a facture is one keystroke away from a facture
-de complaisance. The buyer block should be a foreign key to a party record with
-its identifiers, and a party created at the till should be flagged as unverified
+The 50 % fine applies to both kinds. The second alinéa extends it to the
+recipient, and states that extension for the fausses factures case; it does
+not say the same for the facture de complaisance, so whether the buyer of a
+facture de complaisance is fined under this arrêté is not settled by its text.
+A POS that lets an operator type a free-text buyer name onto a facture is
+still one keystroke away from a facture de complaisance on the seller's side.
+The buyer block should be a foreign key to a party record with its
+identifiers, and a party created at the till should be flagged as unverified
 until someone fills the RC and the NIF.
 
 ## Field list per document kind, for the product
@@ -278,7 +305,7 @@ until someone fills the RC and the NIF.
 |---|---|---|---|---|---|
 | `ticket` | loi 04-02 art. 10 al. 3 | none | not required | not required | only if the shop is au réel |
 | `facture` | loi 04-02 art. 10 al. 1 and 2, décret 05-468 art. 3 and 4 | full, or name and address for a consumer | required, TTC in figures and words | required, unless télématique under art. 11 | only if the shop is au réel |
-| `facture` to a consumer on request | décret 05-468 art. 2 al. 4 | name and address | required | required | as above |
+| `facture` to a consumer on request | décret 05-468 art. 2 last alinéa (issued on request) and art. 3-2 last alinéa (« ses nom, prénom(s) et adresse ») | name, prénom(s) and address | required | required | as above |
 | `bon de livraison` and `facture récapitulative` | loi 04-02 art. 11, décret 05-468 arts. 14 to 17 | full | on the récapitulative | required | on the récapitulative |
 | `bon de transaction commerciale` | décret 16-66 | none beyond the signature | not required | seller stamp and signature, buyer signature | none |
 
@@ -290,7 +317,9 @@ later by reading only the decree's title.
 - No text prescribes what a ticket de caisse contains. What shops actually
   print is a practice question for the comptable, not a legal one.
 - The AI (article d'imposition) has no text making it a facture mention.
-- Décret 05-468 art. 11 allows a facture "par voie télématique" subject to a
-  joint arrêté of the ministers of commerce and finance. Whether that arrêté
-  was ever published decides whether a purely electronic facture with no wet
-  stamp is legal. Not searched tonight.
+- Décret 05-468 art. 11 allows a facture "par voie télématique" subject to an
+  « arrêté conjoint des ministres chargés du commerce, des finances et des
+  télécommunications », three ministers. Whether that arrêté was ever
+  published decides whether a purely electronic facture with no wet stamp is
+  legal. Not searched tonight; it is absent from the ministry of commerce
+  listing read above, which is not proof.

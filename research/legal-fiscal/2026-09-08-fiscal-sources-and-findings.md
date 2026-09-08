@@ -368,7 +368,7 @@ with
 
 with
 
-> décret 05-468 art. 10, "une série ininterrompue et chronologique de factures", a new facturier only after the previous one is exhausted, a cancelled facture keeps its number and carries "facture annulée" written diagonally (Arabic "فاتورة ملغاة", JO n° 80/2005 Arabic edition); décret 16-66 art. 5 says the same for the bon de transaction commerciale with the mention « ANNULE » in capitals; whether the series restarts each year is a practice question for the comptable
+> décret 05-468 art. 10, "une série ininterrompue et chronologique de factures", a new facturier only after the previous one is exhausted, and « La facture régulièrement annulée doit faire l'objet d'une mention "facture annulée" inscrite clairement en diagonale » (Arabic "فاتورة ملغاة", JO n° 80/2005 Arabic edition). That a cancelled facture keeps its number is an inference from the série ininterrompue, not a sentence of the décret; décret 16-66 art. 5 says the same for the bon de transaction commerciale with the mention « ANNULE » in capitals; whether the inference holds in practice and whether the series restarts each year are question 4 of `research/legal-fiscal/2026-09-08-questions-comptable.md`
 
 **Row "Droit de timbre", Source cell.** Append at the end, after the circular
 reference:
@@ -382,18 +382,15 @@ rule the spec relies on and never states with a source:
 
 **§3, Totals table.** Two additions that are not Source-column edits:
 
-- `discount` needs a sentence saying how a global discount is allocated when
-  the basket spans two rate groups. The spec defines `discount` against
-  `total_ht` and `tva` per rate group, and never joins the two. Proposed, and
-  put to the comptable as question 7 of `2026-09-08-questions-comptable.md`:
-  proportional to each group's HT, remainder of centimes to the largest group.
 - `old_balance`, `remaining_debt` and `total_debt` should be marked as practice
   rather than law. No text requires or forbids them on a document, and a reader
   of that table currently cannot tell which rows are law and which are habit.
 - `amount_in_words` is defined on `net_to_pay`, which includes the stamp, while
   décret 05-468 art. 3 asks for the "prix total toutes taxes comprises". Which
-  figure goes in words is question 1 of the comptable page's follow-up and is
-  unanswered.
+  figure goes in words is question 8 of `2026-09-08-questions-comptable.md`
+  and is unanswered. The global discount split needs no edit: the row "Global
+  discount spread" already pins it, fixture `discount_spread_largest_remainder`,
+  and question 7 of the comptable page checks it against practice.
 
 **§3, document kinds.** There is no `quittance` kind. A receipt for a later cash
 payment is itself a title constating a payment under Code du timbre art. 100-I,
@@ -401,6 +398,6 @@ and the DGI circular 14/2025 names the quittance first. Question 6 of the
 comptable page decides whether the kind is needed.
 
 **§4, Printing.** Add the cancellation overlay to the template requirements: a
-cancelled facture prints its own number with "facture annulée" (ar
-"فاتورة ملغاة") written diagonally across the document, per décret 05-468
-art. 10.
+cancelled facture prints "facture annulée" (ar "فاتورة ملغاة") written
+diagonally across the document, per décret 05-468 art. 10. That it prints
+under its own number is the spec's numbering rule, not the décret's words.

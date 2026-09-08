@@ -15,7 +15,7 @@ the centime side does not.
 |---|---|---|
 | `sources/JO-2024-084-LF2025-ar.pdf`, JO n° 84 of 26 December 2024, Arabic edition | 18 amounts in letters with the figures beside them, from 100 DA to 8 523 063 673 111 DA | Text extracts once normalised NFKC. Correction to the earlier note in the findings doc: the file is not glyph-locked. Its fonts encode Arabic Presentation Forms-B, so a raw search for `دينار` misses and `ﺩﻳﻨﺎﺭ` hits. NFKC folds them |
 | `sources/JO-2005-080-decret-05-468-facture-ar.pdf`, JO n° 80 of 11 December 2005, Arabic edition | The official Arabic wording of décret 05-468, including the phrase for "in figures and in letters" and the cancelled-facture mark | Font has no ToUnicode map, so the text layer is unreadable. Pages 19 and 20 were rendered to PNG and read visually |
-| `sources/BanqueAlgerie-Instruction-05-95-normalisation-du-cheque.pdf` | Where the amount in letters goes on a cheque, zone B, after "Payez contre ce chèque", on two ruled lines | French only. No Arabic, no spelling rule, no centime |
+| `sources/BanqueAlgerie-Instruction-05-95-normalisation-du-cheque.pdf` | Where the amount in letters goes on a cheque, zone B, after "Payez contre ce chèque", on two ruled lines | Bilingual, not French only: §I-1 says the norm respects "la réglementation en vigueur (mentions obligatoires, langue arabe)", the model cheques in appendices I-a, I-b and I-c print "DA" beside "دج" and "Payez contre ce chèque" beside its Arabic, and §III-2-1 records the amount in the encoding band "en centimes sur un maximum de 12 caractères". No spelling rule for the amount in letters, in either language, and no centime written in letters |
 
 Searched and not found tonight: an official Algerian text that writes a
 centime amount in Arabic letters. The LF 2025 Arabic issue has zero
@@ -140,7 +140,7 @@ Decisions inside it, each with the reason:
 
 ## What the native reviewer decides
 
-Send these five with the golden file, not before it exists:
+Send these six with the golden file, not before it exists:
 
 1. ثلاثمائة, أربعمائة, تسعمائة in the joined form, since the JO never needs them.
 2. سنتيم and its plural سنتيمات, against any form an Algerian accountant
@@ -160,4 +160,4 @@ table plus the two long JO amounts verbatim, because those two are the only
 rows backed by a primary source and they are the rows that will catch a
 regression in the thousands and milliards joins. Hand-write every expectation
 in centimes as the money contract requires. Nothing here becomes code until
-the reviewer has answered the five questions above.
+the reviewer has answered the six questions above.

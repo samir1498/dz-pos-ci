@@ -1,6 +1,6 @@
 # Questions pour le comptable (2026-09-08)
 
-Une page, sept questions. Chacune donne la règle telle que nous l'avons lue,
+Une page, huit questions. Chacune donne la règle telle que nous l'avons lue,
 la source, et la raison de la question. Les textes cités sont dans
 `research/legal-fiscal/sources/`. Nous cherchons la pratique constatée sur les
 factures réelles, pas une confirmation du texte.
@@ -43,12 +43,15 @@ change-t-on de régime en cours d'année ou seulement au 1er janvier ?
 Règle lue : la facture est régulière lorsqu'elle provient d'un facturier ou d'un
 procédé informatique comportant « une série ininterrompue et chronologique de
 factures », et un nouveau carnet ne peut être entamé qu'après épuisement du
-précédent. Une facture annulée garde son numéro et porte la mention « facture
-annulée » en diagonale.
+précédent. « La facture régulièrement annulée doit faire l'objet d'une mention
+"facture annulée" inscrite clairement en diagonale. » Le texte s'arrête là.
 Source : décret exécutif 05-468 du 10 décembre 2005, art. 10.
-Pourquoi : le texte ne dit pas si la série repart à 1 au 1er janvier. En pratique,
-la numérotation est-elle continue d'une année sur l'autre, ou remise à zéro avec
-l'année dans le numéro ?
+Notre lecture : une facture annulée garde son numéro, parce que le réattribuer
+casserait la série ininterrompue. C'est une déduction, pas une phrase du décret.
+Pourquoi : cette déduction tient-elle en pratique, ou voit-on des numéros
+réutilisés après annulation ? Et le texte ne dit pas si la série repart à 1 au
+1er janvier : la numérotation est-elle continue d'une année sur l'autre, ou
+remise à zéro avec l'année dans le numéro ?
 
 ## 5. Le timbre sur une facture à crédit réglée plus tard en espèces
 
@@ -81,6 +84,17 @@ répartir cette remise entre les deux groupes. Nous prévoyons une répartition
 proportionnelle au HT de chaque groupe, le reliquat de centimes allant au groupe
 le plus important. Est-ce la pratique, ou la remise est-elle ventilée ligne par
 ligne avant tout calcul de taxe ?
+
+## 8. Le montant en lettres : total TTC ou net à payer
+
+Règle lue : la facture comporte le « prix total toutes taxes comprises, libellé
+en chiffres et en lettres ».
+Source : décret exécutif 05-468, art. 3.
+Pourquoi : lorsqu'un droit de timbre s'ajoute à une facture réglée en espèces,
+le net à payer dépasse le total TTC du montant du timbre. Nous écrivons
+aujourd'hui en lettres le net à payer, timbre compris, comme les logiciels du
+marché. Sur les factures que vous voyez, le montant en lettres reprend-il le
+total TTC, ou le net à payer avec le timbre ?
 
 ## Une remarque utile pour la question 1
 
