@@ -201,14 +201,57 @@ NIS (or name and address for a consumer), amount in words, stamp and
 signature blocks, TTC including discounts, and the extra lines of arts 7
 to 9 when they apply.
 
-### IFU regime (not yet read, product-shaping)
+### IFU regime (read, primary): an IFU shop must not show TVA at all
 
-Search results agree that sole traders under the impôt forfaitaire unique
-(threshold quoted as 8 M DA, 15 M DA for achat-revente in one source) do
-not invoice TVA at all. If most target shops are IFU, the till's default
-document shows no TVA line and the per-rate rounding design serves the
-minority on the régime réel. Needs the CIDTA articles (282 ter ff.) and
-the LF 2026 changes read, then a decision on a per-shop "régime" setting.
+CIDTA 2026 (`sources/CodedesImpotsDirectsetTaxesAssimilees2026fr.pdf`):
+
+- **Art. 282 ter (p. 108):** natural persons with an industrial,
+  commercial, non-commercial or artisanal activity whose annual turnover
+  does not exceed **8 000 000 DA** are under the impôt forfaitaire unique,
+  unless they opt for the régime réel. Excluded: property development,
+  importers reselling as is, wholesale buy-resell (art. 183 ter), and a
+  further list.
+- **Art. 282 quinquies (p. 110):** several shops of one owner are taxed
+  separately as long as the sum of their turnovers stays under 8 M DA;
+  above it, the owner moves to the régime réel for all of them.
+- **Art. 282 sexies (p. 110):** IFU rate 5 % for production and sale of
+  goods, 12 % for other activities, 0,5 % under the auto-entrepreneur
+  status.
+- **Art. 282 quater (p. 109):** for products with a regulated price or
+  margin (large-consumption goods), the IFU base is the margin, and the
+  return must split turnover between regulated and other products.
+
+CTCA 2026 (`sources/CodedesTaxessurleChiffredAffaires2026fr.pdf`):
+
+- **Art. 2-12 (p. 6):** retail sales are in the TVA field "à l'exclusion
+  des opérations réalisées par des contribuables relevant de l'impôt
+  forfaitaire unique".
+- **Art. 64 (p. 41):** "Les redevables placés sous le régime de l'impôt
+  forfaitaire unique ne peuvent pas mentionner la taxe sur la valeur
+  ajoutée sur leurs factures sous peine de se voir appliquer les
+  sanctions prévues à l'article 114." Whoever prints TVA without paying
+  it is personally liable for it.
+
+Consequence for the product, and it is a big one:
+
+- The shop has a **régime fiscal** setting: `ifu` or `réel`. It is not a
+  per-product thing and not a toggle to hide a line; it changes what a
+  price is.
+- **IFU shop:** one price per product, no TVA rate, no HT/TTC split, no
+  TVA line on ticket or facture (printing one is an offence). Totals are
+  lines, discount, stamp (the timbre is a separate duty and still applies
+  to cash), net to pay. The facture still carries every 05-468 mention
+  except the TVA line. The margin split of art. 282 quater is a reporting
+  concern for later (flag on product: regulated price yes/no).
+- **Réel shop:** everything already specified: rate per product, HT
+  lines, TVA per rate group, TTC.
+- A shop can change regime at a year boundary (turnover crosses 8 M DA
+  or an option is taken). Documents keep the regime they were issued
+  under; the setting is dated, not overwritten.
+- Which regime most target shops are under is a market question, not a
+  legal one: 8 M DA a year is about 22 000 DA a day of sales, so a small
+  supérette is IFU and a busy one is réel. The product must do both from
+  v1; the mockup today only shows the réel case.
 
 ### Amount in words (decree read; libraries checked)
 
