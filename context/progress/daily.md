@@ -20,4 +20,7 @@ type: 'daily'
 ## 2026-09-08 18:09 UTC
 
 - Night build started (Samir: "take the wheel", 2026-09-08 19:55). T1 Money newtype committed on core/money-newtype (1205a3d): Money(i64), Bps, pct half away from zero, fixtures tva_rounding_once_per_rate + money_no_float, 8 proptests, mutation check red on the exact-half case. Five tracks running in worktrees off that branch: A money rules (core/money-rules), B words (core/money-words), C migration+api+shared+screen+e2e (core/first-migration-api), D tooling T5-T7 (tooling/housekeeping), E research R3/R6/R7/R8 (research/legal-r3-r8). Integration branch night/2026-09-08; no PRs opened by the session (dz-pr is user-only). (@night-build, @money)
+## 2026-09-08 18:18 UTC
+
+- Night build 20:17: T1 reviewed (two lenses) and fixed in 49e9e1a (Bps bounded to 10 000, no Default on Money, fixture and proptest gaps closed). Track D (tooling T5-T7) reviewed, three lost clauses restored, merged into night/2026-09-08. Traps: Agent worktrees start from main; a shared CARGO_TARGET_DIR across worktrees serves stale artifacts for same-named crates. Track F added on Samir's request: brainqraft-mobile conventions into a research page, a frontend-conventions process and a packages/design scaffold. (@night-build)
 

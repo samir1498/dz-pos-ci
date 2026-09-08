@@ -20,13 +20,13 @@ tasks:
     status: 'pending'
   - id: 'T5'
     desc: 'CI clippy runs with --all-targets like the justfile and quality-gates prescribe (.github/workflows/ci.yml)'
-    status: 'pending'
+    status: 'done'
   - id: 'T6'
     desc: 'dz-review gains the three sections pc-review (laptop, ~/.claude/skills/pc-review) carries: what every finding must state, a fix proven by a test that fails without it, the traps list; quality-gates gets the proptest/fast-check paragraph from property-fuzz-tests'
-    status: 'pending'
+    status: 'done'
   - id: 'T7'
     desc: 'coding-rules: no hardcoded Figma pixel or hex in UI code, tokens from design/shared/tokens.css or percentages (rule copied from the freelance workspace AGENTS.md)'
-    status: 'pending'
+    status: 'done'
 acceptance: []
 ---
 # Repo tooling, skills and rules for dz-pos

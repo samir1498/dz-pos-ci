@@ -20,8 +20,12 @@ tldr: 'ctx roadmap add omits category and created; plan_validate fails until add
   `progress_log`, `references_add` and plan edit lands on that branch.
   Either commit them as separate `chore(context)` commits and cherry-pick
   to `main`, or switch the checkout to `main` before writing.
-- Worktrees for parallel agents share one Rust build with
-  `CARGO_TARGET_DIR=/home/samir/dz-pos/target`; cargo's directory lock
-  serialises builds, so "Blocking waiting for file lock on build
-  directory" is normal, not a hang.
+- Do not share one `CARGO_TARGET_DIR` between worktrees of this repo.
+  Cargo keys artifacts of a path crate by name and version, not by path,
+  so `dzpos-core` built from one worktree overwrites the other's and a
+  later `cargo clippy` links tests against a stale library ("no variant
+  RateOutOfRange" on a source that has it). Seen 2026-09-08; cleared with
+  `cargo clean -p dzpos-core`. Each worktree gets its own `target/`
+  (`CARGO_TARGET_DIR=$PWD/target`), with `CARGO_BUILD_JOBS=3` when three
+  builds may run at once on the 12-core, 11 GB box.
 
