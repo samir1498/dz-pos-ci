@@ -38,8 +38,15 @@ locales/                 en.json, fr.json
 
 Why it is worth keeping: a feature is one directory you can read end to
 end, and a feature that goes away is one directory you delete. The 25
-features in there each have between one and four subfolders, and none of
-them reaches into another's `components/`.
+features carry between one and seven subfolders each, drawn from that same
+short list of names.
+
+Features do import each other, through the `@/features/{name}/{layer}` path
+rather than a relative climb: the journey screen launches a game, the feed
+mounts the game stack. What the project bans is narrower and is written
+down in `CLAUDE.md`: "a game must not import another game's feedback
+assets". Shared cues moved into a `shared/` folder under the feature that
+owns the mechanism instead.
 
 `components/ui/` is the generic layer (button, card, dialog, elevated
 button). `components/buttons/`, `inputs/`, `indicators/`, `overlays/`,
@@ -143,11 +150,11 @@ by prefix, so a stray extra element breaks cache reads while invalidation
 keeps working, and nothing fails loudly. Worth keeping verbatim; dz-pos
 will hit the same edge the first time a query key grows a filter.
 
-**A feature does not import another feature's private assets.** From the
-game feedback section: "a game must not import another game's feedback
-assets". Shared cues moved to a `shared/` folder under the feature that
-owns the mechanism. Worth keeping as the general rule for
-`features/{a}` reaching into `features/{b}`.
+**A feature does not import another feature's private assets.** See the
+folder structure section. The rule is not "features never import each
+other", which the code does not follow; it is that a feature's internal
+assets are not another feature's to reach for, and the shared ones get
+promoted to a `shared/` folder first.
 
 **Selectors at module scope.** From the journey hooks section: "**Selectors
 must be declared at module scope.** An inline arrow gets a fresh identity

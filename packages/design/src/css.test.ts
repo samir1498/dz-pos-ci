@@ -56,7 +56,7 @@ describe("toCss", () => {
     expect(declarations(emitted, '[dir="rtl"]')).toEqual(declarations(source, '[dir="rtl"]'));
   });
 
-  it("declares every primitive before the semantic tokens that reference it", () => {
+  it("resolves every var() reference to a variable declared in the same block", () => {
     const root = declarations(emitted, ":root");
     for (const [name, value] of Object.entries(root)) {
       const reference = /^var\((--[a-z0-9-]+)\)$/.exec(value);

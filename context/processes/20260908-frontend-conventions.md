@@ -112,7 +112,7 @@ Enforced by eslint `no-restricted-imports` in each app, not by review.
 |---|---|
 | Components import `theme`, never primitives | ban the patterns `@dzpos/design/primitives` and `**/design/src/primitives` |
 | Screens do not fetch | ban `useQuery` / `useMutation` / `useSuspenseQuery` from `@tanstack/react-query`, with an override that re-allows them inside `features/*/hooks/**` and `src/lib/**` |
-| Screens do not call Tauri | ban `invoke` from `@tauri-apps/api/core` outside `src/lib/**` (desktop only) |
+| Screens do not call Tauri | ban `@tauri-apps/api/core` outside `src/lib/**`, so every command goes through one wrapper (desktop only) |
 | One place per cross-cutting side effect | when a second one appears (logging, telemetry), it gets one hook and a ban on the SDK, the same shape as the two above |
 
 Two rules `no-restricted-imports` cannot express:
@@ -222,12 +222,24 @@ rules: {
 },
 ```
 
-Then an override that re-allows the two banned groups where they belong:
+Then an override that re-allows TanStack and the Tauri module where they
+belong. It restates the rule with the primitives pattern still in it rather
+than switching `no-restricted-imports` off, because tier 1 stays banned in
+a query hook and in `lib/` too:
 
 ```js
 {
   files: ["src/features/*/hooks/**", "src/lib/**"],
-  rules: { "no-restricted-imports": "off" },
+  rules: {
+    "no-restricted-imports": ["error", {
+      patterns: [
+        {
+          group: ["@dzpos/design/primitives", "**/design/src/primitives"],
+          message: "Tier 1 is not a component API. Import { theme } from '@dzpos/design', or use the CSS custom property.",
+        },
+      ],
+    }],
+  },
 }
 ```
 
