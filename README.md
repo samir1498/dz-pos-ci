@@ -24,7 +24,8 @@ commit.
 crates/core      Rust: models, diesel repos, services, migrations (SQLite)
 apps/desktop     Tauri 2 + React 19 + Vite; Rust side in src-tauri/
 apps/mobile      Expo / React Native — placeholder, not started
-docs/            features.md and architecture.md — the spec every task cites
+docs/            features.md and architecture.md — the spec every task cites;
+                 roadmap.md — the milestones to a first shop
 ```
 
 Cargo workspace at the root, pnpm workspace over `apps/*`.

@@ -23,16 +23,24 @@ not scheduled; **open** waits on a decision listed at the bottom.
 ## Build order
 
 Each step is usable on its own and ships with its tests before the next
-starts.
+starts. `docs/roadmap.md` holds the milestones, what each one demos and
+what blocks it; this list is the order in one glance.
 
-1. Products, suppliers, purchases into stock, sales, expenses, daily backup,
-   dashboard — the inventory baseline.
-2. Customers with a debt ledger and credit limit.
-3. Invoice model: the fiscal document with every legal field.
-4. Print engine: thermal 80mm and A4/A5, three languages, golden-file tested.
+1. Money core: centimes, TVA, stamp, amount in words, the first migration,
+   `crates/api` with products.
+2. A cash sale with a printed 80mm ticket: products, till, the ticket
+   series, stock ledger, the user on every row and the audit log, settings
+   with the régime fiscal, three languages, daily backup.
+3. Customers with a debt ledger and credit limit, and the invoice model
+   with every legal field: facture, avoir, proforma, statement.
+4. Stock in: suppliers, purchases, expenses, dashboard, Excel.
 5. Users and roles.
-6. LAN mode: one desktop serves, phones and second tills pair by QR.
-7. Cloud mode — only after Anouar decides (open decision 1).
+6. First release: installer, updater, signing, versioned migrations.
+7. LAN mode: one desktop serves, phones and second tills pair by QR.
+8. Cloud mode — only after Anouar decides (open decision 1).
+
+The sections below keep their original numbering; it names the area, not
+the order.
 
 ## 1. Inventory baseline (v1)
 
@@ -50,11 +58,11 @@ for the rest. Saving a purchase moves stock in and adds the unpaid part to
 the supplier's debt. A purchase can be received in parts.
 
 **Sale (till).** Lines (product, quantity, unit price, line discount),
-global discount, payment mode (cash, card, cheque, transfer, credit), amount
-tendered, change. Anonymous sale is allowed; a credit sale requires a
-customer. Saving a sale moves stock out and, if credit, adds to the
-customer's debt. Every sale is a fiscal document (see §3) even when it is a
-simple ticket.
+global discount, payment mode (cash; credit on the customer's ledger; card
+on a TPE with no integration, decided 2026-09-08), amount tendered,
+change. Anonymous sale is allowed; a credit sale requires a customer.
+Saving a sale moves stock out and, if credit, adds to the customer's debt.
+Every sale is a fiscal document (see §3) even when it is a simple ticket.
 
 **Stock movements.** Append-only ledger: every change to quantity on hand
 is a row with type (purchase, sale, adjustment, return, opening), quantity,
@@ -116,10 +124,13 @@ discount, TVA rate, line total HT.
 | `net_to_pay` | `total_ttc + stamp` |
 | `amount_in_words` | `net_to_pay` written out in the print language |
 | `old_balance`, `remaining_debt`, `total_debt` | from the ledger at issue time |
-| `payment_mode` | cash, card, cheque, transfer, credit |
+| `payment_mode` | cash, card, credit in v1; cheque and transfer are parked (the column admits them) |
 
-Numbering: per kind, per year, gapless, assigned at issue and never reused;
-a cancelled facture gets an avoir, it is not deleted.
+Numbering: per kind, gapless, assigned at issue and never reused; a
+cancelled facture keeps its number and is marked "facture annulée"; an
+avoir is its own kind with its own series. A yearly reset of the series is
+common practice but not in the decree; confirm with the comptable (R8)
+before it becomes a setting.
 
 ### Fiscal rules — current assumptions
 
@@ -161,7 +172,7 @@ document records the user. Audit log of sensitive actions (price change,
 discount override, delete, settings change) — an ISO-27001 control we get
 for nearly free by writing it now.
 
-## 6. LAN mode (v1, after 1–5)
+## 6. LAN mode (v1, after the desktop milestones)
 
 Exactly one desktop is the server; it advertises via mDNS and shows a QR
 (host, port, short-lived pairing token). A phone or a second till scans it
@@ -173,7 +184,7 @@ show one instruction.
 ## 7. Cloud mode (open)
 
 Same core binary hosted, one SQLite file per shop, account login. Not
-started until decision 1. Nothing in 1–6 may assume it does not exist:
+started until decision 1. Nothing built before it may assume it does not exist:
 every query is scoped by `shop_id`, every client talks HTTP.
 
 ## Later, agreed
@@ -182,13 +193,17 @@ every query is scoped by `shop_id`, every client talks HTTP.
 - AI invoice scanning on the phone (the one modern thing the competitor has).
 - Phone-only offline via the Rust core compiled into the RN app (uniffi),
   never a TypeScript reimplementation of the calculations.
+- Cheque and transfer as payment modes (decided 2026-09-08: v1 is cash,
+  credit, card on a TPE).
+- Facture récapitulative (décret 05-468 art. 14–17).
 
 ## Open decisions
 
 1. **SaaS with an account, offline licence, or both.** Anouar. Changes
-   pricing, hosting and step 7 only.
-2. **Product name and GitHub org.** Anouar; name research continues. Changes
-   the bundle identifier once, before the first release.
+   pricing, hosting and step 8 only.
+2. **Product name.** Anouar; "Dinar" proposed and the org `Dinar-dz` created
+   on 2026-09-08. The name changes the bundle identifier once, before the
+   first release.
 3. ~~TVA per product or one global rate.~~ **Decided 2026-09-08 (Samir):
    per product, defaulted from the category.** CTCA art. 23 lists the 9 %
    goods by customs tariff line, so the rate is a property of the product.
