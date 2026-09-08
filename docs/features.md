@@ -188,8 +188,8 @@ every query is scoped by `shop_id`, every client talks HTTP.
    pricing, hosting and step 7 only.
 2. **Product name and GitHub org.** Anouar; name research continues. Changes
    the bundle identifier once, before the first release.
-3. **TVA per product or one global rate.** Recommendation: per product with
-   a global default — the competitor's single global rate is a known
-   complaint and the cost of a column now is nothing.
+3. ~~TVA per product or one global rate.~~ **Decided 2026-09-08 (Samir):
+   per product, defaulted from the category.** CTCA art. 23 lists the 9 %
+   goods by customs tariff line, so the rate is a property of the product.
 4. **A real printed facture** from any Algerian shop, to check the field
    list and layout against paper before the golden files are frozen.
