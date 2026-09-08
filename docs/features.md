@@ -154,9 +154,10 @@ first release.**
 ## 4. Printing (v1)
 
 - Templates: `ticket_80mm`, `facture_a4`, `facture_a5`, `proforma_a4`,
-  `bon_de_livraison_a4`, `avoir_a4`, `statement_a4`, `barcode_label`. Each
-  in ar/fr/en. HTML rendered by the core, not the UI, so desktop and any
-  server print the same bytes.
+  `avoir_a4`, `statement_a4`, `barcode_label`. Each in ar/fr/en. HTML
+  rendered by the core, not the UI, so desktop and any server print the
+  same bytes. `bon_de_livraison_a4` is parked with the facture
+  récapitulative (see Later); the `kind` stays in the model.
 - Golden-file test for every template × language against fixed fixtures.
   A template change is a reviewed golden diff.
 - Thermal: ESC/POS over USB or Bluetooth from the desktop; from the phone
@@ -198,7 +199,10 @@ every query is scoped by `shop_id`, every client talks HTTP.
   never a TypeScript reimplementation of the calculations.
 - Cheque and transfer as payment modes (decided 2026-09-08: v1 is cash,
   credit, card on a TPE).
-- Facture récapitulative (décret 05-468 art. 14–17).
+- Bon de livraison and facture récapitulative together (décret 05-468
+  art. 14–17 allow the first only with the second and a wilaya
+  authorisation). The `bon_de_livraison` kind exists in the model; no
+  template or screen until then.
 
 ## Open decisions
 

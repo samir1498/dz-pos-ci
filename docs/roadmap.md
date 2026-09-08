@@ -62,7 +62,8 @@ settings changes; the store block in settings with RC, NIF, NIS, AI; the
 régime fiscal control in settings; `ticket_80mm` golden files in three
 languages, each with and without the stamp line (cash versus card);
 ESC/POS over USB from the desktop; three languages on every screen, RTL
-from the first one; daily backup, keep 30, restore from settings.
+from the first one; daily backup, keep 30, restore from settings. The
+first native window on the laptop is where the Tauri MCP trial (R9) runs.
 
 Fixtures: `numbering_gapless` for the ticket series;
 `regime_ifu_prints_no_tva`; the ticket branch of
@@ -77,8 +78,9 @@ in the mockup today and its legal source (loi 04-02 art. 10 as amended in
 
 Demo: a company customer buys on credit and gets a numbered A4 facture with
 the amount in words; pays part of it a week later; the statement shows the
-balance. Whether that facture carries a stamp line is one of the R8
-questions below, so the demo does not promise one.
+balance. The facture carries no stamp line at issue: the stamp is cash
+only (`stamp_progressive_tranches`), and a credit sale pays nothing at
+issue.
 
 In: customers (fiche; identifiers required for a company at issue); the
 debt ledger, append-only, oldest-first settlement, credit limit warn and
@@ -94,10 +96,11 @@ Blocks: a real printed facture from an Algerian shop before the golden
 files freeze (open decision 4); a native speaker's review of the Arabic
 words file (R6); the accountant's answers (R8) on rounding practice, the
 half-dinar, whether the yearly reset of the series is practice or habit,
-and two questions this review added: does a credit facture that is
-settled in cash later carry the stamp, and on which amount is the stamp
-computed, `total_ttc` or the sum paid. Depending on the answer, a receipt
-kind (quittance) joins the document model here.
+and two questions added on 2026-09-08 that no source read so far answers:
+when a credit facture is settled in cash later, does that payment need a
+stamped receipt, and on which amount is the stamp computed, the facture's
+`total_ttc` or the sum paid. Depending on the answer, a receipt kind
+(quittance) joins the document model here.
 
 ## M3. Stock in, expenses, reports
 
@@ -131,11 +134,12 @@ Demo: Anouar installs from a signed Windows installer, reads version, git
 hash and build date in About, updates in place, and a first shop runs on it.
 
 In: the bundle identifier changed once, with the final name; the Tauri
-updater and its signing key; the Windows code-signing certificate;
-migrations tied to the app version, an automatic backup before each, and
-the previous-version open test enforced from the first tag onward; a tag
-on `main` builds the installer and the GitHub release; a support bundle
-whose log header carries the version; an Arabic and RTL polish pass.
+updater and its signing key; the Windows code-signing certificate; the
+previous-version migration test enforced from the first tag onward; an
+Arabic and RTL polish pass; and the five release questions listed as open
+in `docs/architecture.md` § Release (version in the log header and
+support bundle, backup before each migration, key holder, tag-only
+builds) answered and built as answered.
 
 Release gates, all of them: every fiscal row in `features.md` confirmed by
 a comptable (R8); a real printed facture seen (open decision 4); the Arabic
@@ -153,13 +157,14 @@ Demo: a phone pairs by QR, sells from the shop floor, and the ticket prints
 on the desktop.
 
 In: LAN mode, one desktop serves; mDNS discovery; pairing by QR with a
-single-use short-lived token (the mockup shows 60 seconds), shown only by
-an owner or manager, and a paired-devices list in settings with revoke;
-the Windows
-Firewall banner; the Expo thin client (pair, till, cart, pay, ticket,
-products, customers, more) with its retry queue; printing through the
-desktop; Maestro flows on a real phone over Tailscale. The Expo plugin and
-MCP trial (R9, second half) start here.
+short-lived token (the mockup shows 60 seconds); the Windows Firewall
+banner; the Expo thin client (pair, till, cart, pay, ticket, products,
+customers, more) with its retry queue; printing through the desktop;
+Maestro flows on a real phone over Tailscale. The Expo plugin and the
+Expo MCP (R9) are installed here, not before. Three controls proposed
+here and written into `features.md` §6 when the milestone starts: the
+token is single-use, only an owner or manager shows the QR, and settings
+list paired devices with a revoke.
 
 Blocks: whether LAN traffic needs TLS or the Wi-Fi is trusted; decided in
 `docs/architecture.md` before a second device writes to the ledger.
@@ -167,8 +172,9 @@ Blocks: whether LAN traffic needs TLS or the Wi-Fi is trusted; decided in
 ## After M6, when Anouar decides
 
 Cloud mode waits on open decision 1 (SaaS with an account, offline licence,
-or both). When it comes, sync is one-directional and a tested backup and
-restore path exists first. Not scheduled.
+or both). When it comes, a tested backup and restore path exists first,
+and the sync design (one direction, the server's answer wins, as the LAN
+mode already does) gets its own page. Not scheduled.
 
 ## Parked
 
