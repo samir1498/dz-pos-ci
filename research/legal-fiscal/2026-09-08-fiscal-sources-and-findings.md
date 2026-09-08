@@ -12,6 +12,8 @@ remains.
 | `CodedeTimbre2026fr.pdf` | Code du timbre, édition 2026 (121 p.) | DGI, mfdgi.gov.dz/files/803/2026/3724 |
 | `CodedesTaxessurleChiffredAffaires2026fr.pdf` | Code des taxes sur le chiffre d'affaires (CTCA), édition 2026 (179 p.) | DGI, mfdgi.gov.dz/files/803/2026/3725 |
 | `JO-2024-084-LF2025.pdf` | Journal Officiel n° 84/2024, loi de finances 2025 | joradp.dz/FTP/JO-FRANCAIS/2024/F2024084.pdf |
+| `JO-2024-084-LF2025-ar.pdf` | The same JO issue, Arabic edition (official Arabic spelling of amounts, read visually) | joradp.dz/FTP/JO-ARABE/2024/A2024084.pdf |
+| `BanqueAlgerie-Instruction-05-95-normalisation-du-cheque.pdf` | Cheque layout standard, amount in letters zone | bank-of-algeria.dz |
 | `Circulaire-14-MF-DGI-LF2025-timbre-de-quittance-2025-03-05.pdf` | DGI circular n° 14/MF/DGI/LF.2025 of 5 March 2025 on how to compute the droit de timbre de quittance (4 p., scanned; OCR text is rough) | copy hosted by aminahadji.com; the DGI lists it under legislation-fiscale/circulaires-et-instructions |
 
 | `CodedesImpotsDirectsetTaxesAssimilees2026fr.pdf` | Code des impôts directs et taxes assimilées (CIDTA), édition 2026 (241 p.) | DGI, mfdgi.gov.dz/files/803/2026/3726 |
@@ -156,17 +158,73 @@ document shows no TVA line and the per-rate rounding design serves the
 minority on the régime réel. Needs the CIDTA articles (282 ter ff.) and
 the LF 2026 changes read, then a decision on a per-shop "régime" setting.
 
-### Amount in words (partly read)
+### Amount in words (decree read; libraries checked)
 
-The decree requires the TTC total "en chiffres et en lettres". French
+Décret 05-468 requires the TTC total "en chiffres et en lettres". French
 wording in practice: "Arrêtée la présente facture à la somme de ... dinars
-algériens et ... centimes". Arabic convention on printed factures not yet
-sourced.
+algériens et ... centimes". Lumina prints it in the invoice language with
+the prefix "Facture arrêtée à la somme de :" (fr) and an Arabic
+equivalent; Arabic wording convention on printed factures still needs a
+native review.
+
+Lumina ships a hand-written `numberToWords.js` (7.5 KB, fr / ar / en,
+dinars and centimes, float input split with `Math.floor` and
+`Math.round`). It is their code; we do not copy it. It is evidence that
+three languages and centimes are what the market expects, and that the
+Arabic form uses the dual ("ألفان") and "دينار / سنتيم".
+
+Open source checked 2026-09-08:
+
+| Library | Languages we need | Notes |
+|---|---|---|
+| `n2words` 6.1.2 (npm, MIT, zero deps) | fr, en, ar (ar-SA) cardinals; currency form exists but has no DZD (ar/fr know MAD, TND) | good as an independent oracle in vitest for the fr / en / ar cardinal part |
+| `num2words` 1.2.0 (crates.io, MIT/Apache) | en, fr only, no Arabic; float input via `num-bigfloat`; currency has a generic `DINAR` | would cover two of three languages and bring a float type into the money path |
+
+Official spelling references found 2026-09-08:
+
+- **French, the rule:** Académie française, "Questions de langue: Nombres
+  (écriture, lecture, accord)", dictionnaire-academie.fr/article/QDL057.
+  Traditional rule: hyphens between elements under one hundred, none
+  around "et" (vingt et un). The 1990 rectifications (JO français du 6
+  décembre 1990) allow hyphens everywhere (vingt-et-un, deux-cent-mille);
+  both are accepted. Agreement: vingt and cent take an s when multiplied
+  and not followed by another number word (quatre-vingts, deux cents, but
+  quatre-vingt-un, deux cent trois); mille never varies; million and
+  milliard are nouns (deux millions de dinars).
+- **French, official Algerian usage:** the Journal Officiel writes amounts
+  in words next to the figures, and it uses the 1990 hyphenation:
+  "cent cinquante-et-un mille dinars", "mille cinq cents dinars (1.500
+  DA)", "cinquante mille dinars (50.000 DA)", "dix millions de dinars",
+  "cent cinquante milliards de dinars" (JO n° 84/2024). Our French golden
+  file follows the JO style: hyphens everywhere, "de dinars" after
+  million/milliard, "dinars" and "centimes" spelled out, no "DA". One JO
+  line reads "deux cent millions de dinars"; the Académie rule gives
+  "deux cents millions"; pin the Académie form and note the JO variant.
+- **Cheques:** Banque d'Algérie instruction n° 05-95 (normalisation du
+  chèque, PDF in `sources/`) fixes where the amount in letters goes
+  ("Payez contre ce chèque", two lines) and that the marking band carries
+  the amount in centimes; it gives no spelling rule.
+- **Arabic:** no Algerian text prescribes the spelling. The JO Arabic
+  edition (`sources/JO-2024-084-LF2025-ar.pdf`, glyph-encoded, not
+  extractable as text) is the official usage to copy from by reading the
+  pages; the cheque formula in use is "فقط ... دينار جزائري و ... سنتيم لا
+  غير". The Arabic golden file is hand-written from those pages and
+  reviewed by a native speaker before the first printed facture.
+
+Recommendation: write the three converters in Rust in `crates/core`
+(integer centimes in, string out; cardinals up to 10^9 are ~100 lines per
+language), golden-tested, with the French agreement traps (`quatre-vingts`
+/ `quatre-vingt-un`, `cent` / `cents`, `mille` invariable) and the Arabic
+dual and plural forms as fixture rows. Use `n2words` only in the vitest
+side as a second implementation to cross-check the golden files, never as
+a runtime dependency. A native speaker reviews the Arabic golden file
+before the first printed facture.
 
 ## Lumina versus the law (to be completed as a table, task R7)
 
 | Rule | Lumina implements | Law says | Status |
 |---|---|---|---|
 | Droit de timbre | 1 % of net, min 5, max 2 500, cash only | per 100 DA tranche rounded up, 1 / 1,5 / 2 DA by band on the whole amount, ≤ 300 DA free, min 5, no cap, electronic exempt (art. 100-I, circ. 14/2025) | Lumina outdated |
-| TVA | 19 / 9 / 0 per product | art. 21 / 23, per tariff line | consistent |
+| TVA | one global rate for the whole cart (`currentTVAPercentage`), applied in float to the discounted subtotal, printed with `toFixed(2)` | art. 21 / 23: the rate is per product by tariff line; no facture rounding rule (CIDTA 324 is for the return) | Lumina simplifies; a mixed 19/9 basket is wrong there |
+| Amount in words | own `numberToWords.js`, fr / ar / en, dinars and centimes | décret 05-468: TTC in figures and words | consistent in intent; we write our own |
 | Facture mentions | full field list in teardown | décret 05-468 | to be diffed |
