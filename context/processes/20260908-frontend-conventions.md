@@ -165,6 +165,93 @@ What a test has to do to count, on top of `quality-gates`:
   a text selector is a locale-dependent failure waiting to happen. Add an
   id only when a flow needs it, and list it in the flow's README table.
 
+## How to adopt
+
+`packages/design` is wired to nothing yet, and `apps/desktop` has no eslint.
+Four steps, in order.
+
+**1. Take the dependency.**
+
+```
+pnpm --filter dzpos-desktop add @dzpos/design --workspace
+```
+
+Then generate the custom properties into a file `styles.css` imports, with a
+one-line script that calls `toCss()` and writes it. Until that script exists,
+`design/shared/tokens.css` is still the file the browser reads, and the test
+in `packages/design` is what keeps the two identical.
+
+**2. Install the linter.**
+
+```
+pnpm --filter dzpos-desktop add -D eslint typescript-eslint \
+  eslint-plugin-import eslint-plugin-react-hooks
+```
+
+**3. Add `apps/desktop/eslint.config.js`.** The rules block that carries
+this page:
+
+```js
+rules: {
+  "import/order": ["warn", {
+    groups: ["builtin", "external", "internal", "parent", "sibling", "index"],
+    alphabetize: { order: "asc", caseInsensitive: true },
+    "newlines-between": "always",
+  }],
+  "react-hooks/rules-of-hooks": "error",
+  "react-hooks/exhaustive-deps": "warn",
+  "no-restricted-imports": ["error", {
+    patterns: [
+      {
+        group: ["@dzpos/design/primitives", "**/design/src/primitives"],
+        message: "Tier 1 is not a component API. Import { theme } from '@dzpos/design', or use the CSS custom property.",
+      },
+      {
+        group: ["@tauri-apps/api/core"],
+        message: "Call the wrapper in src/lib/tauri.ts. Only it talks to the command layer.",
+      },
+    ],
+    paths: [
+      {
+        name: "@tanstack/react-query",
+        importNames: ["useQuery", "useMutation", "useSuspenseQuery"],
+        message: "A screen uses a hook from features/<feature>/hooks. Only that folder calls TanStack directly.",
+      },
+    ],
+  }],
+},
+```
+
+Then an override that re-allows the two banned groups where they belong:
+
+```js
+{
+  files: ["src/features/*/hooks/**", "src/lib/**"],
+  rules: { "no-restricted-imports": "off" },
+}
+```
+
+Add `"lint": "eslint src"` to `apps/desktop/package.json` and put it in the
+quality-gate chain.
+
+**4. Migrate three components first.** These three, because the mockups
+already define them, so the token mapping is a lookup rather than a
+decision:
+
+1. **Button**, `.btn` and its variants in `design/shared/components.css`
+   (`btn-primary`, `btn-secondary`, `btn-danger`, `btn-ghost`, sizes `sm`,
+   `lg`, `block`). Every screen needs it, and it pins the colour roles and
+   both control heights.
+2. **Numeric keypad**, `.keypad` and `.num` in the same file. It pins
+   `--touch-min`, `--control-h-lg` and the numeric font, and it is the
+   component a cashier touches most.
+3. **Product tile**, `.ptile` in `design/desktop/desktop.css`. It pins the
+   radius scale, the card surface and the shadow scale, and it is the first
+   component that will read real data from `packages/shared`.
+
+A migration is done when the component has no literal colour, no literal
+pixel, a `data-testid`, and every visible string through `t()`.
+
 ## Open
 
 - `as const` on a token object is an `as`, and `coding-rules` bans `as`
