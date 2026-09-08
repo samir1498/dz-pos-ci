@@ -27,6 +27,9 @@ tasks:
   - id: 'T7'
     desc: 'Gates green, PR with every fiscal assumption listed'
     status: 'pending'
+  - id: 'T8'
+    desc: 'Stamp rule follows research R1 (progressive tranches, electronic exempt), not the clamp; do not implement the stamp until R1 lands'
+    status: 'pending'
 acceptance:
   - 'cargo test and pnpm -r test both load fixtures/money/*.json and pass; a changed constant fails both'
 references:

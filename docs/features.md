@@ -3,7 +3,7 @@
 Normative. If a screen or a rule is not here, it is not in scope. The
 competitor teardown, the Algerian facture field list and the market notes
 live in the research repo (`Observeone-research`,
-`engineering-and-product/2026-09-07-dz-pos-competitor/`); this file says
+`dz-pos/competitors/2026-09-07-lumina-and-market/`); this file says
 what *we* build, and links there for *why*.
 
 Status legend: **v1** ships in the first release; **later** is agreed but
@@ -123,19 +123,21 @@ a cancelled facture gets an avoir, it is not deleted.
 
 ### Fiscal rules — current assumptions
 
-These are what the competitor implements plus common practice, not
-citations. **Confirm each with a comptable before the first release.** Each
-row names the test fixture that pins it.
+Each row names the fixture that pins it and the source that decides it.
+"assumption" means nobody has read the law for it yet; a source cites code,
+article and edition. Primary sources and findings live in the research repo
+under `dz-pos/legal-fiscal/`. **Confirm each with a comptable before the
+first release.**
 
-| Rule | Assumption | Fixture |
-|---|---|---|
-| Money representation | integer centimes; no float anywhere in core | `money_no_float` |
-| Rounding | half away from zero, applied once per TVA rate on the subtotal, not per line | `tva_rounding_once_per_rate` |
-| TVA rates | 19 % standard, 9 % reduced, 0 % exempt; default per product (open decision 3) | `tva_rates_table` |
-| Droit de timbre | `clamp(net × 1 %, 5 DZD, 2 500 DZD)`, cash payments only, toggle in settings | `stamp_cash_only_clamped` |
-| Amount in words | French, Arabic and English generators, dinars and centimes | `words_{fr,ar,en}_golden` |
-| Party identifiers | RC, NIF, NIS, AI printed for both parties on `facture`; optional on `ticket` | `facture_requires_party_ids` |
-| Numbering | gapless per kind per year | `numbering_gapless` |
+| Rule | Assumption | Fixture | Source |
+|---|---|---|---|
+| Money representation | integer centimes; no float anywhere in core | `money_no_float` | design choice, not law |
+| Rounding | half away from zero, applied once per TVA rate on the subtotal, not per line | `tva_rounding_once_per_rate` | assumption; CTCA 2026 art. 80bis points to CIDTA art. 324, not yet read |
+| TVA rates | 19 % standard, 9 % reduced, 0 % exempt; rate per product, defaulted from category | `tva_rates_table` | CTCA 2026 art. 21 (19 %), art. 23 (9 %, list by tariff line) |
+| Droit de timbre | **superseded, do not implement:** `clamp(net × 1 %, 5, 2 500)` was Lumina's pre-2025 rule. Current: per tranche of 100 DA or fraction, 1 DA up to 30 000, 1,5 DA to 100 000, 2 DA above, minimum 5 DA, amounts of 300 DA or less out of scope; electronic payments exempt. Marginal vs whole-amount banding and the 300 DA edge are open | `stamp_progressive_tranches` (replaces `stamp_cash_only_clamped`) | Code du timbre 2026 art. 100-I, art. 258 quinquies (LF 2025) |
+| Amount in words | French, Arabic and English generators, dinars and centimes | `words_{fr,ar,en}_golden` | décret 05-468: total TTC "en chiffres et en lettres"; Arabic wording not yet sourced |
+| Party identifiers | RC, NIF, NIS, AI printed for both parties on `facture`; optional on `ticket` | `facture_requires_party_ids` | décret 05-468 (FAQ list read; decree text pending); ticket rules in loi 04-02 pending |
+| Numbering | gapless per kind per year | `numbering_gapless` | assumption; "numéro d'ordre" in 05-468, which text requires gapless is task R5 |
 
 ## 4. Printing (v1)
 

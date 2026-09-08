@@ -8,7 +8,7 @@ does not change twice.
 
 Research, competitor teardown and the architecture rules live in the
 `Observeone-research` repo under
-`engineering-and-product/2026-09-07-dz-pos-competitor/`.
+`dz-pos/competitors/2026-09-07-lumina-and-market/`.
 
 ## Origin
 

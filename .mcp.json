@@ -3,7 +3,10 @@
     "pc-ctx": {
       "command": "npx",
       "args": ["-y", "@pc-ctx/mcp"],
-      "env": { "PC_CTX_ROOT": "/home/samir/dz-pos/context" }
+      "env": {
+        "PC_CTX_ROOT": "/home/samir/dz-pos/context",
+        "PC_CTX_RESEARCH_DIR": "/home/samir/observeone/Observeone-research"
+      }
     }
   }
 }
