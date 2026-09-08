@@ -347,11 +347,15 @@ fn parse_en(words: &str) -> i64 {
 
 /// The small end and the scale boundaries, swept rather than sampled, so
 /// the round trip does not depend on what the random draw happened to
-/// pick. Every centime value up to 100 dinars, then each carry.
+/// pick. Every centime value up to 100 dinars, then every point where a
+/// scale word appears or changes.
 #[test]
 fn fr_and_en_read_back_on_the_small_end_and_the_carries() {
     let mut amounts: Vec<i64> = (0..=10_000).collect();
-    for scale in [100i64, 10_000, 1_000_000, 100_000_000, 100_000_000_000] {
+    // In centimes, so each of these is the first amount that needs the
+    // next word: 1 DA, 1 000 DA (mille), 1 000 000 DA (million),
+    // 1 000 000 000 DA (milliard).
+    for scale in [100i64, 100_000, 100_000_000, 100_000_000_000] {
         for step in -2i64..=2 {
             let candidate = scale + step;
             if candidate >= 0 {
