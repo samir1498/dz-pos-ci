@@ -63,7 +63,7 @@ diesel::table! {
         shop_id -> Integer,
         name -> Text,
         role -> Text,
-        pin_hash -> Nullable<Text>,
+        pin_hash -> Text,
         created_at -> Timestamp,
     }
 }

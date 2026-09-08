@@ -44,7 +44,11 @@ CREATE TABLE users (
     shop_id    INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
     name       TEXT NOT NULL,
     role       TEXT NOT NULL CHECK (role IN ('owner', 'manager', 'cashier')),
-    pin_hash   TEXT,
+    -- Never NULL: a NULL hash reads as "no PIN set", which is one careless
+    -- check away from "anyone may log in". '!unset' is not a hash any
+    -- verifier accepts, so it fails closed. M4 brings login and must write a
+    -- real hash over it before the first sign-in.
+    pin_hash   TEXT NOT NULL DEFAULT '!unset',
     created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
 ) STRICT;
 CREATE INDEX idx_users_shop ON users (shop_id);
@@ -98,7 +102,8 @@ CREATE INDEX idx_products_shop_name ON products (shop_id, name);
 -- with it so every later document and ledger row has an author before M4
 -- brings real users.
 INSERT INTO shops (id, name) VALUES (1, 'Mon magasin');
-INSERT INTO users (shop_id, name, role) VALUES (1, 'Propriétaire', 'owner');
+INSERT INTO users (shop_id, name, role, pin_hash)
+    VALUES (1, 'Propriétaire', 'owner', '!unset');
 INSERT INTO settings (shop_id, key, value, valid_from)
     VALUES (1, 'regime_fiscal', 'reel', '2026-01-01 00:00:00');
 INSERT INTO categories (shop_id, name, default_rate_bps) VALUES (1, 'Général', 1900);

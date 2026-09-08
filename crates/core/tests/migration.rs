@@ -243,6 +243,33 @@ fn one_shop_is_seeded_with_an_owner() {
 }
 
 #[test]
+fn the_seeded_owner_carries_a_pin_that_cannot_verify() {
+    // A NULL pin_hash reads as "no PIN set", which is one careless check away
+    // from "anyone may log in". M4 replaces the sentinel with a real hash.
+    let (_dir, mut conn) = open_temp();
+    let rows: Vec<Name> = diesel::sql_query(
+        "SELECT pin_hash AS name FROM users WHERE shop_id = 1 AND role = 'owner'",
+    )
+    .load(&mut conn)
+    .unwrap();
+    assert_eq!(rows.len(), 1, "the seeded owner has a NULL pin_hash");
+    assert_eq!(rows[0].name, "!unset");
+
+    let nullable = count(
+        &mut conn,
+        "SELECT COUNT(*) AS n FROM pragma_table_info('users') \
+         WHERE name = 'pin_hash' AND \"notnull\" = 1",
+    );
+    assert_eq!(nullable, 1, "pin_hash still accepts NULL");
+
+    let null_row = diesel::sql_query(
+        "INSERT INTO users (shop_id, name, role, pin_hash) VALUES (1, 'x', 'cashier', NULL)",
+    )
+    .execute(&mut conn);
+    assert!(null_row.is_err(), "a NULL pin_hash was accepted");
+}
+
+#[test]
 fn regime_fiscal_is_a_dated_setting_defaulting_to_reel() {
     // features.md, Régime fiscal row: shop-level, dated, `ifu` or `reel`.
     let (_dir, mut conn) = open_temp();
