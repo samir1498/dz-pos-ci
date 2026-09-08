@@ -44,6 +44,16 @@ dev:
 tauri:
     pnpm desktop tauri dev
 
+# ---- e2e (headless chromium; starts its own API and Vite) ----
+
+# the whole products suite against a throwaway database
+e2e:
+    pnpm desktop e2e
+
+# only the test that writes apps/desktop/e2e/screenshots/products.png
+screenshot:
+    pnpm desktop e2e -g screenshot
+
 # ---- mockups (design/) ----
 
 mockup-serve:
