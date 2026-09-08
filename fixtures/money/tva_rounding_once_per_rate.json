@@ -13,7 +13,14 @@
     { "name": "9 % of 12,39 DA = 1,1151", "amount": 1239, "rate_bps": 900, "expected": 112 },
     { "name": "19 % of 999 999,99 DA = 189 999,9981", "amount": 99999999, "rate_bps": 1900, "expected": 19000000 },
     { "name": "100 % is identity", "amount": 4242, "rate_bps": 10000, "expected": 4242 },
-    { "name": "50 % of an odd centime: 0,005 rounds up", "amount": 1, "rate_bps": 5000, "expected": 1 }
+    { "name": "50 % of an odd centime: 0,005 rounds up", "amount": 1, "rate_bps": 5000, "expected": 1 },
+    { "name": "50 % of minus one centime: -0,005 rounds away from zero, not to even", "amount": -1, "rate_bps": 5000, "expected": -1 },
+    { "name": "1 bps of 49,99 DA = 0,004999, below the half", "amount": 4999, "rate_bps": 1, "expected": 0 },
+    { "name": "1 bps of 50,00 DA = 0,005, exactly the half", "amount": 5000, "rate_bps": 1, "expected": 1 }
+  ],
+  "invalid_rate_cases": [
+    { "name": "one past 100 %", "rate_bps": 10001 },
+    { "name": "19 typed as percent times ten thousand", "rate_bps": 190000 }
   ],
   "overflow_cases": [
     { "name": "i64::MAX times 19 % overflows the intermediate product", "amount": 9223372036854775807, "rate_bps": 1900 }

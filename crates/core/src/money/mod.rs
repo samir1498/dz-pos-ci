@@ -9,21 +9,27 @@ use serde::{Deserialize, Serialize};
 pub const BPS_PER_WHOLE: i64 = 10_000;
 
 /// A whole amount of centimes. `Money::centimes(1250)` is 12,50 DA.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Money(i64);
 
 /// A rate in basis points: `Bps::new(1900)` is 19 %.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "u32", into = "u32")]
 pub struct Bps(u32);
+
+impl From<Bps> for u32 {
+    fn from(b: Bps) -> u32 {
+        b.0
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum MoneyError {
     #[error("amount overflows i64 centimes")]
     Overflow,
+    #[error("rate above 10 000 basis points (100 %)")]
+    RateOutOfRange,
 }
 
 impl Money {
@@ -86,11 +92,25 @@ impl Money {
 }
 
 impl Bps {
-    pub const fn new(v: u32) -> Self {
-        Bps(v)
+    /// A rate is at most one whole; 19 typed as 190 000 must not become
+    /// 1 900 % TVA (fixture `tva_rounding_once_per_rate`, invalid rates).
+    pub fn new(v: u32) -> Result<Self, MoneyError> {
+        Bps::try_from(v)
     }
 
     pub const fn as_u32(self) -> u32 {
         self.0
+    }
+}
+
+impl TryFrom<u32> for Bps {
+    type Error = MoneyError;
+
+    fn try_from(v: u32) -> Result<Self, MoneyError> {
+        if i64::from(v) > BPS_PER_WHOLE {
+            Err(MoneyError::RateOutOfRange)
+        } else {
+            Ok(Bps(v))
+        }
     }
 }

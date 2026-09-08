@@ -29,10 +29,17 @@ struct OverflowCase {
 }
 
 #[derive(Deserialize)]
+struct InvalidRateCase {
+    name: String,
+    rate_bps: u32,
+}
+
+#[derive(Deserialize)]
 struct RoundingFixture {
     name: String,
     pct_cases: Vec<PctCase>,
     overflow_cases: Vec<OverflowCase>,
+    invalid_rate_cases: Vec<InvalidRateCase>,
 }
 
 #[test]
@@ -40,8 +47,21 @@ fn tva_rounding_once_per_rate_pct_cases() {
     let f: RoundingFixture = serde_json::from_str(&fixture("tva_rounding_once_per_rate")).unwrap();
     assert_eq!(f.name, "tva_rounding_once_per_rate");
     assert!(f.pct_cases.len() >= 10, "fixture lost its cases");
+    for c in &f.invalid_rate_cases {
+        assert_eq!(
+            Bps::new(c.rate_bps),
+            Err(MoneyError::RateOutOfRange),
+            "{}",
+            c.name
+        );
+        let json = c.rate_bps.to_string();
+        let r: Result<Bps, _> = serde_json::from_str(&json);
+        assert!(r.is_err(), "{} must be rejected by serde", c.name);
+    }
     for c in &f.pct_cases {
-        let got = Money::centimes(c.amount).pct(Bps::new(c.rate_bps)).unwrap();
+        let got = Money::centimes(c.amount)
+            .pct(Bps::new(c.rate_bps).unwrap())
+            .unwrap_or_else(|e| panic!("{}: {e}", c.name));
         assert_eq!(
             got,
             Money::centimes(c.expected),
@@ -52,7 +72,7 @@ fn tva_rounding_once_per_rate_pct_cases() {
         );
     }
     for c in &f.overflow_cases {
-        let got = Money::centimes(c.amount).pct(Bps::new(c.rate_bps));
+        let got = Money::centimes(c.amount).pct(Bps::new(c.rate_bps).unwrap());
         assert_eq!(got, Err(MoneyError::Overflow), "{}", c.name);
     }
 }
@@ -81,6 +101,12 @@ fn money_no_float_serde() {
     for c in &f.accepts {
         let m: Money = serde_json::from_str(&c.json).unwrap_or_else(|e| panic!("{}: {e}", c.json));
         assert_eq!(m.as_centimes(), c.centimes, "{}", c.json);
+        assert_eq!(
+            m,
+            Money::centimes(c.centimes),
+            "constructor vs serde {}",
+            c.json
+        );
         assert_eq!(
             serde_json::to_string(&m).unwrap(),
             c.json,
