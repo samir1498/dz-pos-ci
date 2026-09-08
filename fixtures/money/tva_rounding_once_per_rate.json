@@ -1,0 +1,21 @@
+{
+  "name": "tva_rounding_once_per_rate",
+  "rule": "docs/features.md, fiscal rules: rounding to the centime, half away from zero, once per rate group. Rates are basis points (1900 = 19 %). Amounts are integer centimes. Expected values are written by hand, never computed.",
+  "pct_cases": [
+    { "name": "19 % of 100,00 DA", "amount": 10000, "rate_bps": 1900, "expected": 1900 },
+    { "name": "9 % of 100,00 DA", "amount": 10000, "rate_bps": 900, "expected": 900 },
+    { "name": "0 % of anything", "amount": 123456, "rate_bps": 0, "expected": 0 },
+    { "name": "19 % of 0,01 DA rounds down (0,0019)", "amount": 1, "rate_bps": 1900, "expected": 0 },
+    { "name": "19 % of 0,03 DA rounds up (0,0057)", "amount": 3, "rate_bps": 1900, "expected": 1 },
+    { "name": "exact half rounds away from zero: 19 % of 2,50 DA = 0,475", "amount": 250, "rate_bps": 1900, "expected": 48 },
+    { "name": "exact half on a negative amount rounds away from zero: 19 % of -2,50 DA = -0,475", "amount": -250, "rate_bps": 1900, "expected": -48 },
+    { "name": "9 % of 12,34 DA = 1,1106", "amount": 1234, "rate_bps": 900, "expected": 111 },
+    { "name": "9 % of 12,39 DA = 1,1151", "amount": 1239, "rate_bps": 900, "expected": 112 },
+    { "name": "19 % of 999 999,99 DA = 189 999,9981", "amount": 99999999, "rate_bps": 1900, "expected": 19000000 },
+    { "name": "100 % is identity", "amount": 4242, "rate_bps": 10000, "expected": 4242 },
+    { "name": "50 % of an odd centime: 0,005 rounds up", "amount": 1, "rate_bps": 5000, "expected": 1 }
+  ],
+  "overflow_cases": [
+    { "name": "i64::MAX times 19 % overflows the intermediate product", "amount": 9223372036854775807, "rate_bps": 1900 }
+  ]
+}

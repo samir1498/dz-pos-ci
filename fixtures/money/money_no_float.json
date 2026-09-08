@@ -1,0 +1,17 @@
+{
+  "name": "money_no_float",
+  "rule": "docs/features.md, fiscal rules: money is integer centimes everywhere. A Money value serialises as a bare integer and refuses any JSON that is not an integer.",
+  "accepts": [
+    { "json": "0", "centimes": 0 },
+    { "json": "1250", "centimes": 1250 },
+    { "json": "-1250", "centimes": -1250 },
+    { "json": "9223372036854775807", "centimes": 9223372036854775807 }
+  ],
+  "rejects": [
+    { "json": "12.50", "why": "a float" },
+    { "json": "\"1250\"", "why": "a string" },
+    { "json": "1250.0", "why": "a float with a zero fraction" },
+    { "json": "1e3", "why": "exponent notation" },
+    { "json": "9223372036854775808", "why": "one past i64::MAX" }
+  ]
+}
