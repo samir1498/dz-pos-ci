@@ -1,3 +1,6 @@
+// Tests may panic; the deny is for shipped code.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use diesel::prelude::*;
 use diesel::sql_types::Integer;
 

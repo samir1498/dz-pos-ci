@@ -1,34 +1,34 @@
 # CLAUDE.md — dz-pos
 
-Placeholder-named product. Read `README.md` first; the six rules there are
-load-bearing, and the research folder it links to holds the reasons.
+Placeholder-named product. Read `README.md` first. Every rule lives in
+`context/` (the pc-ctx store) so the laptop clone and every session read
+the same pages; this file is the index.
 
-## How to work
-- Senior-engineer mindset: verify APIs and constraints before writing code.
-- Respect the existing layering: `crates/core` = models → repos → services.
-  UI code (Tauri commands, later HTTP handlers, mobile) calls services, never
-  diesel directly.
-- No new dependencies without a stated reason. No TypeScript `as` casts — a
-  cast in a fixture makes a green test prove nothing.
-- Comments: 3 lines max, only for a constraint, a measured number or a trap.
-- Never write "pre-existing"; state the actual root cause.
-- Money is integer centimes. Anything that touches TVA, stamp duty or
-  amount-in-words gets property tests on rounding.
-- Invoice templates get golden-file tests. A wrong field on a printed
-  facture is a legal problem no UI test catches.
+## Read before working
+- `context/repos/20260908-dz-pos.md`: where the repo lives on each machine,
+  stack, layout, commands, the files that decide things.
+- `docs/features.md` (spec, fiscal rules with fixture names) and
+  `docs/architecture.md` (the six rules, layers, error policy).
+- `context/progress/now.md` and `ctx plan list --status active` for what is
+  in flight.
 
-## Planning and progress
-`context/` is the pc-ctx store for this product (plans, roadmaps, handoffs,
-progress). Use the `pc-ctx` MCP tools or `ctx` from inside `context/`; don't
-edit plan files by hand. Commits carry a `ctx: <plan-slug>[/T<n>] <start|progress|close>`
-trailer — the commit-msg hook in `.githooks/` enforces it
-(`git config core.hooksPath .githooks` once per clone).
+## Processes (`context/processes/`)
+- `coding-rules`: Rust, TypeScript, CSS; layering; comments; money in centimes.
+- `quality-gates`: the five gates, what counts as tested, the extra layers
+  for money, roles and deletion.
+- `machines-and-heavy-jobs`: WSL box vs laptop, the shared-box claim rule,
+  no worktrees while one session per machine works the repo.
+- `security-and-provenance`: ISO 27001 controls per feature; where a
+  learned fact or a fiscal claim gets written.
+- `git-and-planning`: branch + PR, the `ctx:` trailer, session rituals.
 
-## Gates before "done"
-`cargo fmt --all --check` · `cargo clippy --workspace -- -D warnings` ·
-`cargo test --workspace` · `pnpm -r build` · `pnpm -r test`.
-Show the output. CI green is not "tested" — drive the behaviour.
+## Skills (`.claude/skills/`, symlinked into `~/.claude/skills/` on the WSL box)
+`dz-context` · `dz-money` · `dz-review` · `dz-pr` · `dz-mockup` ·
+`laptop-dev` · `git-commit-convention` · `dont-sound-like-ai`.
 
-## Git
-- Branch + PR; never commit to `main` directly once CI exists on it.
-- Never `git reset --hard`, `git clean -fd` or force-push without asking.
+## Non-negotiables (repeated here because they are cheap to forget)
+- Money is integer centimes, checked arithmetic, no `f64` near a total.
+- No `unwrap` / `expect` in shipped code (clippy denies it). No TS `as`.
+- Branch + PR, `ctx:` trailer in the trailer block, never commit to `main`.
+- Never excuse a failure as already present before your change; state the
+  actual root cause.

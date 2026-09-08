@@ -12,3 +12,6 @@ tauri = { version = "2", features = ["devtools"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+[lints]
+workspace = true

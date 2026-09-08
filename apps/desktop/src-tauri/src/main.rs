@@ -6,5 +6,8 @@ fn main() {
     #[cfg(target_os = "linux")]
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
 
-    dzpos_desktop::run()
+    if let Err(e) = dzpos_desktop::run() {
+        eprintln!("dz-pos failed to start: {e}");
+        std::process::exit(1);
+    }
 }

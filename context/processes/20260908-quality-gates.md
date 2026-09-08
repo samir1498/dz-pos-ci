@@ -1,0 +1,40 @@
+---
+title: 'Quality gates'
+slug: 'quality-gates'
+status: 'active'
+category: 'processes'
+created: 20260908
+tldr: 'The five gates, what counts as tested, the extra layers for money/roles/deletion'
+---
+# Quality gates
+
+Before "done" and before a PR, run from the repo root and show the output:
+
+```
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+pnpm -r build
+pnpm -r test
+```
+
+CI green is not "tested". Say what you drove and on which machine: a
+mockup route through the `dz-mockup` drive scripts, a Tauri window on the
+laptop, an HTTP call against `crates/api`. If a gate did not run (no
+display, laptop offline), write that rather than ticking the box.
+
+Money, roles and permissions, and anything that deletes data need two more
+layers before merge: every path executed against the real thing (a real
+SQLite file, a real request, a real printed layout), and the `dz-review`
+skill's parallel adversarial pass with its challenge round. Mocks confirm
+the code does what you intended; they say nothing about what the database
+did.
+
+A new test of a money rule is not done until a mutation (flip the constant
+or the rounding direction) makes at least one named fixture fail. Commit
+before the mutation loop.
+
+Sonar: not set up for this repo yet (plan
+`repo-tooling-skills-and-rules-for-dz-pos`, T4 checks Rust support on the
+team server). Do not quote a Sonar gate until it exists.
+

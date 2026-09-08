@@ -5,10 +5,10 @@ pub struct DbState {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub fn run() -> tauri::Result<()> {
     tauri::Builder::default()
         .setup(|app| {
-            let db_path = db_path();
+            let db_path = db_path()?;
             if let Some(parent) = std::path::Path::new(&db_path).parent() {
                 std::fs::create_dir_all(parent)?;
             }
@@ -17,13 +17,15 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
 }
 
-fn db_path() -> String {
-    let base = dirs::data_dir().expect("Cannot find data directory");
-    base.join("dzpos")
+fn db_path() -> std::io::Result<String> {
+    let base = dirs::data_dir().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "no user data directory")
+    })?;
+    Ok(base
+        .join("dzpos")
         .join("dzpos.db")
         .to_string_lossy()
-        .to_string()
+        .to_string())
 }
