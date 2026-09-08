@@ -69,7 +69,7 @@ sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel li
 ## First-time setup (do the parts that need no sudo)
 
 ```
-ssh laptop 'git clone -q git@github.com:samir1498/dz-pos.git ~/Developer/dz-pos && zsh -lic "cd ~/Developer/dz-pos && pnpm install"'
+ssh laptop 'git clone -q git@github.com:Dinar-dz/dz-pos.git ~/Developer/dz-pos && zsh -lic "cd ~/Developer/dz-pos && pnpm install"'
 ```
 
 Then the dnf line above (Samir), then one `cargo build` in

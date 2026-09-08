@@ -3,7 +3,7 @@
 New product line, separate from ObserveOne. Anouar asked for an inventory
 management product for the Algerian market, built against an incumbent that is
 selling well. Working codename **dz-pos** — placeholder, not the product name.
-No GitHub org decided yet. Code: [samir1498/dz-pos](https://github.com/samir1498/dz-pos)
+No GitHub org decided yet. Code: [Dinar-dz/dz-pos](https://github.com/Dinar-dz/dz-pos)
 (private, scaffolded 2026-09-07 from MonStock `33d2ab0`, to be transferred to
 the org once it exists).
 
