@@ -17,6 +17,13 @@ load-bearing, and the research folder it links to holds the reasons.
 - Invoice templates get golden-file tests. A wrong field on a printed
   facture is a legal problem no UI test catches.
 
+## Planning and progress
+`context/` is the pc-ctx store for this product (plans, roadmaps, handoffs,
+progress). Use the `pc-ctx` MCP tools or `ctx` from inside `context/`; don't
+edit plan files by hand. Commits carry a `ctx: <plan-slug>[/T<n>] <start|progress|close>`
+trailer — the commit-msg hook in `.githooks/` enforces it
+(`git config core.hooksPath .githooks` once per clone).
+
 ## Gates before "done"
 `cargo fmt --all --check` · `cargo clippy --workspace -- -D warnings` ·
 `cargo test --workspace` · `pnpm -r build` · `pnpm -r test`.

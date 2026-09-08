@@ -1,0 +1,28 @@
+#!/bin/sh
+set -e
+
+COMMIT_MSG_FILE=$1
+
+FIRST_LINE=$(head -n1 "$COMMIT_MSG_FILE")
+case "$FIRST_LINE" in
+    Merge*) exit 0 ;;
+    Revert*) exit 0 ;;
+esac
+
+if ! git interpret-trailers --parse < "$COMMIT_MSG_FILE" | grep -q '^ctx:'; then
+    echo ""
+    echo "✗ Commit rejected: missing ctx: trailer"
+    echo "  Every commit needs a ctx: trailer in the footer:"
+    echo ""
+    echo "    feat(scope): description"
+    echo ""
+    echo "    ctx: <plan-slug> close"
+    echo ""
+    echo "  Common actions: start | progress | close"
+    echo "  Per-task:       ctx: <plan-slug>/T3 close"
+    echo "  Link repo:      ctx: <plan-slug> repo:<repo-slug>"
+    echo ""
+    echo "  Run \`ctx plan list --status active\` to find plan slugs."
+    echo ""
+    exit 1
+fi
