@@ -155,6 +155,34 @@ async fn a_duplicate_barcode_is_409() {
 }
 
 #[tokio::test]
+async fn one_barcode_may_exist_once_in_each_shop() {
+    // Over the wire this time: the 409 above is per shop, not global.
+    use diesel::prelude::*;
+
+    let h = harness();
+    let mut d = draft();
+    d["barcode"] = json!("6130001000018");
+    let (status, made) = call(&h.app, "POST", "/products", Some(d.clone())).await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+
+    // A second shop in the same file. There is no shops route yet, so the
+    // row goes in raw; what is under test is the index, never this seed.
+    let mut seed = dzpos_core::db::open(&h.path).unwrap();
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(&mut seed)
+        .unwrap();
+
+    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap());
+    // Shop 2 has no categories of its own, so it names its rate.
+    d["category_id"] = json!(null);
+    d["rate_bps"] = json!(1900);
+    let (status, body) = call(&other, "POST", "/products", Some(d)).await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    assert_eq!(body["shop_id"], 2);
+    assert_eq!(body["barcode"], "6130001000018");
+}
+
+#[tokio::test]
 async fn a_validation_failure_is_422() {
     let h = harness();
     let mut d = draft();

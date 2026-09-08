@@ -179,6 +179,31 @@ fn a_duplicate_barcode_in_the_same_shop_is_rejected() {
 }
 
 #[test]
+fn one_barcode_may_exist_once_in_each_shop() {
+    // The unique index is (shop_id, barcode). Making it global passed every
+    // other test in this suite, so this is the one that pins it: two shops
+    // stocking the same product print the manufacturer's code on both.
+    let (_dir, mut conn) = open_temp();
+    let theirs = seed_second_shop(&mut conn);
+
+    let mut mine = draft("Huile Elio 5L");
+    mine.barcode = Some("6130001000018".to_string());
+    let ours = products::create(&mut conn, SHOP, mine).unwrap();
+    assert_eq!(ours.shop_id, SHOP);
+
+    let mut yours = draft("Huile Elio 5L");
+    yours.barcode = Some("6130001000018".to_string());
+    yours.category_id = Some(theirs);
+    let made = products::create(&mut conn, 2, yours).unwrap();
+    assert_eq!(made.shop_id, 2);
+    assert_eq!(made.barcode.as_deref(), Some("6130001000018"));
+
+    // And each shop still sees only its own.
+    assert_eq!(products::list(&mut conn, SHOP).unwrap().len(), 1);
+    assert_eq!(products::list(&mut conn, 2).unwrap().len(), 1);
+}
+
+#[test]
 fn an_empty_name_is_rejected() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("  ");
