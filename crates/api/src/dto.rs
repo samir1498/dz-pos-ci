@@ -3,8 +3,9 @@
 //!
 //! Money crosses as an integer number of centimes in a JSON `number`
 //! (architecture.md, contract between Rust and TypeScript). ts-rs would
-//! call an `i64` a `bigint`, so every money and quantity field says
-//! `number`: the values are safe below 2^53, which is 90 trillion dinars.
+//! call an `i64` a `bigint`, so the exporter in `tests/export_bindings.rs`
+//! configures large ints as `number`: centimes are safe below 2^53, which
+//! is 90 trillion dinars.
 
 use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::money::{Bps, Money};
@@ -54,15 +55,10 @@ pub struct ProductDto {
     pub barcode: Option<String>,
     pub category_id: Option<i32>,
     pub unit: UnitDto,
-    #[ts(type = "number")]
     pub cost_centimes: i64,
-    #[ts(type = "number")]
     pub selling_centimes: i64,
-    #[ts(type = "number")]
     pub wholesale_centimes: Option<i64>,
-    #[ts(type = "number")]
     pub qty_on_hand_milli: i64,
-    #[ts(type = "number")]
     pub low_stock_at_milli: i64,
     pub rate_bps: u32,
     pub active: bool,
@@ -100,18 +96,13 @@ pub struct NewProductDto {
     #[serde(default)]
     pub category_id: Option<i32>,
     pub unit: UnitDto,
-    #[ts(type = "number")]
     pub cost_centimes: i64,
-    #[ts(type = "number")]
     pub selling_centimes: i64,
     #[serde(default)]
-    #[ts(type = "number | null")]
     pub wholesale_centimes: Option<i64>,
     #[serde(default)]
-    #[ts(type = "number")]
     pub qty_on_hand_milli: i64,
     #[serde(default)]
-    #[ts(type = "number")]
     pub low_stock_at_milli: i64,
     #[serde(default)]
     pub rate_bps: Option<u32>,

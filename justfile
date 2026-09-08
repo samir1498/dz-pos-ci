@@ -22,8 +22,13 @@ test:
 build:
     pnpm -r build
 
+# regenerate the TS types from crates/api and fail if the commit is stale
+types-check:
+    cargo test -p dzpos-api --test export_bindings
+    git diff --exit-code packages/shared/src/generated
+
 # everything a PR needs, in order; stops at the first failure
-gates: fmt clippy test build
+gates: fmt clippy types-check test build
 
 # ---- dev ----
 
