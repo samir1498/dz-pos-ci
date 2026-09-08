@@ -42,7 +42,20 @@ function go(r) {
 }
 
 // ---- totals ----
+// money.js refuses a discount above the basket instead of clamping it. The
+// field must not be able to ask for one, and removing a line can shrink the
+// basket under a discount already typed, so the clamp lives here.
+function cartHt() {
+  return computeTotals(state.cart, {
+    globalDiscount: 0,
+    paymentMode: "cash",
+    stampEnabled: false,
+    regime: store.regime,
+  }).totalHt;
+}
+
 function totals(mode = state.pay.mode) {
+  state.globalDiscount = Math.min(Math.max(state.globalDiscount, 0), cartHt());
   return computeTotals(state.cart, {
     globalDiscount: state.globalDiscount,
     paymentMode: mode,
@@ -473,7 +486,7 @@ app.addEventListener("input", (e) => {
     }
     render();
   } else if (el.dataset.gdisc !== undefined) {
-    state.globalDiscount = Math.max(0, Math.round(Number(el.value || 0) * 100));
+    state.globalDiscount = Math.min(Math.max(0, Math.round(Number(el.value || 0) * 100)), cartHt());
     render();
     app.querySelector("[data-gdisc]")?.focus();
   } else if (el.dataset.psearch !== undefined) {

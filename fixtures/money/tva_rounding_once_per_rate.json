@@ -125,6 +125,29 @@
       }
     },
     {
+      "name": "the leftover centime moves a printed TVA amount, not only a base: 19 % 1,00 and 9 % 0,99 with a 0,57 discount give shares 0,28 and 0,28, and the leftover centime goes to the larger 19 % group, so its base is 0,71 and its TVA is 0,71 x 19 % = 0,1349 rounded to 0,13; had the centime gone to the 9 % group the 19 % base would be 0,72 and its TVA 0,1368 rounded to 0,14, one centime more on the document",
+      "input": {
+        "lines": [
+          { "qty": 1, "unit_price": 100, "line_discount": 0, "rate_bps": 1900 },
+          { "qty": 1, "unit_price": 99, "line_discount": 0, "rate_bps": 900 }
+        ],
+        "opts": { "global_discount": 57, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+      },
+      "expected": {
+        "total_ht": 199,
+        "discount": 57,
+        "subtotal_ht": 142,
+        "tva_by_rate": [
+          { "rate_bps": 900, "base": 71, "amount": 6 },
+          { "rate_bps": 1900, "base": 71, "amount": 13 }
+        ],
+        "tva": 19,
+        "total_ttc": 161,
+        "stamp": 0,
+        "net_to_pay": 161
+      }
+    },
+    {
       "name": "two equal groups of 100,00 and a 0,03 discount: each takes 0,01 and the tie on HT is broken by the lower rate, so 9 % takes the leftover centime and its base is 99,98",
       "input": {
         "lines": [

@@ -37,6 +37,9 @@ describe("tva_rounding_once_per_rate", () => {
     expect(pct(c.amount, c.rate_bps)).toBe(c.expected);
   });
 
+  // rounding.overflow_cases are skipped for the same reason as the stamp's:
+  // the amount is i64::MAX, past Number.MAX_SAFE_INTEGER, so JS cannot hold
+  // the input. Rust covers them; there is nothing to assert here.
   it.each(rounding.invalid_rate_cases)("refuses a rate above one whole: $name", (c) => {
     expect(() => pct(10000, c.rate_bps)).toThrowError(/RateOutOfRange/);
   });
