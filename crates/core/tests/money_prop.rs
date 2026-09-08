@@ -2,7 +2,9 @@
 //! counterexample to a minimal one; freeze it as a fixture case when found.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use dzpos_core::money::{Bps, Money, MoneyError};
+use dzpos_core::money::{
+    compute_totals, stamp, Bps, Line, Money, MoneyError, PaymentMode, Regime, TotalsOptions,
+};
 use proptest::prelude::*;
 
 // Amounts a shop can see: up to a billion dinars in centimes, both signs.
@@ -87,5 +89,142 @@ proptest! {
             sum = sum.checked_add(Money::centimes(unit)).unwrap();
         }
         prop_assert_eq!(product, sum);
+    }
+}
+
+// ---- totals and the stamp ----
+
+/// A basket a shop can ring up: unit prices to a million dinars, small
+/// counts, a line discount never above its own line, rates from the real
+/// table plus 100 % to stress the arithmetic.
+fn basket() -> impl Strategy<Value = Vec<Line>> {
+    let line = (
+        0i64..=20,
+        0i64..=100_000_000,
+        prop::sample::select(vec![0u32, 900, 1900, 10_000]),
+    )
+        .prop_flat_map(|(qty, unit, rate)| {
+            let gross = unit.saturating_mul(qty);
+            (0i64..=gross).prop_map(move |line_discount| Line {
+                qty,
+                unit_price: Money::centimes(unit),
+                line_discount: Money::centimes(line_discount),
+                rate: Bps::new(rate).unwrap(),
+            })
+        });
+    prop::collection::vec(line, 0..6)
+}
+
+fn opts(
+    global_discount: Money,
+    payment_mode: PaymentMode,
+    stamp_enabled: bool,
+    regime: Regime,
+) -> TotalsOptions {
+    TotalsOptions {
+        global_discount,
+        payment_mode,
+        stamp_enabled,
+        regime,
+    }
+}
+
+fn any_mode() -> impl Strategy<Value = PaymentMode> {
+    prop::sample::select(vec![
+        PaymentMode::Cash,
+        PaymentMode::Card,
+        PaymentMode::Credit,
+    ])
+}
+
+fn sum_bases(t: &dzpos_core::money::Totals) -> Money {
+    t.tva_by_rate
+        .iter()
+        .fold(Money::ZERO, |a, l| a.checked_add(l.base).unwrap())
+}
+
+proptest! {
+    /// The columns of the totals table agree with each other whatever the
+    /// basket, and the spread neither invents nor loses a centime.
+    #[test]
+    fn totals_columns_agree(
+        lines in basket(),
+        per_mille in 0i64..=1000,
+        mode in any_mode(),
+        stamp_enabled in any::<bool>(),
+    ) {
+        let bare = compute_totals(&lines, &opts(Money::ZERO, mode, false, Regime::Reel)).unwrap();
+        // A discount somewhere in [0, total_ht], never above it.
+        let discount = Money::centimes(
+            i64::try_from(
+                i128::from(bare.total_ht.as_centimes())
+                    .checked_mul(i128::from(per_mille))
+                    .unwrap() / 1000,
+            ).unwrap(),
+        );
+        let t = compute_totals(&lines, &opts(discount, mode, stamp_enabled, Regime::Reel)).unwrap();
+
+        prop_assert_eq!(
+            t.total_ht.checked_sub(t.discount).unwrap(),
+            sum_bases(&t),
+            "total_ht - discount must equal the sum of the group bases"
+        );
+        prop_assert_eq!(sum_bases(&t), t.subtotal_ht);
+        let tva = t.tva_by_rate.iter().fold(Money::ZERO, |a, l| a.checked_add(l.amount).unwrap());
+        prop_assert_eq!(tva, t.tva);
+        prop_assert_eq!(t.subtotal_ht.checked_add(t.tva).unwrap(), t.total_ttc);
+        prop_assert_eq!(t.total_ttc.checked_add(t.stamp).unwrap(), t.net_to_pay);
+    }
+
+    /// Under the IFU there is no TVA row and no TVA, and the net is the
+    /// subtotal plus the stamp (`regime_ifu_prints_no_tva`).
+    #[test]
+    fn ifu_carries_no_tva(lines in basket(), mode in any_mode()) {
+        let t = compute_totals(&lines, &opts(Money::ZERO, mode, true, Regime::Ifu)).unwrap();
+        prop_assert!(t.tva_by_rate.is_empty());
+        prop_assert_eq!(sum_bases(&t), Money::ZERO);
+        prop_assert_eq!(t.tva, Money::ZERO);
+        prop_assert_eq!(t.total_ttc, t.subtotal_ht);
+        prop_assert_eq!(t.total_ttc.checked_add(t.stamp).unwrap(), t.net_to_pay);
+    }
+
+    /// A global discount above the basket is refused, never clamped to it.
+    #[test]
+    fn a_discount_above_the_basket_is_refused(lines in basket(), over in 1i64..=1_000_000) {
+        let bare = compute_totals(
+            &lines,
+            &opts(Money::ZERO, PaymentMode::Cash, false, Regime::Reel),
+        ).unwrap();
+        let too_much = bare.total_ht.checked_add(Money::centimes(over)).unwrap();
+        let got = compute_totals(&lines, &opts(too_much, PaymentMode::Cash, false, Regime::Reel));
+        prop_assert_eq!(got, Err(MoneyError::GlobalDiscountAboveTotal));
+    }
+
+    /// Nothing is due at or under 300,00 DA.
+    #[test]
+    fn stamp_is_zero_at_or_under_the_floor(a in -1_000_000i64..=30_000) {
+        prop_assert_eq!(stamp(Money::centimes(a), PaymentMode::Cash).unwrap(), Money::ZERO);
+    }
+
+    /// The stamp never falls as the amount rises.
+    #[test]
+    fn stamp_is_monotone_in_the_amount(a in 0i64..=100_000_000_000, b in 0i64..=100_000_000_000) {
+        let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
+        let s_lo = stamp(Money::centimes(lo), PaymentMode::Cash).unwrap();
+        let s_hi = stamp(Money::centimes(hi), PaymentMode::Cash).unwrap();
+        prop_assert!(s_lo <= s_hi, "{lo} gave {s_lo:?} but {hi} gave {s_hi:?}");
+    }
+
+    /// Card and credit never carry the stamp, at any amount.
+    #[test]
+    fn stamp_is_zero_for_card_and_credit(a in any::<i64>()) {
+        prop_assert_eq!(stamp(Money::centimes(a), PaymentMode::Card).unwrap(), Money::ZERO);
+        prop_assert_eq!(stamp(Money::centimes(a), PaymentMode::Credit).unwrap(), Money::ZERO);
+    }
+
+    /// Anything above the floor owes at least the 5,00 DA minimum.
+    #[test]
+    fn stamp_above_the_floor_is_never_below_the_minimum(a in 30_001i64..=100_000_000_000) {
+        prop_assert!(stamp(Money::centimes(a), PaymentMode::Cash).unwrap() >= Money::centimes(500));
     }
 }
