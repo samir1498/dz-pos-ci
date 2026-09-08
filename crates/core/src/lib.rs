@@ -2,3 +2,4 @@
 //! goes through `services`; nothing outside this crate touches diesel.
 pub mod db;
 pub mod money;
+pub mod schema;
