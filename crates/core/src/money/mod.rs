@@ -3,6 +3,8 @@
 //! the three move together. No `f64` on any path that reaches a total.
 #![deny(clippy::arithmetic_side_effects)]
 
+pub mod words;
+
 use serde::{Deserialize, Serialize};
 
 pub mod stamp;
