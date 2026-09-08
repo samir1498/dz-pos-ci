@@ -37,5 +37,7 @@
   "error_unreachable": "Server unreachable.",
   "error_unknown": "Something went wrong.",
   "error_name_required": "A name is required.",
-  "error_price_invalid": "Invalid amount."
+  "error_price_invalid": "Invalid amount.",
+  "error_cost_invalid": "Invalid cost price.",
+  "error_stock_invalid": "Invalid quantity."
 }

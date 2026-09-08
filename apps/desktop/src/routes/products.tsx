@@ -136,9 +136,11 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
       stock: "",
     },
     onSubmit: async ({ value }) => {
-      const cost = parseAmountToCentimes(value.cost) ?? 0;
+      // The validators have already refused anything unreadable, so these
+      // fall back only for the blank case they allow.
+      const cost = optional(value.cost, parseAmountToCentimes) ?? 0;
       const price = parseAmountToCentimes(value.price) ?? 0;
-      const stock = parseQtyToMilli(value.stock) ?? 0;
+      const stock = optional(value.stock, parseQtyToMilli) ?? 0;
       // The rejection is deliberately swallowed: onError has already turned
       // the server's code into a translated message on the form.
       await create
@@ -242,7 +244,15 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
         )}
       </form.Field>
 
-      <form.Field name="cost">
+      <form.Field
+        name="cost"
+        validators={{
+          onSubmit: ({ value }) =>
+            optional(value, parseAmountToCentimes) === undefined
+              ? "error_cost_invalid"
+              : undefined,
+        }}
+      >
         {(field) => (
           <label className="flex flex-col gap-1">
             <span>{t("field_cost")}</span>
@@ -252,11 +262,18 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
             />
+            <FieldError messages={field.state.meta.errors} />
           </label>
         )}
       </form.Field>
 
-      <form.Field name="stock">
+      <form.Field
+        name="stock"
+        validators={{
+          onSubmit: ({ value }) =>
+            optional(value, parseQtyToMilli) === undefined ? "error_stock_invalid" : undefined,
+        }}
+      >
         {(field) => (
           <label className="flex flex-col gap-1">
             <span>{t("field_stock")}</span>
@@ -266,6 +283,7 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
             />
+            <FieldError messages={field.state.meta.errors} />
           </label>
         )}
       </form.Field>
@@ -286,6 +304,16 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
       </div>
     </form>
   );
+}
+
+/**
+ * A field a shop may leave empty. Blank is zero; anything the parser cannot
+ * read is `undefined`, which is what blocks the submit. `?? 0` used to
+ * flatten both cases, so "12 DA" was stored as a cost of nothing.
+ */
+function optional(text: string, parse: (t: string) => number | null): number | undefined {
+  if (text.trim() === "") return 0;
+  return parse(text) ?? undefined;
 }
 
 /** Field validators return translation keys, never sentences. */

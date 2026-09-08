@@ -32,6 +32,23 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/** The POST the form makes, if it made one. */
+function postCall(mock: ReturnType<typeof vi.fn>): [string, RequestInit] | undefined {
+  return mock.mock.calls.find((call) => call[1]?.method === "POST");
+}
+
+function posted(mock: ReturnType<typeof vi.fn>): boolean {
+  return postCall(mock) !== undefined;
+}
+
+function sentBody(mock: ReturnType<typeof vi.fn>): Record<string, unknown> {
+  const call = postCall(mock);
+  if (call === undefined) throw new Error("the form never posted");
+  const { body } = call[1];
+  if (typeof body !== "string") throw new Error("the form posted no JSON body");
+  return JSON.parse(body);
+}
+
 function mount() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -131,6 +148,56 @@ describe("the add form", () => {
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     expect(await screen.findByText("Ce code-barres est déjà utilisé.")).toBeInTheDocument();
+  });
+
+  test("refuses a cost that is not a number instead of storing zero", async () => {
+    // parseAmountToCentimes(value.cost) ?? 0 turned "12 DA" into a cost of
+    // nothing and saved it, so the shop's margin was quietly wrong.
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(json(200, []));
+    mount();
+    await screen.findByText("Aucun produit pour le moment.");
+
+    await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
+    await user.type(screen.getByLabelText("Nom"), "Sucre Cristal 1kg");
+    await user.type(screen.getByLabelText("Prix de vente"), "1,10");
+    await user.type(screen.getByLabelText("Prix d'achat"), "12 DA");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(await screen.findByText("Prix d'achat invalide.")).toBeInTheDocument();
+    expect(posted(fetchMock)).toBe(false);
+  });
+
+  test("refuses a stock that is not a number instead of storing zero", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(json(200, []));
+    mount();
+    await screen.findByText("Aucun produit pour le moment.");
+
+    await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
+    await user.type(screen.getByLabelText("Nom"), "Sucre Cristal 1kg");
+    await user.type(screen.getByLabelText("Prix de vente"), "1,10");
+    await user.type(screen.getByLabelText("Quantité en stock"), "60 kg");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(await screen.findByText("Quantité invalide.")).toBeInTheDocument();
+    expect(posted(fetchMock)).toBe(false);
+  });
+
+  test("leaves a blank cost and a blank stock meaning zero", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(json(200, []));
+    mount();
+    await screen.findByText("Aucun produit pour le moment.");
+
+    await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
+    await user.type(screen.getByLabelText("Nom"), "Sucre Cristal 1kg");
+    await user.type(screen.getByLabelText("Prix de vente"), "1,10");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() => expect(posted(fetchMock)).toBe(true));
+    expect(sentBody(fetchMock).cost_centimes).toBe(0);
+    expect(sentBody(fetchMock).qty_on_hand_milli).toBe(0);
   });
 
   test("renders the money code the API now sends for a bad rate", async () => {

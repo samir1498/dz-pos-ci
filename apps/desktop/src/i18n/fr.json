@@ -37,5 +37,7 @@
   "error_unreachable": "Serveur injoignable.",
   "error_unknown": "Une erreur est survenue.",
   "error_name_required": "Le nom est obligatoire.",
-  "error_price_invalid": "Montant invalide."
+  "error_price_invalid": "Montant invalide.",
+  "error_cost_invalid": "Prix d'achat invalide.",
+  "error_stock_invalid": "Quantité invalide."
 }

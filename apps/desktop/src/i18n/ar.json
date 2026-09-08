@@ -37,5 +37,7 @@
   "error_unreachable": "الخادم غير متاح.",
   "error_unknown": "حدث خطأ ما.",
   "error_name_required": "الاسم مطلوب.",
-  "error_price_invalid": "مبلغ غير صالح."
+  "error_price_invalid": "مبلغ غير صالح.",
+  "error_cost_invalid": "سعر شراء غير صالح.",
+  "error_stock_invalid": "كمية غير صالحة."
 }
