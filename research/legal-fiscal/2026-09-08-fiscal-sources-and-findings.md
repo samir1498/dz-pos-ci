@@ -309,12 +309,16 @@ Official spelling references found 2026-09-08:
   chèque, PDF in `sources/`) fixes where the amount in letters goes
   ("Payez contre ce chèque", two lines) and that the marking band carries
   the amount in centimes; it gives no spelling rule.
-- **Arabic:** no Algerian text prescribes the spelling. The JO Arabic
-  edition (`sources/JO-2024-084-LF2025-ar.pdf`, glyph-encoded, not
-  extractable as text) is the official usage to copy from by reading the
-  pages; the cheque formula in use is "فقط ... دينار جزائري و ... سنتيم لا
-  غير". The Arabic golden file is hand-written from those pages and
-  reviewed by a native speaker before the first printed facture.
+- **Arabic:** no Algerian text prescribes the spelling, but the JO Arabic
+  edition writes every amount in letters and gives 18 worked examples in the
+  LF 2025 issue. `sources/JO-2024-084-LF2025-ar.pdf` does extract as text
+  once normalised NFKC; its fonts encode Arabic Presentation Forms-B, which
+  is what made it look glyph-locked. The corpus, the count-form table, the
+  décret 05-468 Arabic wording "محرّرًا بالأرقام والأحرف", the cancellation
+  string "فاتورة ملغاة" and the official Arabic field labels are in
+  `2026-09-08-amount-in-words-arabic.md`. No official Algerian source found
+  for the centime word in letters, so that line stays an assumption and the
+  Arabic golden file waits on a native reviewer.
 
 Recommendation: write the three converters in Rust in `crates/core`
 (integer centimes in, string out; cardinals up to 10^9 are ~100 lines per
