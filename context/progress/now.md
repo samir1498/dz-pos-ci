@@ -26,7 +26,7 @@ Samir reviews between steps; one step in flight at a time.
 3. [ ] TVA grouping per rate and global discount spread; fixtures shared with `design/shared/money.js` via vitest (T2, T5)
 4. [ ] Stamp duty per step 1 (T3, T8)
 5. [ ] Amount in words fr/ar/en with golden files (T4, R6)
-6. [ ] `crates/api` with GET/POST /products and the products screen reading it, shown on the laptop
+6. [ ] First migration (`shop_id`, products with a price model for both regimes, settings with the dated régime fiscal, one seeded owner user), `crates/api` with GET/POST /products, `packages/shared` with the ts-rs types, and the products screen reading it, shown on the laptop
 
 ## From Anouar, 2026-09-08 (Discord), to lock after the steps
 
