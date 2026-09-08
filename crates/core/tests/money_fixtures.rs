@@ -2,7 +2,7 @@
 //! `docs/features.md`; the same files feed vitest against the mockup.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use dzpos_core::money::{Bps, Money, MoneyError};
+use dzpos_core::money::{stamp, Bps, Money, MoneyError, PaymentMode};
 use serde::Deserialize;
 
 fn fixture(name: &str) -> String {
@@ -73,6 +73,52 @@ fn tva_rounding_once_per_rate_pct_cases() {
     }
     for c in &f.overflow_cases {
         let got = Money::centimes(c.amount).pct(Bps::new(c.rate_bps).unwrap());
+        assert_eq!(got, Err(MoneyError::Overflow), "{}", c.name);
+    }
+}
+
+#[derive(Deserialize)]
+struct StampInput {
+    total_ttc: i64,
+    mode: PaymentMode,
+}
+
+#[derive(Deserialize)]
+struct StampExpected {
+    stamp: i64,
+}
+
+#[derive(Deserialize)]
+struct StampCase {
+    name: String,
+    input: StampInput,
+    expected: StampExpected,
+}
+
+#[derive(Deserialize)]
+struct StampOverflowCase {
+    name: String,
+    input: StampInput,
+}
+
+#[derive(Deserialize)]
+struct StampFixture {
+    name: String,
+    cases: Vec<StampCase>,
+    overflow_cases: Vec<StampOverflowCase>,
+}
+
+#[test]
+fn stamp_progressive_tranches_cases() {
+    let f: StampFixture = serde_json::from_str(&fixture("stamp_progressive_tranches")).unwrap();
+    assert_eq!(f.name, "stamp_progressive_tranches");
+    assert!(f.cases.len() >= 20, "fixture lost its cases");
+    for c in &f.cases {
+        let got = stamp(Money::centimes(c.input.total_ttc), c.input.mode).unwrap();
+        assert_eq!(got, Money::centimes(c.expected.stamp), "{}", c.name);
+    }
+    for c in &f.overflow_cases {
+        let got = stamp(Money::centimes(c.input.total_ttc), c.input.mode);
         assert_eq!(got, Err(MoneyError::Overflow), "{}", c.name);
     }
 }

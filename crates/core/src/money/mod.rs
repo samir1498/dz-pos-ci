@@ -5,6 +5,10 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod stamp;
+
+pub use stamp::{stamp, PaymentMode};
+
 /// Basis points in one whole: 10 000 bps = 100 %.
 pub const BPS_PER_WHOLE: i64 = 10_000;
 
