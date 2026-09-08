@@ -1,0 +1,26 @@
+[package]
+name = "dzpos-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+dzpos-core = { path = "../core" }
+# Versions checked on crates.io 2026-09-08; these are the current stable
+# releases and the candidates docs/architecture.md already named.
+axum = "0.8.9"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net"] }
+tower-http = { version = "0.7.1", features = ["cors"] }
+clap = { version = "4.6.6", features = ["derive"] }
+ts-rs = "12.0.1"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = "2"
+
+[dev-dependencies]
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = "0.1.5"
+tempfile = "3"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

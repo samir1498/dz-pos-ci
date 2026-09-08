@@ -6,6 +6,10 @@ use std::path::Path;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/");
 
+/// The connection every service takes. Aliased so callers above this crate
+/// name a core type and never depend on diesel themselves.
+pub type Conn = SqliteConnection;
+
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
     #[error("connect: {0}")]

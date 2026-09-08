@@ -33,6 +33,13 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      # Linux only: on Windows autocrlf rewrites the generated files and the
+      # diff would fail on line endings rather than on a stale type.
+      - name: Generated TS types are current
+        if: runner.os == 'Linux'
+        run: |
+          cargo test -p dzpos-api --test export_bindings
+          git diff --exit-code packages/shared/src/generated
       - name: Coverage (lcov for Sonar)
         if: runner.os == 'Linux'
         run: |

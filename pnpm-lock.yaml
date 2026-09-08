@@ -10,6 +10,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@dzpos/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@tanstack/react-form':
         specifier: ^1.33.0
         version: 1.33.5(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -89,6 +92,15 @@ importers:
 
   design:
     devDependencies:
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.11(jsdom@29.1.1)(vite@8.2.2(esbuild@0.28.2)(jiti@2.7.0))
+
+  packages/shared:
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
       vitest:
         specifier: ^4.1.9
         version: 4.1.11(jsdom@29.1.1)(vite@8.2.2(esbuild@0.28.2)(jiti@2.7.0))
