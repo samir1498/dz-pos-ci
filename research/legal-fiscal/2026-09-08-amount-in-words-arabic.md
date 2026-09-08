@@ -76,7 +76,7 @@ Art. 3, last seller mention, JO n° 80 of 2005, Arabic edition, p. 19:
 
 That is the Arabic of "prix total toutes taxes comprises, libellé en chiffres
 et en lettres". The phrase to use on a printed Arabic facture is
-"بالأرقام والأحرف", not "بالحروف".
+"بالأرقام والأحرف".
 
 The buyer rule in Arabic, same page: "يجب أن تحتوي الفاتورة على اسم المشتري
 ولقبه وعنوانه إذا كان مستهلكا."
@@ -149,6 +149,9 @@ Send these five with the golden file, not before it exists:
 4. Whether zero centimes is dropped or written.
 5. Whether the dual ديناران and سنتيمان are used in practice or replaced by
    the figure, which is what many printed factures do.
+6. Whether the currency word carries جزائري on a facture. The JO writes bare
+   دينار everywhere; the cheque formula in circulation says دينار جزائري. The
+   convention above uses the bare form because that is the sourced one.
 
 ## For the fixtures, later
 

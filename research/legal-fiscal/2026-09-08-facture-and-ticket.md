@@ -26,7 +26,11 @@ The ministry of commerce lists the texts in force per subject. Its recueil
 "Règles applicables aux Pratiques Commerciales" holds two entries, loi 04-02
 and loi 10-06, so 10-06 is the only amendment to date. Its recueil
 "Conditions et modalités d'établissement de la facture" holds four entries:
-05-468, the arrêté of 1 August 2013, décret 16-66, and loi 04-02 itself.
+décret 05-468, the arrêté of 1 August 2013, décret 16-66, and décret exécutif
+20-389 of 19 December 2020 (JO n° 78 of 27 December 2020), which fixes the form
+and the mentions of the procès-verbal an inspector writes when he finds a
+commercial-practices offence. The joint arrêté that décret 05-468 art. 11 calls
+for, the one that would open the télématique facture, is not in that recueil.
 
 Correction to the earlier findings note: `Loi-04-02-pratiques-commerciales.pdf`
 is not an excerpt. It is the full eight-page JO n° 41 extract, arts. 1 to 67,
@@ -118,8 +122,8 @@ is the reason the print templates need a hard validation gate:
 
 - Six mentions are load-bearing. Seller or buyer name or raison sociale,
   their NIF, their address, the quantity, the precise designation, and the
-  unit price HT. Omit one of these and the document is not a non-conforming
-  facture, it is a défaut de facturation punished at 80 % of the amount.
+  unit price HT. Omitting one of these is a défaut de facturation under
+  art. 33, punished at 80 % of the amount.
 - Every other mention of décret 05-468 art. 3, omitted, costs 10 000 to
   50 000 DA.
 

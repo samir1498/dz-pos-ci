@@ -21,6 +21,7 @@ remains.
 | `JO-2004-041-loi-04-02-pratiques-commerciales.pdf` | Official JO n° 41 of 27 June 2004, loi 04-02 at p. 3 | joradp.dz/FTP/JO-FRANCAIS/2004/F2004041.pdf, fetched 2026-09-08 |
 | `JO-2010-046-loi-10-06-modifiant-04-02.pdf` | JO n° 46 of 18 August 2010, loi 10-06 at p. 10; its art. 3 rewrites loi 04-02 art. 10 | joradp.dz/FTP/JO-FRANCAIS/2010/F2010046.pdf, fetched 2026-09-08 |
 | `JO-2005-080-decret-05-468-facture.pdf` | Official JO n° 80 of 11 December 2005, décret exécutif 05-468 at p. 16 | joradp.dz/FTP/JO-FRANCAIS/2005/F2005080.pdf, fetched 2026-09-08 |
+| `JO-2005-080-decret-05-468-facture-ar.pdf` | The same JO issue, Arabic edition. Its font carries no ToUnicode map, so pages 19 and 20 are read as rendered images; they give the official Arabic field labels, the "بالأرقام والأحرف" phrase and the "فاتورة ملغاة" cancellation string | joradp.dz/FTP/JO-ARABE/2005/A2005080.pdf, fetched 2026-09-08 |
 | `JO-2016-010-decret-16-66-bon-de-transaction-commerciale.pdf` | JO n° 10 of 22 February 2016, décret exécutif 16-66 at p. 3: the model of the document tenant lieu de facture, for agriculture, pêche, aquaculture, artisanat only | joradp.dz/FTP/JO-FRANCAIS/2016/F2016010.pdf, fetched 2026-09-08 |
 | `JO-2014-030-arrete-2013-08-01-fausses-factures.pdf` | JO n° 30 of 21 May 2014, arrêté of 1 August 2013 at p. 7: false factures and factures de complaisance, 50 % fiscal fine | joradp.dz/FTP/JO-FRANCAIS/2014/F2014030.pdf, fetched 2026-09-08 |
 
@@ -339,3 +340,67 @@ are the droit de timbre, where it still uses the pre-2025 flat 1 % capped at
 for a basket mixing 19 % and 9 % goods. Four mentions of décret 05-468 art. 3
 are missing from both products: forme juridique, nature de l'activité, capital
 social, and the settlement date.
+
+## Recommended edits to `docs/features.md`
+
+Written by the research track, to be applied by whoever owns the spec. Each
+item names the row and gives the replacement text verbatim.
+
+**Row "Amount in words", Source cell.** Replace
+
+> décret 05-468: total TTC "en chiffres et en lettres"; Arabic wording not yet sourced
+
+with
+
+> décret 05-468 art. 3, "prix total toutes taxes comprises, libellé en chiffres et en lettres"; Arabic wording from the JO Arabic edition, JO n° 84/2024, 18 amounts in letters, count forms and convention in `research/legal-fiscal/2026-09-08-amount-in-words-arabic.md`; the centime word سنتيم has no Algerian source and waits on a native reviewer
+
+**Row "Party identifiers", Source cell.** Replace
+
+> décret 05-468 art. 3 and 4; NIF/AI from tax texts, article to cite (R3)
+
+with
+
+> décret 05-468 art. 3 (seller and buyer mentions, "numéro d'identification statistique") and art. 4 (cachet humide et signature); the NIF is required by loi 04-02 art. 34, which lists it among the mentions whose omission is a défaut de facturation; loi 05-16 (LF 2006) art. 42 replaced NIS by NIF in the tax codes; no text makes the article d'imposition a facture mention, CIDTA art. 183 ter only requires it in the wholesaler's état-clients
+
+**Row "Numbering", Source cell.** Replace
+
+> décret 05-468 art. 10
+
+with
+
+> décret 05-468 art. 10, "une série ininterrompue et chronologique de factures", a new facturier only after the previous one is exhausted, a cancelled facture keeps its number and carries "facture annulée" written diagonally (Arabic "فاتورة ملغاة", JO n° 80/2005 Arabic edition); décret 16-66 art. 5 says the same for the bon de transaction commerciale with the mention « ANNULE » in capitals; whether the series restarts each year is a practice question for the comptable
+
+**Row "Droit de timbre", Source cell.** Append at the end, after the circular
+reference:
+
+> ; nearest precedent for the half-dinar case is the code de l'enregistrement art. 11, as modified by LF 2025 art. 31, "les fractions inférieures à 0,5 DA étant négligées et les fractions égales ou supérieures à 0,5 DA étant comptées pour 1 DA", a different code and not binding on the timbre
+
+**New row, after "Party identifiers".** The ticket versus facture trigger is a
+rule the spec relies on and never states with a source:
+
+> | Ticket versus facture | a consumer sale takes a ticket de caisse or a bon justifying the transaction, and a facture the moment the customer asks; a sale to another economic agent takes a facture at the time of the sale. No text prescribes the ticket's content | `ticket_vs_facture_trigger` | loi 04-02 art. 10 as rewritten by loi 10-06 art. 3 (JO n° 46 of 18 August 2010, p. 10); décret 05-468 art. 2 last paragraph; sanction loi 04-02 art. 33, 80 % of the amount that should have been invoiced |
+
+**§3, Totals table.** Two additions that are not Source-column edits:
+
+- `discount` needs a sentence saying how a global discount is allocated when
+  the basket spans two rate groups. The spec defines `discount` against
+  `total_ht` and `tva` per rate group, and never joins the two. Proposed, and
+  put to the comptable as question 7 of `2026-09-08-questions-comptable.md`:
+  proportional to each group's HT, remainder of centimes to the largest group.
+- `old_balance`, `remaining_debt` and `total_debt` should be marked as practice
+  rather than law. No text requires or forbids them on a document, and a reader
+  of that table currently cannot tell which rows are law and which are habit.
+- `amount_in_words` is defined on `net_to_pay`, which includes the stamp, while
+  décret 05-468 art. 3 asks for the "prix total toutes taxes comprises". Which
+  figure goes in words is question 1 of the comptable page's follow-up and is
+  unanswered.
+
+**§3, document kinds.** There is no `quittance` kind. A receipt for a later cash
+payment is itself a title constating a payment under Code du timbre art. 100-I,
+and the DGI circular 14/2025 names the quittance first. Question 6 of the
+comptable page decides whether the kind is needed.
+
+**§4, Printing.** Add the cancellation overlay to the template requirements: a
+cancelled facture prints its own number with "facture annulée" (ar
+"فاتورة ملغاة") written diagonally across the document, per décret 05-468
+art. 10.
