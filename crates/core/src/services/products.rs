@@ -7,6 +7,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::product::{NewProduct, Product, ProductRowWrite};
 use crate::money::{Bps, Money};
+use crate::repos::categories as categories_repo;
 use crate::repos::counters;
 use crate::repos::products as repo;
 
@@ -113,7 +114,7 @@ fn validate(
     // only when it had to supply a rate, so a caller who named its own rate
     // could point a product at another shop's category (rule 3).
     let category_rate = match new.category_id {
-        Some(id) => Some(repo::category_default_rate_bps(conn, shop_id, id)?.ok_or(
+        Some(id) => Some(categories_repo::default_rate_bps(conn, shop_id, id)?.ok_or(
             CoreError::NotFound {
                 entity: "category",
                 id,

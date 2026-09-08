@@ -9,14 +9,15 @@
 //! whether anything moved, which is what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    ApiErrorDto, ApiErrorPayloadDto, HealthDto, NewProductDto, ProductDto, UnitDto,
+    ApiErrorDto, ApiErrorPayloadDto, CategoryDto, HealthDto, NewProductDto, ProductDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 6] = [
+const FILES: [&str; 7] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
+    "CategoryDto.ts",
     "HealthDto.ts",
     "ApiErrorDto.ts",
     "ApiErrorPayloadDto.ts",
@@ -41,6 +42,7 @@ fn export_bindings() {
     UnitDto::export_all(&cfg).unwrap();
     ProductDto::export_all(&cfg).unwrap();
     NewProductDto::export_all(&cfg).unwrap();
+    CategoryDto::export_all(&cfg).unwrap();
     HealthDto::export_all(&cfg).unwrap();
     ApiErrorDto::export_all(&cfg).unwrap();
     ApiErrorPayloadDto::export_all(&cfg).unwrap();

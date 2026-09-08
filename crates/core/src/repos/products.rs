@@ -8,7 +8,7 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::product::{Product, ProductRow, ProductRowWrite};
-use crate::schema::{categories, products};
+use crate::schema::products;
 
 /// A unique-index violation on `(shop_id, barcode)` is the only constraint
 /// a caller can trip, so it becomes the domain error rather than a SQL one.
@@ -93,19 +93,4 @@ pub fn barcode_exists(
         .first(conn)
         .optional()?;
     Ok(found.is_some())
-}
-
-/// The category's default TVA rate in basis points, or `None` when no
-/// category with that id belongs to this shop.
-pub fn category_default_rate_bps(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    category_id: i32,
-) -> Result<Option<i32>, CoreError> {
-    Ok(categories::table
-        .filter(categories::shop_id.eq(shop_id))
-        .filter(categories::id.eq(category_id))
-        .select(categories::default_rate_bps)
-        .first(conn)
-        .optional()?)
 }

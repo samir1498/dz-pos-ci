@@ -266,6 +266,30 @@ async fn every_error_body_has_a_code_and_a_message() {
 }
 
 #[tokio::test]
+async fn categories_are_listed_with_the_rate_a_product_would_inherit() {
+    // The add form used to hardcode category 1 and a null rate, so every
+    // product came out at 19 %. It needs the shop's real categories.
+    let h = harness();
+    let (status, list) = call(&h.app, "GET", "/categories", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list.as_array().map(Vec::len), Some(1));
+    assert_eq!(list[0]["name"], "Général");
+    assert_eq!(list[0]["default_rate_bps"], 1900);
+    assert_eq!(list[0]["shop_id"], SHOP);
+    assert!(list[0]["id"].is_number());
+}
+
+#[tokio::test]
+async fn categories_are_scoped_to_the_servers_own_shop() {
+    // Rule 3, the same way products are.
+    let h = harness();
+    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap());
+    let (status, list) = call(&other, "GET", "/categories", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list.as_array().map(Vec::len), Some(0));
+}
+
+#[tokio::test]
 async fn only_the_apps_own_origins_may_call_it() {
     // allow_origin(Any) let any page open in any browser on this machine
     // read and write the till's database over loopback.

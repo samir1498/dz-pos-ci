@@ -6,6 +6,7 @@
 // half-typed object into the UI.
 
 import type { ApiErrorDto } from "./generated/ApiErrorDto";
+import type { CategoryDto } from "./generated/CategoryDto";
 import type { HealthDto } from "./generated/HealthDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { ProductDto } from "./generated/ProductDto";
@@ -48,6 +49,20 @@ export function isApiErrorBody(value: unknown): value is ApiErrorDto {
   return (
     isRecord(error) && typeof error.code === "string" && typeof error.message === "string"
   );
+}
+
+export function isCategory(value: unknown): value is CategoryDto {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.shop_id === "number" &&
+    typeof value.name === "string" &&
+    typeof value.default_rate_bps === "number"
+  );
+}
+
+function isCategoryList(value: unknown): value is CategoryDto[] {
+  return Array.isArray(value) && value.every(isCategory);
 }
 
 export function isHealth(value: unknown): value is HealthDto {
@@ -124,6 +139,10 @@ export function createClient(baseUrl: string, fetchImpl?: typeof fetch) {
 
     async health(): Promise<HealthDto> {
       return narrow(await send("/health"), isHealth, "health answer");
+    },
+
+    async listCategories(): Promise<CategoryDto[]> {
+      return narrow(await send("/categories"), isCategoryList, "category list");
     },
 
     async listProducts(): Promise<ProductDto[]> {

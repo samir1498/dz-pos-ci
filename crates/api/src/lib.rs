@@ -85,6 +85,7 @@ pub fn router_with_origin(state: AppState, extra: Option<HeaderValue>) -> Router
 
     Router::new()
         .route("/health", get(routes::health))
+        .route("/categories", get(routes::categories::list))
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
         .route("/products/{id}", get(routes::products::get_one))
