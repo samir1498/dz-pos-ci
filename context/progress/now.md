@@ -3,8 +3,13 @@ type: 'now'
 updated: '2026-09-08'
 ---
 ## Active
-Run `bun run ctx status` for full overview.
-Run `bun run ctx show <slug>` for plan details.
+Roadmap `dz-pos-to-first-shop` (`just ctx roadmap show dz-pos-to-first-shop`
+from the repo root, full text `docs/roadmap.md`): M0 in flight, the ladder
+below is its steps. M1 to M6 are paused stub plans that receive tasks when
+their milestone starts.
+
+Run `just status` from the repo root for the ladder and the plans.
+Run `just ctx show <slug>` for plan details.
 
 ## Done recently
 
@@ -41,3 +46,6 @@ Samir reviews between steps; one step in flight at a time.
   all three embedded in the binary and shown in About.
 - Payment modes v1: cash, credit (customer ledger), card on a TPE with no
   integration; transfer and cheque later.
+- Milestone order (later that evening): a cash sale with a printed ticket
+  ships before customers and debt; sequence and exit criteria, no dates.
+  `docs/roadmap.md`.
