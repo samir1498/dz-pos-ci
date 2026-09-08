@@ -43,7 +43,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    settings (shop_id, key, valid_from) {
+    settings (seq) {
+        seq -> Integer,
         shop_id -> Integer,
         key -> Text,
         value -> Text,

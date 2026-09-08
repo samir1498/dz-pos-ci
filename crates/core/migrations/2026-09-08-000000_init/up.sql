@@ -30,14 +30,21 @@ CREATE TABLE shops (
 -- valid_from until the next row for the same key. A document reads the row
 -- that was current when it was issued, so the régime fiscal it printed
 -- under stays readable after the shop changes régime.
+--
+-- The key is the row's own seq, not (shop_id, key, valid_from): valid_from
+-- is whole seconds, and two changes inside one second are a thing a person
+-- does. Keyed on the timestamp the second write was refused and lost. seq
+-- also settles the order when two rows share a valid_from: the later insert
+-- is the later decision.
 CREATE TABLE settings (
+    seq        INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     shop_id    INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
     key        TEXT NOT NULL,
     value      TEXT NOT NULL,
     valid_from TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    PRIMARY KEY (shop_id, key, valid_from),
     CHECK (key <> 'regime_fiscal' OR value IN ('ifu', 'reel'))
 ) STRICT;
+CREATE INDEX idx_settings_shop_key ON settings (shop_id, key, valid_from);
 
 CREATE TABLE users (
     id         INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
