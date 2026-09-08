@@ -2,7 +2,9 @@
 //! `docs/features.md`; the same files feed vitest against the mockup.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use dzpos_core::money::{stamp, Bps, Money, MoneyError, PaymentMode};
+use dzpos_core::money::{
+    compute_totals, stamp, Bps, Line, Money, MoneyError, PaymentMode, Totals, TotalsOptions,
+};
 use serde::Deserialize;
 
 fn fixture(name: &str) -> String {
@@ -35,11 +37,33 @@ struct InvalidRateCase {
 }
 
 #[derive(Deserialize)]
+struct TotalsInput {
+    lines: Vec<Line>,
+    opts: TotalsOptions,
+}
+
+#[derive(Deserialize)]
+struct TotalsCase {
+    name: String,
+    input: TotalsInput,
+    expected: Totals,
+}
+
+#[derive(Deserialize)]
+struct TotalsErrorCase {
+    name: String,
+    input: TotalsInput,
+    error: String,
+}
+
+#[derive(Deserialize)]
 struct RoundingFixture {
     name: String,
     pct_cases: Vec<PctCase>,
     overflow_cases: Vec<OverflowCase>,
     invalid_rate_cases: Vec<InvalidRateCase>,
+    totals_cases: Vec<TotalsCase>,
+    totals_error_cases: Vec<TotalsErrorCase>,
 }
 
 #[test]
@@ -74,6 +98,47 @@ fn tva_rounding_once_per_rate_pct_cases() {
     for c in &f.overflow_cases {
         let got = Money::centimes(c.amount).pct(Bps::new(c.rate_bps).unwrap());
         assert_eq!(got, Err(MoneyError::Overflow), "{}", c.name);
+    }
+}
+
+#[test]
+fn tva_rounding_once_per_rate_totals_cases() {
+    let f: RoundingFixture = serde_json::from_str(&fixture("tva_rounding_once_per_rate")).unwrap();
+    assert!(f.totals_cases.len() >= 10, "fixture lost its totals cases");
+    for c in &f.totals_cases {
+        let got = compute_totals(&c.input.lines, &c.input.opts).unwrap();
+        // Compare field by field so a failure names the column, not the struct.
+        assert_eq!(got.total_ht, c.expected.total_ht, "total_ht: {}", c.name);
+        assert_eq!(got.discount, c.expected.discount, "discount: {}", c.name);
+        assert_eq!(
+            got.subtotal_ht, c.expected.subtotal_ht,
+            "subtotal_ht: {}",
+            c.name
+        );
+        assert_eq!(
+            got.tva_by_rate, c.expected.tva_by_rate,
+            "tva_by_rate: {}",
+            c.name
+        );
+        assert_eq!(got.tva, c.expected.tva, "tva: {}", c.name);
+        assert_eq!(got.total_ttc, c.expected.total_ttc, "total_ttc: {}", c.name);
+        assert_eq!(got.stamp, c.expected.stamp, "stamp: {}", c.name);
+        assert_eq!(
+            got.net_to_pay, c.expected.net_to_pay,
+            "net_to_pay: {}",
+            c.name
+        );
+    }
+}
+
+#[test]
+fn tva_rounding_once_per_rate_totals_error_cases() {
+    let f: RoundingFixture = serde_json::from_str(&fixture("tva_rounding_once_per_rate")).unwrap();
+    assert!(!f.totals_error_cases.is_empty(), "fixture lost its errors");
+    for c in &f.totals_error_cases {
+        let got = compute_totals(&c.input.lines, &c.input.opts);
+        let err = got.expect_err(&c.name);
+        assert_eq!(format!("{err:?}"), c.error, "{}", c.name);
     }
 }
 
