@@ -9,9 +9,13 @@
 -- *_centimes column. STRICT accepts only INT, INTEGER, REAL, TEXT, BLOB and
 -- ANY as declared types, so timestamps are TEXT (SQLite stores them that
 -- way already) and the boolean is an INTEGER with a CHECK.
+--
+-- Every id is AUTOINCREMENT. Plain INTEGER PRIMARY KEY hands the highest
+-- deleted rowid out again, and a reissued product id would reissue the
+-- in-store barcode printed on a label that is still on a shelf.
 
 CREATE TABLE shops (
-    id         INTEGER PRIMARY KEY NOT NULL,
+    id         INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name       TEXT NOT NULL,
     rc         TEXT,
     nif        TEXT,
@@ -36,7 +40,7 @@ CREATE TABLE settings (
 ) STRICT;
 
 CREATE TABLE users (
-    id         INTEGER PRIMARY KEY NOT NULL,
+    id         INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     shop_id    INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
     name       TEXT NOT NULL,
     role       TEXT NOT NULL CHECK (role IN ('owner', 'manager', 'cashier')),
@@ -46,7 +50,7 @@ CREATE TABLE users (
 CREATE INDEX idx_users_shop ON users (shop_id);
 
 CREATE TABLE categories (
-    id                INTEGER PRIMARY KEY NOT NULL,
+    id                INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     shop_id           INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
     name              TEXT NOT NULL,
     -- TVA rate in basis points a product inherits when it names no rate of
@@ -56,7 +60,7 @@ CREATE TABLE categories (
 ) STRICT;
 
 CREATE TABLE products (
-    id                 INTEGER PRIMARY KEY NOT NULL,
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     shop_id            INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
     name               TEXT NOT NULL,
     -- NULL until one is set; SQLite allows many NULLs under a UNIQUE index,

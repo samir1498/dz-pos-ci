@@ -194,6 +194,40 @@ fn a_rate_column_refuses_anything_outside_zero_to_one_whole() {
 }
 
 #[test]
+fn a_deleted_id_is_never_handed_out_again() {
+    // Without AUTOINCREMENT SQLite reuses the highest deleted rowid, so a
+    // deleted product's id would come back and with it its in-store barcode.
+    let (_dir, mut conn) = open_temp();
+    let rows = [
+        ("shops", "INSERT INTO shops (name) VALUES ('autre magasin')"),
+        (
+            "users",
+            "INSERT INTO users (shop_id, name, role) VALUES (1, 'caissier', 'cashier')",
+        ),
+        (
+            "categories",
+            "INSERT INTO categories (shop_id, name, default_rate_bps) VALUES (1, 'c', 1900)",
+        ),
+        (
+            "products",
+            "INSERT INTO products (shop_id, name, unit, cost_centimes, selling_centimes, \
+             qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+             VALUES (1, 'p', 'piece', 0, 0, 0, 0, 1900)",
+        ),
+    ];
+    for (table, insert) in rows {
+        diesel::sql_query(insert).execute(&mut conn).unwrap();
+        let first = count(&mut conn, &format!("SELECT MAX(id) AS n FROM {table}"));
+        diesel::sql_query(format!("DELETE FROM {table} WHERE id = {first}"))
+            .execute(&mut conn)
+            .unwrap();
+        diesel::sql_query(insert).execute(&mut conn).unwrap();
+        let second = count(&mut conn, &format!("SELECT MAX(id) AS n FROM {table}"));
+        assert_ne!(second, first, "{table} handed out a deleted id again");
+    }
+}
+
+#[test]
 fn one_shop_is_seeded_with_an_owner() {
     let (_dir, mut conn) = open_temp();
     assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);
