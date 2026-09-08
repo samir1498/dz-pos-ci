@@ -97,6 +97,29 @@ fn a_blank_barcode_is_auto_numbered_and_unique() {
 }
 
 #[test]
+fn a_typed_barcode_sitting_on_the_next_auto_number_does_not_block_it() {
+    // The auto number used to be the row's id, so a user who typed the number
+    // the next row was about to get rolled that insert back for ever: the id
+    // was never consumed and every later blank create landed on it again.
+    // 2000010000029 is the in-store code for sequence 2.
+    let (_dir, mut conn) = open_temp();
+    let mut taken = draft("Saisi à la main");
+    taken.barcode = Some("2000010000029".to_string());
+    products::create(&mut conn, SHOP, taken).unwrap();
+
+    let a = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let b = products::create(&mut conn, SHOP, draft("B")).unwrap();
+    let (ba, bb) = (a.barcode.unwrap(), b.barcode.unwrap());
+    assert_ne!(ba, bb, "two blank creates got the same number");
+    for code in [&ba, &bb] {
+        assert_ne!(code, "2000010000029", "the auto number reused a typed one");
+        assert_eq!(code.len(), 13, "not an EAN-13: {code}");
+        assert!(code.starts_with('2'), "not an in-store code: {code}");
+    }
+    assert_eq!(products::list(&mut conn, SHOP).unwrap().len(), 3);
+}
+
+#[test]
 fn whitespace_only_barcode_counts_as_blank() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");

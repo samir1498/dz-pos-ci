@@ -15,6 +15,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    counters (shop_id, name) {
+        shop_id -> Integer,
+        name -> Text,
+        next_value -> BigInt,
+    }
+}
+
+diesel::table! {
     products (id) {
         id -> Integer,
         shop_id -> Integer,
@@ -69,8 +77,11 @@ diesel::table! {
 }
 
 diesel::joinable!(categories -> shops (shop_id));
+diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
 diesel::joinable!(settings -> shops (shop_id));
 diesel::joinable!(users -> shops (shop_id));
 
-diesel::allow_tables_to_appear_in_same_query!(categories, products, settings, shops, users);
+diesel::allow_tables_to_appear_in_same_query!(
+    categories, counters, products, settings, shops, users
+);

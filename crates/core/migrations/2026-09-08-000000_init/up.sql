@@ -53,6 +53,18 @@ CREATE TABLE users (
 ) STRICT;
 CREATE INDEX idx_users_shop ON users (shop_id);
 
+-- Numbers a shop hands out for itself, one series per name. A number is
+-- taken inside the transaction that writes the row using it, so it is never
+-- derived from a rowid: a rolled back insert leaves the counter advanced
+-- rather than pointing at a number that is already taken for ever.
+CREATE TABLE counters (
+    shop_id    INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    next_value INTEGER NOT NULL
+        CHECK (typeof(next_value) = 'integer' AND next_value >= 1),
+    PRIMARY KEY (shop_id, name)
+) STRICT;
+
 CREATE TABLE categories (
     id                INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     shop_id           INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
@@ -107,3 +119,4 @@ INSERT INTO users (shop_id, name, role, pin_hash)
 INSERT INTO settings (shop_id, key, value, valid_from)
     VALUES (1, 'regime_fiscal', 'reel', '2026-01-01 00:00:00');
 INSERT INTO categories (shop_id, name, default_rate_bps) VALUES (1, 'Général', 1900);
+INSERT INTO counters (shop_id, name, next_value) VALUES (1, 'in_store_barcode', 1);

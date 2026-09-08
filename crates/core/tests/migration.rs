@@ -50,7 +50,14 @@ fn migration_creates_every_table() {
     let names: Vec<String> = rows.into_iter().map(|r| r.name).collect();
     assert_eq!(
         names,
-        vec!["categories", "products", "settings", "shops", "users"]
+        vec![
+            "categories",
+            "counters",
+            "products",
+            "settings",
+            "shops",
+            "users"
+        ]
     );
 }
 
@@ -59,7 +66,7 @@ fn every_table_carries_shop_id() {
     // Rule 3 in docs/architecture.md: `shop_id` from day one, on every table.
     // `shops` carries it as its own primary key.
     let (_dir, mut conn) = open_temp();
-    for table in ["categories", "products", "settings", "users"] {
+    for table in ["categories", "counters", "products", "settings", "users"] {
         let n = count(
             &mut conn,
             &format!(
@@ -112,7 +119,14 @@ fn every_table_is_strict() {
     // A STRICT table refuses text where an integer belongs, so a price can
     // never be read back as something other than centimes.
     let (_dir, mut conn) = open_temp();
-    for table in ["shops", "settings", "users", "categories", "products"] {
+    for table in [
+        "shops",
+        "settings",
+        "users",
+        "counters",
+        "categories",
+        "products",
+    ] {
         let n = count(
             &mut conn,
             &format!(
