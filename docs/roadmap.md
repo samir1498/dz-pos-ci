@@ -34,7 +34,7 @@ Fixtures: `money_no_float`, `tva_rounding_once_per_rate`, `tva_rates_table`,
 
 Housekeeping, tracked as tasks on the repo-tooling and money plans:
 `design/shared/money.js` still computes the old 1 % clamped stamp (the
-money plan's T3 and T6 now say tranches); CI runs clippy without
+money plan's stamp tasks say tranches); CI runs clippy without
 `--all-targets` while the justfile and the quality gates require it; the
 `dz-review` skill lacks three sections that `pc-review`, the skill it was
 cut from (on the laptop, not in this repo), carries: what every finding
@@ -153,8 +153,9 @@ Demo: a phone pairs by QR, sells from the shop floor, and the ticket prints
 on the desktop.
 
 In: LAN mode, one desktop serves; mDNS discovery; pairing by QR with a
-single-use token that expires in minutes, shown only by an owner or
-manager, and a paired-devices list in settings with revoke; the Windows
+single-use short-lived token (the mockup shows 60 seconds), shown only by
+an owner or manager, and a paired-devices list in settings with revoke;
+the Windows
 Firewall banner; the Expo thin client (pair, till, cart, pay, ticket,
 products, customers, more) with its retry queue; printing through the
 desktop; Maestro flows on a real phone over Tailscale. The Expo plugin and

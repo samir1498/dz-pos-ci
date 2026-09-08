@@ -170,7 +170,10 @@ Permissions: sell, give discount above X %, override credit block, see cost
 prices and margins, edit products, edit settings, see reports. Every
 document records the user. Audit log of sensitive actions (price change,
 discount override, delete, settings change) — an ISO-27001 control we get
-for nearly free by writing it now.
+for nearly free by writing it now. An owner user exists from the first
+migration, so every document, ledger row and audit entry carries a user
+from the first sale (build-order step 2); PIN, roles and permissions
+arrive in step 5.
 
 ## 6. LAN mode (v1, after the desktop milestones)
 
