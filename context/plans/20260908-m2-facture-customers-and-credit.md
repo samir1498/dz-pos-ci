@@ -34,6 +34,12 @@ tasks:
   - id: 'T9'
     desc: 'The avoir and proforma cases of facture_a4 (T5 titles all three kinds in one template): the avoir''s reference line and its own lines, the proforma wording, the annulée reprint of a cancelled facture, goldens ×3 for each with every amount parsed back; split into a second template only if the avoir needs more than a title and a reference; after T5 and T6''s model, same wave as T6'
     status: 'done'
+  - id: 'T10'
+    desc: 'After the checkpoint: the avoir computes "facture minus earlier avoirs" six separate times (credited_amount, closes_the_facture, credited_by_line, left_on_line, left_at, remainder); build one Remaining table (per line qty/ht/discount, per rate base/tva/remise, totals) once at the top of avoir::issue so a partial is min(slice, remaining) and the closing avoir is remaining; about 150 lines fewer; the avoir and debt property tests with their committed seeds are the safety net and must stay green; dz-review money lens before merge'
+    status: 'pending'
+  - id: 'T11'
+    desc: 'Build-vs-buy for Samir: packages/shared/src/client.ts is a 600-line hand-rolled validator (five identical list guards, eight literal-array enum guards, a shape guard per DTO) with no zod or valibot in the workspace; either adopt one (schemas generated beside the ts-rs types, guards deleted) or fold the repeated guards into listOf/oneOf helpers; and the till screen (556 lines, 179 branch points) split into the cart, the payment panel and the customer panel with the same tests'
+    status: 'pending'
 acceptance: []
 ---
 # M2: facture, customers and credit
