@@ -1,36 +1,15 @@
 // The settings screen driven through a real browser against a real API:
-// the store block a ticket prints and the dated régime fiscal. Strings come
-// from src/i18n/fr.json so a reworded label fails here rather than passing
-// a hardcoded sentence.
+// the store block a ticket prints and the dated régime fiscal. Strings
+// come from the JSON dictionary of the Playwright project running the
+// test (fr, en or ar), so a reworded label fails here rather than passing
+// a hardcoded sentence, in every language.
 
 import { expect, test } from "@playwright/test";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentLang, t } from "./messages";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
-const frPath = path.join(here, "..", "src", "i18n", "fr.json");
-
-function readMessages(): Record<string, string> {
-  const parsed: unknown = JSON.parse(readFileSync(frPath, "utf8"));
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error(`${frPath} is not a JSON object`);
-  }
-  const messages: Record<string, string> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value !== "string") throw new Error(`${frPath}: ${key} is not a string`);
-    messages[key] = value;
-  }
-  return messages;
-}
-
-const messages = readMessages();
-
-function t(key: string): string {
-  const value = messages[key];
-  if (value === undefined) throw new Error(`${frPath} has no key ${key}`);
-  return value;
-}
 
 const STORE_NAME = "Superette El Baraka";
 const RC = "16/00-1234567 B 20";
@@ -76,6 +55,16 @@ test("saves the store block and reads it back after a reload", async ({ page }) 
   await expect(page.getByLabel(t("field_rc"), { exact: true })).toHaveValue(RC);
   await expect(page.getByLabel(t("field_nis"), { exact: true })).toHaveValue("");
   await expect(page.getByLabel(t("field_phone"), { exact: true })).toHaveValue(PHONE);
+
+  // The one committed settings screenshot: Arabic, so the RTL layout of a
+  // form (fields mirrored, fiscal identifiers still left to right) has a
+  // reference image, the way products.png does for fr.
+  if (currentLang() === "ar") {
+    await page.screenshot({
+      path: path.join(here, "screenshots", "settings-ar.png"),
+      fullPage: true,
+    });
+  }
 });
 
 test("a régime change dated ahead is planned; dated back it is in force", async ({ page }) => {
