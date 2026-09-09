@@ -9,5 +9,6 @@ export type { ProductDto } from "./generated/ProductDto";
 export type { UnitDto } from "./generated/UnitDto";
 
 export { ApiError, createClient, isApiErrorBody, isCategory } from "./client";
+export type { ClientOptions } from "./client";
 export type { ApiClient } from "./client";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";

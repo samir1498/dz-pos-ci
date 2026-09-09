@@ -13,6 +13,14 @@ use tower::ServiceExt;
 
 const SHOP: i32 = 1;
 
+/// The launch token every request in this file shows. The desktop makes a
+/// random one per launch; a fixed one here keeps the tests readable.
+const TOKEN: &str = "test-launch-token";
+
+fn token() -> dzpos_api::LaunchToken {
+    dzpos_api::LaunchToken::from_secret(TOKEN).unwrap()
+}
+
 struct Harness {
     _dir: tempfile::TempDir,
     path: std::path::PathBuf,
@@ -26,7 +34,7 @@ fn harness() -> Harness {
     Harness {
         _dir: dir,
         path,
-        app: dzpos_api::router(state),
+        app: dzpos_api::router(state, &token()),
     }
 }
 
@@ -36,7 +44,10 @@ async fn call(
     uri: &str,
     body: Option<Value>,
 ) -> (StatusCode, Value) {
-    let req = Request::builder().method(method).uri(uri);
+    let req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {TOKEN}"));
     let req = match body {
         Some(v) => req
             .header("content-type", "application/json")
@@ -172,7 +183,7 @@ async fn one_barcode_may_exist_once_in_each_shop() {
         .execute(&mut seed)
         .unwrap();
 
-    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap());
+    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap(), &token());
     // Shop 2 has no categories of its own, so it names its rate.
     d["category_id"] = json!(null);
     d["rate_bps"] = json!(1900);
@@ -357,7 +368,7 @@ async fn categories_are_listed_with_the_rate_a_product_would_inherit() {
 async fn categories_are_scoped_to_the_servers_own_shop() {
     // Rule 3, the same way products are.
     let h = harness();
-    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap());
+    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap(), &token());
     let (status, list) = call(&other, "GET", "/categories", None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(list.as_array().map(Vec::len), Some(0));
@@ -415,6 +426,7 @@ async fn one_more_origin_can_be_named_for_the_ssh_case() {
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     let app = dzpos_api::router_with_origin(
         state,
+        &token(),
         Some(HeaderValue::from_static("http://100.111.55.62:5173")),
     );
 
@@ -437,11 +449,11 @@ async fn the_server_only_ever_answers_for_its_own_shop() {
     // Rule 3: the shop is the server's, never the caller's to choose.
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
-    let mine = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap());
+    let mine = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap(), &token());
     let (status, _) = call(&mine, "POST", "/products", Some(draft())).await;
     assert_eq!(status, StatusCode::CREATED);
 
-    let other = dzpos_api::router(dzpos_api::AppState::open(&path, 2).unwrap());
+    let other = dzpos_api::router(dzpos_api::AppState::open(&path, 2).unwrap(), &token());
     let (_, list) = call(&other, "GET", "/products", None).await;
     assert_eq!(list.as_array().map(Vec::len), Some(0));
 
@@ -495,4 +507,158 @@ async fn a_spent_barcode_series_is_a_conflict_on_the_wire() {
     let (status, answer) = call(&h.app, "POST", "/products", Some(draft())).await;
     assert_eq!(status, StatusCode::CONFLICT, "{answer}");
     assert_eq!(answer["error"]["code"], "exhausted", "{answer}");
+}
+
+/// A request built by hand, with whatever `authorization` value the test
+/// wants, or none. `call` above always shows the right token.
+async fn call_with_auth(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    authorization: Option<&str>,
+) -> axum::response::Response {
+    let req = Request::builder().method(method).uri(uri);
+    let req = match authorization {
+        Some(value) => req.header("authorization", value),
+        None => req,
+    };
+    app.clone()
+        .oneshot(req.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
+async fn envelope(res: axum::response::Response) -> (StatusCode, Value) {
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+#[tokio::test]
+async fn a_request_without_the_launch_token_is_401_in_the_envelope() {
+    // Loopback is not a boundary: any process on the machine can open
+    // 127.0.0.1. Without the token the desktop handed its own webview, a
+    // caller learns nothing, not even that the route exists.
+    let h = harness();
+    for shown in [
+        None,
+        Some("Bearer wrong"),
+        Some("Basic dGVzdA=="),
+        Some("test-launch-token"),
+    ] {
+        let res = call_with_auth(&h.app, "GET", "/products", shown).await;
+        assert_eq!(
+            res.headers()
+                .get("www-authenticate")
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer"),
+            "{shown:?}"
+        );
+        let (status, body) = envelope(res).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{shown:?}");
+        assert_eq!(body["error"]["code"], "unauthorized", "{shown:?}");
+        assert!(body["error"]["message"].is_string(), "{shown:?}");
+    }
+    let (status, _) = call(&h.app, "GET", "/products", None).await;
+    assert_eq!(status, StatusCode::OK, "the right token still gets through");
+}
+
+#[tokio::test]
+async fn a_token_that_differs_only_at_the_end_is_refused() {
+    let h = harness();
+    for shown in [
+        "Bearer test-launch-tokeN",
+        "Bearer test-launch-toke",
+        "Bearer test-launch-token1",
+    ] {
+        let res = call_with_auth(&h.app, "GET", "/products", Some(shown)).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{shown}");
+    }
+}
+
+#[tokio::test]
+async fn the_scheme_is_read_the_way_rfc_7235_spells_it() {
+    // The scheme is case-insensitive and may be followed by more than one
+    // space; the token itself is exact.
+    let h = harness();
+    for shown in [
+        "bearer test-launch-token",
+        "BEARER test-launch-token",
+        "Bearer  test-launch-token",
+    ] {
+        let res = call_with_auth(&h.app, "GET", "/products", Some(shown)).await;
+        assert_eq!(res.status(), StatusCode::OK, "{shown}");
+    }
+    for shown in [
+        "Bearertest-launch-token",
+        "Bearer test-launch-token extra",
+        "Token test-launch-token",
+    ] {
+        let res = call_with_auth(&h.app, "GET", "/products", Some(shown)).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{shown}");
+    }
+}
+
+#[tokio::test]
+async fn a_wrong_method_on_health_answers_in_the_envelope_too() {
+    // /health lives outside the token guard, and it still owes the same
+    // JSON 405 every other route gives.
+    let h = harness();
+    let (status, body) = envelope(call_with_auth(&h.app, "PUT", "/health", None).await).await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(body["error"]["code"], "method_not_allowed");
+}
+
+#[tokio::test]
+async fn an_unknown_route_needs_the_token_too() {
+    // 404 versus 401 would tell a stranger which routes exist.
+    let h = harness();
+    let (status, body) = envelope(call_with_auth(&h.app, "GET", "/nowhere", None).await).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["error"]["code"], "unauthorized");
+}
+
+#[tokio::test]
+async fn health_needs_no_token() {
+    // The e2e harness and the desktop wait on it before the page has the
+    // token; it says the process is up and which shop, nothing more.
+    let h = harness();
+    let (status, body) = envelope(call_with_auth(&h.app, "GET", "/health", None).await).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["status"], "ok");
+}
+
+#[tokio::test]
+async fn the_preflight_clears_the_authorization_header() {
+    // A browser sends OPTIONS without any authorization header and only
+    // then the real request with it; the preflight must name the header
+    // as allowed or the browser never sends the token at all.
+    let h = harness();
+    let req = Request::builder()
+        .method("OPTIONS")
+        .uri("/products")
+        .header("origin", "http://127.0.0.1:5173")
+        .header("access-control-request-method", "POST")
+        .header(
+            "access-control-request-headers",
+            "authorization, content-type",
+        )
+        .body(Body::empty())
+        .unwrap();
+    let res = h.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let allow_headers = res
+        .headers()
+        .get("access-control-allow-headers")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_ascii_lowercase)
+        .unwrap_or_default();
+    assert!(allow_headers.contains("authorization"), "{allow_headers}");
+    assert_eq!(
+        allowed_origin(res).as_deref(),
+        Some("http://127.0.0.1:5173")
+    );
 }

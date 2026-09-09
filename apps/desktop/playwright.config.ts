@@ -7,6 +7,7 @@
 // 2026-09-08); this config is the interim local driver.
 
 import { defineConfig, devices } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +25,11 @@ const apiPort = 4319;
 const webPort = 5174;
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const baseURL = `http://127.0.0.1:${webPort}`;
+
+// The API refuses every call that does not show its launch token; the
+// desktop makes one per launch, this run makes one per suite and hands it
+// to both servers, the way the Tauri process hands it to its webview.
+const launchToken = randomBytes(32).toString("hex");
 
 const home = process.env.HOME ?? "";
 const cargoEnv = {
@@ -68,7 +74,7 @@ export default defineConfig({
       // way the SSH case is: one extra origin on the command line.
       command: `rm -f "${tempDb}" "${tempDb}-shm" "${tempDb}-wal" && cargo run -p dzpos-api -- --db "${tempDb}" --port ${apiPort} --allow-origin ${baseURL}`,
       cwd: repoRoot,
-      env: cargoEnv,
+      env: { ...cargoEnv, DZPOS_API_TOKEN: launchToken },
       url: `${apiUrl}/health`,
       reuseExistingServer: false,
       // A cold cargo build takes minutes on this box.
@@ -81,7 +87,7 @@ export default defineConfig({
       // here keeps the test API out of the app's source.
       command: `pnpm exec vite --port ${webPort} --strictPort`,
       cwd: desktopDir,
-      env: { VITE_API_URL: apiUrl },
+      env: { VITE_API_URL: apiUrl, VITE_API_TOKEN: launchToken },
       url: baseURL,
       reuseExistingServer: false,
       timeout: 120_000,

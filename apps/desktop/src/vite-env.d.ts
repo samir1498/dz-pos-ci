@@ -4,6 +4,7 @@
 // `any` here would hide a wrong base URL until runtime.
 interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
+  readonly VITE_API_TOKEN?: string;
 }
 
 interface ImportMeta {
@@ -13,3 +14,4 @@ interface ImportMeta {
 // Injected by the Tauri process before any app script runs; absent in a
 // plain browser.
 declare const __DZPOS_API_URL__: string | undefined;
+declare const __DZPOS_API_TOKEN__: string | undefined;

@@ -1131,6 +1131,7 @@ dependencies = [
  "clap",
  "diesel",
  "dzpos-core",
+ "getrandom 0.3.4",
  "http-body-util",
  "serde",
  "serde_json",

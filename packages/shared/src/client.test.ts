@@ -121,6 +121,38 @@ describe("createClient", () => {
     await expect(api.listProducts()).rejects.toMatchObject({ code: "unreachable" });
   });
 
+  test("every request shows the launch token as a bearer, /health included", async () => {
+    // The API refuses anything without it (crates/api, launch token), so a
+    // client built with a token must send it on every call, GET and POST.
+    const seen: Array<string | undefined> = [];
+    const api = createClient("http://x", {
+      token: "abc123",
+      fetch: async (url, init) => {
+        seen.push(new Headers(init?.headers).get("authorization") ?? undefined);
+        return new Response(
+          JSON.stringify(String(url).endsWith("/health") ? { status: "ok", shop_id: 1 } : []),
+          { status: 200 },
+        );
+      },
+    });
+    await api.health();
+    await api.listProducts();
+    await api.listCategories();
+    expect(seen).toEqual(["Bearer abc123", "Bearer abc123", "Bearer abc123"]);
+  });
+
+  test("a client built without a token sends no authorization header", async () => {
+    let seen: string | null = "unset";
+    const api = createClient("http://x", {
+      fetch: async (_url, init) => {
+        seen = new Headers(init?.headers).get("authorization");
+        return new Response("[]", { status: 200 });
+      },
+    });
+    await api.listProducts();
+    expect(seen).toBeNull();
+  });
+
   test("creating a product posts JSON and returns the created row", async () => {
     let seen: RequestInit | undefined;
     const api = createClient("http://x", async (_url, init) => {

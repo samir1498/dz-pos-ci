@@ -5,11 +5,13 @@
 pub mod dto;
 pub mod error;
 pub mod routes;
+pub mod token;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use axum::http::{header, HeaderValue, Method};
+use axum::middleware::from_fn_with_state;
 use axum::routing::{get, post};
 use axum::Router;
 use dzpos_core::db::Conn;
@@ -17,6 +19,7 @@ use dzpos_core::error::CoreError;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::error::ApiError;
+pub use crate::token::LaunchToken;
 
 /// The connection and the one shop this server answers for. A caller never
 /// chooses the shop (rule 3); the process is started with it.
@@ -68,8 +71,8 @@ const OWN_ORIGINS: [HeaderValue; 4] = [
     HeaderValue::from_static("http://tauri.localhost"),
 ];
 
-pub fn router(state: AppState) -> Router {
-    router_with_origin(state, None)
+pub fn router(state: AppState, token: &LaunchToken) -> Router {
+    router_with_origin(state, token, None)
 }
 
 /// Same routes, plus one more origin the operator names. The UI served from
@@ -103,40 +106,55 @@ pub fn origin_from_flag(flag: &str) -> Result<HeaderValue, String> {
     HeaderValue::from_str(flag).map_err(|_| format!("{flag}: not a valid header value"))
 }
 
-pub fn router_with_origin(state: AppState, extra: Option<HeaderValue>) -> Router {
-    // TODO(M4): no auth. Nothing here identifies a caller yet, so the only
-    // thing standing between a page and the shop's database is the origin
-    // list below and the loopback socket. M4 brings users and roles and this
-    // router gains the middleware that checks them.
+pub fn router_with_origin(
+    state: AppState,
+    token: &LaunchToken,
+    extra: Option<HeaderValue>,
+) -> Router {
     let mut origins = OWN_ORIGINS.to_vec();
     origins.extend(extra);
 
-    Router::new()
-        .route("/health", get(routes::health))
+    // Who may call (docs/architecture.md, "Transport and auth"): the process
+    // that holds the launch token. Loopback is not a boundary, any process
+    // or page on the machine can open 127.0.0.1, so the token is what says
+    // "this is the desktop's own screen". Only /health answers without it.
+    // TODO(M4): which user is calling. Roles arrive with users; the request
+    // identity slot is this middleware, the token stays the outer check.
+    // The health route owes the same JSON 405 as every guarded one; the
+    // method fallback below is the one on the router inside the guard.
+    let open = Router::new().route(
+        "/health",
+        get(routes::health).fallback(routes::method_not_allowed),
+    );
+    let guarded = Router::new()
         .route("/categories", get(routes::categories::list))
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
         .route("/products/{id}", get(routes::products::get_one))
         .fallback(routes::not_found)
         .method_not_allowed_fallback(routes::method_not_allowed)
-        // Loopback is not a boundary: every browser on the machine can reach
-        // 127.0.0.1, so allow_origin(Any) let any page a user happened to
-        // open read and write the till. The list is what keeps a stranger's
-        // page from being handed the answer.
+        .layer(from_fn_with_state(token.clone(), token::require));
+
+    open.merge(guarded)
+        // Every browser on the machine can reach 127.0.0.1, so
+        // allow_origin(Any) let any page a user happened to open read and
+        // write the till. The list is what keeps a stranger's page from
+        // being handed the answer, and the preflight is answered here,
+        // before the token check, because a browser sends it bare.
         .layer(
             CorsLayer::new()
                 .allow_origin(AllowOrigin::list(origins))
                 .allow_methods([Method::GET, Method::POST])
-                .allow_headers([header::CONTENT_TYPE]),
+                .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]),
         )
         .with_state(state)
 }
 
 /// Binds loopback only. A till's database must never be reachable from the
-/// shop's wifi; LAN mode in M7 is a deliberate, separate decision.
-pub async fn serve(state: AppState, port: u16) -> std::io::Result<()> {
+/// shop's wifi; LAN mode in M6 is a deliberate, separate decision.
+pub async fn serve(state: AppState, token: &LaunchToken, port: u16) -> std::io::Result<()> {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
-    axum::serve(listener, router(state)).await
+    axum::serve(listener, router(state, token)).await
 }
 
 /// Binds loopback on `port` and reports the port actually bound, so a

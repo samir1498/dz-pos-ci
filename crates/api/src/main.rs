@@ -25,6 +25,11 @@ struct Args {
     allow_origin: Option<String>,
 }
 
+/// The launch token every caller must show (`Authorization: Bearer`). Read
+/// from the environment, never from a flag, so `ps` does not show it.
+/// Absent: a random one is made and printed once on stdout.
+const TOKEN_VAR: &str = "DZPOS_API_TOKEN";
+
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
     let args = Args::parse();
@@ -51,10 +56,31 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         .map(dzpos_api::origin_from_flag)
         .transpose()
         .map_err(|why| format!("--allow-origin {why}"))?;
+    let (token, made_here) = match std::env::var(TOKEN_VAR) {
+        Ok(secret) => (
+            dzpos_api::LaunchToken::from_secret(&secret)
+                .map_err(|why| format!("{TOKEN_VAR}: {why}"))?,
+            false,
+        ),
+        Err(_) => (
+            dzpos_api::LaunchToken::generate().map_err(|e| format!("no randomness: {e}"))?,
+            true,
+        ),
+    };
     let state = dzpos_api::AppState::open(&args.db, args.shop)?;
     let (listener, port) = dzpos_api::bind(args.port).await?;
+    if made_here {
+        // The operator's own terminal is the only place it goes; the UI
+        // needs it as VITE_API_TOKEN (`just api` makes one per run in .dev
+        // and `just dev` reads it, so neither prints anything).
+        println!("dzpos-api launch token {}", token.expose());
+    }
     // The e2e harness waits on this line to know the port is live.
     println!("dzpos-api listening on http://127.0.0.1:{port}");
-    axum::serve(listener, dzpos_api::router_with_origin(state, extra_origin)).await?;
+    axum::serve(
+        listener,
+        dzpos_api::router_with_origin(state, &token, extra_origin),
+    )
+    .await?;
     Ok(())
 }
