@@ -125,6 +125,22 @@ pub fn allocate(
     Ok(DebtAllocation::from(row))
 }
 
+/// What one payment settled, oldest document first: the order the money
+/// filled them in (features.md §2).
+pub fn allocations_of_payment(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    payment_ledger_id: i32,
+) -> Result<Vec<DebtAllocation>, CoreError> {
+    let rows: Vec<DebtAllocationRow> = debt_allocations::table
+        .filter(debt_allocations::shop_id.eq(shop_id))
+        .filter(debt_allocations::payment_ledger_id.eq(payment_ledger_id))
+        .order(debt_allocations::id.asc())
+        .select(DebtAllocationRow::as_select())
+        .load(conn)?;
+    Ok(rows.into_iter().map(DebtAllocation::from).collect())
+}
+
 /// What has been settled against one document, oldest first: that is the
 /// order a payment fills them in (features.md §2).
 pub fn allocations(

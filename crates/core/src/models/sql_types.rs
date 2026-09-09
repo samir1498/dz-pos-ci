@@ -144,6 +144,20 @@ text_enum! {
 }
 
 text_enum! {
+    /// How a payment against a debt reached the till (features.md §2). Two
+    /// ways and not three: settling a credit with more credit is not a
+    /// payment, so `PaymentMode::Credit` has no counterpart here.
+    ///
+    /// It is informational on the movement. No stamp is computed from it: the
+    /// droit de timbre is a question about the receipt a later settlement is
+    /// handed, and the comptable has not answered it (R8).
+    PaymentMethod {
+        Cash => "cash",
+        Card => "card",
+    }
+}
+
+text_enum! {
     /// A cancelled document keeps its number and its row, so the series never
     /// gaps (features.md, Numbering row).
     DocumentStatus {

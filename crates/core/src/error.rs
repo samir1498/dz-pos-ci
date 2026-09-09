@@ -38,6 +38,16 @@ pub enum CoreError {
     NotFound { entity: &'static str, id: i32 },
     #[error("barcode {0} is already used in this shop")]
     DuplicateBarcode(String),
+    /// A payment for more than the customer owes. Its own variant rather than
+    /// a `Validation`, because the only useful thing to say back is a figure
+    /// the caller never sent: what is outstanding right now. The code stays
+    /// `validation`, so a screen that already translates it says the same
+    /// sentence and reads the amount out of the payload.
+    ///
+    /// Money that came in above a debt is an avoir's business (T6), never a
+    /// credit balance a payment quietly opened.
+    #[error("a payment is never more than what the customer owes")]
+    PaymentAboveDebt { outstanding_centimes: i64 },
     /// A number series the shop hands out (in-store barcodes, later the
     /// document numbers) has no next value. Not a validation failure: the
     /// user did nothing wrong, and the API answers 409 so the UI can say
@@ -94,7 +104,7 @@ impl CoreError {
     /// Stable key the UI translates. Never the message.
     pub const fn code(&self) -> &'static str {
         match self {
-            CoreError::Validation { .. } => "validation",
+            CoreError::Validation { .. } | CoreError::PaymentAboveDebt { .. } => "validation",
             CoreError::NotFound { .. } => "not_found",
             CoreError::DuplicateBarcode(_) => "duplicate_barcode",
             CoreError::Exhausted { .. } => "exhausted",

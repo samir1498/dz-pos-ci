@@ -9,6 +9,16 @@ export type ApiErrorPayloadDto = { code: string, message: string,
  */
 balance_after_centimes?: number, credit_limit_centimes?: number, 
 /**
+ * The field of the request a refusal is about, when it is about one.
+ */
+field?: string, 
+/**
+ * Only on a payment refused for being more than the debt: what the
+ * customer actually owes. "Too much" is useless without the amount that
+ * would not have been.
+ */
+outstanding_centimes?: number, 
+/**
  * Only on `party_ids`: which half of the facture is short (`seller` or
  * `buyer`) and which identifiers it is short of (`rc`, `nis`, `name`,
  * `address`). The till sends the cashier to the settings or to the

@@ -3,7 +3,9 @@ import { ApiError, createClient, isApiErrorBody, isSale } from "./client";
 import type { BackupDto } from "./generated/BackupDto";
 import type { CustomerDto } from "./generated/CustomerDto";
 import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
+import type { CustomerPaymentsDto } from "./generated/CustomerPaymentsDto";
 import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
+import type { PaymentDto } from "./generated/PaymentDto";
 import type { DebtEntryDto } from "./generated/DebtEntryDto";
 import type { BackupsDto } from "./generated/BackupsDto";
 import type { NewProductDto } from "./generated/NewProductDto";
@@ -764,6 +766,23 @@ const ledger: CustomerLedgerDto = {
   entries: [entry],
 };
 
+const payment: PaymentDto = {
+  ledger_id: 11,
+  customer_id: 3,
+  amount_centimes: 70_000,
+  payment_mode: "cash",
+  note: "acompte",
+  balance_after_centimes: 80_000,
+  allocations: [{ document_id: 4, amount_centimes: 70_000 }],
+  created_at: "2026-09-12 16:30:00",
+};
+
+const payments: CustomerPaymentsDto = {
+  customer_id: 3,
+  balance_centimes: 80_000,
+  payments: [payment],
+};
+
 const write: CustomerWriteDto = {
   name: "Entreprise Benali",
   party_kind: "company",
@@ -887,5 +906,100 @@ describe("customers", () => {
     await expect(
       api.adjustCustomerDebt(3, { amount_centimes: 0, note: null }),
     ).rejects.toMatchObject({ code: "validation", status: 422 });
+  });
+
+  test("payments come back with what each one settled", async () => {
+    const { calls, fetchStub } = recorder(payments);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+
+    await expect(api.customerPayments(3)).resolves.toEqual(payments);
+    await expect(
+      api.payCustomer(3, { amount_centimes: 70_000, payment_mode: "cash", note: "acompte" }),
+    ).resolves.toEqual(payments);
+
+    expect(calls[0].url).toBe("http://127.0.0.1:4317/customers/3/payments");
+    expect(calls[1].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[1].init?.body))).toEqual({
+      amount_centimes: 70_000,
+      payment_mode: "cash",
+      note: "acompte",
+    });
+  });
+
+  test("a payment of the wrong shape is refused, never handed to the UI", async () => {
+    for (const bad of [
+      // The envelope itself.
+      { ...payments, balance_centimes: 9.5 },
+      { ...payments, customer_id: null },
+      { ...payments, payments: {} },
+      // One payment inside it. An amount JSON.parse had to round and a mode
+      // the app does not know are both answers it cannot show.
+      { ...payments, payments: [{ ...payment, amount_centimes: 2 ** 53 }] },
+      { ...payments, payments: [{ ...payment, payment_mode: "cheque" }] },
+      { ...payments, payments: [{ ...payment, balance_after_centimes: null }] },
+      // And one allocation inside that.
+      {
+        ...payments,
+        payments: [{ ...payment, allocations: [{ document_id: 4, amount_centimes: 1.5 }] }],
+      },
+      { ...payments, payments: [{ ...payment, allocations: [{ document_id: 4 }] }] },
+    ]) {
+      const api = createClient("http://x", stub(200, bad));
+      await expect(api.customerPayments(3)).rejects.toMatchObject({ code: "bad_response" });
+    }
+  });
+
+  test("a payment above the debt carries the field and what is owed; other errors carry neither", async () => {
+    const api = createClient(
+      "http://x",
+      stub(422, {
+        error: {
+          code: "validation",
+          message: "a payment is never more than what the customer owes",
+          field: "amount_centimes",
+          outstanding_centimes: 150_000,
+        },
+      }),
+    );
+    await expect(
+      api.payCustomer(3, { amount_centimes: 200_000, payment_mode: "cash", note: null }),
+    ).rejects.toMatchObject({
+      code: "validation",
+      status: 422,
+      field: "amount_centimes",
+      outstandingCentimes: 150_000,
+    });
+
+    // Absent, not zero: a form that read a missing figure as nothing would
+    // tell a cashier the customer owes 0,00 on every other refusal.
+    const plain = createClient(
+      "http://x",
+      stub(422, { error: { code: "validation", message: "no" } }),
+    );
+    await expect(
+      plain.payCustomer(3, { amount_centimes: 1, payment_mode: "cash", note: null }),
+    ).rejects.toMatchObject({
+      code: "validation",
+      field: undefined,
+      outstandingCentimes: undefined,
+      balanceAfterCentimes: undefined,
+      creditLimitCentimes: undefined,
+    });
+
+    // A figure of the wrong type is not a refusal this client can read, so
+    // the whole envelope is one it does not know rather than one it half
+    // believes.
+    for (const bad of [
+      { code: "validation", message: "no", outstanding_centimes: "150000" },
+      { code: "validation", message: "no", outstanding_centimes: 1.5 },
+      { code: "validation", message: "no", field: 7 },
+      { code: "credit_limit", message: "no", balance_after_centimes: "550000" },
+      { code: "credit_limit", message: "no", credit_limit_centimes: null },
+    ]) {
+      const wrong = createClient("http://x", stub(422, { error: bad }));
+      await expect(
+        wrong.payCustomer(3, { amount_centimes: 1, payment_mode: "cash", note: null }),
+      ).rejects.toMatchObject({ code: "unreachable", status: 422 });
+    }
   });
 });

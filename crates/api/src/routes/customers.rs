@@ -9,13 +9,19 @@
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::response::Html;
 use axum::Json;
+use dzpos_core::db::Conn;
+use dzpos_core::error::CoreError;
+use dzpos_core::lang::Lang;
+use dzpos_core::print::{render_statement, Paper};
 use dzpos_core::services::customers::NewCustomer;
-use dzpos_core::services::{customers as service, debt};
+use dzpos_core::services::{clock, customers as service, debt};
 use serde::Deserialize;
 
 use crate::dto::{
-    money_field, AdjustmentDto, CustomerDto, CustomerLedgerDto, CustomerWriteDto, NewCustomerDto,
+    money_field, parse_day, AdjustmentDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto,
+    CustomerWriteDto, NewCustomerDto, NewPaymentDto, PaymentDto,
 };
 use crate::error::ApiError;
 use crate::AppState;
@@ -134,6 +140,112 @@ pub async fn adjust(
         .blocking(move |c| debt::adjust(c, shop, user, id, amount, note))
         .await?;
     Ok((StatusCode::CREATED, Json(envelope(id, written.statement))))
+}
+
+/// Money against the debt (features.md §2). One transaction in the core: the
+/// movement, the documents it settled and the remaining debt on each of them.
+///
+/// The answer is the whole list of payments again, the way an adjustment
+/// answers the whole ledger: the screen shows the new payment with its
+/// allocations and the new balance without a second call, and what it shows
+/// is what the core stored rather than what the form sent.
+pub async fn pay(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    body: Result<Json<NewPaymentDto>, JsonRejection>,
+) -> Result<(StatusCode, Json<CustomerPaymentsDto>), ApiError> {
+    let id = path_id(id)?;
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let amount = dto.amount()?;
+    let mode = dto.payment_mode.into();
+    let note = dto.note;
+    let shop = state.shop_id;
+    // TODO(M4): the user comes from the request identity, not from the state.
+    let user = state.user_id;
+    // The moment is the server's, not the till's: a machine whose clock is
+    // wrong must not decide which side of a statement's date range a payment
+    // falls on. The shop's calendar, which is the one clock the ledger and a
+    // document's `issued_at` are both on.
+    let at = clock::now();
+    let written = state
+        .blocking(move |c| {
+            debt::pay(c, shop, user, id, amount, mode, note, at)?;
+            payments_envelope(c, shop, id)
+        })
+        .await?;
+    Ok((StatusCode::CREATED, Json(written)))
+}
+
+/// The customer's payments, newest first, each with what it settled.
+pub async fn payments(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+) -> Result<Json<CustomerPaymentsDto>, ApiError> {
+    let id = path_id(id)?;
+    let shop = state.shop_id;
+    let found = state
+        .blocking(move |c| payments_envelope(c, shop, id))
+        .await?;
+    Ok(Json(found))
+}
+
+/// The days a statement covers and the language it prints in. Named by the
+/// caller on every call rather than read from a setting, like the ticket's:
+/// a document prints in the language the app is being used in, and the screen
+/// is the only place that knows which that is (features.md §4).
+#[derive(Deserialize)]
+pub struct StatementQuery {
+    from: String,
+    to: String,
+    lang: Lang,
+}
+
+/// The statement of account for a range of days, as the HTML page the core
+/// rendered (features.md §2 and §4). The core renders it, so the desktop and
+/// a server with no screen hand over the same bytes.
+pub async fn statement(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    range: Result<Query<StatementQuery>, QueryRejection>,
+) -> Result<Html<String>, ApiError> {
+    let id = path_id(id)?;
+    let Query(StatementQuery { from, to, lang }) = range.map_err(|_| {
+        ApiError::BadRequest(
+            "from and to are days written YYYY-MM-DD and lang is fr, en or ar".into(),
+        )
+    })?;
+    let from = parse_day("from", &from)?;
+    let to = parse_day("to", &to)?;
+    let shop = state.shop_id;
+    let page = state
+        .blocking(move |c| {
+            // The fiche as it stands, not as it stood: a statement is a page
+            // about the account, and the address it is posted to is the one
+            // on the fiche today. The buyer block a facture snapshotted is
+            // the other question, and the facture answers it.
+            let customer = service::get(c, shop, id)?;
+            let statement = debt::statement_between(c, shop, id, from, to)?;
+            render_statement(&customer, &statement, lang, Paper::A4)
+        })
+        .await?;
+    Ok(Html(page))
+}
+
+fn payments_envelope(
+    conn: &mut Conn,
+    shop: i32,
+    customer_id: i32,
+) -> Result<CustomerPaymentsDto, CoreError> {
+    let payments = debt::payments(conn, shop, customer_id)?;
+    // The balance is the ledger's whole sum, not the newest payment's: a sale
+    // written after the last payment moved it, and the fiche beside this list
+    // shows the same figure.
+    let balance = debt::balance(conn, shop, customer_id)?;
+    Ok(CustomerPaymentsDto {
+        customer_id,
+        balance_centimes: balance.as_centimes(),
+        payments: payments.into_iter().map(PaymentDto::from).collect(),
+    })
 }
 
 fn envelope(customer_id: i32, statement: debt::Statement) -> CustomerLedgerDto {

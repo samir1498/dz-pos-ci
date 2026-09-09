@@ -25,7 +25,11 @@ printed_number: string,
 /**
  * `YYYY-MM-DD HH:MM:SS` on the shop's calendar (core, services::clock).
  */
-issued_at: string, user_id: number, regime: RegimeDto, payment_mode: PaymentModeDto, seller: StoreDto, customer_id: number | null, balance: SaleBalanceDto | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, tendered_centimes: number | null, change_centimes: number | null, status: DocumentStatusDto, lines: Array<SaleLineDto>, 
+issued_at: string, user_id: number, regime: RegimeDto, payment_mode: PaymentModeDto, seller: StoreDto, customer_id: number | null, 
+/**
+ * Null on a document with no customer, which is every cash ticket.
+ */
+balance: SaleBalanceDto | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, tendered_centimes: number | null, change_centimes: number | null, status: DocumentStatusDto, lines: Array<SaleLineDto>, 
 /**
  * What the till should say while still handing over the ticket, null
  * when there is nothing to say. A read of a stored document carries

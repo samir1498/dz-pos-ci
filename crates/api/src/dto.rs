@@ -17,7 +17,7 @@ use dzpos_core::models::shop::{Shop, StoreBlock};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
 use dzpos_core::services::backup::Backup;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
-use dzpos_core::services::debt::{DebtKind, LedgerLine};
+use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
 use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, SaleKind, Warning};
 use dzpos_core::services::settings::DatedRegime;
 use serde::{Deserialize, Serialize};
@@ -226,6 +226,16 @@ pub struct ApiErrorPayloadDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub credit_limit_centimes: Option<i64>,
+    /// The field of the request a refusal is about, when it is about one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub field: Option<String>,
+    /// Only on a payment refused for being more than the debt: what the
+    /// customer actually owes. "Too much" is useless without the amount that
+    /// would not have been.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub outstanding_centimes: Option<i64>,
     /// Only on `party_ids`: which half of the facture is short (`seller` or
     /// `buyer`) and which identifiers it is short of (`rc`, `nis`, `name`,
     /// `address`). The till sends the cashier to the settings or to the
@@ -578,7 +588,9 @@ pub struct SaleTotalsDto {
 /// What the customer owed before this document, what it leaves unpaid, and
 /// what they owe now (features.md §3, the balance triple). Stored on the
 /// document at issue and never recomputed, so a screen and a reprint say the
-/// same thing. Null on a document that names no customer.
+/// same thing. `remaining_debt_centimes` is the one of the three that moves
+/// afterwards: a payment settles part of a document and the column says how
+/// much of it is left. Null on a document that names no customer.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export_to = "SaleBalanceDto.ts")]
 pub struct SaleBalanceDto {
@@ -609,6 +621,7 @@ pub struct SaleDto {
     pub payment_mode: PaymentModeDto,
     pub seller: StoreDto,
     pub customer_id: Option<i32>,
+    /// Null on a document with no customer, which is every cash ticket.
     pub balance: Option<SaleBalanceDto>,
     pub totals: SaleTotalsDto,
     pub tva: Vec<SaleTvaDto>,
@@ -1081,4 +1094,123 @@ pub fn parse_day(field: &'static str, text: &str) -> Result<NaiveDate, ApiError>
         .ok_or_else(|| {
             ApiError::Request(CoreError::validation(field, "a day is written YYYY-MM-DD"))
         })
+}
+
+/// How a payment against a debt was taken (features.md §2). Two ways and not
+/// three: settling a credit with more credit is not a payment, so this is not
+/// `PaymentModeDto`, which is what a document was sold under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "PaymentMethodDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum PaymentMethodDto {
+    Cash,
+    Card,
+}
+
+impl From<PaymentMethod> for PaymentMethodDto {
+    fn from(m: PaymentMethod) -> Self {
+        match m {
+            PaymentMethod::Cash => PaymentMethodDto::Cash,
+            PaymentMethod::Card => PaymentMethodDto::Card,
+        }
+    }
+}
+
+impl From<PaymentMethodDto> for PaymentMethod {
+    fn from(m: PaymentMethodDto) -> Self {
+        match m {
+            PaymentMethodDto::Cash => PaymentMethod::Cash,
+            PaymentMethodDto::Card => PaymentMethod::Card,
+        }
+    }
+}
+
+/// What one payment placed on one document (features.md §2). A payment is one
+/// movement and the documents it settled are these, oldest first.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PaymentAllocationDto.ts")]
+pub struct PaymentAllocationDto {
+    pub document_id: i32,
+    pub amount_centimes: i64,
+}
+
+impl From<DebtAllocation> for PaymentAllocationDto {
+    fn from(a: DebtAllocation) -> Self {
+        PaymentAllocationDto {
+            document_id: a.document_id,
+            amount_centimes: a.amount.as_centimes(),
+        }
+    }
+}
+
+/// One payment, with what it settled and the balance it left behind. The
+/// allocations travel with it so a screen showing a payment never asks a
+/// second time what the money went to.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PaymentDto.ts")]
+pub struct PaymentDto {
+    /// The ledger movement's id: a payment is a row of the ledger, and an
+    /// allocation names it.
+    pub ledger_id: i32,
+    pub customer_id: i32,
+    pub amount_centimes: i64,
+    /// Null on a payment written before the mode was stored; nothing writes
+    /// one without it now.
+    pub payment_mode: Option<PaymentMethodDto>,
+    pub note: Option<String>,
+    /// The balance as of this payment: every older movement counted, no newer
+    /// one. Computed in the core (services::debt).
+    pub balance_after_centimes: i64,
+    pub allocations: Vec<PaymentAllocationDto>,
+    /// `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
+    pub created_at: String,
+}
+
+impl From<Payment> for PaymentDto {
+    fn from(p: Payment) -> Self {
+        PaymentDto {
+            ledger_id: p.entry.id,
+            customer_id: p.entry.customer_id,
+            amount_centimes: p.entry.credit.as_centimes(),
+            payment_mode: p.entry.payment_mode.map(Into::into),
+            note: p.entry.note,
+            balance_after_centimes: p.balance_after.as_centimes(),
+            allocations: p.allocations.into_iter().map(Into::into).collect(),
+            created_at: p.entry.created_at.format(DATE_TIME_FORMAT).to_string(),
+        }
+    }
+}
+
+/// A customer's payments, newest first, and the balance the whole ledger sums
+/// to. The balance is in the envelope for the reason the ledger's is: a screen
+/// showing it never adds a column up itself.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "CustomerPaymentsDto.ts")]
+pub struct CustomerPaymentsDto {
+    pub customer_id: i32,
+    pub balance_centimes: i64,
+    pub payments: Vec<PaymentDto>,
+}
+
+/// Money against a debt: how much, how it was taken, and why if the shop
+/// wants to say. The moment is the server's, like a document's `issued_at`.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewPaymentDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewPaymentDto {
+    pub amount_centimes: i64,
+    pub payment_mode: PaymentMethodDto,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+impl NewPaymentDto {
+    /// The amount as money the core will take. The safe-integer bound is
+    /// checked here, at the edge, like every other amount on the wire.
+    pub fn amount(&self) -> Result<Money, ApiError> {
+        Ok(Money::centimes(within_js_safe_range(
+            "amount_centimes",
+            self.amount_centimes,
+        )?))
+    }
 }

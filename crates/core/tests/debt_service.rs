@@ -6,13 +6,17 @@
 //! assert is that every movement lands in it and that a movement which says
 //! nothing cannot land at all.
 
+use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
-use dzpos_core::money::Money;
+use dzpos_core::money::{Money, PaymentMode, Regime, Totals};
 use dzpos_core::services::audit;
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
-use dzpos_core::services::debt::{self, DebtKind, NewDebtAllocation, NewDebtEntry};
+use dzpos_core::services::debt::{self, DebtKind, NewDebtAllocation, NewDebtEntry, PaymentMethod};
+use dzpos_core::services::documents::{
+    self, BalanceTriple, DocumentKind, NewDocument, PartyBlock, SellerBlock,
+};
 
 const SHOP: i32 = 1;
 /// The owner the first migration seeds.
@@ -710,4 +714,1103 @@ fn an_adjustment_answers_the_ledger_its_own_transaction_read() {
         written.statement.balance.as_centimes(),
         "the log and the answer carry two different balances"
     );
+}
+
+// ---------------------------------------------------------------- payments
+//
+// The documents below are built by hand, `debt::append` writing the `sale`
+// row beside a document that carries its own `remaining_debt`, rather than by
+// selling on credit: the credit sale is being written on its own branch and
+// this half of features.md §2 is the settlement, not the sale.
+
+/// A document made out to `customer` for `net` centimes, unpaid, issued on
+/// the day given so the oldest-first order is a fact of the fixture and not
+/// of the insert order.
+fn a_document_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, day: u32) -> i32 {
+    let net = Money::centimes(net);
+    let issued_at = NaiveDate::from_ymd_opt(2026, 9, day)
+        .and_then(|d| d.and_hms_opt(10, 0, 0))
+        .unwrap();
+    let before = debt::balance(conn, SHOP, customer_id).unwrap();
+    let doc = documents::issue(
+        conn,
+        SHOP,
+        NewDocument {
+            kind: DocumentKind::Facture,
+            issued_at,
+            user_id: OWNER,
+            regime: Regime::Reel,
+            payment_mode: PaymentMode::Credit,
+            seller: SellerBlock {
+                name: "Mon magasin".to_string(),
+                rc: None,
+                nif: None,
+                nis: None,
+                ai: None,
+                address: None,
+                phone: None,
+            },
+            customer_id: Some(customer_id),
+            buyer: Some(PartyBlock {
+                name: "Entreprise Benali".to_string(),
+                party_kind: PartyKind::Company,
+                rc: None,
+                nif: None,
+                nis: None,
+                ai: None,
+                address: None,
+            }),
+            ref_document_id: None,
+            balance: Some(BalanceTriple {
+                old_balance: before,
+                remaining_debt: net,
+                total_debt: before.checked_add(net).unwrap(),
+            }),
+            totals: Totals {
+                total_ht: net,
+                discount: Money::ZERO,
+                subtotal_ht: net,
+                tva_by_rate: Vec::new(),
+                tva: Money::ZERO,
+                total_ttc: net,
+                stamp: Money::ZERO,
+                net_to_pay: net,
+            },
+            tendered: None,
+            change: None,
+            lines: Vec::new(),
+        },
+    )
+    .unwrap();
+    // Stamped with the day the document was issued, not the day the test
+    // runs: a fixture dated by the wall clock would drift in and out of the
+    // ranges the statement tests read, and pass or fail by the calendar.
+    debt::append_at(
+        conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id,
+            document_id: Some(doc.id),
+            kind: DebtKind::Sale,
+            debit: net,
+            credit: Money::ZERO,
+            user_id: OWNER,
+            note: None,
+        },
+        Some(issued_at),
+    )
+    .unwrap();
+    doc.id
+}
+
+/// What the customer owed before the range, written as an opening balance on
+/// a day of its own. `customers::create` can carry an opening debt, but the
+/// row it writes is stamped now, and a statement test needs the movement to
+/// sit on a day it chose.
+fn an_opening_balance(conn: &mut SqliteConnection, customer_id: i32, centimes: i64, day: u32) {
+    debt::append_at(
+        conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id,
+            document_id: None,
+            kind: DebtKind::Opening,
+            debit: Money::centimes(centimes),
+            credit: Money::ZERO,
+            user_id: OWNER,
+            note: None,
+        },
+        Some(at(day)),
+    )
+    .unwrap();
+}
+
+fn at(day: u32) -> chrono::NaiveDateTime {
+    NaiveDate::from_ymd_opt(2026, 9, day)
+        .and_then(|d| d.and_hms_opt(16, 30, 0))
+        .unwrap()
+}
+
+fn remaining_debt(conn: &mut SqliteConnection, document_id: i32) -> Money {
+    documents::get(conn, SHOP, document_id)
+        .unwrap()
+        .balance
+        .expect("a document issued on credit carries the balance triple")
+        .remaining_debt
+}
+
+#[test]
+fn a_payment_fills_the_oldest_documents_first_and_stops_where_the_money_does() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let first = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let second = a_document_on_credit(&mut conn, customer, 200_000, 11);
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(150_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(paid.entry.kind, DebtKind::Payment);
+    assert_eq!(paid.entry.credit, Money::centimes(150_000));
+    assert_eq!(paid.entry.debit, Money::ZERO);
+    assert_eq!(paid.balance_after, Money::centimes(150_000));
+    assert_eq!(
+        paid.allocations
+            .iter()
+            .map(|a| (a.document_id, a.amount))
+            .collect::<Vec<(i32, Money)>>(),
+        [
+            (first, Money::centimes(100_000)),
+            (second, Money::centimes(50_000)),
+        ],
+        "the money did not fill the older document before it touched the newer"
+    );
+    // The document's own column moves with the allocation: the balance triple
+    // says what is left unpaid on this piece of paper, so it cannot stay at
+    // what the paper asked for once part of it has been settled.
+    assert_eq!(remaining_debt(&mut conn, first), Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, second), Money::centimes(150_000));
+}
+
+#[test]
+fn a_second_payment_carries_on_from_where_the_first_stopped() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let first = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let second = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    let pay = |conn: &mut SqliteConnection, centimes: i64, day: u32| {
+        debt::pay(
+            conn,
+            SHOP,
+            OWNER,
+            customer,
+            Money::centimes(centimes),
+            PaymentMethod::Card,
+            None,
+            at(day),
+        )
+        .unwrap()
+    };
+
+    pay(&mut conn, 150_000, 12);
+    let second_payment = pay(&mut conn, 150_000, 13);
+
+    assert_eq!(
+        second_payment
+            .allocations
+            .iter()
+            .map(|a| (a.document_id, a.amount))
+            .collect::<Vec<(i32, Money)>>(),
+        [(second, Money::centimes(150_000))],
+        "the second payment went back over a document the first one settled"
+    );
+    assert_eq!(second_payment.balance_after, Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, first), Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, second), Money::ZERO);
+}
+
+#[test]
+fn a_payment_above_what_the_customer_owes_is_refused_with_the_outstanding_amount() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    let refused = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(100_001),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap_err();
+
+    match refused {
+        CoreError::PaymentAboveDebt {
+            outstanding_centimes,
+        } => assert_eq!(outstanding_centimes, 100_000),
+        other => panic!("a payment over the debt was refused as {other:?}"),
+    }
+    // Money over a debt is an avoir's business, never a credit balance a
+    // payment opened on the way past: nothing at all was written.
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, customer).unwrap(),
+        Money::centimes(100_000)
+    );
+    assert_eq!(debt::ledger(&mut conn, SHOP, customer).unwrap().len(), 1);
+}
+
+#[test]
+fn a_customer_who_owes_nothing_takes_no_payment() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+
+    let refused = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(1),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap_err();
+
+    match refused {
+        CoreError::PaymentAboveDebt {
+            outstanding_centimes,
+        } => assert_eq!(outstanding_centimes, 0),
+        other => panic!("a payment against no debt was refused as {other:?}"),
+    }
+}
+
+#[test]
+fn a_payment_of_nothing_or_of_a_negative_is_refused() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    for centimes in [0, -1_000] {
+        let refused = debt::pay(
+            &mut conn,
+            SHOP,
+            OWNER,
+            customer,
+            Money::centimes(centimes),
+            PaymentMethod::Cash,
+            None,
+            at(12),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(refused, CoreError::Validation { ref field, .. } if field == "amount_centimes"),
+            "{centimes} centimes was refused as {refused:?}"
+        );
+    }
+}
+
+#[test]
+fn money_against_a_debt_no_document_carries_settles_the_balance_and_no_paper() {
+    let (_dir, mut conn) = open_temp();
+    // An opening balance is the debt the shop was carrying before it had the
+    // app: real money owed, and no document in the file to place it on.
+    let customer = customers::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        fiche("Entreprise Benali"),
+        Some(Money::centimes(80_000)),
+    )
+    .unwrap()
+    .id;
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(30_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert!(
+        paid.allocations.is_empty(),
+        "a payment invented a document to settle"
+    );
+    assert_eq!(paid.balance_after, Money::centimes(50_000));
+}
+
+#[test]
+fn a_document_already_settled_by_an_allocation_nobody_wrote_a_payment_for_refuses_the_money() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    // An allocation written straight into the table moves no column, so the
+    // document still reads as unpaid while it has already been settled in
+    // full. Σ of the allocations is the only thing that catches it.
+    let payment = debt::append(
+        &mut conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id: customer,
+            document_id: None,
+            kind: DebtKind::Payment,
+            debit: Money::ZERO,
+            credit: Money::centimes(100_000),
+            user_id: OWNER,
+            note: None,
+        },
+    )
+    .unwrap();
+    debt::allocate(
+        &mut conn,
+        SHOP,
+        NewDebtAllocation {
+            payment_ledger_id: payment.id,
+            document_id: document,
+            amount: Money::centimes(100_000),
+        },
+    )
+    .unwrap();
+    // The forged payment took the balance to nothing, so the debt has to be
+    // put back for the refusal under test to be the allocation check and not
+    // the outstanding check.
+    debt::append(
+        &mut conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id: customer,
+            document_id: None,
+            kind: DebtKind::Adjustment,
+            debit: Money::centimes(100_000),
+            credit: Money::ZERO,
+            user_id: OWNER,
+            note: None,
+        },
+    )
+    .unwrap();
+
+    let refused = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(10_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap_err();
+
+    assert!(
+        matches!(refused, CoreError::Validation { ref field, .. } if field == "amount_centimes"),
+        "a document settled twice over was refused as {refused:?}"
+    );
+    // The refusal rolled the whole thing back: no payment row, and the
+    // document still reads what it read before.
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, customer).unwrap(),
+        Money::centimes(100_000)
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, document),
+        Money::centimes(100_000)
+    );
+}
+
+#[test]
+fn a_payment_carries_the_mode_it_was_taken_in_and_the_moment_it_landed() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(40_000),
+        PaymentMethod::Card,
+        Some("acompte".to_string()),
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(paid.entry.payment_mode, Some(PaymentMethod::Card));
+    assert_eq!(paid.entry.created_at, at(12));
+    assert_eq!(paid.entry.note.as_deref(), Some("acompte"));
+    // A sale says nothing about a mode: nothing was handed over.
+    let sale = debt::ledger(&mut conn, SHOP, customer)
+        .unwrap()
+        .into_iter()
+        .find(|e| e.kind == DebtKind::Sale)
+        .unwrap();
+    assert_eq!(sale.payment_mode, None);
+}
+
+#[test]
+fn a_payment_leaves_an_audit_entry_carrying_the_balance_on_both_sides() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(40_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    let log = audit::list(&mut conn, SHOP).unwrap();
+    let entry = log
+        .iter()
+        .find(|e| e.action == "pay_debt")
+        .expect("the payment left no audit entry");
+    let before: serde_json::Value =
+        serde_json::from_str(entry.before.as_deref().unwrap_or("null")).unwrap();
+    let after: serde_json::Value =
+        serde_json::from_str(entry.after.as_deref().unwrap_or("null")).unwrap();
+    assert_eq!(before["balance_centimes"], 100_000);
+    assert_eq!(after["balance_centimes"], paid.balance_after.as_centimes());
+    assert_eq!(after["amount_centimes"], 40_000);
+    assert_eq!(after["payment_mode"], "cash");
+    assert_eq!(after["ledger_id"], paid.entry.id);
+    // What the money settled, document by document, and not only which
+    // documents it touched: a log that says a facture was settled without
+    // saying by how much cannot be read against the facture.
+    assert_eq!(
+        after["allocations"],
+        serde_json::json!([{ "document_id": document, "amount_centimes": 40_000 }])
+    );
+}
+
+#[test]
+fn the_payments_of_a_customer_read_back_newest_first_with_what_each_one_settled() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let first = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let second = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(150_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(20_000),
+        PaymentMethod::Card,
+        None,
+        at(13),
+    )
+    .unwrap();
+
+    let payments = debt::payments(&mut conn, SHOP, customer).unwrap();
+
+    assert_eq!(payments.len(), 2, "a sale row was read back as a payment");
+    assert_eq!(payments[0].entry.credit, Money::centimes(20_000));
+    assert_eq!(payments[0].balance_after, Money::centimes(130_000));
+    assert_eq!(
+        payments[0]
+            .allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [second]
+    );
+    assert_eq!(payments[1].entry.credit, Money::centimes(150_000));
+    assert_eq!(
+        payments[1]
+            .allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [first, second]
+    );
+}
+
+#[test]
+fn a_statement_opens_at_what_was_owed_before_the_range_and_closes_at_the_last_movement_in_it() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    // Four movements dated by hand: two before the range, one inside it and
+    // one after. A range that took the wrong side of either day would read
+    // the wrong opening or the wrong closing balance.
+    an_opening_balance(&mut conn, customer, 150_000, 1);
+    let document = a_document_on_credit(&mut conn, customer, 200_000, 5);
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(50_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(100_000),
+        PaymentMethod::Card,
+        None,
+        at(25),
+    )
+    .unwrap();
+
+    let range = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2026, 9, 10).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 9, 20).unwrap(),
+    )
+    .unwrap();
+
+    // The opening balance is the running balance of the newest movement
+    // before the range: the opening row and the facture, both dated earlier.
+    assert_eq!(range.opening, Money::centimes(350_000));
+    assert_eq!(
+        range.entries.len(),
+        1,
+        "the range took a movement outside it"
+    );
+    assert_eq!(range.entries[0].entry.kind, DebtKind::Payment);
+    assert_eq!(range.entries[0].balance_after, Money::centimes(300_000));
+    assert_eq!(range.closing, Money::centimes(300_000));
+    // A payment cites no document; the sale does, and it is outside this
+    // range, so nothing here names one.
+    assert_eq!(range.entries[0].document, None);
+
+    // The same range widened to the sale picks up the document the movement
+    // cites, under the kind and the number a customer quotes.
+    let wider = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2026, 9, 5).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 9, 20).unwrap(),
+    )
+    .unwrap();
+    let sale = wider
+        .entries
+        .iter()
+        .find(|line| line.entry.kind == DebtKind::Sale)
+        .expect("the widened range dropped the sale");
+    assert_eq!(sale.entry.document_id, Some(document));
+    assert_eq!(
+        sale.document.map(|d| d.kind),
+        Some(dzpos_core::services::documents::DocumentKind::Facture)
+    );
+}
+
+#[test]
+fn a_range_that_ends_before_it_starts_is_refused() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+
+    let refused = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2026, 9, 20).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 9, 10).unwrap(),
+    )
+    .unwrap_err();
+
+    assert!(
+        matches!(refused, CoreError::Validation { ref field, .. } if field == "to"),
+        "{refused:?}"
+    );
+}
+
+#[test]
+fn a_range_with_nothing_in_it_closes_where_it_opened() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    an_opening_balance(&mut conn, customer, 150_000, 1);
+
+    let range = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2027, 1, 1).unwrap(),
+        NaiveDate::from_ymd_opt(2027, 1, 31).unwrap(),
+    )
+    .unwrap();
+
+    assert!(range.entries.is_empty());
+    assert_eq!(range.opening, Money::centimes(150_000));
+    assert_eq!(range.closing, range.opening);
+}
+
+#[test]
+fn a_movement_is_stamped_by_the_shops_clock_and_not_by_utc() {
+    // A document's `issued_at` is on the shop's calendar (services::clock),
+    // and the ledger has to be on the same one: a statement asks for days,
+    // and between 23:00 and midnight UTC the two clocks disagree about which
+    // day a payment landed on. Algeria is UTC+1 all year, so a row stamped by
+    // the database's own CURRENT_TIMESTAMP is an hour behind this.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+
+    let written = debt::append(
+        &mut conn,
+        SHOP,
+        movement(customer, DebtKind::Opening, 150_000, 0),
+    )
+    .unwrap();
+
+    let drift = written
+        .created_at
+        .signed_duration_since(dzpos_core::services::clock::now())
+        .num_seconds()
+        .abs();
+    assert!(
+        drift <= 5,
+        "the movement is stamped {drift}s from the shop's clock: {}",
+        written.created_at
+    );
+}
+
+#[test]
+fn the_first_and_the_last_moment_of_a_range_are_inside_it() {
+    // Both days are included (features.md §2), which is the whole of the two
+    // days and not the two instants they start at: a payment taken at half
+    // past midnight on the first day and one taken in the last minute of the
+    // last day are both in the statement the customer is sent.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let day = |d: u32, h: u32, m: u32| {
+        NaiveDate::from_ymd_opt(2026, 9, d)
+            .and_then(|date| date.and_hms_opt(h, m, 0))
+            .unwrap()
+    };
+    // Outside, first moment of the range, last moment of the range, outside.
+    for (at, centimes) in [
+        (day(9, 23, 30), 10_000),
+        (day(10, 0, 30), 20_000),
+        (day(20, 23, 30), 30_000),
+        (day(21, 0, 30), 40_000),
+    ] {
+        debt::append_at(
+            &mut conn,
+            SHOP,
+            movement(customer, DebtKind::Adjustment, centimes, 0),
+            Some(at),
+        )
+        .unwrap();
+    }
+
+    let range = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2026, 9, 10).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 9, 20).unwrap(),
+    )
+    .unwrap();
+
+    let inside: Vec<i64> = range
+        .entries
+        .iter()
+        .map(|line| line.entry.debit.as_centimes())
+        .collect();
+    assert_eq!(
+        inside,
+        [20_000, 30_000],
+        "the range took the wrong side of one of its two days"
+    );
+    assert_eq!(range.opening, Money::centimes(10_000));
+    assert_eq!(range.closing, Money::centimes(60_000));
+}
+
+#[test]
+fn a_cancelled_document_takes_none_of_a_payment() {
+    // A cancelled facture is not a debt any more: whatever is left on its
+    // `remaining_debt` column, money handed over settles the paper that still
+    // stands. The ledger row the cancellation writes is what moves the
+    // balance (T6); this only refuses to fill the cancelled sheet.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let cancelled = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let standing = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    diesel::sql_query(format!(
+        "UPDATE documents SET status = 'cancelled' WHERE id = {cancelled}"
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(50_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(
+        paid.allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [standing],
+        "the payment filled a cancelled document"
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, cancelled),
+        Money::centimes(100_000)
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, standing),
+        Money::centimes(150_000)
+    );
+}
+
+#[test]
+fn the_oldest_document_is_the_one_issued_first_and_not_the_one_written_first() {
+    // The two orders are made to disagree: the newer facture is written into
+    // the file first and carries the lower id. Oldest-first means the day the
+    // paper was issued, which is what a customer means by "my oldest
+    // invoice", so a settlement sorted by id would fill the wrong one.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let newer = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    let older = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    assert!(
+        newer < older,
+        "the fixture no longer inverts the two orders"
+    );
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(100_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(
+        paid.allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [older]
+    );
+    assert_eq!(remaining_debt(&mut conn, older), Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, newer), Money::centimes(200_000));
+}
+
+#[test]
+fn two_documents_in_the_same_second_are_filled_in_the_order_they_were_written() {
+    // `issued_at` is whole seconds, so two factures rung up in the same
+    // second carry the same one. The id breaks the tie: settling oldest first
+    // has to mean one order, and the answer cannot depend on whichever order
+    // SQLite felt like returning.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let first = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let second = a_document_on_credit(&mut conn, customer, 200_000, 10);
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(150_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(
+        paid.allocations
+            .iter()
+            .map(|a| (a.document_id, a.amount.as_centimes()))
+            .collect::<Vec<(i32, i64)>>(),
+        [(first, 100_000), (second, 50_000)]
+    );
+}
+
+#[test]
+fn a_payment_never_reaches_the_documents_of_the_other_customer() {
+    // Two fiches of the same shop. Money handed over by one settles that
+    // one's paper and nothing else: the other customer's oldest facture is
+    // older than anything here and would be filled first by a query that
+    // forgot whose debt it was reading.
+    let (_dir, mut conn) = open_temp();
+    let payer = a_customer(&mut conn, "Entreprise Benali");
+    let other = a_customer(&mut conn, "Entreprise Amrani");
+    let theirs = a_document_on_credit(&mut conn, other, 100_000, 5);
+    let mine = a_document_on_credit(&mut conn, payer, 200_000, 10);
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        payer,
+        Money::centimes(150_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(
+        paid.allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [mine]
+    );
+    assert_eq!(remaining_debt(&mut conn, theirs), Money::centimes(100_000));
+    assert_eq!(remaining_debt(&mut conn, mine), Money::centimes(50_000));
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, other).unwrap(),
+        Money::centimes(100_000),
+        "the other customer's balance moved"
+    );
+}
+
+#[test]
+fn a_correction_downwards_settles_the_oldest_documents_the_way_a_payment_does() {
+    // A discount agreed after the facture was printed, a returned bag of
+    // cement, a keying mistake: the correction lowers the debt, and the paper
+    // it lowers has to say so too. Otherwise the document keeps asking for
+    // 1 000,00 while the ledger says 700,00, and a payment of what is really
+    // owed is refused by the very documents it was meant to close.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-30_000),
+        Some("remise accordée après coup".to_string()),
+    )
+    .unwrap();
+
+    assert_eq!(
+        corrected
+            .allocations
+            .iter()
+            .map(|a| (a.document_id, a.amount.as_centimes()))
+            .collect::<Vec<(i32, i64)>>(),
+        [(document, 30_000)]
+    );
+    assert_eq!(remaining_debt(&mut conn, document), Money::centimes(70_000));
+
+    // And what is left on the paper is exactly what the customer can now pay
+    // off it, in one go and without a refusal.
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(70_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+    assert_eq!(paid.balance_after, Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, document), Money::ZERO);
+}
+
+#[test]
+fn a_correction_upwards_is_debt_that_no_document_carries() {
+    // Money owed that no paper asks for: it raises the balance and leaves
+    // every document exactly as it was. Nothing to settle means nothing to
+    // allocate, and a facture must never grow because a correction did.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(20_000),
+        None,
+    )
+    .unwrap();
+
+    assert!(corrected.allocations.is_empty());
+    assert_eq!(
+        remaining_debt(&mut conn, document),
+        Money::centimes(100_000)
+    );
+    assert_eq!(corrected.statement.balance, Money::centimes(120_000));
+}
+
+#[test]
+fn a_correction_downwards_is_audited_with_what_it_took_off_each_document() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let first = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let second = a_document_on_credit(&mut conn, customer, 200_000, 11);
+
+    debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-150_000),
+        None,
+    )
+    .unwrap();
+
+    let log = audit::list(&mut conn, SHOP).unwrap();
+    let entry = log
+        .iter()
+        .find(|e| e.action == "adjust_debt")
+        .expect("the correction left no audit entry");
+    let after: serde_json::Value =
+        serde_json::from_str(entry.after.as_deref().unwrap_or("null")).unwrap();
+    assert_eq!(
+        after["allocations"],
+        serde_json::json!([
+            { "document_id": first, "amount_centimes": 100_000 },
+            { "document_id": second, "amount_centimes": 50_000 },
+        ])
+    );
+}
+
+#[test]
+fn credit_taken_before_the_facture_existed_stays_on_the_ledger_and_not_on_the_paper() {
+    // Frozen from the property run in tests/debt_prop.rs, which found it
+    // while the invariant was written as "the papers never ask for more than
+    // the balance": correct 100,00 off an account that owes nothing, then
+    // sell 100,00 on credit. The customer owes nothing, and the facture still
+    // asks for its whole net, because that is what a facture is issued with
+    // (features.md §3) and there was nothing unpaid for the correction to
+    // settle when it landed.
+    //
+    // So the two figures part company by exactly the credit nobody could
+    // place. The document is not wrong and the ledger is not wrong; what a
+    // later payment can settle is what the ledger says, and that is nothing.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-100_000),
+        None,
+    )
+    .unwrap();
+    assert!(
+        corrected.allocations.is_empty(),
+        "there was no document to settle"
+    );
+
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, customer).unwrap(),
+        Money::ZERO
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, document),
+        Money::centimes(100_000)
+    );
+    // And nothing can be handed over against it, because nothing is owed.
+    let refused = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(1_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(refused, CoreError::PaymentAboveDebt { outstanding_centimes } if outstanding_centimes == 0),
+        "{refused:?}"
+    );
+}
+
+#[test]
+fn a_closed_fiche_still_takes_a_payment() {
+    // A shop closes a fiche to stop selling to somebody, not to stop
+    // collecting from them: a customer who owes 1 000,00 on the day their
+    // fiche is closed still walks in with the money. The sale is what a
+    // closed fiche refuses (services::sales), never the settlement.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let mut closed = fiche("Entreprise Benali");
+    closed.active = false;
+    customers::update(&mut conn, SHOP, OWNER, customer, closed).unwrap();
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(100_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(paid.balance_after, Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, document), Money::ZERO);
+}
+
+#[test]
+fn a_closed_fiche_still_takes_a_correction() {
+    // Same rule from the other side: a keying mistake on a fiche that has
+    // since been closed is still a mistake, and the only way to correct a
+    // ledger is to write a movement.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    debt::append(
+        &mut conn,
+        SHOP,
+        movement(customer, DebtKind::Opening, 150_000, 0),
+    )
+    .unwrap();
+    let mut closed = fiche("Entreprise Benali");
+    closed.active = false;
+    customers::update(&mut conn, SHOP, OWNER, customer, closed).unwrap();
+
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-50_000),
+        Some("erreur de saisie".to_string()),
+    )
+    .unwrap();
+
+    assert_eq!(corrected.statement.balance, Money::centimes(100_000));
 }
