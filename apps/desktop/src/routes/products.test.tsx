@@ -236,6 +236,40 @@ describe("the add form", () => {
     expect(sentBody().rate_bps).toBe(900);
   });
 
+  test("when the categories cannot be loaded the form stays closed and nothing is posted", async () => {
+    const user = userEvent.setup();
+    const answer = fetchMock.getMockImplementation();
+    fetchMock.mockImplementation((input: unknown, init?: RequestInit) => {
+      if (String(input).endsWith("/categories")) {
+        return Promise.resolve(json(500, { error: { code: "storage", message: "x" } }));
+      }
+      if (answer === undefined) throw new Error("no stub");
+      return answer(input, init);
+    });
+    mount();
+    await screen.findByText("Aucun produit pour le moment.");
+    await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Erreur d'enregistrement.");
+    expect(screen.queryByLabelText("Nom")).not.toBeInTheDocument();
+    expect(posted()).toBe(false);
+  });
+
+  test("with no category at all the product posts no category and the 19 % fallback", async () => {
+    const user = userEvent.setup();
+    categories = [];
+    mount();
+    await openTheForm(user);
+
+    await user.type(screen.getByLabelText("Nom"), "Sans catégorie");
+    await user.type(screen.getByLabelText("Prix de vente"), "10");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(sentBody().category_id).toBeNull();
+    expect(sentBody().rate_bps).toBe(1900);
+  });
+
   test("refuses a cost that is not a number instead of storing zero", async () => {
     // parseAmountToCentimes(value.cost) ?? 0 turned "12 DA" into a cost of
     // nothing and saved it, so the shop's margin was quietly wrong.
