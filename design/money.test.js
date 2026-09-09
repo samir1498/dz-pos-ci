@@ -59,6 +59,9 @@ describe("tva_rounding_once_per_rate", () => {
 function expectTotals(c) {
   const got = computeTotals(c.input.lines.map(toLine), toOpts(c.input.opts));
   const e = c.expected;
+  // Every column the fixture names, in the order the document prints them,
+  // so the mockup and money_fixtures.rs check the same things.
+  expect(got.totalHt).toBe(e.total_ht);
   expect(got.discount).toBe(e.discount);
   expect(got.subtotalHt).toBe(e.subtotal_ht);
   expect(got.tvaByRate).toEqual(
