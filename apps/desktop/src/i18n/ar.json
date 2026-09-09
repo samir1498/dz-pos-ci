@@ -46,5 +46,12 @@
   "error_name_required": "الاسم مطلوب.",
   "error_price_invalid": "مبلغ غير صالح.",
   "error_cost_invalid": "سعر شراء غير صالح.",
-  "error_stock_invalid": "كمية غير صالحة."
+  "error_stock_invalid": "كمية غير صالحة.",
+  "products_edit": "تعديل",
+  "products_inactive": "غير نشط",
+  "field_wholesale": "سعر الجملة",
+  "field_low_stock": "تنبيه انخفاض المخزون عند",
+  "field_active": "معروض للبيع",
+  "error_wholesale_invalid": "سعر الجملة غير صالح.",
+  "error_low_stock_invalid": "الحد غير صالح."
 }

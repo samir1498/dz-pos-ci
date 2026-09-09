@@ -171,6 +171,15 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       return narrow(await send("/products"), isProductList, "product list");
     },
 
+    async updateProduct(id: number, input: NewProductDto): Promise<ProductDto> {
+      const body = await send(`/products/${id}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isProduct, "product");
+    },
+
     async createProduct(input: NewProductDto): Promise<ProductDto> {
       const body = await send("/products", {
         method: "POST",

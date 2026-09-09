@@ -69,8 +69,13 @@ pub(crate) struct ProductRow {
     pub updated_at: NaiveDateTime,
 }
 
+// `treat_none_as_null`: diesel's changeset skips a `None` field by default,
+// so an update that removed the category or the wholesale price silently
+// kept the old value. Every field here is the whole new row; a `None` is a
+// NULL. The service fills `barcode` before the write, so it is never None
+// on an update.
 #[derive(Debug, Insertable, AsChangeset)]
-#[diesel(table_name = products)]
+#[diesel(table_name = products, treat_none_as_null = true)]
 pub(crate) struct ProductRowWrite {
     pub shop_id: i32,
     pub name: String,

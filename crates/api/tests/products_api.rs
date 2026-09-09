@@ -662,3 +662,98 @@ async fn the_preflight_clears_the_authorization_header() {
         Some("http://127.0.0.1:5173")
     );
 }
+
+#[tokio::test]
+async fn put_products_id_updates_the_row_and_answers_it() {
+    let h = harness();
+    let (_, made) = call(&h.app, "POST", "/products", Some(draft())).await;
+    let id = made["id"].as_i64().unwrap();
+    let mut edited = draft();
+    edited["name"] = json!("Huile Elio 5L (promo)");
+    edited["selling_centimes"] = json!(880);
+    edited["wholesale_centimes"] = json!(850);
+    edited["low_stock_at_milli"] = json!(5_000);
+    edited["rate_bps"] = json!(900);
+    edited["active"] = json!(false);
+    edited["barcode"] = Value::Null;
+    let (status, body) = call(&h.app, "PUT", &format!("/products/{id}"), Some(edited)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["id"], id);
+    assert_eq!(body["name"], "Huile Elio 5L (promo)");
+    assert_eq!(body["selling_centimes"], 880);
+    assert_eq!(body["wholesale_centimes"], 850);
+    assert_eq!(body["low_stock_at_milli"], 5_000);
+    assert_eq!(body["rate_bps"], 900);
+    assert_eq!(body["active"], false);
+    assert_eq!(
+        body["barcode"], made["barcode"],
+        "a null barcode keeps the number"
+    );
+
+    let (_, one) = call(&h.app, "GET", &format!("/products/{id}"), None).await;
+    assert_eq!(one, body, "the read answers what the update answered");
+}
+
+#[tokio::test]
+async fn put_on_a_missing_product_is_404_and_a_bad_id_is_422() {
+    let h = harness();
+    let (status, body) = call(&h.app, "PUT", "/products/999", Some(draft())).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["error"]["code"], "not_found");
+    let (status, body) = call(&h.app, "PUT", "/products/abc", Some(draft())).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["error"]["code"], "bad_request");
+}
+
+#[tokio::test]
+async fn put_with_another_products_barcode_is_409_and_a_bad_body_is_422() {
+    let h = harness();
+    let (_, a) = call(&h.app, "POST", "/products", Some(draft())).await;
+    let mut other = draft();
+    other["name"] = json!("B");
+    let (_, b) = call(&h.app, "POST", "/products", Some(other)).await;
+    let mut taken = draft();
+    taken["barcode"] = b["barcode"].clone();
+    let uri = format!("/products/{}", a["id"]);
+    let (status, body) = call(&h.app, "PUT", &uri, Some(taken)).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["error"]["code"], "duplicate_barcode");
+
+    let mut bad = draft();
+    bad["selling_centimes"] = json!(-1);
+    let (status, body) = call(&h.app, "PUT", &uri, Some(bad)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["error"]["code"], "validation");
+    let (_, still) = call(&h.app, "GET", &uri, None).await;
+    assert_eq!(still["name"], a["name"], "a refused update changes nothing");
+}
+
+#[tokio::test]
+async fn the_browser_is_allowed_to_send_a_put() {
+    // CORS names the methods too; without PUT in the list the preflight
+    // refuses the edit the screen sends.
+    let h = harness();
+    let req = Request::builder()
+        .method("OPTIONS")
+        .uri("/products/1")
+        .header("origin", "http://127.0.0.1:5173")
+        .header("access-control-request-method", "PUT")
+        .header(
+            "access-control-request-headers",
+            "authorization, content-type",
+        )
+        .body(Body::empty())
+        .unwrap();
+    let res = h.app.clone().oneshot(req).await.unwrap();
+    let methods = res
+        .headers()
+        .get("access-control-allow-methods")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    assert!(methods.contains("PUT"), "{methods}");
+    assert_eq!(
+        allowed_origin(res).as_deref(),
+        Some("http://127.0.0.1:5173")
+    );
+}

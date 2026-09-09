@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { ApiError, createClient, isApiErrorBody } from "./client";
+import type { NewProductDto } from "./generated/NewProductDto";
 import type { ProductDto } from "./generated/ProductDto";
 
 const product: ProductDto = {
@@ -151,6 +152,41 @@ describe("createClient", () => {
     });
     await api.listProducts();
     expect(seen).toBeNull();
+  });
+
+  test("updating a product puts JSON to its own path and returns the row", async () => {
+    let seenUrl = "";
+    let seen: RequestInit | undefined;
+    const api = createClient("http://x", async (url, init) => {
+      seenUrl = String(url);
+      seen = init;
+      return new Response(JSON.stringify({ ...product, name: "renamed" }), { status: 200 });
+    });
+    const input = {
+      name: "renamed",
+      barcode: null,
+      category_id: 1,
+      unit: "piece",
+      cost_centimes: 820,
+      selling_centimes: 920,
+      wholesale_centimes: null,
+      qty_on_hand_milli: 24_000,
+      low_stock_at_milli: 10_000,
+      rate_bps: 1900,
+      active: false,
+    } satisfies NewProductDto;
+    await expect(api.updateProduct(7, input)).resolves.toMatchObject({ name: "renamed" });
+    expect(seenUrl).toBe("http://x/products/7");
+    expect(seen?.method).toBe("PUT");
+    expect(new Headers(seen?.headers).get("content-type")).toBe("application/json");
+    expect(JSON.parse(String(seen?.body))).toEqual(input);
+  });
+
+  test("an update answered with the wrong shape is refused like a read", async () => {
+    const api = createClient("http://x", stub(200, { id: 7 }));
+    await expect(api.updateProduct(7, { ...product })).rejects.toMatchObject({
+      code: "bad_response",
+    });
   });
 
   test("creating a product posts JSON and returns the created row", async () => {

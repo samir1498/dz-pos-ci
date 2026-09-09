@@ -46,5 +46,12 @@
   "error_name_required": "A name is required.",
   "error_price_invalid": "Invalid amount.",
   "error_cost_invalid": "Invalid cost price.",
-  "error_stock_invalid": "Invalid quantity."
+  "error_stock_invalid": "Invalid quantity.",
+  "products_edit": "Edit",
+  "products_inactive": "Inactive",
+  "field_wholesale": "Wholesale price",
+  "field_low_stock": "Low stock alert at",
+  "field_active": "For sale",
+  "error_wholesale_invalid": "Invalid wholesale price.",
+  "error_low_stock_invalid": "Invalid threshold."
 }

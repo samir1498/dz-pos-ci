@@ -6,7 +6,7 @@ Playwright here is the interim local driver.
 ## Run it
 
 ```
-just e2e         # both tests
+just e2e         # all three tests
 just screenshot  # only the test that writes screenshots/products.png
 ```
 
@@ -62,12 +62,15 @@ minutes. The API webServer has a ten minute start timeout for that.
 - `screenshots/products.png`: committed, 1280x800, full page.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
 
-## Two things the screen does not do yet
+## What the suite checks and where
 
-- The table has no TVA column, so the rate the form posts is only checked
-  on the request body (`postedRates`), not on the row that comes back. A
-  server storing 19 % for a posted 9 % would keep the suite green until
-  the M1 products screen shows the rate.
+- The rate is checked twice: on the request body (`postedRates`,
+  `putBodies`) and on the row the API answers with, which the table shows
+  in its TVA column. A server storing 19 % for a posted 9 % fails the
+  second check.
+- The edit test proves the whole product is sent back (every field, the
+  wholesale price and the low-stock threshold included) and that the row
+  re-reads from the API, not from what was typed.
 - An empty name is caught by the form's own validator before any request
   goes out, so the visible message is `error_name_required` from the UI.
   The API's `validation` code has no path to this form; the test counts
