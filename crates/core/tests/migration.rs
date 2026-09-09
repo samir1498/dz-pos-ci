@@ -1608,9 +1608,50 @@ fn a_facture_naming_a_customer_goes_down_and_up_without_orphaning_itself() {
 
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
+    // Everything the fourth migration added to `documents` is off the table
+    // again: the seven columns of the buyer block and the three of the
+    // balance triple.
+    for column in [
+        "buyer_name",
+        "buyer_party_kind",
+        "buyer_rc",
+        "buyer_nif",
+        "buyer_nis",
+        "buyer_ai",
+        "buyer_address",
+        "old_balance_centimes",
+        "remaining_debt_centimes",
+        "total_debt_centimes",
+    ] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM pragma_table_info('documents') \
+                     WHERE name = '{column}'"
+                )
+            ),
+            0,
+            "the down.sql left {column} on documents"
+        );
+    }
+
     conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
         .unwrap();
 
+    // The money came back untouched. The two copies are where a column could
+    // quietly land in the wrong place, and a total off by a copy is a facture
+    // that no longer matches the paper the customer holds.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 \
+             AND total_ht_centimes = 100000 AND tva_centimes = 19000 \
+             AND total_ttc_centimes = 119000 AND net_to_pay_centimes = 119000"
+        ),
+        1,
+        "the totals are not what was seeded before the round trip"
+    );
     assert_eq!(
         orphan_rows(&mut conn),
         0,
