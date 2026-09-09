@@ -53,6 +53,15 @@ Every API route but `/health` needs the launch token, so `just api` runs
 first and `just dev` after it. From another machine, pass the browser's
 origin to `just api` (its third argument) or the API refuses it.
 
+The API binary takes `--db <file>` (created and migrated if missing),
+`--port` (4317, 0 picks a free one), `--shop` (1), `--backup-dir <dir>`
+(default: a `backups` folder beside the database; every copy the settings
+screen makes and every restore reads from there) and `--daily-backup`
+(copy the shop file at launch when the newest copy is a day old, and keep
+checking while the server runs; the desktop does this on its own, the flag
+exercises the loop without Tauri). `cargo run -p dzpos-api -- --help`
+prints the same list.
+
 ## Rules that are not negotiable
 
 From the architecture notes; the reasons are there.
