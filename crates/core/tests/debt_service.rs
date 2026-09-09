@@ -611,3 +611,52 @@ fn an_adjustment_for_another_shops_customer_is_not_found_and_writes_nothing() {
     assert!(debt::ledger(&mut conn, SHOP, id).unwrap().is_empty());
     assert!(audit::list(&mut conn, 2).unwrap().is_empty());
 }
+
+/// A user id no row carries. `debt_ledger.user_id` and `audit_log.user_id`
+/// both have a foreign key to `users`, so a write naming this fails at the
+/// file.
+const NO_SUCH_USER: i32 = 999;
+
+/// The movement and the entry that says who wrote it are one transaction, so
+/// a correction that fails leaves neither.
+///
+/// The foreign key fires on the ledger insert, which is the first of the two
+/// writes, so what this holds is that nothing survives a failed adjustment.
+/// The fiche's `an_update_that_fails_at_the_audit_entry_leaves_the_fiche_as_it_was`
+/// is where the audit's own rollback is pinned: an update writes no other
+/// row carrying a user id, so there the audit entry is the write that fails.
+#[test]
+fn an_adjustment_that_fails_leaves_neither_the_movement_nor_the_log() {
+    let (_dir, mut conn) = open_temp();
+    let id = a_customer(&mut conn, "Brahim");
+    debt::adjust(&mut conn, SHOP, OWNER, id, Money::centimes(150_000), None).unwrap();
+    // The fiche's own creation is logged too, so the count is what it was
+    // before rather than a number written down here.
+    let logged = audit::list(&mut conn, SHOP).unwrap().len();
+
+    let err = debt::adjust(
+        &mut conn,
+        SHOP,
+        NO_SUCH_USER,
+        id,
+        Money::centimes(50_000),
+        Some("erreur de saisie".into()),
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "storage", "{err}");
+    assert_eq!(
+        debt::ledger(&mut conn, SHOP, id).unwrap().len(),
+        1,
+        "the failed correction left a movement behind"
+    );
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, id).unwrap(),
+        Money::centimes(150_000),
+        "the balance moved for a correction that was never written"
+    );
+    assert_eq!(
+        audit::list(&mut conn, SHOP).unwrap().len(),
+        logged,
+        "the failed correction left an entry behind"
+    );
+}
