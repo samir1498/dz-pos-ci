@@ -556,13 +556,40 @@ describe("sales", () => {
 
   test("a sale is read back by id and the list is one call", async () => {
     const fetchStub: typeof fetch = async (input) =>
-      new Response(JSON.stringify(String(input).endsWith("/sales") ? [sale] : sale), {
+      new Response(JSON.stringify(String(input).includes("/sales?") || String(input).endsWith("/sales") ? [sale] : sale), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
     const api = createClient("http://127.0.0.1:4317", fetchStub);
     await expect(api.getSale(1)).resolves.toEqual(sale);
     await expect(api.listSales()).resolves.toEqual([sale]);
+  });
+
+  test("the list asks for one kind only when it is given one", async () => {
+    // No kind is every document the till issued, so a facture is reachable
+    // once its print panel is closed; a kind narrows it to that series.
+    const calls: string[] = [];
+    const fetchStub: typeof fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify([sale]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await api.listSales();
+    await api.listSales("facture");
+    await api.listSales("ticket");
+    expect(calls).toEqual([
+      "http://127.0.0.1:4317/sales",
+      "http://127.0.0.1:4317/sales?kind=facture",
+      "http://127.0.0.1:4317/sales?kind=ticket",
+    ]);
+  });
+
+  test("a list with one row of the wrong shape is refused whole", async () => {
+    const api = createClient("http://x", stub(200, [sale, { ...sale, kind: "reçu" }]));
+    await expect(api.listSales("facture")).rejects.toMatchObject({ code: "bad_response" });
   });
 
   test("a sale with no printed number is refused rather than shown blank", async () => {

@@ -64,7 +64,7 @@ pub enum SaleKind {
 impl SaleKind {
     /// The document kind the sale is issued as, and with it the series it
     /// numbers in (`doc_ticket`, `doc_facture`).
-    const fn document_kind(self) -> DocumentKind {
+    pub const fn document_kind(self) -> DocumentKind {
         match self {
             SaleKind::Ticket => DocumentKind::Ticket,
             SaleKind::Facture => DocumentKind::Facture,

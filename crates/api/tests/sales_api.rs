@@ -812,3 +812,72 @@ async fn a_kind_the_till_cannot_ring_up_is_refused_at_the_edge() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(code(&body), "bad_request");
 }
+
+#[tokio::test]
+async fn the_list_carries_both_kinds_newest_first_and_the_filter_narrows_it() {
+    let (_dir, app) = app();
+    seller_ready(&app).await;
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let c = party(
+        &app,
+        "Entreprise Amrani",
+        "company",
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        None,
+    )
+    .await;
+    let basket = json!({
+        "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+        "payment_mode": "cash",
+        "tendered_centimes": 200_000,
+    });
+    let (_, ticket) = call(&app, "POST", "/sales", Some(basket)).await;
+    let (_, facture) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "credit",
+            "customer_id": c,
+            "kind": "facture",
+        })),
+    )
+    .await;
+
+    // Everything the till issued, the last one first. A facture that fell
+    // off this list would be unreachable the moment the print panel closed.
+    let (status, all) = call(&app, "GET", "/sales", None).await;
+    assert_eq!(status, StatusCode::OK, "{all}");
+    let rows = all.as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["id"], facture["id"]);
+    assert_eq!(rows[0]["kind"], json!("facture"));
+    assert_eq!(rows[0]["printed_number"], json!("FA-000001"));
+    assert_eq!(rows[1]["id"], ticket["id"]);
+    assert_eq!(rows[1]["kind"], json!("ticket"));
+    assert_eq!(rows[1]["printed_number"], json!("TK-000001"));
+
+    for (kind, expected) in [("ticket", &ticket), ("facture", &facture)] {
+        let (status, only) = call(&app, "GET", &format!("/sales?kind={kind}"), None).await;
+        assert_eq!(status, StatusCode::OK, "{only}");
+        let rows = only.as_array().unwrap();
+        assert_eq!(rows.len(), 1, "{kind}: {only}");
+        assert_eq!(rows[0]["id"], expected["id"]);
+        assert_eq!(rows[0]["kind"], json!(kind));
+    }
+}
+
+#[tokio::test]
+async fn a_kind_the_till_never_issues_is_refused_rather_than_ignored() {
+    // A filter the server does not understand is not an empty filter: a
+    // screen asking for `avoir` and being handed every document would be
+    // showing the wrong list with no way to tell.
+    let (_dir, app) = app();
+    for uri in ["/sales?kind=avoir", "/sales?kind=Ticket", "/sales?kind="] {
+        let (status, body) = call(&app, "GET", uri, None).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{uri}: {body}");
+        assert_eq!(code(&body), "bad_request", "{uri}");
+    }
+}

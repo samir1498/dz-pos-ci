@@ -9,21 +9,39 @@ use axum::Json;
 use dzpos_core::lang::Lang;
 use dzpos_core::print::{render_facture, render_ticket, Paper};
 use dzpos_core::services::documents::DocumentKind;
-use dzpos_core::services::sales::NewSale;
+use dzpos_core::services::sales::{NewSale, SaleKind};
 use dzpos_core::services::{documents, sales};
 use serde::Deserialize;
 
-use crate::dto::{NewSaleDto, SaleDto};
+use crate::dto::{NewSaleDto, SaleDto, SaleKindDto};
 use crate::error::ApiError;
 use crate::AppState;
 
-/// Newest first, the ticket series only. The kind is named rather than left
-/// open on purpose: the till's receipt view is about the day's till roll,
-/// and a facture is filed and reprinted from the documents screen T9 adds.
-pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<SaleDto>>, ApiError> {
+/// Which paper the caller wants listed, if only one of them.
+#[derive(Deserialize)]
+pub struct ListQuery {
+    kind: Option<SaleKindDto>,
+}
+
+/// Newest first, every kind the till issues unless the caller narrows it.
+///
+/// A facture is reachable here the moment its print panel is closed, which
+/// is the whole reason the filter is optional rather than fixed: the day's
+/// till roll asks for `ticket`, the documents screen T9 adds asks for
+/// `facture`, and a screen that wants both asks for neither. A kind this
+/// route does not know is refused rather than read as no filter: a caller
+/// asking for `avoir` and being handed everything would be showing the
+/// wrong list with nothing to tell it apart from the right one.
+pub async fn list(
+    State(state): State<AppState>,
+    query: Result<Query<ListQuery>, QueryRejection>,
+) -> Result<Json<Vec<SaleDto>>, ApiError> {
+    let Query(ListQuery { kind }) =
+        query.map_err(|_| ApiError::BadRequest("kind must be ticket or facture".into()))?;
+    let kind = kind.map(|k| SaleKind::from(k).document_kind());
     let shop = state.shop_id;
     let found = state
-        .blocking(move |c| documents::list(c, shop, Some(DocumentKind::Ticket)))
+        .blocking(move |c| documents::list(c, shop, kind))
         .await?;
     Ok(Json(found.into_iter().map(SaleDto::from).collect()))
 }

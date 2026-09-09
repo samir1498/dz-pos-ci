@@ -104,10 +104,11 @@ async function readSale(request: APIRequestContext, id: number): Promise<Sale> {
   return res.json();
 }
 
-/** The highest number the ticket series has handed out, read through the
- * route that lists tickets and nothing else. */
+/** The highest number the ticket series has handed out. The list carries
+ * every kind now, so it is asked for the one series: a facture's number
+ * comes out of its own counter and says nothing about this one. */
 async function lastTicketNumber(request: APIRequestContext): Promise<number> {
-  const res = await request.get(`${apiUrl()}/sales`, { headers: apiHeaders() });
+  const res = await request.get(`${apiUrl()}/sales?kind=ticket`, { headers: apiHeaders() });
   expect(res.ok()).toBe(true);
   const tickets: { number: number }[] = await res.json();
   return tickets.reduce((high, one) => Math.max(high, one.number), 0);
@@ -171,6 +172,13 @@ test("rings a facture up on credit, prints it, and leaves the ticket series wher
   expect(stored.kind).toBe("facture");
   expect(stored.series).toBe("doc_facture");
   expect(stored.number).toBe(1);
+
+  // And it is on the list of what the till has issued, so a cashier can
+  // reach it again once the print panel is closed.
+  const listed = await request.get(`${apiUrl()}/sales`, { headers: apiHeaders() });
+  expect(listed.ok()).toBe(true);
+  const rows: Sale[] = await listed.json();
+  expect(rows.some((row) => row.id === sale.id && row.kind === "facture")).toBe(true);
 
   // The confirmation names the paper and the number as the paper spells it.
   const done = page.getByRole("status");

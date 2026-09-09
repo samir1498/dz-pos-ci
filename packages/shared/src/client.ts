@@ -25,6 +25,7 @@ import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { PaymentModeDto } from "./generated/PaymentModeDto";
 import type { SaleWarningDto } from "./generated/SaleWarningDto";
 import type { SaleDto } from "./generated/SaleDto";
+import type { SaleKindDto } from "./generated/SaleKindDto";
 import type { SaleLineDto } from "./generated/SaleLineDto";
 import type { SaleBalanceDto } from "./generated/SaleBalanceDto";
 import type { SaleTotalsDto } from "./generated/SaleTotalsDto";
@@ -635,10 +636,12 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       return sendText(`/sales/${id}/facture?lang=${lang}&paper=${paper}`);
     },
 
-    /** Newest first, the ticket series only: a facture is filed and reprinted
-     * from the documents screen, not from the day's till roll. */
-    async listSales(): Promise<SaleDto[]> {
-      return narrow(await send("/sales"), isSaleList, "sale list");
+    /** Newest first, every kind the till issues. `kind` narrows it to one
+     * series: the day's till roll asks for `ticket`, a documents screen for
+     * `facture`, and a screen that wants both asks for neither. */
+    async listSales(kind?: SaleKindDto): Promise<SaleDto[]> {
+      const query = kind === undefined ? "" : `?kind=${kind}`;
+      return narrow(await send(`/sales${query}`), isSaleList, "sale list");
     },
 
     /** The shop's customers, the active ones first. `search` is a piece of a
