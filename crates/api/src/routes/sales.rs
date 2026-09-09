@@ -6,8 +6,9 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::Html;
 use axum::Json;
+use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
-use dzpos_core::print::{render_facture, render_ticket, Paper};
+use dzpos_core::print::{render_facture_with, render_ticket, Cancellation, FactureInput, Paper};
 use dzpos_core::services::documents::DocumentKind;
 use dzpos_core::services::sales::{NewSale, SaleKind};
 use dzpos_core::services::{avoir, documents, sales};
@@ -101,11 +102,21 @@ pub struct FactureQuery {
     paper: Paper,
 }
 
-/// The A4 or A5 facture for a stored sale, as an HTML page.
+/// The A4 or A5 sheet for a stored facture, avoir or proforma, as an HTML
+/// page.
 ///
-/// The id has to name a facture. A ticket is its own paper and its own
-/// series, so the kind is part of what is being asked for and a ticket's id
-/// answers 404 rather than a page titled FACTURE (services::documents).
+/// Three kinds and not one: an avoir and a proforma are the same sheet with
+/// a different title, a different number and one line saying which. A ticket
+/// is its own paper and its own series, so its id still answers 404 rather
+/// than a page titled FACTURE (services::documents).
+///
+/// What the template needs and the row does not carry is filled here,
+/// because this is the layer that can read a second document. The facture an
+/// avoir names is an id on the row and a number and a day on the paper, so
+/// that document is read and handed over; the day and the reason a
+/// cancellation was taken come off the annulled document's own block. A
+/// cancelled facture with no block still prints as cancelled, because the
+/// status is on the row; it just cannot say when or why.
 pub async fn facture(
     State(state): State<AppState>,
     id: Result<Path<i32>, PathRejection>,
@@ -116,10 +127,40 @@ pub async fn facture(
     let Query(FactureQuery { lang, paper }) = query
         .map_err(|_| ApiError::BadRequest("lang must be fr, en or ar and paper a4 or a5".into()))?;
     let shop = state.shop_id;
-    let found = state
-        .blocking(move |c| documents::get_of_kind(c, shop, id, DocumentKind::Facture))
+    let (found, referenced) = state
+        .blocking(move |c| {
+            let found = documents::get(c, shop, id)?;
+            if !matches!(
+                found.kind,
+                DocumentKind::Facture | DocumentKind::Avoir | DocumentKind::Proforma
+            ) {
+                return Err(CoreError::NotFound {
+                    entity: DocumentKind::Facture.as_str(),
+                    id,
+                });
+            }
+            // Read in the same call, so the page and the document it names
+            // come out of one look at the file.
+            let referenced = match found.ref_document_id {
+                Some(ref_id) => Some(documents::get(c, shop, ref_id)?),
+                None => None,
+            };
+            Ok((found, referenced))
+        })
         .await?;
-    Ok(Html(render_facture(&found, lang, paper)?))
+    let cancellation = found.cancellation.as_ref().map(|c| Cancellation {
+        at: c.at,
+        reason: &c.reason,
+    });
+    Ok(Html(render_facture_with(
+        &found,
+        &FactureInput {
+            referenced: referenced.as_ref(),
+            cancellation,
+        },
+        lang,
+        paper,
+    )?))
 }
 
 pub async fn create(

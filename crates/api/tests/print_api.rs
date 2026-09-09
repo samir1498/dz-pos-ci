@@ -414,3 +414,154 @@ async fn the_facture_route_refuses_a_call_without_the_launch_token() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(error_code(&body), "unauthorized");
 }
+
+/// A POST through the router, for the tests below that write a document
+/// before printing it.
+async fn post_json(app: &axum::Router, uri: &str, body: Value) -> Value {
+    let req = Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let value: Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(status.is_success(), "{uri}: {value}");
+    value
+}
+
+#[tokio::test]
+async fn an_avoir_prints_on_the_facture_sheet_and_names_the_facture_it_credits() {
+    // The reference line is a sentence the template builds out of the
+    // referenced facture's number and day, neither of which is on the avoir's
+    // own row: the route is the layer that can read that second document, so
+    // this is what proves it does.
+    let (_dir, _path, app) = app();
+    let facture = a_facture(&app).await;
+    let (_, _, sheet) = call_text(
+        &app,
+        &format!("/sales/{facture}/facture?lang=fr&paper=a4"),
+        true,
+    )
+    .await;
+    let facture_number = sheet
+        .split("FA-")
+        .nth(1)
+        .map(|rest| format!("FA-{}", &rest[..6]))
+        .expect("the facture prints its own number");
+
+    let avoir = post_json(
+        &app,
+        &format!("/sales/{facture}/avoir"),
+        json!({ "lines": null, "reason": "retour marchandise" }),
+    )
+    .await;
+    let avoir_id = avoir["id"].as_i64().unwrap();
+
+    let (status, content_type, body) = call_text(
+        &app,
+        &format!("/sales/{avoir_id}/facture?lang=fr&paper=a4"),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(content_type.as_deref(), Some(HTML));
+    assert!(
+        body.contains(&facture_number),
+        "the avoir does not name the facture it credits: {facture_number}"
+    );
+    assert!(body.contains("AV-000001"), "the avoir's own number");
+}
+
+#[tokio::test]
+async fn a_cancelled_facture_prints_the_day_and_the_reason_it_was_annulled() {
+    let (_dir, _path, app) = app();
+    let facture = a_facture(&app).await;
+    post_json(
+        &app,
+        &format!("/sales/{facture}/cancel"),
+        json!({ "reason": "commande annulée par le client" }),
+    )
+    .await;
+
+    let (status, _, body) = call_text(
+        &app,
+        &format!("/sales/{facture}/facture?lang=fr&paper=a4"),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // The reason is free text somebody typed, so it reaches the page escaped
+    // and the day comes off the block the cancellation wrote.
+    assert!(
+        body.contains("commande annulée par le client"),
+        "the annulée face does not say why"
+    );
+}
+
+#[tokio::test]
+async fn a_proforma_prints_on_the_same_sheet_under_its_own_number() {
+    let (_dir, _path, app) = app();
+    // The same seller, product and customer the facture helper sets up.
+    let facture = a_facture(&app).await;
+    let (_, _, _) = call_text(
+        &app,
+        &format!("/sales/{facture}/facture?lang=fr&paper=a4"),
+        true,
+    )
+    .await;
+    let product = post_json(
+        &app,
+        "/products",
+        json!({
+            "name": "Sable 0/4",
+            "unit": "box",
+            "cost_centimes": 20_000,
+            "selling_centimes": 40_000,
+            "qty_on_hand_milli": 10_000,
+            "rate_bps": 1900,
+        }),
+    )
+    .await;
+    let customer = post_json(
+        &app,
+        "/customers",
+        json!({
+            "name": "Sarl Bencheikh",
+            "party_kind": "company",
+            "phone": null,
+            "address": "Rouiba",
+            "rc": "16/00-1111111 B 22",
+            "nif": null,
+            "nis": "098216001111111",
+            "ai": null,
+            "credit_limit_centimes": null,
+            "warn_threshold_centimes": null,
+            "notes": null,
+            "active": true,
+            "opening_debt_centimes": null,
+        }),
+    )
+    .await;
+    let quote = post_json(
+        &app,
+        "/sales",
+        json!({
+            "payment_mode": "credit",
+            "customer_id": customer["id"],
+            "kind": "proforma",
+            "lines": [{ "product_id": product["id"], "qty_milli": 1_000 }],
+        }),
+    )
+    .await;
+    let id = quote["id"].as_i64().unwrap();
+
+    let (status, content_type, body) =
+        call_text(&app, &format!("/sales/{id}/facture?lang=fr&paper=a4"), true).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(content_type.as_deref(), Some(HTML));
+    assert!(body.contains("PF-000001"), "the proforma's own number");
+}
