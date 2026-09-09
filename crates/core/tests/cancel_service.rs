@@ -789,3 +789,112 @@ fn a_document_of_kind(conn: &mut SqliteConnection, kind: DocumentKind, customer:
     .unwrap();
     documents::list(conn, SHOP, Some(kind)).unwrap()[0].id
 }
+
+/// Everything the log holds about one document comes back from one query,
+/// because every row about a document says `document` in `entity` and names
+/// it in `entity_id`. The override row used to say `sale`, so the history of
+/// a facture was two queries and a reader had to know that.
+///
+/// The story is the whole life of one facture: sold on credit past the
+/// customer's limit on purpose, credited in part, then annulled.
+#[test]
+fn the_life_of_a_document_reads_back_from_one_query() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000);
+    let customer = a_customer(&mut conn);
+    // A limit of nothing, so the sale needs the override to go through.
+    let open = customers::get(&mut conn, SHOP, customer).unwrap();
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        NewCustomer {
+            name: open.name,
+            party_kind: open.party_kind,
+            phone: open.phone,
+            address: open.address,
+            rc: open.rc,
+            nif: open.nif,
+            nis: open.nis,
+            ai: open.ai,
+            credit_limit: Some(Money::ZERO),
+            warn_threshold: None,
+            notes: open.notes,
+            active: true,
+        },
+        None,
+    )
+    .unwrap();
+
+    let facture = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![line(p, 2_000)],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Credit,
+            tendered: None,
+            customer_id: Some(customer),
+            override_credit: true,
+            kind: SaleKind::Facture,
+            issued_at: Some(at(10)),
+        },
+    )
+    .unwrap()
+    .document;
+    avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        Some(vec![dzpos_core::services::avoir::AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 1_000,
+        }]),
+        None,
+        Some(at(11)),
+    )
+    .unwrap();
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        "erreur de saisie".to_string(),
+        Some(at(12)),
+    )
+    .unwrap();
+
+    let history: Vec<String> = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .filter(|e| e.entity == "document" && e.entity_id == Some(facture.id))
+        .map(|e| e.action)
+        .collect();
+    // Two credit notes: the partial the shop wrote, and the closing one the
+    // cancellation wrote to take back what was left.
+    assert_eq!(
+        history,
+        [
+            "document.issue_override",
+            "document.avoir",
+            "document.avoir",
+            "document.cancel"
+        ],
+        "the life of a facture is not one query away"
+    );
+
+    // The cancellation says what the paper is left asking for, so a reader can
+    // tell a cancellation that moved money from one that moved none.
+    let cancelled = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .find(|e| e.action == "document.cancel")
+        .expect("the cancellation is logged");
+    let after: serde_json::Value =
+        serde_json::from_str(&cancelled.after.unwrap_or_default()).unwrap();
+    assert_eq!(after["remaining_debt_centimes"], 0);
+    assert_eq!(after["reason"], "erreur de saisie");
+}

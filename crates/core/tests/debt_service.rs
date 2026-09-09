@@ -583,7 +583,7 @@ fn an_adjustment_is_audited_with_the_balance_before_and_after() {
         .iter()
         .find(|e| e.entity == "customer_debt")
         .expect("the adjustment left no audit entry");
-    assert_eq!(entry.action, "adjust_debt");
+    assert_eq!(entry.action, "debt.adjust");
     assert_eq!(entry.entity_id, Some(id));
     assert_eq!(entry.user_id, OWNER);
     let before: serde_json::Value =
@@ -1237,7 +1237,7 @@ fn a_payment_leaves_an_audit_entry_carrying_the_balance_on_both_sides() {
     let log = audit::list(&mut conn, SHOP).unwrap();
     let entry = log
         .iter()
-        .find(|e| e.action == "pay_debt")
+        .find(|e| e.action == "debt.pay")
         .expect("the payment left no audit entry");
     let before: serde_json::Value =
         serde_json::from_str(entry.before.as_deref().unwrap_or("null")).unwrap();
@@ -1815,7 +1815,7 @@ fn a_correction_downwards_is_audited_with_what_it_took_off_each_document() {
     let log = audit::list(&mut conn, SHOP).unwrap();
     let entry = log
         .iter()
-        .find(|e| e.action == "adjust_debt")
+        .find(|e| e.action == "debt.adjust")
         .expect("the correction left no audit entry");
     let after: serde_json::Value =
         serde_json::from_str(entry.after.as_deref().unwrap_or("null")).unwrap();

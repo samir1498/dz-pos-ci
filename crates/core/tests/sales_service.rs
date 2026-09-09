@@ -1222,9 +1222,9 @@ fn an_override_takes_the_sale_past_the_limit_and_the_log_says_who() {
     let entries = audit::list(&mut conn, SHOP).unwrap();
     let entry = entries
         .iter()
-        .find(|e| e.action == "sale.credit_override")
+        .find(|e| e.action == "document.issue_override")
         .expect("an override past a rule is logged");
-    assert_eq!(entry.entity, "sale");
+    assert_eq!(entry.entity, "document");
     assert_eq!(entry.entity_id, Some(doc.id));
     assert_eq!(entry.user_id, OWNER);
     // `before` is the state the decision was taken against: what the
@@ -1276,7 +1276,7 @@ fn an_override_on_a_fiche_that_was_also_warning_says_so_in_the_log() {
     let entries = audit::list(&mut conn, SHOP).unwrap();
     let entry = entries
         .iter()
-        .find(|e| e.action == "sale.credit_override")
+        .find(|e| e.action == "document.issue_override")
         .expect("an override past a rule is logged");
     assert_eq!(entry.entity_id, Some(doc.id));
     let after = entry.after.clone().unwrap_or_default();
@@ -1301,7 +1301,7 @@ fn an_override_on_a_sale_the_limit_would_have_taken_writes_no_log_row() {
         !audit::list(&mut conn, SHOP)
             .unwrap()
             .iter()
-            .any(|e| e.action == "sale.credit_override"),
+            .any(|e| e.action == "document.issue_override"),
         "a sale inside the limit logged an override nobody took"
     );
 }
@@ -1985,7 +1985,7 @@ fn an_override_the_party_ids_then_refuse_leaves_no_log_row_and_no_number() {
         !audit::list(&mut conn, SHOP)
             .unwrap()
             .iter()
-            .any(|e| e.action == "sale.credit_override"),
+            .any(|e| e.action == "document.issue_override"),
         "an override was logged for a sale that was refused"
     );
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());

@@ -352,7 +352,11 @@ pub fn issue(
                 user_id,
                 audit::Change {
                     action: audit::ACTION_CREDIT_OVERRIDE,
-                    entity: "sale",
+                    // The row is about the document the decision produced,
+                    // which is what `entity_id` names, so it says `document`
+                    // like every other row about one. A reader after the
+                    // history of a facture asks for one entity, not three.
+                    entity: "document",
                     entity_id: Some(document.id),
                     // `before` is the state the decision was taken against
                     // and nothing else: what the customer owed and what
