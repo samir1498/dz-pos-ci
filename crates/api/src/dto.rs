@@ -425,6 +425,7 @@ pub enum DocumentKindDto {
     BonDeLivraison,
     Avoir,
     BonDeReception,
+    Quittance,
 }
 
 impl From<DocumentKind> for DocumentKindDto {
@@ -436,6 +437,7 @@ impl From<DocumentKind> for DocumentKindDto {
             DocumentKind::BonDeLivraison => DocumentKindDto::BonDeLivraison,
             DocumentKind::Avoir => DocumentKindDto::Avoir,
             DocumentKind::BonDeReception => DocumentKindDto::BonDeReception,
+            DocumentKind::Quittance => DocumentKindDto::Quittance,
         }
     }
 }
