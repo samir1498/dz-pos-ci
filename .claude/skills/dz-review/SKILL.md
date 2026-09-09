@@ -24,7 +24,10 @@ reading alone.
 
 Spawn the agents in one message. Vary the model. Brief each with the
 business rules from `docs/features.md`, the branch, and "do not edit, do
-not spawn, say clean rather than pad".
+not spawn, say clean rather than pad". A lens that needs a scratch file
+to prove something names it `review-probe-<what>` and deletes it before
+reporting; a lens that runs cargo says so, and runs none while the
+session's gates run (the box has 11 GB).
 
 - **Centime correctness.** Every way a total, TVA, stamp, change or debt
   comes out wrong: rounding twice, float leaking in, a discount spread that
