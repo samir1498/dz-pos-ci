@@ -39,6 +39,7 @@ export {
 } from "./client";
 export type { ClientOptions } from "./client";
 export type { ApiClient } from "./client";
+export type { PrintLang } from "./client";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";
 export {
   BPS_PER_WHOLE,

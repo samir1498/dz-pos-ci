@@ -487,6 +487,29 @@ describe("sales", () => {
     await expect(api.listSales()).resolves.toEqual([sale]);
   });
 
+  test("a ticket comes back as the page the core rendered, not as JSON", async () => {
+    const page = '<!doctype html>\n<html lang="ar" dir="rtl"><body>تذكرة</body></html>\n';
+    const calls: string[] = [];
+    const fetchStub: typeof fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(page, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", { fetch: fetchStub, token: "t" });
+    await expect(api.getSaleTicket(7, "ar")).resolves.toBe(page);
+    expect(calls[0]).toBe("http://127.0.0.1:4317/sales/7/ticket?lang=ar");
+  });
+
+  test("a ticket the server refused surfaces the code and never the HTML", async () => {
+    const api = createClient(
+      "http://127.0.0.1:4317",
+      stub(404, { error: { code: "not_found", message: "document 7 does not exist in this shop" } }),
+    );
+    await expect(api.getSaleTicket(7, "fr")).rejects.toMatchObject({ code: "not_found" });
+  });
+
   test("a total the server could not send exactly is refused, never shown", async () => {
     // Centimes are safe below 2^53. A number past it came out of JSON.parse
     // already rounded, so printing it would print a wrong amount.
