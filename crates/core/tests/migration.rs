@@ -50,7 +50,14 @@ fn migration_creates_every_table() {
     let names: Vec<String> = rows.into_iter().map(|r| r.name).collect();
     assert_eq!(
         names,
-        vec!["categories", "products", "settings", "shops", "users"]
+        vec![
+            "categories",
+            "counters",
+            "products",
+            "settings",
+            "shops",
+            "users"
+        ]
     );
 }
 
@@ -59,7 +66,7 @@ fn every_table_carries_shop_id() {
     // Rule 3 in docs/architecture.md: `shop_id` from day one, on every table.
     // `shops` carries it as its own primary key.
     let (_dir, mut conn) = open_temp();
-    for table in ["categories", "products", "settings", "users"] {
+    for table in ["categories", "counters", "products", "settings", "users"] {
         let n = count(
             &mut conn,
             &format!(
@@ -92,6 +99,149 @@ fn money_columns_are_integer_centimes() {
 }
 
 #[test]
+fn the_bundled_sqlite_is_new_enough_for_strict_tables() {
+    // STRICT arrived in SQLite 3.37. libsqlite3-sys is pinned bundled, so the
+    // version is the crate's, not the machine's.
+    let (_dir, mut conn) = open_temp();
+    let rows: Vec<Name> = diesel::sql_query("SELECT sqlite_version() AS name")
+        .load(&mut conn)
+        .unwrap();
+    let version = rows[0].name.clone();
+    let parts: Vec<u32> = version.split('.').filter_map(|p| p.parse().ok()).collect();
+    assert!(
+        parts[0] > 3 || (parts[0] == 3 && parts[1] >= 37),
+        "bundled SQLite {version} is older than 3.37"
+    );
+}
+
+#[test]
+fn every_table_is_strict() {
+    // A STRICT table refuses text where an integer belongs, so a price can
+    // never be read back as something other than centimes.
+    let (_dir, mut conn) = open_temp();
+    for table in [
+        "shops",
+        "settings",
+        "users",
+        "counters",
+        "categories",
+        "products",
+    ] {
+        let n = count(
+            &mut conn,
+            &format!(
+                "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
+                 AND name = '{table}' AND sql LIKE '%STRICT%'"
+            ),
+        );
+        assert_eq!(n, 1, "{table} is not STRICT");
+    }
+}
+
+/// Inserts a product row with `cost_centimes` set to whatever SQL literal is
+/// given, bypassing every Rust type on the way in.
+fn insert_cost(conn: &mut SqliteConnection, literal: &str) -> QueryResult<usize> {
+    diesel::sql_query(format!(
+        "INSERT INTO products (shop_id, name, unit, cost_centimes, selling_centimes, \
+         qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+         VALUES (1, 'p', 'piece', {literal}, 0, 0, 0, 1900)"
+    ))
+    .execute(conn)
+}
+
+#[test]
+fn a_money_column_refuses_a_real_a_text_and_a_negative() {
+    // Rule 6: money is integer centimes. 19.99 was read back as Money(19).
+    let (_dir, mut conn) = open_temp();
+    assert!(
+        insert_cost(&mut conn, "0").is_ok(),
+        "an integer was refused"
+    );
+    assert!(
+        insert_cost(&mut conn, "19.99").is_err(),
+        "a real amount was accepted into a *_centimes column"
+    );
+    assert!(
+        insert_cost(&mut conn, "'19.99'").is_err(),
+        "a text amount was accepted into a *_centimes column"
+    );
+    assert!(
+        insert_cost(&mut conn, "-1").is_err(),
+        "a negative amount was accepted into a *_centimes column"
+    );
+}
+
+#[test]
+fn a_rate_column_refuses_anything_outside_zero_to_one_whole() {
+    let (_dir, mut conn) = open_temp();
+    let product = |conn: &mut SqliteConnection, rate: &str| {
+        diesel::sql_query(format!(
+            "INSERT INTO products (shop_id, name, unit, cost_centimes, selling_centimes, \
+             qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+             VALUES (1, 'p', 'piece', 0, 0, 0, 0, {rate})"
+        ))
+        .execute(conn)
+    };
+    assert!(product(&mut conn, "0").is_ok());
+    assert!(product(&mut conn, "10000").is_ok());
+    assert!(
+        product(&mut conn, "190000").is_err(),
+        "a rate above one whole was accepted"
+    );
+    assert!(
+        product(&mut conn, "-1").is_err(),
+        "a negative rate was accepted"
+    );
+
+    let category = |conn: &mut SqliteConnection, rate: &str| {
+        diesel::sql_query(format!(
+            "INSERT INTO categories (shop_id, name, default_rate_bps) \
+             VALUES (1, 'c{rate}', {rate})"
+        ))
+        .execute(conn)
+    };
+    assert!(category(&mut conn, "900").is_ok());
+    assert!(
+        category(&mut conn, "190000").is_err(),
+        "a category default rate above one whole was accepted"
+    );
+}
+
+#[test]
+fn a_deleted_id_is_never_handed_out_again() {
+    // Without AUTOINCREMENT SQLite reuses the highest deleted rowid, so a
+    // deleted product's id would come back and with it its in-store barcode.
+    let (_dir, mut conn) = open_temp();
+    let rows = [
+        ("shops", "INSERT INTO shops (name) VALUES ('autre magasin')"),
+        (
+            "users",
+            "INSERT INTO users (shop_id, name, role) VALUES (1, 'caissier', 'cashier')",
+        ),
+        (
+            "categories",
+            "INSERT INTO categories (shop_id, name, default_rate_bps) VALUES (1, 'c', 1900)",
+        ),
+        (
+            "products",
+            "INSERT INTO products (shop_id, name, unit, cost_centimes, selling_centimes, \
+             qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+             VALUES (1, 'p', 'piece', 0, 0, 0, 0, 1900)",
+        ),
+    ];
+    for (table, insert) in rows {
+        diesel::sql_query(insert).execute(&mut conn).unwrap();
+        let first = count(&mut conn, &format!("SELECT MAX(id) AS n FROM {table}"));
+        diesel::sql_query(format!("DELETE FROM {table} WHERE id = {first}"))
+            .execute(&mut conn)
+            .unwrap();
+        diesel::sql_query(insert).execute(&mut conn).unwrap();
+        let second = count(&mut conn, &format!("SELECT MAX(id) AS n FROM {table}"));
+        assert_ne!(second, first, "{table} handed out a deleted id again");
+    }
+}
+
+#[test]
 fn one_shop_is_seeded_with_an_owner() {
     let (_dir, mut conn) = open_temp();
     assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);
@@ -104,6 +254,33 @@ fn one_shop_is_seeded_with_an_owner() {
         1,
         "every shop needs one owner so later rows have an author"
     );
+}
+
+#[test]
+fn the_seeded_owner_carries_a_pin_that_cannot_verify() {
+    // A NULL pin_hash reads as "no PIN set", which is one careless check away
+    // from "anyone may log in". M4 replaces the sentinel with a real hash.
+    let (_dir, mut conn) = open_temp();
+    let rows: Vec<Name> = diesel::sql_query(
+        "SELECT pin_hash AS name FROM users WHERE shop_id = 1 AND role = 'owner'",
+    )
+    .load(&mut conn)
+    .unwrap();
+    assert_eq!(rows.len(), 1, "the seeded owner has a NULL pin_hash");
+    assert_eq!(rows[0].name, "!unset");
+
+    let nullable = count(
+        &mut conn,
+        "SELECT COUNT(*) AS n FROM pragma_table_info('users') \
+         WHERE name = 'pin_hash' AND \"notnull\" = 1",
+    );
+    assert_eq!(nullable, 1, "pin_hash still accepts NULL");
+
+    let null_row = diesel::sql_query(
+        "INSERT INTO users (shop_id, name, role, pin_hash) VALUES (1, 'x', 'cashier', NULL)",
+    )
+    .execute(&mut conn);
+    assert!(null_row.is_err(), "a NULL pin_hash was accepted");
 }
 
 #[test]

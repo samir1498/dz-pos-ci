@@ -16,7 +16,12 @@
   "field_name": "Name",
   "field_barcode": "Barcode",
   "field_barcode_hint": "Leave empty to number it automatically",
+  "field_category": "Category",
+  "field_rate": "VAT",
   "field_unit": "Unit of measure",
+  "rate_1900": "19 %",
+  "rate_900": "9 %",
+  "rate_0": "0 %",
   "field_cost": "Cost price",
   "field_price": "Selling price",
   "field_stock": "Quantity on hand",
@@ -37,5 +42,7 @@
   "error_unreachable": "Server unreachable.",
   "error_unknown": "Something went wrong.",
   "error_name_required": "A name is required.",
-  "error_price_invalid": "Invalid amount."
+  "error_price_invalid": "Invalid amount.",
+  "error_cost_invalid": "Invalid cost price.",
+  "error_stock_invalid": "Invalid quantity."
 }

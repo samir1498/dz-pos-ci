@@ -15,6 +15,7 @@ const SHOP: i32 = 1;
 
 struct Harness {
     _dir: tempfile::TempDir,
+    path: std::path::PathBuf,
     app: axum::Router,
 }
 
@@ -24,6 +25,7 @@ fn harness() -> Harness {
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     Harness {
         _dir: dir,
+        path,
         app: dzpos_api::router(state),
     }
 }
@@ -51,6 +53,28 @@ async fn call(
         serde_json::from_slice(&bytes).unwrap_or(Value::Null)
     };
     (status, value)
+}
+
+/// The CORS preflight a browser sends before a cross-origin POST, and the
+/// `access-control-allow-origin` the server answered with. `None` means the
+/// browser will refuse to hand the answer to the page.
+async fn preflight(app: &axum::Router, origin: &str) -> Option<String> {
+    let req = Request::builder()
+        .method("OPTIONS")
+        .uri("/products")
+        .header("origin", origin)
+        .header("access-control-request-method", "POST")
+        .header("access-control-request-headers", "content-type")
+        .body(Body::empty())
+        .unwrap();
+    allowed_origin(app.clone().oneshot(req).await.unwrap())
+}
+
+fn allowed_origin(res: axum::response::Response) -> Option<String> {
+    res.headers()
+        .get("access-control-allow-origin")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string)
 }
 
 fn draft() -> Value {
@@ -131,6 +155,34 @@ async fn a_duplicate_barcode_is_409() {
 }
 
 #[tokio::test]
+async fn one_barcode_may_exist_once_in_each_shop() {
+    // Over the wire this time: the 409 above is per shop, not global.
+    use diesel::prelude::*;
+
+    let h = harness();
+    let mut d = draft();
+    d["barcode"] = json!("6130001000018");
+    let (status, made) = call(&h.app, "POST", "/products", Some(d.clone())).await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+
+    // A second shop in the same file. There is no shops route yet, so the
+    // row goes in raw; what is under test is the index, never this seed.
+    let mut seed = dzpos_core::db::open(&h.path).unwrap();
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(&mut seed)
+        .unwrap();
+
+    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap());
+    // Shop 2 has no categories of its own, so it names its rate.
+    d["category_id"] = json!(null);
+    d["rate_bps"] = json!(1900);
+    let (status, body) = call(&other, "POST", "/products", Some(d)).await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    assert_eq!(body["shop_id"], 2);
+    assert_eq!(body["barcode"], "6130001000018");
+}
+
+#[tokio::test]
 async fn a_validation_failure_is_422() {
     let h = harness();
     let mut d = draft();
@@ -147,22 +199,67 @@ async fn a_validation_failure_is_422() {
 }
 
 #[tokio::test]
-async fn a_rate_above_one_whole_is_422_not_a_panic() {
+async fn a_rate_above_one_whole_is_422_with_the_codes_own_name() {
+    // architecture.md: the API maps the core's code, it never derives one.
+    // The core calls this `money`, so the wire says `money` and the UI's
+    // error_money key is what renders.
     let h = harness();
     let mut d = draft();
     d["rate_bps"] = json!(190_000);
     let (status, body) = call(&h.app, "POST", "/products", Some(d)).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(body["error"]["code"], "validation");
+    assert_eq!(body["error"]["code"], "money");
 }
 
 #[tokio::test]
-async fn a_malformed_body_is_422_with_the_same_error_shape() {
+async fn a_money_error_coming_out_of_a_read_is_a_storage_failure() {
+    // A rate the migration's CHECK refuses cannot be written any more, so a
+    // row carrying one is a file written by something else: 500, not a 422
+    // telling the user to correct a form they never filled in.
+    use diesel::prelude::*;
+
     let h = harness();
-    let (status, body) = call(&h.app, "POST", "/products", Some(json!({ "name": 3 }))).await;
+    let (status, made) = call(&h.app, "POST", "/products", Some(draft())).await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+
+    // diesel lives here only to plant a row no service can write; the
+    // product's own layers still reach the file through dzpos_core.
+    let mut planted = dzpos_core::db::open(&h.path).unwrap();
+    diesel::sql_query("PRAGMA ignore_check_constraints = ON")
+        .execute(&mut planted)
+        .unwrap();
+    diesel::sql_query("UPDATE products SET rate_bps = 190000")
+        .execute(&mut planted)
+        .unwrap();
+
+    let (status, body) = call(&h.app, "GET", "/products", None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "money");
+}
+
+#[tokio::test]
+async fn a_malformed_body_is_422_with_a_message_that_quotes_no_serde() {
+    // The message used to be serde's own text, internals and all: "Failed to
+    // parse the request body as JSON: name: EOF while parsing...". It says
+    // nothing a caller can act on and it leaks the DTO's shape.
+    let h = harness();
+    for body in [json!({ "name": 3 }), json!({}), json!("nope")] {
+        let (status, got) = call(&h.app, "POST", "/products", Some(body)).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(got["error"]["code"], "bad_request");
+        assert_eq!(got["error"]["message"], "invalid JSON body");
+    }
+}
+
+#[tokio::test]
+async fn an_unknown_field_is_named_without_listing_the_ones_that_exist() {
+    let h = harness();
+    let mut d = draft();
+    d["couleur"] = json!("rouge");
+    let (status, body) = call(&h.app, "POST", "/products", Some(d)).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body["error"]["code"], "bad_request");
-    assert!(body["error"]["message"].is_string());
+    assert_eq!(body["error"]["message"], "unknown field couleur");
 }
 
 #[tokio::test]
@@ -194,6 +291,99 @@ async fn every_error_body_has_a_code_and_a_message() {
     assert_eq!(body["error"]["code"], "not_found");
     assert!(body["error"]["message"].is_string());
     assert_eq!(body.as_object().map(|o| o.len()), Some(1));
+}
+
+#[tokio::test]
+async fn categories_are_listed_with_the_rate_a_product_would_inherit() {
+    // The add form used to hardcode category 1 and a null rate, so every
+    // product came out at 19 %. It needs the shop's real categories.
+    let h = harness();
+    let (status, list) = call(&h.app, "GET", "/categories", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list.as_array().map(Vec::len), Some(1));
+    assert_eq!(list[0]["name"], "Général");
+    assert_eq!(list[0]["default_rate_bps"], 1900);
+    assert_eq!(list[0]["shop_id"], SHOP);
+    assert!(list[0]["id"].is_number());
+}
+
+#[tokio::test]
+async fn categories_are_scoped_to_the_servers_own_shop() {
+    // Rule 3, the same way products are.
+    let h = harness();
+    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap());
+    let (status, list) = call(&other, "GET", "/categories", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list.as_array().map(Vec::len), Some(0));
+}
+
+#[tokio::test]
+async fn only_the_apps_own_origins_may_call_it() {
+    // allow_origin(Any) let any page open in any browser on this machine
+    // read and write the till's database over loopback.
+    let h = harness();
+    for origin in [
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "tauri://localhost",
+        "http://tauri.localhost",
+    ] {
+        assert_eq!(
+            preflight(&h.app, origin).await.as_deref(),
+            Some(origin),
+            "{origin} is one of the app's own and was refused"
+        );
+    }
+    assert_eq!(
+        preflight(&h.app, "https://evil.example").await,
+        None,
+        "a stranger's page was cleared to call the till"
+    );
+}
+
+#[tokio::test]
+async fn an_answer_to_a_stranger_carries_no_cors_header() {
+    let h = harness();
+    let req = Request::builder()
+        .method("GET")
+        .uri("/products")
+        .header("origin", "https://evil.example")
+        .body(Body::empty())
+        .unwrap();
+    let res = h.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(
+        allowed_origin(res),
+        None,
+        "the browser would have handed this answer to a stranger's page"
+    );
+}
+
+#[tokio::test]
+async fn one_more_origin_can_be_named_for_the_ssh_case() {
+    // The UI served from the WSL box and opened on the laptop is a fourth
+    // origin, and it is the operator's to name, never a default.
+    use axum::http::HeaderValue;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    let app = dzpos_api::router_with_origin(
+        state,
+        Some(HeaderValue::from_static("http://100.111.55.62:5173")),
+    );
+
+    assert_eq!(
+        preflight(&app, "http://100.111.55.62:5173")
+            .await
+            .as_deref(),
+        Some("http://100.111.55.62:5173")
+    );
+    assert_eq!(preflight(&app, "https://evil.example").await, None);
+    assert_eq!(
+        preflight(&app, "http://127.0.0.1:5173").await.as_deref(),
+        Some("http://127.0.0.1:5173"),
+        "naming one more origin must not drop the built-in ones"
+    );
 }
 
 #[tokio::test]

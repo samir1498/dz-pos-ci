@@ -7,12 +7,18 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::product::{NewProduct, Product, ProductRowWrite};
 use crate::money::{Bps, Money};
+use crate::repos::categories as categories_repo;
+use crate::repos::counters;
 use crate::repos::products as repo;
 
 /// GS1 prefix 2 is reserved for restricted circulation: codes a shop makes
 /// up for itself, which never collide with a manufacturer's barcode.
 const IN_STORE_PREFIX: u8 = 2;
 const EAN13_LEN: usize = 13;
+/// How many taken numbers the allocator walks past before it gives up. A
+/// shop would have to type a thousand in-store codes by hand in a row to
+/// reach it, and the bound is what keeps the loop from spinning.
+const IN_STORE_ATTEMPTS: u32 = 1_000;
 
 pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<Product>, CoreError> {
     repo::list(conn, shop_id)
@@ -27,16 +33,12 @@ pub fn create(
     shop_id: i32,
     new: NewProduct,
 ) -> Result<Product, CoreError> {
-    let write = validate(conn, shop_id, &new)?;
-    let auto_number = write.barcode.is_none();
+    let mut write = validate(conn, shop_id, &new)?;
     conn.transaction(|conn| {
-        let made = repo::insert(conn, &write)?;
-        if !auto_number {
-            return Ok(made);
+        if write.barcode.is_none() {
+            write.barcode = Some(next_free_in_store_barcode(conn, shop_id)?);
         }
-        let barcode = in_store_barcode(shop_id, made.id)?;
-        repo::set_barcode(conn, shop_id, made.id, &barcode)?;
-        repo::get(conn, shop_id, made.id)
+        repo::insert(conn, &write)
     })
 }
 
@@ -108,7 +110,19 @@ fn validate(
         .filter(|b| !b.is_empty())
         .map(str::to_string);
 
-    let rate = resolve_rate(conn, shop_id, new)?;
+    // The category is looked up whatever the rate says. It used to be read
+    // only when it had to supply a rate, so a caller who named its own rate
+    // could point a product at another shop's category (rule 3).
+    let category_rate = match new.category_id {
+        Some(id) => Some(categories_repo::default_rate_bps(conn, shop_id, id)?.ok_or(
+            CoreError::NotFound {
+                entity: "category",
+                id,
+            },
+        )?),
+        None => None,
+    };
+    let rate = resolve_rate(new, category_rate)?;
 
     Ok(ProductRowWrite {
         shop_id,
@@ -128,46 +142,60 @@ fn validate(
     })
 }
 
-/// An explicit rate wins; otherwise the category's default. With neither,
-/// there is nothing to guess from, so the caller is told.
-fn resolve_rate(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    new: &NewProduct,
-) -> Result<Bps, CoreError> {
+/// An explicit rate wins; otherwise the category's default, already read and
+/// already proved to belong to this shop. With neither, there is nothing to
+/// guess from, so the caller is told.
+fn resolve_rate(new: &NewProduct, category_rate_bps: Option<i32>) -> Result<Bps, CoreError> {
     if let Some(rate) = new.rate_bps {
         return Ok(rate);
     }
-    let Some(category_id) = new.category_id else {
+    let Some(raw) = category_rate_bps else {
         return Err(CoreError::validation(
             "rate_bps",
             "a product without a category must name its TVA rate",
         ));
     };
-    let raw = repo::category_default_rate_bps(conn, shop_id, category_id)?.ok_or(
-        CoreError::NotFound {
-            entity: "category",
-            id: category_id,
-        },
-    )?;
     let raw = u32::try_from(raw).map_err(|_| crate::money::MoneyError::RateOutOfRange)?;
     Ok(Bps::new(raw)?)
 }
 
-/// EAN-13 in the restricted-circulation range: prefix, shop, product, check
+/// Takes numbers from the shop's counter until one is free. The number can
+/// never come from the row's id: a user is allowed to type the code the next
+/// row would have taken, and deriving it from the id made that insert roll
+/// back without consuming the id, so every later blank create hit the same
+/// number and failed for ever.
+fn next_free_in_store_barcode(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+) -> Result<String, CoreError> {
+    for _ in 0..IN_STORE_ATTEMPTS {
+        let sequence = counters::take_next(conn, shop_id, counters::IN_STORE_BARCODE)?;
+        let code = in_store_barcode(shop_id, sequence)?;
+        if !repo::barcode_exists(conn, shop_id, &code)? {
+            return Ok(code);
+        }
+    }
+    Err(CoreError::validation(
+        "barcode",
+        "no free in-store barcode was found",
+    ))
+}
+
+/// EAN-13 in the restricted-circulation range: prefix, shop, sequence, check
 /// digit. Assumption, not law: see the report and features.md §1.
-fn in_store_barcode(shop_id: i32, product_id: i32) -> Result<String, CoreError> {
+fn in_store_barcode(shop_id: i32, sequence: i64) -> Result<String, CoreError> {
     let shop = u64::try_from(shop_id)
         .map_err(|_| CoreError::validation("shop_id", "shop id is not a barcode-able number"))?;
-    let product = u64::try_from(product_id)
-        .map_err(|_| CoreError::validation("id", "product id is not a barcode-able number"))?;
-    if shop > 99_999 || product > 999_999 {
+    let seq = u64::try_from(sequence).map_err(|_| {
+        CoreError::validation("barcode", "the barcode counter is not a usable number")
+    })?;
+    if shop > 99_999 || seq > 999_999 {
         return Err(CoreError::validation(
             "barcode",
-            "shop or product id no longer fits an in-store EAN-13",
+            "the shop or the barcode counter no longer fits an in-store EAN-13",
         ));
     }
-    let body = format!("{IN_STORE_PREFIX}{shop:05}{product:06}");
+    let body = format!("{IN_STORE_PREFIX}{shop:05}{seq:06}");
     let check = ean13_check_digit(&body)?;
     Ok(format!("{body}{check}"))
 }

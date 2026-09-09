@@ -18,6 +18,11 @@ struct Args {
     /// The one shop this server answers for.
     #[arg(long, default_value_t = 1)]
     shop: i32,
+    /// One more browser origin cleared to call this server, on top of the
+    /// app's own. The UI served from this box and opened on another machine
+    /// needs it: `--allow-origin http://100.111.55.62:5173`.
+    #[arg(long)]
+    allow_origin: Option<String>,
 }
 
 #[tokio::main]
@@ -38,10 +43,15 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
             std::fs::create_dir_all(parent)?;
         }
     }
+    let extra_origin = args
+        .allow_origin
+        .as_deref()
+        .map(axum::http::HeaderValue::from_str)
+        .transpose()?;
     let state = dzpos_api::AppState::open(&args.db, args.shop)?;
     let (listener, port) = dzpos_api::bind(args.port).await?;
     // The e2e harness waits on this line to know the port is live.
     println!("dzpos-api listening on http://127.0.0.1:{port}");
-    axum::serve(listener, dzpos_api::router(state)).await?;
+    axum::serve(listener, dzpos_api::router_with_origin(state, extra_origin)).await?;
     Ok(())
 }

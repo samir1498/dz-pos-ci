@@ -44,6 +44,19 @@ const STOCK_INPUT = "12";
 const STOCK_RENDERED = "12";
 
 test("adds a product and saves the products screenshot", async ({ page }) => {
+  // The rate is chosen by hand (9 %) rather than inherited from the
+  // category, and the request body is captured to prove what was posted.
+  const postedRates: unknown[] = [];
+  await page.route("**/products", async (route) => {
+    if (route.request().method() === "POST") {
+      const body: unknown = route.request().postDataJSON();
+      if (typeof body === "object" && body !== null && "rate_bps" in body) {
+        postedRates.push(body.rate_bps);
+      }
+    }
+    await route.continue();
+  });
+
   await page.goto("/products");
 
   await expect(page.getByRole("heading", { name: t("products_title") })).toBeVisible();
@@ -54,6 +67,11 @@ test("adds a product and saves the products screenshot", async ({ page }) => {
   await page.getByLabel(t("field_name"), { exact: true }).fill(PRODUCT_NAME);
   await page.getByLabel(t("field_price"), { exact: true }).fill(PRICE_INPUT);
   await page.getByLabel(t("field_stock"), { exact: true }).fill(STOCK_INPUT);
+  // By role, not by label: a <label> wrapping a <select> has the option
+  // texts in its own text, so an exact label match never resolves.
+  await page
+    .getByRole("combobox", { name: t("field_rate"), exact: true })
+    .selectOption({ label: t("rate_900") });
   await page.getByRole("button", { name: t("action_save") }).click();
 
   const row = page.getByRole("row").filter({ hasText: PRODUCT_NAME });
@@ -61,6 +79,7 @@ test("adds a product and saves the products screenshot", async ({ page }) => {
   await expect(row.getByRole("cell", { name: PRICE_RENDERED, exact: true })).toBeVisible();
   await expect(row.getByRole("cell", { name: STOCK_RENDERED, exact: true })).toBeVisible();
   await expect(page.getByText(t("products_empty"))).toBeHidden();
+  expect(postedRates).toEqual([900]);
 
   await page.screenshot({
     path: path.join(here, "screenshots", "products.png"),

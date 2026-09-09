@@ -20,6 +20,32 @@ fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
     (dir, conn)
 }
 
+/// A second shop with a category of its own, and that category's id. There
+/// is no shops service yet (M7 pairs a second till), so the rows go in raw:
+/// what is under test is the service's scoping, never this seed.
+fn seed_second_shop(conn: &mut SqliteConnection) -> i32 {
+    use diesel::prelude::*;
+
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO categories (shop_id, name, default_rate_bps) VALUES (2, 'Autre', 900)",
+    )
+    .execute(conn)
+    .unwrap();
+    let row: Id = diesel::sql_query("SELECT id FROM categories WHERE shop_id = 2")
+        .get_result(conn)
+        .unwrap();
+    row.id
+}
+
 fn draft(name: &str) -> NewProduct {
     NewProduct {
         name: name.to_string(),
@@ -97,6 +123,29 @@ fn a_blank_barcode_is_auto_numbered_and_unique() {
 }
 
 #[test]
+fn a_typed_barcode_sitting_on_the_next_auto_number_does_not_block_it() {
+    // The auto number used to be the row's id, so a user who typed the number
+    // the next row was about to get rolled that insert back for ever: the id
+    // was never consumed and every later blank create landed on it again.
+    // 2000010000029 is the in-store code for sequence 2.
+    let (_dir, mut conn) = open_temp();
+    let mut taken = draft("Saisi à la main");
+    taken.barcode = Some("2000010000029".to_string());
+    products::create(&mut conn, SHOP, taken).unwrap();
+
+    let a = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let b = products::create(&mut conn, SHOP, draft("B")).unwrap();
+    let (ba, bb) = (a.barcode.unwrap(), b.barcode.unwrap());
+    assert_ne!(ba, bb, "two blank creates got the same number");
+    for code in [&ba, &bb] {
+        assert_ne!(code, "2000010000029", "the auto number reused a typed one");
+        assert_eq!(code.len(), 13, "not an EAN-13: {code}");
+        assert!(code.starts_with('2'), "not an in-store code: {code}");
+    }
+    assert_eq!(products::list(&mut conn, SHOP).unwrap().len(), 3);
+}
+
+#[test]
 fn whitespace_only_barcode_counts_as_blank() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");
@@ -127,6 +176,31 @@ fn a_duplicate_barcode_in_the_same_shop_is_rejected() {
         Err(CoreError::DuplicateBarcode(code)) => assert_eq!(code, "6130001000018"),
         other => panic!("expected DuplicateBarcode, got {other:?}"),
     }
+}
+
+#[test]
+fn one_barcode_may_exist_once_in_each_shop() {
+    // The unique index is (shop_id, barcode). Making it global passed every
+    // other test in this suite, so this is the one that pins it: two shops
+    // stocking the same product print the manufacturer's code on both.
+    let (_dir, mut conn) = open_temp();
+    let theirs = seed_second_shop(&mut conn);
+
+    let mut mine = draft("Huile Elio 5L");
+    mine.barcode = Some("6130001000018".to_string());
+    let ours = products::create(&mut conn, SHOP, mine).unwrap();
+    assert_eq!(ours.shop_id, SHOP);
+
+    let mut yours = draft("Huile Elio 5L");
+    yours.barcode = Some("6130001000018".to_string());
+    yours.category_id = Some(theirs);
+    let made = products::create(&mut conn, 2, yours).unwrap();
+    assert_eq!(made.shop_id, 2);
+    assert_eq!(made.barcode.as_deref(), Some("6130001000018"));
+
+    // And each shop still sees only its own.
+    assert_eq!(products::list(&mut conn, SHOP).unwrap().len(), 1);
+    assert_eq!(products::list(&mut conn, 2).unwrap().len(), 1);
 }
 
 #[test]
@@ -218,6 +292,38 @@ fn a_category_from_another_shop_is_rejected() {
     let mut d = draft("A");
     d.category_id = Some(4242);
     match products::create(&mut conn, SHOP, d) {
+        Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "category"),
+        other => panic!("expected a category NotFound, got {other:?}"),
+    }
+}
+
+#[test]
+fn another_shops_category_is_rejected_even_when_the_rate_is_explicit() {
+    // The category was only looked up when it had to supply a rate, so an
+    // explicit rate let a product point at another shop's category (rule 3).
+    let (_dir, mut conn) = open_temp();
+    let theirs = seed_second_shop(&mut conn);
+    let mut d = draft("A");
+    d.category_id = Some(theirs);
+    d.rate_bps = Some(Bps::new(1900).unwrap());
+    match products::create(&mut conn, SHOP, d) {
+        Err(CoreError::NotFound { entity, id }) => {
+            assert_eq!(entity, "category");
+            assert_eq!(id, theirs);
+        }
+        other => panic!("expected a category NotFound, got {other:?}"),
+    }
+}
+
+#[test]
+fn an_update_onto_another_shops_category_is_rejected_too() {
+    let (_dir, mut conn) = open_temp();
+    let theirs = seed_second_shop(&mut conn);
+    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let mut d = draft("A");
+    d.category_id = Some(theirs);
+    d.rate_bps = Some(Bps::new(1900).unwrap());
+    match products::update(&mut conn, SHOP, made.id, d) {
         Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "category"),
         other => panic!("expected a category NotFound, got {other:?}"),
     }
@@ -317,6 +423,12 @@ fn a_rate_above_one_whole_never_panics_on_the_way_out() {
     use diesel::prelude::*;
     let (_dir, mut conn) = open_temp();
     let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    // The migration's CHECK now refuses this row, which is the point of the
+    // constraint. The pragma stands in for the file this test is about: one
+    // written by an old import or a repair tool that never saw the CHECK.
+    diesel::sql_query("PRAGMA ignore_check_constraints = ON")
+        .execute(&mut conn)
+        .unwrap();
     diesel::sql_query(format!(
         "UPDATE products SET rate_bps = 190000 WHERE id = {}",
         made.id

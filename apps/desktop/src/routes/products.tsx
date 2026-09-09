@@ -14,8 +14,8 @@ import {
   parseAmountToCentimes,
   parseQtyToMilli,
 } from "@dzpos/shared";
-import type { NewProductDto, ProductDto, UnitDto } from "@dzpos/shared";
-import { api, productsQueryKey } from "@/api";
+import type { CategoryDto, NewProductDto, ProductDto, UnitDto } from "@dzpos/shared";
+import { api, categoriesQueryKey, productsQueryKey } from "@/api";
 import { isKey, useTranslation, type Key } from "@/i18n";
 
 export const Route = createFileRoute("/products")({ component: ProductsScreen });
@@ -28,6 +28,15 @@ const UNIT_KEY: Record<UnitDto, Key> = {
   litre: "unit_litre",
   box: "unit_box",
 };
+
+/** features.md, TVA rates row: 19 % standard, 9 % reduced, 0 % exempt. */
+const RATES: readonly { bps: number; key: Key }[] = [
+  { bps: 1900, key: "rate_1900" },
+  { bps: 900, key: "rate_900" },
+  { bps: 0, key: "rate_0" },
+];
+
+const FALLBACK_RATE_BPS = 1900;
 
 const ERROR_KEY: Record<string, Key> = {
   validation: "error_validation",
@@ -52,6 +61,12 @@ export function ProductsScreen() {
   const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
   const products = useQuery({ queryKey: productsQueryKey, queryFn: () => api.listProducts() });
+  // The form needs the shop's real categories before it can offer one, so
+  // the query lives here and the form is rendered once it has answered.
+  const categories = useQuery({
+    queryKey: categoriesQueryKey,
+    queryFn: () => api.listCategories(),
+  });
 
   return (
     <section className="flex flex-col gap-4">
@@ -66,7 +81,15 @@ export function ProductsScreen() {
         </button>
       </header>
 
-      {adding ? <AddProductForm onDone={() => setAdding(false)} /> : null}
+      {adding && categories.isSuccess ? (
+        <AddProductForm categories={categories.data} onDone={() => setAdding(false)} />
+      ) : null}
+      {adding && categories.isPending ? <p>{t("products_loading")}</p> : null}
+      {adding && categories.isError ? (
+        <p role="alert" className="text-red-700">
+          {t(errorKey(categories.error))}
+        </p>
+      ) : null}
 
       {products.isPending ? <p>{t("products_loading")}</p> : null}
       {products.isError ? (
@@ -111,7 +134,13 @@ function ProductTable({ rows }: { rows: ProductDto[] }) {
   );
 }
 
-function AddProductForm({ onDone }: { onDone: () => void }) {
+function AddProductForm({
+  categories,
+  onDone,
+}: {
+  categories: CategoryDto[];
+  onDone: () => void;
+}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<Key | null>(null);
@@ -126,33 +155,40 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
     onError: (error: unknown) => setServerError(errorKey(error)),
   });
 
+  const first = categories[0];
   const form = useForm({
     defaultValues: {
       name: "",
       barcode: "",
+      category: first === undefined ? "" : String(first.id),
+      rate: String(first?.default_rate_bps ?? FALLBACK_RATE_BPS),
       unit: "piece",
       cost: "",
       price: "",
       stock: "",
     },
     onSubmit: async ({ value }) => {
-      const cost = parseAmountToCentimes(value.cost) ?? 0;
+      // The validators have already refused anything unreadable, so these
+      // fall back only for the blank case they allow.
+      const cost = optional(value.cost, parseAmountToCentimes) ?? 0;
       const price = parseAmountToCentimes(value.price) ?? 0;
-      const stock = parseQtyToMilli(value.stock) ?? 0;
+      const stock = optional(value.stock, parseQtyToMilli) ?? 0;
       // The rejection is deliberately swallowed: onError has already turned
       // the server's code into a translated message on the form.
       await create
         .mutateAsync({
           name: value.name,
           barcode: value.barcode.trim() === "" ? null : value.barcode.trim(),
-          category_id: 1,
+          category_id: value.category === "" ? null : Number(value.category),
           unit: toUnit(value.unit),
           cost_centimes: cost,
           selling_centimes: price,
           wholesale_centimes: null,
           qty_on_hand_milli: stock,
           low_stock_at_milli: 0,
-          rate_bps: null,
+          // Sent, never left to the server to infer: the shop chose a rate on
+          // this screen and the product has to carry the one it chose.
+          rate_bps: Number(value.rate),
           active: true,
         })
         .catch(() => undefined);
@@ -202,6 +238,52 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
         )}
       </form.Field>
 
+      <form.Field name="category">
+        {(field) => (
+          <label className="flex flex-col gap-1">
+            <span>{t("field_category")}</span>
+            <select
+              className="rounded border px-2 py-1"
+              value={field.state.value}
+              onChange={(e) => {
+                field.handleChange(e.target.value);
+                // The category's rate is the offer, not the decision: the
+                // rate select below stays editable after this.
+                const chosen = categories.find((c) => String(c.id) === e.target.value);
+                if (chosen !== undefined) {
+                  form.setFieldValue("rate", String(chosen.default_rate_bps));
+                }
+              }}
+            >
+              {categories.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </form.Field>
+
+      <form.Field name="rate">
+        {(field) => (
+          <label className="flex flex-col gap-1">
+            <span>{t("field_rate")}</span>
+            <select
+              className="rounded border px-2 py-1"
+              value={field.state.value}
+              onChange={(e) => field.handleChange(e.target.value)}
+            >
+              {RATES.map((rate) => (
+                <option key={rate.bps} value={String(rate.bps)}>
+                  {t(rate.key)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </form.Field>
+
       <form.Field name="unit">
         {(field) => (
           <label className="flex flex-col gap-1">
@@ -242,7 +324,15 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
         )}
       </form.Field>
 
-      <form.Field name="cost">
+      <form.Field
+        name="cost"
+        validators={{
+          onSubmit: ({ value }) =>
+            optional(value, parseAmountToCentimes) === undefined
+              ? "error_cost_invalid"
+              : undefined,
+        }}
+      >
         {(field) => (
           <label className="flex flex-col gap-1">
             <span>{t("field_cost")}</span>
@@ -252,11 +342,18 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
             />
+            <FieldError messages={field.state.meta.errors} />
           </label>
         )}
       </form.Field>
 
-      <form.Field name="stock">
+      <form.Field
+        name="stock"
+        validators={{
+          onSubmit: ({ value }) =>
+            optional(value, parseQtyToMilli) === undefined ? "error_stock_invalid" : undefined,
+        }}
+      >
         {(field) => (
           <label className="flex flex-col gap-1">
             <span>{t("field_stock")}</span>
@@ -266,6 +363,7 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
             />
+            <FieldError messages={field.state.meta.errors} />
           </label>
         )}
       </form.Field>
@@ -286,6 +384,16 @@ function AddProductForm({ onDone }: { onDone: () => void }) {
       </div>
     </form>
   );
+}
+
+/**
+ * A field a shop may leave empty. Blank is zero; anything the parser cannot
+ * read is `undefined`, which is what blocks the submit. `?? 0` used to
+ * flatten both cases, so "12 DA" was stored as a cost of nothing.
+ */
+function optional(text: string, parse: (t: string) => number | null): number | undefined {
+  if (text.trim() === "") return 0;
+  return parse(text) ?? undefined;
 }
 
 /** Field validators return translation keys, never sentences. */

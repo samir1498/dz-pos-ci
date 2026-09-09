@@ -25,3 +25,4 @@ export function apiBaseUrl(): string {
 export const api = createClient(apiBaseUrl());
 
 export const productsQueryKey: readonly string[] = ["products"];
+export const categoriesQueryKey: readonly string[] = ["categories"];

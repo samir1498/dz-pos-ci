@@ -38,8 +38,11 @@ jobs:
       - name: Generated TS types are current
         if: runner.os == 'Linux'
         run: |
-          cargo test -p dzpos-api --test export_bindings
-          git diff --exit-code packages/shared/src/generated
+          tmp="$(mktemp -d)"
+          DZPOS_TS_OUT_DIR="$tmp" cargo test -p dzpos-api --test export_bindings
+          # Both directions: a new DTO shows as "Only in $tmp", one that was
+          # deleted leaves an orphan the old `git diff` never looked for.
+          diff -r "$tmp" packages/shared/src/generated
       - name: Coverage (lcov for Sonar)
         if: runner.os == 'Linux'
         run: |

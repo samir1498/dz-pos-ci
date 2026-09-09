@@ -9,11 +9,12 @@ pub mod routes;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use axum::http::{header, HeaderValue, Method};
 use axum::routing::{get, post};
 use axum::Router;
 use dzpos_core::db::Conn;
 use dzpos_core::error::CoreError;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::error::ApiError;
 
@@ -58,24 +59,46 @@ impl AppState {
     }
 }
 
+/// The origins the product's own screens are served from: the browser
+/// preview on 5173 and the two the Tauri webview uses.
+const OWN_ORIGINS: [HeaderValue; 4] = [
+    HeaderValue::from_static("http://127.0.0.1:5173"),
+    HeaderValue::from_static("http://localhost:5173"),
+    HeaderValue::from_static("tauri://localhost"),
+    HeaderValue::from_static("http://tauri.localhost"),
+];
+
 pub fn router(state: AppState) -> Router {
-    // TODO(M4): no auth. Every caller is trusted because the server binds to
-    // 127.0.0.1 and one desktop owns the file. M4 brings users and roles and
-    // this router gains the middleware that checks them.
+    router_with_origin(state, None)
+}
+
+/// Same routes, plus one more origin the operator names. The UI served from
+/// the WSL box and opened on the laptop is a real case and it is a decision,
+/// never a default.
+pub fn router_with_origin(state: AppState, extra: Option<HeaderValue>) -> Router {
+    // TODO(M4): no auth. Nothing here identifies a caller yet, so the only
+    // thing standing between a page and the shop's database is the origin
+    // list below and the loopback socket. M4 brings users and roles and this
+    // router gains the middleware that checks them.
+    let mut origins = OWN_ORIGINS.to_vec();
+    origins.extend(extra);
+
     Router::new()
         .route("/health", get(routes::health))
+        .route("/categories", get(routes::categories::list))
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
         .route("/products/{id}", get(routes::products::get_one))
         .fallback(routes::not_found)
-        // The browser preview on 5173 and the Tauri webview are both a
-        // different origin from this server. Safe because the socket is
-        // loopback-only; revisit with auth in M4.
+        // Loopback is not a boundary: every browser on the machine can reach
+        // 127.0.0.1, so allow_origin(Any) let any page a user happened to
+        // open read and write the till. The list is what keeps a stranger's
+        // page from being handed the answer.
         .layer(
             CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
+                .allow_origin(AllowOrigin::list(origins))
+                .allow_methods([Method::GET, Method::POST])
+                .allow_headers([header::CONTENT_TYPE]),
         )
         .with_state(state)
 }

@@ -8,7 +8,7 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::product::{Product, ProductRow, ProductRowWrite};
-use crate::schema::{categories, products};
+use crate::schema::products;
 
 /// A unique-index violation on `(shop_id, barcode)` is the only constraint
 /// a caller can trip, so it becomes the domain error rather than a SQL one.
@@ -78,36 +78,19 @@ pub fn update(
     get(conn, shop_id, id)
 }
 
-/// Writes a barcode onto a row that was inserted without one. Split from
-/// `insert` because the number is derived from the id the insert assigns.
-pub fn set_barcode(
+/// Whether this shop already uses that barcode. The auto-numbering asks
+/// before it hands a number out, so a number a user typed by hand costs one
+/// number rather than a failed insert.
+pub fn barcode_exists(
     conn: &mut SqliteConnection,
     shop_id: i32,
-    id: i32,
     barcode: &str,
-) -> Result<(), CoreError> {
-    diesel::update(
-        products::table
-            .filter(products::shop_id.eq(shop_id))
-            .filter(products::id.eq(id)),
-    )
-    .set(products::barcode.eq(barcode))
-    .execute(conn)
-    .map_err(|e| map_write(e, Some(barcode)))?;
-    Ok(())
-}
-
-/// The category's default TVA rate in basis points, or `None` when no
-/// category with that id belongs to this shop.
-pub fn category_default_rate_bps(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    category_id: i32,
-) -> Result<Option<i32>, CoreError> {
-    Ok(categories::table
-        .filter(categories::shop_id.eq(shop_id))
-        .filter(categories::id.eq(category_id))
-        .select(categories::default_rate_bps)
+) -> Result<bool, CoreError> {
+    let found: Option<i32> = products::table
+        .filter(products::shop_id.eq(shop_id))
+        .filter(products::barcode.eq(barcode))
+        .select(products::id)
         .first(conn)
-        .optional()?)
+        .optional()?;
+    Ok(found.is_some())
 }

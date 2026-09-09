@@ -35,6 +35,12 @@ The database is thrown away, so the first assertion is always the empty
 state. The API base URL reaches the app through `VITE_API_URL`, which
 `src/api.ts` already reads; no source file knows about the test.
 
+The same variable serves the SSH case: when the browser runs on the
+laptop and the API on the WSL box, start Vite with `VITE_API_URL` set to
+the box's Tailscale address and port (`http://100.x.y.z:4317`), otherwise
+the app falls back to `http://127.0.0.1:4317` on the laptop and finds
+nothing there.
+
 The first run after a clean checkout compiles `dzpos-api`, which takes
 minutes. The API webServer has a ten minute start timeout for that.
 

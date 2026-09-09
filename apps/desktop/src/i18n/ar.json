@@ -16,7 +16,12 @@
   "field_name": "الاسم",
   "field_barcode": "الرمز الشريطي",
   "field_barcode_hint": "اتركه فارغًا ليُرقَّم تلقائيًا",
+  "field_category": "الفئة",
+  "field_rate": "الرسم على القيمة المضافة",
   "field_unit": "وحدة القياس",
+  "rate_1900": "19 ٪",
+  "rate_900": "9 ٪",
+  "rate_0": "0 ٪",
   "field_cost": "سعر الشراء",
   "field_price": "سعر البيع",
   "field_stock": "الكمية المتوفرة",
@@ -37,5 +42,7 @@
   "error_unreachable": "الخادم غير متاح.",
   "error_unknown": "حدث خطأ ما.",
   "error_name_required": "الاسم مطلوب.",
-  "error_price_invalid": "مبلغ غير صالح."
+  "error_price_invalid": "مبلغ غير صالح.",
+  "error_cost_invalid": "سعر شراء غير صالح.",
+  "error_stock_invalid": "كمية غير صالحة."
 }

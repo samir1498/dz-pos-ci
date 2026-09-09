@@ -1,5 +1,9 @@
 //! Diesel table definitions for `migrations/2026-09-08-000000_init`.
-//! Hand-written to match that SQL; `diesel print-schema` regenerates it.
+//! Hand-written to match that SQL. The tables are STRICT, so the migration
+//! declares timestamps as TEXT and the boolean as INTEGER: SQLite stores
+//! both that way already, and diesel reads `Timestamp` and `Bool` from
+//! them. `diesel print-schema` would name the storage type instead of the
+//! domain one, so it is a starting point here, not the source.
 
 diesel::table! {
     categories (id) {
@@ -7,6 +11,14 @@ diesel::table! {
         shop_id -> Integer,
         name -> Text,
         default_rate_bps -> Integer,
+    }
+}
+
+diesel::table! {
+    counters (shop_id, name) {
+        shop_id -> Integer,
+        name -> Text,
+        next_value -> BigInt,
     }
 }
 
@@ -31,7 +43,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    settings (shop_id, key, valid_from) {
+    settings (seq) {
+        seq -> Integer,
         shop_id -> Integer,
         key -> Text,
         value -> Text,
@@ -59,14 +72,17 @@ diesel::table! {
         shop_id -> Integer,
         name -> Text,
         role -> Text,
-        pin_hash -> Nullable<Text>,
+        pin_hash -> Text,
         created_at -> Timestamp,
     }
 }
 
 diesel::joinable!(categories -> shops (shop_id));
+diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
 diesel::joinable!(settings -> shops (shop_id));
 diesel::joinable!(users -> shops (shop_id));
 
-diesel::allow_tables_to_appear_in_same_query!(categories, products, settings, shops, users);
+diesel::allow_tables_to_appear_in_same_query!(
+    categories, counters, products, settings, shops, users
+);

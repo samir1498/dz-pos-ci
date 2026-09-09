@@ -17,6 +17,9 @@ serde_json = { workspace = true }
 thiserror = "2"
 
 [dev-dependencies]
+# Test-only: one test plants a row the migration's CHECK refuses, which no
+# service can write. Shipped code in this crate goes through dzpos-core.
+diesel = { workspace = true, features = ["sqlite"] }
 tower = { version = "0.5.3", features = ["util"] }
 http-body-util = "0.1.5"
 tempfile = "3"

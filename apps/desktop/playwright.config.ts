@@ -63,7 +63,10 @@ export default defineConfig({
     {
       // The db file is removed first, journal siblings included, so a run
       // never inherits rows from the previous one.
-      command: `rm -f "${tempDb}" "${tempDb}-shm" "${tempDb}-wal" && cargo run -p dzpos-api -- --db "${tempDb}" --port ${apiPort}`,
+      // The API names its allowed origins (the dev Vite port and the Tauri
+      // ones); the test Vite runs on another port, so it is passed in the
+      // way the SSH case is: one extra origin on the command line.
+      command: `rm -f "${tempDb}" "${tempDb}-shm" "${tempDb}-wal" && cargo run -p dzpos-api -- --db "${tempDb}" --port ${apiPort} --allow-origin ${baseURL}`,
       cwd: repoRoot,
       env: cargoEnv,
       url: `${apiUrl}/health`,

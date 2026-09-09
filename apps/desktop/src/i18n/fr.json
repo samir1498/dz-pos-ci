@@ -16,7 +16,12 @@
   "field_name": "Nom",
   "field_barcode": "Code-barres",
   "field_barcode_hint": "Laisser vide pour numéroter automatiquement",
+  "field_category": "Catégorie",
+  "field_rate": "TVA",
   "field_unit": "Unité de mesure",
+  "rate_1900": "19 %",
+  "rate_900": "9 %",
+  "rate_0": "0 %",
   "field_cost": "Prix d'achat",
   "field_price": "Prix de vente",
   "field_stock": "Quantité en stock",
@@ -37,5 +42,7 @@
   "error_unreachable": "Serveur injoignable.",
   "error_unknown": "Une erreur est survenue.",
   "error_name_required": "Le nom est obligatoire.",
-  "error_price_invalid": "Montant invalide."
+  "error_price_invalid": "Montant invalide.",
+  "error_cost_invalid": "Prix d'achat invalide.",
+  "error_stock_invalid": "Quantité invalide."
 }
