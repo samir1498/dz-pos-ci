@@ -357,6 +357,25 @@ pub fn anything_left(
     }))
 }
 
+/// What a whole avoir on this facture would come to, without writing one.
+///
+/// The figure a cancellation's confirm shows, and it has to be this
+/// subtraction rather than the totals of the lines still on the facture: those
+/// are what the closing avoir refuses to be computed from, so a confirm
+/// re-deriving them would promise 60 where the avoir will be written for 59.
+pub fn what_is_left(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    facture: &Document,
+) -> Result<Money, CoreError> {
+    let already = credited_amount(&repo::avoirs_of(conn, shop_id, facture.id)?)?;
+    Ok(facture
+        .totals
+        .total_ttc
+        .checked_sub(already)?
+        .max(Money::ZERO))
+}
+
 /// What is still unpaid on a facture. A facture with no customer carries no
 /// triple at all, and nothing was ever owed on it.
 fn unpaid_on(facture: &Document) -> Money {

@@ -10,6 +10,7 @@ use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
+use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::document::{
     payment_mode_stored, regime_stored, CancelWrite, DocumentLineRowWrite, DocumentRowWrite,
     DocumentTvaRowWrite,
@@ -18,7 +19,7 @@ use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Money, PaymentMode};
 use crate::repos::counters;
 use crate::repos::documents as repo;
-use crate::services::{audit, avoir, clock, customers, optional_field, products, stock};
+use crate::services::{audit, avoir, clock, customers, debt, optional_field, products, stock};
 
 pub use crate::models::document::{
     BalanceTriple, Cancellation, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
@@ -109,22 +110,36 @@ pub fn cancel(
                 "this document is already annulée",
             ));
         }
+        // Named rather than excluded. A ticket and a facture are the two
+        // papers a sale is handed over on, and undoing one is what this knows
+        // how to do: the goods come back and the money comes off the account.
+        // Everything else is refused by not being on the list, so a kind added
+        // later is refused until somebody decides what undoing it means rather
+        // than falling through to a cancellation that half works.
         match document.kind {
-            DocumentKind::Avoir | DocumentKind::Proforma => {
+            DocumentKind::Ticket | DocumentKind::Facture => {}
+            _ => {
                 return Err(CoreError::validation(
                     "document_id",
-                    "an avoir and a proforma are not annulled",
+                    "only a ticket and a facture are annulled",
                 ))
             }
-            _ => {}
         }
         let at = at.unwrap_or_else(clock::now);
 
         // A facture that put money on an account is undone by an avoir, which
-        // brings the goods and the money back in one numbered document. Every
-        // other document owed nobody anything, so only the goods move.
-        let avoir_document_id = if carries_money(&document) {
-            if avoir::anything_left(conn, shop_id, &document)? {
+        // brings the goods and the money back in one numbered document. A
+        // ticket that put money on an account has no avoir to be undone by,
+        // because an avoir is written against a facture, so the goods and the
+        // ledger move separately. Everything else owed nobody anything and
+        // only the goods move.
+        let avoir_document_id = match effect_of(conn, shop_id, &document)? {
+            CancelEffect::NothingToReverse => None,
+            CancelEffect::StockBack => {
+                return_the_goods(conn, shop_id, user_id, &document)?;
+                None
+            }
+            CancelEffect::StockBackAndAvoir { .. } if document.kind == DocumentKind::Facture => {
                 Some(
                     avoir::issue(
                         conn,
@@ -137,12 +152,12 @@ pub fn cancel(
                     )?
                     .id,
                 )
-            } else {
+            }
+            CancelEffect::StockBackAndAvoir { amount } => {
+                return_the_goods(conn, shop_id, user_id, &document)?;
+                reverse_on_the_ledger(conn, shop_id, user_id, &document, amount, at, &reason)?;
                 None
             }
-        } else {
-            return_the_goods(conn, shop_id, user_id, &document)?;
-            None
         };
 
         repo::set_cancelled(
@@ -191,8 +206,60 @@ pub fn cancel(
     })
 }
 
+/// What cancelling a document would do, so a screen can say it before it asks.
+///
+/// The screen cannot work this out from the document alone. A facture whose
+/// goods have all come back on earlier credit notes carries debt, was sold on
+/// credit and names a customer, and cancelling it does nothing at all: the
+/// avoirs already did it. Reading the three fields would say otherwise, and a
+/// confirm that promises a credit note the shop then cannot find is worse than
+/// no confirm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CancelEffect {
+    /// The document is annulled and nothing moves: every one of its lines has
+    /// already come back on an avoir.
+    NothingToReverse,
+    /// The goods go back on the shelf. Nobody was owed anything.
+    StockBack,
+    /// The goods go back and this much comes off the customer's account. On a
+    /// facture it is a numbered avoir; on a ticket it is a ledger row alone,
+    /// because an avoir is written against a facture.
+    StockBackAndAvoir { amount: Money },
+}
+
+pub fn cancel_effect(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+) -> Result<CancelEffect, CoreError> {
+    let document = repo::get(conn, shop_id, document_id)?;
+    effect_of(conn, shop_id, &document)
+}
+
+fn effect_of(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document: &Document,
+) -> Result<CancelEffect, CoreError> {
+    if !carries_money(document) {
+        return Ok(CancelEffect::StockBack);
+    }
+    if document.kind != DocumentKind::Facture {
+        // A ticket carries no avoirs, so the whole of it is still out.
+        return Ok(CancelEffect::StockBackAndAvoir {
+            amount: document.totals.net_to_pay,
+        });
+    }
+    if !avoir::anything_left(conn, shop_id, document)? {
+        return Ok(CancelEffect::NothingToReverse);
+    }
+    Ok(CancelEffect::StockBackAndAvoir {
+        amount: avoir::what_is_left(conn, shop_id, document)?,
+    })
+}
+
 /// Whether the document put money on a customer's account, and so has to be
-/// undone by an avoir rather than by the goods alone.
+/// undone on the ledger rather than by the goods alone.
 ///
 /// A credit sale is the plain case. A facture the customer has since paid is
 /// the other one: the ledger carries both the sale and the payment, and
@@ -200,6 +267,57 @@ pub fn cancel(
 /// holding rather than quietly cancel the money too.
 fn carries_money(document: &Document) -> bool {
     document.customer_id.is_some() && document.payment_mode == PaymentMode::Credit
+}
+
+/// Takes a cancelled credit ticket off the customer's account.
+///
+/// The ledger half of an avoir with no document above it. A ticket carries no
+/// number in the avoir series and nothing is written against it, so what says
+/// the money came back is one credit row naming the ticket. What that row
+/// settles is the ticket's own unpaid part first, then the customer's other
+/// unpaid papers oldest first, and what none of them can take is credit the
+/// shop is holding: the same three steps, and for the same reason, as the
+/// money half of `avoir::issue` (features.md §3).
+fn reverse_on_the_ledger(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    document: &Document,
+    amount: Money,
+    at: NaiveDateTime,
+    reason: &str,
+) -> Result<(), CoreError> {
+    let Some(customer_id) = document.customer_id else {
+        return Ok(());
+    };
+    if amount == Money::ZERO {
+        return Ok(());
+    }
+    let entry = debt::append_at(
+        conn,
+        shop_id,
+        NewDebtEntry {
+            customer_id,
+            document_id: Some(document.id),
+            kind: DebtKind::Avoir,
+            debit: Money::ZERO,
+            credit: amount,
+            user_id,
+            note: Some(reason.to_string()),
+        },
+        Some(at),
+    )?;
+    let unpaid = document.balance.map_or(Money::ZERO, |b| b.remaining_debt);
+    let on_itself = amount.min(unpaid);
+    debt::settle_document(conn, shop_id, entry.id, document.id, on_itself)?;
+    debt::settle_oldest_first(
+        conn,
+        shop_id,
+        customer_id,
+        entry.id,
+        amount.checked_sub(on_itself)?,
+    )?;
+    Ok(())
 }
 
 /// Puts the goods of a cancelled document back on the shelf, one movement per

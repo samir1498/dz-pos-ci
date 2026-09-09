@@ -525,3 +525,267 @@ fn a_cancellation_needs_a_reason() {
         "a refused cancellation moved stock"
     );
 }
+
+/// A credit ticket is a real document: the credit sale issues one when the
+/// buyer is not a company and the shop is putting it on the slate anyway.
+/// There is no avoir to write against it, because an avoir is written against
+/// a facture, so the money comes off the account as a ledger row that names
+/// the ticket and carries no number of its own.
+#[test]
+fn a_credit_ticket_is_cancelled_by_a_ledger_row_and_not_by_an_avoir() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000);
+    let c = a_customer(&mut conn);
+    let ticket = sell(
+        &mut conn,
+        Some(c),
+        vec![line(p, 3_000)],
+        PaymentMode::Credit,
+        SaleKind::Ticket,
+        10,
+    );
+    assert_eq!(ticket.kind, DocumentKind::Ticket);
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, c).unwrap(),
+        Money::centimes(300_000)
+    );
+
+    let cancelled = documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        ticket.id,
+        "erreur de caisse".to_string(),
+        Some(at(11)),
+    )
+    .unwrap();
+
+    assert_eq!(cancelled.status, DocumentStatus::Cancelled);
+    assert_eq!(cancelled.number, ticket.number, "the number stays");
+    assert_eq!(
+        cancelled
+            .cancellation
+            .as_ref()
+            .and_then(|c| c.avoir_document_id),
+        None,
+        "no numbered credit note is written against a ticket"
+    );
+    assert_eq!(
+        documents::list(&mut conn, SHOP, Some(DocumentKind::Avoir))
+            .unwrap()
+            .len(),
+        0
+    );
+
+    // The goods are back and the account is square.
+    assert_eq!(
+        products::get(&mut conn, SHOP, p).unwrap().qty_on_hand_milli,
+        100_000
+    );
+    assert!(kinds(&mut conn, p).contains(&(MovementKind::Return, 3_000)));
+    assert_eq!(debt::balance(&mut conn, SHOP, c).unwrap(), Money::ZERO);
+    assert_eq!(
+        documents::get(&mut conn, SHOP, ticket.id)
+            .unwrap()
+            .balance
+            .map(|b| b.remaining_debt),
+        Some(Money::ZERO)
+    );
+
+    // The reversal is one ledger row of kind avoir naming the ticket.
+    let rows = debt::ledger(&mut conn, SHOP, c).unwrap();
+    let reversal = rows
+        .iter()
+        .find(|e| e.kind == DebtKind::Avoir)
+        .expect("the ticket's money came off the account");
+    assert_eq!(reversal.credit, Money::centimes(300_000));
+    assert_eq!(reversal.document_id, Some(ticket.id));
+}
+
+/// What the customer had already paid on a credit ticket does not vanish with
+/// it: the goods go back, the whole of the ticket comes off the account, and
+/// the money they handed over is theirs to spend, the same way an avoir's
+/// excess is.
+#[test]
+fn a_paid_credit_ticket_leaves_the_customer_holding_what_they_paid() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000);
+    let c = a_customer(&mut conn);
+    let ticket = sell(
+        &mut conn,
+        Some(c),
+        vec![line(p, 3_000)],
+        PaymentMode::Credit,
+        SaleKind::Ticket,
+        10,
+    );
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        c,
+        Money::centimes(100_000),
+        PaymentMethod::Cash,
+        None,
+        at(11),
+    )
+    .unwrap();
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, c).unwrap(),
+        Money::centimes(200_000)
+    );
+
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        ticket.id,
+        "erreur de caisse".to_string(),
+        Some(at(12)),
+    )
+    .unwrap();
+
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, c).unwrap(),
+        Money::centimes(-100_000),
+        "the 1 000,00 they paid is credit the shop is holding"
+    );
+}
+
+/// The kinds a cancellation takes are named, not the ones it refuses. A
+/// quittance and a bon are papers about something that already happened, and
+/// nothing here knows how to undo one.
+#[test]
+fn only_a_ticket_and_a_facture_are_cancelled() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000);
+    let c = a_customer(&mut conn);
+    let quittance = a_document_of_kind(&mut conn, DocumentKind::Quittance, c);
+    let err = documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        quittance,
+        "erreur".to_string(),
+        Some(at(11)),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "document_id"),
+        "{err:?}"
+    );
+
+    // And a ticket and a facture still go through.
+    let ticket = sell(
+        &mut conn,
+        None,
+        vec![line(p, 1_000)],
+        PaymentMode::Cash,
+        SaleKind::Ticket,
+        10,
+    );
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        ticket.id,
+        "erreur".to_string(),
+        Some(at(11)),
+    )
+    .unwrap();
+}
+
+/// What the screen has to say before it asks. Read off the core, because a
+/// screen re-deriving it gets a fully credited facture wrong: it carries debt
+/// and still nothing happens.
+#[test]
+fn the_effect_of_a_cancellation_is_answered_before_it_is_taken() {
+    use dzpos_core::services::documents::CancelEffect;
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Bougie", 50);
+    let c = a_customer(&mut conn);
+
+    // A cash ticket: the goods and nothing else.
+    let ticket = sell(
+        &mut conn,
+        None,
+        vec![line(p, 3_000)],
+        PaymentMode::Cash,
+        SaleKind::Ticket,
+        10,
+    );
+    assert_eq!(
+        documents::cancel_effect(&mut conn, SHOP, ticket.id).unwrap(),
+        CancelEffect::StockBack
+    );
+
+    // A facture on credit: the goods and a credit note of what is left.
+    let facture = sell(
+        &mut conn,
+        Some(c),
+        vec![line(p, 3_000)],
+        PaymentMode::Credit,
+        SaleKind::Facture,
+        11,
+    );
+    assert_eq!(
+        documents::cancel_effect(&mut conn, SHOP, facture.id).unwrap(),
+        CancelEffect::StockBackAndAvoir {
+            amount: facture.totals.total_ttc
+        }
+    );
+
+    // Credited in part, and the figure follows what is left rather than what
+    // a slice of the remaining line would come to: 150 - 100 and not 50.
+    avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        Some(vec![dzpos_core::services::avoir::AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 2_000,
+        }]),
+        None,
+        Some(at(12)),
+    )
+    .unwrap();
+    let left = documents::cancel_effect(&mut conn, SHOP, facture.id).unwrap();
+    let credited: i64 = avoir::list_for(&mut conn, SHOP, facture.id)
+        .unwrap()
+        .iter()
+        .map(|a| a.totals.net_to_pay.as_centimes())
+        .sum();
+    assert_eq!(
+        left,
+        CancelEffect::StockBackAndAvoir {
+            amount: Money::centimes(facture.totals.total_ttc.as_centimes() - credited)
+        }
+    );
+
+    // Credited in full: nothing left to undo at all.
+    avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(13))).unwrap();
+    assert_eq!(
+        documents::cancel_effect(&mut conn, SHOP, facture.id).unwrap(),
+        CancelEffect::NothingToReverse
+    );
+}
+
+/// A document of a kind the till never writes, put in the file by hand so the
+/// allowlist can be asked about it.
+fn a_document_of_kind(conn: &mut SqliteConnection, kind: DocumentKind, customer: i32) -> i32 {
+    use diesel::prelude::*;
+    diesel::sql_query(format!(
+        "INSERT INTO documents (shop_id, kind, series, number, issued_at, user_id, regime, \
+         payment_mode, seller_name, customer_id, total_ht_centimes, discount_centimes, \
+         subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+         net_to_pay_centimes, status) \
+         VALUES (1, '{}', 'doc_{}', 1, '2026-09-10 10:00:00', 1, 'reel', 'cash', \
+         'Mon magasin', {customer}, 0, 0, 0, 0, 0, 0, 0, 'issued')",
+        kind.as_str(),
+        kind.as_str()
+    ))
+    .execute(conn)
+    .unwrap();
+    documents::list(conn, SHOP, Some(kind)).unwrap()[0].id
+}
