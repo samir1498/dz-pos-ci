@@ -32,6 +32,9 @@ import type { SaleWarningDto } from "./generated/SaleWarningDto";
 import type { SaleDto } from "./generated/SaleDto";
 import type { SaleKindDto } from "./generated/SaleKindDto";
 import type { SaleLineDto } from "./generated/SaleLineDto";
+import type { SaleCancellationDto } from "./generated/SaleCancellationDto";
+import type { NewAvoirDto } from "./generated/NewAvoirDto";
+import type { CancelDocumentDto } from "./generated/CancelDocumentDto";
 import type { SaleBalanceDto } from "./generated/SaleBalanceDto";
 import type { SaleTotalsDto } from "./generated/SaleTotalsDto";
 import type { SaleTvaDto } from "./generated/SaleTvaDto";
@@ -310,7 +313,22 @@ function isSaleLine(value: unknown): value is SaleLineDto {
     isExactInteger(value.unit_price_centimes) &&
     isExactInteger(value.line_discount_centimes) &&
     typeof value.rate_bps === "number" &&
-    isExactInteger(value.line_total_centimes)
+    isExactInteger(value.line_total_centimes) &&
+    isNullableNumber(value.ref_line_id)
+  );
+}
+
+/** What a cancellation left on the document it annulled, or nothing at all
+ *  on one that still stands. Whole or absent: a screen never has to ask
+ *  whether the date is there while the reason is not. */
+function isSaleCancellation(value: unknown): value is SaleCancellationDto | null {
+  return (
+    value === null ||
+    (isRecord(value) &&
+      typeof value.cancelled_at === "string" &&
+      typeof value.cancelled_by === "number" &&
+      typeof value.reason === "string" &&
+      isNullableNumber(value.avoir_document_id))
   );
 }
 
@@ -366,6 +384,8 @@ export function isSale(value: unknown): value is SaleDto {
     isPaymentMode(value.payment_mode) &&
     isStore(value.seller) &&
     isNullableNumber(value.customer_id) &&
+    isNullableNumber(value.ref_document_id) &&
+    isNullableString(value.buyer_name) &&
     isSaleBalance(value.balance) &&
     isSaleTotals(value.totals) &&
     Array.isArray(value.tva) &&
@@ -373,6 +393,7 @@ export function isSale(value: unknown): value is SaleDto {
     isNullableExactInteger(value.tendered_centimes) &&
     isNullableExactInteger(value.change_centimes) &&
     isDocumentStatus(value.status) &&
+    isSaleCancellation(value.cancellation) &&
     Array.isArray(value.lines) &&
     value.lines.every(isSaleLine) &&
     isNullableSaleWarning(value.warning)
@@ -698,6 +719,37 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     async listSales(kind?: SaleKindDto): Promise<SaleDto[]> {
       const query = kind === undefined ? "" : `?kind=${kind}`;
       return narrow(await send(`/sales${query}`), isSaleList, "sale list");
+    },
+
+    /** Writes a credit note against the facture named. `lines` left out is
+     * the whole of what is left on it, which is what the "avoir the lot"
+     * button sends; a list credits the lines it names and no more of each
+     * than the facture has left. Every rule is the core's. */
+    async createAvoir(id: number, input: NewAvoirDto): Promise<SaleDto> {
+      const body = await send(`/sales/${id}/avoir`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isSale, "avoir");
+    },
+
+    /** Every avoir written against one facture, oldest first. A ticket's id
+     * is a 404 rather than an empty list: an empty list would read as "this
+     * facture has no credit notes". */
+    async listAvoirs(id: number): Promise<SaleDto[]> {
+      return narrow(await send(`/sales/${id}/avoirs`), isSaleList, "avoir list");
+    },
+
+    /** Annuls a document and hands it back carrying the block that says
+     * when, by whom, why and with which avoir. It keeps its number. */
+    async cancelSale(id: number, input: CancelDocumentDto): Promise<SaleDto> {
+      const body = await send(`/sales/${id}/cancel`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isSale, "sale");
     },
 
     /** The shop's customers, the active ones first. `search` is a piece of a

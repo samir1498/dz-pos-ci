@@ -33,6 +33,13 @@ issued_at: string, user_id: number, regime: RegimeDto, payment_mode: PaymentMode
  */
 ref_document_id: number | null, 
 /**
+ * The buyer's name as this document printed it, snapshotted at issue.
+ * Null on a ticket sold to whoever walked in. A list naming the customer
+ * reads it from here and never from the fiche: the fiche is edited in
+ * place, and the paper says who it was made out to on the day.
+ */
+buyer_name: string | null, 
+/**
  * Null on a document with no customer, which is every cash ticket.
  */
 balance: SaleBalanceDto | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, tendered_centimes: number | null, change_centimes: number | null, status: DocumentStatusDto, 

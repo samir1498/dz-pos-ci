@@ -424,6 +424,8 @@ const sale: SaleDto = {
     phone: null,
   },
   customer_id: null,
+  ref_document_id: null,
+  buyer_name: null,
   balance: null,
   totals: {
     total_ht_centimes: 22_000,
@@ -438,6 +440,7 @@ const sale: SaleDto = {
   tendered_centimes: 30_000,
   change_centimes: 3_820,
   status: "issued",
+  cancellation: null,
   lines: [
     {
       id: 1,
@@ -450,6 +453,7 @@ const sale: SaleDto = {
       line_discount_centimes: 0,
       rate_bps: 1900,
       line_total_centimes: 22_000,
+      ref_line_id: null,
     },
   ],
   warning: null,

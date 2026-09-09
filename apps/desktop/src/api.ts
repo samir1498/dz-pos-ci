@@ -92,3 +92,18 @@ export function saleFactureQueryKey(
 ): readonly (string | number)[] {
   return ["sale-facture", id, lang, paper];
 }
+
+/** The document list, keyed by the kind filter so the narrowed list and the
+ * whole one are two entries and a filter change is not answered from the
+ * other's cache. `undefined` is every kind, which is what the route reads a
+ * missing `kind` as. */
+export function salesQueryKey(kind?: string): readonly (string | undefined)[] {
+  return ["sales", kind];
+}
+
+/** Every avoir written against one facture. Its own key rather than a slice
+ * of the document's: writing one changes both, and the detail panel reads
+ * the two shapes separately. */
+export function saleAvoirsQueryKey(id: number): readonly (string | number)[] {
+  return ["sale-avoirs", id];
+}

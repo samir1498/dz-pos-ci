@@ -103,6 +103,8 @@ const sale: SaleDto = {
   payment_mode: "cash",
   seller: settings.store,
   customer_id: null,
+  ref_document_id: null,
+  buyer_name: null,
   balance: null,
   totals: {
     total_ht_centimes: 110_000,
@@ -120,6 +122,7 @@ const sale: SaleDto = {
   tendered_centimes: 150_000,
   change_centimes: 20_800,
   status: "issued",
+  cancellation: null,
   lines: [
     {
       id: 1,
@@ -132,6 +135,7 @@ const sale: SaleDto = {
       line_discount_centimes: 0,
       rate_bps: 1900,
       line_total_centimes: 80_000,
+      ref_line_id: null,
     },
     {
       id: 2,
@@ -144,6 +148,7 @@ const sale: SaleDto = {
       line_discount_centimes: 0,
       rate_bps: 900,
       line_total_centimes: 30_000,
+      ref_line_id: null,
     },
   ],
   warning: null,
@@ -1036,6 +1041,30 @@ describe("the facture at the till", () => {
     await user.click(screen.getByRole("button", { name: "Encaisser" }));
     await waitFor(() => expect(posted()).toBe(true));
     expect(salePost()).toMatchObject({ kind: "ticket" });
+  });
+
+  test("the proforma needs a customer too and posts its own kind", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () => json(201, { ...issued, kind: "proforma" });
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+
+    // A quotation is made out to somebody the way a facture is, so it is
+    // offered on the same terms and says why when it is not.
+    const proforma = screen.getByRole("radio", { name: "Proforma" });
+    expect(proforma).toBeDisabled();
+    expect(proforma.closest("label")).toHaveAttribute(
+      "title",
+      "Une proforma est établie au nom d'un client : choisissez-en un.",
+    );
+
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Proforma" }));
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()).toMatchObject({ kind: "proforma", customer_id: amrani.id });
   });
 
   test("picking a customer opens the switch and the body posts the facture kind", async () => {

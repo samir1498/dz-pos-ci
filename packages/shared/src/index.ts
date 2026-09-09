@@ -40,6 +40,10 @@ export type { SaleWarningDto } from "./generated/SaleWarningDto";
 export type { SaleKindDto } from "./generated/SaleKindDto";
 export type { NewSaleDto } from "./generated/NewSaleDto";
 export type { NewSaleLineDto } from "./generated/NewSaleLineDto";
+export type { SaleCancellationDto } from "./generated/SaleCancellationDto";
+export type { AvoirLineDto } from "./generated/AvoirLineDto";
+export type { NewAvoirDto } from "./generated/NewAvoirDto";
+export type { CancelDocumentDto } from "./generated/CancelDocumentDto";
 
 export {
   ApiError,

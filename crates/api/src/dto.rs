@@ -635,6 +635,11 @@ pub struct SaleDto {
     /// The facture an avoir is written against, null on every other kind.
     /// The screen showing an avoir follows it to name the paper it credits.
     pub ref_document_id: Option<i32>,
+    /// The buyer's name as this document printed it, snapshotted at issue.
+    /// Null on a ticket sold to whoever walked in. A list naming the customer
+    /// reads it from here and never from the fiche: the fiche is edited in
+    /// place, and the paper says who it was made out to on the day.
+    pub buyer_name: Option<String>,
     /// Null on a document with no customer, which is every cash ticket.
     pub balance: Option<SaleBalanceDto>,
     pub totals: SaleTotalsDto,
@@ -696,6 +701,7 @@ impl From<Document> for SaleDto {
             },
             customer_id: d.customer_id,
             ref_document_id: d.ref_document_id,
+            buyer_name: d.buyer.as_ref().map(|b| b.name.clone()),
             balance: d.balance.map(|b| SaleBalanceDto {
                 old_balance_centimes: b.old_balance.as_centimes(),
                 remaining_debt_centimes: b.remaining_debt.as_centimes(),
