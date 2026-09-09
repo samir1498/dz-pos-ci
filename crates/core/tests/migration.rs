@@ -935,10 +935,13 @@ fn a_database_at_the_first_migration_takes_the_second() {
             global_discount: Money::ZERO,
             payment_mode: PaymentMode::Cash,
             tendered: Some(Money::centimes(5_000)),
+            customer_id: None,
+            override_credit: false,
             issued_at: None,
         },
     )
-    .unwrap();
+    .unwrap()
+    .document;
     assert_eq!(sale.number, 1);
     assert_eq!(sale.totals.total_ht, Money::centimes(2_000));
     assert_eq!(

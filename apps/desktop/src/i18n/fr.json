@@ -128,7 +128,6 @@
   "pay_cash": "Espèces",
   "pay_card": "Carte",
   "pay_credit": "Crédit",
-  "pay_credit_later": "Une vente à crédit a besoin d'un compte client, prévu dans la prochaine version.",
   "action_pay": "Encaisser",
   "action_paying": "Encaissement…",
   "till_paid": "Ticket émis",
@@ -221,5 +220,19 @@
   "error_statement_range_invalid": "La date de fin est avant la date de début.",
   "error_payment_amount_invalid": "Montant invalide.",
   "error_payment_amount_zero": "Un paiement de zéro ne solde rien.",
-  "action_take_payment": "Encaisser"
+  "action_take_payment": "Encaisser",
+  "pay_credit_needs_customer": "Choisissez un client qui peut acheter à crédit.",
+  "till_customer": "Client",
+  "till_customer_search": "Rechercher un client",
+  "till_walk_in": "Client de passage",
+  "till_no_limit": "sans plafond",
+  "till_near_limit": "Proche du plafond",
+  "till_over_limit": "Plafond dépassé",
+  "till_balance_after": "Solde après cette vente",
+  "till_override": "Forcer la vente",
+  "till_override_confirm": "Forcer cette vente au-delà du plafond du client ? La décision est enregistrée dans le journal.",
+  "till_new_balance": "Nouveau solde du client",
+  "till_near_limit_sold": "Ce client atteint son seuil d'alerte.",
+  "error_credit_limit": "Cette vente dépasse le plafond de crédit du client.",
+  "error_credit_needs_customer": "Une vente à crédit a besoin d'un client."
 }

@@ -10,13 +10,13 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    AdjustmentDto, ApiErrorDetailsDto, ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto,
-    CategoryDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto,
-    DatedRegimeDto, DebtEntryDto, DebtKindDto, DocumentKindDto, DocumentStatusDto, HealthDto,
-    NewCustomerDto, NewPaymentDto, NewProductDto, NewSaleDto, NewSaleLineDto, PartyKindDto,
-    PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto,
-    RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto, SaleDto, SaleLineDto, SaleTotalsDto,
-    SaleTvaDto, SettingsDto, StoreDto, UnitDto,
+    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto,
+    CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DatedRegimeDto,
+    DebtEntryDto, DebtKindDto, DocumentKindDto, DocumentStatusDto, HealthDto, NewCustomerDto,
+    NewPaymentDto, NewProductDto, NewSaleDto, NewSaleLineDto, PartyKindDto, PaymentAllocationDto,
+    PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto,
+    RestoreDto, SaleBalanceDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto, SaleWarningDto,
+    SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
@@ -28,7 +28,6 @@ const FILES: [&str; 39] = [
     "HealthDto.ts",
     "ApiErrorDto.ts",
     "ApiErrorPayloadDto.ts",
-    "ApiErrorDetailsDto.ts",
     "StoreDto.ts",
     "RegimeDto.ts",
     "DatedRegimeDto.ts",
@@ -44,6 +43,7 @@ const FILES: [&str; 39] = [
     "SaleTvaDto.ts",
     "SaleTotalsDto.ts",
     "SaleBalanceDto.ts",
+    "SaleWarningDto.ts",
     "SaleDto.ts",
     "NewSaleLineDto.ts",
     "NewSaleDto.ts",
@@ -139,6 +139,7 @@ fn export_bindings() {
     SaleTvaDto::export_all(&cfg).unwrap();
     SaleTotalsDto::export_all(&cfg).unwrap();
     SaleBalanceDto::export_all(&cfg).unwrap();
+    SaleWarningDto::export_all(&cfg).unwrap();
     SaleDto::export_all(&cfg).unwrap();
     NewSaleLineDto::export_all(&cfg).unwrap();
     NewSaleDto::export_all(&cfg).unwrap();
@@ -150,7 +151,6 @@ fn export_bindings() {
     DebtEntryDto::export_all(&cfg).unwrap();
     CustomerLedgerDto::export_all(&cfg).unwrap();
     AdjustmentDto::export_all(&cfg).unwrap();
-    ApiErrorDetailsDto::export_all(&cfg).unwrap();
     PaymentMethodDto::export_all(&cfg).unwrap();
     PaymentAllocationDto::export_all(&cfg).unwrap();
     PaymentDto::export_all(&cfg).unwrap();

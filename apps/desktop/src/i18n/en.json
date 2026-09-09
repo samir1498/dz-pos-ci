@@ -128,7 +128,6 @@
   "pay_cash": "Cash",
   "pay_card": "Card",
   "pay_credit": "Credit",
-  "pay_credit_later": "A credit sale needs a customer account, which arrives in the next version.",
   "action_pay": "Pay",
   "action_paying": "Paying…",
   "till_paid": "Ticket issued",
@@ -221,5 +220,19 @@
   "error_statement_range_invalid": "The end day is before the start day.",
   "error_payment_amount_invalid": "Invalid amount.",
   "error_payment_amount_zero": "A payment of nothing settles nothing.",
-  "action_take_payment": "Take the payment"
+  "action_take_payment": "Take the payment",
+  "pay_credit_needs_customer": "Pick a customer who can buy on credit.",
+  "till_customer": "Customer",
+  "till_customer_search": "Search for a customer",
+  "till_walk_in": "Walk-in customer",
+  "till_no_limit": "no limit",
+  "till_near_limit": "Near the limit",
+  "till_over_limit": "Over the limit",
+  "till_balance_after": "Balance after this sale",
+  "till_override": "Sell anyway",
+  "till_override_confirm": "Sell past this customer's credit limit? The decision goes in the audit log.",
+  "till_new_balance": "Customer's new balance",
+  "till_near_limit_sold": "This customer has reached their warning threshold.",
+  "error_credit_limit": "This sale goes past the customer's credit limit.",
+  "error_credit_needs_customer": "A credit sale needs a customer."
 }

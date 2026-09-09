@@ -7,6 +7,7 @@ import type { SaleBalanceDto } from "./SaleBalanceDto";
 import type { SaleLineDto } from "./SaleLineDto";
 import type { SaleTotalsDto } from "./SaleTotalsDto";
 import type { SaleTvaDto } from "./SaleTvaDto";
+import type { SaleWarningDto } from "./SaleWarningDto";
 import type { StoreDto } from "./StoreDto";
 
 /**
@@ -21,4 +22,11 @@ issued_at: string, user_id: number, regime: RegimeDto, payment_mode: PaymentMode
 /**
  * Null on a document with no customer, which is every cash ticket.
  */
-balance: SaleBalanceDto | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, tendered_centimes: number | null, change_centimes: number | null, status: DocumentStatusDto, lines: Array<SaleLineDto>, };
+balance: SaleBalanceDto | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, tendered_centimes: number | null, change_centimes: number | null, status: DocumentStatusDto, lines: Array<SaleLineDto>, 
+/**
+ * What the till should say while still handing over the ticket, null
+ * when there is nothing to say. A read of a stored document carries
+ * none: a warning is about the moment the sale was rung up, not about
+ * the paper.
+ */
+warning: SaleWarningDto | null, };

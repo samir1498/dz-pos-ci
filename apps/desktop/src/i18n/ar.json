@@ -128,7 +128,6 @@
   "pay_cash": "نقدا",
   "pay_card": "بطاقة",
   "pay_credit": "بالدين",
-  "pay_credit_later": "البيع بالدين يحتاج حساب زبون، وهو مبرمج في الإصدار القادم.",
   "action_pay": "الدفع",
   "action_paying": "جاري الدفع…",
   "till_paid": "تم إصدار التذكرة",
@@ -221,5 +220,19 @@
   "error_statement_range_invalid": "تاريخ النهاية قبل تاريخ البداية.",
   "error_payment_amount_invalid": "مبلغ غير صالح.",
   "error_payment_amount_zero": "دفعة بصفر لا تسدد شيئًا.",
-  "action_take_payment": "تسجيل"
+  "action_take_payment": "تسجيل",
+  "pay_credit_needs_customer": "اختر زبونًا يمكنه الشراء بالدين.",
+  "till_customer": "الزبون",
+  "till_customer_search": "البحث عن زبون",
+  "till_walk_in": "زبون عابر",
+  "till_no_limit": "بدون سقف",
+  "till_near_limit": "قريب من السقف",
+  "till_over_limit": "تجاوز السقف",
+  "till_balance_after": "الرصيد بعد هذا البيع",
+  "till_override": "إتمام البيع رغم ذلك",
+  "till_override_confirm": "هل تتم عملية البيع رغم تجاوز سقف الزبون؟ يُسجَّل القرار في سجل التدقيق.",
+  "till_new_balance": "رصيد الزبون الجديد",
+  "till_near_limit_sold": "بلغ هذا الزبون عتبة التنبيه.",
+  "error_credit_limit": "هذا البيع يتجاوز سقف الدين المسموح للزبون.",
+  "error_credit_needs_customer": "البيع بالدين يحتاج زبونًا."
 }

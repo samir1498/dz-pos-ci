@@ -7,4 +7,15 @@ import type { PaymentModeDto } from "./PaymentModeDto";
  * sale happened is the server's to say, on the shop's calendar, and a till
  * with a wrong clock would otherwise date a fiscal document.
  */
-export type NewSaleDto = { lines: Array<NewSaleLineDto>, global_discount_centimes: number, payment_mode: PaymentModeDto, tendered_centimes: number | null, };
+export type NewSaleDto = { lines: Array<NewSaleLineDto>, global_discount_centimes: number, payment_mode: PaymentModeDto, tendered_centimes: number | null, 
+/**
+ * Who the sale is made out to. Required on credit; on cash and card it
+ * names the buyer on the document and moves no debt.
+ */
+customer_id: number | null, 
+/**
+ * Sell past the customer's credit limit on purpose. `override` on the
+ * wire because that is what the button says; `override` is a Rust
+ * keyword, so the field is spelled out here and renamed on both sides.
+ */
+override: boolean, };

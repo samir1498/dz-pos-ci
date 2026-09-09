@@ -3,7 +3,7 @@
 //! `code()`, so no Rust or SQL text ever reaches a screen.
 
 use crate::db::DbError;
-use crate::money::MoneyError;
+use crate::money::{Money, MoneyError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
@@ -29,6 +29,20 @@ pub enum CoreError {
     /// the series is spent rather than "check your input".
     #[error("the {series} series is exhausted")]
     Exhausted { series: &'static str },
+    /// A credit sale the customer's limit will not carry (features.md §1).
+    /// Not a validation failure: every field the caller sent is well formed,
+    /// and what refuses the sale is what the customer already owes. The two
+    /// amounts travel with the code because the till has to say by how much
+    /// and against what, and a screen may not re-derive either.
+    #[error(
+        "this sale would leave {} centimes owed against a credit limit of {} centimes",
+        balance_after.as_centimes(),
+        credit_limit.as_centimes()
+    )]
+    CreditLimit {
+        balance_after: Money,
+        credit_limit: Money,
+    },
     #[error(transparent)]
     Money(#[from] MoneyError),
     #[error(transparent)]
@@ -57,6 +71,7 @@ impl CoreError {
             CoreError::NotFound { .. } => "not_found",
             CoreError::DuplicateBarcode(_) => "duplicate_barcode",
             CoreError::Exhausted { .. } => "exhausted",
+            CoreError::CreditLimit { .. } => "credit_limit",
             CoreError::Money(_) => "money",
             CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) => "storage",
             CoreError::Render(_) => "print",

@@ -568,7 +568,7 @@ function PaymentForm({ customer }: { customer: CustomerDto }) {
     },
     onError: (error: unknown) => {
       setSaved(false);
-      const above = error instanceof ApiError ? error.details?.outstanding_centimes : undefined;
+      const above = error instanceof ApiError ? error.outstandingCentimes : undefined;
       setOutstanding(above ?? null);
       setServerError(above === undefined ? errorKey(error) : "error_payment_above_debt");
     },

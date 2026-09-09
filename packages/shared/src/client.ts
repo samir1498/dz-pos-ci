@@ -5,7 +5,6 @@
 // answers the wrong shape raises a translatable error instead of leaking a
 // half-typed object into the UI.
 
-import type { ApiErrorDetailsDto } from "./generated/ApiErrorDetailsDto";
 import type { ApiErrorDto } from "./generated/ApiErrorDto";
 import type { BackupDto } from "./generated/BackupDto";
 import type { BackupsDto } from "./generated/BackupsDto";
@@ -29,9 +28,10 @@ import type { DocumentStatusDto } from "./generated/DocumentStatusDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { PaymentModeDto } from "./generated/PaymentModeDto";
-import type { SaleBalanceDto } from "./generated/SaleBalanceDto";
+import type { SaleWarningDto } from "./generated/SaleWarningDto";
 import type { SaleDto } from "./generated/SaleDto";
 import type { SaleLineDto } from "./generated/SaleLineDto";
+import type { SaleBalanceDto } from "./generated/SaleBalanceDto";
 import type { SaleTotalsDto } from "./generated/SaleTotalsDto";
 import type { SaleTvaDto } from "./generated/SaleTvaDto";
 import type { ProductDto } from "./generated/ProductDto";
@@ -43,21 +43,41 @@ import type { SettingsDto } from "./generated/SettingsDto";
 import type { StoreDto } from "./generated/StoreDto";
 import type { UnitDto } from "./generated/UnitDto";
 
-/** An error the server described. `code` is a translation key. */
+/** An error the server described. `code` is a translation key.
+ *
+ * `balanceAfterCentimes` and `creditLimitCentimes` are on a `credit_limit`
+ * refusal and on nothing else: the till has to say by how much a limit was
+ * passed, and working that out on the screen would be a second answer to
+ * what a customer owes. `field` and `outstandingCentimes` are the same
+ * bargain on a payment above the debt: the fiche says what is actually owed
+ * because the server said it. Undefined everywhere else, never zero. */
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
-  /** What the refusal says beyond its code, when it says anything: the field
-   *  it is about, and the figures a screen needs to make it useful. Undefined
-   *  on every error that has only a code to give. */
-  readonly details?: ApiErrorDetailsDto;
+  readonly balanceAfterCentimes?: number;
+  readonly creditLimitCentimes?: number;
+  readonly field?: string;
+  readonly outstandingCentimes?: number;
 
-  constructor(code: string, message: string, status: number, details?: ApiErrorDetailsDto) {
+  constructor(
+    code: string,
+    message: string,
+    status: number,
+    figures?: {
+      balanceAfterCentimes?: number;
+      creditLimitCentimes?: number;
+      field?: string;
+      outstandingCentimes?: number;
+    },
+  ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
-    this.details = details;
+    this.balanceAfterCentimes = figures?.balanceAfterCentimes;
+    this.creditLimitCentimes = figures?.creditLimitCentimes;
+    this.field = figures?.field;
+    this.outstandingCentimes = figures?.outstandingCentimes;
   }
 }
 
@@ -79,33 +99,29 @@ function isUnit(value: unknown): value is UnitDto {
   return typeof value === "string" && UNITS.some((u) => u === value);
 }
 
-/** The optional half of a refusal. A body whose `details` is the wrong shape
- *  is read as no details at all rather than refused: the code and the message
- *  are the contract, and the extras are what a screen may use if they are
- *  there. */
-function isApiErrorDetails(value: unknown): value is ApiErrorDetailsDto {
-  if (!isRecord(value)) return false;
-  const field = value.field;
-  const outstanding = value.outstanding_centimes;
-  return (
-    (field === undefined || typeof field === "string") &&
-    (outstanding === undefined || isExactInteger(outstanding))
-  );
-}
-
 export function isApiErrorBody(value: unknown): value is ApiErrorDto {
   if (!isRecord(value)) return false;
   const { error } = value;
   return (
-    isRecord(error) && typeof error.code === "string" && typeof error.message === "string"
+    isRecord(error) &&
+    typeof error.code === "string" &&
+    typeof error.message === "string" &&
+    isOptionalExactInteger(error.balance_after_centimes) &&
+    isOptionalExactInteger(error.credit_limit_centimes) &&
+    (error.field === undefined || typeof error.field === "string") &&
+    isOptionalExactInteger(error.outstanding_centimes)
   );
 }
 
-/** The details of a refusal, when the body carries usable ones. */
-function detailsOf(body: ApiErrorDto): ApiErrorDetailsDto | undefined {
-  const details: unknown = body.error.details;
-  if (details === undefined || details === null) return undefined;
-  return isApiErrorDetails(details) ? details : undefined;
+/** The error the envelope described, with the figures it carried. One place
+ * builds it, so both callers of `unwrap` read a refusal the same way. */
+function apiError(body: ApiErrorDto, status: number): ApiError {
+  return new ApiError(body.error.code, body.error.message, status, {
+    balanceAfterCentimes: body.error.balance_after_centimes,
+    creditLimitCentimes: body.error.credit_limit_centimes,
+    field: body.error.field,
+    outstandingCentimes: body.error.outstanding_centimes,
+  });
 }
 
 export function isCategory(value: unknown): value is CategoryDto {
@@ -133,6 +149,12 @@ function isExactInteger(value: unknown): value is number {
 
 function isNullableExactInteger(value: unknown): value is number | null {
   return value === null || isExactInteger(value);
+}
+
+/** A field the server leaves out rather than sending as null. Absent is an
+ * answer here: only a credit refusal carries the two amounts. */
+function isOptionalExactInteger(value: unknown): value is number | undefined {
+  return value === undefined || isExactInteger(value);
 }
 
 export function isProduct(value: unknown): value is ProductDto {
@@ -234,6 +256,12 @@ function isPaymentMode(value: unknown): value is PaymentModeDto {
   return typeof value === "string" && PAYMENT_MODES.some((m) => m === value);
 }
 
+const SALE_WARNINGS: readonly SaleWarningDto[] = ["near_limit"];
+
+function isNullableSaleWarning(value: unknown): value is SaleWarningDto | null {
+  return value === null || (typeof value === "string" && SALE_WARNINGS.some((w) => w === value));
+}
+
 const DOCUMENT_KINDS: readonly DocumentKindDto[] = [
   "ticket",
   "facture",
@@ -279,6 +307,19 @@ function isSaleTva(value: unknown): value is SaleTvaDto {
   );
 }
 
+/** The balance triple, or null on a document that names no customer. Three
+ *  exact integers or nothing: two of three would be a closing balance its
+ *  own opening balance does not explain. */
+function isSaleBalance(value: unknown): value is SaleBalanceDto | null {
+  return (
+    value === null ||
+    (isRecord(value) &&
+      isExactInteger(value.old_balance_centimes) &&
+      isExactInteger(value.remaining_debt_centimes) &&
+      isExactInteger(value.total_debt_centimes))
+  );
+}
+
 /** Every column of the totals table, each an exact integer of centimes: a
  *  total JSON.parse had to round is refused rather than printed. */
 function isSaleTotals(value: unknown): value is SaleTotalsDto {
@@ -291,18 +332,6 @@ function isSaleTotals(value: unknown): value is SaleTotalsDto {
     isExactInteger(value.total_ttc_centimes) &&
     isExactInteger(value.stamp_centimes) &&
     isExactInteger(value.net_to_pay_centimes)
-  );
-}
-
-/** The three amounts of the debt a document carries, or nothing at all: a
- *  cash ticket sold to whoever walked in names no customer and has no balance
- *  to print. */
-function isSaleBalance(value: unknown): value is SaleBalanceDto {
-  return (
-    isRecord(value) &&
-    isExactInteger(value.old_balance_centimes) &&
-    isExactInteger(value.remaining_debt_centimes) &&
-    isExactInteger(value.total_debt_centimes)
   );
 }
 
@@ -320,7 +349,7 @@ export function isSale(value: unknown): value is SaleDto {
     isPaymentMode(value.payment_mode) &&
     isStore(value.seller) &&
     isNullableNumber(value.customer_id) &&
-    (value.balance === null || isSaleBalance(value.balance)) &&
+    isSaleBalance(value.balance) &&
     isSaleTotals(value.totals) &&
     Array.isArray(value.tva) &&
     value.tva.every(isSaleTva) &&
@@ -328,7 +357,8 @@ export function isSale(value: unknown): value is SaleDto {
     isNullableExactInteger(value.change_centimes) &&
     isDocumentStatus(value.status) &&
     Array.isArray(value.lines) &&
-    value.lines.every(isSaleLine)
+    value.lines.every(isSaleLine) &&
+    isNullableSaleWarning(value.warning)
   );
 }
 
@@ -459,7 +489,7 @@ async function unwrap(res: Response): Promise<unknown> {
   }
   if (res.ok) return body;
   if (isApiErrorBody(body)) {
-    throw new ApiError(body.error.code, body.error.message, res.status, detailsOf(body));
+    throw apiError(body, res.status);
   }
   // The server always sends the shape above; anything else is the network
   // or a proxy, so the UI still gets a key it can translate.
@@ -484,7 +514,7 @@ async function unwrapText(res: Response): Promise<string> {
     body = null;
   }
   if (isApiErrorBody(body)) {
-    throw new ApiError(body.error.code, body.error.message, res.status, detailsOf(body));
+    throw apiError(body, res.status);
   }
   throw new ApiError("unreachable", `HTTP ${res.status}`, res.status);
 }

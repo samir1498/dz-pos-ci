@@ -676,8 +676,8 @@ async fn a_payment_above_the_debt_is_422_carrying_what_is_outstanding() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{answer}");
     assert_eq!(answer["error"]["code"], "validation");
     // "too much" is useless without the amount that would not have been.
-    assert_eq!(answer["error"]["details"]["field"], "amount_centimes");
-    assert_eq!(answer["error"]["details"]["outstanding_centimes"], 100_000);
+    assert_eq!(answer["error"]["field"], "amount_centimes");
+    assert_eq!(answer["error"]["outstanding_centimes"], 100_000);
 
     let (_, payments) = call(&h.app, "GET", &format!("/customers/{id}/payments"), None).await;
     assert_eq!(
@@ -689,7 +689,7 @@ async fn a_payment_above_the_debt_is_422_carrying_what_is_outstanding() {
 }
 
 #[tokio::test]
-async fn a_refusal_with_nothing_to_add_carries_no_details_at_all() {
+async fn a_refusal_with_nothing_to_add_carries_no_figures_at_all() {
     let h = harness();
     let made = create(&h.app, draft("Entreprise Benali")).await;
     let id = id_of(&made);
@@ -704,10 +704,17 @@ async fn a_refusal_with_nothing_to_add_carries_no_details_at_all() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{answer}");
     assert_eq!(answer["error"]["code"], "validation");
-    assert!(
-        answer["error"].get("details").is_none(),
-        "an error with nothing to add grew a payload: {answer}"
-    );
+    for extra in [
+        "field",
+        "outstanding_centimes",
+        "balance_after_centimes",
+        "credit_limit_centimes",
+    ] {
+        assert!(
+            answer["error"].get(extra).is_none(),
+            "an error with nothing to add grew {extra}: {answer}"
+        );
+    }
 }
 
 #[tokio::test]
