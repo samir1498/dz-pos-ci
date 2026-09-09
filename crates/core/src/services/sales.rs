@@ -4,19 +4,24 @@
 //! M2 adds the sale on credit. It names a customer, it snapshots the buyer
 //! block onto the document, it writes one `sale` movement on that customer's
 //! ledger and it stores the balance triple the paper prints, all inside the
-//! same transaction as the document and the stock. The facture-or-ticket
-//! rule is in features.md §3; this issues a `ticket` whatever the payment.
+//! same transaction as the document and the stock.
+//!
+//! M2 also adds the choice of paper (features.md §3). Loi 04-02 art. 10, as
+//! rewritten by loi 10-06 art. 3, decides ticket against facture by who the
+//! buyer is and never by an amount or by how the sale is paid, so the
+//! operator names the kind on the request and a facture is refused unless
+//! both party blocks carry what décret 05-468 art. 3 asks of them.
 
 use chrono::NaiveDateTime;
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, PartySide};
 use crate::models::customer::Customer;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::document::{
     payment_mode_stored, BalanceTriple, Document, DocumentKind, NewDocument, NewDocumentLine,
-    PartyBlock, SellerBlock,
+    PartyBlock, PartyKind, SellerBlock,
 };
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{
@@ -42,6 +47,31 @@ pub struct NewSaleLine {
     pub line_discount: Money,
 }
 
+/// The paper the till is ringing this basket up on (features.md §3). Two
+/// values and not `DocumentKind`: an avoir and a bon de livraison are their
+/// own writes with their own rules, and letting the till name one would be a
+/// stock movement and a numbered document nobody asked for.
+///
+/// A ticket is the default because a sale to a consumer is the till's
+/// ordinary case and needs nothing from the buyer (loi 04-02 art. 10 al. 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SaleKind {
+    #[default]
+    Ticket,
+    Facture,
+}
+
+impl SaleKind {
+    /// The document kind the sale is issued as, and with it the series it
+    /// numbers in (`doc_ticket`, `doc_facture`).
+    const fn document_kind(self) -> DocumentKind {
+        match self {
+            SaleKind::Ticket => DocumentKind::Ticket,
+            SaleKind::Facture => DocumentKind::Facture,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewSale {
     pub lines: Vec<NewSaleLine>,
@@ -57,6 +87,10 @@ pub struct NewSale {
     /// sale goes through and the audit log carries who did it; until M4
     /// there are no roles, so anyone may send it (features.md §1).
     pub override_credit: bool,
+    /// Ticket or facture, decided at the till before the sale is saved
+    /// (features.md §3). Never by a later reprint: the document is due « dès
+    /// la réalisation de la vente ».
+    pub kind: SaleKind,
     /// Unset means now on the shop's calendar (services::clock).
     pub issued_at: Option<NaiveDateTime>,
 }
@@ -103,6 +137,16 @@ pub fn issue(
         return Err(CoreError::validation(
             "customer_id",
             "a credit sale is owed by a customer, so one has to be named",
+        ));
+    }
+    if new.kind == SaleKind::Facture && new.customer_id.is_none() {
+        // Décret 05-468 art. 3 puts the buyer on the paper, and the fiche is
+        // where the buyer block comes from. Refused on the field the caller
+        // sent rather than as `party_ids`: nothing is missing from a block
+        // here, there is no block at all.
+        return Err(CoreError::validation(
+            "customer_id",
+            "a facture is made out to a customer, so one has to be named",
         ));
     }
     if new.global_discount.is_negative() {
@@ -169,22 +213,29 @@ pub fn issue(
             )?),
         };
 
+        // A named customer is snapshotted onto the document the way the
+        // seller is, on a ticket as much as on a facture: the fiche is
+        // edited in place, and a reprint months later has to hand back the
+        // block the buyer was given.
+        let buyer = credit.as_ref().map(|c| buyer_block(&c.customer));
+        // Still before `documents::issue`, so a facture the identifiers
+        // refuse burns no number of either series (features.md, Numbering).
+        if new.kind == SaleKind::Facture {
+            check_party_ids(&seller, buyer.as_ref())?;
+        }
+
         let document = documents::issue(
             conn,
             shop_id,
             NewDocument {
-                kind: DocumentKind::Ticket,
+                kind: new.kind.document_kind(),
                 issued_at,
                 user_id,
                 regime,
                 payment_mode: new.payment_mode,
                 seller,
-                // A named customer is snapshotted onto the document the way
-                // the seller is, on a ticket as much as on a facture: the
-                // fiche is edited in place, and T4's facture switch then has
-                // nothing to backfill.
                 customer_id: new.customer_id,
-                buyer: credit.as_ref().map(|c| buyer_block(&c.customer)),
+                buyer,
                 ref_document_id: None,
                 balance: credit.as_ref().map(|c| c.balance),
                 totals,
@@ -325,6 +376,81 @@ fn buyer_block(customer: &Customer) -> PartyBlock {
         ai: customer.ai.clone(),
         address: customer.address.clone(),
     }
+}
+
+/// What a facture must carry before it may take a number
+/// (`facture_requires_party_ids`, décret 05-468 art. 3 and 4).
+///
+/// The seller answers with RC and NIS. NIF and AI print when the settings
+/// hold them and refuse nothing: they are on every facture in circulation,
+/// but a shop that has not been handed one yet still has a sale to ring up,
+/// and refusing it would stop the till over a number nobody typed in.
+///
+/// The buyer answers by the kind of party they are on the day. A company
+/// gives the same two identifiers; a consumer gives « ses nom, prénom(s) et
+/// adresse » and nothing more (art. 3-2, last alinéa), which is why the
+/// party kind is snapshotted onto the block rather than inferred from
+/// whether an RC happens to be filled in.
+///
+/// The seller is checked first: a shop whose own settings are short has no
+/// fiche the cashier could edit that would make the facture printable, so
+/// hearing about the buyer first would send them to the wrong screen.
+fn check_party_ids(seller: &SellerBlock, buyer: Option<&PartyBlock>) -> Result<(), CoreError> {
+    let mut missing = Vec::new();
+    if unset(seller.rc.as_deref()) {
+        missing.push("rc");
+    }
+    if unset(seller.nis.as_deref()) {
+        missing.push("nis");
+    }
+    if !missing.is_empty() {
+        return Err(CoreError::PartyIds {
+            side: PartySide::Seller,
+            missing,
+        });
+    }
+
+    // `issue` refuses a facture with no customer before any of this, so a
+    // block missing here is a fiche the document service could not read;
+    // the same refusal is the honest answer either way.
+    let Some(buyer) = buyer else {
+        return Err(CoreError::validation(
+            "customer_id",
+            "a facture is made out to a customer, so one has to be named",
+        ));
+    };
+    match buyer.party_kind {
+        PartyKind::Company => {
+            if unset(buyer.rc.as_deref()) {
+                missing.push("rc");
+            }
+            if unset(buyer.nis.as_deref()) {
+                missing.push("nis");
+            }
+        }
+        PartyKind::Consumer => {
+            if buyer.name.trim().is_empty() {
+                missing.push("name");
+            }
+            if unset(buyer.address.as_deref()) {
+                missing.push("address");
+            }
+        }
+    }
+    if !missing.is_empty() {
+        return Err(CoreError::PartyIds {
+            side: PartySide::Buyer,
+            missing,
+        });
+    }
+    Ok(())
+}
+
+/// An identifier a block does not really carry. A field of spaces is not an
+/// RC: the services store what was typed after a trim, and a row written
+/// before that rule existed could still hold one.
+fn unset(value: Option<&str>) -> bool {
+    !value.is_some_and(|v| !v.trim().is_empty())
 }
 
 /// What the customer's standing decided: the fiche, the triple the document

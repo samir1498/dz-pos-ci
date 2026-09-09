@@ -72,6 +72,14 @@ struct Payload {
     balance_after_centimes: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     credit_limit_centimes: Option<i64>,
+    /// The same exception, for the same reason, on the facture's party
+    /// blocks: the till has to say which side is short and of what, and
+    /// working that out on the screen would be a second reading of décret
+    /// 05-468 art. 3. Absent from every other error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    party_side: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing_ids: Option<Vec<&'static str>>,
 }
 
 impl ApiError {
@@ -126,6 +134,18 @@ impl ApiError {
             _ => (None, None),
         }
     }
+
+    /// The side and the identifiers a facture refusal carries. Every other
+    /// error carries neither, and the fields are then absent from the body.
+    fn party_ids(&self) -> (Option<&'static str>, Option<Vec<&'static str>>) {
+        match self {
+            ApiError::Core(CoreError::PartyIds { side, missing })
+            | ApiError::Request(CoreError::PartyIds { side, missing }) => {
+                (Some(side.as_str()), Some(missing.clone()))
+            }
+            _ => (None, None),
+        }
+    }
 }
 
 /// What a core error means once a service has run. A `Money` error here is a
@@ -138,9 +158,12 @@ const fn status_for(e: &CoreError) -> StatusCode {
         // paying another way or by resending with `override`. The two
         // amounts in the payload are what the till renders, so it sits with
         // the 422s and not with the conflicts.
-        CoreError::Validation { .. } | CoreError::CreditLimit { .. } => {
-            StatusCode::UNPROCESSABLE_ENTITY
-        }
+        // A facture the party blocks refuse sits with them: the request is
+        // well formed and the caller can act on it, by filling the fiche or
+        // the settings in, or by ringing the same basket up as a ticket.
+        CoreError::Validation { .. }
+        | CoreError::CreditLimit { .. }
+        | CoreError::PartyIds { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
         // A template that will not render is the app's own bug: the
@@ -190,6 +213,7 @@ impl IntoResponse for ApiError {
         let (status, code) = self.parts();
         let message = self.message();
         let (balance_after_centimes, credit_limit_centimes) = self.credit_amounts();
+        let (party_side, missing_ids) = self.party_ids();
         let mut res = (
             status,
             Json(Body {
@@ -198,6 +222,8 @@ impl IntoResponse for ApiError {
                     message,
                     balance_after_centimes,
                     credit_limit_centimes,
+                    party_side,
+                    missing_ids,
                 },
             }),
         )

@@ -8,7 +8,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, PartySide};
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::models::stock::MovementKind;
@@ -16,7 +16,7 @@ use dzpos_core::money::{Bps, Money, PaymentMode, Regime};
 use dzpos_core::services::customers::{NewCustomer, PartyKind};
 use dzpos_core::services::debt::DebtKind;
 use dzpos_core::services::documents::{Document, DocumentKind};
-use dzpos_core::services::sales::{self, NewSale, NewSaleLine};
+use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
 use dzpos_core::services::{audit, customers, debt, documents, products, settings, shops, stock};
 
 const SHOP: i32 = 1;
@@ -95,6 +95,7 @@ fn cash(lines: Vec<NewSaleLine>, tendered: i64) -> NewSale {
         tendered: Some(Money::centimes(tendered)),
         customer_id: None,
         override_credit: false,
+        kind: SaleKind::Ticket,
         issued_at: Some(at(9)),
     }
 }
@@ -282,6 +283,7 @@ fn a_credit_sale_is_refused_until_customers_exist() {
             tendered: None,
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9)),
         },
     )
@@ -319,6 +321,7 @@ fn cash_with_nothing_tendered_is_refused() {
             tendered: None,
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9)),
         },
     )
@@ -343,6 +346,7 @@ fn a_card_sale_records_no_tendered_and_carries_no_stamp() {
             tendered: None,
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9)),
         },
     )
@@ -387,6 +391,7 @@ fn a_card_sale_that_sends_an_amount_tendered_is_refused() {
             tendered: Some(Money::centimes(1_000)),
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9)),
         },
     )
@@ -408,6 +413,7 @@ fn a_discount_the_basket_cannot_carry_is_a_validation_error_not_a_money_fault() 
         tendered: Some(Money::centimes(1_000)),
         customer_id: None,
         override_credit: false,
+        kind: SaleKind::Ticket,
         issued_at: Some(at(9)),
     };
     assert_eq!(
@@ -424,6 +430,7 @@ fn a_discount_the_basket_cannot_carry_is_a_validation_error_not_a_money_fault() 
         tendered: Some(Money::centimes(1_000)),
         customer_id: None,
         override_credit: false,
+        kind: SaleKind::Ticket,
         issued_at: Some(at(9)),
     };
     assert_eq!(
@@ -445,6 +452,7 @@ fn a_discount_the_basket_cannot_carry_is_a_validation_error_not_a_money_fault() 
         tendered: Some(Money::centimes(1_000)),
         customer_id: None,
         override_credit: false,
+        kind: SaleKind::Ticket,
         issued_at: Some(at(9)),
     };
     assert_eq!(
@@ -475,6 +483,7 @@ fn a_price_times_a_quantity_that_does_not_fit_names_the_field_it_came_from() {
         tendered: Some(Money::centimes((1 << 53) - 1)),
         customer_id: None,
         override_credit: false,
+        kind: SaleKind::Ticket,
         issued_at: Some(at(9)),
     };
     match issue_sale(&mut conn, SHOP, OWNER, huge).unwrap_err() {
@@ -500,6 +509,7 @@ fn a_discount_spreads_over_the_rates_and_the_ticket_keeps_the_recap() {
             tendered: Some(Money::centimes(50_000)),
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9)),
         },
     )
@@ -544,6 +554,7 @@ fn the_unit_price_can_be_overridden_at_the_till() {
             tendered: Some(Money::centimes(20_000)),
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9)),
         },
     )
@@ -739,6 +750,7 @@ fn credit(customer_id: i32, lines: Vec<NewSaleLine>, override_credit: bool) -> N
         tendered: None,
         customer_id: Some(customer_id),
         override_credit,
+        kind: SaleKind::Ticket,
         issued_at: Some(at(9)),
     }
 }
@@ -758,6 +770,7 @@ fn a_credit_sale_with_no_customer_is_refused_and_writes_nothing() {
             tendered: None,
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9)),
         },
     )
@@ -1251,4 +1264,385 @@ fn a_closed_fiche_and_another_shops_fiche_cannot_be_sold_to() {
         "{err:?}"
     );
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+}
+
+// ---- the facture at the till (features.md §3, `facture_requires_party_ids`)
+
+/// The shop's own settings as a facture needs them. `nis` is handed in so a
+/// test can take one identifier away without rewriting the whole block.
+fn store_block(rc: Option<&str>, nis: Option<&str>) -> StoreBlock {
+    StoreBlock {
+        name: "Supérette El Bahdja".to_string(),
+        rc: rc.map(str::to_string),
+        nif: Some("000216001234567".to_string()),
+        nis: nis.map(str::to_string),
+        ai: Some("16123456789".to_string()),
+        address: Some("Rue Didouche Mourad, Alger".to_string()),
+        phone: Some("021 00 00 00".to_string()),
+    }
+}
+
+/// A seller block that carries what a facture asks of it.
+fn seller_ready(conn: &mut SqliteConnection) {
+    shops::update_store(
+        conn,
+        SHOP,
+        OWNER,
+        store_block(Some("16/00-1234567 B 21"), Some("098216001234567")),
+    )
+    .unwrap();
+}
+
+/// A fiche of the kind the caller names, with only the identifiers it hands
+/// over. Everything else is left off on purpose: what refuses a facture is
+/// the field that is missing, and a helper filling them all in would hide it.
+fn party(
+    conn: &mut SqliteConnection,
+    name: &str,
+    party_kind: PartyKind,
+    rc: Option<&str>,
+    nis: Option<&str>,
+    address: Option<&str>,
+) -> i32 {
+    customers::create(
+        conn,
+        SHOP,
+        OWNER,
+        NewCustomer {
+            name: name.to_string(),
+            party_kind,
+            phone: None,
+            address: address.map(str::to_string),
+            rc: rc.map(str::to_string),
+            nif: None,
+            nis: nis.map(str::to_string),
+            ai: None,
+            credit_limit: None,
+            warn_threshold: None,
+            notes: None,
+            active: true,
+        },
+        None,
+    )
+    .unwrap()
+    .id
+}
+
+/// A basket rung up as a facture, paid the way the caller names.
+fn facture(customer_id: i32, lines: Vec<NewSaleLine>, payment_mode: PaymentMode) -> NewSale {
+    NewSale {
+        lines,
+        global_discount: Money::ZERO,
+        payment_mode,
+        tendered: match payment_mode {
+            PaymentMode::Cash => Some(Money::centimes(1_000_000)),
+            _ => None,
+        },
+        customer_id: Some(customer_id),
+        override_credit: false,
+        kind: SaleKind::Facture,
+        issued_at: Some(at(9)),
+    }
+}
+
+/// What the counter of a series stands at, read from the table the counter
+/// writes rather than from a document: a refusal that rolled back leaves no
+/// document to read, and the whole claim is that it left no number either.
+fn counter(conn: &mut SqliteConnection, series: &str) -> i64 {
+    #[derive(QueryableByName)]
+    struct Next {
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        next_value: i64,
+    }
+    let rows: Vec<Next> =
+        diesel::sql_query("SELECT next_value FROM counters WHERE shop_id = 1 AND name = ?")
+            .bind::<diesel::sql_types::Text, _>(series)
+            .load(conn)
+            .unwrap();
+    rows.first().map_or(1, |r| r.next_value)
+}
+
+#[test]
+fn a_facture_to_a_company_carrying_its_identifiers_is_issued_in_the_facture_series() {
+    let (_dir, mut conn) = open_temp();
+    seller_ready(&mut conn);
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+    let c = party(
+        &mut conn,
+        "Entreprise Amrani",
+        PartyKind::Company,
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        Some("Zone industrielle, Rouiba"),
+    );
+
+    // Credit, to pin the other half of the rule: loi 04-02 art. 10 decides
+    // the paper by who the buyer is and never by how they pay.
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(c, vec![line(p, 1_000)], PaymentMode::Credit),
+    )
+    .unwrap();
+
+    assert_eq!(doc.kind, DocumentKind::Facture);
+    assert_eq!(doc.series, "doc_facture");
+    assert_eq!(doc.number, 1);
+    let buyer = doc.buyer.expect("a facture carries a buyer block");
+    assert_eq!(buyer.name, "Entreprise Amrani");
+    assert_eq!(buyer.rc.as_deref(), Some("16/00-7654321 B 22"));
+    assert_eq!(buyer.nis.as_deref(), Some("098216007654321"));
+    // The ledger moved, the way it does on any credit sale.
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, c).unwrap(),
+        doc.totals.net_to_pay
+    );
+}
+
+#[test]
+fn a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number() {
+    let (_dir, mut conn) = open_temp();
+    seller_ready(&mut conn);
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+    let c = party(
+        &mut conn,
+        "Entreprise Amrani",
+        PartyKind::Company,
+        Some("16/00-7654321 B 22"),
+        None,
+        None,
+    );
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(c, vec![line(p, 1_000)], PaymentMode::Cash),
+    )
+    .unwrap_err();
+    match err {
+        CoreError::PartyIds { side, ref missing } => {
+            assert_eq!(side, PartySide::Buyer);
+            assert_eq!(missing, &["nis"]);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(err.code(), "party_ids");
+
+    // Nothing at all happened: no document, no stock movement, and above
+    // all no number taken out of either series (features.md, Numbering).
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+    assert_eq!(counter(&mut conn, "doc_facture"), 1);
+    assert_eq!(counter(&mut conn, "doc_ticket"), 1);
+
+    // The same basket goes through once the fiche carries the identifier,
+    // and it is FA number 1: the refusal cost the series nothing.
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        c,
+        NewCustomer {
+            name: "Entreprise Amrani".to_string(),
+            party_kind: PartyKind::Company,
+            phone: None,
+            address: None,
+            rc: Some("16/00-7654321 B 22".to_string()),
+            nif: None,
+            nis: Some("098216007654321".to_string()),
+            ai: None,
+            credit_limit: None,
+            warn_threshold: None,
+            notes: None,
+            active: true,
+        },
+    )
+    .unwrap();
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(c, vec![line(p, 1_000)], PaymentMode::Cash),
+    )
+    .unwrap();
+    assert_eq!(doc.number, 1);
+    assert_eq!(doc.series, "doc_facture");
+}
+
+#[test]
+fn a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else() {
+    let (_dir, mut conn) = open_temp();
+    seller_ready(&mut conn);
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+
+    // No RC, no NIS: décret 05-468 art. 3-2, last alinéa asks a consumer for
+    // « ses nom, prénom(s) et adresse » and stops there.
+    let with_address = party(
+        &mut conn,
+        "Karim Belkacem",
+        PartyKind::Consumer,
+        None,
+        None,
+        Some("12 rue des Frères Bouadou, Bir Mourad Raïs"),
+    );
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(with_address, vec![line(p, 1_000)], PaymentMode::Cash),
+    )
+    .unwrap();
+    assert_eq!(doc.kind, DocumentKind::Facture);
+
+    let no_address = party(
+        &mut conn,
+        "Yacine Hamdi",
+        PartyKind::Consumer,
+        None,
+        None,
+        None,
+    );
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(no_address, vec![line(p, 1_000)], PaymentMode::Cash),
+    )
+    .unwrap_err();
+    match err {
+        CoreError::PartyIds { side, ref missing } => {
+            assert_eq!(side, PartySide::Buyer);
+            assert_eq!(missing, &["address"]);
+        }
+        other => panic!("{other:?}"),
+    }
+    // The one facture that went through is still the only one, and the
+    // refusal took no second number.
+    assert_eq!(counter(&mut conn, "doc_facture"), 2);
+}
+
+#[test]
+fn a_shop_whose_settings_carry_no_nis_cannot_issue_a_facture_at_all() {
+    let (_dir, mut conn) = open_temp();
+    shops::update_store(
+        &mut conn,
+        SHOP,
+        OWNER,
+        store_block(Some("16/00-1234567 B 21"), None),
+    )
+    .unwrap();
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+    let c = party(
+        &mut conn,
+        "Entreprise Amrani",
+        PartyKind::Company,
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        None,
+    );
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(c, vec![line(p, 1_000)], PaymentMode::Cash),
+    )
+    .unwrap_err();
+    match err {
+        CoreError::PartyIds { side, ref missing } => {
+            assert_eq!(side, PartySide::Seller);
+            assert_eq!(missing, &["nis"]);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(counter(&mut conn, "doc_facture"), 1);
+
+    // The same shop still rings up tickets: the identifiers are checked when
+    // a facture is issued, not when the settings are saved.
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        cash(vec![line(p, 1_000)], 1_000_000),
+    )
+    .unwrap();
+    assert_eq!(doc.kind, DocumentKind::Ticket);
+}
+
+#[test]
+fn a_facture_with_no_customer_is_refused_on_the_customer_field() {
+    let (_dir, mut conn) = open_temp();
+    seller_ready(&mut conn);
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![line(p, 1_000)],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(1_000_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Facture,
+            issued_at: Some(at(9)),
+        },
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CoreError::Validation { field, .. } if field == "customer_id"),
+        "{err:?}"
+    );
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+    assert_eq!(counter(&mut conn, "doc_facture"), 1);
+}
+
+#[test]
+fn a_ticket_and_a_facture_run_two_series_that_do_not_touch() {
+    let (_dir, mut conn) = open_temp();
+    seller_ready(&mut conn);
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+    let c = party(
+        &mut conn,
+        "Entreprise Amrani",
+        PartyKind::Company,
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        None,
+    );
+
+    let ticket = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        cash(vec![line(p, 1_000)], 1_000_000),
+    )
+    .unwrap();
+    assert_eq!((ticket.series.as_str(), ticket.number), ("doc_ticket", 1));
+
+    let invoice = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(c, vec![line(p, 1_000)], PaymentMode::Cash),
+    )
+    .unwrap();
+    assert_eq!(
+        (invoice.series.as_str(), invoice.number),
+        ("doc_facture", 1)
+    );
+
+    let second_ticket = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        cash(vec![line(p, 1_000)], 1_000_000),
+    )
+    .unwrap();
+    assert_eq!(
+        (second_ticket.series.as_str(), second_ticket.number),
+        ("doc_ticket", 2)
+    );
 }

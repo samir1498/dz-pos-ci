@@ -18,7 +18,7 @@ use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
 use dzpos_core::services::backup::Backup;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
 use dzpos_core::services::debt::{DebtKind, LedgerLine};
-use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, Warning};
+use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, SaleKind, Warning};
 use dzpos_core::services::settings::DatedRegime;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -226,6 +226,17 @@ pub struct ApiErrorPayloadDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub credit_limit_centimes: Option<i64>,
+    /// Only on `party_ids`: which half of the facture is short (`seller` or
+    /// `buyer`) and which identifiers it is short of (`rc`, `nis`, `name`,
+    /// `address`). The till sends the cashier to the settings or to the
+    /// fiche on the side, and names the fields from the list; neither is
+    /// re-derived from the code (architecture.md rule 2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub party_side: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub missing_ids: Option<Vec<String>>,
 }
 
 /// The seller block a ticket prints (features.md §3). Sent whole on every
@@ -450,6 +461,28 @@ impl From<DocumentKind> for DocumentKindDto {
             DocumentKind::Avoir => DocumentKindDto::Avoir,
             DocumentKind::BonDeReception => DocumentKindDto::BonDeReception,
             DocumentKind::Quittance => DocumentKindDto::Quittance,
+        }
+    }
+}
+
+/// The paper the till rings a basket up on (features.md §3). Two values and
+/// not `DocumentKindDto`: an avoir and a bon de livraison are their own
+/// writes with their own rules, and a till that could name one on `POST
+/// /sales` would be issuing a document nobody asked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[ts(export_to = "SaleKindDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum SaleKindDto {
+    #[default]
+    Ticket,
+    Facture,
+}
+
+impl From<SaleKindDto> for SaleKind {
+    fn from(k: SaleKindDto) -> Self {
+        match k {
+            SaleKindDto::Ticket => SaleKind::Ticket,
+            SaleKindDto::Facture => SaleKind::Facture,
         }
     }
 }
@@ -696,6 +729,12 @@ pub struct NewSaleDto {
     #[serde(default, rename = "override")]
     #[ts(rename = "override")]
     pub override_credit: bool,
+    /// Ticket or facture, decided at the till before the sale is saved
+    /// (features.md §3). Left out means a ticket: a sale to a consumer is
+    /// the ordinary case and asks nothing of the buyer, so a caller written
+    /// before this field existed keeps issuing what it always did.
+    #[serde(default)]
+    pub kind: SaleKindDto,
 }
 
 impl TryFrom<NewSaleDto> for NewSale {
@@ -732,6 +771,7 @@ impl TryFrom<NewSaleDto> for NewSale {
                 .map(Money::centimes),
             customer_id: d.customer_id,
             override_credit: d.override_credit,
+            kind: d.kind.into(),
             // The server dates the document (core, services::clock).
             issued_at: None,
         })

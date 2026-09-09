@@ -870,7 +870,7 @@ fn a_database_at_the_first_migration_takes_the_second() {
     // keeps working, not a schema that merely applies.
     use dzpos_core::models::product::{NewProduct, Unit};
     use dzpos_core::money::{Bps, Money, PaymentMode};
-    use dzpos_core::services::sales::{NewSale, NewSaleLine};
+    use dzpos_core::services::sales::{NewSale, NewSaleLine, SaleKind};
     use dzpos_core::services::{products, sales};
     let product = products::create(
         &mut conn,
@@ -907,6 +907,7 @@ fn a_database_at_the_first_migration_takes_the_second() {
             tendered: Some(Money::centimes(5_000)),
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: None,
         },
     )

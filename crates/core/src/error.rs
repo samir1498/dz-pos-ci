@@ -5,6 +5,31 @@
 use crate::db::DbError;
 use crate::money::{Money, MoneyError};
 
+/// Which half of a facture a `PartyIds` refusal is about. The two blocks are
+/// filled in from two different screens, so the side is what tells the till
+/// whether to send the cashier to the settings or to the customer's fiche.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartySide {
+    Seller,
+    Buyer,
+}
+
+impl PartySide {
+    /// The stable key the UI translates, the way an error code is.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            PartySide::Seller => "seller",
+            PartySide::Buyer => "buyer",
+        }
+    }
+}
+
+impl std::fmt::Display for PartySide {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
     #[error("{field} is invalid: {message}")]
@@ -32,6 +57,18 @@ pub enum CoreError {
     CreditLimit {
         balance_after: Money,
         credit_limit: Money,
+    },
+    /// A facture whose party blocks do not carry what décret 05-468 art. 3
+    /// asks of them (`facture_requires_party_ids`). Not a validation failure
+    /// on a field the caller sent: the basket is well formed and what
+    /// refuses the paper sits on the settings page or on the customer's
+    /// fiche. The side and the identifiers travel with the code because the
+    /// till has to say where to go and what is missing, and a screen may not
+    /// work either out from the rule (architecture.md rule 2).
+    #[error("the {side} block of a facture is missing {}", missing.join(", "))]
+    PartyIds {
+        side: PartySide,
+        missing: Vec<&'static str>,
     },
     #[error(transparent)]
     Money(#[from] MoneyError),
@@ -62,6 +99,7 @@ impl CoreError {
             CoreError::DuplicateBarcode(_) => "duplicate_barcode",
             CoreError::Exhausted { .. } => "exhausted",
             CoreError::CreditLimit { .. } => "credit_limit",
+            CoreError::PartyIds { .. } => "party_ids",
             CoreError::Money(_) => "money",
             CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) => "storage",
             CoreError::Render(_) => "print",
