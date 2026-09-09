@@ -25,6 +25,7 @@ import {
   parseQtyToMilli,
 } from "@dzpos/shared";
 import type {
+  CustomerDto,
   NewSaleDto,
   PaymentModeDto,
   ProductDto,
@@ -37,6 +38,7 @@ import type {
 import {
   api,
   categoriesQueryKey,
+  customersQueryKey,
   productsQueryKey,
   saleTicketQueryKey,
   settingsQueryKey,
@@ -68,6 +70,7 @@ const ERROR_KEY: Record<string, Key> = {
   storage: "error_storage",
   exhausted: "error_exhausted",
   bad_request: "error_bad_request",
+  credit_limit: "error_credit_limit",
   unauthorized: "error_unauthorized",
   bad_response: "error_bad_response",
   unreachable: "error_unreachable",
@@ -77,6 +80,46 @@ const ERROR_KEY: Record<string, Key> = {
 function errorKey(error: unknown): Key {
   if (error instanceof ApiError) return ERROR_KEY[error.code] ?? "error_unknown";
   return "error_unknown";
+}
+
+/** The credit refusal, with the two amounts the server sent. The screen
+ * shows them and never works them out: what a customer owes has one answer
+ * and it is the core's (architecture.md rule 2). */
+interface CreditRefusal {
+  readonly balanceAfterCentimes: number;
+  readonly creditLimitCentimes: number;
+  readonly body: NewSaleDto;
+}
+
+/** The refusal, if this error is one and carried both amounts. An error that
+ * says `credit_limit` and carries neither is a server the screen does not
+ * recognise, and it falls back to the plain message. */
+function creditRefusal(error: unknown, body: NewSaleDto): CreditRefusal | null {
+  if (!(error instanceof ApiError) || error.code !== "credit_limit") return null;
+  const { balanceAfterCentimes, creditLimitCentimes } = error;
+  if (balanceAfterCentimes === undefined || creditLimitCentimes === undefined) return null;
+  return { balanceAfterCentimes, creditLimitCentimes, body };
+}
+
+/** What the picked customer's own standing says, before this basket. Over
+ * the limit is what the shop has already let happen; near it is the warning
+ * threshold reached. A customer with no limit is never either. */
+function standing(customer: CustomerDto | null): "over" | "near" | null {
+  if (customer === null) return null;
+  const { balance_centimes: balance, credit_limit_centimes: limit } = customer;
+  if (limit !== null && balance > limit) return "over";
+  const warn = customer.warn_threshold_centimes;
+  if (warn !== null && balance >= warn) return "near";
+  return null;
+}
+
+/** Whether this customer may buy on credit at all: a limit of zero is no
+ * credit, a null limit is no limit. Two different answers, and the screen
+ * acts on them differently (features.md §1). */
+function takesCredit(customer: CustomerDto | null): boolean {
+  if (customer === null) return false;
+  const limit = customer.credit_limit_centimes;
+  return limit === null || limit > 0;
 }
 
 /** A refusal `computeTotals` makes, as something the cashier can read. The
@@ -143,20 +186,39 @@ export function TillScreen() {
   const [done, setDone] = useState<SaleDto | null>(null);
   const [receiptId, setReceiptId] = useState<number | null>(null);
   const [serverError, setServerError] = useState<Key | null>(null);
+  // The picked fiche itself, not its id: the search box narrows the list
+  // under it, and a customer who drops out of the results is still the one
+  // this basket is for.
+  const [customer, setCustomer] = useState<CustomerDto | null>(null);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [refusal, setRefusal] = useState<CreditRefusal | null>(null);
 
   const products = useQuery({ queryKey: productsQueryKey, queryFn: () => api.listProducts() });
   const categories = useQuery({ queryKey: categoriesQueryKey, queryFn: () => api.listCategories() });
   const settings = useQuery({ queryKey: settingsQueryKey, queryFn: () => api.getSettings() });
+  // The server filters on name and phone, so the box sends what was typed
+  // rather than filtering a list the till happens to hold.
+  const customers = useQuery({
+    queryKey: [...customersQueryKey, "till", customerSearch.trim()],
+    queryFn: () => api.listCustomers(customerSearch),
+  });
 
   const pay = useMutation({
     mutationFn: (input: NewSaleDto) => api.createSale(input),
     onSuccess: async (issued: SaleDto) => {
       setServerError(null);
+      setRefusal(null);
       setDone(issued);
       setReceiptId(null);
       setCart([]);
       setGlobalDiscountText("");
       setTenderedText("");
+      // The next basket starts on nobody, and the fiche the sale moved is
+      // re-read: its balance is the ledger's answer and this sale changed it.
+      setCustomer(null);
+      setCustomerSearch("");
+      setMode("cash");
+      await queryClient.invalidateQueries({ queryKey: customersQueryKey });
       // The next customer's first scan goes into this box; a filter left
       // over from the last basket would take its digits on the end and
       // match nothing.
@@ -165,7 +227,13 @@ export function TillScreen() {
       await queryClient.invalidateQueries({ queryKey: productsQueryKey });
       searchRef.current?.focus();
     },
-    onError: (error: unknown) => setServerError(errorKey(error)),
+    onError: (error: unknown, input: NewSaleDto) => {
+      const refused = creditRefusal(error, input);
+      setRefusal(refused);
+      // The credit panel says the whole thing, amounts included, so the one
+      // line of generic text underneath would only repeat it worse.
+      setServerError(refused === null ? errorKey(error) : null);
+    },
   });
 
   useEffect(() => {
@@ -275,13 +343,19 @@ export function TillScreen() {
           : null;
   const change = mode === "cash" && tendered !== null ? tendered - netToPay : 0;
 
-  const problem = lineProblem ?? globalDiscountProblem ?? totalsProblem ?? tenderedProblem;
+  // The core refuses a credit sale with no customer on the customer_id
+  // field; the screen keeps the cashier from posting one at all, which is
+  // the same rule kept in two places on purpose (the comment at the top).
+  const creditProblem: Key | null =
+    mode === "credit" && !takesCredit(customer) ? "error_credit_needs_customer" : null;
+
+  const problem =
+    lineProblem ?? globalDiscountProblem ?? totalsProblem ?? tenderedProblem ?? creditProblem;
   const canPay =
     cart.length > 0 && preview !== null && problem === null && !tenderedMissing && !pay.isPending;
 
-  const submit = useCallback(() => {
-    if (!canPay || preview === null) return;
-    const body: NewSaleDto = {
+  const body = useCallback(
+    (override: boolean): NewSaleDto => ({
       lines: cart.map((line, i) => ({
         product_id: line.product.id,
         qty_milli: read[i].qtyMilli,
@@ -295,9 +369,26 @@ export function TillScreen() {
       global_discount_centimes: globalDiscount ?? 0,
       payment_mode: mode,
       tendered_centimes: mode === "cash" ? (tendered ?? 0) : null,
-    };
-    pay.mutate(body);
-  }, [canPay, cart, globalDiscount, mode, pay, preview, read, tendered]);
+      customer_id: customer?.id ?? null,
+      override,
+    }),
+    [cart, customer, globalDiscount, mode, read, tendered],
+  );
+
+  const submit = useCallback(() => {
+    if (!canPay || preview === null) return;
+    pay.mutate(body(false));
+  }, [body, canPay, pay, preview]);
+
+  /** The same basket again, past the limit this time. The body is the one
+   * the server refused, so the sale that goes through is the sale that was
+   * refused and not a second basket the cashier could have edited between
+   * the two calls. */
+  const override = useCallback(() => {
+    if (refusal === null) return;
+    if (!window.confirm(t("till_override_confirm"))) return;
+    pay.mutate({ ...refusal.body, override: true });
+  }, [pay, refusal, t]);
 
   // F9 pays, the way a till keyboard does. Held in a ref so the listener is
   // installed once and still sees the cart as it is now.
@@ -434,6 +525,21 @@ export function TillScreen() {
           />
         ) : null}
 
+        <CustomerPicker
+          picked={customer}
+          rows={customers.data ?? []}
+          search={customerSearch}
+          onSearch={setCustomerSearch}
+          onPick={(next) => {
+            setCustomer(next);
+            setRefusal(null);
+            // A customer who cannot buy on credit cannot leave the till on
+            // credit either: the mode falls back rather than sitting on a
+            // choice the pay button silently refuses.
+            if (!takesCredit(next)) setMode((m) => (m === "credit" ? "cash" : m));
+          }}
+        />
+
         <div data-testid="cart" className="flex flex-col gap-3">
           {cart.length === 0 ? <p>{t("till_cart_empty")}</p> : null}
           {cart.map((line, i) => (
@@ -479,15 +585,15 @@ export function TillScreen() {
           <legend className="mb-1">{t("payment_mode")}</legend>
           <PaymentChoice mode="cash" current={mode} label={t("pay_cash")} onPick={setMode} />
           <PaymentChoice mode="card" current={mode} label={t("pay_card")} onPick={setMode} />
-          {/* Drawn and disabled: features.md §3 gives credit a customer
-              ledger, and customers arrive in M2. The mockup promises the
-              choice, so the screen keeps it visible and says when. */}
+          {/* On credit the sale goes on a customer's ledger, so the choice
+              is there once a customer who may buy on credit is picked. A
+              limit of zero is no credit at all (features.md §1). */}
           <PaymentChoice
             mode="credit"
             current={mode}
             label={t("pay_credit")}
-            title={t("pay_credit_later")}
-            disabled
+            title={takesCredit(customer) ? undefined : t("pay_credit_needs_customer")}
+            disabled={!takesCredit(customer)}
             onPick={setMode}
           />
         </fieldset>
@@ -518,6 +624,10 @@ export function TillScreen() {
           </p>
         ) : null}
 
+        {refusal !== null ? (
+          <CreditRefused refusal={refusal} onOverride={override} pending={pay.isPending} />
+        ) : null}
+
         {serverError !== null ? (
           <p role="alert" className="text-red-700">
             {t(serverError)}
@@ -536,6 +646,133 @@ export function TillScreen() {
         {receiptId !== null ? <Receipt id={receiptId} /> : null}
       </aside>
     </section>
+  );
+}
+
+/** Who the sale is for. "Walk-in" is the default and stays the first choice:
+ * most baskets at a till belong to nobody in particular, and a cashier must
+ * not have to unpick a customer to sell to one.
+ *
+ * Only active fiches are offered. A closed fiche is one the shop has stopped
+ * doing business with, and the core refuses a sale to it; offering it here
+ * would be a choice that always fails.
+ *
+ * The picked fiche is kept whole by the parent, so narrowing the search does
+ * not unpick it. It is added back to the options when the search has pushed
+ * it out, or the select would show a blank row for a customer who is there.
+ */
+function CustomerPicker({
+  picked,
+  rows,
+  search,
+  onSearch,
+  onPick,
+}: {
+  picked: CustomerDto | null;
+  rows: CustomerDto[];
+  search: string;
+  onSearch: (value: string) => void;
+  onPick: (customer: CustomerDto | null) => void;
+}) {
+  const { t } = useTranslation();
+  const active = rows.filter((c) => c.active);
+  const options =
+    picked !== null && !active.some((c) => c.id === picked.id) ? [picked, ...active] : active;
+  const alert = standing(picked);
+  return (
+    <div className="flex flex-col gap-2 border-b pb-3">
+      <label className="flex flex-col gap-1">
+        <span>{t("till_customer")}</span>
+        <input
+          type="search"
+          className="rounded border px-2 py-1"
+          aria-label={t("till_customer_search")}
+          placeholder={t("customers_search_hint")}
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+        />
+      </label>
+      <select
+        className="rounded border px-2 py-1"
+        aria-label={t("till_customer")}
+        value={picked === null ? "" : String(picked.id)}
+        onChange={(e) => {
+          const id = Number(e.target.value);
+          onPick(options.find((c) => c.id === id) ?? null);
+        }}
+      >
+        <option value="">{t("till_walk_in")}</option>
+        {options.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      {picked !== null ? (
+        <p className="flex items-center justify-between gap-2 text-sm">
+          <span>{t("customers_balance")}</span>
+          <span data-testid="till-customer-balance" className="font-mono" dir="ltr">
+            {formatCentimes(picked.balance_centimes)}
+          </span>
+        </p>
+      ) : null}
+      {alert !== null && picked !== null ? (
+        <p
+          role="status"
+          data-testid="till-limit-banner"
+          className={alert === "over" ? "text-sm text-red-700" : "text-sm text-amber-700"}
+        >
+          {`${t(alert === "over" ? "till_over_limit" : "till_near_limit")} · ${formatCentimes(
+            picked.balance_centimes,
+          )} / ${
+            picked.credit_limit_centimes === null
+              ? t("till_no_limit")
+              : formatCentimes(picked.credit_limit_centimes)
+          }`}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** The credit limit refusing the sale, in the two amounts the server sent.
+ * The override button sends the same basket again with the flag on; the
+ * server writes an audit row for it, and until roles arrive in M4 anyone at
+ * the till may take that decision (features.md §1). */
+function CreditRefused({
+  refusal,
+  onOverride,
+  pending,
+}: {
+  refusal: CreditRefusal;
+  onOverride: () => void;
+  pending: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div role="alert" className="flex flex-col gap-2 rounded border border-red-700 p-3">
+      <strong className="text-red-700">{t("error_credit_limit")}</strong>
+      <p className="flex items-center justify-between gap-2">
+        <span>{t("till_balance_after")}</span>
+        <span data-testid="till-balance-after" className="font-mono" dir="ltr">
+          {formatCentimes(refusal.balanceAfterCentimes)}
+        </span>
+      </p>
+      <p className="flex items-center justify-between gap-2">
+        <span>{t("field_credit_limit")}</span>
+        <span data-testid="till-credit-limit" className="font-mono" dir="ltr">
+          {formatCentimes(refusal.creditLimitCentimes)}
+        </span>
+      </p>
+      <button
+        type="button"
+        className="rounded border px-3 py-1.5"
+        disabled={pending}
+        onClick={onOverride}
+      >
+        {t("till_override")}
+      </button>
+    </div>
   );
 }
 
@@ -742,6 +979,21 @@ function Confirmation({
           <span className="font-mono" dir="ltr">
             {formatCentimes(sale.change_centimes)}
           </span>
+        </p>
+      ) : null}
+      {/* The balance the document stores, not one the screen worked out:
+          the ledger has one answer and the core gave it. */}
+      {sale.balance !== null ? (
+        <p className="flex items-center justify-between gap-2">
+          <span>{t("till_new_balance")}</span>
+          <span data-testid="till-new-balance" className="font-mono" dir="ltr">
+            {formatCentimes(sale.balance.total_debt_centimes)}
+          </span>
+        </p>
+      ) : null}
+      {sale.warning === "near_limit" ? (
+        <p data-testid="till-near-limit" className="text-sm text-amber-700">
+          {t("till_near_limit_sold")}
         </p>
       ) : null}
       <div className="flex gap-2">
