@@ -304,31 +304,35 @@ fn the_list_is_newest_first_and_filters_by_kind() {
 }
 
 #[test]
-fn two_documents_in_the_same_second_list_by_the_later_insert() {
+fn two_documents_in_the_same_second_show_the_higher_id_first() {
     // issued_at is whole seconds and a busy till issues two tickets inside
-    // one, so the till expects the later sale first. This pins the order the
-    // screen shows; SQLite happens to return it without the id tie-break
-    // too, so the clause itself is not what this test proves.
+    // one, so the till expects the later sale first. The rows go in with the
+    // higher id first, so insertion order and the order under test disagree.
+    //
+    // This pins what the screen shows, not the `id DESC` clause that
+    // promises it: with the clause removed the query still passes, because
+    // idx_documents_shop_issued is scanned backwards and equal issued_at
+    // values come out by falling rowid anyway. Drop that index as well and
+    // the sort falls back to insertion order and this goes red.
     let (_dir, mut conn) = open_temp();
-    let p = a_product(&mut conn, "Sucre");
-    let first = documents::issue(
-        &mut conn,
-        SHOP,
-        draft(DocumentKind::Ticket, Some(p), at(9, 10)),
-    )
-    .unwrap();
-    let second = documents::issue(
-        &mut conn,
-        SHOP,
-        draft(DocumentKind::Ticket, Some(p), at(9, 10)),
-    )
-    .unwrap();
+    for (id, number) in [(20, 1), (10, 2)] {
+        diesel::sql_query(format!(
+            "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
+             regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+             subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+             net_to_pay_centimes, status) \
+             VALUES ({id}, 1, 'ticket', 'doc_ticket', {number}, '2026-09-09 10:00:00', 1, \
+             'reel', 'cash', 'Mon magasin', 0, 0, 0, 0, 0, 0, 0, 'issued')"
+        ))
+        .execute(&mut conn)
+        .unwrap();
+    }
     let ids: Vec<i32> = documents::list(&mut conn, SHOP, None)
         .unwrap()
         .iter()
         .map(|d| d.id)
         .collect();
-    assert_eq!(ids, vec![second.id, first.id]);
+    assert_eq!(ids, vec![20, 10]);
 }
 
 #[test]
