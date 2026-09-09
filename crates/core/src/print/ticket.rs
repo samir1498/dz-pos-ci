@@ -191,14 +191,28 @@ fn view(doc: &Document, lang: Lang) -> TicketView {
 
 /// The debt block, read off the document and never recomputed: a reprint
 /// shows the balance the customer was handed, not a sum of today's ledger.
+///
+/// The closing row is named by its sign, exactly as the facture names it
+/// (`facture::balance_view`): below zero is money the shop is holding for
+/// the customer, and calling that a debt on the 80 mm paper while the A4
+/// paper calls it a credit gives one account two names. The figure keeps the
+/// sign the document stores either way; only the label moves.
 fn balance(balance: BalanceTriple, lang: Lang) -> BalanceView {
+    let in_credit = balance.total_debt.is_negative();
     BalanceView {
         title: text(Key::Balance, lang),
         old_label: text(Key::OldBalance, lang),
         old: format_centimes(balance.old_balance),
         this_label: text(Key::ThisDocument, lang),
         this: format_centimes(balance.remaining_debt),
-        total_label: text(Key::TotalDebt, lang),
+        total_label: text(
+            if in_credit {
+                Key::TotalCredit
+            } else {
+                Key::TotalDebt
+            },
+            lang,
+        ),
         total: format_centimes(balance.total_debt),
     }
 }

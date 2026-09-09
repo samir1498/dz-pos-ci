@@ -641,10 +641,17 @@ fn line_view(line: &DocumentLine, reel: bool) -> LineView {
 fn balance_view(balance: BalanceTriple, lang: Lang) -> BalanceView {
     // A balance that closes below zero is the shop holding money for the
     // customer, which is where an avoir leaves one who owed less than it
-    // gives back (T6: the excess becomes customer credit). The label is
-    // what changes and not the figure: the amount is printed with the sign
-    // the document stores, the way the statement prints its closing
-    // balance, so a reader who adds the three rows up gets the third.
+    // gives back: the excess becomes customer credit. The label is what
+    // changes and not the figure: the amount is printed with the sign the
+    // document stores, the way the statement prints its closing balance.
+    //
+    // The three rows are the triple features.md §3 defines and not a sum a
+    // reader can check on the page: `remaining_debt` is this document's own
+    // unpaid part, so a credit sale settled out of credit the customer was
+    // already holding prints an old balance and a closing one that differ by
+    // more than the middle row. What the closing row states is what the
+    // customer owes after the document, which is the figure that matters at
+    // a counter.
     //
     // The sign decides it and not the kind: an avoir that only cuts a debt
     // down leaves a debt, and calling that a credit would tell the customer
