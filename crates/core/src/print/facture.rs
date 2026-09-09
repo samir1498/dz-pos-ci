@@ -146,6 +146,14 @@ struct CancellationView {
     reason: String,
 }
 
+/// How the document was paid, on the two faces of this template where the
+/// question means anything. An avoir hands money back and a proforma asks
+/// for nothing, so neither prints the block at all.
+struct PaymentModeView {
+    title: &'static str,
+    mode: &'static str,
+}
+
 /// The three amounts of the debt as they stood when the document was
 /// issued. Printed together or not at all: an old balance without the
 /// closing one is a figure the reader cannot check.
@@ -208,8 +216,14 @@ struct FactureView {
     in_words_label: &'static str,
     in_words: String,
     balance: Option<BalanceView>,
-    payment_mode_label: &'static str,
-    payment_mode: &'static str,
+    /// Absent on an avoir and on a proforma: neither was paid, and a mode
+    /// of payment on either is a sentence contradicting the rest of the
+    /// page.
+    payment_mode: Option<PaymentModeView>,
+    /// Whether the row of blocks is printed at all. A proforma has neither
+    /// a balance nor a mode of payment, and an empty framed row is a block
+    /// the reader looks into for something that was left out.
+    show_blocks: bool,
     cachet_label: &'static str,
     seller_label: &'static str,
     buyer_label: &'static str,
@@ -478,7 +492,16 @@ fn view(
         total_ttc: reel.then(|| format_centimes(totals.total_ttc)),
         stamp_label: text(Key::Stamp, lang),
         stamp: some_amount(totals.stamp),
-        net_to_pay_label: text(Key::NetToPay, lang),
+        // The row a facture closes on is the net to pay. An avoir asks for
+        // nothing, so the same row names the amount it hands back: the
+        // figure is untouched and only the words change.
+        net_to_pay_label: text(
+            match doc.kind {
+                DocumentKind::Avoir => Key::AvoirAmount,
+                _ => Key::NetToPay,
+            },
+            lang,
+        ),
         net_to_pay: format_centimes(totals.net_to_pay),
         in_words_label: text(in_words_key(doc.kind), lang),
         in_words,
@@ -489,8 +512,20 @@ fn view(
             DocumentKind::Proforma => None,
             _ => doc.balance.map(|b| balance_view(b, lang)),
         },
-        payment_mode_label: text(Key::PaymentMode, lang),
-        payment_mode: text(payment_mode_key(doc.payment_mode), lang),
+        // How it was paid, where the question means anything. On an avoir
+        // the stored mode is the one the facture was sold under, and
+        // printing "crédit" over a document handing money back tells the
+        // buyer they owe it ("دين", debt, in the Arabic). A proforma is a
+        // quote whose own notice says it settles nothing, and a mode of
+        // payment on it contradicts the line above.
+        payment_mode: match doc.kind {
+            DocumentKind::Avoir | DocumentKind::Proforma => None,
+            _ => Some(PaymentModeView {
+                title: text(Key::PaymentMode, lang),
+                mode: text(payment_mode_key(doc.payment_mode), lang),
+            }),
+        },
+        show_blocks: !matches!(doc.kind, DocumentKind::Proforma),
         cachet_label: text(Key::Cachet, lang),
         seller_label: text(Key::Seller, lang),
         buyer_label: text(Key::Buyer, lang),

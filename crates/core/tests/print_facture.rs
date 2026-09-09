@@ -1579,6 +1579,75 @@ fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
     }
 }
 
+/// A mode of payment is how a document was paid, and neither of these two
+/// is. An avoir hands money back, so "Crédit" under a heading saying
+/// "payment mode" tells the customer they owe what the page is giving them
+/// (and the Arabic word is "debt" outright); a proforma is a quote whose own
+/// notice says it settles nothing, so a mode of payment on it contradicts
+/// the line above. Both drop the block; the facture keeps it.
+#[test]
+fn neither_an_avoir_nor_a_proforma_prints_how_it_was_paid() {
+    for case in [Case::Avoir, Case::Proforma] {
+        let fixture = Fixture::of(case);
+        for lang in Lang::ALL {
+            let html = fixture.render(lang, Paper::A4);
+            assert!(
+                !html.contains(text(Key::PaymentMode, lang)),
+                "{lang:?} {case:?}: the page says how it was paid"
+            );
+        }
+    }
+
+    // Counted rather than read, so a block that lost its heading and kept
+    // its word is caught too: a facture prints the mode and the balance, an
+    // avoir the balance alone, a proforma neither.
+    let blocks = |html: &str| html.matches("<div class=\"block\">").count();
+    for lang in Lang::ALL {
+        assert_eq!(
+            blocks(&Fixture::of(Case::Credit).render(lang, Paper::A4)),
+            2
+        );
+        assert_eq!(blocks(&Fixture::of(Case::Avoir).render(lang, Paper::A4)), 1);
+        assert_eq!(
+            blocks(&Fixture::of(Case::Proforma).render(lang, Paper::A4)),
+            0
+        );
+    }
+}
+
+/// The last row of the totals says what the figure is for. On a facture it
+/// is the net to pay, the amount the buyer owes; an avoir asks for nothing,
+/// so the same row names the amount of the avoir instead. The figure does
+/// not move, only the words beside it.
+#[test]
+fn the_avoir_names_its_last_row_as_its_own_amount_and_not_as_a_net_to_pay() {
+    let avoir = Fixture::of(Case::Avoir);
+    let facture = Fixture::of(Case::Credit);
+    let proforma = Fixture::of(Case::Proforma);
+    for lang in Lang::ALL {
+        let html = avoir.render(lang, Paper::A4);
+        assert!(html.contains(text(Key::AvoirAmount, lang)), "{lang:?}");
+        assert!(
+            !html.contains(text(Key::NetToPay, lang)),
+            "{lang:?}: the avoir asks the buyer for a net to pay"
+        );
+        // The amount itself is untouched: the row is relabelled and not
+        // recomputed.
+        assert_eq!(
+            centimes(&one_amount(&html, "net-to-pay")),
+            avoir.doc.totals.net_to_pay.as_centimes(),
+            "{lang:?}"
+        );
+
+        // The two documents that do ask for money keep the words for it.
+        for other in [&facture, &proforma] {
+            let html = other.render(lang, Paper::A4);
+            assert!(html.contains(text(Key::NetToPay, lang)), "{lang:?}");
+            assert!(!html.contains(text(Key::AvoirAmount, lang)), "{lang:?}");
+        }
+    }
+}
+
 /// A proforma creates no debt, so a stored one carrying a triple that is not
 /// three zeroes contradicts the rule that wrote it. Dropping the block would
 /// hide the contradiction and printing it would say a quote moved a debt, so

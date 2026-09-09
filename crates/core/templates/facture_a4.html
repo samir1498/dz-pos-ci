@@ -148,11 +148,14 @@ two places for a comptable to check against each other. #}
 </table>
 </div>
 <p class="words">{{ in_words_label }} <strong class="in-words">{{ in_words }}</strong></p>
+{%- if show_blocks %}
 <section class="blocks">
+{%- if let Some(payment_mode) = payment_mode %}
 <div class="block">
-<h2>{{ payment_mode_label }}</h2>
-<div>{{ payment_mode }}</div>
+<h2>{{ payment_mode.title }}</h2>
+<div>{{ payment_mode.mode }}</div>
 </div>
+{%- endif %}
 {%- if let Some(balance) = balance %}
 <div class="block">
 <h2>{{ balance.title }}</h2>
@@ -162,6 +165,7 @@ two places for a comptable to check against each other. #}
 </div>
 {%- endif %}
 </section>
+{%- endif %}
 <section class="sign">
 <div>{{ seller_label }} · {{ cachet_label }}</div>
 <div>{{ buyer_label }} · {{ cachet_label }}</div>

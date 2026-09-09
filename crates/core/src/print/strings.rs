@@ -73,6 +73,11 @@ pub enum Key {
     AvoirOnFacture,
     /// What joins a document to its date in that sentence.
     IssuedOn,
+    /// The last row of an avoir's totals. A facture closes on the net to
+    /// pay, the figure the buyer owes; an avoir asks for nothing, so the
+    /// same row names the amount of the avoir. The figure is the same one,
+    /// under the words that fit the paper it is on.
+    AvoirAmount,
     Seller,
     Buyer,
     Designation,
@@ -153,7 +158,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 63] = [
+    pub const ALL: [Key; 64] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -179,6 +184,7 @@ impl Key {
         Key::ProformaNotice,
         Key::AvoirOnFacture,
         Key::IssuedOn,
+        Key::AvoirAmount,
         Key::Seller,
         Key::Buyer,
         Key::Designation,
@@ -335,6 +341,15 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::IssuedOn, Lang::Fr) => "du",
         (Key::IssuedOn, Lang::En) => "dated",
         (Key::IssuedOn, Lang::Ar) => "بتاريخ",
+
+        // Unreviewed wording, like this dictionary's Arabic: no comptable
+        // has read the French of it yet. The apostrophe is the typographic
+        // one, which is the French a printed document uses and also the one
+        // that reaches the page as itself: a typewriter apostrophe would
+        // sit in the golden as `&#39;`.
+        (Key::AvoirAmount, Lang::Fr) => "Montant de l\u{2019}avoir",
+        (Key::AvoirAmount, Lang::En) => "Credit note amount",
+        (Key::AvoirAmount, Lang::Ar) => "مبلغ الإشعار الدائن",
 
         (Key::Seller, Lang::Fr) => "Vendeur",
         (Key::Seller, Lang::En) => "Seller",
