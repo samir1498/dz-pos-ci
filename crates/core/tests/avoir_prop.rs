@@ -56,7 +56,7 @@ fn a_split() -> impl Strategy<Value = Vec<Vec<u32>>> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(40))]
+    #![proptest_config(ProptestConfig::with_cases(200))]
 
     #[test]
     fn the_avoirs_on_a_facture_add_up_to_it((basket, discount) in a_basket(), split in a_split()) {
@@ -102,18 +102,25 @@ proptest! {
         let mut day = 11;
         for (round, cuts) in split.iter().enumerate() {
             let mut asked: Vec<AvoirLine> = Vec::new();
+            let mut would_close = true;
             for (n, line) in facture.lines.iter().enumerate() {
                 let want = i64::from(cuts.get(n).copied().unwrap_or(0)) * 1_000;
-                if want == 0 {
-                    continue;
-                }
                 let left = left_on(&mut conn, &facture, line.id);
-                // Strictly less, so a partial never closes the facture.
-                if want < left {
-                    asked.push(AvoirLine { document_line_id: line.id, qty_milli: want });
+                // A partial may empty a line, which is the case worth reaching:
+                // the closing avoir then carries a line whose quantity is spent
+                // and whose centimes are not, and that centime is what the
+                // whole subtraction exists to give back.
+                let take = want.min(left);
+                if take > 0 {
+                    asked.push(AvoirLine { document_line_id: line.id, qty_milli: take });
+                }
+                if take < left {
+                    would_close = false;
                 }
             }
-            if asked.is_empty() {
+            // What it may not do is empty every line: that is the cancellation's
+            // avoir, and the ordering is not what is under test.
+            if asked.is_empty() || would_close {
                 continue;
             }
             avoir::issue(&mut conn, SHOP, OWNER, facture.id, Some(asked), None, on(day))

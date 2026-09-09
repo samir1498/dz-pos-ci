@@ -307,6 +307,22 @@ capped at the facture's `total_ttc` rather than its `net_to_pay`, because the
 stamp is never given back and the difference would otherwise be room for the
 partials to eat.
 
+That cap is read per rate as well as on the total: a partial avoir never gives
+back more base, more TVA or more remise at one rate than the facture still has
+at that rate. Without it the subtraction goes below zero on a paper that cannot
+carry it. Two partials that between them take a whole rate group can round
+their tax to a centime more than the facture charged there, and a partial that
+takes a group's whole HT can leave behind the centime of remise the facture put
+on that group, and either way the closing avoir is asked for a base or a tax of
+minus one centime at a rate whose goods have all come back. The centime stays
+on the partial that rounded it, where it is one centime of rounding on a paper
+that is already rounding.
+
+A closing avoir can come to nothing. What is left of a facture may be a
+quantity worth no centime, and the credit note that takes it back is then
+written for 0,00: the goods go back on the shelf on it and it moves no debt at
+all, because a movement of nothing moves nothing.
+
 **Credit consumed at issue.** A customer holding credit who buys on credit
 has the new document settled out of that credit as it is issued, inside the
 sale's own transaction: an allocation from the credit onto the new document,
