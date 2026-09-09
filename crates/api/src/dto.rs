@@ -436,8 +436,9 @@ impl From<PaymentModeDto> for PaymentMode {
     }
 }
 
-/// The document kinds of features.md §3. M1 issues `ticket`; the union is
-/// whole so a later milestone adds a screen, not a type.
+/// The document kinds of features.md §3. The till issues `ticket` and
+/// `facture`; the union is whole so a later milestone adds a screen, not a
+/// type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export_to = "DocumentKindDto.ts")]
 #[serde(rename_all = "snake_case")]

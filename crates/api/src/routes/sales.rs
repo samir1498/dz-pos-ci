@@ -54,7 +54,9 @@ pub struct TicketQuery {
 /// from a server with no screen), so this handler reads the document and
 /// hands the string over. A lang the app does not print, or none at all, is
 /// the caller's mistake and answers 422 in the envelope like every other
-/// unreadable request.
+/// unreadable request. The id has to name a ticket: a facture squeezed onto
+/// a till slip is a facture nobody would take for one, so its id answers 404
+/// here, the same way a ticket's does on the facture route.
 pub async fn ticket(
     State(state): State<AppState>,
     id: Result<Path<i32>, PathRejection>,
@@ -65,7 +67,9 @@ pub async fn ticket(
     let Query(TicketQuery { lang }) =
         lang.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
-    let found = state.blocking(move |c| documents::get(c, shop, id)).await?;
+    let found = state
+        .blocking(move |c| documents::get_of_kind(c, shop, id, DocumentKind::Ticket))
+        .await?;
     Ok(Html(render_ticket(&found, lang)?))
 }
 

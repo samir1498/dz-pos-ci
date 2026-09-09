@@ -100,8 +100,9 @@ text_enum! {
 }
 
 text_enum! {
-    /// The document kinds of features.md §3. M1 issues `Ticket` only; the
-    /// others exist so a later milestone adds a screen, not a migration.
+    /// The document kinds of features.md §3. The till issues `Ticket` and
+    /// `Facture`; the others exist so a later milestone adds a screen, not a
+    /// migration.
     /// `Quittance` is the stamped receipt for a payment against a debt, and
     /// nothing issues one: the comptable has not said whether a payment on
     /// account needs its own numbered document (R8), and a kind added once

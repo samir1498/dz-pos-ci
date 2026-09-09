@@ -341,11 +341,14 @@ async fn a_lang_or_a_sheet_the_app_does_not_print_is_422_in_the_envelope() {
     }
 }
 
-/// A ticket has its own 80 mm paper. Printing one through this route would
-/// be a document titled FACTURE that took a number out of the ticket series,
-/// so the route does not find it at all: the id names no facture.
+/// A ticket has its own 80 mm paper. Printing one through the facture route
+/// would be a document titled FACTURE that took a number out of the ticket
+/// series, so the route does not find it at all: the id names no facture.
+/// The rule is the same in both directions, and for the same reason: a
+/// facture squeezed onto an 80 mm slip is a facture that does not look like
+/// one, so the ticket route does not find it either.
 #[tokio::test]
-async fn the_id_of_a_ticket_is_not_a_facture_and_answers_404() {
+async fn each_print_route_only_finds_its_own_kind() {
     let (_dir, _path, app) = app();
     let id = a_sale(&app).await;
     let (status, _, body) =
@@ -357,7 +360,8 @@ async fn the_id_of_a_ticket_is_not_a_facture_and_answers_404() {
     let facture = a_facture(&app).await;
     let (status, _, body) =
         call_text(&app, &format!("/sales/{facture}/ticket?lang=fr"), true).await;
-    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(error_code(&body), "not_found");
 }
 
 #[tokio::test]

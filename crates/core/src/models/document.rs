@@ -117,7 +117,8 @@ pub struct Document {
     pub seller: SellerBlock,
     pub customer_id: Option<i32>,
     /// What the paper says about the buyer. `None` on a ticket sold to
-    /// whoever walked in, which is every document M1 issued.
+    /// whoever walked in; a facture always carries one, because it is made
+    /// out to somebody (décret 05-468 art. 3).
     pub buyer: Option<PartyBlock>,
     /// The facture an avoir is written against. T4 owns the rule about which
     /// factures may be named; here it is only carried.

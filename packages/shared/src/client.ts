@@ -634,7 +634,8 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       return sendText(`/sales/${id}/facture?lang=${lang}&paper=${paper}`);
     },
 
-    /** Newest first, tickets only in M1. */
+    /** Newest first, the ticket series only: a facture is filed and reprinted
+     * from the documents screen, not from the day's till roll. */
     async listSales(): Promise<SaleDto[]> {
       return narrow(await send("/sales"), isSaleList, "sale list");
     },
