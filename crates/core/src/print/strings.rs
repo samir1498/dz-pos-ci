@@ -52,10 +52,32 @@ pub enum Key {
     /// A facture that was cancelled keeps its number and says so
     /// (features.md, Numbering row).
     FactureCancelled,
+    /// The one word the mark across a cancelled reprint carries. Not the
+    /// heading, which is a sentence read at the top of the page: this is
+    /// read at arm's length, across the sheet.
+    CancelledMark,
+    /// The day the shop cancelled it, and why. Both are stored beside the
+    /// document (T6's `cancelled_at` and `cancel_reason`).
+    CancelledOn,
+    CancelReason,
     Avoir,
     Proforma,
-    /// The facture an avoir is written against.
-    ReferencedDocument,
+    /// What a proforma says about itself, in a line of its own: it is a
+    /// quote and not a facture, it books nothing and it owes nothing (T6).
+    /// A customer handed one must not file it as a facture.
+    ProformaNotice,
+    /// The opening of the line naming the facture an avoir is written
+    /// against, one of the mentions décret 05-468 art. 3 asks an avoir to
+    /// carry. It is the start of a sentence and not a column label:
+    /// "Avoir sur facture FA-000042 du 09/09/2026".
+    AvoirOnFacture,
+    /// What joins a document to its date in that sentence.
+    IssuedOn,
+    /// The last row of an avoir's totals. A facture closes on the net to
+    /// pay, the figure the buyer owes; an avoir asks for nothing, so the
+    /// same row names the amount of the avoir. The figure is the same one,
+    /// under the words that fit the paper it is on.
+    AvoirAmount,
     Seller,
     Buyer,
     Designation,
@@ -74,12 +96,20 @@ pub enum Key {
     TvaBase,
     TotalTtc,
     /// The words line: décret 05-468 art. 3 asks the total to be written
-    /// "en chiffres et en lettres".
+    /// "en chiffres et en lettres". This one names a facture, so an avoir
+    /// and a proforma close themselves in their own words below rather than
+    /// call themselves a facture on their last line.
     InWords,
+    AvoirInWords,
+    ProformaInWords,
     Balance,
     OldBalance,
     ThisDocument,
     TotalDebt,
+    /// The same row when the customer's balance closes below zero: the shop
+    /// is holding money for them, and "solde total" over a negative reads as
+    /// a debt with a typo in it.
+    TotalCredit,
     /// What the two parties put on the paper at the bottom of a facture
     /// (décret 05-468 art. 4).
     Cachet,
@@ -128,7 +158,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 55] = [
+    pub const ALL: [Key; 64] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -146,9 +176,15 @@ impl Key {
         Key::Currency,
         Key::Facture,
         Key::FactureCancelled,
+        Key::CancelledMark,
+        Key::CancelledOn,
+        Key::CancelReason,
         Key::Avoir,
         Key::Proforma,
-        Key::ReferencedDocument,
+        Key::ProformaNotice,
+        Key::AvoirOnFacture,
+        Key::IssuedOn,
+        Key::AvoirAmount,
         Key::Seller,
         Key::Buyer,
         Key::Designation,
@@ -162,10 +198,13 @@ impl Key {
         Key::TvaBase,
         Key::TotalTtc,
         Key::InWords,
+        Key::AvoirInWords,
+        Key::ProformaInWords,
         Key::Balance,
         Key::OldBalance,
         Key::ThisDocument,
         Key::TotalDebt,
+        Key::TotalCredit,
         Key::Cachet,
         Key::Statement,
         Key::Period,
@@ -262,6 +301,21 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::FactureCancelled, Lang::En) => "CANCELLED INVOICE",
         (Key::FactureCancelled, Lang::Ar) => "فاتورة ملغاة",
 
+        (Key::CancelledMark, Lang::Fr) => "ANNULÉE",
+        (Key::CancelledMark, Lang::En) => "CANCELLED",
+        (Key::CancelledMark, Lang::Ar) => "ملغاة",
+
+        (Key::CancelledOn, Lang::Fr) => "Annulée le",
+        (Key::CancelledOn, Lang::En) => "Cancelled on",
+        (Key::CancelledOn, Lang::Ar) => "ألغيت في",
+
+        // The colon belongs to the wording and not to the template: French
+        // puts a narrow no-break space before it and English puts none, and
+        // a template that punctuated the line would be deciding that.
+        (Key::CancelReason, Lang::Fr) => "Motif\u{202f}:",
+        (Key::CancelReason, Lang::En) => "Reason:",
+        (Key::CancelReason, Lang::Ar) => "السبب:",
+
         (Key::Avoir, Lang::Fr) => "AVOIR",
         (Key::Avoir, Lang::En) => "CREDIT NOTE",
         (Key::Avoir, Lang::Ar) => "إشعار دائن",
@@ -270,9 +324,32 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::Proforma, Lang::En) => "PRO FORMA INVOICE",
         (Key::Proforma, Lang::Ar) => "فاتورة أولية",
 
-        (Key::ReferencedDocument, Lang::Fr) => "Facture référencée",
-        (Key::ReferencedDocument, Lang::En) => "Referenced invoice",
-        (Key::ReferencedDocument, Lang::Ar) => "الفاتورة المرجعية",
+        (Key::ProformaNotice, Lang::Fr) => {
+            "Proforma, sans valeur comptable\u{202f}: ce document n\u{2019}est pas une facture et ne crée aucune dette."
+        }
+        (Key::ProformaNotice, Lang::En) => {
+            "Pro forma, of no accounting value: this document is not an invoice and creates no debt."
+        }
+        (Key::ProformaNotice, Lang::Ar) => {
+            "فاتورة أولية، بدون قيمة محاسبية: هذه الوثيقة ليست فاتورة ولا تنشئ أي دين."
+        }
+
+        (Key::AvoirOnFacture, Lang::Fr) => "Avoir sur facture",
+        (Key::AvoirOnFacture, Lang::En) => "Credit note against invoice",
+        (Key::AvoirOnFacture, Lang::Ar) => "إشعار دائن على الفاتورة",
+
+        (Key::IssuedOn, Lang::Fr) => "du",
+        (Key::IssuedOn, Lang::En) => "dated",
+        (Key::IssuedOn, Lang::Ar) => "بتاريخ",
+
+        // Unreviewed wording, like this dictionary's Arabic: no comptable
+        // has read the French of it yet. The apostrophe is the typographic
+        // one, which is the French a printed document uses and also the one
+        // that reaches the page as itself: a typewriter apostrophe would
+        // sit in the golden as `&#39;`.
+        (Key::AvoirAmount, Lang::Fr) => "Montant de l\u{2019}avoir",
+        (Key::AvoirAmount, Lang::En) => "Credit note amount",
+        (Key::AvoirAmount, Lang::Ar) => "مبلغ الإشعار الدائن",
 
         (Key::Seller, Lang::Fr) => "Vendeur",
         (Key::Seller, Lang::En) => "Seller",
@@ -322,12 +399,24 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::TotalTtc, Lang::En) => "Total incl. tax",
         (Key::TotalTtc, Lang::Ar) => "المجموع مع الرسم",
 
-        // The décret's own wording, which names the facture whatever kind
-        // the document is; T9 splits the sentence per kind if the comptable
-        // asks for it on an avoir.
+        // The décret's own wording, for the paper it is written on. T9 split
+        // the sentence per kind rather than have an avoir call itself a
+        // facture on the line a comptable reads first; the two new sentences
+        // are unreviewed wording, like this dictionary's Arabic.
         (Key::InWords, Lang::Fr) => "Arrêtée la présente facture à la somme de",
         (Key::InWords, Lang::En) => "This invoice is closed at the sum of",
         (Key::InWords, Lang::Ar) => "أوقفت هذه الفاتورة بمبلغ",
+
+        // The same sentence about the paper it is actually written on. An
+        // avoir that said "la présente facture" would name another
+        // document on the line a comptable reads first.
+        (Key::AvoirInWords, Lang::Fr) => "Arrêté le présent avoir à la somme de",
+        (Key::AvoirInWords, Lang::En) => "This credit note is closed at the sum of",
+        (Key::AvoirInWords, Lang::Ar) => "أوقف هذا الإشعار الدائن بمبلغ",
+
+        (Key::ProformaInWords, Lang::Fr) => "Arrêtée la présente proforma à la somme de",
+        (Key::ProformaInWords, Lang::En) => "This pro forma invoice is closed at the sum of",
+        (Key::ProformaInWords, Lang::Ar) => "أوقفت هذه الفاتورة الأولية بمبلغ",
 
         (Key::Balance, Lang::Fr) => "Solde",
         (Key::Balance, Lang::En) => "Balance",
@@ -344,6 +433,10 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::TotalDebt, Lang::Fr) => "Solde total",
         (Key::TotalDebt, Lang::En) => "Total owed",
         (Key::TotalDebt, Lang::Ar) => "الرصيد الإجمالي",
+
+        (Key::TotalCredit, Lang::Fr) => "Solde créditeur",
+        (Key::TotalCredit, Lang::En) => "Credit balance",
+        (Key::TotalCredit, Lang::Ar) => "رصيد دائن",
 
         (Key::Cachet, Lang::Fr) => "Cachet et signature",
         (Key::Cachet, Lang::En) => "Stamp and signature",

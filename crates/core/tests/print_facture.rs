@@ -17,8 +17,9 @@
 //!
 //! The little parser below is the ticket test's, copied rather than shared:
 //! two golden suites that check each other's files through one helper can
-//! both be made green by editing the helper once. T9 folds them together if
-//! the avoir and proforma suites want the same shape.
+//! both be made green by editing the helper once. T9 added the avoir, the
+//! proforma and the cancelled reprint to this file and left the two suites
+//! apart for the same reason.
 
 use std::path::PathBuf;
 
@@ -29,7 +30,10 @@ use dzpos_core::money::{
     compute_totals, Bps, Line, Money, PaymentMode, Regime, TotalsOptions, TvaLine,
 };
 use dzpos_core::print::strings::{text, Key};
-use dzpos_core::print::{render_facture, render_facture_with_reference, Paper};
+use dzpos_core::print::{
+    render_facture, render_facture_with, render_facture_with_reference, Cancellation, FactureInput,
+    Paper,
+};
 use dzpos_core::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, PartyBlock, PartyKind,
     SellerBlock,
@@ -54,10 +58,42 @@ const LINES: [(&str, i64, i64, i64, u32); 3] = [
     ("Pain", 1_000, 8_000, 1_000, 0),
 ];
 
+/// The two lines the avoir takes back, a part of the basket and not all of
+/// it: one of the two bottles and half of the flour. A partial avoir is
+/// what T6 allows, and an avoir printing the facture's own totals is the
+/// mistake these goldens have to be able to catch, so its lines and its
+/// amounts are none of the facture's.
+///
+/// The first name carries the markup the facture's does: a reprint of an
+/// avoir escapes a product name or it does not, and the avoir goldens say
+/// which.
+const AVOIR_LINES: [(&str, i64, i64, i64, u32); 2] = [
+    ("Huile <Elio> & Co 5 L", 1_000, 15_000, 0, 1900),
+    ("Farine", 500, 32_000, 0, 900),
+];
+
 /// 20,00 DA off the whole basket.
 const GLOBAL_DISCOUNT: i64 = 2_000;
 /// What the customer owed before this facture: 1 500,00 DA.
 const OLD_BALANCE: i64 = 150_000;
+/// What the customer owed before the avoir: 300,00 DA, less than the avoir
+/// gives back, so the triple closes below zero and the block has to say
+/// credit rather than debt.
+const OLD_BALANCE_BEFORE_THE_AVOIR: i64 = 30_000;
+
+/// The day the fixed sale was made, the later day the avoir is written and
+/// the later day the facture is cancelled. They differ on purpose: a
+/// reference line or a cancellation line that printed the document's own
+/// date instead of the one it was handed would read the same on 9 September
+/// and be wrong.
+const ISSUED: (i32, u32, u32, u32, u32) = (2026, 9, 9, 14, 5);
+const AVOIR_ISSUED: (i32, u32, u32, u32, u32) = (2026, 9, 12, 9, 20);
+const CANCELLED_AT: (i32, u32, u32, u32, u32) = (2026, 9, 12, 10, 30);
+
+/// Typed by the shop into a free-text field and printed on the paper, so it
+/// carries the markup a product name carries and for the same reason: a
+/// reason that could close a tag would break the page it explains.
+const CANCEL_REASON: &str = "Erreur de saisie <quantité> & prix";
 
 /// The same basket, invoiced three ways. The régime decides the TVA half of
 /// the paper, the payment mode decides the money half and the party kind
@@ -74,29 +110,106 @@ enum Case {
     /// IFU, on credit, to a company: no rate column, no recap, no "HT" and
     /// no "TTC" anywhere on the page.
     Ifu,
+    /// A partial avoir written against the credit facture: two lines of the
+    /// three, its own later date, no droit de timbre, and a triple that
+    /// leaves the customer holding a credit.
+    Avoir,
+    /// The same basket quoted rather than sold: no balance block, a wording
+    /// saying the page settles nothing, and the words kept.
+    Proforma,
+    /// The credit facture reprinted after it was cancelled: the same money
+    /// to the centime, under the cancelled heading and behind the mark.
+    Cancelled,
 }
 
 impl Case {
-    const ALL: [Case; 3] = [Case::Credit, Case::Cash, Case::Ifu];
+    const ALL: [Case; 6] = [
+        Case::Credit,
+        Case::Cash,
+        Case::Ifu,
+        Case::Avoir,
+        Case::Proforma,
+        Case::Cancelled,
+    ];
 
     const fn regime(self) -> Regime {
         match self {
-            Case::Credit | Case::Cash => Regime::Reel,
+            Case::Credit | Case::Cash | Case::Avoir | Case::Proforma | Case::Cancelled => {
+                Regime::Reel
+            }
             Case::Ifu => Regime::Ifu,
         }
     }
 
     const fn payment_mode(self) -> PaymentMode {
         match self {
-            Case::Credit | Case::Ifu => PaymentMode::Credit,
+            Case::Credit | Case::Ifu | Case::Avoir | Case::Proforma | Case::Cancelled => {
+                PaymentMode::Credit
+            }
             Case::Cash => PaymentMode::Cash,
         }
     }
 
     const fn party_kind(self) -> PartyKind {
         match self {
-            Case::Credit | Case::Ifu => PartyKind::Company,
+            Case::Credit | Case::Ifu | Case::Avoir | Case::Proforma | Case::Cancelled => {
+                PartyKind::Company
+            }
             Case::Cash => PartyKind::Consumer,
+        }
+    }
+
+    const fn kind(self) -> DocumentKind {
+        match self {
+            Case::Credit | Case::Cash | Case::Ifu | Case::Cancelled => DocumentKind::Facture,
+            Case::Avoir => DocumentKind::Avoir,
+            Case::Proforma => DocumentKind::Proforma,
+        }
+    }
+
+    /// A cancelled facture keeps the number it burned (features.md,
+    /// Numbering row); every other face is a document in its own state.
+    const fn status(self) -> DocumentStatus {
+        match self {
+            Case::Cancelled => DocumentStatus::Cancelled,
+            _ => DocumentStatus::Issued,
+        }
+    }
+
+    /// The number in the kind's own series. An avoir and a proforma each
+    /// burn their own, so no two of the three faces print the same figure
+    /// and a golden cannot pass by carrying the facture's.
+    const fn number(self) -> i64 {
+        match self {
+            Case::Avoir => 3,
+            Case::Proforma => 5,
+            _ => 42,
+        }
+    }
+
+    /// The lines the document carries. The avoir takes back a part of the
+    /// basket; every other face sells all of it.
+    const fn rows(self) -> &'static [(&'static str, i64, i64, i64, u32)] {
+        match self {
+            Case::Avoir => &AVOIR_LINES,
+            _ => &LINES,
+        }
+    }
+
+    /// A global discount is a thing the seller granted on the day. An avoir
+    /// hands back the lines it names and grants nothing, so it carries none
+    /// and prints neither the discount row nor the subtotal.
+    const fn global_discount(self) -> i64 {
+        match self {
+            Case::Avoir => 0,
+            _ => GLOBAL_DISCOUNT,
+        }
+    }
+
+    const fn issued_at(self) -> (i32, u32, u32, u32, u32) {
+        match self {
+            Case::Avoir => AVOIR_ISSUED,
+            _ => ISSUED,
         }
     }
 
@@ -106,6 +219,9 @@ impl Case {
             Case::Credit => "",
             Case::Cash => "-cash",
             Case::Ifu => "-ifu",
+            Case::Avoir => "-avoir",
+            Case::Proforma => "-proforma",
+            Case::Cancelled => "-annulee",
         }
     }
 }
@@ -157,7 +273,8 @@ fn consumer_buyer() -> PartyBlock {
 /// template, and the money module is what pins the money.
 fn fixed_facture(case: Case) -> Document {
     let regime = case.regime();
-    let money_lines: Vec<Line> = LINES
+    let rows = case.rows();
+    let money_lines: Vec<Line> = rows
         .iter()
         .map(|(_, qty_milli, unit, line_discount, rate)| Line {
             qty_milli: *qty_milli,
@@ -169,7 +286,7 @@ fn fixed_facture(case: Case) -> Document {
     let totals = compute_totals(
         &money_lines,
         &TotalsOptions {
-            global_discount: Money::centimes(GLOBAL_DISCOUNT),
+            global_discount: Money::centimes(case.global_discount()),
             payment_mode: case.payment_mode(),
             // On for the shop in every case: the stamp being absent from
             // the credit facture has to be the rule doing it, not a
@@ -180,7 +297,7 @@ fn fixed_facture(case: Case) -> Document {
     )
     .unwrap();
 
-    let lines = LINES
+    let lines = rows
         .iter()
         .zip(&money_lines)
         .enumerate()
@@ -206,28 +323,52 @@ fn fixed_facture(case: Case) -> Document {
     // 9 September 2026, already on the shop's calendar (services::clock
     // writes it there, UTC+1 all year), so printing it needs no conversion.
     // A facture prints the day and not the minute.
-    let issued_at = NaiveDate::from_ymd_opt(2026, 9, 9)
-        .unwrap()
-        .and_hms_opt(14, 5, 0)
-        .unwrap();
+    let issued_at = at(case.issued_at());
 
     // A credit facture carries the ledger as it stood when it was issued:
     // what was owed before, what this document adds, what is left. A cash
     // one adds nothing to any ledger and carries no block at all.
     let credit = case.payment_mode() == PaymentMode::Credit;
-    let old_balance = Money::centimes(OLD_BALANCE);
-    let balance = credit.then(|| BalanceTriple {
-        old_balance,
-        remaining_debt: totals.net_to_pay,
-        total_debt: old_balance.checked_add(totals.net_to_pay).unwrap(),
-    });
+    let balance = match case {
+        // An avoir moves the debt the other way, so what it adds is the
+        // negative of what it hands back, and a customer given back more
+        // than they owed ends the day holding a credit.
+        Case::Avoir => {
+            let old_balance = Money::centimes(OLD_BALANCE_BEFORE_THE_AVOIR);
+            let this = Money::ZERO.checked_sub(totals.net_to_pay).unwrap();
+            Some(BalanceTriple {
+                old_balance,
+                remaining_debt: this,
+                total_debt: old_balance.checked_add(this).unwrap(),
+            })
+        }
+        // A proforma creates no debt at all (T6), and the triple it stores
+        // says so in three zeroes. The page drops the block rather than
+        // print a debt of nothing three times.
+        Case::Proforma => Some(BalanceTriple {
+            old_balance: Money::ZERO,
+            remaining_debt: Money::ZERO,
+            total_debt: Money::ZERO,
+        }),
+        _ => {
+            let old_balance = Money::centimes(OLD_BALANCE);
+            credit.then(|| BalanceTriple {
+                old_balance,
+                remaining_debt: totals.net_to_pay,
+                total_debt: old_balance.checked_add(totals.net_to_pay).unwrap(),
+            })
+        }
+    };
 
     Document {
-        id: 1,
+        // The avoir is a second row in the table and the facture it names is
+        // the first: an avoir carrying the id it references would let the
+        // reference check pass on a document that referenced itself.
+        id: if matches!(case, Case::Avoir) { 2 } else { 1 },
         shop_id: SHOP,
-        kind: DocumentKind::Facture,
-        series: DocumentKind::Facture.series().to_owned(),
-        number: 42,
+        kind: case.kind(),
+        series: case.kind().series().to_owned(),
+        number: case.number(),
         issued_at,
         user_id: OWNER,
         regime,
@@ -238,7 +379,9 @@ fn fixed_facture(case: Case) -> Document {
             PartyKind::Company => company_buyer(),
             PartyKind::Consumer => consumer_buyer(),
         }),
-        ref_document_id: None,
+        // The avoir names the facture it is written against; nothing else
+        // this template prints names another document.
+        ref_document_id: matches!(case, Case::Avoir).then_some(1),
         balance,
         totals,
         // A facture states what is due and how it is settled; the note
@@ -246,9 +389,64 @@ fn fixed_facture(case: Case) -> Document {
         // the ticket's.
         tendered: None,
         change: None,
-        status: DocumentStatus::Issued,
+        status: case.status(),
         lines,
         created_at: issued_at,
+    }
+}
+
+/// A date on the shop's calendar, from the tuple the case names it by.
+fn at(when: (i32, u32, u32, u32, u32)) -> chrono::NaiveDateTime {
+    let (year, month, day, hour, minute) = when;
+    NaiveDate::from_ymd_opt(year, month, day)
+        .unwrap()
+        .and_hms_opt(hour, minute, 0)
+        .unwrap()
+}
+
+/// The document a case renders and everything the page needs beside it: the
+/// facture an avoir names, and the day and the reason a cancelled facture
+/// was cancelled. Neither is on the document's own row (the reference is an
+/// id there and a number on paper; the cancellation columns are T6's), so
+/// the fixture hands them over the way a caller will.
+struct Fixture {
+    doc: Document,
+    referenced: Option<Document>,
+    cancellation: Option<(chrono::NaiveDateTime, String)>,
+}
+
+impl Fixture {
+    fn of(case: Case) -> Fixture {
+        Fixture {
+            doc: fixed_facture(case),
+            referenced: matches!(case, Case::Avoir).then(|| fixed_facture(Case::Credit)),
+            cancellation: matches!(case, Case::Cancelled)
+                .then(|| (at(CANCELLED_AT), CANCEL_REASON.to_owned())),
+        }
+    }
+
+    fn input(&self) -> FactureInput<'_> {
+        FactureInput {
+            referenced: self.referenced.as_ref(),
+            cancellation: self
+                .cancellation
+                .as_ref()
+                .map(|(at, reason)| Cancellation { at: *at, reason }),
+        }
+    }
+
+    fn render(&self, lang: Lang, paper: Paper) -> String {
+        render_facture_with(&self.doc, &self.input(), lang, paper).unwrap()
+    }
+
+    /// The balance the page is expected to carry. A proforma stores a triple
+    /// of zeroes and prints no block, so what the document holds and what
+    /// the paper says are two different answers here and only here.
+    fn printed_balance(&self) -> Option<BalanceTriple> {
+        match self.doc.kind {
+            DocumentKind::Proforma => None,
+            _ => self.doc.balance,
+        }
     }
 }
 
@@ -328,6 +526,36 @@ fn centimes(printed: &str) -> i64 {
     sign * (whole * 100 + rest)
 }
 
+/// The text of every `<span class="qty qty-line">` in the file: the
+/// quantity cells. A quantity is a figure like any other on this page, and
+/// the one an avoir hands back is not the one the facture sold, so it is
+/// read back off the golden too.
+fn qtys(html: &str) -> Vec<String> {
+    let opening = "<span class=\"qty qty-line\">";
+    html.split(opening)
+        .skip(1)
+        .map(|rest| {
+            let end = rest.find("</span>").expect("a quantity span never closes");
+            rest[..end].to_owned()
+        })
+        .collect()
+}
+
+/// "1,5" back to 1500 thousandths, and "2" to 2000. The golden's own
+/// digits, read by a parser that shares no code with the formatter.
+fn milli(printed: &str) -> i64 {
+    let digits: String = printed
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == ',' || *c == '-')
+        .collect();
+    let (whole, rest) = digits.split_once(',').unwrap_or((digits.as_str(), ""));
+    let sign = if whole.starts_with('-') { -1 } else { 1 };
+    let whole: i64 = whole.trim_start_matches('-').parse().unwrap();
+    assert!(rest.len() <= 3, "{printed} carries more than thousandths");
+    let rest: i64 = format!("{rest:0<3}").parse().unwrap();
+    sign * (whole * 1_000 + rest)
+}
+
 /// The text of every `<span class="rate rate-{marker}">` in the file: the
 /// rate cells, which carry a figure no amount parser would catch.
 fn rates(html: &str, marker: &str) -> Vec<String> {
@@ -356,6 +584,81 @@ fn bps(printed: &str) -> u32 {
     whole * 100 + rest
 }
 
+/// The reference line, as the file carries it: the whole sentence, so a test
+/// can read the number and the day in it together rather than find each of
+/// them somewhere on the page.
+fn reference_line(html: &str) -> String {
+    let opening = "<div class=\"reference\">";
+    let rest = html
+        .split_once(opening)
+        .unwrap_or_else(|| panic!("the page carries no reference line"))
+        .1;
+    let end = rest
+        .find("</div>")
+        .expect("the reference line never closes");
+    rest[..end].to_owned()
+}
+
+/// The diagonal mark of a cancelled reprint, as the file carries it: the
+/// contents of its own `div`, so a test reads the word where the mark is
+/// drawn and not anywhere on a page whose heading already says "annulée".
+fn mark_block(html: &str) -> Option<String> {
+    let opening = "<div class=\"annulee\">";
+    let rest = html.split_once(opening)?.1;
+    let end = rest.find("</div>").expect("the mark block never closes");
+    Some(rest[..end].to_owned())
+}
+
+/// The stylesheet rule that draws the mark across the page. Read out of the
+/// same file, because the mark is a rule and a `div` together: either one
+/// without the other is a word sitting in the corner of a facture.
+fn mark_rule(html: &str) -> String {
+    let opening = ".annulee span {";
+    let rest = html
+        .split_once(opening)
+        .unwrap_or_else(|| panic!("the page carries no rule for the mark"))
+        .1;
+    let end = rest.find('}').expect("the mark rule never closes");
+    rest[..end].to_owned()
+}
+
+/// The page from the opening of the lines table to the end of the words
+/// line, in one string: the lines with their quantities, prices and rates,
+/// the totals table down to the net row, and the sentence writing that
+/// figure out. Two renders can be compared for all of it at once, without
+/// the comparison naming each amount and forgetting one.
+///
+/// What it does not cover is the rest of the page: the framed blocks, the
+/// signatures, and the heading above the parties. A test comparing two
+/// renders reads those separately (`a_cancelled_reprint_differs_from_the_
+/// live_facture_in_the_cancellation_only` does it line by line, in both
+/// directions).
+fn money_block(html: &str) -> String {
+    let opening = "<div class=\"lines\">";
+    let rest = html
+        .split_once(opening)
+        .unwrap_or_else(|| panic!("the page carries no lines table"))
+        .1;
+    let end = rest
+        .find("</p>")
+        .expect("the words line never closes the money block");
+    rest[..end].to_owned()
+}
+
+/// The heading, as the file carries it: the contents of the `h1`. Read as
+/// the element and not as text anywhere on the page, because a title is a
+/// word the page repeats elsewhere: the Arabic proforma's notice opens with
+/// the very words of its heading, so a page titled "facture" would carry
+/// "فاتورة أولية" all the same.
+fn heading(html: &str) -> String {
+    let rest = html
+        .split_once("<h1>")
+        .unwrap_or_else(|| panic!("the page carries no heading"))
+        .1;
+    let end = rest.find("</h1>").expect("the heading never closes");
+    rest[..end].to_owned()
+}
+
 /// The words line, as the file carries it.
 fn in_words(html: &str) -> String {
     let opening = "<strong class=\"in-words\">";
@@ -368,7 +671,17 @@ fn in_words(html: &str) -> String {
 }
 
 /// Every amount in the golden, against what the document stores.
-fn the_golden_says_what_the_document_stores(html: &str, doc: &Document, lang: Lang) {
+///
+/// `balance` is what the page is expected to print, which is the document's
+/// own triple everywhere but on a proforma: that one stores three zeroes and
+/// prints no block, and passing the document's field here would let a page
+/// printing a debt of nothing pass.
+fn the_golden_says_what_the_document_stores(
+    html: &str,
+    doc: &Document,
+    balance: Option<BalanceTriple>,
+    lang: Lang,
+) {
     let totals = &doc.totals;
     assert_eq!(
         centimes(&one_amount(html, "total")),
@@ -377,10 +690,10 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document, lang: La
     );
     // The discount is stored as what it takes off and printed as what it
     // does to the column, so the paper carries the sign the document does
-    // not: -20,00 under a total of 850,00.
+    // not: -20,00 under a total of 850,00. Nothing granted prints no row.
     assert_eq!(
-        centimes(&one_amount(html, "discount")),
-        -totals.discount.as_centimes(),
+        optional_amount(html, "discount"),
+        (totals.discount != Money::ZERO).then(|| -totals.discount.as_centimes()),
         "the discount row"
     );
     // No discount, no subtotal row: it would repeat the total above it.
@@ -458,6 +771,15 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document, lang: La
         doc.lines.len(),
         "one unit price per line"
     );
+    // The quantity beside them: an avoir takes back a part of what the
+    // facture sold, and a page showing the facture's quantity over the
+    // avoir's amounts is a document whose own arithmetic does not hold.
+    let quantities = qtys(html);
+    assert_eq!(quantities.len(), doc.lines.len(), "one quantity per line");
+    for (printed, line) in quantities.iter().zip(&doc.lines) {
+        assert_eq!(milli(printed), line.qty_milli, "a quantity");
+    }
+
     for ((printed, unit_price), line) in lines.iter().zip(&unit_prices).zip(&doc.lines) {
         assert_eq!(centimes(printed), line.line_total.as_centimes(), "a line");
         assert_eq!(
@@ -493,20 +815,20 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document, lang: La
     // stores them: a reprint shows the debt the customer signed for.
     assert_eq!(
         optional_amount(html, "old-balance"),
-        doc.balance.map(|b| b.old_balance.as_centimes()),
+        balance.map(|b| b.old_balance.as_centimes()),
         "the old balance row"
     );
     assert_eq!(
         optional_amount(html, "this-document"),
-        doc.balance.map(|b| b.remaining_debt.as_centimes()),
+        balance.map(|b| b.remaining_debt.as_centimes()),
         "this document's row"
     );
     assert_eq!(
         optional_amount(html, "total-debt"),
-        doc.balance.map(|b| b.total_debt.as_centimes()),
+        balance.map(|b| b.total_debt.as_centimes()),
         "the total debt row"
     );
-    if let Some(balance) = doc.balance {
+    if let Some(balance) = balance {
         assert_eq!(
             balance.old_balance.checked_add(balance.remaining_debt),
             Ok(balance.total_debt),
@@ -527,10 +849,10 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document, lang: La
 /// One case against its three goldens: the render is the file, and the file
 /// says what the document stores.
 fn each_language_of(case: Case) {
-    let doc = fixed_facture(case);
+    let fixture = Fixture::of(case);
     let mut updated = Vec::new();
     for lang in Lang::ALL {
-        let rendered = render_facture(&doc, lang, Paper::A4).unwrap();
+        let rendered = fixture.render(lang, Paper::A4);
         let expected = golden(lang, case, &rendered, &mut updated);
         assert_eq!(
             rendered,
@@ -538,7 +860,12 @@ fn each_language_of(case: Case) {
             "{} is not what the template renders",
             golden_name(lang, case)
         );
-        the_golden_says_what_the_document_stores(&expected, &doc, lang);
+        the_golden_says_what_the_document_stores(
+            &expected,
+            &fixture.doc,
+            fixture.printed_balance(),
+            lang,
+        );
     }
     refuse_a_silent_regeneration(&updated);
 }
@@ -558,6 +885,21 @@ fn the_ifu_facture_is_its_golden_in_every_language() {
     each_language_of(Case::Ifu);
 }
 
+#[test]
+fn the_avoir_is_its_golden_in_every_language() {
+    each_language_of(Case::Avoir);
+}
+
+#[test]
+fn the_proforma_is_its_golden_in_every_language() {
+    each_language_of(Case::Proforma);
+}
+
+#[test]
+fn the_cancelled_facture_is_its_golden_in_every_language() {
+    each_language_of(Case::Cancelled);
+}
+
 /// A5 is the same facture on a smaller sheet. One line of the page changes,
 /// the one the OS print dialog reads, and the words, the amounts and the
 /// blocks are the same bytes: two layouts kept in step by hand would drift
@@ -565,10 +907,10 @@ fn the_ifu_facture_is_its_golden_in_every_language() {
 #[test]
 fn the_a5_facture_differs_from_the_a4_in_the_page_size_line_only() {
     for case in Case::ALL {
-        let doc = fixed_facture(case);
+        let fixture = Fixture::of(case);
         for lang in Lang::ALL {
-            let a4 = render_facture(&doc, lang, Paper::A4).unwrap();
-            let a5 = render_facture(&doc, lang, Paper::A5).unwrap();
+            let a4 = fixture.render(lang, Paper::A4);
+            let a5 = fixture.render(lang, Paper::A5);
             let a4_lines: Vec<&str> = a4.lines().collect();
             let a5_lines: Vec<&str> = a5.lines().collect();
             assert_eq!(a4_lines.len(), a5_lines.len(), "{lang:?} {case:?}");
@@ -756,7 +1098,7 @@ fn a_negative_old_balance_is_printed_as_a_negative() {
     });
     let html = render_facture(&doc, Lang::Fr, Paper::A4).unwrap();
     assert_eq!(optional_amount(&html, "old-balance"), Some(-25_000));
-    the_golden_says_what_the_document_stores(&html, &doc, Lang::Fr);
+    the_golden_says_what_the_document_stores(&html, &doc, doc.balance, Lang::Fr);
 }
 
 /// Only three kinds have a title on this paper. A ticket has its own 80 mm
@@ -781,7 +1123,13 @@ fn a_kind_this_template_has_no_title_for_is_refused() {
         DocumentKind::Avoir,
         DocumentKind::Proforma,
     ] {
+        let mut doc = fixed_facture(Case::Credit);
         doc.kind = kind;
+        // A proforma creates no debt and this template refuses one that
+        // carries a triple; the title is what is under test here.
+        if kind == DocumentKind::Proforma {
+            doc.balance = None;
+        }
         let html = render_facture(&doc, Lang::Fr, Paper::A4).unwrap();
         let title = match kind {
             DocumentKind::Avoir => Key::Avoir,
@@ -864,20 +1212,13 @@ fn an_ifu_document_carrying_a_tva_recap_is_refused_not_quietly_stripped() {
 #[test]
 fn an_avoir_prints_the_number_of_the_facture_it_references() {
     let facture = fixed_facture(Case::Credit);
-    let mut avoir = fixed_facture(Case::Credit);
-    avoir.id = 2;
-    avoir.kind = DocumentKind::Avoir;
-    avoir.number = 3;
-    avoir.ref_document_id = Some(facture.id);
+    let avoir = fixed_facture(Case::Avoir);
 
     for lang in Lang::ALL {
         let html = render_facture_with_reference(&avoir, Some(&facture), lang, Paper::A4).unwrap();
         assert!(html.contains("AV-000003"), "{lang:?}");
         assert!(html.contains("FA-000042"), "{lang:?}");
-        assert!(
-            html.contains(text(Key::ReferencedDocument, lang)),
-            "{lang:?}"
-        );
+        assert!(html.contains(text(Key::AvoirOnFacture, lang)), "{lang:?}");
     }
 
     // No reference handed over, a reference that is another document, and a
@@ -906,9 +1247,28 @@ fn an_avoir_prints_the_number_of_the_facture_it_references() {
         "print"
     );
 
+    // The line says "avoir sur facture", so the paper it names has to be one.
+    // A reference that is a ticket, an avoir or a proforma is refused rather
+    // than named as a facture on a page a comptable reads.
+    for kind in [
+        DocumentKind::Ticket,
+        DocumentKind::Avoir,
+        DocumentKind::Proforma,
+    ] {
+        let mut not_a_facture = fixed_facture(Case::Credit);
+        not_a_facture.kind = kind;
+        assert_eq!(
+            render_facture_with_reference(&avoir, Some(&not_a_facture), Lang::Fr, Paper::A4)
+                .unwrap_err()
+                .code(),
+            "print",
+            "{kind:?}"
+        );
+    }
+
     // A facture that references nothing prints with no reference row.
     let plain = render_facture(&facture, Lang::Fr, Paper::A4).unwrap();
-    assert!(!plain.contains(text(Key::ReferencedDocument, Lang::Fr)));
+    assert!(!plain.contains(text(Key::AvoirOnFacture, Lang::Fr)));
 }
 
 /// A name the shop typed is printed and never run: the ampersand and the
@@ -918,9 +1278,9 @@ fn an_avoir_prints_the_number_of_the_facture_it_references() {
 #[test]
 fn a_product_name_with_markup_in_it_is_escaped_and_not_rendered() {
     for case in Case::ALL {
-        let doc = fixed_facture(case);
+        let fixture = Fixture::of(case);
         for lang in Lang::ALL {
-            let html = render_facture(&doc, lang, Paper::A4).unwrap();
+            let html = fixture.render(lang, Paper::A4);
             assert!(
                 html.contains("Huile &#60;Elio&#62; &#38; Co 5 L"),
                 "{lang:?} {case:?} does not carry the escaped name"
@@ -959,16 +1319,16 @@ fn the_arabic_facture_reads_right_to_left_and_says_it_is_unreviewed() {
 #[test]
 fn the_digits_are_western_in_every_language() {
     for case in Case::ALL {
-        let doc = fixed_facture(case);
+        let fixture = Fixture::of(case);
         for lang in Lang::ALL {
-            let html = render_facture(&doc, lang, Paper::A4).unwrap();
+            let html = fixture.render(lang, Paper::A4);
             assert!(
                 !html.chars().any(|c| ('\u{0660}'..='\u{0669}').contains(&c)),
                 "{lang:?} {case:?} carries Arabic-Indic digits"
             );
             assert_eq!(
                 centimes(&one_amount(&html, "net-to-pay")),
-                doc.totals.net_to_pay.as_centimes(),
+                fixture.doc.totals.net_to_pay.as_centimes(),
                 "{lang:?} {case:?}"
             );
         }
@@ -1007,4 +1367,500 @@ fn the_words_are_the_net_to_pay_and_not_the_total_ttc() {
             "{lang:?}"
         );
     }
+}
+
+/// The avoir says which facture it is written against and when that facture
+/// was issued: "Avoir sur facture FA-000042 du 09/09/2026". The day is the
+/// referenced facture's and not the avoir's own, which is three days later
+/// in the fixture, so a line built from the wrong document is red rather
+/// than plausible.
+#[test]
+fn the_avoir_names_the_facture_it_is_written_against_and_the_day_of_it() {
+    let fixture = Fixture::of(Case::Avoir);
+    for lang in Lang::ALL {
+        let html = fixture.render(lang, Paper::A4);
+        let line = reference_line(&html);
+        assert!(
+            line.contains(text(Key::AvoirOnFacture, lang)),
+            "{lang:?}: {line}"
+        );
+        assert!(line.contains("FA-000042"), "{lang:?}: {line}");
+        assert!(line.contains(text(Key::IssuedOn, lang)), "{lang:?}: {line}");
+        assert!(line.contains("09/09/2026"), "{lang:?}: {line}");
+        assert!(
+            !line.contains("12/09/2026"),
+            "{lang:?} dated the reference by the avoir: {line}"
+        );
+        // The avoir's own date is on the page all the same, under its own
+        // number, where every document carries it.
+        assert!(html.contains("12/09/2026"), "{lang:?}");
+        assert!(html.contains("AV-000003"), "{lang:?}");
+    }
+}
+
+/// An avoir hands the lines back and asks for nothing, so it carries no
+/// droit de timbre (T6: the stamp is zero on an avoir) and its totals block
+/// has no stamp row. A stored avoir that carries one contradicts the rule
+/// that wrote it, and the honest answer is the one the IFU recap gets:
+/// refuse, rather than drop a row and hand over a total whose parts do not
+/// add up.
+#[test]
+fn an_avoir_prints_no_stamp_and_one_that_carries_a_stamp_is_refused() {
+    let fixture = Fixture::of(Case::Avoir);
+    assert_eq!(
+        fixture.doc.totals.stamp,
+        Money::ZERO,
+        "the avoir fixture was built with a stamp"
+    );
+    for lang in Lang::ALL {
+        let html = fixture.render(lang, Paper::A4);
+        assert!(
+            amounts(&html, "stamp").is_empty(),
+            "{lang:?} avoir carries a stamp row"
+        );
+        assert!(!html.contains(text(Key::Stamp, lang)), "{lang:?}");
+    }
+
+    let mut stamped = fixed_facture(Case::Avoir);
+    stamped.totals.stamp = Money::centimes(100);
+    let facture = fixed_facture(Case::Credit);
+    let err =
+        render_facture_with_reference(&stamped, Some(&facture), Lang::Fr, Paper::A4).unwrap_err();
+    assert_eq!(err.code(), "print", "{err:?}");
+
+    // The same stamp on the cash facture is printed, so the refusal is the
+    // kind doing it and not the template having lost the row.
+    let cash = fixed_facture(Case::Cash);
+    assert_ne!(cash.totals.stamp, Money::ZERO);
+    let html = render_facture(&cash, Lang::Fr, Paper::A4).unwrap();
+    assert_eq!(
+        optional_amount(&html, "stamp"),
+        Some(cash.totals.stamp.as_centimes())
+    );
+}
+
+/// A customer handed back more than they owed is owed money, and the block
+/// says credit where it would otherwise say what is due. The label follows
+/// the sign of the closing figure and not the kind of the document: an avoir
+/// that only cuts a debt down leaves a debt, and calling that a credit would
+/// tell the customer they were owed money they are not.
+#[test]
+fn the_balance_block_says_credit_when_the_avoir_closes_below_zero() {
+    let fixture = Fixture::of(Case::Avoir);
+    let triple = fixture.doc.balance.expect("the avoir carries a triple");
+    assert!(
+        triple.total_debt.as_centimes() < 0,
+        "the avoir fixture does not close below zero: {triple:?}"
+    );
+    for lang in Lang::ALL {
+        let html = fixture.render(lang, Paper::A4);
+        assert!(html.contains(text(Key::TotalCredit, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::TotalDebt, lang)), "{lang:?}");
+        // The amount keeps the sign the document stores, the way the
+        // statement's closing balance does: the label says which way it
+        // points and the figure is read back against the row.
+        assert_eq!(
+            optional_amount(&html, "total-debt"),
+            Some(triple.total_debt.as_centimes()),
+            "{lang:?}"
+        );
+    }
+
+    // The same avoir against a larger old balance still leaves a debt, and
+    // the block says so.
+    let mut smaller = fixed_facture(Case::Avoir);
+    let old_balance = Money::centimes(500_000);
+    let this = Money::ZERO.checked_sub(smaller.totals.net_to_pay).unwrap();
+    smaller.balance = Some(BalanceTriple {
+        old_balance,
+        remaining_debt: this,
+        total_debt: old_balance.checked_add(this).unwrap(),
+    });
+    let facture = fixed_facture(Case::Credit);
+    for lang in Lang::ALL {
+        let html =
+            render_facture_with_reference(&smaller, Some(&facture), lang, Paper::A4).unwrap();
+        assert!(html.contains(text(Key::TotalDebt, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::TotalCredit, lang)), "{lang:?}");
+    }
+}
+
+/// The words line names the document it closes. An avoir that said "la
+/// présente facture" would be a wording a comptable reads as being about
+/// another paper, so each kind closes itself, the way the statement does.
+#[test]
+fn each_kind_closes_itself_in_its_own_words() {
+    let avoir = Fixture::of(Case::Avoir);
+    for lang in Lang::ALL {
+        let html = avoir.render(lang, Paper::A4);
+        assert!(html.contains(text(Key::AvoirInWords, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::InWords, lang)), "{lang:?}");
+        assert_eq!(
+            in_words(&html),
+            amount_in_words(avoir.doc.totals.net_to_pay, lang).unwrap(),
+            "{lang:?}"
+        );
+    }
+    let facture = Fixture::of(Case::Credit);
+    for lang in Lang::ALL {
+        let html = facture.render(lang, Paper::A4);
+        assert!(html.contains(text(Key::InWords, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::AvoirInWords, lang)), "{lang:?}");
+    }
+}
+
+/// The avoir's own lines and its own totals, never the facture's. The
+/// fixture takes back two lines of three and one of them by half, so a page
+/// that read the referenced facture for its amounts would print figures this
+/// test names as wrong.
+#[test]
+fn the_avoir_prints_its_own_lines_and_not_the_ones_it_references() {
+    let fixture = Fixture::of(Case::Avoir);
+    let facture = fixed_facture(Case::Credit);
+    assert_ne!(
+        fixture.doc.totals.net_to_pay, facture.totals.net_to_pay,
+        "the avoir fixture asks for the same amount as its facture"
+    );
+    for lang in Lang::ALL {
+        let html = fixture.render(lang, Paper::A4);
+        assert_eq!(amounts(&html, "line").len(), 2, "{lang:?}");
+        assert_eq!(
+            centimes(&one_amount(&html, "net-to-pay")),
+            fixture.doc.totals.net_to_pay.as_centimes(),
+            "{lang:?}"
+        );
+        assert_ne!(
+            centimes(&one_amount(&html, "net-to-pay")),
+            facture.totals.net_to_pay.as_centimes(),
+            "{lang:?}"
+        );
+    }
+}
+
+/// Only an avoir is written against another document. A facture or a
+/// proforma carrying a reference would print "avoir sur facture" over a page
+/// that is not one, so the printer refuses it rather than label it.
+#[test]
+fn a_document_that_is_not_an_avoir_may_not_reference_a_facture() {
+    let facture = fixed_facture(Case::Credit);
+    for kind in [DocumentKind::Facture, DocumentKind::Proforma] {
+        let mut doc = fixed_facture(Case::Credit);
+        doc.kind = kind;
+        doc.id = 2;
+        doc.ref_document_id = Some(facture.id);
+        if kind == DocumentKind::Proforma {
+            doc.balance = None;
+        }
+        let err =
+            render_facture_with_reference(&doc, Some(&facture), Lang::Fr, Paper::A4).unwrap_err();
+        assert_eq!(err.code(), "print", "{kind:?}: {err:?}");
+    }
+}
+
+/// A proforma is a quote on facture paper. It burns its own number, moves
+/// no stock and creates no debt (T6), and the page has to say so: a
+/// customer handed one must not file it as a facture, and a comptable
+/// reading it must not book it. So it carries a wording of its own, and no
+/// balance block at all.
+#[test]
+fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
+    let fixture = Fixture::of(Case::Proforma);
+    // The document stores a triple, all three of it zero, which is what T6
+    // writes for a proforma. The page dropping the block is the rule doing
+    // it and not the fixture having nothing to print.
+    let triple = fixture
+        .doc
+        .balance
+        .expect("the proforma fixture stores no triple");
+    assert_eq!(triple.old_balance, Money::ZERO);
+    assert_eq!(triple.remaining_debt, Money::ZERO);
+    assert_eq!(triple.total_debt, Money::ZERO);
+
+    for lang in Lang::ALL {
+        let html = fixture.render(lang, Paper::A4);
+        assert!(html.contains(text(Key::ProformaNotice, lang)), "{lang:?}");
+        assert_eq!(heading(&html), text(Key::Proforma, lang), "{lang:?}");
+        assert!(html.contains("PF-000005"), "{lang:?}");
+        for absent in ["old-balance", "this-document", "total-debt"] {
+            assert!(
+                amounts(&html, absent).is_empty(),
+                "the {lang:?} proforma carries a {absent} row"
+            );
+        }
+        assert!(!html.contains(text(Key::Balance, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::TotalDebt, lang)), "{lang:?}");
+
+        // The credit facture, the same basket, prints all three: the block
+        // is gone for the proforma and not gone for everyone.
+        let facture = Fixture::of(Case::Credit).render(lang, Paper::A4);
+        assert_eq!(amounts(&facture, "total-debt").len(), 1, "{lang:?}");
+        assert!(
+            !facture.contains(text(Key::ProformaNotice, lang)),
+            "{lang:?}"
+        );
+    }
+}
+
+/// A mode of payment is how a document was paid, and neither of these two
+/// is. An avoir hands money back, so "Crédit" under a heading saying
+/// "payment mode" tells the customer they owe what the page is giving them
+/// (and the Arabic word is "debt" outright); a proforma is a quote whose own
+/// notice says it settles nothing, so a mode of payment on it contradicts
+/// the line above. Both drop the block; the facture keeps it.
+#[test]
+fn neither_an_avoir_nor_a_proforma_prints_how_it_was_paid() {
+    for case in [Case::Avoir, Case::Proforma] {
+        let fixture = Fixture::of(case);
+        for lang in Lang::ALL {
+            let html = fixture.render(lang, Paper::A4);
+            assert!(
+                !html.contains(text(Key::PaymentMode, lang)),
+                "{lang:?} {case:?}: the page says how it was paid"
+            );
+        }
+    }
+
+    // Counted rather than read, so a block that lost its heading and kept
+    // its word is caught too: a facture prints the mode and the balance, an
+    // avoir the balance alone, a proforma neither.
+    let blocks = |html: &str| html.matches("<div class=\"block\">").count();
+    for lang in Lang::ALL {
+        assert_eq!(
+            blocks(&Fixture::of(Case::Credit).render(lang, Paper::A4)),
+            2
+        );
+        assert_eq!(blocks(&Fixture::of(Case::Avoir).render(lang, Paper::A4)), 1);
+        assert_eq!(
+            blocks(&Fixture::of(Case::Proforma).render(lang, Paper::A4)),
+            0
+        );
+    }
+}
+
+/// The last row of the totals says what the figure is for. On a facture it
+/// is the net to pay, the amount the buyer owes; an avoir asks for nothing,
+/// so the same row names the amount of the avoir instead. The figure does
+/// not move, only the words beside it.
+#[test]
+fn the_avoir_names_its_last_row_as_its_own_amount_and_not_as_a_net_to_pay() {
+    let avoir = Fixture::of(Case::Avoir);
+    let facture = Fixture::of(Case::Credit);
+    let proforma = Fixture::of(Case::Proforma);
+    for lang in Lang::ALL {
+        let html = avoir.render(lang, Paper::A4);
+        assert!(html.contains(text(Key::AvoirAmount, lang)), "{lang:?}");
+        assert!(
+            !html.contains(text(Key::NetToPay, lang)),
+            "{lang:?}: the avoir asks the buyer for a net to pay"
+        );
+        // The amount itself is untouched: the row is relabelled and not
+        // recomputed.
+        assert_eq!(
+            centimes(&one_amount(&html, "net-to-pay")),
+            avoir.doc.totals.net_to_pay.as_centimes(),
+            "{lang:?}"
+        );
+
+        // The two documents that do ask for money keep the words for it.
+        for other in [&facture, &proforma] {
+            let html = other.render(lang, Paper::A4);
+            assert!(html.contains(text(Key::NetToPay, lang)), "{lang:?}");
+            assert!(!html.contains(text(Key::AvoirAmount, lang)), "{lang:?}");
+        }
+    }
+}
+
+/// A proforma creates no debt, so a stored one carrying a triple that is not
+/// three zeroes contradicts the rule that wrote it. Dropping the block would
+/// hide the contradiction and printing it would say a quote moved a debt, so
+/// the page is refused the way an IFU document carrying a TVA recap is.
+#[test]
+fn a_proforma_carrying_a_debt_is_refused_not_quietly_stripped() {
+    let zero = BalanceTriple {
+        old_balance: Money::ZERO,
+        remaining_debt: Money::ZERO,
+        total_debt: Money::ZERO,
+    };
+    // Three zeroes is the triple a proforma stores, and it prints.
+    let mut doc = fixed_facture(Case::Proforma);
+    doc.balance = Some(zero);
+    assert!(render_facture(&doc, Lang::Fr, Paper::A4).is_ok());
+
+    // One field at a time, so a check that read the closing balance alone
+    // would let a proforma carrying an old balance through, and one that
+    // read the document's own row would let the two others through. Each
+    // triple below is a ledger a proforma cannot have touched.
+    let debt = Money::centimes(150_000);
+    let sub_cases = [
+        BalanceTriple {
+            old_balance: debt,
+            ..zero
+        },
+        BalanceTriple {
+            remaining_debt: debt,
+            ..zero
+        },
+        BalanceTriple {
+            total_debt: debt,
+            ..zero
+        },
+    ];
+    for triple in sub_cases {
+        let mut doc = fixed_facture(Case::Proforma);
+        doc.balance = Some(triple);
+        for lang in Lang::ALL {
+            let err = render_facture(&doc, lang, Paper::A4)
+                .err()
+                .unwrap_or_else(|| panic!("{lang:?} {triple:?} printed a proforma with a debt"));
+            assert_eq!(err.code(), "print", "{lang:?} {triple:?}: {err:?}");
+        }
+    }
+}
+
+/// The words line names the paper it closes here too: a proforma that said
+/// "la présente facture" would be the one wording on the page contradicting
+/// the notice above it.
+#[test]
+fn a_proforma_closes_itself_in_its_own_words() {
+    let fixture = Fixture::of(Case::Proforma);
+    for lang in Lang::ALL {
+        let html = fixture.render(lang, Paper::A4);
+        assert!(html.contains(text(Key::ProformaInWords, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::InWords, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::AvoirInWords, lang)), "{lang:?}");
+        assert_eq!(
+            in_words(&html),
+            amount_in_words(fixture.doc.totals.net_to_pay, lang).unwrap(),
+            "{lang:?}"
+        );
+    }
+}
+
+/// The reprint of a cancelled facture is the same document. It keeps its
+/// number and its money to the centime (features.md, Numbering row) and says
+/// on its face that it was cancelled, so what separates it from the live
+/// page is the heading, the mark and the line naming the day and the reason,
+/// and nothing else. A reprint that also moved an amount would be a second
+/// version of a document the shop already handed over.
+#[test]
+fn a_cancelled_reprint_differs_from_the_live_facture_in_the_cancellation_only() {
+    let cancelled = Fixture::of(Case::Cancelled);
+    let live = Fixture::of(Case::Credit);
+    for lang in Lang::ALL {
+        let after = cancelled.render(lang, Paper::A4);
+        let before = live.render(lang, Paper::A4);
+
+        // Everything from the lines table to the words line, which is the
+        // whole of the money on this page, byte for byte.
+        assert_eq!(
+            money_block(&after),
+            money_block(&before),
+            "{lang:?}: the cancelled reprint moved an amount"
+        );
+
+        let after_lines: Vec<&str> = after.lines().collect();
+        let before_lines: Vec<&str> = before.lines().collect();
+        // What the cancelled page adds: the mark, the line under the number
+        // and the heading that says the document is cancelled.
+        let added: Vec<&str> = after_lines
+            .iter()
+            .filter(|line| !before_lines.contains(line))
+            .copied()
+            .collect();
+        assert!(!added.is_empty(), "{lang:?}: nothing says it was cancelled");
+        // One of them is the mark. The word alone is not enough: it is a
+        // substring of the cancelled heading in all three languages, so a
+        // page that had lost the mark and kept the heading would satisfy
+        // every other check in this test.
+        assert!(
+            added.iter().any(|line| line.contains("class=\"annulee\"")),
+            "{lang:?}: the reprint carries no mark across its face"
+        );
+        for line in &added {
+            assert!(
+                line.contains("class=\"annulee\"")
+                    || line.contains("class=\"cancelled\"")
+                    || line.contains(text(Key::FactureCancelled, lang)),
+                "{lang:?}: {line} is neither the heading nor the cancellation"
+            );
+        }
+        // And what it drops, which has to be that same heading and nothing
+        // else: a reprint that lost the payment mode or the signature block
+        // would pass a check that only read the lines it added.
+        let dropped: Vec<&str> = before_lines
+            .iter()
+            .filter(|line| !after_lines.contains(line))
+            .copied()
+            .collect();
+        for line in &dropped {
+            assert!(
+                line.contains(text(Key::Facture, lang)),
+                "{lang:?}: the cancelled reprint dropped {line}"
+            );
+        }
+        // The mark, the day, the reason, and the number the document keeps.
+        assert!(after.contains(text(Key::CancelledMark, lang)), "{lang:?}");
+        assert!(after.contains(text(Key::CancelledOn, lang)), "{lang:?}");
+        assert!(after.contains("12/09/2026"), "{lang:?}");
+        assert!(after.contains(text(Key::CancelReason, lang)), "{lang:?}");
+        assert!(after.contains("FA-000042"), "{lang:?}");
+        // A reason typed by the shop is printed and never run, like a
+        // product name.
+        assert!(
+            after.contains("Erreur de saisie &#60;quantité&#62; &#38; prix"),
+            "{lang:?} did not escape the reason"
+        );
+        assert!(!after.contains("<quantité>"), "{lang:?}");
+
+        // The live facture carries none of it, so the mark is the status
+        // doing it and not the template printing it for everyone.
+        assert!(!before.contains(text(Key::CancelledMark, lang)), "{lang:?}");
+        assert!(!before.contains(text(Key::CancelledOn, lang)), "{lang:?}");
+    }
+}
+
+/// The mark follows the document's status and the line under the number
+/// follows what the caller read with it. A cancelled facture printed by a
+/// caller that has no cancellation columns to hand still says it is
+/// cancelled: the alternative is a void document that looks live.
+#[test]
+fn a_cancelled_facture_carries_the_mark_even_with_no_cancellation_read_with_it() {
+    let doc = fixed_facture(Case::Cancelled);
+    for lang in Lang::ALL {
+        let html = render_facture(&doc, lang, Paper::A4).unwrap();
+        // In the mark's own block, not merely somewhere on a page whose
+        // heading is "FACTURE ANNULÉE" and carries the word already.
+        let mark = mark_block(&html).unwrap_or_else(|| panic!("{lang:?}: no mark block"));
+        assert!(mark.contains(text(Key::CancelledMark, lang)), "{lang:?}");
+        // And drawn across the page rather than printed in a corner: the
+        // rotation is what a reader sees from the other side of a counter.
+        assert!(mark_rule(&html).contains("rotate("), "{lang:?}");
+        assert!(html.contains(text(Key::FactureCancelled, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::CancelledOn, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::CancelReason, lang)), "{lang:?}");
+    }
+}
+
+/// A day and a reason belong to a document the shop cancelled. Printing them
+/// over a live facture would hand a customer a page saying it is void while
+/// the ledger still counts it, so the caller that hands them over for a live
+/// document is refused rather than obeyed.
+#[test]
+fn a_cancellation_printed_over_a_live_facture_is_refused() {
+    let live = fixed_facture(Case::Credit);
+    let input = FactureInput {
+        referenced: None,
+        cancellation: Some(Cancellation {
+            at: at(CANCELLED_AT),
+            reason: CANCEL_REASON,
+        }),
+    };
+    for lang in Lang::ALL {
+        let err = render_facture_with(&live, &input, lang, Paper::A4).unwrap_err();
+        assert_eq!(err.code(), "print", "{lang:?}: {err:?}");
+    }
+    // The same input over the same document once it is cancelled is the page
+    // this test is about, and it renders.
+    let cancelled = fixed_facture(Case::Cancelled);
+    assert!(render_facture_with(&cancelled, &input, Lang::Fr, Paper::A4).is_ok());
 }

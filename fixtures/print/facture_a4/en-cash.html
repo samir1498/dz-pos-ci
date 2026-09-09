@@ -6,11 +6,15 @@
 <style>
 @page { size: A4; margin: 12mm }
 body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", Arial, sans-serif }
-.doc { max-inline-size: 186mm; margin: 0 auto }
+.doc { max-inline-size: 186mm; margin: 0 auto; position: relative }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; border-block-end: 2px solid #000; padding-block-end: 3mm }
 .head h1 { font-size: 20px; margin: 0 0 1mm }
 .ident { text-align: end }
 .num { white-space: nowrap }
+.annulee { position: absolute; inset-block-start: 92mm; inset-inline: 0; text-align: center }
+.annulee span { display: inline-block; border: 3px solid #949494; color: #949494; font-size: 44px; font-weight: 700; letter-spacing: .15em; padding: 3mm 10mm; transform: rotate(-24deg) }
+.cancelled { margin-block-start: 1mm; font-weight: 700 }
+.notice { margin: 4mm 0 0; border: 1px solid #000; padding: 2mm 3mm; font-weight: 700 }
 .parties { display: flex; gap: 6mm; margin-block-start: 6mm }
 .party { flex: 1 1 0; border: 1px solid #000; padding: 3mm }
 .party h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 2mm }
@@ -72,9 +76,9 @@ td.n, th.n { text-align: end; white-space: nowrap }
 <tr><th>Description</th><th class="n">Qty</th><th class="n">Unit price excl. tax</th><th class="n">Discount</th><th class="n">VAT</th><th class="n">Amount excl. tax</th></tr>
 </thead>
 <tbody>
-<tr><td>Huile &#60;Elio&#62; &#38; Co 5 L</td><td class="n num">2</td><td class="n"><span class="amount amount-unit-price">150,00</span></td><td class="n"></td><td class="n num"><span class="rate rate-line">19 %</span></td><td class="n"><span class="amount amount-line">300,00</span></td></tr>
-<tr><td>Farine</td><td class="n num">1,5</td><td class="n"><span class="amount amount-unit-price">320,00</span></td><td class="n"></td><td class="n num"><span class="rate rate-line">9 %</span></td><td class="n"><span class="amount amount-line">480,00</span></td></tr>
-<tr><td>Pain</td><td class="n num">1</td><td class="n"><span class="amount amount-unit-price">80,00</span></td><td class="n"><span class="amount amount-line-discount">-10,00</span></td><td class="n num"><span class="rate rate-line">0 %</span></td><td class="n"><span class="amount amount-line">70,00</span></td></tr>
+<tr><td>Huile &#60;Elio&#62; &#38; Co 5 L</td><td class="n num"><span class="qty qty-line">2</span></td><td class="n"><span class="amount amount-unit-price">150,00</span></td><td class="n"></td><td class="n num"><span class="rate rate-line">19 %</span></td><td class="n"><span class="amount amount-line">300,00</span></td></tr>
+<tr><td>Farine</td><td class="n num"><span class="qty qty-line">1,5</span></td><td class="n"><span class="amount amount-unit-price">320,00</span></td><td class="n"></td><td class="n num"><span class="rate rate-line">9 %</span></td><td class="n"><span class="amount amount-line">480,00</span></td></tr>
+<tr><td>Pain</td><td class="n num"><span class="qty qty-line">1</span></td><td class="n"><span class="amount amount-unit-price">80,00</span></td><td class="n"><span class="amount amount-line-discount">-10,00</span></td><td class="n num"><span class="rate rate-line">0 %</span></td><td class="n"><span class="amount amount-line">70,00</span></td></tr>
 </tbody>
 </table>
 </div>
