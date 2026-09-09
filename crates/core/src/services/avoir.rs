@@ -30,7 +30,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::stock::{Movement, MovementKind};
-use crate::money::{compute_totals, Line, Money, MoneyError, TotalsOptions};
+use crate::money::{compute_totals, Line, Money, MoneyError, Totals, TotalsOptions, TvaLine};
 use crate::repos::documents as repo;
 use crate::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
@@ -81,46 +81,98 @@ pub fn issue(
             ));
         }
 
+        let earlier = repo::avoirs_of(conn, shop_id, facture_id)?;
         let credited = credited_by_line(conn, shop_id, &facture)?;
         let coming_back = chosen(&facture, &credited, lines)?;
 
-        // Every line is priced as it was sold, so a reprint of the two papers
-        // side by side shows the same unit price and the same rate.
-        let money_lines: Vec<Line> = coming_back
-            .iter()
-            .map(|(line, qty_milli, line_discount)| Line {
-                qty_milli: *qty_milli,
-                unit_price: line.unit_price,
-                line_discount: *line_discount,
-                rate: line.rate_bps,
-            })
-            .collect();
-        let totals = compute_totals(
-            &money_lines,
-            &TotalsOptions {
-                global_discount: global_discount(&facture, &money_lines)?,
-                payment_mode: facture.payment_mode,
-                // An avoir never carries the droit de timbre, whatever the
-                // facture was paid in. Passed as off rather than by handing
-                // over a payment mode the document is not: the stored mode is
-                // the facture's, and the paper says so.
-                stamp_enabled: false,
-                regime: facture.regime,
-            },
-        )
-        .map_err(too_large("lines"))?;
+        // The one that takes the last quantity off the facture is not computed
+        // from its own slice at all: it is the facture less every avoir before
+        // it, field by field. Rounding a slice's tax is what makes three
+        // credit notes of 60 against a facture of 179, and the third of them
+        // is where the centime has to come back
+        // (`avoir_closing_carries_the_remainder`).
+        let already = credited_amount(&earlier)?;
+        let (totals, document_lines) = if closes_the_facture(&facture, &credited, &coming_back) {
+            // The closing avoir is a subtraction, so it cannot overrun the
+            // facture by arithmetic and the running-total check below would
+            // never fire on it. What it can meet is a file that already
+            // disagrees with itself: avoirs coming to the whole of the facture
+            // while its lines still hold goods, which is what a row written
+            // straight into the table looks like. A facture that asked for
+            // nothing is left alone, because there is nothing there to overrun.
+            if facture.totals.total_ttc != Money::ZERO && already >= facture.totals.total_ttc {
+                return Err(CoreError::validation(
+                    "lines",
+                    "the avoirs on this facture would come to more than it asked for",
+                ));
+            }
+            remainder(&facture, &earlier)?
+        } else {
+            // Every line is priced as it was sold, so a reprint of the two
+            // papers side by side shows the same unit price and the same rate.
+            let money_lines: Vec<Line> = coming_back
+                .iter()
+                .map(|(line, qty_milli, line_discount)| Line {
+                    qty_milli: *qty_milli,
+                    unit_price: line.unit_price,
+                    line_discount: *line_discount,
+                    rate: line.rate_bps,
+                })
+                .collect();
+            let totals = compute_totals(
+                &money_lines,
+                &TotalsOptions {
+                    global_discount: global_discount(&facture, &money_lines)?,
+                    payment_mode: facture.payment_mode,
+                    // An avoir never carries the droit de timbre, whatever the
+                    // facture was paid in. Passed as off rather than by handing
+                    // over a payment mode the document is not: the stored mode
+                    // is the facture's, and the paper says so.
+                    stamp_enabled: false,
+                    regime: facture.regime,
+                },
+            )
+            .map_err(too_large("lines"))?;
 
-        // The safety net under the quantities: a line's remaining quantity is
-        // checked above, and this is checked against the one figure the whole
-        // facture asked for. A forged avoir carrying no line at all moves no
-        // quantity and would slip past everything else.
-        let already = credited_amount(conn, shop_id, facture_id)?;
-        if already.checked_add(totals.net_to_pay)? > facture.totals.net_to_pay {
-            return Err(CoreError::validation(
-                "lines",
-                "the avoirs on this facture would come to more than it asked for",
-            ));
-        }
+            // The safety net under the quantities: a line's remaining quantity
+            // is checked above, and this is checked against the one figure the
+            // whole facture asked for. A forged avoir carrying no line at all
+            // moves no quantity and would slip past everything else.
+            //
+            // Against `total_ttc` and not against `net_to_pay`, because the
+            // droit de timbre is the one part of a facture no avoir ever gives
+            // back: capping at the net would leave the stamp's worth of room
+            // for the partials to eat, and the closing avoir would then have
+            // to be written for a negative amount.
+            if already.checked_add(totals.net_to_pay)? > facture.totals.total_ttc {
+                return Err(CoreError::validation(
+                    "lines",
+                    "the avoirs on this facture would come to more than it asked for",
+                ));
+            }
+
+            let lines = coming_back
+                .iter()
+                .zip(&money_lines)
+                .map(|((line, qty_milli, line_discount), money)| {
+                    Ok(NewDocumentLine {
+                        product_id: line.product_id,
+                        name: line.name.clone(),
+                        barcode: line.barcode.clone(),
+                        qty_milli: *qty_milli,
+                        unit_price: line.unit_price,
+                        line_discount: *line_discount,
+                        rate_bps: line.rate_bps,
+                        line_total: money
+                            .unit_price
+                            .checked_mul_milli(*qty_milli)?
+                            .checked_sub(*line_discount)?,
+                        ref_line_id: Some(line.id),
+                    })
+                })
+                .collect::<Result<Vec<_>, MoneyError>>()?;
+            (totals, lines)
+        };
 
         let customer_id = facture.customer_id;
         let old_balance = match customer_id {
@@ -164,26 +216,7 @@ pub fn issue(
                 totals: totals.clone(),
                 tendered: None,
                 change: None,
-                lines: coming_back
-                    .iter()
-                    .zip(&money_lines)
-                    .map(|((line, qty_milli, line_discount), money)| {
-                        Ok(NewDocumentLine {
-                            product_id: line.product_id,
-                            name: line.name.clone(),
-                            barcode: line.barcode.clone(),
-                            qty_milli: *qty_milli,
-                            unit_price: line.unit_price,
-                            line_discount: *line_discount,
-                            rate_bps: line.rate_bps,
-                            line_total: money
-                                .unit_price
-                                .checked_mul_milli(*qty_milli)?
-                                .checked_sub(*line_discount)?,
-                            ref_line_id: Some(line.id),
-                        })
-                    })
-                    .collect::<Result<Vec<_>, MoneyError>>()?,
+                lines: document_lines,
             },
         )?;
 
@@ -331,16 +364,123 @@ fn unpaid_on(facture: &Document) -> Money {
 }
 
 /// What earlier avoirs have already asked for against this facture.
-fn credited_amount(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    facture_id: i32,
-) -> Result<Money, CoreError> {
+fn credited_amount(earlier: &[Document]) -> Result<Money, CoreError> {
     let mut sum = Money::ZERO;
-    for avoir in repo::avoirs_of(conn, shop_id, facture_id)? {
+    for avoir in earlier {
         sum = sum.checked_add(avoir.totals.net_to_pay)?;
     }
     Ok(sum)
+}
+
+/// Whether this avoir takes the last quantity off the facture, which is what
+/// decides how its money is computed.
+///
+/// Every line of the facture has to end at nothing: a line still holding one
+/// unit is a facture that can be credited again, and the avoir being written
+/// is one more partial.
+fn closes_the_facture(facture: &Document, credited: &[(i32, i64)], coming: &Coming) -> bool {
+    facture.lines.iter().all(|line| {
+        let taken = credited
+            .iter()
+            .find(|(id, _)| *id == line.id)
+            .map_or(0, |(_, qty)| *qty);
+        let now = coming
+            .iter()
+            .find(|(l, _, _)| l.id == line.id)
+            .map_or(0, |(_, qty, _)| *qty);
+        line.qty_milli.saturating_sub(taken).saturating_sub(now) <= 0
+    })
+}
+
+/// The facture less every avoir already written against it: the totals field
+/// by field, and the lines line by line.
+///
+/// This is the closing avoir, and it exists because a slice of a facture is
+/// not a fraction of it. The tax on each slice is rounded once, on that
+/// slice's own base, so three slices of a 179 facture come to 180 and three
+/// slices of a 286 one come to 285. Neither is wrong on its own paper and both
+/// are wrong added up, and what a shop and a comptable read is the sum: the
+/// avoirs on a facture have to reproduce it. So the last one is the
+/// difference, and it carries whatever the rounding left over.
+///
+/// The droit de timbre is the one thing not in the difference. It is paid on
+/// money that changed hands (Code du timbre 2026 art. 100-I) and never given
+/// back, so the figure being reproduced is the facture's `total_ttc` and the
+/// avoir's own stamp stays at zero.
+///
+/// A line that comes to nothing at all is dropped; a line whose quantity is
+/// spent but whose centimes are not is kept, because that centime is the whole
+/// reason this function exists.
+fn remainder(
+    facture: &Document,
+    earlier: &[Document],
+) -> Result<(Totals, Vec<NewDocumentLine>), CoreError> {
+    let mut totals = Totals {
+        total_ht: facture.totals.total_ht,
+        discount: facture.totals.discount,
+        subtotal_ht: facture.totals.subtotal_ht,
+        tva_by_rate: facture.totals.tva_by_rate.clone(),
+        tva: facture.totals.tva,
+        total_ttc: facture.totals.total_ttc,
+        stamp: Money::ZERO,
+        net_to_pay: facture.totals.total_ttc,
+    };
+    for avoir in earlier {
+        totals.total_ht = totals.total_ht.checked_sub(avoir.totals.total_ht)?;
+        totals.discount = totals.discount.checked_sub(avoir.totals.discount)?;
+        totals.subtotal_ht = totals.subtotal_ht.checked_sub(avoir.totals.subtotal_ht)?;
+        totals.tva = totals.tva.checked_sub(avoir.totals.tva)?;
+        totals.total_ttc = totals.total_ttc.checked_sub(avoir.totals.total_ttc)?;
+        for row in &avoir.totals.tva_by_rate {
+            // A rate an earlier avoir carries is a rate the facture carries:
+            // an avoir line is a facture line and takes its rate from it.
+            let Some(mine) = totals.tva_by_rate.iter_mut().find(|r| r.rate == row.rate) else {
+                return Err(CoreError::validation(
+                    "lines",
+                    "an avoir on this facture carries a rate the facture does not",
+                ));
+            };
+            mine.base = mine.base.checked_sub(row.base)?;
+            mine.amount = mine.amount.checked_sub(row.amount)?;
+        }
+    }
+    totals.net_to_pay = totals.total_ttc;
+    totals
+        .tva_by_rate
+        .retain(|r: &TvaLine| r.base != Money::ZERO || r.amount != Money::ZERO);
+
+    let mut lines = Vec::new();
+    for line in &facture.lines {
+        let mut qty_milli = line.qty_milli;
+        let mut line_discount = line.line_discount;
+        let mut line_total = line.line_total;
+        for avoir in earlier {
+            for taken in avoir
+                .lines
+                .iter()
+                .filter(|l| l.ref_line_id == Some(line.id))
+            {
+                qty_milli = qty_milli.saturating_sub(taken.qty_milli);
+                line_discount = line_discount.checked_sub(taken.line_discount)?;
+                line_total = line_total.checked_sub(taken.line_total)?;
+            }
+        }
+        if qty_milli == 0 && line_total == Money::ZERO && line_discount == Money::ZERO {
+            continue;
+        }
+        lines.push(NewDocumentLine {
+            product_id: line.product_id,
+            name: line.name.clone(),
+            barcode: line.barcode.clone(),
+            qty_milli,
+            unit_price: line.unit_price,
+            line_discount,
+            rate_bps: line.rate_bps,
+            line_total,
+            ref_line_id: Some(line.id),
+        });
+    }
+    Ok((totals, lines))
 }
 
 /// How much of each facture line earlier avoirs have already taken back, by

@@ -691,3 +691,193 @@ fn a_cancelled_facture_is_credited_by_nothing_more() {
         "{err:?}"
     );
 }
+
+/// The sum of every field of every avoir on a facture, for the invariant that
+/// the papers add up: what came back on credit notes equals what the facture
+/// asked for, less the droit de timbre it never refunds.
+fn avoir_sum(conn: &mut SqliteConnection, facture_id: i32) -> (i64, i64, i64, i64, i64) {
+    let mut ht = 0;
+    let mut discount = 0;
+    let mut subtotal = 0;
+    let mut tva = 0;
+    let mut ttc = 0;
+    for a in avoir::list_for(conn, SHOP, facture_id).unwrap() {
+        ht += a.totals.total_ht.as_centimes();
+        discount += a.totals.discount.as_centimes();
+        subtotal += a.totals.subtotal_ht.as_centimes();
+        tva += a.totals.tva.as_centimes();
+        ttc += a.totals.total_ttc.as_centimes();
+        assert_eq!(a.totals.stamp, Money::ZERO, "an avoir carries no stamp");
+        assert_eq!(a.totals.net_to_pay, a.totals.total_ttc);
+    }
+    (ht, discount, subtotal, tva, ttc)
+}
+
+/// 0,50 at 19 % three times over. Each single unit rounds its 9,5 centimes of
+/// tax up to 10, so three slices come to 180 against a facture of 179: one
+/// centime that was never charged, and under the old arithmetic the third
+/// avoir was refused for it and the cancellation with it.
+#[test]
+fn three_one_unit_avoirs_add_up_to_the_facture_they_credit() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Bougie", 50, 1900);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+    assert_eq!(facture.totals.net_to_pay, Money::centimes(179));
+    let line_id = facture.lines[0].id;
+
+    for day in 11..=13 {
+        avoir::issue(
+            &mut conn,
+            SHOP,
+            OWNER,
+            facture.id,
+            Some(vec![AvoirLine {
+                document_line_id: line_id,
+                qty_milli: 1_000,
+            }]),
+            None,
+            Some(at(day)),
+        )
+        .unwrap_or_else(|e| panic!("the avoir of day {day} was refused: {e:?}"));
+    }
+
+    let (ht, discount, subtotal, tva, ttc) = avoir_sum(&mut conn, facture.id);
+    assert_eq!(ht, facture.totals.total_ht.as_centimes());
+    assert_eq!(discount, facture.totals.discount.as_centimes());
+    assert_eq!(subtotal, facture.totals.subtotal_ht.as_centimes());
+    assert_eq!(tva, facture.totals.tva.as_centimes());
+    assert_eq!(ttc, facture.totals.total_ttc.as_centimes());
+
+    // The closing avoir is the one that gave the centime back: 179 - 60 - 60.
+    let avoirs = avoir::list_for(&mut conn, SHOP, facture.id).unwrap();
+    assert_eq!(avoirs[0].totals.net_to_pay, Money::centimes(60));
+    assert_eq!(avoirs[1].totals.net_to_pay, Money::centimes(60));
+    assert_eq!(avoirs[2].totals.net_to_pay, Money::centimes(59));
+}
+
+/// The same rounding the other way. 0,80 at 19 % is 15,2 centimes of tax a
+/// unit, rounded down to 15, so three slices come to 285 against a facture of
+/// 286: the facture would have been annulled still asking for a centime.
+#[test]
+fn a_facture_annulled_after_partial_avoirs_is_left_asking_for_nothing() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Savon", 80, 1900);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+    assert_eq!(facture.totals.net_to_pay, Money::centimes(286));
+    let line_id = facture.lines[0].id;
+
+    for day in 11..=12 {
+        avoir::issue(
+            &mut conn,
+            SHOP,
+            OWNER,
+            facture.id,
+            Some(vec![AvoirLine {
+                document_line_id: line_id,
+                qty_milli: 1_000,
+            }]),
+            None,
+            Some(at(day)),
+        )
+        .unwrap();
+    }
+
+    // The cancellation writes the closing avoir for what is left of the unit
+    // and of the centime, and the facture asks for nothing afterwards.
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        "commande annulée".to_string(),
+        Some(at(13)),
+    )
+    .unwrap();
+
+    let (_, _, _, _, ttc) = avoir_sum(&mut conn, facture.id);
+    assert_eq!(ttc, facture.totals.total_ttc.as_centimes());
+    let after = documents::get(&mut conn, SHOP, facture.id).unwrap();
+    assert_eq!(
+        after.balance.map(|b| b.remaining_debt),
+        Some(Money::ZERO),
+        "an annulled facture asks for nothing at all"
+    );
+    assert_eq!(debt::balance(&mut conn, SHOP, c).unwrap(), Money::ZERO);
+}
+
+/// Two partials that between them take every quantity: the second is the
+/// closing one and carries the remainder of every field, so the two reproduce
+/// the facture even across two rates and a global discount.
+#[test]
+fn two_partials_that_finish_a_facture_reproduce_every_field_of_it() {
+    let (_dir, mut conn) = open_temp();
+    let a = product(&mut conn, "Ciment", 333, 1900);
+    let b = product(&mut conn, "Semoule", 777, 900);
+    let c = a_customer(&mut conn);
+    let facture = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![line(a, 3_000), line(b, 7_000)],
+            global_discount: Money::centimes(101),
+            payment_mode: PaymentMode::Credit,
+            tendered: None,
+            customer_id: Some(c),
+            override_credit: false,
+            kind: SaleKind::Facture,
+            issued_at: Some(at(10)),
+        },
+    )
+    .unwrap()
+    .document;
+
+    let first: Vec<AvoirLine> = facture
+        .lines
+        .iter()
+        .map(|l| AvoirLine {
+            document_line_id: l.id,
+            qty_milli: 1_000,
+        })
+        .collect();
+    avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        Some(first),
+        None,
+        Some(at(11)),
+    )
+    .unwrap();
+    avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(12))).unwrap();
+
+    let (ht, discount, subtotal, tva, ttc) = avoir_sum(&mut conn, facture.id);
+    assert_eq!(ht, facture.totals.total_ht.as_centimes(), "HT");
+    assert_eq!(discount, facture.totals.discount.as_centimes(), "discount");
+    assert_eq!(
+        subtotal,
+        facture.totals.subtotal_ht.as_centimes(),
+        "subtotal"
+    );
+    assert_eq!(tva, facture.totals.tva.as_centimes(), "TVA");
+    assert_eq!(ttc, facture.totals.total_ttc.as_centimes(), "TTC");
+
+    // And per rate, which is the figure a comptable adds up across the year.
+    for row in &facture.totals.tva_by_rate {
+        let mut base = 0;
+        let mut amount = 0;
+        for av in avoir::list_for(&mut conn, SHOP, facture.id).unwrap() {
+            for r in &av.totals.tva_by_rate {
+                if r.rate == row.rate {
+                    base += r.base.as_centimes();
+                    amount += r.amount.as_centimes();
+                }
+            }
+        }
+        assert_eq!(base, row.base.as_centimes(), "base at {:?}", row.rate);
+        assert_eq!(amount, row.amount.as_centimes(), "tva at {:?}", row.rate);
+    }
+}

@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 5c58d7f442b5c565fb0f5fa9b503c3e8d21db8317ed58a734762367577fb6175 # shrinks to (basket, discount) = ([(50, 1900, 1000), (50, 1900, 2001)], 7), split = [[], [], [1, 1]]
