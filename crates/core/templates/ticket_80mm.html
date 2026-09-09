@@ -48,7 +48,7 @@ body { margin: 0; background: #fff; color: #000 }
 <div class="item-name">{{ line.name }}</div>
 <div class="row item-detail"><span class="num">{{ line.qty }} × {{ line.unit_price }}{% if let Some(rate) = line.rate %} · {{ rate }}{% endif %}</span><span class="amount amount-line">{{ line.total }}</span></div>
 {%- if let Some(discount) = line.discount %}
-<div class="row item-detail"><span class="label">{{ discount_label }}</span><span class="num">-{{ discount }}</span></div>
+<div class="row item-detail"><span class="label">{{ discount_label }}</span><span class="amount amount-line-discount">-{{ discount }}</span></div>
 {%- endif %}
 {%- endfor %}
 <div class="dashed"></div>

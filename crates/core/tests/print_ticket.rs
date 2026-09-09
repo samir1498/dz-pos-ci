@@ -251,6 +251,27 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document) {
         assert_eq!(centimes(printed), line.line_total.as_centimes(), "a line");
     }
 
+    // A line discount is an amount on the paper like any other, so it is
+    // read back like any other. A line that carries none prints no row.
+    let discounted: Vec<&DocumentLine> = doc
+        .lines
+        .iter()
+        .filter(|l| l.line_discount != Money::ZERO)
+        .collect();
+    let printed = amounts(html, "line-discount");
+    assert_eq!(
+        printed.len(),
+        discounted.len(),
+        "one row per discounted line"
+    );
+    for (printed, line) in printed.iter().zip(discounted) {
+        assert_eq!(
+            centimes(printed),
+            -line.line_discount.as_centimes(),
+            "a line discount"
+        );
+    }
+
     assert_eq!(
         doc.tendered.map(|m| m.as_centimes()),
         Some(centimes(&one_amount(html, "tendered"))),
