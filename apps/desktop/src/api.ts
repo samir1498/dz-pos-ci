@@ -92,3 +92,41 @@ export function saleFactureQueryKey(
 ): readonly (string | number)[] {
   return ["sale-facture", id, lang, paper];
 }
+
+/** Every rendered page of one document, whatever language and whatever sheet
+ * it was asked for in. A cancellation changes the paper itself, so all of
+ * them are stale at once and naming each language and each sheet to invalidate
+ * them would be a list that goes wrong the day a fourth paper size exists.
+ *
+ * Two prefixes because the two papers are two keys: an 80 mm ticket and a
+ * sheet are rendered by different routes. */
+export function saleSheetPrefixes(id: number): readonly (readonly (string | number)[])[] {
+  return [
+    ["sale-ticket", id],
+    ["sale-facture", id],
+  ];
+}
+
+/** The document list, keyed by the kind filter so the narrowed list and the
+ * whole one are two entries and a filter change is not answered from the
+ * other's cache. `undefined` is every kind, which is what the route reads a
+ * missing `kind` as. */
+export function salesQueryKey(kind?: string): readonly (string | undefined)[] {
+  return ["sales", kind];
+}
+
+/** Every list entry whatever its filter. A write that changes a document's
+ * status changes what each of them holds, and invalidating one filter's key
+ * leaves the others answering from a cache the write made wrong: react-query
+ * matches a filter key element by element, so `["sales", undefined]` misses
+ * `["sales", "facture"]` rather than covering it. */
+export function salesQueryPrefix(): readonly string[] {
+  return ["sales"];
+}
+
+/** Every avoir written against one facture. Its own key rather than a slice
+ * of the document's: writing one changes both, and the detail panel reads
+ * the two shapes separately. */
+export function saleAvoirsQueryKey(id: number): readonly (string | number)[] {
+  return ["sale-avoirs", id];
+}

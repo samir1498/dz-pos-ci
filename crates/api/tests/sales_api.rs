@@ -881,3 +881,401 @@ async fn a_kind_the_till_never_issues_is_refused_rather_than_ignored() {
         assert_eq!(code(&body), "bad_request", "{uri}");
     }
 }
+
+/// A facture on credit to a company that carries its identifiers, which is
+/// what an avoir and a cancellation are written against.
+async fn a_credit_facture(app: &axum::Router, product_id: i64, qty_milli: i64) -> Value {
+    seller_ready(app).await;
+    let c = party(
+        app,
+        "Sarl Amine Distribution",
+        "company",
+        Some("16/00-7654321 B 20"),
+        Some("098216007654321"),
+        Some("05 boulevard Krim Belkacem, Alger"),
+    )
+    .await;
+    let (status, body) = call(
+        app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": product_id, "qty_milli": qty_milli }],
+            "payment_mode": "credit",
+            "customer_id": c,
+            "kind": "facture",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    body
+}
+
+#[tokio::test]
+async fn an_avoir_answers_201_naming_the_facture_it_credits_and_lists_under_it() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let facture = a_credit_facture(&app, p, 3_000).await;
+    let facture_id = facture["id"].as_i64().unwrap();
+    let line_id = facture["lines"][0]["id"].as_i64().unwrap();
+
+    // One line of 500,00 back out of 3 000,00.
+    let (status, avoir) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/avoir"),
+        Some(json!({
+            "lines": [{ "document_line_id": line_id, "qty_milli": 500 }],
+            "reason": "retour marchandise",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{avoir}");
+    assert_eq!(avoir["kind"], "avoir");
+    assert_eq!(avoir["ref_document_id"], facture_id);
+    assert_eq!(avoir["totals"]["net_to_pay_centimes"], 50_000);
+    // An avoir never carries the droit de timbre.
+    assert_eq!(avoir["totals"]["stamp_centimes"], 0);
+    assert_eq!(avoir["lines"][0]["ref_line_id"], line_id);
+    assert!(avoir["printed_number"].as_str().unwrap().starts_with("AV-"));
+
+    // The facture now asks for what is left on it.
+    let (status, back) = call(&app, "GET", &format!("/sales/{facture_id}"), None).await;
+    assert_eq!(status, StatusCode::OK, "{back}");
+    assert_eq!(back["balance"]["remaining_debt_centimes"], 250_000);
+
+    // And the avoir is listed under the facture it credits.
+    let (status, listed) = call(&app, "GET", &format!("/sales/{facture_id}/avoirs"), None).await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert_eq!(listed[0]["id"], avoir["id"]);
+}
+
+#[tokio::test]
+async fn an_avoir_on_a_ticket_is_404_and_one_past_the_line_is_422() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let (status, ticket) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 1_000_000,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{ticket}");
+    let ticket_id = ticket["id"].as_i64().unwrap();
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/sales/{ticket_id}/avoir"),
+        Some(json!({ "lines": null, "reason": null })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(code(&body), "not_found");
+
+    let facture = a_credit_facture(&app, p, 1_000).await;
+    let facture_id = facture["id"].as_i64().unwrap();
+    let line_id = facture["lines"][0]["id"].as_i64().unwrap();
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/avoir"),
+        Some(json!({
+            "lines": [{ "document_line_id": line_id, "qty_milli": 5_000 }],
+            "reason": null,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    // The envelope of a validation refusal is its code and its message: the
+    // field a core error names is not on the wire (crates/api/src/error.rs
+    // fills `field` only where a screen has a box to put it in), so what is
+    // asserted here is the refusal and the message the till shows.
+    assert_eq!(code(&body), "validation");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("credited"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn cancelling_a_credit_facture_answers_the_block_naming_the_avoir() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let facture = a_credit_facture(&app, p, 2_000).await;
+    let facture_id = facture["id"].as_i64().unwrap();
+    let customer_id = facture["customer_id"].as_i64().unwrap();
+
+    let (status, cancelled) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/cancel"),
+        Some(json!({ "reason": "commande annulée" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{cancelled}");
+    assert_eq!(cancelled["status"], "cancelled");
+    // The number stays, so the series never gaps.
+    assert_eq!(cancelled["number"], facture["number"]);
+    assert_eq!(cancelled["cancellation"]["reason"], "commande annulée");
+    // The whole block travels, not the reason alone: the annulée face of the
+    // paper prints the day, and a comptable asking why a numbered document
+    // stopped asking for its amount is owed who decided it.
+    assert_eq!(
+        cancelled["cancellation"]["cancelled_at"]
+            .as_str()
+            .expect("the moment it was annulled")
+            .len(),
+        19,
+        "{cancelled}"
+    );
+    assert_eq!(cancelled["cancellation"]["cancelled_by"], 1);
+    let avoir_id = cancelled["cancellation"]["avoir_document_id"]
+        .as_i64()
+        .expect("a facture carrying debt is cancelled through an avoir");
+
+    let (status, avoir) = call(&app, "GET", &format!("/sales/{avoir_id}"), None).await;
+    assert_eq!(status, StatusCode::OK, "{avoir}");
+    assert_eq!(avoir["kind"], "avoir");
+    assert_eq!(avoir["totals"]["net_to_pay_centimes"], 200_000);
+
+    // The customer owes nothing now.
+    let (status, fiche) = call(&app, "GET", &format!("/customers/{customer_id}"), None).await;
+    assert_eq!(status, StatusCode::OK, "{fiche}");
+    assert_eq!(fiche["balance_centimes"], 0);
+
+    // A second cancellation is refused.
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/cancel"),
+        Some(json!({ "reason": "encore" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(code(&body), "validation");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("annulée"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn a_proforma_crosses_the_wire_takes_its_own_series_and_moves_no_stock() {
+    let (_dir, app) = app();
+    seller_ready(&app).await;
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let c = party(&app, "Sarl Amine", "company", None, None, None).await;
+
+    let (status, before) = call(&app, "GET", &format!("/products/{p}"), None).await;
+    assert_eq!(status, StatusCode::OK, "{before}");
+    let qty_before = before["qty_on_hand_milli"].as_i64().unwrap();
+
+    let (status, quote) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 2_000 }],
+            "payment_mode": "credit",
+            "customer_id": c,
+            "kind": "proforma",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{quote}");
+    assert_eq!(quote["kind"], "proforma");
+    assert_eq!(quote["number"], 1);
+    assert!(quote["printed_number"].as_str().unwrap().starts_with("PF-"));
+    assert_eq!(quote["balance"]["total_debt_centimes"], 0);
+
+    // Nothing left the shelf and nobody owes anything.
+    let (_, after) = call(&app, "GET", &format!("/products/{p}"), None).await;
+    assert_eq!(after["qty_on_hand_milli"], qty_before);
+    let (_, fiche) = call(&app, "GET", &format!("/customers/{c}"), None).await;
+    assert_eq!(fiche["balance_centimes"], 0);
+
+    // And a proforma with no customer is refused on the field.
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "kind": "proforma",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(code(&body), "validation");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("customer"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn a_cancellation_with_no_reason_is_refused_on_the_field() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let facture = a_credit_facture(&app, p, 1_000).await;
+    let facture_id = facture["id"].as_i64().unwrap();
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/cancel"),
+        Some(json!({ "reason": "   " })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(code(&body), "validation");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("reason"),
+        "{body}"
+    );
+}
+
+/// A field the type does not know is refused rather than dropped. The one
+/// that matters is a misspelt `lines` on an avoir: dropped, it reads as the
+/// whole facture coming back, so a caller asking for one unit of three would
+/// have credited all three and never been told.
+#[tokio::test]
+async fn a_stray_field_is_refused_on_every_avoir_and_cancel_body() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let facture = a_credit_facture(&app, p, 3_000).await;
+    let facture_id = facture["id"].as_i64().unwrap();
+    let line_id = facture["lines"][0]["id"].as_i64().unwrap();
+
+    for body in [
+        // The misspelling itself.
+        json!({ "line": [{ "document_line_id": line_id, "qty_milli": 1_000 }], "reason": null }),
+        // A stray beside a good body.
+        json!({ "lines": null, "reason": null, "note": "retour" }),
+        // And one inside a line.
+        json!({
+            "lines": [{ "document_line_id": line_id, "qty_milli": 1_000, "product_id": 1 }],
+            "reason": null
+        }),
+    ] {
+        let (status, answer) = call(
+            &app,
+            "POST",
+            &format!("/sales/{facture_id}/avoir"),
+            Some(body.clone()),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{body} was taken: {answer}"
+        );
+    }
+
+    let (status, answer) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/cancel"),
+        Some(json!({ "reason": "erreur", "avoir": false })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{answer}");
+
+    // Nothing was written by any of them: the facture still stands and no
+    // credit note was taken out of the series.
+    let (status, still) = call(&app, "GET", &format!("/sales/{facture_id}"), None).await;
+    assert_eq!(status, StatusCode::OK, "{still}");
+    assert_eq!(still["status"], "issued");
+    let (status, avoirs) = call(&app, "GET", &format!("/sales/{facture_id}/avoirs"), None).await;
+    assert_eq!(status, StatusCode::OK, "{avoirs}");
+    assert_eq!(avoirs.as_array().map(Vec::len), Some(0), "{avoirs}");
+}
+
+/// What a cancellation would do, answered by the core on a read of one
+/// document. The screen cannot work it out from the fields beside it: a
+/// facture credited in full still carries debt, was still sold on credit and
+/// still names a customer, and cancelling it does nothing at all.
+#[tokio::test]
+async fn a_read_of_one_document_says_what_cancelling_it_would_do() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+
+    // A cash ticket: the goods and nothing else.
+    let (status, ticket) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 200_000,
+            "kind": "ticket"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{ticket}");
+    let ticket_id = ticket["id"].as_i64().unwrap();
+    let (_, read) = call(&app, "GET", &format!("/sales/{ticket_id}"), None).await;
+    assert_eq!(read["cancel_effect"]["effect"], "stock_back", "{read}");
+
+    // A facture on credit: the goods and a credit note of the whole of it.
+    let facture = a_credit_facture(&app, p, 3_000).await;
+    let facture_id = facture["id"].as_i64().unwrap();
+    let (_, read) = call(&app, "GET", &format!("/sales/{facture_id}"), None).await;
+    assert_eq!(read["cancel_effect"]["effect"], "stock_back_and_avoir");
+    assert_eq!(read["cancel_effect"]["amount_centimes"], 300_000);
+
+    // Credited in part: the figure follows what is left.
+    let line_id = facture["lines"][0]["id"].as_i64().unwrap();
+    let (status, made) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/avoir"),
+        Some(json!({
+            "lines": [{ "document_line_id": line_id, "qty_milli": 1_000 }],
+            "reason": null
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+    let (_, read) = call(&app, "GET", &format!("/sales/{facture_id}"), None).await;
+    assert_eq!(read["cancel_effect"]["amount_centimes"], 200_000);
+
+    // Credited in full: nothing left to undo.
+    let (status, rest) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/avoir"),
+        Some(json!({ "lines": null, "reason": null })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{rest}");
+    let (_, read) = call(&app, "GET", &format!("/sales/{facture_id}"), None).await;
+    assert_eq!(
+        read["cancel_effect"]["effect"], "nothing_to_reverse",
+        "{read}"
+    );
+
+    // The list does not carry it: it is a question about one document and it
+    // costs a read of that document's credit notes.
+    let (_, listed) = call(&app, "GET", "/sales", None).await;
+    assert!(listed[0]["cancel_effect"].is_null(), "{listed}");
+}

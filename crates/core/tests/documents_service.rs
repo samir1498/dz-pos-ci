@@ -131,6 +131,7 @@ fn draft(kind: DocumentKind, product_id: Option<i32>, issued_at: NaiveDateTime) 
             line_discount: Money::ZERO,
             rate_bps: Bps::new(1900).unwrap(),
             line_total: Money::centimes(10_000),
+            ref_line_id: None,
         }],
     }
 }

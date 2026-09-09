@@ -1112,6 +1112,78 @@ fn a_document_already_settled_by_an_allocation_nobody_wrote_a_payment_for_refuse
     );
 }
 
+/// The same guard on the other half of the settlement. `settle_oldest_first`
+/// has money and looks for paper; `settle_document` is handed the paper, which
+/// is what an avoir uses to reach the facture it was written against. Both
+/// have to sum the allocations already on a document, because the remaining
+/// column alone cannot see a row written straight into the table.
+#[test]
+fn a_named_document_cannot_be_settled_past_what_it_asked_for() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    // Settled in full by a row that moved no column, so the document still
+    // reads as asking for its whole amount.
+    let forged = debt::append(
+        &mut conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id: customer,
+            document_id: None,
+            kind: DebtKind::Payment,
+            debit: Money::ZERO,
+            credit: Money::centimes(100_000),
+            user_id: OWNER,
+            note: None,
+        },
+    )
+    .unwrap();
+    debt::allocate(
+        &mut conn,
+        SHOP,
+        NewDebtAllocation {
+            payment_ledger_id: forged.id,
+            document_id: document,
+            amount: Money::centimes(100_000),
+        },
+    )
+    .unwrap();
+
+    let credit = debt::append(
+        &mut conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id: customer,
+            document_id: None,
+            kind: DebtKind::Avoir,
+            debit: Money::ZERO,
+            credit: Money::centimes(10_000),
+            user_id: OWNER,
+            note: None,
+        },
+    )
+    .unwrap();
+    let refused = debt::settle_document(
+        &mut conn,
+        SHOP,
+        credit.id,
+        document,
+        Money::centimes(10_000),
+    )
+    .unwrap_err();
+
+    assert!(
+        matches!(refused, CoreError::Validation { ref field, .. } if field == "amount_centimes"),
+        "a document settled twice over was refused as {refused:?}"
+    );
+    assert_eq!(
+        debt::allocations(&mut conn, SHOP, document).unwrap().len(),
+        1,
+        "the refused allocation was written anyway"
+    );
+}
+
 #[test]
 fn a_payment_carries_the_mode_it_was_taken_in_and_the_moment_it_landed() {
     let (_dir, mut conn) = open_temp();
@@ -1445,8 +1517,13 @@ fn a_cancelled_document_takes_none_of_a_payment() {
     let customer = a_customer(&mut conn, "Entreprise Benali");
     let cancelled = a_document_on_credit(&mut conn, customer, 100_000, 10);
     let standing = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    // Forged rather than cancelled through the service: what is under test is
+    // the settlement, not the cancellation. The block travels with the status
+    // because that is what a cancelled row holds, and a document reads back as
+    // annulée only when it says when and by whom (features.md §3).
     diesel::sql_query(format!(
-        "UPDATE documents SET status = 'cancelled' WHERE id = {cancelled}"
+        "UPDATE documents SET status = 'cancelled', cancelled_at = '2026-09-11 09:00:00', \
+         cancelled_by = {OWNER}, cancel_reason = 'erreur de saisie' WHERE id = {cancelled}"
     ))
     .execute(&mut conn)
     .unwrap();
