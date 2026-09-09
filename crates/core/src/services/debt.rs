@@ -10,6 +10,8 @@
 //! milestone that has no transaction of its own is `customers::create`, and
 //! it opens one.
 
+use std::collections::HashMap;
+
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
@@ -33,6 +35,21 @@ pub fn balance(
 ) -> Result<Money, CoreError> {
     ensure_customer(conn, shop_id, customer_id)?;
     repo::balance(conn, shop_id, customer_id)
+}
+
+/// What every customer of the shop owes, by customer id. A customer with no
+/// movement is not a key: no rows is no debt, and the caller reads a missing
+/// one as nothing owed.
+pub fn balances(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+) -> Result<HashMap<i32, Money>, CoreError> {
+    let mut sums = HashMap::new();
+    for (customer_id, debit, credit) in repo::balances(conn, shop_id)? {
+        let balance = Money::centimes(debit).checked_sub(Money::centimes(credit))?;
+        sums.insert(customer_id, balance);
+    }
+    Ok(sums)
 }
 
 /// The customer's movements, newest first.

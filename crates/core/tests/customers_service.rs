@@ -67,7 +67,7 @@ fn two_customers_may_share_a_name() {
     let first = customers::create(&mut conn, SHOP, OWNER, fiche("Ahmed"), None).unwrap();
     let second = customers::create(&mut conn, SHOP, OWNER, fiche("Ahmed"), None).unwrap();
     assert_ne!(first.id, second.id);
-    assert_eq!(customers::list(&mut conn, SHOP).unwrap().len(), 2);
+    assert_eq!(customers::list(&mut conn, SHOP, None).unwrap().len(), 2);
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn a_negative_opening_debt_is_refused_and_no_fiche_is_left_behind() {
         matches!(err, CoreError::Validation { ref field, .. } if field == "opening_debt"),
         "{err}"
     );
-    assert!(customers::list(&mut conn, SHOP).unwrap().is_empty());
+    assert!(customers::list(&mut conn, SHOP, None).unwrap().is_empty());
 }
 
 #[test]
@@ -178,7 +178,7 @@ fn another_shop_gets_not_found_on_a_read_and_on_an_update() {
             "{err}"
         );
     }
-    assert!(customers::list(&mut conn, 2).unwrap().is_empty());
+    assert!(customers::list(&mut conn, 2, None).unwrap().is_empty());
     assert_eq!(
         customers::get(&mut conn, SHOP, made.id).unwrap().name,
         "Entreprise Benali",
@@ -307,7 +307,7 @@ fn a_create_that_fails_after_the_fiche_leaves_no_fiche() {
     .unwrap_err();
     assert_eq!(err.code(), "storage", "{err}");
     assert!(
-        customers::list(&mut conn, SHOP).unwrap().is_empty(),
+        customers::list(&mut conn, SHOP, None).unwrap().is_empty(),
         "the fiche outlived the movement that failed"
     );
     assert!(audit::list(&mut conn, SHOP).unwrap().is_empty());
@@ -338,4 +338,163 @@ fn an_update_that_fails_at_the_audit_entry_leaves_the_fiche_as_it_was() {
         1,
         "the create's entry is the only one that should be there"
     );
+}
+
+/// The list is read by a person looking for somebody to serve, so the ones
+/// the shop still deals with come first and the rest sit under them.
+#[test]
+fn the_list_puts_the_active_ones_first_and_orders_each_group_by_name() {
+    let (_dir, mut conn) = open_temp();
+    let mut closed = fiche("Ali");
+    closed.active = false;
+    customers::create(&mut conn, SHOP, OWNER, closed, None).unwrap();
+    customers::create(&mut conn, SHOP, OWNER, fiche("Zoubir"), None).unwrap();
+    customers::create(&mut conn, SHOP, OWNER, fiche("Brahim"), None).unwrap();
+
+    let names: Vec<String> = customers::list(&mut conn, SHOP, None)
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(names, ["Brahim", "Zoubir", "Ali"]);
+}
+
+#[test]
+fn the_search_matches_a_piece_of_the_name_or_of_the_phone() {
+    let (_dir, mut conn) = open_temp();
+    let mut brahim = fiche("Brahim Khelifi");
+    brahim.phone = Some("0770 11 22 33".to_string());
+    customers::create(&mut conn, SHOP, OWNER, brahim, None).unwrap();
+    let mut zoubir = fiche("Zoubir Amrani");
+    zoubir.phone = Some("0555 99 88 77".to_string());
+    customers::create(&mut conn, SHOP, OWNER, zoubir, None).unwrap();
+
+    let by_name: Vec<String> = customers::list(&mut conn, SHOP, Some("khel"))
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(
+        by_name,
+        ["Brahim Khelifi"],
+        "the name is matched anywhere in it, in any case"
+    );
+
+    let by_phone: Vec<String> = customers::list(&mut conn, SHOP, Some("99 88"))
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(by_phone, ["Zoubir Amrani"]);
+
+    assert!(
+        customers::list(&mut conn, SHOP, Some("Massinissa"))
+            .unwrap()
+            .is_empty(),
+        "a search nobody matches answers nothing, not everybody"
+    );
+}
+
+/// A `%` is a character somebody typed, never the wildcard SQLite reads it
+/// as: without the escape, one typed by accident answers the whole list.
+#[test]
+fn a_wildcard_typed_into_the_search_is_a_character_to_match() {
+    let (_dir, mut conn) = open_temp();
+    customers::create(&mut conn, SHOP, OWNER, fiche("Brahim"), None).unwrap();
+    customers::create(&mut conn, SHOP, OWNER, fiche("Remise 5% Zoubir"), None).unwrap();
+
+    let found: Vec<String> = customers::list(&mut conn, SHOP, Some("5%"))
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(found, ["Remise 5% Zoubir"]);
+    assert!(
+        customers::list(&mut conn, SHOP, Some("_"))
+            .unwrap()
+            .is_empty(),
+        "an underscore matched any character instead of itself"
+    );
+}
+
+/// The list screen shows what each customer owes beside the limit, so the
+/// balance travels with the fiche rather than in a call per row.
+#[test]
+fn the_list_and_the_fiche_carry_the_balance_the_ledger_sums_to() {
+    let (_dir, mut conn) = open_temp();
+    let owing = customers::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        fiche("Brahim"),
+        Some(Money::centimes(150_000)),
+    )
+    .unwrap();
+    let clear = customers::create(&mut conn, SHOP, OWNER, fiche("Zoubir"), None).unwrap();
+    debt::append(
+        &mut conn,
+        SHOP,
+        debt::NewDebtEntry {
+            customer_id: owing.id,
+            document_id: None,
+            kind: debt::DebtKind::Payment,
+            debit: Money::ZERO,
+            credit: Money::centimes(50_000),
+            user_id: OWNER,
+            note: None,
+        },
+    )
+    .unwrap();
+
+    let rows = customers::list_with_balance(&mut conn, SHOP, None).unwrap();
+    let balances: Vec<(String, Money)> = rows
+        .into_iter()
+        .map(|row| (row.customer.name, row.balance))
+        .collect();
+    assert_eq!(
+        balances,
+        [
+            ("Brahim".to_string(), Money::centimes(100_000)),
+            ("Zoubir".to_string(), Money::ZERO),
+        ],
+        "a customer with no movement owes nothing, not nothing at all"
+    );
+
+    let one = customers::get_with_balance(&mut conn, SHOP, owing.id).unwrap();
+    assert_eq!(one.customer.id, owing.id);
+    assert_eq!(one.balance, Money::centimes(100_000));
+    assert_eq!(
+        customers::get_with_balance(&mut conn, SHOP, clear.id)
+            .unwrap()
+            .balance,
+        Money::ZERO
+    );
+}
+
+#[test]
+fn another_shops_fiche_is_not_found_with_its_balance_either() {
+    let (_dir, mut conn) = open_temp();
+    second_shop(&mut conn);
+    let made = customers::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        fiche("Brahim"),
+        Some(Money::centimes(150_000)),
+    )
+    .unwrap();
+    let err = customers::get_with_balance(&mut conn, 2, made.id).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::NotFound {
+                entity: "customer",
+                ..
+            }
+        ),
+        "{err}"
+    );
+    assert!(customers::list_with_balance(&mut conn, 2, None)
+        .unwrap()
+        .is_empty());
 }

@@ -9,16 +9,58 @@ use crate::error::CoreError;
 use crate::models::customer::{Customer, CustomerRow, CustomerRowWrite};
 use crate::schema::customers;
 
-/// Alphabetical, the order the customer list and the picker read in. Two
+/// The ones the shop still deals with first, then alphabetical inside each
+/// group: the list is read by somebody looking for a customer to serve, and a
+/// deactivated fiche is kept for its ledger rather than for that. Two
 /// customers may share a name, so the id breaks the tie and the order is
 /// stable between two calls.
-pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<Customer>, CoreError> {
-    let rows: Vec<CustomerRow> = customers::table
+///
+/// `search` matches a piece of the name or of the phone. It is a substring
+/// somebody typed into a box, so the wildcards SQLite reads in a LIKE pattern
+/// are escaped into characters to match: a `%` typed by accident used to
+/// answer the whole list.
+pub fn list(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    search: Option<&str>,
+) -> Result<Vec<Customer>, CoreError> {
+    let mut query = customers::table
         .filter(customers::shop_id.eq(shop_id))
-        .order((customers::name.asc(), customers::id.asc()))
+        .into_boxed();
+    if let Some(text) = search {
+        let pattern = contains_pattern(text);
+        query = query.filter(
+            customers::name
+                .like(pattern.clone())
+                .escape('\\')
+                // A fiche with no phone is not a match, and `NULL LIKE …` is
+                // NULL, which an OR treats as no match. `assume_not_null`
+                // only says so to the type system.
+                .or(customers::phone
+                    .like(pattern)
+                    .escape('\\')
+                    .assume_not_null()),
+        );
+    }
+    let rows: Vec<CustomerRow> = query
+        .order((
+            customers::active.desc(),
+            customers::name.asc(),
+            customers::id.asc(),
+        ))
         .select(CustomerRow::as_select())
         .load(conn)?;
     Ok(rows.into_iter().map(Customer::from).collect())
+}
+
+/// What was typed, as a LIKE pattern that matches it anywhere: the escape
+/// character first, so escaping it does not escape the escapes.
+fn contains_pattern(text: &str) -> String {
+    let escaped = text
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    format!("%{escaped}%")
 }
 
 pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Customer, CoreError> {
