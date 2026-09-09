@@ -25,7 +25,7 @@ use crate::money::Money;
 use crate::repos::customers as customers_repo;
 use crate::repos::debt as repo;
 use crate::repos::documents as documents_repo;
-use crate::services::{audit, optional_field};
+use crate::services::{audit, clock, optional_field};
 
 pub use crate::models::debt::{
     DebtAllocation, DebtEntry, DebtKind, NewDebtAllocation, NewDebtEntry, PaymentMethod,
@@ -152,7 +152,9 @@ pub struct RangedStatement {
 ///
 /// `to` is inclusive to the end of its day: a range asked for as one day is
 /// that day's movements, and a payment taken at 16:30 falls inside a range
-/// that ends on the day it was taken.
+/// that ends on the day it was taken. The day a movement is compared by is
+/// the day on the shop's calendar, because every row is stamped by the shop's
+/// clock (`append_at`) and a document's `issued_at` is too.
 pub fn statement_between(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -525,10 +527,14 @@ pub fn append(
 }
 
 /// The same movement, stamped with the moment it belongs to rather than with
-/// the moment it was written. `None` leaves the column's own default, which
-/// is what every caller ringing something up wants; a caller that knows when
-/// the money moved says so, and the statement's date range then reads the day
-/// the shop would say it was.
+/// the moment it was written. `None` is now, on the shop's clock, which is
+/// what every caller ringing something up wants; a caller that knows when the
+/// money moved says so, and the statement's date range then reads the day the
+/// shop would say it was.
+///
+/// The column's own `CURRENT_TIMESTAMP` default is never used: it is UTC,
+/// while a document's `issued_at` is on the shop's calendar, and one hour a
+/// day the two disagree about which day a movement landed on.
 pub fn append_at(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -581,7 +587,7 @@ pub fn append_at(
             // A movement that is not a payment was not handed over in
             // anything. `pay` is the one writer that fills the mode in.
             payment_mode: None,
-            created_at: at,
+            created_at: Some(at.unwrap_or_else(clock::now)),
         },
     )
 }

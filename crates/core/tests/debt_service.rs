@@ -1347,3 +1347,84 @@ fn a_range_with_nothing_in_it_closes_where_it_opened() {
     assert_eq!(range.opening, Money::centimes(150_000));
     assert_eq!(range.closing, range.opening);
 }
+
+#[test]
+fn a_movement_is_stamped_by_the_shops_clock_and_not_by_utc() {
+    // A document's `issued_at` is on the shop's calendar (services::clock),
+    // and the ledger has to be on the same one: a statement asks for days,
+    // and between 23:00 and midnight UTC the two clocks disagree about which
+    // day a payment landed on. Algeria is UTC+1 all year, so a row stamped by
+    // the database's own CURRENT_TIMESTAMP is an hour behind this.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+
+    let written = debt::append(
+        &mut conn,
+        SHOP,
+        movement(customer, DebtKind::Opening, 150_000, 0),
+    )
+    .unwrap();
+
+    let drift = written
+        .created_at
+        .signed_duration_since(dzpos_core::services::clock::now())
+        .num_seconds()
+        .abs();
+    assert!(
+        drift <= 5,
+        "the movement is stamped {drift}s from the shop's clock: {}",
+        written.created_at
+    );
+}
+
+#[test]
+fn the_first_and_the_last_moment_of_a_range_are_inside_it() {
+    // Both days are included (features.md §2), which is the whole of the two
+    // days and not the two instants they start at: a payment taken at half
+    // past midnight on the first day and one taken in the last minute of the
+    // last day are both in the statement the customer is sent.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let day = |d: u32, h: u32, m: u32| {
+        NaiveDate::from_ymd_opt(2026, 9, d)
+            .and_then(|date| date.and_hms_opt(h, m, 0))
+            .unwrap()
+    };
+    // Outside, first moment of the range, last moment of the range, outside.
+    for (at, centimes) in [
+        (day(9, 23, 30), 10_000),
+        (day(10, 0, 30), 20_000),
+        (day(20, 23, 30), 30_000),
+        (day(21, 0, 30), 40_000),
+    ] {
+        debt::append_at(
+            &mut conn,
+            SHOP,
+            movement(customer, DebtKind::Adjustment, centimes, 0),
+            Some(at),
+        )
+        .unwrap();
+    }
+
+    let range = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2026, 9, 10).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 9, 20).unwrap(),
+    )
+    .unwrap();
+
+    let inside: Vec<i64> = range
+        .entries
+        .iter()
+        .map(|line| line.entry.debit.as_centimes())
+        .collect();
+    assert_eq!(
+        inside,
+        [20_000, 30_000],
+        "the range took the wrong side of one of its two days"
+    );
+    assert_eq!(range.opening, Money::centimes(10_000));
+    assert_eq!(range.closing, Money::centimes(60_000));
+}
