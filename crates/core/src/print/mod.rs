@@ -11,11 +11,13 @@
 //! ticket and the facture are two papers, but a document number reads the
 //! same on both and a customer comparing them must not find two spellings.
 
+pub mod debt_slip;
 pub mod facture;
 pub mod statement;
 pub mod strings;
 pub mod ticket;
 
+pub use debt_slip::render_debt_slip;
 pub use facture::{
     render_facture, render_facture_with, render_facture_with_reference, Cancellation, FactureInput,
     Paper,

@@ -13,7 +13,9 @@ use dzpos_core::error::CoreError;
 use dzpos_core::money::{Money, PaymentMode, Regime, Totals};
 use dzpos_core::services::audit;
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
-use dzpos_core::services::debt::{self, DebtKind, NewDebtAllocation, NewDebtEntry, PaymentMethod};
+use dzpos_core::services::debt::{
+    self, DebtKind, DocumentRef, NewDebtAllocation, NewDebtEntry, PaymentMethod,
+};
 use dzpos_core::services::documents::{
     self, BalanceTriple, DocumentKind, NewDocument, PartyBlock, SellerBlock,
 };
@@ -1813,4 +1815,78 @@ fn a_closed_fiche_still_takes_a_correction() {
     .unwrap();
 
     assert_eq!(corrected.statement.balance, Money::centimes(100_000));
+}
+
+#[test]
+fn the_recent_movements_are_the_newest_ones_and_the_balance_counts_them_all() {
+    // What the debt slip prints (features.md §2). The window is the newest
+    // few movements; the figure under the customer's name is the whole
+    // ledger, so a shop handing over the slip is not quoting a smaller debt
+    // than the one it is owed.
+    let (_dir, mut conn) = open_temp();
+    let id = a_customer(&mut conn, "Brahim");
+    a_document(&mut conn, 1, SHOP, 7);
+    debt::append(&mut conn, SHOP, movement(id, DebtKind::Opening, 150_000, 0)).unwrap();
+    for _ in 0..11 {
+        debt::append(&mut conn, SHOP, movement(id, DebtKind::Sale, 10_000, 0)).unwrap();
+    }
+    let newest = debt::append(
+        &mut conn,
+        SHOP,
+        NewDebtEntry {
+            document_id: Some(1),
+            ..movement(id, DebtKind::Sale, 5_000, 0)
+        },
+    )
+    .unwrap();
+
+    let slip = debt::recent(&mut conn, SHOP, id, 10).unwrap();
+
+    assert_eq!(
+        slip.balance,
+        Money::centimes(265_000),
+        "the balance is not what the whole ledger sums to"
+    );
+    assert_eq!(
+        slip.balance,
+        debt::balance(&mut conn, SHOP, id).unwrap(),
+        "the slip and the balance query disagree"
+    );
+    assert_eq!(
+        slip.entries.len(),
+        10,
+        "the window is not the size asked for"
+    );
+    assert_eq!(
+        slip.entries[0].entry.id, newest.id,
+        "the rows do not read newest first"
+    );
+    assert_eq!(
+        slip.entries[0].balance_after,
+        Money::centimes(265_000),
+        "the newest row does not carry the balance as of itself"
+    );
+    // The oldest movement of all is outside the window, which is the whole
+    // point of it: the opening row is the thirteenth from the end.
+    assert!(
+        !slip
+            .entries
+            .iter()
+            .any(|line| line.entry.kind == DebtKind::Opening),
+        "a movement older than the window reached the slip"
+    );
+    // The document a row cites is named by the kind and number a customer
+    // quotes, read off the document rather than off the ledger row.
+    assert_eq!(
+        slip.entries[0].document,
+        Some(DocumentRef {
+            kind: DocumentKind::Facture,
+            number: 7,
+        }),
+        "the newest row does not name the facture it was written for"
+    );
+    assert!(
+        slip.entries[1].document.is_none(),
+        "a movement citing no document was given one"
+    );
 }

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>Account balance slip Entreprise Benali &#38; Fils</title>
+<style>
+@page { size: 80mm auto; margin: 0 }
+body { margin: 0; background: #fff; color: #000 }
+.slip { inline-size: 72mm; margin: 0 auto; padding: 4mm 0; font: 12px/1.45 "DejaVu Sans Mono", "Courier New", monospace }
+.center { text-align: center }
+.name { font-size: 15px; font-weight: 700 }
+.dashed { border-block-start: 1px dashed #000; margin-block: 2mm }
+.row { display: flex; justify-content: space-between; gap: 3mm }
+.row .label { overflow-wrap: anywhere }
+.amount, .num { white-space: nowrap }
+.cur { margin-inline-start: .4em }
+.who { overflow-wrap: anywhere }
+.movement { color: #333 }
+.net { font-weight: 700; font-size: 14px }
+.notice { font-size: 11px }
+</style>
+</head>
+<body>
+<article class="slip">
+<div class="center">
+<div class="name">Alimentation Générale El Baraka</div>
+<div>5 boulevard Amirouche, Alger</div>
+<div class="num">021 63 44 55</div>
+<div>NIF <span class="num">000916007654321</span></div>
+<div>RC <span class="num">16/00-7654321 B 21</span></div>
+<div>NIS <span class="num">000916001112223</span></div>
+<div>AI <span class="num">16987654321</span></div>
+</div>
+<div class="dashed"></div>
+<div class="center">Account balance slip</div>
+<div class="center num">13/09/2026 17:30</div>
+<div class="dashed"></div>
+<div>Customer</div>
+<div class="who name">Entreprise Benali &#38; Fils</div>
+<div class="who">12 rue Didouche Mourad, Alger</div>
+<div class="num">0770 11 22 33</div>
+<div>RC <span class="num">16/00-1234567 B 09</span></div>
+<div>NIF <span class="num">000916001234567</span></div>
+<div>NIS <span class="num">000916009876543</span></div>
+<div>AI <span class="num">16123456789</span></div>
+<div class="dashed"></div>
+<div class="row net"><span class="label">Balance</span><span class="amount amount-balance">1 750,00</span><span class="cur">DZD</span></div>
+<div>This slip is closed at the sum of <strong class="in-words">one thousand seven hundred and fifty dinars</strong></div>
+<div class="dashed"></div>
+<div>Latest movements</div>
+<div class="row"><span class="num">12/09/2026</span><span class="label">Sale</span><span class="num">FA-000047</span></div>
+<div class="row movement"><span>Debit <span class="amount amount-debit">350,00</span></span><span class="amount amount-running">1 750,00</span></div>
+<div class="row"><span class="num">11/09/2026</span><span class="label">Payment</span></div>
+<div class="row movement"><span>Credit <span class="amount amount-credit">600,00</span></span><span class="amount amount-running">1 400,00</span></div>
+<div class="row"><span class="num">10/09/2026</span><span class="label">Sale</span><span class="num">FA-000046</span></div>
+<div class="row movement"><span>Debit <span class="amount amount-debit">400,00</span></span><span class="amount amount-running">2 000,00</span></div>
+<div class="row"><span class="num">09/09/2026</span><span class="label">Credit note</span><span class="num">AV-000003</span></div>
+<div class="row movement"><span>Credit <span class="amount amount-credit">150,00</span></span><span class="amount amount-running">1 600,00</span></div>
+<div class="row"><span class="num">08/09/2026</span><span class="label">Sale</span><span class="num">FA-000045</span></div>
+<div class="row movement"><span>Debit <span class="amount amount-debit">250,00</span></span><span class="amount amount-running">1 750,00</span></div>
+<div class="row"><span class="num">07/09/2026</span><span class="label">Payment</span></div>
+<div class="row movement"><span>Credit <span class="amount amount-credit">200,00</span></span><span class="amount amount-running">1 500,00</span></div>
+<div class="row"><span class="num">06/09/2026</span><span class="label">Sale</span><span class="num">FA-000044</span></div>
+<div class="row movement"><span>Debit <span class="amount amount-debit">300,00</span></span><span class="amount amount-running">1 700,00</span></div>
+<div class="row"><span class="num">05/09/2026</span><span class="label">Adjustment</span></div>
+<div class="row movement"><span>Credit <span class="amount amount-credit">100,00</span></span><span class="amount amount-running">1 400,00</span></div>
+<div class="row"><span class="num">04/09/2026</span><span class="label">Sale</span><span class="num">FA-000043</span></div>
+<div class="row movement"><span>Debit <span class="amount amount-debit">500,00</span></span><span class="amount amount-running">1 500,00</span></div>
+<div class="row"><span class="num">03/09/2026</span><span class="label">Payment</span></div>
+<div class="row movement"><span>Credit <span class="amount amount-credit">2 500,00</span></span><span class="amount amount-running">1 000,00</span></div>
+<div class="dashed"></div>
+<div class="center notice">This slip has no fiscal value</div>
+</article>
+</body>
+</html>

@@ -215,6 +215,57 @@ pub fn statement_between(
     })
 }
 
+/// What a customer owes now and the movements that are still worth showing
+/// them: the newest `limit` rows, each with the balance as of itself and the
+/// document it cites.
+///
+/// `balance` is the whole ledger's, never the sum of the rows carried here. A
+/// slip whose figure was the sum of the ten movements it printed would be
+/// wrong for every customer who has bought more than ten times, and wrong in
+/// the direction that says they owe less than they do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecentStatement {
+    pub balance: Money,
+    /// Newest first, which is the order a counter paper is read in.
+    pub entries: Vec<StatementEntry>,
+}
+
+/// The customer's account as a debt slip prints it (features.md §2). The same
+/// running column `statement` builds, cut to its newest `limit` rows and with
+/// each cited document named, so the slip adds nothing up on its way to paper.
+pub fn recent(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+    limit: usize,
+) -> Result<RecentStatement, CoreError> {
+    let whole = statement(conn, shop_id, customer_id)?;
+    let balance = whole.balance;
+    let newest: Vec<LedgerLine> = whole.lines.into_iter().take(limit).collect();
+    let cited: Vec<i32> = newest
+        .iter()
+        .filter_map(|line| line.entry.document_id)
+        .collect();
+    let named = documents_repo::kinds_and_numbers(conn, shop_id, &cited)?;
+    let entries = newest
+        .into_iter()
+        .map(|line| StatementEntry {
+            document: line.entry.document_id.and_then(|id| {
+                named
+                    .iter()
+                    .find(|(found, _, _)| *found == id)
+                    .map(|(_, kind, number)| DocumentRef {
+                        kind: *kind,
+                        number: *number,
+                    })
+            }),
+            entry: line.entry,
+            balance_after: line.balance_after,
+        })
+        .collect();
+    Ok(RecentStatement { balance, entries })
+}
+
 /// What an adjustment left behind: the movement, what it took off the
 /// customer's documents, and the ledger as the same transaction read it once
 /// the movement had landed. The statement travels with the entry so that the
