@@ -169,3 +169,32 @@ fn another_shop_is_not_found_on_read_or_write() {
         "shop 1 was not touched by the write aimed at shop 2"
     );
 }
+
+#[test]
+fn a_store_block_change_leaves_an_audit_entry_holding_both_versions() {
+    // The seller block is a legal block of every document (décret 05-468
+    // art. 2). Who changed the NIF, and to what, is the question the log
+    // exists to answer (features.md §5).
+    use dzpos_core::services::audit;
+    let (_dir, mut conn) = open_temp();
+    let before_name = shops::get(&mut conn, SHOP).unwrap().name;
+    shops::update_store(&mut conn, SHOP, OWNER, full_block()).unwrap();
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    assert_eq!(entries.len(), 1, "the store block change was not logged");
+    let entry = &entries[0];
+    assert_eq!(entry.action, "update");
+    assert_eq!(entry.entity, "shop");
+    assert_eq!(entry.entity_id, Some(SHOP));
+    assert_eq!(entry.user_id, OWNER);
+    let before = entry.before.clone().expect("no before");
+    let after = entry.after.clone().expect("no after");
+    assert!(
+        before.contains(&before_name),
+        "the old name is missing: {before}"
+    );
+    assert!(
+        after.contains("000016001234567"),
+        "the new NIF is missing: {after}"
+    );
+}

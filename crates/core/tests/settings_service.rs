@@ -213,3 +213,32 @@ fn a_change_to_the_regime_already_in_force_on_that_day_is_refused() {
         at(2025, 6, 1)
     );
 }
+
+#[test]
+fn a_regime_change_leaves_an_audit_entry_naming_the_day_it_starts() {
+    // The régime decides whether a document prints TVA at all, so a change
+    // is a sensitive one (features.md §5) and the entry has to carry the
+    // date it takes effect, not only the day of the click.
+    use dzpos_core::services::audit;
+    let (_dir, mut conn) = open_temp();
+    settings::set_regime(&mut conn, SHOP, OWNER, Regime::Ifu, at(2026, 3, 1)).unwrap();
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    assert_eq!(entries.len(), 1, "the régime change was not logged");
+    let entry = &entries[0];
+    assert_eq!(entry.action, "set_regime");
+    assert_eq!(entry.entity, "regime_fiscal");
+    assert_eq!(entry.entity_id, Some(SHOP));
+    assert_eq!(entry.user_id, OWNER);
+    let before = entry.before.clone().expect("no before");
+    let after = entry.after.clone().expect("no after");
+    assert!(
+        before.contains("reel"),
+        "the old régime is missing: {before}"
+    );
+    assert!(after.contains("ifu"), "the new régime is missing: {after}");
+    assert!(
+        after.contains("2026-03-01"),
+        "the day the change starts is missing: {after}"
+    );
+}

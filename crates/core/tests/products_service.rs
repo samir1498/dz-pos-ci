@@ -641,3 +641,36 @@ fn an_update_of_a_missing_product_is_not_found_with_its_id() {
         other => panic!("expected a product NotFound, got {other:?}"),
     }
 }
+
+#[test]
+fn a_price_change_leaves_an_audit_entry_and_a_rename_does_not() {
+    // features.md §5 names the price and the active flag as the sensitive
+    // edits. The entry has to hold the old and the new value: an entry that
+    // only says "something changed" answers no question a comptable asks.
+    use dzpos_core::services::audit;
+    let (_dir, mut conn) = open_temp();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("Sucre")).unwrap();
+
+    let renamed = draft("Sucre roux");
+    products::update(&mut conn, SHOP, OWNER, made.id, renamed).unwrap();
+    assert!(
+        audit::list(&mut conn, SHOP).unwrap().is_empty(),
+        "a rename was logged and would bury the price changes"
+    );
+
+    let mut dearer = draft("Sucre roux");
+    dearer.selling = Money::centimes(1_050);
+    products::update(&mut conn, SHOP, OWNER, made.id, dearer).unwrap();
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    assert_eq!(entries.len(), 1, "the price change was not logged");
+    let entry = &entries[0];
+    assert_eq!(entry.action, "update");
+    assert_eq!(entry.entity, "product");
+    assert_eq!(entry.entity_id, Some(made.id));
+    assert_eq!(entry.user_id, OWNER);
+    let before = entry.before.clone().expect("no before");
+    let after = entry.after.clone().expect("no after");
+    assert!(before.contains("920"), "the old price is missing: {before}");
+    assert!(after.contains("1050"), "the new price is missing: {after}");
+}
