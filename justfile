@@ -41,8 +41,11 @@ types-check:
 
 # regenerate the committed TS types after a DTO change (the test never
 # writes there on its own, so `cargo test` cannot mask a stale commit)
+# Absolute: cargo runs a test from the crate's own directory, and a relative
+# path here wrote crates/api/packages/shared/src/generated the first time a
+# DTO was added after the recipe was written.
 types:
-    DZPOS_TS_OUT_DIR=packages/shared/src/generated cargo test -p dzpos-api --test export_bindings
+    DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" cargo test -p dzpos-api --test export_bindings
 
 # everything a PR needs, in order; stops at the first failure
 gates: fmt clippy types-check test build

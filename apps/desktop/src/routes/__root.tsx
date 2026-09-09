@@ -9,9 +9,12 @@ function RootLayout() {
     <div dir={dir} className="min-h-screen">
       <header className="flex items-center gap-4 border-b p-4">
         <span className="font-semibold">{t("app_name")}</span>
-        <nav>
+        <nav className="flex gap-4">
           <Link to="/products" className="underline">
             {t("nav_products")}
+          </Link>
+          <Link to="/settings" className="underline">
+            {t("nav_settings")}
           </Link>
         </nav>
       </header>

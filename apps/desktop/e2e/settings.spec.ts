@@ -1,0 +1,109 @@
+// The settings screen driven through a real browser against a real API:
+// the store block a ticket prints and the dated régime fiscal. Strings come
+// from src/i18n/fr.json so a reworded label fails here rather than passing
+// a hardcoded sentence.
+
+import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = fileURLToPath(new URL(".", import.meta.url));
+const frPath = path.join(here, "..", "src", "i18n", "fr.json");
+
+function readMessages(): Record<string, string> {
+  const parsed: unknown = JSON.parse(readFileSync(frPath, "utf8"));
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new Error(`${frPath} is not a JSON object`);
+  }
+  const messages: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== "string") throw new Error(`${frPath}: ${key} is not a string`);
+    messages[key] = value;
+  }
+  return messages;
+}
+
+const messages = readMessages();
+
+function t(key: string): string {
+  const value = messages[key];
+  if (value === undefined) throw new Error(`${frPath} has no key ${key}`);
+  return value;
+}
+
+const STORE_NAME = "Superette El Baraka";
+const RC = "16/00-1234567 B 20";
+const NIF = "000016001234567";
+const PHONE = "0555 12 34 56";
+
+/** A day as the API writes it, `YYYY-MM-DD`, on the calendar the server
+ * reads "today" from: Algeria's, UTC+1 with no daylight saving. */
+function day(offsetDays: number): string {
+  const d = new Date(Date.now() + 3600_000);
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+test("saves the store block and reads it back after a reload", async ({ page }) => {
+  const putBodies: unknown[] = [];
+  await page.route("**/settings/store", async (route) => {
+    if (route.request().method() === "PUT") putBodies.push(route.request().postDataJSON());
+    await route.continue();
+  });
+
+  await page.goto("/products");
+  await page.getByRole("link", { name: t("nav_settings") }).click();
+  await expect(page.getByRole("heading", { name: t("settings_title") })).toBeVisible();
+
+  const name = page.getByLabel(t("field_name"), { exact: true });
+  // The seeded shop, so the database is the fresh one the run started.
+  await expect(name).toHaveValue("Mon magasin");
+  await name.fill(STORE_NAME);
+  await page.getByLabel(t("field_rc"), { exact: true }).fill(RC);
+  await page.getByLabel(t("field_nif"), { exact: true }).fill(NIF);
+  await page.getByLabel(t("field_phone"), { exact: true }).fill(PHONE);
+  const storeForm = page.getByRole("form", { name: t("settings_store") });
+  await storeForm.getByRole("button", { name: t("action_save") }).click();
+  await expect(page.getByRole("status")).toHaveText(t("settings_saved"));
+  expect(putBodies).toEqual([
+    { name: STORE_NAME, rc: RC, nif: NIF, nis: null, ai: null, address: null, phone: PHONE },
+  ]);
+
+  // What the screen shows after a reload is what the file holds.
+  await page.reload();
+  await expect(page.getByLabel(t("field_name"), { exact: true })).toHaveValue(STORE_NAME);
+  await expect(page.getByLabel(t("field_rc"), { exact: true })).toHaveValue(RC);
+  await expect(page.getByLabel(t("field_nis"), { exact: true })).toHaveValue("");
+  await expect(page.getByLabel(t("field_phone"), { exact: true })).toHaveValue(PHONE);
+});
+
+test("a régime change dated ahead is planned; dated back it is in force", async ({ page }) => {
+  await page.goto("/settings");
+  const current = page.getByTestId("regime-current");
+  await expect(current).toContainText(t("regime_reel"));
+  await expect(page.getByTestId("regime-planned")).toHaveCount(0);
+
+  const regimeForm = page.getByRole("form", { name: t("settings_regime") });
+  const regime = regimeForm.getByRole("combobox", { name: t("field_regime") });
+  const from = regimeForm.getByLabel(t("field_valid_from"), { exact: true });
+  const apply = regimeForm.getByRole("button", { name: t("action_apply") });
+
+  // Tomorrow: the change is planned, réel stays in force.
+  await regime.selectOption("ifu");
+  await from.fill(day(1));
+  await apply.click();
+  const planned = page.getByTestId("regime-planned");
+  await expect(planned).toContainText(t("regime_ifu"));
+  await expect(planned).toContainText(day(1));
+  await expect(current).toContainText(t("regime_reel"));
+
+  // Yesterday: in force at once, and the planned line is gone after the
+  // reload because the server's answer, not the screen, decides.
+  await regime.selectOption("ifu");
+  await from.fill(day(-1));
+  await apply.click();
+  await expect(current).toContainText(`${t("regime_ifu")} · ${t("regime_since")} ${day(-1)}`);
+  await page.reload();
+  await expect(page.getByTestId("regime-current")).toContainText(t("regime_ifu"));
+});

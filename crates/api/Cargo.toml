@@ -18,6 +18,8 @@ thiserror = "2"
 # The launch token is 32 random bytes from the OS; already in the lock
 # through tauri, so no new crate is compiled.
 getrandom = "0.3.4"
+# Days on the wire (a régime change is dated); the core already uses it.
+chrono = { workspace = true }
 
 [dev-dependencies]
 # Test-only: one test plants a row the migration's CHECK refuses, which no

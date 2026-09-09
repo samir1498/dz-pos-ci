@@ -10,11 +10,12 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    ApiErrorDto, ApiErrorPayloadDto, CategoryDto, HealthDto, NewProductDto, ProductDto, UnitDto,
+    ApiErrorDto, ApiErrorPayloadDto, CategoryDto, DatedRegimeDto, HealthDto, NewProductDto,
+    ProductDto, RegimeChangeDto, RegimeDto, SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 7] = [
+const FILES: [&str; 12] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -22,13 +23,13 @@ const FILES: [&str; 7] = [
     "HealthDto.ts",
     "ApiErrorDto.ts",
     "ApiErrorPayloadDto.ts",
+    "StoreDto.ts",
+    "RegimeDto.ts",
+    "DatedRegimeDto.ts",
+    "SettingsDto.ts",
+    "RegimeChangeDto.ts",
 ];
 
-/// Where the bindings are written. `just types-check` points
-/// `DZPOS_TS_OUT_DIR` at a temp directory and diffs the result against the
-/// committed one in both directions, so a new or a deleted DTO fails the
-/// gate. With no override the test writes the committed directory in place,
-/// which is how a developer regenerates it.
 /// Where the bindings are written. Never the committed directory by
 /// default: a plain `cargo test --workspace` used to regenerate
 /// `packages/shared/src/generated` in place, so the CI diff that ran after
@@ -91,6 +92,11 @@ fn export_bindings() {
     HealthDto::export_all(&cfg).unwrap();
     ApiErrorDto::export_all(&cfg).unwrap();
     ApiErrorPayloadDto::export_all(&cfg).unwrap();
+    StoreDto::export_all(&cfg).unwrap();
+    RegimeDto::export_all(&cfg).unwrap();
+    DatedRegimeDto::export_all(&cfg).unwrap();
+    SettingsDto::export_all(&cfg).unwrap();
+    RegimeChangeDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

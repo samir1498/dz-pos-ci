@@ -7,6 +7,7 @@
 
 use chrono::NaiveDate;
 use diesel::sqlite::SqliteConnection;
+use dzpos_core::error::CoreError;
 use dzpos_core::money::Regime;
 use dzpos_core::services::settings;
 
@@ -87,4 +88,125 @@ fn the_series_is_scoped_by_shop() {
     // Rule 3: shop 2 never reads shop 1's régime.
     let (_dir, mut conn) = open_temp();
     assert!(settings::regime_as_of(&mut conn, 2, at(2026, 3, 15)).is_err());
+}
+
+#[test]
+fn the_current_regime_carries_the_date_it_took_effect() {
+    let (_dir, mut conn) = open_temp();
+    let current = settings::regime_current(&mut conn, SHOP, at(2026, 3, 15)).unwrap();
+    assert_eq!(current.regime, Regime::Reel);
+    assert_eq!(current.valid_from, at(2026, 1, 1), "the seeded row's date");
+
+    settings::set_regime(&mut conn, SHOP, Regime::Ifu, at(2026, 6, 1)).unwrap();
+    let later = settings::regime_current(&mut conn, SHOP, at(2026, 9, 1)).unwrap();
+    assert_eq!(
+        (later.regime, later.valid_from),
+        (Regime::Ifu, at(2026, 6, 1))
+    );
+}
+
+#[test]
+fn a_change_dated_in_the_future_is_planned_not_current() {
+    let (_dir, mut conn) = open_temp();
+    let today = at(2026, 9, 9);
+    assert_eq!(
+        settings::regime_planned(&mut conn, SHOP, today).unwrap(),
+        None
+    );
+
+    settings::set_regime(&mut conn, SHOP, Regime::Ifu, at(2027, 1, 1)).unwrap();
+    let current = settings::regime_current(&mut conn, SHOP, today).unwrap();
+    assert_eq!(
+        current.regime,
+        Regime::Reel,
+        "the future row does not apply yet"
+    );
+    let planned = settings::regime_planned(&mut conn, SHOP, today)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (planned.regime, planned.valid_from),
+        (Regime::Ifu, at(2027, 1, 1))
+    );
+    // A document issued today still computes under réel (regime_as_of is
+    // what documents read).
+    assert_eq!(
+        settings::regime_as_of(&mut conn, SHOP, today).unwrap(),
+        Regime::Reel
+    );
+    // Once the date arrives the planned row is the current one and nothing
+    // is planned any more.
+    assert_eq!(
+        settings::regime_current(&mut conn, SHOP, at(2027, 1, 1))
+            .unwrap()
+            .regime,
+        Regime::Ifu
+    );
+    assert_eq!(
+        settings::regime_planned(&mut conn, SHOP, at(2027, 1, 1)).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn two_planned_rows_report_the_nearest_date_and_its_latest_decision() {
+    let (_dir, mut conn) = open_temp();
+    let today = at(2026, 9, 9);
+    settings::set_regime(&mut conn, SHOP, Regime::Ifu, at(2027, 6, 1)).unwrap();
+    settings::set_regime(&mut conn, SHOP, Regime::Ifu, at(2027, 1, 1)).unwrap();
+    settings::set_regime(&mut conn, SHOP, Regime::Reel, at(2027, 1, 1)).unwrap();
+    let planned = settings::regime_planned(&mut conn, SHOP, today)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (planned.regime, planned.valid_from),
+        (Regime::Reel, at(2027, 1, 1)),
+        "the nearest date, and on that date the later write"
+    );
+}
+
+#[test]
+fn the_dated_reads_are_scoped_by_shop() {
+    let (_dir, mut conn) = open_temp();
+    assert!(settings::regime_current(&mut conn, 2, at(2026, 3, 15)).is_err());
+    assert_eq!(
+        settings::regime_planned(&mut conn, 2, at(2026, 3, 15)).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn a_change_to_the_regime_already_in_force_on_that_day_is_refused() {
+    // Seeded: reel from 2026-01-01. "Réel from today" would only move the
+    // since date; the row is refused and the series is untouched.
+    let (_dir, mut conn) = open_temp();
+    let err = settings::set_regime(&mut conn, SHOP, Regime::Reel, at(2026, 9, 9)).unwrap_err();
+    assert!(matches!(&err, CoreError::Validation { field, .. } if field == "regime_fiscal"));
+    let current = settings::regime_current(&mut conn, SHOP, at(2026, 9, 9)).unwrap();
+    assert_eq!(
+        current.valid_from,
+        at(2026, 1, 1),
+        "the since date did not move"
+    );
+
+    // Cancelling a planned change is a change: ifu planned for 2027, then
+    // reel from the same day is what is in force there, so it is refused
+    // only once the planned row is the one in force. Reel dated 2027-01-01
+    // is compared with the planned ifu row, and lands.
+    settings::set_regime(&mut conn, SHOP, Regime::Ifu, at(2027, 1, 1)).unwrap();
+    settings::set_regime(&mut conn, SHOP, Regime::Reel, at(2027, 1, 1)).unwrap();
+    assert_eq!(
+        settings::regime_current(&mut conn, SHOP, at(2027, 1, 1))
+            .unwrap()
+            .regime,
+        Regime::Reel
+    );
+    // Before the first row there is nothing to compare with.
+    settings::set_regime(&mut conn, SHOP, Regime::Reel, at(2025, 6, 1)).unwrap();
+    assert_eq!(
+        settings::regime_current(&mut conn, SHOP, at(2025, 7, 1))
+            .unwrap()
+            .valid_from,
+        at(2025, 6, 1)
+    );
 }

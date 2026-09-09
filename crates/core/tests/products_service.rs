@@ -21,7 +21,7 @@ fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
 }
 
 /// A second shop with a category of its own, and that category's id. There
-/// is no shops service yet (M7 pairs a second till), so the rows go in raw:
+/// is no shops service yet (M6 pairs a second till), so the rows go in raw:
 /// what is under test is the service's scoping, never this seed.
 fn seed_second_shop(conn: &mut SqliteConnection) -> i32 {
     use diesel::prelude::*;
