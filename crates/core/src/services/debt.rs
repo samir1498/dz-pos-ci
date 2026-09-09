@@ -289,7 +289,7 @@ pub fn adjust(
         // same way a payment is. Upwards it is debt no document carries, so
         // there is nothing to place.
         let allocations = if amount.is_negative() {
-            allocate_oldest_first(conn, shop_id, customer_id, entry.id, credit)?
+            settle_oldest_first(conn, shop_id, customer_id, entry.id, credit)?
         } else {
             Vec::new()
         };
@@ -411,7 +411,7 @@ pub fn pay(
                 created_at: Some(at),
             },
         )?;
-        let allocations = allocate_oldest_first(conn, shop_id, customer_id, entry.id, amount)?;
+        let allocations = settle_oldest_first(conn, shop_id, customer_id, entry.id, amount)?;
         let after = repo::balance(conn, shop_id, customer_id)?;
         audit::record(
             conn,
@@ -470,7 +470,7 @@ fn allocated_json(allocations: &[DebtAllocation]) -> serde_json::Value {
 /// out before the money does; both are ordinary. The second one is what
 /// happens when part of the balance came from an opening row or a correction,
 /// which cite no document at all.
-fn allocate_oldest_first(
+pub fn settle_oldest_first(
     conn: &mut SqliteConnection,
     shop_id: i32,
     customer_id: i32,
@@ -518,6 +518,54 @@ fn allocate_oldest_first(
     Ok(written)
 }
 
+/// Places part of a credit movement on one named document and writes back
+/// what is left unpaid on it. Runs inside the caller's transaction.
+///
+/// `settle_oldest_first` picks the documents by age, which is what a payment
+/// wants: the customer hands money over and the oldest paper is filled first.
+/// An avoir does not get to pick, because it was written against one facture
+/// and the money is going back on that paper whatever its age; only what that
+/// facture cannot take spreads by age afterwards.
+///
+/// An amount of nothing writes no row: an allocation of zero settles nothing
+/// and would sit against the document forever.
+pub fn settle_document(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    payment_ledger_id: i32,
+    document_id: i32,
+    amount: Money,
+) -> Result<Option<DebtAllocation>, CoreError> {
+    if amount == Money::ZERO {
+        return Ok(None);
+    }
+    let remaining = documents_repo::get(conn, shop_id, document_id)?
+        .balance
+        .map_or(Money::ZERO, |b| b.remaining_debt);
+    if amount > remaining {
+        return Err(CoreError::validation(
+            "amount",
+            "a document cannot be settled for more than it is still asking for",
+        ));
+    }
+    let written = allocate(
+        conn,
+        shop_id,
+        NewDebtAllocation {
+            payment_ledger_id,
+            document_id,
+            amount,
+        },
+    )?;
+    documents_repo::set_remaining_debt(
+        conn,
+        shop_id,
+        document_id,
+        remaining.checked_sub(amount)?.as_centimes(),
+    )?;
+    Ok(Some(written))
+}
+
 /// What the shop is holding for the customer, read off a balance: an amount
 /// below zero turned round, and nothing at all when they owe money.
 ///
@@ -535,7 +583,7 @@ pub fn credit_held(balance: Money) -> Result<Money, CoreError> {
 /// credit first. Runs inside the caller's transaction, beside the document it
 /// is settling.
 ///
-/// This is the other half of `allocate_oldest_first`. That one has money and
+/// This is the other half of `settle_oldest_first`. That one has money and
 /// looks for paper; this one has paper and looks for money, which is what a
 /// credit sale to a customer in credit needs: the document has to be handed
 /// over asking for what is really left on it, and the credit that covers the

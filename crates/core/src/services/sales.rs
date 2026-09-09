@@ -252,6 +252,9 @@ pub fn issue(
                         line_discount: p.line_discount,
                         rate_bps: p.rate_bps,
                         line_total: p.line_total,
+                        // A sold line credits nothing; only an avoir line
+                        // names the line it is written against.
+                        ref_line_id: None,
                     })
                     .collect(),
             },

@@ -200,6 +200,7 @@ fn fixed_facture(case: Case) -> Document {
                 .unwrap()
                 .checked_sub(line.line_discount)
                 .unwrap(),
+            ref_line_id: None,
         })
         .collect();
 

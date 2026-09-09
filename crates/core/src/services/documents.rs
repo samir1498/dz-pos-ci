@@ -150,6 +150,26 @@ pub fn issue(
                     });
                 }
             }
+            // A line that credits another names a line of the document this
+            // one is written against. Checked here for the same two reasons
+            // the product is: the foreign key alone would take a line of
+            // another shop's facture (rule 3), and a line of some third
+            // document nobody named would credit a paper this one does not
+            // refer to.
+            if let Some(ref_line_id) = line.ref_line_id {
+                let Some(ref_document_id) = new.ref_document_id else {
+                    return Err(CoreError::validation(
+                        "ref_line_id",
+                        "a line credits another only on a document written against one",
+                    ));
+                };
+                if !repo::line_belongs_to_document(conn, shop_id, ref_line_id, ref_document_id)? {
+                    return Err(CoreError::NotFound {
+                        entity: "document_line",
+                        id: ref_line_id,
+                    });
+                }
+            }
             let position = i32::try_from(position)
                 .map_err(|_| CoreError::validation("lines", "more lines than a document holds"))?;
             repo::insert_line(
@@ -167,6 +187,7 @@ pub fn issue(
                     rate_bps: i32::try_from(line.rate_bps.as_u32())
                         .map_err(|_| crate::money::MoneyError::RateOutOfRange)?,
                     line_total_centimes: line.line_total.as_centimes(),
+                    ref_line_id: line.ref_line_id,
                 },
             )?;
         }

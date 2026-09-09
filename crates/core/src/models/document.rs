@@ -104,6 +104,11 @@ pub struct DocumentLine {
     pub line_discount: Money,
     pub rate_bps: Bps,
     pub line_total: Money,
+    /// The facture line this one credits, on an avoir line and nowhere else
+    /// (features.md §3). What is left to credit on a facture line is its
+    /// quantity less what earlier avoirs took off that same line, so the two
+    /// are matched by id and never by which product they name.
+    pub ref_line_id: Option<i32>,
 }
 
 /// A line as a caller hands it over, before it has an id.
@@ -117,6 +122,7 @@ pub struct NewDocumentLine {
     pub line_discount: Money,
     pub rate_bps: Bps,
     pub line_total: Money,
+    pub ref_line_id: Option<i32>,
 }
 
 /// A document as the rest of the app sees it. `totals` carries the TVA recap
@@ -327,6 +333,7 @@ pub(crate) struct DocumentLineRow {
     pub line_discount_centimes: i64,
     pub rate_bps: i32,
     pub line_total_centimes: i64,
+    pub ref_line_id: Option<i32>,
 }
 
 #[derive(Debug, Insertable)]
@@ -343,6 +350,7 @@ pub(crate) struct DocumentLineRowWrite {
     pub line_discount_centimes: i64,
     pub rate_bps: i32,
     pub line_total_centimes: i64,
+    pub ref_line_id: Option<i32>,
 }
 
 // Only the three columns a recap row prints. The document it belongs to is
@@ -381,6 +389,7 @@ impl TryFrom<DocumentLineRow> for DocumentLine {
             line_discount: Money::centimes(r.line_discount_centimes),
             rate_bps: bps(r.rate_bps)?,
             line_total: Money::centimes(r.line_total_centimes),
+            ref_line_id: r.ref_line_id,
         })
     }
 }

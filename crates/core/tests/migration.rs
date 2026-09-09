@@ -1360,7 +1360,23 @@ fn a_database_without_the_cancellation_columns_takes_the_migration_that_adds_the
             "the file this starts from already carries {column}"
         );
     }
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('document_lines') \
+             WHERE name = 'ref_line_id'"
+        ),
+        0,
+        "the file this starts from already carries ref_line_id"
+    );
     seed_a_facture_naming_a_customer(&mut conn);
+    diesel::sql_query(
+        "INSERT INTO document_lines (id, shop_id, document_id, position, name, qty_milli, \
+         unit_price_centimes, line_discount_centimes, rate_bps, line_total_centimes) \
+         VALUES (9, 1, 4, 0, 'Ciment', 1000, 100000, 0, 1900, 100000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
 
     let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
     conn.run_migration(&pending[0]).unwrap();
@@ -1375,6 +1391,24 @@ fn a_database_without_the_cancellation_columns_takes_the_migration_that_adds_the
         ),
         1,
         "the facture the file already carried did not survive the new columns"
+    );
+    // A line the file already carried credits nothing, which is what every
+    // line of a ticket, a facture and a proforma says.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM document_lines WHERE id = 9 AND qty_milli = 1000 \
+             AND line_total_centimes = 100000 AND ref_line_id IS NULL"
+        ),
+        1,
+        "the line the file already carried did not survive the new column"
+    );
+    // The facture line an avoir line credits is a line of this file.
+    assert!(
+        diesel::sql_query("UPDATE document_lines SET ref_line_id = 999 WHERE id = 9")
+            .execute(&mut conn)
+            .is_err(),
+        "the credited-line reference took an id no line has"
     );
 
     // A cancellation is written whole: the day, the person and the reason
@@ -1396,10 +1430,7 @@ fn a_database_without_the_cancellation_columns_takes_the_migration_that_adds_the
     // The person who cancelled is a user of this file and the avoir a
     // cancellation issued is a document of it, so both columns name a row
     // rather than holding a number somebody typed.
-    for bad in [
-        "cancelled_by = 999",
-        "cancel_avoir_document_id = 999",
-    ] {
+    for bad in ["cancelled_by = 999", "cancel_avoir_document_id = 999"] {
         assert!(
             diesel::sql_query(format!("UPDATE documents SET {bad} WHERE id = 4"))
                 .execute(&mut conn)
@@ -1435,9 +1466,18 @@ fn the_migration_reverts_and_reapplies() {
 
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
-    // The sixth one only adds columns, so its down takes the four and leaves
+    // The sixth one only adds columns, so its down takes the five and leaves
     // every document standing with the number a comptable reads and the buyer
     // block it was made out to.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('document_lines') \
+             WHERE name = 'ref_line_id'"
+        ),
+        0,
+        "the cancellation down.sql left ref_line_id behind"
+    );
     for column in [
         "cancelled_at",
         "cancelled_by",

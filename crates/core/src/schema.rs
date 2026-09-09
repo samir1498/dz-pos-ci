@@ -141,6 +141,7 @@ diesel::table! {
         line_discount_centimes -> BigInt,
         rate_bps -> Integer,
         line_total_centimes -> BigInt,
+        ref_line_id -> Nullable<Integer>,
     }
 }
 

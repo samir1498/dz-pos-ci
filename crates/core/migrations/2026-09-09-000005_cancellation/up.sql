@@ -1,4 +1,6 @@
--- What a cancellation left on the document it annulled (features.md §3).
+-- What a credit note leaves behind, on both sides of it (features.md §3):
+-- what a cancellation wrote on the document it annulled, and which line of a
+-- facture each line of an avoir credits.
 --
 -- A cancelled document keeps its number and its row so the series never gaps
 -- (décret 05-468 art. 10), which the `status` column has said since the first
@@ -35,3 +37,14 @@ ALTER TABLE documents ADD COLUMN cancel_reason TEXT;
 -- ticket carries none: the stock goes back and no money was ever owed, so
 -- there is nothing to write a credit note for.
 ALTER TABLE documents ADD COLUMN cancel_avoir_document_id INTEGER REFERENCES documents(id);
+
+-- The facture line one avoir line credits. A partial avoir may be written
+-- against a facture more than once, and what is left to credit on a line is
+-- its quantity less what earlier avoirs took off that same line: matching the
+-- two by product would go wrong the first time a facture carries one product
+-- on two lines, which is ordinary as soon as a line discount or a second
+-- price is involved.
+--
+-- Null on every line that credits nothing, which is every line of a ticket, a
+-- facture and a proforma.
+ALTER TABLE document_lines ADD COLUMN ref_line_id INTEGER REFERENCES document_lines(id);

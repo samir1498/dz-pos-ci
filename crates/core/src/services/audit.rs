@@ -32,6 +32,16 @@ pub const ACTION_ADJUST_DEBT: &str = "adjust_debt";
 /// Until M4 there are no roles and anyone may take it (features.md §1).
 pub const ACTION_CREDIT_OVERRIDE: &str = "sale.credit_override";
 
+/// A credit note written against a facture. The entry names the facture that
+/// changed, because that is the paper a reader is holding when they ask why it
+/// stopped asking for its amount, and carries the avoir it produced, what the
+/// avoir was worth and both balances, so the log reads as the reversal it was.
+pub const ACTION_AVOIR: &str = "document.avoir";
+/// A document annulled. It keeps its number and its row, so what the log adds
+/// is when, by whom, why, and the avoir the cancellation issued when it issued
+/// one (features.md §3).
+pub const ACTION_CANCEL: &str = "document.cancel";
+
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
