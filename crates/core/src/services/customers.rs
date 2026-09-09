@@ -25,16 +25,18 @@ pub use crate::models::customer::{Customer, NewCustomer, PartyKind};
 /// The shop's customers, the active ones first. `search` is a piece of a name
 /// or of a phone number; blank is no filter at all, so a search box that has
 /// been emptied reads the whole list rather than nothing.
+///
+/// It is bounded at 200 characters like the fields that are stored, under the
+/// name the caller sends it as: a search box nobody bounded builds a LIKE
+/// pattern the length of whatever was pasted into it, and no name it could
+/// match is that long anyway.
 pub fn list(
     conn: &mut SqliteConnection,
     shop_id: i32,
     search: Option<&str>,
 ) -> Result<Vec<Customer>, CoreError> {
-    repo::list(
-        conn,
-        shop_id,
-        search.map(str::trim).filter(|s| !s.is_empty()),
-    )
+    let search = optional_field("q", search)?;
+    repo::list(conn, shop_id, search.as_deref())
 }
 
 /// A fiche and what its ledger sums to. The two travel together because the

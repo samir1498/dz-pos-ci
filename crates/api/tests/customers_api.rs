@@ -263,6 +263,37 @@ async fn a_field_longer_than_a_facture_prints_is_422_naming_it() {
     assert_eq!(list.as_array().map(Vec::len), Some(0));
 }
 
+/// The search box reaches a LIKE pattern, so it is bounded like the fields
+/// that are stored rather than left to carry whatever a paste holds.
+#[tokio::test]
+async fn a_search_longer_than_a_field_is_422_naming_it() {
+    let h = harness();
+    create(&h.app, draft("Entreprise Benali")).await;
+    let (ok, found) = call(
+        &h.app,
+        "GET",
+        &format!("/customers?q={}", "e".repeat(200)),
+        None,
+    )
+    .await;
+    assert_eq!(ok, StatusCode::OK, "{found}");
+    assert_eq!(found.as_array().unwrap().len(), 0);
+
+    let (status, body) = call(
+        &h.app,
+        "GET",
+        &format!("/customers?q={}", "e".repeat(201)),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["error"]["code"], "validation");
+    assert!(
+        body["error"]["message"].as_str().unwrap().starts_with("q "),
+        "{body}"
+    );
+}
+
 #[tokio::test]
 async fn an_adjustment_writes_a_movement_and_answers_the_new_balance() {
     let h = harness();

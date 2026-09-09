@@ -417,6 +417,55 @@ fn a_wildcard_typed_into_the_search_is_a_character_to_match() {
     );
 }
 
+/// A backslash is the escape character the LIKE runs with, so one somebody
+/// typed has to reach SQLite doubled. Without that, a name carrying one is
+/// unfindable and a trailing one is a syntax error.
+#[test]
+fn a_backslash_typed_into_the_search_is_a_character_to_match() {
+    let (_dir, mut conn) = open_temp();
+    customers::create(&mut conn, SHOP, OWNER, fiche("Brahim"), None).unwrap();
+    customers::create(&mut conn, SHOP, OWNER, fiche("Sarl A\\B Import"), None).unwrap();
+
+    let found: Vec<String> = customers::list(&mut conn, SHOP, Some("A\\B"))
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(found, ["Sarl A\\B Import"]);
+    let lone: Vec<String> = customers::list(&mut conn, SHOP, Some("\\"))
+        .unwrap()
+        .into_iter()
+        .map(|c| c.name)
+        .collect();
+    assert_eq!(
+        lone,
+        ["Sarl A\\B Import"],
+        "a lone backslash was read as an escape rather than as the character it is"
+    );
+}
+
+/// The search is a field like any other: 200 characters, refused above. A
+/// box nobody bounded is a LIKE pattern the length of whatever was pasted
+/// into it.
+#[test]
+fn a_search_longer_than_a_field_is_refused() {
+    let (_dir, mut conn) = open_temp();
+    customers::create(&mut conn, SHOP, OWNER, fiche("Brahim"), None).unwrap();
+
+    assert_eq!(
+        customers::list(&mut conn, SHOP, Some(&"e".repeat(200)))
+            .unwrap()
+            .len(),
+        0,
+        "200 characters is a search that matches nothing, not a refusal"
+    );
+    let err = customers::list(&mut conn, SHOP, Some(&"e".repeat(201))).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "q"),
+        "{err}"
+    );
+}
+
 /// The list screen shows what each customer owes beside the limit, so the
 /// balance travels with the fiche rather than in a call per row.
 #[test]
