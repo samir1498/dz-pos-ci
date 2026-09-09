@@ -3,38 +3,15 @@
 // is restored, and the product is gone. Nothing is mocked, so a green run
 // means the file on disk really was swapped underneath the running server.
 //
+// Strings come from the JSON dictionary of the Playwright project running
+// the test (fr, en or ar), so the same run proves the block in all three.
+//
 // This spec runs first (the files run in name order, one worker, one
 // database) and leaves the shop empty again, which is the state the products
 // spec starts from.
 
 import { expect, test } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const here = fileURLToPath(new URL(".", import.meta.url));
-const frPath = path.join(here, "..", "src", "i18n", "fr.json");
-
-function readMessages(): Record<string, string> {
-  const parsed: unknown = JSON.parse(readFileSync(frPath, "utf8"));
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error(`${frPath} is not a JSON object`);
-  }
-  const messages: Record<string, string> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value !== "string") throw new Error(`${frPath}: ${key} is not a string`);
-    messages[key] = value;
-  }
-  return messages;
-}
-
-const messages = readMessages();
-
-function t(key: string): string {
-  const value = messages[key];
-  if (value === undefined) throw new Error(`${frPath} has no key ${key}`);
-  return value;
-}
+import { t } from "./messages";
 
 const PRODUCT_NAME = "Café Bonal 250g";
 
