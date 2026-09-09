@@ -102,7 +102,7 @@ two places for a comptable to check against each other. #}
 </thead>
 <tbody>
 {%- for line in lines %}
-<tr><td>{{ line.name }}</td><td class="n num">{{ line.qty }}</td><td class="n"><span class="amount amount-unit-price">{{ line.unit_price }}</span></td>{% if show_line_discount %}<td class="n">{% if let Some(discount) = line.discount %}<span class="amount amount-line-discount">-{{ discount }}</span>{% endif %}</td>{% endif %}{% if let Some(rate) = line.rate %}<td class="n num">{{ rate }}</td>{% endif %}<td class="n"><span class="amount amount-line">{{ line.total }}</span></td></tr>
+<tr><td>{{ line.name }}</td><td class="n num">{{ line.qty }}</td><td class="n"><span class="amount amount-unit-price">{{ line.unit_price }}</span></td>{% if show_line_discount %}<td class="n">{% if let Some(discount) = line.discount %}<span class="amount amount-line-discount">-{{ discount }}</span>{% endif %}</td>{% endif %}{% if let Some(rate) = line.rate %}<td class="n num"><span class="rate rate-line">{{ rate }}</span></td>{% endif %}<td class="n"><span class="amount amount-line">{{ line.total }}</span></td></tr>
 {%- endfor %}
 </tbody>
 </table>
@@ -118,7 +118,7 @@ two places for a comptable to check against each other. #}
 <tr><td>{{ subtotal_label }}</td><td class="n"><span class="amount amount-subtotal">{{ subtotal }}</span><span class="cur">{{ currency }}</span></td></tr>
 {%- endif %}
 {%- for tva in tva_rows %}
-<tr><td>{{ tva.label }} <span class="label">{{ tva.base_label }} <span class="amount amount-tva-base">{{ tva.base }}</span></span></td><td class="n"><span class="amount amount-tva">{{ tva.amount }}</span><span class="cur">{{ currency }}</span></td></tr>
+<tr><td>{{ tva.label }} <span class="rate rate-tva">{{ tva.rate }}</span> <span class="label">{{ tva.base_label }} <span class="amount amount-tva-base">{{ tva.base }}</span></span></td><td class="n"><span class="amount amount-tva">{{ tva.amount }}</span><span class="cur">{{ currency }}</span></td></tr>
 {%- endfor %}
 {%- if let Some(total_ttc) = total_ttc %}
 <tr><td>{{ total_ttc_label }}</td><td class="n"><span class="amount amount-total-ttc">{{ total_ttc }}</span><span class="cur">{{ currency }}</span></td></tr>

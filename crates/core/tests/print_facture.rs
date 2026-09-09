@@ -39,12 +39,17 @@ const SHOP: i32 = 1;
 const OWNER: i32 = 1;
 const CUSTOMER: i32 = 7;
 
-/// The three lines of the fixed sale, the ticket fixture's: 2 × 150,00 at
-/// 19 %, 1,5 kg × 320,00 at 9 %, and 1 × 80,00 at 0 % with a 10,00 line
-/// discount. The same basket on both papers, so a facture and a ticket of
-/// the same sale can be read side by side.
+/// The three lines of the fixed sale, the ticket fixture's amounts: 2 ×
+/// 150,00 at 19 %, 1,5 kg × 320,00 at 9 %, and 1 × 80,00 at 0 % with a
+/// 10,00 line discount.
+///
+/// The first name is not the ticket's. A product name is typed by the shop
+/// and lands in the page as it was typed, so one fixture name carries an
+/// ampersand and a pair of angle brackets: the goldens then pin askama's
+/// escaping, and a template that ever rendered a name raw would show it as
+/// a golden diff rather than as a broken facture at a customer's desk.
 const LINES: [(&str, i64, i64, i64, u32); 3] = [
-    ("Café moulu 250 g", 2_000, 15_000, 0, 1900),
+    ("Huile <Elio> & Co 5 L", 2_000, 15_000, 0, 1900),
     ("Farine", 1_500, 32_000, 0, 900),
     ("Pain", 1_000, 8_000, 1_000, 0),
 ];
@@ -323,6 +328,34 @@ fn centimes(printed: &str) -> i64 {
     sign * (whole * 100 + rest)
 }
 
+/// The text of every `<span class="rate rate-{marker}">` in the file: the
+/// rate cells, which carry a figure no amount parser would catch.
+fn rates(html: &str, marker: &str) -> Vec<String> {
+    let opening = format!("<span class=\"rate rate-{marker}\">");
+    html.split(&opening)
+        .skip(1)
+        .map(|rest| {
+            let end = rest.find("</span>").expect("a rate span never closes");
+            rest[..end].to_owned()
+        })
+        .collect()
+}
+
+/// "9,5 %" back to 950 basis points, and "19 %" to 1900. The golden's own
+/// digits, read by a parser that shares no code with the one that printed
+/// them, so a recap label that slid onto the wrong row is caught by the
+/// rate and not only by the amount beside it.
+fn bps(printed: &str) -> u32 {
+    let digits: String = printed
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == ',')
+        .collect();
+    let (whole, rest) = digits.split_once(',').unwrap_or((digits.as_str(), ""));
+    let whole: u32 = whole.parse().unwrap();
+    let rest: u32 = format!("{rest:0<2}").parse().unwrap();
+    whole * 100 + rest
+}
+
 /// The words line, as the file carries it.
 fn in_words(html: &str) -> String {
     let opening = "<strong class=\"in-words\">";
@@ -390,6 +423,32 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document, lang: La
         assert_eq!(centimes(printed), row.amount.as_centimes(), "a TVA row");
         assert_eq!(centimes(base), row.base.as_centimes(), "a TVA base");
     }
+
+    // Each recap row names the rate its base and its tax belong to. Read
+    // back beside the amounts, so a label that slid onto another row (19 %
+    // over the 9 % base) is red even though every amount is still right.
+    let recap_rates = rates(html, "tva");
+    assert_eq!(
+        recap_rates.len(),
+        totals.tva_by_rate.len(),
+        "one rate per recap row"
+    );
+    for (printed, row) in recap_rates.iter().zip(&totals.tva_by_rate) {
+        assert_eq!(bps(printed), row.rate.as_u32(), "a recap row's rate");
+    }
+
+    // The rate on a line is the rate the line was sold at, réel only:
+    // under the IFU there is no column at all, not a column of zeroes.
+    let line_rates = rates(html, "line");
+    let expected: Vec<u32> = match doc.regime {
+        Regime::Reel => doc.lines.iter().map(|l| l.rate_bps.as_u32()).collect(),
+        Regime::Ifu => Vec::new(),
+    };
+    assert_eq!(
+        line_rates.iter().map(|r| bps(r)).collect::<Vec<u32>>(),
+        expected,
+        "the rate cells of the lines"
+    );
 
     let lines = amounts(html, "line");
     let unit_prices = amounts(html, "unit-price");
@@ -545,7 +604,6 @@ fn an_ifu_facture_names_no_tax_in_any_language() {
             "ت.ق.م",
             "HT",
             "TTC",
-            "%",
             "excl. tax",
             "incl. tax",
             "hors taxe",
@@ -556,6 +614,19 @@ fn an_ifu_facture_names_no_tax_in_any_language() {
                 "{forbidden} is on the {lang:?} IFU facture"
             );
         }
+        // The per-cent sign is read off the printed page and not the
+        // stylesheet above it: a width written as a percentage is a length
+        // and names no tax, and a ban that fired on one would push the next
+        // reader into a worse layout than into a legal fix.
+        let printed = html.split_once("</style>").expect("the page has a head").1;
+        assert!(
+            !printed.contains('%'),
+            "a rate is printed on the {lang:?} IFU facture"
+        );
+        assert!(
+            rates(&html, "line").is_empty() && rates(&html, "tva").is_empty(),
+            "the {lang:?} IFU facture keeps a rate cell"
+        );
         for absent in ["tva", "tva-base", "total-ttc"] {
             assert!(
                 amounts(&html, absent).is_empty(),
@@ -570,6 +641,8 @@ fn an_ifu_facture_names_no_tax_in_any_language() {
         assert_eq!(amounts(&reel_html, "tva").len(), 3, "0 %, 9 % and 19 %");
         assert_eq!(amounts(&reel_html, "tva-base").len(), 3, "{lang:?}");
         assert_eq!(amounts(&reel_html, "total-ttc").len(), 1, "{lang:?}");
+        assert_eq!(rates(&reel_html, "tva").len(), 3, "{lang:?}");
+        assert_eq!(rates(&reel_html, "line").len(), 3, "{lang:?}");
         assert!(reel_html.contains(text(Key::TotalHt, lang)), "{lang:?}");
         assert!(reel_html.contains(text(Key::UnitPriceHt, lang)), "{lang:?}");
         assert!(reel_html.contains(text(Key::Tva, lang)), "{lang:?}");
@@ -836,6 +909,28 @@ fn an_avoir_prints_the_number_of_the_facture_it_references() {
     // A facture that references nothing prints with no reference row.
     let plain = render_facture(&facture, Lang::Fr, Paper::A4).unwrap();
     assert!(!plain.contains(text(Key::ReferencedDocument, Lang::Fr)));
+}
+
+/// A name the shop typed is printed and never run: the ampersand and the
+/// angle brackets of a product name come out as entities, so a name can
+/// neither close a tag nor open one. The golden carries the escaped form,
+/// and this test says which form that is.
+#[test]
+fn a_product_name_with_markup_in_it_is_escaped_and_not_rendered() {
+    for case in Case::ALL {
+        let doc = fixed_facture(case);
+        for lang in Lang::ALL {
+            let html = render_facture(&doc, lang, Paper::A4).unwrap();
+            assert!(
+                html.contains("Huile &#60;Elio&#62; &#38; Co 5 L"),
+                "{lang:?} {case:?} does not carry the escaped name"
+            );
+            assert!(
+                !html.contains("<Elio>"),
+                "{lang:?} {case:?} rendered a product name as markup"
+            );
+        }
+    }
 }
 
 #[test]

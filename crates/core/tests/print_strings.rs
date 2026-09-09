@@ -18,7 +18,11 @@ use dzpos_core::print::strings::{text, Key};
 /// that still adds up.
 #[test]
 fn the_dictionary_lists_every_key_once() {
-    assert_eq!(Key::ALL.len(), 38, "a key was added to the enum, not to ALL");
+    assert_eq!(
+        Key::ALL.len(),
+        38,
+        "a key was added to the enum, not to ALL"
+    );
     let listed: HashSet<Key> = Key::ALL.into_iter().collect();
     assert_eq!(listed.len(), Key::ALL.len(), "a key is listed twice in ALL");
 }

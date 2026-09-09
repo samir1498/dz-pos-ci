@@ -82,7 +82,11 @@ struct LineView {
 }
 
 struct TvaRow {
-    label: String,
+    label: &'static str,
+    /// The group's rate, on its own so the golden can be read for it: an
+    /// amount parser cannot tell a recap row whose label slid onto the
+    /// wrong base from one that did not.
+    rate: String,
     base_label: &'static str,
     base: String,
     amount: String,
@@ -312,7 +316,8 @@ fn view(
             .tva_by_rate
             .iter()
             .map(|row| TvaRow {
-                label: format!("{} {}", text(Key::Tva, lang), percent(row.rate)),
+                label: text(Key::Tva, lang),
+                rate: percent(row.rate),
                 base_label: text(Key::TvaBase, lang),
                 base: format_centimes(row.base),
                 amount: format_centimes(row.amount),
