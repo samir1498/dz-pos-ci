@@ -2,7 +2,15 @@
 // after changing them; CI fails on a stale checkout.
 export type { ApiErrorDto } from "./generated/ApiErrorDto";
 export type { ApiErrorPayloadDto } from "./generated/ApiErrorPayloadDto";
+export type { AdjustmentDto } from "./generated/AdjustmentDto";
 export type { CategoryDto } from "./generated/CategoryDto";
+export type { CustomerDto } from "./generated/CustomerDto";
+export type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
+export type { CustomerWriteDto } from "./generated/CustomerWriteDto";
+export type { DebtEntryDto } from "./generated/DebtEntryDto";
+export type { DebtKindDto } from "./generated/DebtKindDto";
+export type { NewCustomerDto } from "./generated/NewCustomerDto";
+export type { PartyKindDto } from "./generated/PartyKindDto";
 export type { HealthDto } from "./generated/HealthDto";
 export type { NewProductDto } from "./generated/NewProductDto";
 export type { ProductDto } from "./generated/ProductDto";
@@ -32,6 +40,9 @@ export {
   isBackup,
   isBackups,
   isCategory,
+  isCustomer,
+  isCustomerLedger,
+  isDebtEntry,
   isRestore,
   isSale,
   isSettings,

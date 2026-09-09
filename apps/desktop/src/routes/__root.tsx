@@ -16,6 +16,9 @@ function RootLayout() {
           <Link to="/till" className="underline">
             {t("nav_till")}
           </Link>
+          <Link to="/customers" className="underline">
+            {t("nav_customers")}
+          </Link>
           <Link to="/products" className="underline">
             {t("nav_products")}
           </Link>

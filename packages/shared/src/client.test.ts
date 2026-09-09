@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { ApiError, createClient, isApiErrorBody, isSale } from "./client";
 import type { BackupDto } from "./generated/BackupDto";
+import type { CustomerDto } from "./generated/CustomerDto";
+import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
+import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
+import type { DebtEntryDto } from "./generated/DebtEntryDto";
 import type { BackupsDto } from "./generated/BackupsDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { NewSaleDto } from "./generated/NewSaleDto";
@@ -549,6 +553,169 @@ describe("sales", () => {
         payment_mode: "cash",
         tendered_centimes: null,
       }),
+    ).rejects.toMatchObject({ code: "validation", status: 422 });
+  });
+});
+
+const customer: CustomerDto = {
+  id: 3,
+  shop_id: 1,
+  name: "Entreprise Benali",
+  party_kind: "company",
+  phone: "0770 11 22 33",
+  address: null,
+  rc: null,
+  nif: null,
+  nis: null,
+  ai: null,
+  credit_limit_centimes: 5_000_000,
+  warn_threshold_centimes: 4_000_000,
+  notes: null,
+  active: true,
+  balance_centimes: 150_000,
+};
+
+const entry: DebtEntryDto = {
+  id: 9,
+  customer_id: 3,
+  document_id: null,
+  kind: "opening",
+  debit_centimes: 150_000,
+  credit_centimes: 0,
+  balance_after_centimes: 150_000,
+  user_id: 1,
+  note: "solde de départ",
+  created_at: "2026-09-09 10:00:00",
+};
+
+const ledger: CustomerLedgerDto = {
+  customer_id: 3,
+  balance_centimes: 150_000,
+  entries: [entry],
+};
+
+const write: CustomerWriteDto = {
+  name: "Entreprise Benali",
+  party_kind: "company",
+  phone: "0770 11 22 33",
+  address: null,
+  rc: null,
+  nif: null,
+  nis: null,
+  ai: null,
+  credit_limit_centimes: 5_000_000,
+  warn_threshold_centimes: 4_000_000,
+  notes: null,
+  active: true,
+};
+
+/** Records what was asked for and answers `body`. */
+function recorder(body: unknown, status = 200) {
+  const calls: { url: string; init: RequestInit | undefined }[] = [];
+  const fetchStub: typeof fetch = async (input, init) => {
+    calls.push({ url: String(input), init });
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  return { calls, fetchStub };
+}
+
+describe("customers", () => {
+  test("lists them, and a search travels as an encoded query", async () => {
+    const { calls, fetchStub } = recorder([customer]);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.listCustomers()).resolves.toEqual([customer]);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers");
+
+    await api.listCustomers("benali & fils");
+    expect(calls[1]?.url).toBe("http://127.0.0.1:4317/customers?q=benali+%26+fils");
+  });
+
+  test("a blank search asks for the whole list rather than an empty filter", async () => {
+    const { calls, fetchStub } = recorder([customer]);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await api.listCustomers("   ");
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers");
+  });
+
+  test("creates one with the opening debt in centimes", async () => {
+    const { calls, fetchStub } = recorder(customer, 201);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    const posted = { ...write, opening_debt_centimes: 150_000 };
+    await expect(api.createCustomer(posted)).resolves.toEqual(customer);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(posted);
+  });
+
+  test("updates one with the whole row, nulls included", async () => {
+    const cleared = { ...write, rc: null, credit_limit_centimes: null };
+    const { calls, fetchStub } = recorder({ ...customer, ...cleared });
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await api.updateCustomer(3, cleared);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers/3");
+    expect(calls[0]?.init?.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(cleared);
+  });
+
+  test("reads one fiche and its ledger", async () => {
+    const one = recorder(customer);
+    await expect(
+      createClient("http://127.0.0.1:4317", one.fetchStub).getCustomer(3),
+    ).resolves.toEqual(customer);
+    expect(one.calls[0]?.url).toBe("http://127.0.0.1:4317/customers/3");
+
+    const rows = recorder(ledger);
+    await expect(
+      createClient("http://127.0.0.1:4317", rows.fetchStub).customerLedger(3),
+    ).resolves.toEqual(ledger);
+    expect(rows.calls[0]?.url).toBe("http://127.0.0.1:4317/customers/3/ledger");
+  });
+
+  test("an adjustment posts signed centimes and answers the ledger again", async () => {
+    const lowered: CustomerLedgerDto = { ...ledger, balance_centimes: 100_000 };
+    const { calls, fetchStub } = recorder(lowered, 201);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(
+      api.adjustCustomerDebt(3, { amount_centimes: -50_000, note: "erreur de saisie" }),
+    ).resolves.toEqual(lowered);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers/3/adjustments");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      amount_centimes: -50_000,
+      note: "erreur de saisie",
+    });
+  });
+
+  test("a fiche or a movement of the wrong shape is refused, never handed to the UI", async () => {
+    for (const bad of [
+      { ...customer, balance_centimes: 9.5 },
+      { ...customer, party_kind: "societe" },
+      { ...customer, credit_limit_centimes: "5000" },
+      { ...customer, active: "yes" },
+    ]) {
+      const api = createClient("http://x", stub(200, [bad]));
+      await expect(api.listCustomers()).rejects.toMatchObject({ code: "bad_response" });
+    }
+    for (const bad of [
+      { ...ledger, balance_centimes: null },
+      { ...ledger, entries: [{ ...entry, kind: "remise" }] },
+      { ...ledger, entries: [{ ...entry, balance_after_centimes: 2 ** 53 }] },
+    ]) {
+      const api = createClient("http://x", stub(200, bad));
+      await expect(api.customerLedger(3)).rejects.toMatchObject({ code: "bad_response" });
+    }
+  });
+
+  test("the server's refusal keeps its code", async () => {
+    const api = createClient(
+      "http://x",
+      stub(422, { error: { code: "validation", message: "amount ..." } }),
+    );
+    await expect(
+      api.adjustCustomerDebt(3, { amount_centimes: 0, note: null }),
     ).rejects.toMatchObject({ code: "validation", status: 422 });
   });
 });

@@ -16,6 +16,8 @@ use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::models::shop::{Shop, StoreBlock};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
 use dzpos_core::services::backup::Backup;
+use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
+use dzpos_core::services::debt::{DebtKind, LedgerLine};
 use dzpos_core::services::sales::{NewSale, NewSaleLine};
 use dzpos_core::services::settings::DatedRegime;
 use serde::{Deserialize, Serialize};
@@ -659,6 +661,285 @@ impl TryFrom<NewSaleDto> for NewSale {
             // The server dates the document (core, services::clock).
             issued_at: None,
         })
+    }
+}
+
+/// Who the buyer is (features.md §2). Asked for on the fiche, never inferred
+/// from whether an RC was typed in: loi 04-02 art. 10 decides ticket against
+/// facture by the buyer, so an inference would flip the rule the moment
+/// somebody cleared a field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "PartyKindDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum PartyKindDto {
+    Company,
+    Consumer,
+}
+
+impl From<PartyKind> for PartyKindDto {
+    fn from(k: PartyKind) -> Self {
+        match k {
+            PartyKind::Company => PartyKindDto::Company,
+            PartyKind::Consumer => PartyKindDto::Consumer,
+        }
+    }
+}
+
+impl From<PartyKindDto> for PartyKind {
+    fn from(k: PartyKindDto) -> Self {
+        match k {
+            PartyKindDto::Company => PartyKind::Company,
+            PartyKindDto::Consumer => PartyKind::Consumer,
+        }
+    }
+}
+
+/// Why the debt moved (features.md §2). The whole union crosses from the
+/// first version: the ledger already holds `sale` and `payment` rows that T3
+/// writes, and a screen that met an unknown kind could only refuse the whole
+/// answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "DebtKindDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum DebtKindDto {
+    Opening,
+    Sale,
+    Payment,
+    Avoir,
+    Adjustment,
+}
+
+impl From<DebtKind> for DebtKindDto {
+    fn from(k: DebtKind) -> Self {
+        match k {
+            DebtKind::Opening => DebtKindDto::Opening,
+            DebtKind::Sale => DebtKindDto::Sale,
+            DebtKind::Payment => DebtKindDto::Payment,
+            DebtKind::Avoir => DebtKindDto::Avoir,
+            DebtKind::Adjustment => DebtKindDto::Adjustment,
+        }
+    }
+}
+
+/// The fiche as a screen reads it, with what the customer owes. The balance
+/// is the ledger's sum computed in the core, never a stored column, and it
+/// travels with the fiche so the list does not make a call per row.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "CustomerDto.ts")]
+pub struct CustomerDto {
+    pub id: i32,
+    pub shop_id: i32,
+    pub name: String,
+    pub party_kind: PartyKindDto,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    /// Null is no limit at all, zero is no credit at all: two different
+    /// answers, and the till acts on them differently (T3).
+    pub credit_limit_centimes: Option<i64>,
+    pub warn_threshold_centimes: Option<i64>,
+    pub notes: Option<String>,
+    pub active: bool,
+    /// Below zero is the shop owing the customer after an overpayment.
+    pub balance_centimes: i64,
+}
+
+impl From<CustomerWithBalance> for CustomerDto {
+    fn from(c: CustomerWithBalance) -> Self {
+        let balance = c.balance.as_centimes();
+        let c = c.customer;
+        CustomerDto {
+            id: c.id,
+            shop_id: c.shop_id,
+            name: c.name,
+            party_kind: c.party_kind.into(),
+            phone: c.phone,
+            address: c.address,
+            rc: c.rc,
+            nif: c.nif,
+            nis: c.nis,
+            ai: c.ai,
+            credit_limit_centimes: c.credit_limit.map(Money::as_centimes),
+            warn_threshold_centimes: c.warn_threshold.map(Money::as_centimes),
+            notes: c.notes,
+            active: c.active,
+            balance_centimes: balance,
+        }
+    }
+}
+
+/// The fields a fiche is written with, on a create and on an update alike.
+/// The whole row travels every time, the way the store block does: a field
+/// left out is a bug at the edge, and a null clears the column.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "CustomerWriteDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct CustomerWriteDto {
+    pub name: String,
+    pub party_kind: PartyKindDto,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    pub credit_limit_centimes: Option<i64>,
+    pub warn_threshold_centimes: Option<i64>,
+    pub notes: Option<String>,
+    pub active: bool,
+}
+
+/// A new fiche: the same fields, plus the debt the shop was already carrying
+/// for this customer before it had the app. The opening debt is only on the
+/// create because it is a ledger movement, not a column, and an update that
+/// could set it would be an edit to the ledger nobody could see (features.md
+/// §2).
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewCustomerDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewCustomerDto {
+    pub name: String,
+    pub party_kind: PartyKindDto,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    pub credit_limit_centimes: Option<i64>,
+    pub warn_threshold_centimes: Option<i64>,
+    pub notes: Option<String>,
+    #[serde(default = "yes")]
+    pub active: bool,
+    #[serde(default)]
+    pub opening_debt_centimes: Option<i64>,
+}
+
+impl TryFrom<CustomerWriteDto> for NewCustomer {
+    type Error = ApiError;
+
+    fn try_from(d: CustomerWriteDto) -> Result<Self, ApiError> {
+        Ok(NewCustomer {
+            name: d.name,
+            party_kind: d.party_kind.into(),
+            phone: d.phone,
+            address: d.address,
+            rc: d.rc,
+            nif: d.nif,
+            nis: d.nis,
+            ai: d.ai,
+            credit_limit: money_field("credit_limit_centimes", d.credit_limit_centimes)?,
+            warn_threshold: money_field("warn_threshold_centimes", d.warn_threshold_centimes)?,
+            notes: d.notes,
+            active: d.active,
+        })
+    }
+}
+
+impl TryFrom<NewCustomerDto> for NewCustomer {
+    type Error = ApiError;
+
+    fn try_from(d: NewCustomerDto) -> Result<Self, ApiError> {
+        NewCustomer::try_from(CustomerWriteDto {
+            name: d.name,
+            party_kind: d.party_kind,
+            phone: d.phone,
+            address: d.address,
+            rc: d.rc,
+            nif: d.nif,
+            nis: d.nis,
+            ai: d.ai,
+            credit_limit_centimes: d.credit_limit_centimes,
+            warn_threshold_centimes: d.warn_threshold_centimes,
+            notes: d.notes,
+            active: d.active,
+        })
+    }
+}
+
+/// An optional amount on the wire, checked against the safe-integer bound
+/// like every other one: `None` stays `None`, which is the field left empty.
+pub fn money_field(field: &'static str, value: Option<i64>) -> Result<Option<Money>, ApiError> {
+    value
+        .map(|c| within_js_safe_range(field, c))
+        .transpose()
+        .map(|c| c.map(Money::centimes))
+}
+
+/// One movement of the ledger, with the balance it left behind.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "DebtEntryDto.ts")]
+pub struct DebtEntryDto {
+    pub id: i32,
+    pub customer_id: i32,
+    /// The document the movement came from, when it came from one. An
+    /// opening balance and an adjustment cite none.
+    pub document_id: Option<i32>,
+    pub kind: DebtKindDto,
+    /// What the movement added to the debt; zero on a payment or an avoir.
+    pub debit_centimes: i64,
+    /// What it took off; zero on a sale or an opening balance.
+    pub credit_centimes: i64,
+    /// The balance as of this movement: every older one counted, no newer
+    /// one. Computed in the core (services::debt).
+    pub balance_after_centimes: i64,
+    pub user_id: i32,
+    pub note: Option<String>,
+    /// `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
+    pub created_at: String,
+}
+
+impl From<LedgerLine> for DebtEntryDto {
+    fn from(l: LedgerLine) -> Self {
+        DebtEntryDto {
+            id: l.entry.id,
+            customer_id: l.entry.customer_id,
+            document_id: l.entry.document_id,
+            kind: l.entry.kind.into(),
+            debit_centimes: l.entry.debit.as_centimes(),
+            credit_centimes: l.entry.credit.as_centimes(),
+            balance_after_centimes: l.balance_after.as_centimes(),
+            user_id: l.entry.user_id,
+            note: l.entry.note,
+            created_at: l.entry.created_at.format(DATE_TIME_FORMAT).to_string(),
+        }
+    }
+}
+
+/// A customer's ledger: the movements newest first and the balance they sum
+/// to. The balance is in the envelope so a screen showing it never adds the
+/// column up itself.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "CustomerLedgerDto.ts")]
+pub struct CustomerLedgerDto {
+    pub customer_id: i32,
+    pub balance_centimes: i64,
+    pub entries: Vec<DebtEntryDto>,
+}
+
+/// A correction to what a customer owes: signed centimes and why. Positive
+/// raises the debt, negative lowers it, zero is refused. The ledger is
+/// append-only, so this writes a movement rather than editing one.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "AdjustmentDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct AdjustmentDto {
+    pub amount_centimes: i64,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+impl AdjustmentDto {
+    /// The amount as money the core will take. The safe-integer bound is
+    /// checked here, at the edge, like every other amount on the wire.
+    pub fn amount(&self) -> Result<Money, ApiError> {
+        Ok(Money::centimes(within_js_safe_range(
+            "amount_centimes",
+            self.amount_centimes,
+        )?))
     }
 }
 

@@ -1,8 +1,10 @@
 //! What a customer owes (features.md §2). The ledger is append-only and the
 //! balance is its sum, so there is nothing here that edits or deletes a
 //! movement: a mistake is corrected by an `adjustment` row a comptable can
-//! read, and a customer's fiche being edited never touches the ledger. T2
-//! adds the endpoint that writes one.
+//! read, and a customer's fiche being edited never touches the ledger.
+//! `adjust` below is that correction, and it is the one write here that opens
+//! a transaction of its own, because the movement and its audit entry are one
+//! change.
 //!
 //! `append` runs in whatever transaction the caller opened, and does not open
 //! one of its own: a sale on credit writes the document, the lines, the stock
@@ -10,6 +12,9 @@
 //! milestone that has no transaction of its own is `customers::create`, and
 //! it opens one.
 
+use std::collections::HashMap;
+
+use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
@@ -18,7 +23,7 @@ use crate::money::Money;
 use crate::repos::customers as customers_repo;
 use crate::repos::debt as repo;
 use crate::repos::documents as documents_repo;
-use crate::services::optional_field;
+use crate::services::{audit, optional_field};
 
 pub use crate::models::debt::{
     DebtAllocation, DebtEntry, DebtKind, NewDebtAllocation, NewDebtEntry,
@@ -35,6 +40,21 @@ pub fn balance(
     repo::balance(conn, shop_id, customer_id)
 }
 
+/// What every customer of the shop owes, by customer id. A customer with no
+/// movement is not a key: no rows is no debt, and the caller reads a missing
+/// one as nothing owed.
+pub fn balances(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+) -> Result<HashMap<i32, Money>, CoreError> {
+    let mut sums = HashMap::new();
+    for (customer_id, debit, credit) in repo::balances(conn, shop_id)? {
+        let balance = Money::centimes(debit).checked_sub(Money::centimes(credit))?;
+        sums.insert(customer_id, balance);
+    }
+    Ok(sums)
+}
+
 /// The customer's movements, newest first.
 pub fn ledger(
     conn: &mut SqliteConnection,
@@ -43,6 +63,140 @@ pub fn ledger(
 ) -> Result<Vec<DebtEntry>, CoreError> {
     ensure_customer(conn, shop_id, customer_id)?;
     repo::ledger(conn, shop_id, customer_id)
+}
+
+/// One movement and what the customer owed once it had landed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LedgerLine {
+    pub entry: DebtEntry,
+    /// The balance as of this movement: every older movement counted, no
+    /// newer one. The newest line's is the balance the customer owes now.
+    pub balance_after: Money,
+}
+
+/// A customer's ledger as the fiche reads it: the movements newest first,
+/// each with the balance as of itself, and the balance the whole thing sums
+/// to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Statement {
+    pub balance: Money,
+    pub lines: Vec<LedgerLine>,
+}
+
+/// The ledger with its running balance. The column is computed here rather
+/// than on the screen that shows it: a second place that works out what a
+/// customer owes is a second answer, and the two would part company the day
+/// a kind of movement is added.
+pub fn statement(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+) -> Result<Statement, CoreError> {
+    let entries = ledger(conn, shop_id, customer_id)?;
+    let mut running = Money::ZERO;
+    let mut lines = Vec::with_capacity(entries.len());
+    // Oldest first, which is the only order a running balance can be built
+    // in; the answer is turned back the way the fiche reads it below.
+    for entry in entries.into_iter().rev() {
+        running = running.checked_add(entry.signed()?)?;
+        lines.push(LedgerLine {
+            entry,
+            balance_after: running,
+        });
+    }
+    lines.reverse();
+    Ok(Statement {
+        balance: running,
+        lines,
+    })
+}
+
+/// What an adjustment left behind: the movement, and the ledger as the same
+/// transaction read it once the movement had landed. The statement travels
+/// with the entry so that the balance the caller answers, the balance the
+/// audit records and the balance the ledger sums to are one figure read once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Adjusted {
+    pub entry: DebtEntry,
+    pub statement: Statement,
+}
+
+/// Corrects a balance by writing a movement, never by editing one
+/// (features.md §2). A positive amount raises what the customer owes, a
+/// negative one lowers it; zero is refused, because a correction of nothing
+/// is an empty form somebody submitted.
+///
+/// The movement and its audit entry are one transaction: a change to what
+/// somebody owes with nobody's name on it is exactly what the log exists to
+/// prevent (features.md §5). The two balances are stored in the entry so a
+/// reader never has to re-derive them from the ledger.
+pub fn adjust(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    customer_id: i32,
+    amount: Money,
+    note: Option<String>,
+) -> Result<Adjusted, CoreError> {
+    ensure_customer(conn, shop_id, customer_id)?;
+    if amount == Money::ZERO {
+        return Err(CoreError::validation(
+            "amount",
+            "a correction of nothing corrects nothing",
+        ));
+    }
+    // Negated through checked arithmetic: `-amount` on the smallest i64 has
+    // no positive to negate to.
+    let (debit, credit) = if amount.is_negative() {
+        (Money::ZERO, Money::ZERO.checked_sub(amount)?)
+    } else {
+        (amount, Money::ZERO)
+    };
+    conn.transaction(|conn| {
+        let before = repo::balance(conn, shop_id, customer_id)?;
+        let entry = append(
+            conn,
+            shop_id,
+            NewDebtEntry {
+                customer_id,
+                document_id: None,
+                kind: DebtKind::Adjustment,
+                debit,
+                credit,
+                user_id,
+                note,
+            },
+        )?;
+        // Read once, inside the transaction: what goes into the log below is
+        // the same figure the caller is handed.
+        let after = statement(conn, shop_id, customer_id)?;
+        audit::record(
+            conn,
+            shop_id,
+            user_id,
+            audit::Change {
+                action: audit::ACTION_ADJUST_DEBT,
+                entity: "customer_debt",
+                entity_id: Some(customer_id),
+                before: Some(
+                    serde_json::json!({ "balance_centimes": before.as_centimes() }).to_string(),
+                ),
+                after: Some(
+                    serde_json::json!({
+                        "balance_centimes": after.balance.as_centimes(),
+                        "amount_centimes": amount.as_centimes(),
+                        "ledger_id": entry.id,
+                        "note": entry.note,
+                    })
+                    .to_string(),
+                ),
+            },
+        )?;
+        Ok(Adjusted {
+            entry,
+            statement: after,
+        })
+    })
 }
 
 /// Writes one movement. Runs inside the caller's transaction.

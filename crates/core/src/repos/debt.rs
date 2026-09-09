@@ -55,6 +55,32 @@ pub fn balance(
     Ok(debit.checked_sub(credit)?)
 }
 
+/// Each customer's two column sums, in one query, for the shop's whole list.
+/// A customer with no movement is not in the answer: no rows is no debt, and
+/// the caller reads a missing one as nothing owed.
+///
+/// The subtraction stays in Rust, checked, for the reason `balance` gives;
+/// this is the same query grouped, so the list screen reads one row per
+/// customer instead of one query per customer.
+pub fn balances(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+) -> Result<Vec<(i32, i64, i64)>, CoreError> {
+    let rows: Vec<(i32, Option<i64>, Option<i64>)> = debt_ledger::table
+        .filter(debt_ledger::shop_id.eq(shop_id))
+        .group_by(debt_ledger::customer_id)
+        .select((
+            debt_ledger::customer_id,
+            sql::<Nullable<BigInt>>("SUM(debit_centimes)"),
+            sql::<Nullable<BigInt>>("SUM(credit_centimes)"),
+        ))
+        .load(conn)?;
+    Ok(rows
+        .into_iter()
+        .map(|(customer_id, debit, credit)| (customer_id, debit.unwrap_or(0), credit.unwrap_or(0)))
+        .collect())
+}
+
 /// One customer's movements, newest first. `created_at` is whole seconds and
 /// two movements can land inside one, so the id breaks the tie: the later
 /// insert is the later movement.

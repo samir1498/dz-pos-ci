@@ -22,8 +22,60 @@ use crate::services::{audit, bounded_field, debt, optional_field};
 
 pub use crate::models::customer::{Customer, NewCustomer, PartyKind};
 
-pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<Customer>, CoreError> {
-    repo::list(conn, shop_id)
+/// The shop's customers, the active ones first. `search` is a piece of a name
+/// or of a phone number; blank is no filter at all, so a search box that has
+/// been emptied reads the whole list rather than nothing.
+///
+/// It is bounded at 200 characters like the fields that are stored, under the
+/// name the caller sends it as: a search box nobody bounded builds a LIKE
+/// pattern the length of whatever was pasted into it, and no name it could
+/// match is that long anyway.
+pub fn list(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    search: Option<&str>,
+) -> Result<Vec<Customer>, CoreError> {
+    let search = optional_field("q", search)?;
+    repo::list(conn, shop_id, search.as_deref())
+}
+
+/// A fiche and what its ledger sums to. The two travel together because the
+/// list screen shows the debt beside the limit, and reading them apart would
+/// be one query per row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomerWithBalance {
+    pub customer: Customer,
+    pub balance: Money,
+}
+
+/// The list, each fiche carrying its balance. Two queries whatever the number
+/// of customers: the fiches, and the ledger summed per customer.
+pub fn list_with_balance(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    search: Option<&str>,
+) -> Result<Vec<CustomerWithBalance>, CoreError> {
+    let found = list(conn, shop_id, search)?;
+    let balances = debt::balances(conn, shop_id)?;
+    Ok(found
+        .into_iter()
+        .map(|customer| {
+            // A customer with no movement is not in the sums, and owes
+            // nothing.
+            let balance = balances.get(&customer.id).copied().unwrap_or(Money::ZERO);
+            CustomerWithBalance { customer, balance }
+        })
+        .collect())
+}
+
+pub fn get_with_balance(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    id: i32,
+) -> Result<CustomerWithBalance, CoreError> {
+    let customer = repo::get(conn, shop_id, id)?;
+    let balance = debt::balance(conn, shop_id, id)?;
+    Ok(CustomerWithBalance { customer, balance })
 }
 
 pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Customer, CoreError> {
