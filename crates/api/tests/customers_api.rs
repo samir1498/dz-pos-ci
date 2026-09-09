@@ -442,3 +442,56 @@ async fn an_id_that_is_not_a_number_is_the_same_envelope_as_every_other_refusal(
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["error"]["code"], "bad_request");
 }
+
+/// A centime figure a JSON number cannot carry without rounding is refused at
+/// the edge rather than stored as something near it: past 2^53 - 1 the number
+/// that comes back is not the number that was sent (dto, `within_js_safe_range`).
+#[tokio::test]
+async fn an_amount_past_the_safe_integer_bound_is_422_naming_the_field() {
+    let h = harness();
+    let past = 9_007_199_254_740_992i64;
+
+    let mut huge = draft("Entreprise Benali");
+    huge["credit_limit_centimes"] = json!(past);
+    let (status, body) = call(&h.app, "POST", "/customers", Some(huge)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["error"]["code"], "validation");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("credit_limit_centimes "),
+        "{body}"
+    );
+
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let (status, body) = call(
+        &h.app,
+        "POST",
+        &format!("/customers/{}/adjustments", id_of(&made)),
+        Some(json!({ "amount_centimes": -past, "note": null })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["error"]["code"], "validation");
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("amount_centimes "),
+        "{body}"
+    );
+
+    let (_, ledger) = call(
+        &h.app,
+        "GET",
+        &format!("/customers/{}/ledger", id_of(&made)),
+        None,
+    )
+    .await;
+    assert_eq!(
+        ledger["entries"].as_array().unwrap().len(),
+        0,
+        "the refused correction landed anyway: {ledger}"
+    );
+}
