@@ -71,6 +71,55 @@ pub fn belongs_to_shop(
     Ok(found.is_some())
 }
 
+/// One document's id, what is still unpaid on it and what it asked for, for
+/// every document of this customer that still carries debt, oldest first.
+///
+/// `issued_at` is whole seconds and two documents can land inside one, so the
+/// id breaks the tie: settling oldest first has to mean one order and not
+/// whichever order the file happened to answer in.
+pub fn unpaid_of_customer(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+) -> Result<Vec<(i32, i64, i64)>, CoreError> {
+    let rows: Vec<(i32, Option<i64>, i64)> = documents::table
+        .filter(documents::shop_id.eq(shop_id))
+        .filter(documents::customer_id.eq(customer_id))
+        .filter(documents::remaining_debt_centimes.gt(0))
+        .order((documents::issued_at.asc(), documents::id.asc()))
+        .select((
+            documents::id,
+            documents::remaining_debt_centimes,
+            documents::net_to_pay_centimes,
+        ))
+        .load(conn)?;
+    // The filter above is what makes the column present, so a null here is a
+    // row SQLite cannot answer with and the map is never taken.
+    Ok(rows
+        .into_iter()
+        .filter_map(|(id, remaining, net)| remaining.map(|remaining| (id, remaining, net)))
+        .collect())
+}
+
+/// Writes back what is left unpaid on one document. The only column of a
+/// document a payment moves: the old balance and the total debt are what the
+/// paper said on the day and a reprint has to keep saying it.
+pub fn set_remaining_debt(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+    remaining_centimes: i64,
+) -> Result<(), CoreError> {
+    diesel::update(
+        documents::table
+            .filter(documents::shop_id.eq(shop_id))
+            .filter(documents::id.eq(document_id)),
+    )
+    .set(documents::remaining_debt_centimes.eq(Some(remaining_centimes)))
+    .execute(conn)?;
+    Ok(())
+}
+
 pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Document, CoreError> {
     let row: DocumentRow = documents::table
         .filter(documents::shop_id.eq(shop_id))

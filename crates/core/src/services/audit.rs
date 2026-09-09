@@ -17,6 +17,11 @@ pub const ACTION_CREATE: &str = "create";
 pub const ACTION_UPDATE: &str = "update";
 /// A régime change appended to the dated series.
 pub const ACTION_SET_REGIME: &str = "set_regime";
+/// Money against a customer's debt, written as a ledger movement with the
+/// documents it settled. The entry carries the balance before and after and
+/// the documents the money landed on, so the log reads as the settlement it
+/// was without anyone summing the ledger again.
+pub const ACTION_PAY_DEBT: &str = "pay_debt";
 /// A correction to what a customer owes, written as a ledger movement. The
 /// entry carries the balance before and after, so the log reads as the
 /// change it was without anyone summing the ledger again.
