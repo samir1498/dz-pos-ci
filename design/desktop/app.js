@@ -445,7 +445,7 @@ app.addEventListener("click", (e) => {
   else if (d.inc !== undefined) state.cart[d.inc].qtyMilli += MILLI_PER_UNIT;
   else if (d.dec !== undefined) {
     state.cart[d.dec].qtyMilli -= MILLI_PER_UNIT;
-    if (state.cart[d.dec].qty <= 0) state.cart.splice(d.dec, 1);
+    if (state.cart[d.dec].qtyMilli <= 0) state.cart.splice(d.dec, 1);
   } else if (d.del !== undefined) state.cart.splice(d.del, 1);
   else if (d.clear !== undefined) {
     state.cart = [];
