@@ -1068,6 +1068,30 @@ describe("the facture at the till", () => {
     expect(salePost()).toMatchObject({ kind: "proforma", customer_id: amrani.id });
   });
 
+  test("a quotation is still refused when the basket itself is wrong", async () => {
+    // A proforma takes no money, so the cash box and the credit limit are not
+    // part of what makes it sendable. What is in the basket still is: a
+    // global discount that is not an amount is as wrong on a quotation as on
+    // a sale, and nothing may be posted while it stands.
+    const user = userEvent.setup();
+    saleAnswer = () => json(201, { ...issued, kind: "proforma" });
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Proforma" }));
+    await user.type(screen.getByLabelText("Remise globale (DA)"), "abc");
+
+    // Said out loud, and the button will not send it.
+    expect(screen.getByText("Remise invalide.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Encaisser" })).toBeDisabled();
+
+    // Corrected, and the quotation goes.
+    await user.clear(screen.getByLabelText("Remise globale (DA)"));
+    await user.type(screen.getByLabelText("Remise globale (DA)"), "50");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()).toMatchObject({ kind: "proforma", global_discount_centimes: 5_000 });
+  });
+
   test("picking a customer opens the switch and the body posts the facture kind", async () => {
     const user = userEvent.setup();
     saleAnswer = () => json(201, issued);

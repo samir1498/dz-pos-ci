@@ -124,6 +124,13 @@ function rowOf(cell: HTMLElement): HTMLElement {
   return row;
 }
 
+/** `JSON.parse` answers `any`, which spreads through everything it touches.
+ *  The return type is what turns it back into `unknown`, and it does it
+ *  without an assertion. */
+function parsed(body: BodyInit | null | undefined): unknown {
+  return JSON.parse(String(body));
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -151,7 +158,7 @@ beforeEach(() => {
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "POST") {
-      posted.push({ url, body: JSON.parse(String(init.body)) as unknown });
+      posted.push({ url, body: parsed(init.body) });
       if (url.includes("/avoir")) return Promise.resolve(json(201, avoir));
       if (url.includes("/cancel")) {
         return Promise.resolve(

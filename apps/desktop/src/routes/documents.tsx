@@ -64,7 +64,26 @@ function errorKey(error: unknown): Key {
  *  (crates/api/src/routes/sales.rs). */
 type Filter = SaleKindDto | "all";
 
-const FILTERS: readonly Filter[] = ["all", "ticket", "facture", "proforma"];
+/** Every value the filter offers, and what each is called. A record keyed by
+ *  the union, so a sale kind added to the API fails to compile here rather
+ *  than quietly never being offered: an array of strings would have taken the
+ *  new kind's absence in silence.
+ *
+ *  `Object.keys` types its answer as `string[]`, which loses exactly the fact
+ *  this needs, so the list is narrowed back by a guard rather than asserted.
+ *  Insertion order is the order they are offered in. */
+const FILTER_KEY = {
+  all: "documents_filter_all",
+  ticket: "documents_kind_ticket",
+  facture: "documents_kind_facture",
+  proforma: "documents_kind_proforma",
+} satisfies Record<Filter, Key>;
+
+function isFilter(value: string): value is Filter {
+  return value in FILTER_KEY;
+}
+
+const FILTERS: readonly Filter[] = Object.keys(FILTER_KEY).filter(isFilter);
 
 const KIND_KEY: Record<DocumentKindDto, Key> = {
   ticket: "documents_kind_ticket",
@@ -115,7 +134,7 @@ export function DocumentsScreen() {
                 setOpenId(null);
               }}
             />
-            {t(value === "all" ? "documents_filter_all" : KIND_KEY[value])}
+            {t(FILTER_KEY[value])}
           </label>
         ))}
       </fieldset>

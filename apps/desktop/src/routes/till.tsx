@@ -428,15 +428,24 @@ export function TillScreen() {
   const creditProblem: Key | null =
     mode === "credit" && !takesCredit(customer) ? "error_credit_needs_customer" : null;
 
-  const problem =
-    lineProblem ?? globalDiscountProblem ?? totalsProblem ?? tenderedProblem ?? creditProblem;
-  // A quotation takes no money, so the cash box is not part of what makes
-  // it sendable: a proforma is written from a basket and a customer alone.
+  // What is wrong with the basket, and what is wrong at the cash box. A
+  // quotation takes no money, so the second half is not part of what makes it
+  // sendable: a proforma is written from a basket and a customer alone. The
+  // first half still is. A quantity that is not a number and a global discount
+  // above the basket are as wrong on a quotation as on a sale, and the price a
+  // customer is quoted is the one they will be charged.
+  //
+  // Split rather than dropped whole. `preview` is null while any of the basket
+  // problems stands, so dropping them all happened to gate correctly, and the
+  // day the preview is computed some other way it would stop doing so.
+  const basketProblem = lineProblem ?? globalDiscountProblem ?? totalsProblem;
+  const tillProblem = tenderedProblem ?? creditProblem;
   const quoting = kind === "proforma";
   const canPay =
     cart.length > 0 &&
     preview !== null &&
-    (quoting || problem === null) &&
+    basketProblem === null &&
+    (quoting || tillProblem === null) &&
     (quoting || !tenderedMissing) &&
     !pay.isPending;
 
