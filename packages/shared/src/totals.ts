@@ -135,14 +135,21 @@ export function pct(amount: number, rateBps: number): number {
  */
 export function stamp(totalTtc: number, mode: PaymentModeDto): number {
   if (mode !== "cash" || totalTtc <= STAMP_FLOOR) return 0;
-  const tranches = Math.ceil(totalTtc / STAMP_TRANCHE);
+  // Cut in BigInt, the way `money/stamp.rs` cuts them in i64 and the way
+  // `pct` above works: the tranche count divided in floating point, which
+  // put a tax on an amount that had already been rounded to get there. The
+  // ceiling is the integer form, `(amount + tranche - 1) / tranche`, and a
+  // total a Number can no longer hold is an `Overflow` rather than an answer
+  // built out of digits that are gone.
+  const tranche = BigInt(STAMP_TRANCHE);
+  const tranches = (exact(totalTtc) + tranche - 1n) / tranche;
   const rate =
     totalTtc <= STAMP_BAND_LOW
       ? STAMP_RATE_LOW
       : totalTtc <= STAMP_BAND_MID
         ? STAMP_RATE_MID
         : STAMP_RATE_HIGH;
-  return Math.max(tranches * rate, STAMP_MIN);
+  return Math.max(safe(tranches * BigInt(rate)), STAMP_MIN);
 }
 
 /**
