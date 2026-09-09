@@ -299,6 +299,35 @@ fn centimes(printed: &str) -> i64 {
     sign * (whole * 100 + rest)
 }
 
+/// The text of every `<span class="rate rate-{marker}">` in the file: the
+/// rate cells, which carry a figure no amount parser would catch. The facture
+/// suite has the same pair of helpers, copied rather than shared for the
+/// reason its own header gives.
+fn rates(html: &str, marker: &str) -> Vec<String> {
+    let opening = format!("<span class=\"rate rate-{marker}\">");
+    html.split(&opening)
+        .skip(1)
+        .map(|rest| {
+            let end = rest.find("</span>").expect("a rate span never closes");
+            rest[..end].to_owned()
+        })
+        .collect()
+}
+
+/// "9,5 %" back to 950 basis points, and "19 %" to 1900. The golden's own
+/// digits, read by a parser that shares no code with the one that printed
+/// them.
+fn bps(printed: &str) -> u32 {
+    let digits: String = printed
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == ',')
+        .collect();
+    let (whole, rest) = digits.split_once(',').unwrap_or((digits.as_str(), ""));
+    let whole: u32 = whole.parse().unwrap();
+    let rest: u32 = format!("{rest:0<2}").parse().unwrap();
+    whole * 100 + rest
+}
+
 /// Every amount in the golden, against the totals the document stores.
 fn the_golden_says_what_the_document_stores(html: &str, doc: &Document) {
     let totals = &doc.totals;
@@ -338,11 +367,38 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document) {
         assert_eq!(centimes(printed), row.amount.as_centimes(), "a TVA row");
     }
 
+    // Each recap row names the rate its tax belongs to, and the paper is read
+    // for it the way the facture's is: an amount that landed under the wrong
+    // rate adds up on the page and is wrong on it.
+    let recap_rates = rates(html, "tva");
+    assert_eq!(
+        recap_rates.len(),
+        totals.tva_by_rate.len(),
+        "one rate per recap row"
+    );
+    for (printed, row) in recap_rates.iter().zip(&totals.tva_by_rate) {
+        assert_eq!(bps(printed), row.rate.as_u32(), "a recap row's rate");
+    }
+
     let lines = amounts(html, "line");
     assert_eq!(lines.len(), doc.lines.len(), "one total per sold line");
     for (printed, line) in lines.iter().zip(&doc.lines) {
         assert_eq!(centimes(printed), line.line_total.as_centimes(), "a line");
     }
+
+    // The rate on a line is the rate the line was sold at, réel only: under
+    // the IFU there is no rate column at all, not a column of zeroes
+    // (`regime_ifu_prints_no_tva`).
+    let line_rates = rates(html, "line");
+    let expected: Vec<u32> = match doc.regime {
+        Regime::Reel => doc.lines.iter().map(|l| l.rate_bps.as_u32()).collect(),
+        Regime::Ifu => Vec::new(),
+    };
+    assert_eq!(
+        line_rates.iter().map(|r| bps(r)).collect::<Vec<u32>>(),
+        expected,
+        "the rate cells of the lines"
+    );
 
     // A line discount is an amount on the paper like any other, so it is
     // read back like any other. A line that carries none prints no row.
@@ -537,6 +593,13 @@ fn an_ifu_ticket_names_no_tax_in_any_language() {
         assert!(
             !html.contains("amount-tva"),
             "the {lang:?} IFU ticket keeps a TVA row"
+        );
+        // Nor a rate cell anywhere: not in the recap it has none of, and not
+        // on a line either. A rate is a tax figure whatever the row it sits
+        // on, and a column of 0 % would name the tax as surely as the word.
+        assert!(
+            rates(&html, "tva").is_empty() && rates(&html, "line").is_empty(),
+            "the {lang:?} IFU ticket keeps a rate cell"
         );
         // "hors taxe" names a tax too, so the total row changes word under
         // the IFU rather than only losing the recap below it.

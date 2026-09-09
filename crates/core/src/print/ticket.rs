@@ -52,8 +52,14 @@ struct LineView {
     total: String,
 }
 
+/// One line of the TVA recap. The word and the rate are two fields rather
+/// than one built string, so the golden carries the rate in a span of its own
+/// and the suite can read it back the way the facture's does: a recap row
+/// that slid onto the wrong rate is caught by the rate and not only by the
+/// amount beside it.
 struct TvaRow {
-    label: String,
+    label: &'static str,
+    rate: String,
     amount: String,
 }
 
@@ -158,7 +164,8 @@ fn view(doc: &Document, lang: Lang) -> TicketView {
             .tva_by_rate
             .iter()
             .map(|row| TvaRow {
-                label: format!("{} {}", text(Key::Tva, lang), percent(row.rate)),
+                label: text(Key::Tva, lang),
+                rate: percent(row.rate),
                 amount: format_centimes(row.amount),
             })
             .collect(),
