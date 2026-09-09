@@ -8,11 +8,18 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import type { CustomerDto, CustomerLedgerDto, CustomerPaymentsDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
-import { CustomersScreen } from "./customers";
+import { CustomerFiche, CustomersScreen } from "./customers";
 
 const benali: CustomerDto = {
   id: 3,
@@ -225,6 +232,18 @@ beforeEach(() => {
         return Promise.resolve(json(201, rows));
       }
       return Promise.resolve(json(init.method === "POST" ? 201 : 200, benali));
+    }
+    // One fiche by id, which is what the `/customers/$id` route reads. Before
+    // the list branch below: `/customers/3` has no `q` and would otherwise
+    // come back as the whole list.
+    const one = /\/customers\/(\d+)$/.exec(url);
+    if (one !== null) {
+      const found = list.find((c) => c.id === Number(one[1]));
+      return Promise.resolve(
+        found === undefined
+          ? json(404, { error: { code: "not_found", message: "no" } })
+          : json(200, found),
+      );
     }
     if (url.includes("/ledger")) return Promise.resolve(json(200, rows));
     if (url.includes("/payments")) return Promise.resolve(json(200, payments));
@@ -609,5 +628,55 @@ describe("Arabic", () => {
     // the groups and the sign inside a right-to-left row.
     const amount = within(row).getByText("1 500,00");
     expect(amount).toHaveAttribute("dir", "ltr");
+  });
+});
+
+/** The fiche on a page of its own, which is what `/customers/$id` opens. The
+ * router here is not the app's; it is the smallest one that lets the fiche's
+ * own `Link` render, the way the till's tests build theirs. */
+describe("one customer by id", () => {
+  function mountFiche(id: number) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const rootRoute = createRootRoute();
+    const ficheRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/",
+      component: () => <CustomerFiche id={id} />,
+    });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([ficheRoute]),
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+    });
+    return render(
+      <I18nProvider lang="fr">
+        <QueryClientProvider client={client}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </I18nProvider>,
+    );
+  }
+
+  test("reads the one fiche by id and shows the ledger under it", async () => {
+    mountFiche(3);
+
+    expect(await screen.findByDisplayValue("Entreprise Benali")).toBeInTheDocument();
+    // The fiche it shows came from the customer's own route, not from the
+    // list: a page addressed by id must not depend on a list being loaded.
+    expect(fetched().some((url) => /\/customers\/3$/.test(url))).toBe(true);
+    expect(fetched().some((url) => url.endsWith("/customers"))).toBe(false);
+    expect(
+      await screen.findByRole("heading", { name: fr.customers_ledger }),
+    ).toBeInTheDocument();
+    // And the same two papers the panel offers.
+    expect(screen.getByRole("button", { name: fr.action_debt_slip })).toBeInTheDocument();
+  });
+
+  test("a customer this shop does not have says so instead of showing a blank fiche", async () => {
+    mountFiche(4242);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_not_found);
+    expect(screen.queryByRole("heading", { name: fr.customers_ledger })).toBeNull();
   });
 });

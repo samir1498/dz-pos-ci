@@ -218,6 +218,8 @@
   "action_statement": "Voir le relevé",
   "action_statement_close": "Fermer le relevé",
   "customers_statement_title": "Relevé du client",
+  "action_back_to_customers": "Retour à la liste des clients",
+  "till_open_fiche": "Ouvrir la fiche du client",
   "customers_debt_slip": "Situation de compte",
   "customers_debt_slip_hint": "Le bon 80 mm remis au client au comptoir. Sans valeur fiscale.",
   "action_debt_slip": "Voir la situation",

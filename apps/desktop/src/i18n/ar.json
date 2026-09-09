@@ -218,6 +218,8 @@
   "action_statement": "عرض الكشف",
   "action_statement_close": "إغلاق الكشف",
   "customers_statement_title": "كشف حساب الزبون",
+  "action_back_to_customers": "العودة إلى قائمة الزبائن",
+  "till_open_fiche": "فتح بطاقة الزبون",
   "customers_debt_slip": "وضعية الحساب",
   "customers_debt_slip_hint": "وصل 80 مم يُسلَّم للزبون عند المنضدة. بدون قيمة جبائية.",
   "action_debt_slip": "عرض الوضعية",

@@ -218,6 +218,8 @@
   "action_statement": "Open the statement",
   "action_statement_close": "Close the statement",
   "customers_statement_title": "Customer statement",
+  "action_back_to_customers": "Back to the customer list",
+  "till_open_fiche": "Open the customer fiche",
   "customers_debt_slip": "Account balance slip",
   "customers_debt_slip_hint": "The 80 mm slip handed to the customer at the counter. No fiscal value.",
   "action_debt_slip": "Open the slip",

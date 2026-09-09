@@ -6,7 +6,7 @@
 // shop that has stopped dealing with somebody clears the active box instead,
 // and the till's picker (T3) then leaves them out.
 
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
@@ -27,6 +27,7 @@ import {
   customerDebtSlipKeyPrefix,
   customerDebtSlipQueryKey,
   customerLedgerQueryKey,
+  customerQueryKey,
   customerPaymentsQueryKey,
   customerStatementQueryKey,
   customersQueryKey,
@@ -158,6 +159,51 @@ export function CustomersScreen() {
       ) : null}
       {customers.isSuccess ? (
         <CustomerTable rows={customers.data} onEdit={(row) => setOpen(row)} />
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * One fiche on a page of its own, which is what `/customers/$id` opens. The
+ * till's credit refusal names a customer whose balance stopped a sale, and
+ * the documents screen names the customer a facture was made out to; neither
+ * can reach into the list screen's state to open the panel there, and a link
+ * that dropped the cashier on the list with a search box to retype would be
+ * the shop doing the app's work.
+ *
+ * The same two components the panel uses, so a fiche reads the same whichever
+ * way it was opened.
+ */
+export function CustomerFiche({ id }: { id: number }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const customer = useQuery({
+    queryKey: customerQueryKey(id),
+    queryFn: () => api.getCustomer(id),
+  });
+  const back = () => void navigate({ to: "/customers" });
+
+  return (
+    <section className="flex flex-col gap-4">
+      <header className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold">{t("customers_title")}</h1>
+        <Link to="/customers" className="underline">
+          {t("action_back_to_customers")}
+        </Link>
+      </header>
+
+      {customer.isPending ? <p>{t("customers_loading")}</p> : null}
+      {customer.isError ? (
+        <p role="alert" className="text-red-700">
+          {t(errorKey(customer.error))}
+        </p>
+      ) : null}
+      {customer.isSuccess ? (
+        <div className="flex flex-col gap-4 rounded border p-4">
+          <CustomerForm key={customer.data.id} initial={customer.data} onDone={back} />
+          <CustomerLedger customer={customer.data} />
+        </div>
       ) : null}
     </section>
   );

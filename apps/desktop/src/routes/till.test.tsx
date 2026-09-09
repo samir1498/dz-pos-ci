@@ -919,6 +919,13 @@ describe("on credit", () => {
 
     expect(await screen.findByTestId("till-balance-after")).toHaveTextContent("5 500,00");
     expect(screen.getByTestId("till-credit-limit")).toHaveTextContent("5 000,00");
+    // The other answer to the refusal: the customer's own fiche, where money
+    // comes off what they already owe. The link carries their id, so nobody
+    // types the name back into a search box.
+    expect(screen.getByRole("link", { name: "Ouvrir la fiche du client" })).toHaveAttribute(
+      "href",
+      `/customers/${amrani.id}`,
+    );
     const refused = salePost();
     expect(refused).toMatchObject({ override: false });
 
