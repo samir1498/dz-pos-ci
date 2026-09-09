@@ -368,6 +368,25 @@ fn another_shops_category_is_rejected_even_when_the_rate_is_explicit() {
 }
 
 #[test]
+fn a_category_that_no_longer_exists_is_not_found_rather_than_a_storage_failure() {
+    // The check and the insert share one transaction, so the row cannot
+    // slip between them; a category gone before the call is a 404, never
+    // the foreign-key failure the database would raise (a 500).
+    use diesel::prelude::*;
+
+    let (_dir, mut conn) = open_temp();
+    let gone = seed_second_shop(&mut conn);
+    diesel::sql_query(format!("DELETE FROM categories WHERE id = {gone}"))
+        .execute(&mut conn)
+        .unwrap();
+    let mut d = draft("Orpheline");
+    d.category_id = Some(gone);
+    d.rate_bps = Some(Bps::new(900).unwrap());
+    let err = products::create(&mut conn, 2, d).unwrap_err();
+    assert_eq!(err.code(), "not_found", "{err}");
+}
+
+#[test]
 fn an_update_onto_another_shops_category_is_rejected_too() {
     let (_dir, mut conn) = open_temp();
     let theirs = seed_second_shop(&mut conn);

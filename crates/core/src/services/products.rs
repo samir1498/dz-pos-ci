@@ -33,8 +33,11 @@ pub fn create(
     shop_id: i32,
     new: NewProduct,
 ) -> Result<Product, CoreError> {
-    let mut write = validate(conn, shop_id, &new)?;
+    // The category is checked inside the same transaction as the insert:
+    // checked outside, a category deleted in between surfaced as the FK
+    // failure, a 500, instead of the 404 the check is there to give.
     conn.transaction(|conn| {
+        let mut write = validate(conn, shop_id, &new)?;
         if write.barcode.is_none() {
             write.barcode = Some(next_free_in_store_barcode(conn, shop_id)?);
         }
