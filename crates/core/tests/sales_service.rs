@@ -975,21 +975,60 @@ fn an_override_takes_the_sale_past_the_limit_and_the_log_says_who() {
     assert_eq!(entry.entity, "sale");
     assert_eq!(entry.entity_id, Some(doc.id));
     assert_eq!(entry.user_id, OWNER);
+    // `before` is the state the decision was taken against: what the
+    // customer owed and what they were allowed to owe.
     let before = entry.before.clone().unwrap_or_default();
     assert!(before.contains("\"balance_centimes\":0"), "{before}");
-    assert!(
-        before.contains("\"balance_after_centimes\":100000"),
-        "{before}"
-    );
     assert!(
         before.contains("\"credit_limit_centimes\":50000"),
         "{before}"
     );
+    assert!(!before.contains("balance_after_centimes"), "{before}");
+
+    // `after` is what the decision produced: the document, how much of it
+    // the customer now owes, where the balance landed, how it was paid and
+    // whether the fiche was warning as well as blocking.
     let after = entry.after.clone().unwrap_or_default();
     assert!(
         after.contains(&format!("\"document_id\":{}", doc.id)),
         "{after}"
     );
+    assert!(
+        after.contains("\"balance_after_centimes\":100000"),
+        "{after}"
+    );
+    assert!(
+        after.contains("\"remaining_debt_centimes\":100000"),
+        "{after}"
+    );
+    assert!(after.contains("\"payment_mode\":\"credit\""), "{after}");
+    assert!(after.contains("\"warning\":null"), "{after}");
+}
+
+#[test]
+fn an_override_on_a_fiche_that_was_also_warning_says_so_in_the_log() {
+    // The two rules are separate: this fiche blocks at 500,00 and warns at
+    // 200,00, so the sale is both overridden and warned, and a comptable
+    // reading the row sees the second without opening the fiche.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), Some(20_000));
+
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], true),
+    )
+    .unwrap();
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "sale.credit_override")
+        .expect("an override past a rule is logged");
+    assert_eq!(entry.entity_id, Some(doc.id));
+    let after = entry.after.clone().unwrap_or_default();
+    assert!(after.contains("\"warning\":\"near_limit\""), "{after}");
 }
 
 #[test]

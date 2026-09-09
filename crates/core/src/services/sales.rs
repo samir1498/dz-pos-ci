@@ -15,7 +15,8 @@ use crate::error::CoreError;
 use crate::models::customer::Customer;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::document::{
-    BalanceTriple, Document, DocumentKind, NewDocument, NewDocumentLine, PartyBlock, SellerBlock,
+    payment_mode_stored, BalanceTriple, Document, DocumentKind, NewDocument, NewDocumentLine,
+    PartyBlock, SellerBlock,
 };
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{
@@ -269,17 +270,35 @@ pub fn issue(
                     action: audit::ACTION_CREDIT_OVERRIDE,
                     entity: "sale",
                     entity_id: Some(document.id),
+                    // `before` is the state the decision was taken against
+                    // and nothing else: what the customer owed and what
+                    // they were allowed to owe. The balance the sale left
+                    // behind is not a before, it is what the override
+                    // caused, so it sits in `after` beside the rest of it.
                     before: Some(
                         serde_json::json!({
                             "customer_id": credit.customer.id,
                             "balance_centimes": credit.balance.old_balance.as_centimes(),
-                            "balance_after_centimes": credit.balance.total_debt.as_centimes(),
                             "credit_limit_centimes":
                                 credit.customer.credit_limit.map(Money::as_centimes),
                         })
                         .to_string(),
                     ),
-                    after: Some(serde_json::json!({ "document_id": document.id }).to_string()),
+                    // How it was paid and how much of it is owed are both
+                    // here because a later avoir or a part payment changes
+                    // the document without changing this row: what the
+                    // decision was worth on the day stays readable.
+                    after: Some(
+                        serde_json::json!({
+                            "document_id": document.id,
+                            "balance_after_centimes": credit.balance.total_debt.as_centimes(),
+                            "remaining_debt_centimes":
+                                credit.balance.remaining_debt.as_centimes(),
+                            "payment_mode": payment_mode_stored(document.payment_mode),
+                            "warning": credit.warning.map(Warning::code),
+                        })
+                        .to_string(),
+                    ),
                 },
             )?;
         }
