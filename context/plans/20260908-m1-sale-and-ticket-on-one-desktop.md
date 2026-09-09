@@ -4,7 +4,7 @@ slug: 'm1-sale-and-ticket-on-one-desktop'
 status: 'active'
 category: 'milestone'
 created: 20260908
-tldr: 'Products, till, cash sale, 80mm ticket on a real printer; stub until M0 closes'
+tldr: 'Products, till, cash sale, 80mm ticket on a real printer; runs as a loop on m1/2026-09-09'
 priority: 60
 tasks:
   - id: 'T0'
@@ -15,10 +15,10 @@ tasks:
     status: 'done'
   - id: 'T2'
     desc: 'Settings screen: store block (name, RC, NIF, NIS, AI, address, phone) and the dated régime fiscal control, read and written through the API; the seller block a ticket prints comes from here'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T3'
-    desc: 'Document model in core with every kind but only ticket issued, gapless numbering per kind on take_next (no dedupe loop, so the counter test must pin the series), stock movements ledger, the sale service (lines, discounts, totals, stock out) and POST /sales; the facture-or-ticket rule written into features.md §3; dz-review Pass 2 before merge'
-    status: 'pending'
+    desc: 'Document model in core with every kind but only ticket issued, gapless numbering per kind on take_next (no dedupe loop, so the counter test must pin the series), stock movements ledger, the sale service (lines, discounts, totals, stock out) and POST /sales; the facture-or-ticket rule written into features.md §3; the document row snapshots the seller block (seven shop fields) and the régime value with issued_at in the same transaction, since shops is replaced in place and a régime row can be back-dated (T2 review); the audit log covers settings and shops writes; dz-review Pass 2 before merge'
+    status: 'in-progress'
   - id: 'T4'
     desc: 'Till screen: product search and barcode entry, lines, line and global discount, tendered and change, cash or card; e2e proves a sale reduces stock and the totals match the fixture; dz-review Pass 2 before merge; checkpoint PR to main'
     status: 'pending'
@@ -38,7 +38,8 @@ acceptance: []
 ---
 # M1: a sale and a ticket on one desktop
 
-Stub. Tasks get added when M0 closes. The milestone text is
+Started 2026-09-09. The tasks above run in sequence on `m1/2026-09-09`
+(ruling in `~/.dz-night/ledger.md`, 13:45). The milestone text is
 `docs/roadmap.md` § M1.
 
 Demo that closes it: Anouar sells three products at the till, cash or card

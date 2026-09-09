@@ -4,19 +4,21 @@ slug: 'quality-gates'
 status: 'active'
 category: 'processes'
 created: 20260908
-tldr: 'The five gates, what counts as tested, the extra layers for money/roles/deletion'
+tldr: 'just gates and just e2e, what counts as tested, the extra layers for money/roles/deletion'
 ---
 # Quality gates
 
 Before "done" and before a PR, run from the repo root and show the output:
 
 ```
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-pnpm -r build
-pnpm -r test
+just gates   # cargo fmt --check, clippy --all-targets -D warnings,
+             # generated TS types diffed against the DTOs (types-check),
+             # cargo test, pnpm -r test, pnpm -r build
+just e2e     # Playwright against a fresh API and database
 ```
+
+A DTO change without `just types` fails `types-check`; the committed
+`packages/shared/src/generated` is diffed both ways.
 
 CI green is not "tested". Say what you drove and on which machine: a
 mockup route through the `dz-mockup` drive scripts, a Tauri window on the

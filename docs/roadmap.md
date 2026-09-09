@@ -12,7 +12,7 @@ a ticket sale ships before customers and debt, because a cash sale with a
 printed ticket is the smallest loop a shop can run. `features.md` "Build
 order" follows this page.
 
-## M0. Money core and the first real screen (in flight)
+## M0. Money core and the first real screen (closed 2026-09-09, PR #14)
 
 Demo: the products list on the laptop, read from a real SQLite file through
 `crates/api`.
@@ -32,20 +32,10 @@ reading the API, which is also where the Anthropic `webapp-testing` and
 Fixtures: `money_no_float`, `tva_rounding_once_per_rate`, `tva_rates_table`,
 `stamp_progressive_tranches`, `words_{fr,ar,en}_golden`.
 
-Housekeeping, tracked as tasks on the repo-tooling and money plans:
-`design/shared/money.js` still computes the old 1 % clamped stamp (the
-money plan's stamp tasks say tranches); CI runs clippy without
-`--all-targets` while the justfile and the quality gates require it; the
-`dz-review` skill lacks three sections that `pc-review`, the skill it was
-cut from (on the laptop, not in this repo), carries: what every finding
-must state, a fix proven by a test that fails without it, and the traps
-list; the coding rules have no line on design tokens versus hardcoded
-pixels.
-
 Blocks: nothing. The half-dinar case at the 1,5 DA band stays an open
 fixture until the accountant answers (R8).
 
-## M1. A sale and a ticket on one desktop
+## M1. A sale and a ticket on one desktop (in flight)
 
 Demo: Anouar sells three products at the till, cash or card on a payment
 terminal (TPE), and an 80 mm ticket comes out of a real thermal printer.
@@ -193,5 +183,6 @@ languages on every screen and every printed document. A golden file per
 template and language; a change is a reviewed diff. Migrations forward-only
 once released, each with a previous-version test. Money, roles and anything
 that deletes data get the real-thing run and the `dz-review` pass before
-merge, in M1 as much as in M4. One PR per step; Samir reviews between
-steps.
+merge, in M1 as much as in M4. A review before every merge into the
+milestone branch; checkpoint PRs to `main` at the tasks the plan marks,
+which Samir merges.
