@@ -1484,6 +1484,53 @@ fn a_cancelled_document_takes_none_of_a_payment() {
 }
 
 #[test]
+fn a_cancelled_document_takes_none_of_a_correction_downwards_either() {
+    // A correction downwards settles paper through the same read as a
+    // payment (`allocate_oldest_first`), so it inherits the `status =
+    // issued` filter. Asserted on its own path rather than trusted to the
+    // payment's: the two callers are the whole of what that filter protects,
+    // and a rewrite that gave one of them a query of its own would otherwise
+    // go through green.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let cancelled = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let standing = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    diesel::sql_query(format!(
+        "UPDATE documents SET status = 'cancelled' WHERE id = {cancelled}"
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-50_000),
+        Some("erreur de saisie".to_string()),
+    )
+    .unwrap();
+
+    assert_eq!(
+        corrected
+            .allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [standing],
+        "the correction came off a cancelled document"
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, cancelled),
+        Money::centimes(100_000)
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, standing),
+        Money::centimes(150_000)
+    );
+}
+
+#[test]
 fn the_oldest_document_is_the_one_issued_first_and_not_the_one_written_first() {
     // The two orders are made to disagree: the newer facture is written into
     // the file first and carries the lower id. Oldest-first means the day the
