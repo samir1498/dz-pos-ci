@@ -44,6 +44,19 @@ const tomato: ProductDto = {
   rate_bps: 900,
 };
 
+/** The other whole unit: a case of water, sold by the box. */
+const crate: ProductDto = {
+  ...coffee,
+  id: 4,
+  name: "Pack eau 6x1,5L",
+  barcode: "6130002000048",
+  category_id: 2,
+  unit: "box",
+  selling_centimes: 60_000,
+  qty_on_hand_milli: 8_000,
+  rate_bps: 900,
+};
+
 const salt: ProductDto = {
   ...coffee,
   id: 3,
@@ -158,7 +171,7 @@ function posted(): boolean {
 }
 
 beforeEach(() => {
-  rows = [coffee, tomato, salt];
+  rows = [coffee, tomato, crate, salt];
   saleAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
@@ -314,6 +327,20 @@ describe("the quantity a line carries", () => {
     expect(posted()).toBe(false);
   });
 
+  test("a product sold by the box refuses 1,5 the same way", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(crate);
+    await user.click(tile(crate));
+    const qty = screen.getByLabelText(`Quantité ${crate.name}`);
+    await user.clear(qty);
+    await user.type(qty, "1,5");
+
+    expect(await screen.findByText("Ce produit se vend à l'unité entière.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    expect(posted()).toBe(false);
+  });
+
   test("the minus button takes the quantity the line carries down by one", async () => {
     const user = userEvent.setup();
     mount();
@@ -385,6 +412,42 @@ describe("the discounts the screen refuses on its own", () => {
     expect(await screen.findByText("La remise dépasse le panier.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Encaisser" }));
     expect(posted()).toBe(false);
+  });
+});
+
+describe("the discounts that do reach the API", () => {
+  test("a 50 DA line discount is posted in centimes on its own line", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await user.click(tile(tomato));
+    await user.type(screen.getByLabelText(`Remise ligne (DA) ${tomato.name}`), "50");
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1000");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    await waitFor(() => expect(posted()).toBe(true));
+    const lines: unknown = salePost()?.lines;
+    expect(lines).toEqual([
+      { product_id: 1, qty_milli: 1_000, unit_price_centimes: null, line_discount_centimes: 0 },
+      { product_id: 2, qty_milli: 1_000, unit_price_centimes: null, line_discount_centimes: 5_000 },
+    ]);
+  });
+
+  test("a 50 DA global discount is posted in centimes on the basket", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await user.type(screen.getByLabelText("Remise globale (DA)"), "50");
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1000");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()?.global_discount_centimes).toBe(5_000);
+    expect(salePost()?.lines).toEqual([
+      { product_id: 1, qty_milli: 1_000, unit_price_centimes: null, line_discount_centimes: 0 },
+    ]);
   });
 });
 
