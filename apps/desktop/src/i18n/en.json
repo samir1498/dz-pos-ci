@@ -53,5 +53,6 @@
   "field_low_stock": "Low stock alert at",
   "field_active": "For sale",
   "error_wholesale_invalid": "Invalid wholesale price.",
-  "error_low_stock_invalid": "Invalid threshold."
+  "error_low_stock_invalid": "Invalid threshold.",
+  "category_none": "No category"
 }

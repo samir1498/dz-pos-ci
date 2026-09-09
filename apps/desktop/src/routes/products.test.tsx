@@ -471,6 +471,26 @@ describe("the edit form", () => {
     expect(screen.queryByRole("button", { name: "Enregistrer" })).not.toBeInTheDocument();
   });
 
+  test("can take the product out of its category, and says nothing about renumbering", async () => {
+    const user = userEvent.setup();
+    await openTheEdit(user);
+    expect(screen.queryByText("Laisser vide pour numéroter automatiquement")).toBeNull();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Catégorie" }), "");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(initOf("PUT")).toBeDefined());
+    expect(putRequest().body.category_id).toBeNull();
+  });
+
+  test("shows the stock but does not let the fiche change it", async () => {
+    const user = userEvent.setup();
+    await openTheEdit(user);
+    const stock = screen.getByLabelText("Quantité en stock");
+    expect(stock).toHaveValue("24");
+    expect(stock).toHaveAttribute("readonly");
+    await user.type(stock, "9");
+    expect(stock).toHaveValue("24");
+  });
+
   test("shows the API's refusal on the form and keeps it open", async () => {
     const user = userEvent.setup();
     updateAnswer = () =>
@@ -494,6 +514,19 @@ describe("the edit form", () => {
 });
 
 describe("the add form, every spec field", () => {
+  test("offers no category as a choice and posts null for it", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openTheForm(user);
+    await user.type(screen.getByLabelText("Nom"), "Divers");
+    await user.type(screen.getByLabelText("Prix de vente"), "5");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Catégorie" }), "");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(sentBody().category_id).toBeNull();
+    expect(sentBody().rate_bps).toBe(1900);
+  });
+
   test("posts the wholesale price and the low stock threshold when typed", async () => {
     const user = userEvent.setup();
     mount();

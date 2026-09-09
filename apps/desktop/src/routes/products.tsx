@@ -332,7 +332,9 @@ function ProductForm({
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
             />
-            <span className="text-sm opacity-70">{t("field_barcode_hint")}</span>
+            {initial === null ? (
+              <span className="text-sm opacity-70">{t("field_barcode_hint")}</span>
+            ) : null}
           </label>
         )}
       </form.Field>
@@ -354,6 +356,7 @@ function ProductForm({
                 }
               }}
             >
+              <option value="">{t("category_none")}</option>
               {categories.map((c) => (
                 <option key={c.id} value={String(c.id)}>
                   {c.name}
@@ -470,6 +473,9 @@ function ProductForm({
             value={field.state.value}
             onChange={field.handleChange}
             errors={field.state.meta.errors}
+            // The ledger owns the quantity once the product exists; the
+            // fiche shows it and the core ignores it on an update.
+            readOnly={initial !== null}
           />
         )}
       </form.Field>
@@ -530,19 +536,26 @@ function AmountField({
   value,
   onChange,
   errors,
+  readOnly = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   errors: unknown[];
+  readOnly?: boolean;
 }) {
   return (
     <label className="flex flex-col gap-1">
       <span>{label}</span>
       <input
         inputMode="decimal"
-        className="rounded border px-2 py-1 font-mono text-end"
+        className={
+          readOnly
+            ? "rounded border px-2 py-1 font-mono text-end opacity-60"
+            : "rounded border px-2 py-1 font-mono text-end"
+        }
         value={value}
+        readOnly={readOnly}
         onChange={(e) => onChange(e.target.value)}
       />
       <FieldError messages={errors} />

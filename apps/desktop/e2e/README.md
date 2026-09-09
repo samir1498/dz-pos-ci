@@ -68,9 +68,10 @@ minutes. The API webServer has a ten minute start timeout for that.
   `putBodies`) and on the row the API answers with, which the table shows
   in its TVA column. A server storing 19 % for a posted 9 % fails the
   second check.
-- The edit test proves the whole product is sent back (every field, the
-  wholesale price and the low-stock threshold included) and that the row
-  re-reads from the API, not from what was typed.
+- The edit test adds its own product, then proves the whole product is
+  sent back (all eleven fields, `toEqual`) and that the row re-reads from
+  the API, not from what was typed. The quantity rides along unchanged:
+  the core ignores it on an update because the stock ledger owns it.
 - An empty name is caught by the form's own validator before any request
   goes out, so the visible message is `error_name_required` from the UI.
   The API's `validation` code has no path to this form; the test counts

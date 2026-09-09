@@ -53,5 +53,6 @@
   "field_low_stock": "Alerte stock bas à",
   "field_active": "En vente",
   "error_wholesale_invalid": "Prix de gros invalide.",
-  "error_low_stock_invalid": "Seuil invalide."
+  "error_low_stock_invalid": "Seuil invalide.",
+  "category_none": "Sans catégorie"
 }

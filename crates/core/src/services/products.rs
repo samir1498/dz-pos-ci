@@ -62,6 +62,11 @@ pub fn update(
         if write.barcode.is_none() {
             write.barcode = before.barcode;
         }
+        // The quantity on hand belongs to the stock ledger (features.md §1),
+        // not to the fiche: an edit made from a list read minutes ago must
+        // not undo the sales since. The field rides along on the wire because
+        // add and edit share one shape; here it is the stored value.
+        write.qty_on_hand_milli = before.qty_on_hand_milli;
         repo::update(conn, shop_id, id, &write)
     })
 }

@@ -692,6 +692,32 @@ async fn put_products_id_updates_the_row_and_answers_it() {
 
     let (_, one) = call(&h.app, "GET", &format!("/products/{id}"), None).await;
     assert_eq!(one, body, "the read answers what the update answered");
+
+    // A value set once is cleared by a null, not kept: the changeset writes
+    // NULL for a None (core, ProductRowWrite).
+    let mut cleared = draft();
+    cleared["wholesale_centimes"] = Value::Null;
+    cleared["category_id"] = Value::Null;
+    cleared["rate_bps"] = json!(1900);
+    let (status, body) = call(&h.app, "PUT", &format!("/products/{id}"), Some(cleared)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["wholesale_centimes"], Value::Null);
+    assert_eq!(body["category_id"], Value::Null);
+}
+
+#[tokio::test]
+async fn put_carries_the_quantity_but_never_changes_it() {
+    // The stock ledger owns the quantity (features.md §1); the fiche edit
+    // sends the field because add and edit share one shape, and the core
+    // keeps the stored value.
+    let h = harness();
+    let (_, made) = call(&h.app, "POST", "/products", Some(draft())).await;
+    let id = made["id"].as_i64().unwrap();
+    let mut edited = draft();
+    edited["qty_on_hand_milli"] = json!(1);
+    let (status, body) = call(&h.app, "PUT", &format!("/products/{id}"), Some(edited)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["qty_on_hand_milli"], made["qty_on_hand_milli"]);
 }
 
 #[tokio::test]
@@ -725,7 +751,10 @@ async fn put_with_another_products_barcode_is_409_and_a_bad_body_is_422() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body["error"]["code"], "validation");
     let (_, still) = call(&h.app, "GET", &uri, None).await;
-    assert_eq!(still["name"], a["name"], "a refused update changes nothing");
+    assert_eq!(
+        still["selling_centimes"], 920,
+        "a refused update changes nothing"
+    );
 }
 
 #[tokio::test]
