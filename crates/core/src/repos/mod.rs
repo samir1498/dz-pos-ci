@@ -2,6 +2,8 @@
 pub mod audit;
 pub mod categories;
 pub mod counters;
+pub mod customers;
+pub mod debt;
 pub mod documents;
 pub mod products;
 pub mod settings;

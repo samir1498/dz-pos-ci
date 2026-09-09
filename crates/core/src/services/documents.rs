@@ -15,9 +15,11 @@ use crate::models::document::{
 use crate::money::Money;
 use crate::repos::counters;
 use crate::repos::documents as repo;
+use crate::services::customers;
 
 pub use crate::models::document::{
-    Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument, NewDocumentLine, SellerBlock,
+    BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
+    NewDocumentLine, PartyBlock, PartyKind, SellerBlock,
 };
 
 pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Document, CoreError> {
@@ -46,6 +48,27 @@ pub fn issue(
     new: NewDocument,
 ) -> Result<Document, CoreError> {
     conn.transaction(|conn| {
+        // Before a number is taken, because a refused document should cost
+        // nothing at all: the rollback would give the number back, but the
+        // two ids a caller hands over are known wrong or right without
+        // touching the counter. The foreign keys alone would take the
+        // neighbour's fiche and the neighbour's facture (rule 3).
+        if let Some(customer_id) = new.customer_id {
+            if !customers::customer_belongs_to_shop(conn, shop_id, customer_id)? {
+                return Err(CoreError::NotFound {
+                    entity: "customer",
+                    id: customer_id,
+                });
+            }
+        }
+        if let Some(ref_document_id) = new.ref_document_id {
+            if !repo::belongs_to_shop(conn, shop_id, ref_document_id)? {
+                return Err(CoreError::NotFound {
+                    entity: "document",
+                    id: ref_document_id,
+                });
+            }
+        }
         let series = new.kind.series();
         let number = counters::take_next(conn, shop_id, series)?;
         let totals = &new.totals;
@@ -68,6 +91,17 @@ pub fn issue(
                 seller_address: new.seller.address.clone(),
                 seller_phone: new.seller.phone.clone(),
                 customer_id: new.customer_id,
+                buyer_name: new.buyer.as_ref().map(|b| b.name.clone()),
+                buyer_party_kind: new.buyer.as_ref().map(|b| b.party_kind),
+                buyer_rc: new.buyer.as_ref().and_then(|b| b.rc.clone()),
+                buyer_nif: new.buyer.as_ref().and_then(|b| b.nif.clone()),
+                buyer_nis: new.buyer.as_ref().and_then(|b| b.nis.clone()),
+                buyer_ai: new.buyer.as_ref().and_then(|b| b.ai.clone()),
+                buyer_address: new.buyer.as_ref().and_then(|b| b.address.clone()),
+                ref_document_id: new.ref_document_id,
+                old_balance_centimes: new.balance.map(|b| b.old_balance.as_centimes()),
+                remaining_debt_centimes: new.balance.map(|b| b.remaining_debt.as_centimes()),
+                total_debt_centimes: new.balance.map(|b| b.total_debt.as_centimes()),
                 total_ht_centimes: totals.total_ht.as_centimes(),
                 discount_centimes: totals.discount.as_centimes(),
                 subtotal_ht_centimes: totals.subtotal_ht.as_centimes(),

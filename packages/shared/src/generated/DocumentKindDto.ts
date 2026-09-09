@@ -4,4 +4,4 @@
  * The document kinds of features.md §3. M1 issues `ticket`; the union is
  * whole so a later milestone adds a screen, not a type.
  */
-export type DocumentKindDto = "ticket" | "facture" | "proforma" | "bon_de_livraison" | "avoir" | "bon_de_reception";
+export type DocumentKindDto = "ticket" | "facture" | "proforma" | "bon_de_livraison" | "avoir" | "bon_de_reception" | "quittance";

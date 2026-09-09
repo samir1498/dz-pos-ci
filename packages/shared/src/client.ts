@@ -200,6 +200,7 @@ const DOCUMENT_KINDS: readonly DocumentKindDto[] = [
   "bon_de_livraison",
   "avoir",
   "bon_de_reception",
+  "quittance",
 ];
 
 function isDocumentKind(value: unknown): value is DocumentKindDto {

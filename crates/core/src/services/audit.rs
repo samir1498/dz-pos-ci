@@ -11,6 +11,8 @@ use crate::error::CoreError;
 use crate::models::audit::{AuditEntry, AuditRowWrite};
 use crate::repos::audit as repo;
 
+/// A row that did not exist before, such as a customer fiche.
+pub const ACTION_CREATE: &str = "create";
 /// A settings or shop block that was replaced.
 pub const ACTION_UPDATE: &str = "update";
 /// A régime change appended to the dated series.

@@ -1,6 +1,8 @@
 //! Plain structs and their diesel rows. No business rules live here.
 pub mod audit;
 pub mod category;
+pub mod customer;
+pub mod debt;
 pub mod document;
 pub mod product;
 pub mod shop;

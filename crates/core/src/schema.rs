@@ -98,6 +98,14 @@ diesel::table! {
         seller_address -> Nullable<Text>,
         seller_phone -> Nullable<Text>,
         customer_id -> Nullable<Integer>,
+        buyer_name -> Nullable<Text>,
+        buyer_party_kind -> Nullable<Text>,
+        buyer_rc -> Nullable<Text>,
+        buyer_nif -> Nullable<Text>,
+        buyer_nis -> Nullable<Text>,
+        buyer_ai -> Nullable<Text>,
+        buyer_address -> Nullable<Text>,
+        ref_document_id -> Nullable<Integer>,
         total_ht_centimes -> BigInt,
         discount_centimes -> BigInt,
         subtotal_ht_centimes -> BigInt,
@@ -107,6 +115,9 @@ diesel::table! {
         net_to_pay_centimes -> BigInt,
         tendered_centimes -> Nullable<BigInt>,
         change_centimes -> Nullable<BigInt>,
+        old_balance_centimes -> Nullable<BigInt>,
+        remaining_debt_centimes -> Nullable<BigInt>,
+        total_debt_centimes -> Nullable<BigInt>,
         status -> Text,
         created_at -> Timestamp,
     }
@@ -168,6 +179,55 @@ diesel::table! {
     }
 }
 
+// ---- migrations/2026-09-09-000002_customers ----
+
+diesel::table! {
+    customers (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        name -> Text,
+        party_kind -> Text,
+        phone -> Nullable<Text>,
+        address -> Nullable<Text>,
+        rc -> Nullable<Text>,
+        nif -> Nullable<Text>,
+        nis -> Nullable<Text>,
+        ai -> Nullable<Text>,
+        credit_limit_centimes -> Nullable<BigInt>,
+        warn_threshold_centimes -> Nullable<BigInt>,
+        notes -> Nullable<Text>,
+        active -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    debt_ledger (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        customer_id -> Integer,
+        document_id -> Nullable<Integer>,
+        kind -> Text,
+        debit_centimes -> BigInt,
+        credit_centimes -> BigInt,
+        user_id -> Integer,
+        note -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    debt_allocations (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        payment_ledger_id -> Integer,
+        document_id -> Integer,
+        amount_centimes -> BigInt,
+        created_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(categories -> shops (shop_id));
 diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
@@ -186,11 +246,23 @@ diesel::joinable!(stock_movements -> documents (document_id));
 diesel::joinable!(stock_movements -> users (user_id));
 diesel::joinable!(audit_log -> shops (shop_id));
 diesel::joinable!(audit_log -> users (user_id));
+diesel::joinable!(customers -> shops (shop_id));
+diesel::joinable!(documents -> customers (customer_id));
+diesel::joinable!(debt_ledger -> shops (shop_id));
+diesel::joinable!(debt_ledger -> customers (customer_id));
+diesel::joinable!(debt_ledger -> documents (document_id));
+diesel::joinable!(debt_ledger -> users (user_id));
+diesel::joinable!(debt_allocations -> shops (shop_id));
+diesel::joinable!(debt_allocations -> debt_ledger (payment_ledger_id));
+diesel::joinable!(debt_allocations -> documents (document_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     audit_log,
     categories,
     counters,
+    customers,
+    debt_allocations,
+    debt_ledger,
     document_lines,
     document_tva,
     documents,
