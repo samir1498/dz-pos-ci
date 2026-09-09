@@ -13,7 +13,7 @@ use askama::Template;
 
 use crate::error::CoreError;
 use crate::lang::Lang;
-use crate::models::document::{Document, DocumentLine, SellerBlock};
+use crate::models::document::{BalanceTriple, Document, DocumentLine, SellerBlock};
 use crate::money::format::{format_centimes, format_qty};
 use crate::money::{PaymentMode, Regime};
 use crate::print::strings::{text, Key};
@@ -57,6 +57,21 @@ struct TvaRow {
     amount: String,
 }
 
+/// The three amounts of the debt as they stood when the ticket was issued.
+/// Printed together or not at all, the way the facture prints them: an old
+/// balance without the closing one is a figure the reader cannot check. The
+/// two papers say the same thing in the same words, so a customer holding
+/// both does not find two spellings of what they owe.
+struct BalanceView {
+    title: &'static str,
+    old_label: &'static str,
+    old: String,
+    this_label: &'static str,
+    this: String,
+    total_label: &'static str,
+    total: String,
+}
+
 #[derive(Template)]
 #[template(path = "ticket_80mm.html")]
 struct TicketView {
@@ -83,6 +98,7 @@ struct TicketView {
     tendered: Option<String>,
     change_label: &'static str,
     change: Option<String>,
+    balance: Option<BalanceView>,
     currency: &'static str,
     thank_you: &'static str,
 }
@@ -156,8 +172,27 @@ fn view(doc: &Document, lang: Lang) -> TicketView {
         tendered: cash.then(|| doc.tendered.map(format_centimes)).flatten(),
         change_label: text(Key::Change, lang),
         change: cash.then(|| doc.change.map(format_centimes)).flatten(),
+        // Whenever the document stored one, which is whenever it names a
+        // customer. Not a rule about the payment mode: a ticket paid in cash
+        // by a customer who still owes for last week says so, and it says it
+        // in the same three rows the facture uses.
+        balance: doc.balance.map(|b| balance(b, lang)),
         currency: text(Key::Currency, lang),
         thank_you: text(Key::ThankYou, lang),
+    }
+}
+
+/// The debt block, read off the document and never recomputed: a reprint
+/// shows the balance the customer was handed, not a sum of today's ledger.
+fn balance(balance: BalanceTriple, lang: Lang) -> BalanceView {
+    BalanceView {
+        title: text(Key::Balance, lang),
+        old_label: text(Key::OldBalance, lang),
+        old: format_centimes(balance.old_balance),
+        this_label: text(Key::ThisDocument, lang),
+        this: format_centimes(balance.remaining_debt),
+        total_label: text(Key::TotalDebt, lang),
+        total: format_centimes(balance.total_debt),
     }
 }
 

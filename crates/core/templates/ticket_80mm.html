@@ -71,6 +71,13 @@ body { margin: 0; background: #fff; color: #000 }
 {%- if let Some(change) = change %}
 <div class="row"><span class="label">{{ change_label }}</span><span class="amount amount-change">{{ change }}</span><span class="cur">{{ currency }}</span></div>
 {%- endif %}
+{%- if let Some(balance) = balance %}
+<div class="dashed"></div>
+<div class="center">{{ balance.title }}</div>
+<div class="row"><span class="label">{{ balance.old_label }}</span><span class="amount amount-old-balance">{{ balance.old }}</span><span class="cur">{{ currency }}</span></div>
+<div class="row"><span class="label">{{ balance.this_label }}</span><span class="amount amount-this-document">{{ balance.this }}</span><span class="cur">{{ currency }}</span></div>
+<div class="row net"><span class="label">{{ balance.total_label }}</span><span class="amount amount-total-debt">{{ balance.total }}</span><span class="cur">{{ currency }}</span></div>
+{%- endif %}
 <div class="dashed"></div>
 <div class="center">{{ thank_you }}</div>
 </article>
