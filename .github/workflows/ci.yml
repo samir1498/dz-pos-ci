@@ -47,6 +47,14 @@ jobs:
           # Both directions: a new DTO shows as "Only in $tmp", one that was
           # deleted leaves an orphan the old `git diff` never looked for.
           diff -r "$tmp" packages/shared/src/generated
+      - name: Free runner disk for the instrumented build
+        if: runner.os == 'Linux'
+        # The cached target dir plus llvm-cov's own instrumented target dir
+        # exceed what the runner has left (runs 34342980800, 34343821772).
+        # The preinstalled SDKs below are unused here and weigh about 30 GB.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h / | tail -1
       - name: Coverage (lcov for Sonar)
         if: runner.os == 'Linux'
         run: |
