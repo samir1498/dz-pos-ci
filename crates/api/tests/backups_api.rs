@@ -37,7 +37,12 @@ impl Harness {
             .filter(|p| {
                 p.file_name()
                     .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.starts_with("t.db.before-restore-"))
+                    // The suffix matters: opening one of these copies leaves
+                    // its own `-wal` and `-shm` beside it, and those are not
+                    // copies.
+                    .is_some_and(|n| {
+                        n.starts_with("t.db.before-restore-") && n.ends_with(".sqlite")
+                    })
             })
             .collect();
         found.sort();
@@ -120,7 +125,7 @@ async fn a_fresh_shop_has_no_copies_and_a_post_makes_one() {
     let h = harness();
     let (status, body) = call(&h.app, "GET", "/backups", None).await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body, json!([]));
+    assert_eq!(body, json!({ "backups": [], "safety_copies": [] }));
 
     let (status, made) = call(&h.app, "POST", "/backups", None).await;
     assert_eq!(status, StatusCode::CREATED, "{made}");
@@ -137,8 +142,9 @@ async fn a_fresh_shop_has_no_copies_and_a_post_makes_one() {
     assert!(on_disk.is_file(), "{on_disk:?} was not written");
 
     let (_, listed) = call(&h.app, "GET", "/backups", None).await;
-    assert_eq!(listed.as_array().unwrap().len(), 1);
-    assert_eq!(listed[0], made);
+    assert_eq!(listed["backups"].as_array().unwrap().len(), 1);
+    assert_eq!(listed["backups"][0], made);
+    assert_eq!(listed["safety_copies"], json!([]), "nothing was restored");
 }
 
 #[tokio::test]
@@ -161,6 +167,13 @@ async fn a_restore_puts_the_file_back_and_keeps_what_was_there_in_a_safety_copy(
     assert_eq!(back["restored_from"], json!(name));
     assert_eq!(back["products"], json!(1));
     assert_eq!(back["documents"], Value::Null);
+    // The copy of what is being replaced is named to the caller: it is the
+    // only record of it, and nothing deletes it.
+    let safety_name = back["safety_copy"].as_str().unwrap().to_string();
+    assert!(
+        h.dir.path().join(&safety_name).is_file(),
+        "{safety_name} was named but not written"
+    );
 
     // The same running server answers from the file it just swapped in.
     assert_eq!(product_names(&h.app).await, vec!["Semoule 10kg"]);
@@ -177,9 +190,20 @@ async fn a_restore_puts_the_file_back_and_keeps_what_was_there_in_a_safety_copy(
     // matters is that both are in the copy taken just before the swap.
     assert_eq!(names, vec!["Huile Elio 5L", "Semoule 10kg"]);
 
-    // The safety copy sits beside the shop file, not in the thirty.
+    // The safety copy sits beside the shop file, not among the thirty, and
+    // the screen is told about it under its own name.
     let (_, listed) = call(&h.app, "GET", "/backups", None).await;
-    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert_eq!(listed["backups"].as_array().unwrap().len(), 1);
+    assert_eq!(listed["safety_copies"].as_array().unwrap().len(), 1);
+    assert_eq!(listed["safety_copies"][0]["name"], json!(safety_name));
+    assert!(listed["safety_copies"][0]["bytes"].as_i64().unwrap() > 0);
+
+    // A copy taken after it leaves it where it is: pruning counts the daily
+    // folder, which the safety copy is not in.
+    let (status, _) = call(&h.app, "POST", "/backups", None).await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(h.safety_copies().len(), 1);
+    assert!(h.dir.path().join(&safety_name).is_file());
 
     // The staged copy is gone: the rename moved it, it was not left beside
     // the shop file. (The `-wal` beside the shop file now is the restored
@@ -230,7 +254,8 @@ async fn a_name_that_is_not_one_this_app_wrote_is_refused_and_changes_nothing() 
     assert_eq!(product_names(&h.app).await, vec!["Semoule 10kg"]);
     assert!(h.safety_copies().is_empty());
     let (_, listed) = call(&h.app, "GET", "/backups", None).await;
-    assert_eq!(listed[0]["name"], json!(good));
+    assert_eq!(listed["backups"][0]["name"], json!(good));
+    assert_eq!(listed["safety_copies"], json!([]));
 }
 
 #[tokio::test]
@@ -357,5 +382,5 @@ async fn a_shop_file_that_cannot_be_reopened_leaves_the_server_refusing_every_qu
     // see what there is to restore from.
     let (status, listed) = call(&h.app, "GET", "/backups", None).await;
     assert_eq!(status, StatusCode::OK, "{listed}");
-    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert_eq!(listed["backups"].as_array().unwrap().len(), 1);
 }

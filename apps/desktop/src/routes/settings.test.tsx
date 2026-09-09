@@ -107,7 +107,8 @@ beforeEach(() => {
     // The page carries the backups block too; it asks for the list as soon
     // as the settings load, and an unanswered call would leave a second
     // alert on the screen these tests read.
-    if (url.endsWith("/backups")) return Promise.resolve(json(200, []));
+    if (url.endsWith("/backups"))
+      return Promise.resolve(json(200, { backups: [], safety_copies: [] }));
     if (url.endsWith("/settings")) return Promise.resolve(json(200, current));
     return Promise.resolve(json(404, { error: { code: "not_found", message: "no" } }));
   });

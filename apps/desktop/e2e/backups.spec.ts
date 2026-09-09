@@ -84,8 +84,13 @@ test("a copy taken before a product is added loses it when it is restored", asyn
   await expect(page.getByText(t("products_empty"))).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: PRODUCT_NAME })).toHaveCount(0);
 
-  // The copy that was restored is still there, and the safety copy taken on
-  // the way is not among the thirty: it sits beside the shop file.
+  // The copy that was restored is still there, and the copy of what it
+  // replaced is listed under its own heading rather than left unmentioned
+  // on the disk.
   await page.goto("/settings");
   await expect(page.getByTestId("backup-row")).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: t("settings_safety_copies") })).toBeVisible();
+  const kept = page.getByTestId("safety-copy-row");
+  await expect(kept).toHaveCount(1);
+  await expect(kept.getByRole("button")).toHaveCount(0);
 });

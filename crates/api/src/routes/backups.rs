@@ -10,7 +10,7 @@ use axum::Json;
 use dzpos_core::error::CoreError;
 use dzpos_core::services::backup;
 
-use crate::dto::{BackupDto, RestoreDto};
+use crate::dto::{BackupDto, BackupsDto, RestoreDto};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -20,13 +20,14 @@ use crate::AppState;
 // after midnight would carry yesterday's date on the screen that lists it.
 pub(crate) use crate::routes::settings::now;
 
-pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<BackupDto>>, ApiError> {
-    let dir = state.backup_dir().to_path_buf();
-    let found = tokio::task::spawn_blocking(move || backup::list(&dir))
+pub async fn list(State(state): State<AppState>) -> Result<Json<BackupsDto>, ApiError> {
+    let (daily, safety) = tokio::task::spawn_blocking(move || state.list_backups())
         .await
-        .map_err(|_| ApiError::Unavailable)?
-        .map_err(ApiError::from)?;
-    Ok(Json(found.into_iter().map(BackupDto::from).collect()))
+        .map_err(|_| ApiError::Unavailable)??;
+    Ok(Json(BackupsDto {
+        backups: daily.into_iter().map(BackupDto::from).collect(),
+        safety_copies: safety.into_iter().map(BackupDto::from).collect(),
+    }))
 }
 
 pub async fn create(
@@ -56,12 +57,13 @@ pub async fn restore(
     }
     let path = state.backup_dir().join(&name);
     let restored_from = name;
-    let summary = tokio::task::spawn_blocking(move || state.restore(&path))
+    let done = tokio::task::spawn_blocking(move || state.restore(&path))
         .await
         .map_err(|_| ApiError::Unavailable)??;
     Ok(Json(RestoreDto {
         restored_from,
-        products: summary.products,
-        documents: summary.documents,
+        safety_copy: done.safety_copy,
+        products: done.summary.products,
+        documents: done.summary.documents,
     }))
 }

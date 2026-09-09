@@ -79,7 +79,8 @@ export function BackupsPanel() {
   });
 
   const busy = create.isPending || restore.isPending;
-  const rows: BackupDto[] = backups.data ?? [];
+  const rows: BackupDto[] = backups.data?.backups ?? [];
+  const safetyCopies: BackupDto[] = backups.data?.safety_copies ?? [];
   const newest = rows[0];
 
   function askThenRestore(name: string) {
@@ -140,6 +141,34 @@ export function BackupsPanel() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* Kept under their own heading because they are kept under their
+              own rule: the daily copies are pruned to thirty, these are
+              never deleted, and they are the only record of a state the
+              owner replaced. No restore button: restoring one is a decision
+              that needs a person who knows the file, not one more click. */}
+          {safetyCopies.length === 0 ? null : (
+            <section aria-labelledby="settings-safety-copies" className="flex flex-col gap-2">
+              <h3 id="settings-safety-copies" className="font-semibold">
+                {t("settings_safety_copies")}
+              </h3>
+              <p className="text-sm opacity-80">{t("settings_safety_copies_hint")}</p>
+              <ul className="flex flex-col divide-y rounded border">
+                {safetyCopies.map((row) => (
+                  <li
+                    key={row.name}
+                    data-testid="safety-copy-row"
+                    className="flex items-center justify-between gap-4 px-3 py-2"
+                  >
+                    <span>{readableTime(row.taken_at)}</span>
+                    <span className="text-sm opacity-80">
+                      {readableSize(row.bytes, t("unit_kb"), t("unit_mb"))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </>
       ) : null}

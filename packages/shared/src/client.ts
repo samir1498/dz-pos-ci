@@ -7,6 +7,7 @@
 
 import type { ApiErrorDto } from "./generated/ApiErrorDto";
 import type { BackupDto } from "./generated/BackupDto";
+import type { BackupsDto } from "./generated/BackupsDto";
 import type { CategoryDto } from "./generated/CategoryDto";
 import type { HealthDto } from "./generated/HealthDto";
 import type { NewProductDto } from "./generated/NewProductDto";
@@ -162,10 +163,17 @@ function isBackupList(value: unknown): value is BackupDto[] {
   return Array.isArray(value) && value.every(isBackup);
 }
 
+export function isBackups(value: unknown): value is BackupsDto {
+  return (
+    isRecord(value) && isBackupList(value.backups) && isBackupList(value.safety_copies)
+  );
+}
+
 export function isRestore(value: unknown): value is RestoreDto {
   return (
     isRecord(value) &&
     typeof value.restored_from === "string" &&
+    typeof value.safety_copy === "string" &&
     isExactInteger(value.products) &&
     isNullableExactInteger(value.documents)
   );
@@ -275,9 +283,11 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       return narrow(body, isSettings, "settings");
     },
 
-    /** The copies of the shop file the server keeps, newest first. */
-    async listBackups(): Promise<BackupDto[]> {
-      return narrow(await send("/backups"), isBackupList, "backup list");
+    /** The copies of the shop file the server keeps, newest first: the daily
+     * ones, and the copies taken on the way into a restore, which are kept
+     * under different rules and so travel in their own list. */
+    async listBackups(): Promise<BackupsDto> {
+      return narrow(await send("/backups"), isBackups, "backup list");
     },
 
     /** One more copy, taken now. The server names it and prunes the folder. */

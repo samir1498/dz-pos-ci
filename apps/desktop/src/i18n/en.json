@@ -95,5 +95,7 @@
   "action_restore": "Restore",
   "action_restoring": "Restoring…",
   "unit_kb": "kB",
-  "unit_mb": "MB"
+  "unit_mb": "MB",
+  "settings_safety_copies": "Copies taken before a restore",
+  "settings_safety_copies_hint": "Every restore first keeps a copy of the state it replaced, beside the shop file. These are never deleted."
 }

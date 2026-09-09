@@ -24,6 +24,15 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use crate::error::ApiError;
 pub use crate::token::LaunchToken;
 
+/// What a restore leaves behind: what the shop file now holds, and the name
+/// of the copy of the old one taken on the way. The owner is told that name
+/// because it is the only record of what was replaced, and nothing deletes
+/// it.
+pub struct Restored {
+    pub summary: Summary,
+    pub safety_copy: String,
+}
+
 /// Where backups land when the caller names no folder: beside the shop file.
 /// One folder per shop file, so two tills on one machine never share copies.
 pub const BACKUP_DIR_NAME: &str = "backups";
@@ -74,6 +83,15 @@ impl AppState {
         &self.backup_dir
     }
 
+    /// Every copy this shop has: the daily ones in the backup folder, and
+    /// the safety copies taken on the way into a restore, which sit beside
+    /// the shop file so pruning cannot reach them.
+    pub fn list_backups(&self) -> Result<(Vec<Backup>, Vec<Backup>), ApiError> {
+        let daily = backup::list(&self.backup_dir).map_err(ApiError::from)?;
+        let safety = backup::list_safety(&self.db_path).map_err(ApiError::from)?;
+        Ok((daily, safety))
+    }
+
     /// A copy of the shop file, taken at `at`, and the folder pruned back to
     /// thirty.
     pub fn create_backup(&self, at: NaiveDateTime) -> Result<Backup, ApiError> {
@@ -90,8 +108,9 @@ impl AppState {
     /// 1. check the copy (`backup::verify`); a copy that is torn or that a
     ///    newer app version wrote never gets as far as touching the file;
     /// 2. take the connection's lock, so no handler is mid-query;
-    /// 3. `VACUUM INTO <db>.before-restore-<stamp>.sqlite`, the safety copy,
-    ///    beside the shop file and never counted among the thirty;
+    /// 3. `VACUUM INTO <db>.before-restore-<stamp>-<millis>.sqlite`, the
+    ///    safety copy, beside the shop file and never counted among the
+    ///    thirty, so pruning cannot reach it;
     /// 4. copy the chosen backup to `<db>.restoring.tmp`, in the same folder
     ///    so the rename below cannot cross a file system;
     /// 5. close the live connection, which is what releases the file handle,
@@ -107,15 +126,14 @@ impl AppState {
     /// process has no connection to it: the slot stays empty and every route
     /// that needs the shop file answers 500 until the app is restarted. That
     /// is deliberate. The path is logged so the operator knows which file.
-    pub fn restore(&self, backup_path: &Path) -> Result<Summary, ApiError> {
+    pub fn restore(&self, backup_path: &Path) -> Result<Restored, ApiError> {
         let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
         let db = self.db_path.as_path();
 
-        // The shop's clock, the same one the copies are named for, plus the
-        // millisecond so two restores in one second keep two safety copies.
-        let stamp = crate::routes::backups::now().format("%Y%m%d-%H%M%S%3f");
-        let safety = sibling(db, &format!(".before-restore-{stamp}.sqlite"));
+        // The shop's clock, the same one the copies are named for.
+        let safety_copy = backup::safety_name(db, crate::routes::backups::now());
+        let safety = db.with_file_name(&safety_copy);
         let live = guard.as_mut().ok_or(ApiError::Unavailable)?;
         backup::copy_to(live, &safety).map_err(ApiError::from)?;
 
@@ -141,7 +159,10 @@ impl AppState {
         match dzpos_core::db::open(db) {
             Ok(conn) => {
                 *guard = Some(conn);
-                Ok(summary)
+                Ok(Restored {
+                    summary,
+                    safety_copy,
+                })
             }
             Err(e) => {
                 // The file on disk is whole (the restored copy, with the

@@ -34,6 +34,13 @@ const SUFFIX: &str = ".sqlite";
 /// why the order is never taken from the file system's mtime: a copy moved
 /// between folders keeps its name and loses its mtime.
 const STAMP: &str = "%Y%m%d-%H%M%S";
+/// What sits between the shop file's own name and the stamp on a copy taken
+/// on the way into a restore. Those live beside the shop file, not in the
+/// backup folder, so the thirty daily copies can never prune one away: a
+/// safety copy is the only record of what the shop looked like before the
+/// owner replaced it.
+const SAFETY_INFIX: &str = ".before-restore-";
+
 /// What a copy is called while SQLite is still writing it. One extension
 /// past what [`taken_at`] accepts, so a copy that never finished is invisible
 /// to `list`, to `is_due` and to the restore route.
@@ -92,6 +99,49 @@ pub fn taken_at(name: &str) -> Option<NaiveDateTime> {
     // "20260931-070000" parses as nothing, but a stamp that round-trips to
     // different text (a two-digit year, a stray sign) is refused here.
     (at.format(STAMP).to_string() == stamp).then_some(at)
+}
+
+/// The name a safety copy of `db` taken at `at` gets. The millisecond is
+/// part of it: two restores inside one second must not write to one name,
+/// and `copy_to` refuses a target that exists rather than overwrite it.
+pub fn safety_name(db: &Path, at: NaiveDateTime) -> String {
+    let stem = db
+        .file_name()
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    format!(
+        "{stem}{SAFETY_INFIX}{}-{}{SUFFIX}",
+        at.format(STAMP),
+        at.format("%3f")
+    )
+}
+
+/// The time a safety copy of `db` carries, or `None` when the name is not
+/// one this app wrote beside that file.
+pub fn safety_taken_at(db: &Path, name: &str) -> Option<NaiveDateTime> {
+    let stem = db.file_name()?.to_str()?;
+    let rest = name
+        .strip_prefix(stem)?
+        .strip_prefix(SAFETY_INFIX)?
+        .strip_suffix(SUFFIX)?;
+    let (stamp, millis) = rest.rsplit_once('-')?;
+    if millis.len() != 3 || !millis.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let at = NaiveDateTime::parse_from_str(stamp, STAMP).ok()?;
+    (at.format(STAMP).to_string() == stamp).then_some(at)
+}
+
+/// Every safety copy beside the shop file, newest first.
+pub fn list_safety(db: &Path) -> Result<Vec<Backup>, CoreError> {
+    let Some(dir) = db.parent() else {
+        return Ok(Vec::new());
+    };
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    collect(dir, |name| safety_taken_at(db, name))
 }
 
 /// Is a copy due? True when there is none, or when the newest is a full day
@@ -188,6 +238,16 @@ pub fn prune(dir: &Path, keep: usize) -> Result<Vec<PathBuf>, CoreError> {
 /// empty, not a failure; anything whose name this app did not write is not a
 /// backup and is left alone.
 pub fn list(dir: &Path) -> Result<Vec<Backup>, CoreError> {
+    collect(dir, taken_at)
+}
+
+/// Every entry of `dir` whose name `reads` gives a time to, newest first. A
+/// folder that was never written to is empty, not a failure, and anything
+/// that is not a file is not a copy.
+fn collect(
+    dir: &Path,
+    reads: impl Fn(&str) -> Option<NaiveDateTime>,
+) -> Result<Vec<Backup>, CoreError> {
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -197,7 +257,7 @@ pub fn list(dir: &Path) -> Result<Vec<Backup>, CoreError> {
     for entry in entries {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
-        let Some(taken_at) = taken_at(&name) else {
+        let Some(taken_at) = reads(&name) else {
             continue;
         };
         let meta = entry.metadata()?;
@@ -212,8 +272,7 @@ pub fn list(dir: &Path) -> Result<Vec<Backup>, CoreError> {
         });
     }
     // Newest first. The name breaks a tie so two copies of the same second
-    // (there cannot be, but the order must not depend on the file system)
-    // still come out in a fixed order.
+    // still come out in a fixed order rather than the file system's.
     found.sort_by(|a, b| b.taken_at.cmp(&a.taken_at).then(b.name.cmp(&a.name)));
     Ok(found)
 }

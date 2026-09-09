@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { ApiError, createClient, isApiErrorBody } from "./client";
 import type { BackupDto } from "./generated/BackupDto";
+import type { BackupsDto } from "./generated/BackupsDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { RestoreDto } from "./generated/RestoreDto";
 import type { ProductDto } from "./generated/ProductDto";
@@ -312,17 +313,20 @@ describe("backups", () => {
     bytes: 143_360,
   };
 
-  test("lists the copies the server reports", async () => {
-    const api = createClient("http://127.0.0.1:4317", stub(200, [backup]));
-    await expect(api.listBackups()).resolves.toEqual([backup]);
+  const both: BackupsDto = { backups: [backup], safety_copies: [] };
+
+  test("lists the copies the server reports, daily and safety apart", async () => {
+    const api = createClient("http://127.0.0.1:4317", stub(200, both));
+    await expect(api.listBackups()).resolves.toEqual(both);
   });
 
   test("a copy of the wrong shape is refused, never handed to the UI", async () => {
     for (const bad of [
-      [{ name: "dzpos-20260908-093000.sqlite", taken_at: "2026-09-08T09:30:00" }],
-      [{ name: 1, taken_at: "2026-09-08T09:30:00", bytes: 10 }],
-      [{ ...backup, bytes: 1.5 }],
-      { name: "dzpos-20260908-093000.sqlite" },
+      { backups: [{ name: backup.name, taken_at: backup.taken_at }], safety_copies: [] },
+      { backups: [{ ...backup, bytes: 1.5 }], safety_copies: [] },
+      { backups: [backup] },
+      { backups: [backup], safety_copies: {} },
+      [backup],
     ]) {
       const api = createClient("http://x", stub(200, bad));
       await expect(api.listBackups()).rejects.toMatchObject({ code: "bad_response" });
@@ -347,6 +351,7 @@ describe("backups", () => {
   test("restoring names the copy in the path and returns the counts", async () => {
     const answer: RestoreDto = {
       restored_from: backup.name,
+      safety_copy: "dzpos.db.before-restore-20260909-101500-250.sqlite",
       products: 12,
       documents: null,
     };

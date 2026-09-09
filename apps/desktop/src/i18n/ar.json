@@ -95,5 +95,7 @@
   "action_restore": "استعادة",
   "action_restoring": "جارٍ الاستعادة…",
   "unit_kb": "ك.ب",
-  "unit_mb": "م.ب"
+  "unit_mb": "م.ب",
+  "settings_safety_copies": "نسخ ما قبل الاستعادة",
+  "settings_safety_copies_hint": "كل استعادة تحفظ أولاً نسخة من الحالة التي عوّضتها، بجانب ملف المحل. لا تُحذف هذه النسخ أبداً."
 }

@@ -270,3 +270,60 @@ fn a_half_written_copy_is_never_a_name_the_list_reads() {
         None
     );
 }
+
+#[test]
+fn a_safety_copy_is_named_for_the_shop_file_and_listed_beside_it() {
+    let (dir, mut conn) = open_temp();
+    let live = dir.path().join("t.db");
+    let backups = dir.path().join("backups");
+    backup::create(&mut conn, &backups, at(1, 3)).unwrap();
+
+    let first = backup::safety_name(&live, at(2, 3));
+    assert_eq!(first, "t.db.before-restore-20260102-033000-000.sqlite");
+    backup::copy_to(&mut conn, &dir.path().join(&first)).unwrap();
+    let second = backup::safety_name(&live, at(3, 3));
+    backup::copy_to(&mut conn, &dir.path().join(&second)).unwrap();
+
+    let listed = backup::list_safety(&live).unwrap();
+    let names: Vec<&str> = listed.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, vec![second.as_str(), first.as_str()], "newest first");
+    assert!(listed.iter().all(|b| b.bytes > 0));
+    assert_eq!(listed.first().map(|b| b.taken_at), Some(at(3, 3)));
+
+    // The daily copies and the safety copies never see each other: a safety
+    // copy is not in the folder the thirty are counted in, so pruning that
+    // folder to nothing at all still cannot reach one.
+    assert_eq!(backup::prune(&backups, 0).unwrap().len(), 1);
+    assert!(backup::list(&backups).unwrap().is_empty());
+    assert_eq!(backup::list_safety(&live).unwrap().len(), 2);
+    assert!(dir.path().join(&second).is_file());
+    assert!(
+        dir.path().join(&first).is_file(),
+        "the oldest safety copy went"
+    );
+}
+
+#[test]
+fn a_name_beside_the_shop_file_is_read_back_only_when_it_is_a_safety_copy() {
+    let live = std::path::Path::new("/shop/t.db");
+    assert_eq!(
+        backup::safety_taken_at(live, "t.db.before-restore-20260108-093000-250.sqlite"),
+        Some(at(8, 9))
+    );
+    for bad in [
+        "t.db",
+        "t.db-wal",
+        "t.db.restoring.tmp",
+        "other.db.before-restore-20260108-093000-250.sqlite",
+        "t.db.before-restore-20260108-093000.sqlite",
+        "t.db.before-restore-20260108-093000-25.sqlite",
+        "t.db.before-restore-20261308-093000-250.sqlite",
+        "dzpos-20260108-093000.sqlite",
+    ] {
+        assert_eq!(
+            backup::safety_taken_at(live, bad),
+            None,
+            "{bad} was accepted"
+        );
+    }
+}

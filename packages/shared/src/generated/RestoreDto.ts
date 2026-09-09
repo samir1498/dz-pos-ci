@@ -5,7 +5,13 @@
  * counts read out of it, so the screen can say what landed instead of
  * "done".
  */
-export type RestoreDto = { restored_from: string, products: number, 
+export type RestoreDto = { restored_from: string, 
+/**
+ * The copy of the shop file as it was a moment before, taken on the way
+ * in and kept beside the shop file. Named on the wire because nothing
+ * deletes it and the owner is the only one who can decide to.
+ */
+safety_copy: string, products: number, 
 /**
  * Null until the documents table exists (it arrives with the sale).
  */

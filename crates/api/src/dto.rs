@@ -344,11 +344,23 @@ impl From<Backup> for BackupDto {
         BackupDto {
             name: b.name,
             taken_at: b.taken_at.format(STAMP_FORMAT).to_string(),
-            // A backup past 9 petabytes would round in JavaScript. The clamp
-            // is what keeps the wire honest rather than a silent rounding.
+            // A backup past 9.2 exabytes would round in JavaScript. The
+            // clamp is what keeps the wire honest rather than a silent
+            // rounding.
             bytes: i64::try_from(b.bytes).unwrap_or(MAX_SAFE_INTEGER),
         }
     }
+}
+
+/// What the settings screen reads: the daily copies, and the copies taken on
+/// the way into a restore. The two are separate lists because they are kept
+/// under different rules: the daily ones are pruned to thirty, the safety
+/// ones are never touched.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "BackupsDto.ts")]
+pub struct BackupsDto {
+    pub backups: Vec<BackupDto>,
+    pub safety_copies: Vec<BackupDto>,
 }
 
 /// What the shop file holds after a restore: the copy it came from and the
@@ -358,6 +370,10 @@ impl From<Backup> for BackupDto {
 #[ts(export_to = "RestoreDto.ts")]
 pub struct RestoreDto {
     pub restored_from: String,
+    /// The copy of the shop file as it was a moment before, taken on the way
+    /// in and kept beside the shop file. Named on the wire because nothing
+    /// deletes it and the owner is the only one who can decide to.
+    pub safety_copy: String,
     pub products: i64,
     /// Null until the documents table exists (it arrives with the sale).
     pub documents: Option<i64>,

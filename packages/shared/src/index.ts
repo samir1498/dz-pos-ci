@@ -13,6 +13,7 @@ export type { DatedRegimeDto } from "./generated/DatedRegimeDto";
 export type { SettingsDto } from "./generated/SettingsDto";
 export type { RegimeChangeDto } from "./generated/RegimeChangeDto";
 export type { BackupDto } from "./generated/BackupDto";
+export type { BackupsDto } from "./generated/BackupsDto";
 export type { RestoreDto } from "./generated/RestoreDto";
 
 export {
@@ -20,6 +21,7 @@ export {
   createClient,
   isApiErrorBody,
   isBackup,
+  isBackups,
   isCategory,
   isRestore,
   isSettings,
