@@ -702,6 +702,33 @@ fn customer(
     .id
 }
 
+/// Closes a fiche, the way the customers screen does: the fields as they
+/// were, `active` off.
+fn close(conn: &mut SqliteConnection, id: i32) {
+    let open = customers::get(conn, SHOP, id).unwrap();
+    customers::update(
+        conn,
+        SHOP,
+        OWNER,
+        id,
+        NewCustomer {
+            name: open.name,
+            party_kind: open.party_kind,
+            phone: open.phone,
+            address: open.address,
+            rc: open.rc,
+            nif: open.nif,
+            nis: open.nis,
+            ai: open.ai,
+            credit_limit: open.credit_limit,
+            warn_threshold: open.warn_threshold,
+            notes: open.notes,
+            active: false,
+        },
+    )
+    .unwrap();
+}
+
 /// A basket sold on credit to `customer_id`. `override_credit` is the
 /// owner's decision to pass the limit.
 fn credit(customer_id: i32, lines: Vec<NewSaleLine>, override_credit: bool) -> NewSale {
@@ -948,6 +975,92 @@ fn the_warning_fires_at_the_threshold_and_the_sale_still_goes_through() {
 }
 
 #[test]
+fn a_closed_fiche_is_named_on_no_document_whatever_the_payment_is() {
+    // The rule is about the fiche, not about the credit: a fiche somebody
+    // closed is not a party a document is made out to, so cash and card are
+    // refused on the same field a credit sale is (features.md §1).
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Sac", 10_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", None, None);
+    close(&mut conn, c);
+
+    for mode in [PaymentMode::Cash, PaymentMode::Card] {
+        let sale = NewSale {
+            customer_id: Some(c),
+            payment_mode: mode,
+            tendered: match mode {
+                PaymentMode::Cash => Some(Money::centimes(20_000)),
+                _ => None,
+            },
+            ..credit(c, vec![line(p, 1_000)], false)
+        };
+        let err = issue_sale(&mut conn, SHOP, OWNER, sale).unwrap_err();
+        assert!(
+            matches!(&err, CoreError::Validation { field, .. } if field == "customer_id"),
+            "{mode:?}: {err:?}"
+        );
+    }
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+}
+
+#[test]
+fn a_customer_in_credit_may_buy_on_credit_up_to_their_deposit() {
+    // The limit is tested on the balance the sale leaves behind, and a
+    // customer who has paid ahead has a negative one. A limit of 0 is no
+    // credit, but a deposit of 300,00 is money the shop already holds: a
+    // 200,00 basket leaves them 100,00 in credit and is not a debt at all.
+    // The 400,00 one leaves 100,00 owed against a limit of nothing.
+    let (_dir, mut conn) = open_temp();
+    let p2 = product(&mut conn, "Sac 200", 20_000, 0, Unit::Piece);
+    let p4 = product(&mut conn, "Sac 400", 40_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(0), None);
+    // Written straight onto the ledger: an avoir is T6's, and what this test
+    // is about is the sign of the balance, not how it got there.
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+         credit_centimes, user_id) VALUES (1, ?, 'avoir', 0, 30000, 1)",
+    )
+    .bind::<diesel::sql_types::Integer, _>(c)
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, c).unwrap(),
+        Money::centimes(-30_000)
+    );
+
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p2, 1_000)], false),
+    )
+    .unwrap();
+    let balance = doc.balance.expect("a credit sale stores its balance");
+    assert_eq!(balance.old_balance, Money::centimes(-30_000));
+    assert_eq!(balance.remaining_debt, Money::centimes(20_000));
+    assert_eq!(balance.total_debt, Money::centimes(-10_000));
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p4, 1_000)], false),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::CreditLimit {
+                balance_after,
+                credit_limit,
+            } if balance_after == Money::centimes(30_000)
+                && credit_limit == Money::ZERO
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
 fn an_override_takes_the_sale_past_the_limit_and_the_log_says_who() {
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
@@ -1094,22 +1207,7 @@ fn a_closed_fiche_and_another_shops_fiche_cannot_be_sold_to() {
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Sac", 10_000, 0, Unit::Piece);
     let c = customer(&mut conn, "Entreprise Amrani", None, None);
-    let mut fields = NewCustomer {
-        name: "Entreprise Amrani".to_string(),
-        party_kind: PartyKind::Company,
-        phone: None,
-        address: None,
-        rc: None,
-        nif: None,
-        nis: None,
-        ai: None,
-        credit_limit: None,
-        warn_threshold: None,
-        notes: None,
-        active: true,
-    };
-    fields.active = false;
-    customers::update(&mut conn, SHOP, OWNER, c, fields).unwrap();
+    close(&mut conn, c);
 
     let err = issue_sale(
         &mut conn,
