@@ -34,6 +34,10 @@ const SUFFIX: &str = ".sqlite";
 /// why the order is never taken from the file system's mtime: a copy moved
 /// between folders keeps its name and loses its mtime.
 const STAMP: &str = "%Y%m%d-%H%M%S";
+/// What a copy is called while SQLite is still writing it. One extension
+/// past what [`taken_at`] accepts, so a copy that never finished is invisible
+/// to `list`, to `is_due` and to the restore route.
+const STAGING_SUFFIX: &str = ".tmp";
 
 /// One copy in the backup folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,16 +107,42 @@ pub fn is_due(newest: Option<NaiveDateTime>, now: NaiveDateTime) -> bool {
 /// Writes a consistent copy of the database `conn` is open on into `dir`,
 /// then prunes the folder back to [`KEEP`].
 ///
+/// The copy is written under `<name>.tmp` and renamed only once SQLite has
+/// finished with it. A `VACUUM INTO` that stops halfway (the disk filled)
+/// can leave its target behind, and under the final name that half a file
+/// would be the newest copy the list reports, the reason no copy is due for
+/// a day, and something a restore would be offered. The staging name
+/// carries one extension more than the pattern allows, so nothing that
+/// reads this folder ever trusts it.
+///
 /// The copy is named for `at`, so two copies in the same second are one
-/// copy: the existing file is returned rather than overwritten, since a
+/// copy: an existing file is returned rather than overwritten, since a
 /// double click on "back up now" must not destroy the copy it just made.
 pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, CoreError> {
     std::fs::create_dir_all(dir)?;
     let name = file_name(at);
     let path = dir.join(&name);
-    if !path.exists() {
-        copy_to(conn, &path)?;
+    if path.is_file() {
+        let bytes = std::fs::metadata(&path)?.len();
+        prune(dir, KEEP)?;
+        return Ok(Backup {
+            name,
+            path,
+            taken_at: at,
+            bytes,
+        });
     }
+
+    let staging = dir.join(format!("{name}{STAGING_SUFFIX}"));
+    remove_if_present(&staging)?;
+    let written = copy_to(conn, &staging).and_then(|()| Ok(std::fs::rename(&staging, &path)?));
+    if let Err(e) = written {
+        // Whatever is under the staging name describes nothing anyone wants,
+        // and leaving it would make the next copy of the same second fail.
+        let _ = std::fs::remove_file(&staging);
+        return Err(e);
+    }
+
     let bytes = std::fs::metadata(&path)?.len();
     prune(dir, KEEP)?;
     Ok(Backup {
@@ -121,6 +151,14 @@ pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, 
         taken_at: at,
         bytes,
     })
+}
+
+fn remove_if_present(path: &Path) -> Result<(), CoreError> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// `VACUUM INTO target`. The target must not exist and its folder must, both
