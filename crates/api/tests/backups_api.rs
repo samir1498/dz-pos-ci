@@ -183,7 +183,8 @@ async fn a_restore_puts_the_file_back_and_keeps_what_was_there_in_a_safety_copy(
     assert_eq!(status, StatusCode::OK, "{back}");
     assert_eq!(back["restored_from"], json!(name));
     assert_eq!(back["products"], json!(1));
-    assert_eq!(back["documents"], Value::Null);
+    // The documents table exists since migration 2 and holds nothing yet.
+    assert_eq!(back["documents"], json!(0));
     // The copy of what is being replaced is named to the caller: it is the
     // only record of it, and nothing deletes it.
     let safety_name = back["safety_copy"].as_str().unwrap().to_string();

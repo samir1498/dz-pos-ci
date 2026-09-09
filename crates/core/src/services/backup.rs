@@ -68,7 +68,8 @@ pub struct Backup {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Summary {
     pub products: i64,
-    /// `None` until the documents table exists (it arrives with the sale).
+    /// `None` only for a copy taken before the documents table existed
+    /// (migration 2); every copy since carries the count.
     pub documents: Option<i64>,
 }
 

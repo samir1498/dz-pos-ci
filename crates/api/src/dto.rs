@@ -377,7 +377,8 @@ pub struct RestoreDto {
     /// deletes it and the owner is the only one who can decide to.
     pub safety_copy: String,
     pub products: i64,
-    /// Null until the documents table exists (it arrives with the sale).
+    /// Null only for a copy taken before the documents table existed
+    /// (migration 2, the sale); every copy since carries the count.
     pub documents: Option<i64>,
 }
 

@@ -13,6 +13,7 @@ export type RestoreDto = { restored_from: string,
  */
 safety_copy: string, products: number, 
 /**
- * Null until the documents table exists (it arrives with the sale).
+ * Null only for a copy taken before the documents table existed
+ * (migration 2, the sale); every copy since carries the count.
  */
 documents: number | null, };
