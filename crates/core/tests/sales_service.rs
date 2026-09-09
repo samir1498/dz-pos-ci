@@ -1646,3 +1646,223 @@ fn a_ticket_and_a_facture_run_two_series_that_do_not_touch() {
         ("doc_ticket", 2)
     );
 }
+
+/// Writes a column straight onto a row, past the services that trim what
+/// they are given. What a facture is checked against is whatever is stored,
+/// and a row can carry a blank from an import, from a restore of an older
+/// file, or from a fix somebody made with a SQL client.
+fn set_blank(conn: &mut SqliteConnection, table: &str, id: i32, column: &str, value: &str) {
+    diesel::sql_query(format!(
+        "UPDATE {table} SET {column} = ? WHERE id = ? AND shop_id = 1"
+    ))
+    .bind::<diesel::sql_types::Text, _>(value)
+    .bind::<diesel::sql_types::Integer, _>(id)
+    .execute(conn)
+    .unwrap();
+}
+
+#[test]
+fn a_blank_identifier_is_as_missing_as_no_identifier_at_all() {
+    // Décret 05-468 art. 3 asks for the numbers themselves, and two spaces
+    // in the RC box is a facture with no RC on it. The services trim what
+    // they are handed, so a blank only gets into a row another way; the
+    // check is what stands between that row and a facture that prints an
+    // empty box.
+    let (_dir, mut conn) = open_temp();
+    seller_ready(&mut conn);
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+
+    // The buyer's side, a company: both identifiers blanked, both named.
+    let company = party(
+        &mut conn,
+        "Entreprise Amrani",
+        PartyKind::Company,
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        None,
+    );
+    set_blank(&mut conn, "customers", company, "rc", "   ");
+    set_blank(&mut conn, "customers", company, "nis", "\t\n ");
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(company, vec![line(p, 1_000)], PaymentMode::Cash),
+    )
+    .unwrap_err();
+    match err {
+        CoreError::PartyIds { side, ref missing } => {
+            assert_eq!(side, PartySide::Buyer);
+            assert_eq!(missing, &["rc", "nis"]);
+        }
+        other => panic!("{other:?}"),
+    }
+
+    // The buyer's side, a consumer: a name of spaces is no name, and the
+    // address goes the same way (art. 3-2, last alinéa).
+    let consumer = party(
+        &mut conn,
+        "Karim Belkacem",
+        PartyKind::Consumer,
+        None,
+        None,
+        Some("12 rue des Frères Bouadou, Bir Mourad Raïs"),
+    );
+    set_blank(&mut conn, "customers", consumer, "name", "   ");
+    set_blank(&mut conn, "customers", consumer, "address", " ");
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(consumer, vec![line(p, 1_000)], PaymentMode::Cash),
+    )
+    .unwrap_err();
+    match err {
+        CoreError::PartyIds { side, ref missing } => {
+            assert_eq!(side, PartySide::Buyer);
+            assert_eq!(missing, &["name", "address"]);
+        }
+        other => panic!("{other:?}"),
+    }
+
+    // The seller's side, and it is read first: a shop whose own RC is a
+    // space has nothing a cashier could fix on the customer's fiche.
+    let ready = party(
+        &mut conn,
+        "Entreprise Kaci",
+        PartyKind::Company,
+        Some("16/00-1111111 B 23"),
+        Some("098216001111111"),
+        None,
+    );
+    diesel::sql_query("UPDATE shops SET rc = '  ' WHERE id = 1")
+        .execute(&mut conn)
+        .unwrap();
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture(ready, vec![line(p, 1_000)], PaymentMode::Cash),
+    )
+    .unwrap_err();
+    match err {
+        CoreError::PartyIds { side, ref missing } => {
+            assert_eq!(side, PartySide::Seller);
+            assert_eq!(missing, &["rc"]);
+        }
+        other => panic!("{other:?}"),
+    }
+
+    // Three refusals, no document, and the facture series still stands at
+    // its first number.
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+    assert_eq!(counter(&mut conn, "doc_facture"), 1);
+}
+
+#[test]
+fn the_stamp_on_a_facture_follows_the_cash_and_not_the_paper() {
+    // The droit de timbre is due on a cash payment, whatever the paper says
+    // (stamp_progressive_tranches). A facture paid in cash carries it, and
+    // the same facture on card or on credit carries none: the kind of
+    // document has never decided this.
+    let (_dir, mut conn) = open_temp();
+    seller_ready(&mut conn);
+    // Exempt of TVA, so the tranches are counted on a round 10 000,00 DA:
+    // a hundred tranches of 100,00 at 1,00 each is 100,00 of stamp.
+    let p = product(&mut conn, "Huile", 100_000, 0, Unit::Piece);
+    let c = party(
+        &mut conn,
+        "Entreprise Amrani",
+        PartyKind::Company,
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        None,
+    );
+
+    let paid = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            tendered: Some(Money::centimes(2_000_000)),
+            ..facture(c, vec![line(p, 10_000)], PaymentMode::Cash)
+        },
+    )
+    .unwrap();
+    assert_eq!(paid.kind, DocumentKind::Facture);
+    assert_eq!(paid.totals.total_ttc, Money::centimes(1_000_000));
+    assert_eq!(paid.totals.stamp, Money::centimes(10_000));
+    assert_eq!(paid.totals.net_to_pay, Money::centimes(1_010_000));
+
+    for mode in [PaymentMode::Card, PaymentMode::Credit] {
+        let doc = issue_sale(
+            &mut conn,
+            SHOP,
+            OWNER,
+            facture(c, vec![line(p, 10_000)], mode),
+        )
+        .unwrap();
+        assert_eq!(doc.kind, DocumentKind::Facture, "{mode:?}");
+        assert_eq!(doc.totals.stamp, Money::ZERO, "{mode:?}");
+        assert_eq!(
+            doc.totals.net_to_pay,
+            Money::centimes(1_000_000),
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn an_override_the_party_ids_then_refuse_leaves_no_log_row_and_no_number() {
+    // The override is a decision the owner takes past the credit limit, and
+    // features.md §5 logs decisions that were actually taken. This facture
+    // never happened: the identifiers refused it after the limit had been
+    // waived, so the log has nothing to say and neither series moved.
+    let (_dir, mut conn) = open_temp();
+    seller_ready(&mut conn);
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+    // Zero credit, so the limit refuses the first centime unless overridden,
+    // and no NIS, so the facture is refused whatever the limit says.
+    let c = party(
+        &mut conn,
+        "Entreprise Amrani",
+        PartyKind::Company,
+        Some("16/00-7654321 B 22"),
+        None,
+        None,
+    );
+    diesel::sql_query("UPDATE customers SET credit_limit_centimes = 0 WHERE id = ?")
+        .bind::<diesel::sql_types::Integer, _>(c)
+        .execute(&mut conn)
+        .unwrap();
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            override_credit: true,
+            ..facture(c, vec![line(p, 1_000)], PaymentMode::Credit)
+        },
+    )
+    .unwrap_err();
+    match err {
+        CoreError::PartyIds { side, ref missing } => {
+            assert_eq!(side, PartySide::Buyer);
+            assert_eq!(missing, &["nis"]);
+        }
+        other => panic!("{other:?}"),
+    }
+
+    assert!(
+        !audit::list(&mut conn, SHOP)
+            .unwrap()
+            .iter()
+            .any(|e| e.action == "sale.credit_override"),
+        "an override was logged for a sale that was refused"
+    );
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+    assert!(debt::ledger(&mut conn, SHOP, c).unwrap().is_empty());
+    assert_eq!(counter(&mut conn, "doc_facture"), 1);
+    assert_eq!(counter(&mut conn, "doc_ticket"), 1);
+}
