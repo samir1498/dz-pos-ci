@@ -33,7 +33,7 @@ tasks:
     status: 'done'
   - id: 'T8'
     desc: 'Daily backup of the SQLite file, keep 30, restore from settings, the backup test opens the copy; checkpoint PR to main closes M1 except T6'
-    status: 'in-progress'
+    status: 'done'
 acceptance: []
 ---
 # M1: a sale and a ticket on one desktop
