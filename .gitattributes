@@ -1,0 +1,6 @@
+# The print goldens and the templates are compared byte for byte, so a
+# checkout that rewrites their line endings (Windows autocrlf) breaks the
+# test without changing a character. Pin them to LF on every platform.
+fixtures/print/** text eol=lf
+crates/core/templates/** text eol=lf
+fixtures/money/** text eol=lf
