@@ -12,7 +12,7 @@ use diesel::prelude::*;
 use crate::money::Money;
 use crate::schema::{debt_allocations, debt_ledger};
 
-pub use super::sql_types::DebtKind;
+pub use super::sql_types::{DebtKind, PaymentMethod};
 
 /// One movement of a customer's debt.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +28,9 @@ pub struct DebtEntry {
     pub credit: Money,
     pub user_id: i32,
     pub note: Option<String>,
+    /// How the payment was taken. `None` on every movement that is not a
+    /// payment: nothing was handed over on a sale, an avoir or a correction.
+    pub payment_mode: Option<PaymentMethod>,
     pub created_at: NaiveDateTime,
 }
 
@@ -84,11 +87,16 @@ pub(crate) struct DebtRow {
     pub credit_centimes: i64,
     pub user_id: i32,
     pub note: Option<String>,
+    pub payment_mode: Option<PaymentMethod>,
     pub created_at: NaiveDateTime,
 }
 
+/// `None` on the two columns that carry a default leaves the default in
+/// place: a movement written by `append` says nothing about a payment mode
+/// and is stamped by the file's own clock, and `pay` fills both in.
 #[derive(Debug, Insertable)]
 #[diesel(table_name = debt_ledger)]
+#[diesel(treat_none_as_default_value = true)]
 pub(crate) struct DebtRowWrite {
     pub shop_id: i32,
     pub customer_id: i32,
@@ -98,6 +106,11 @@ pub(crate) struct DebtRowWrite {
     pub credit_centimes: i64,
     pub user_id: i32,
     pub note: Option<String>,
+    pub payment_mode: Option<PaymentMethod>,
+    /// The moment the movement is written on the shop's calendar. `None`
+    /// leaves the column's own default, which is what every caller but `pay`
+    /// wants.
+    pub created_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
@@ -133,6 +146,7 @@ impl From<DebtRow> for DebtEntry {
             credit: Money::centimes(r.credit_centimes),
             user_id: r.user_id,
             note: r.note,
+            payment_mode: r.payment_mode,
             created_at: r.created_at,
         }
     }

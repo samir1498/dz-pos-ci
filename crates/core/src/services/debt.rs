@@ -253,6 +253,11 @@ pub fn append(
             credit_centimes: entry.credit.as_centimes(),
             user_id: entry.user_id,
             note,
+            // A movement that is not a payment was not handed over in
+            // anything, and it is stamped by the file's own clock. `pay`
+            // is the one writer that fills both in.
+            payment_mode: None,
+            created_at: None,
         },
     )
 }

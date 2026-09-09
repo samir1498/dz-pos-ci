@@ -214,6 +214,9 @@ diesel::table! {
         user_id -> Integer,
         note -> Nullable<Text>,
         created_at -> Timestamp,
+        // ---- migrations/2026-09-09-000004_debt_payment_mode ----
+        // Null on every movement that is not a payment.
+        payment_mode -> Nullable<Text>,
     }
 }
 

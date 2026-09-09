@@ -1199,6 +1199,78 @@ fn a_database_at_the_third_migration_takes_the_fourth() {
     );
 }
 
+#[test]
+fn a_database_at_the_fourth_migration_takes_the_fifth() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. This one adds one
+    // nullable column to a table that already holds movements, so what has to
+    // be proved is that the movements are still there, still say what they
+    // said, and read as no payment mode at all rather than as a made-up one.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_at_migration(4);
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('debt_ledger') \
+             WHERE name = 'payment_mode'"
+        ),
+        0,
+        "migration 4 is not the version this test claims to start from"
+    );
+    diesel::sql_query(
+        "INSERT INTO customers (id, shop_id, name, party_kind) VALUES (1, 1, 'Ahmed', 'consumer')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, kind, debit_centimes, \
+         credit_centimes, user_id, note) \
+         VALUES (5, 1, 1, 'opening', 250000, 0, 1, 'report ancien carnet')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_ledger WHERE id = 5 AND kind = 'opening' \
+             AND debit_centimes = 250000 AND note = 'report ancien carnet' \
+             AND payment_mode IS NULL"
+        ),
+        1,
+        "the movement the file already carried did not survive the new column"
+    );
+    // The column takes the two ways a payment is taken and nothing else: a
+    // 'credit' here would be a payment settled with more credit.
+    for mode in ["cash", "card"] {
+        assert_eq!(
+            diesel::sql_query(format!(
+                "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+                 credit_centimes, user_id, payment_mode) \
+                 VALUES (1, 1, 'payment', 0, 1000, 1, '{mode}')"
+            ))
+            .execute(&mut conn)
+            .unwrap(),
+            1,
+            "a payment in {mode} was refused"
+        );
+    }
+    assert!(
+        diesel::sql_query(
+            "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+             credit_centimes, user_id, payment_mode) \
+             VALUES (1, 1, 'payment', 0, 1000, 1, 'credit')"
+        )
+        .execute(&mut conn)
+        .is_err(),
+        "the column took a mode that is not a way of paying"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
+
 /// Customer 1, facture 4 made out to them with a buyer block and a balance
 /// triple, and the ledger movement the sale wrote. Every figure here is read
 /// back by the tests that revert the migration.
@@ -1239,6 +1311,29 @@ fn the_migration_reverts_and_reapplies() {
     // them across, and a facture with a buyer, a balance and a debt behind it
     // is what that copy has to carry.
     seed_a_facture_naming_a_customer(&mut conn);
+
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // The fifth one only adds a column, so its down takes the column and
+    // leaves every movement standing: the ledger row the facture wrote is
+    // still there with the id the allocations would name.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('debt_ledger') \
+             WHERE name = 'payment_mode'"
+        ),
+        0,
+        "the payment mode down.sql left its column behind"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_ledger WHERE customer_id = 1 AND kind = 'sale'"
+        ),
+        1,
+        "the payment mode down.sql took a movement with the column"
+    );
 
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
@@ -1367,6 +1462,15 @@ fn the_migration_reverts_and_reapplies() {
         ),
         1,
         "the fourth migration did not reapply"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('debt_ledger') \
+             WHERE name = 'payment_mode'"
+        ),
+        1,
+        "the fifth migration did not reapply"
     );
 }
 
@@ -1606,6 +1710,11 @@ fn a_facture_naming_a_customer_goes_down_and_up_without_orphaning_itself() {
     let (_dir, mut conn) = open_temp();
     seed_a_facture_naming_a_customer(&mut conn);
 
+    // The fifth migration sits on top of the fourth and only adds a column to
+    // a table the fourth created, so it comes off first; the round trip above
+    // is where that step is asserted.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     // Everything the fourth migration added to `documents` is off the table
