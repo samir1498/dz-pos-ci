@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { CategoryDto, ProductDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import ar from "@/i18n/ar.json";
+import en from "@/i18n/en.json";
 import { ProductsScreen } from "./products";
 
 const product: ProductDto = {
@@ -580,6 +581,20 @@ describe("in Arabic", () => {
     expect(within(row).getByText(`7 ${ar.percent_sign}`)).toBeInTheDocument();
   });
 
+  test("a fractional category rate uses the Arabic decimal separator", async () => {
+    // rateLabel used to hardcode a French comma regardless of language,
+    // so this happened to already read right in Arabic; pinned here so a
+    // future change to decimal_separator alone still catches a regression.
+    categories = [{ ...general, default_rate_bps: 750 }];
+    rows = [{ ...product, rate_bps: 750 }];
+    mount("ar");
+    const row = (await screen.findByText("Huile Elio 5L")).closest("tr");
+    if (row === null) throw new Error("no row");
+    expect(
+      within(row).getByText(`7${ar.decimal_separator}50 ${ar.percent_sign}`),
+    ).toBeInTheDocument();
+  });
+
   test("the barcode, price, rate and stock cells stay left to right", async () => {
     rows = [product];
     mount("ar");
@@ -592,5 +607,21 @@ describe("in Arabic", () => {
     expect(cells[3]).toHaveAttribute("dir", "ltr");
     expect(cells[4]).toHaveAttribute("dir", "ltr");
     expect(cells[5]).toHaveAttribute("dir", "ltr");
+  });
+});
+
+describe("in English", () => {
+  test("a fractional category rate uses the English decimal separator, not a French comma", async () => {
+    // rateLabel hardcoded `.toFixed(2).replace(".", ",")`, so a rate
+    // outside the fixed list read "7,50 %" on the English screen too.
+    categories = [{ ...general, default_rate_bps: 750 }];
+    rows = [{ ...product, rate_bps: 750 }];
+    mount("en");
+    const row = (await screen.findByText("Huile Elio 5L")).closest("tr");
+    if (row === null) throw new Error("no row");
+    expect(
+      within(row).getByText(`7${en.decimal_separator}50 ${en.percent_sign}`),
+    ).toBeInTheDocument();
+    expect(within(row).queryByText("7,50 %")).not.toBeInTheDocument();
   });
 });

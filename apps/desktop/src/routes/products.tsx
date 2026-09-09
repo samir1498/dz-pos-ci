@@ -39,14 +39,19 @@ const RATES: readonly { bps: number; key: Key }[] = [
 const FALLBACK_RATE_BPS = 1900;
 
 /**
- * "7 %" for 700 bps: the label of a rate the fixed list does not carry.
- * The sign comes from `percent_sign` rather than a literal "%" so a
- * custom rate on the Arabic screen reads "٪" like the fixed ones
- * (`rate_900` and friends), not a Latin "%" next to them.
+ * "7 %" for 700 bps, "7.50 %" for 750 (English): the label of a rate the
+ * fixed list does not carry. Both the sign and the decimal separator come
+ * from i18n (`percent_sign`, `decimal_separator`) rather than a literal
+ * "%" and a hardcoded French comma, so a custom rate reads right in every
+ * language: "٪" on the Arabic screen like the fixed ones (`rate_900` and
+ * friends), and "7.50", not "7,50", on the English one.
  */
-function rateLabel(bps: number, percentSign: string): string {
+function rateLabel(bps: number, percentSign: string, decimalSeparator: string): string {
   const percent = bps / 100;
-  return `${Number.isInteger(percent) ? percent : percent.toFixed(2).replace(".", ",")} ${percentSign}`;
+  const numeral = Number.isInteger(percent)
+    ? String(percent)
+    : percent.toFixed(2).replace(".", decimalSeparator);
+  return `${numeral} ${percentSign}`;
 }
 
 /**
@@ -59,7 +64,9 @@ function rateLabel(bps: number, percentSign: string): string {
  */
 function rateCellLabel(bps: number, t: (key: Key) => string): string {
   const fixed = RATES.find((r) => r.bps === bps);
-  return fixed !== undefined ? t(fixed.key) : rateLabel(bps, t("percent_sign"));
+  return fixed !== undefined
+    ? t(fixed.key)
+    : rateLabel(bps, t("percent_sign"), t("decimal_separator"));
 }
 
 /**
@@ -80,10 +87,11 @@ function rateOptions(
   // one no category offers any more.
   if (stored !== undefined) candidates.push(stored);
   const percentSign = t("percent_sign");
+  const decimalSeparator = t("decimal_separator");
   const extra = [...new Set(candidates)]
     .filter((bps) => !known.has(bps))
     .sort((a, b) => b - a)
-    .map((bps) => ({ value: String(bps), label: rateLabel(bps, percentSign) }));
+    .map((bps) => ({ value: String(bps), label: rateLabel(bps, percentSign, decimalSeparator) }));
   return [...fixed, ...extra];
 }
 
