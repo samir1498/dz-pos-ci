@@ -12,6 +12,8 @@ env:
 jobs:
   rust:
     strategy:
+      # A Linux-only step must not cancel the Windows tests halfway.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -49,7 +51,9 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cargo install cargo-llvm-cov --locked
-          cargo llvm-cov --workspace --lcov --output-path lcov.info
+          # Only the crates with tests. The Tauri crate has none and a
+          # second instrumented build of it filled the runner's disk.
+          cargo llvm-cov -p dzpos-core -p dzpos-api --lcov --output-path lcov.info
       - uses: actions/upload-artifact@v4
         if: runner.os == 'Linux'
         with:
