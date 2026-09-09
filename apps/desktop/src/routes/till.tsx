@@ -240,6 +240,16 @@ export function TillScreen() {
     searchRef.current?.focus();
   }, []);
 
+  // A refusal is about one basket. The override button resends the body the
+  // server refused, so the moment any part of that body is edited the
+  // refusal is about a basket that no longer exists: pressing it would
+  // issue the old sale and throw away what the cashier just typed. Every
+  // field the body is built from is watched, and the panel goes with the
+  // first keystroke.
+  useEffect(() => {
+    setRefusal(null);
+  }, [cart, mode, globalDiscountText, tenderedText]);
+
   const rows: ProductDto[] = products.data ?? [];
   const query = search.trim().toLowerCase();
   const visible = rows.filter((p) => {

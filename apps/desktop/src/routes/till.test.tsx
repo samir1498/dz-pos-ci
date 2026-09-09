@@ -897,6 +897,31 @@ describe("on credit", () => {
     expect(posts[1]).toEqual({ ...refused, override: true });
   });
 
+  test("editing the basket takes the refusal away, so the override cannot resend what is gone", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "credit_limit",
+          message: "past the limit",
+          balance_after_centimes: 550_000,
+          credit_limit_centimes: 500_000,
+        },
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await payOnCredit(user);
+    await screen.findByTestId("till-balance-after");
+
+    // The line the refusal was about goes off the cart. What the button
+    // would resend is no longer what the cashier is looking at, so there
+    // is no button.
+    await user.click(screen.getByRole("button", { name: `Un de moins ${coffee.name}` }));
+    expect(screen.queryByRole("button", { name: "Forcer la vente" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("till-balance-after")).not.toBeInTheDocument();
+    expect(salePosts()).toHaveLength(1);
+  });
+
   test("a sale that reaches the warning threshold still goes through and says so", async () => {
     const user = userEvent.setup();
     saleAnswer = () =>
