@@ -433,6 +433,45 @@ async fn a_sidecar_left_behind_after_the_rename_stops_the_file_being_reopened() 
     );
 }
 
+/// Step 5 is the checkpoint, and a checkpoint SQLite refuses to take is
+/// reported on a row it answers happily, not as an error. If that row is
+/// dropped, the restore walks on and renames the copy over a shop file whose
+/// write-ahead log still holds committed pages, and the log is then replayed
+/// into the copy that took its name. So a busy checkpoint has to stop the
+/// restore before the rename: the connection stays open, the shop file stays
+/// where it is, and the till goes on working.
+#[tokio::test]
+async fn a_restore_stops_before_the_rename_when_the_log_cannot_be_folded_back() {
+    use diesel::connection::SimpleConnection;
+    use diesel::prelude::*;
+
+    let h = harness();
+    call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
+    let (_, made) = call(&h.app, "POST", "/backups", None).await;
+    let name = made["name"].as_str().unwrap().to_string();
+    call(&h.app, "POST", "/products", Some(product("Huile Elio 5L"))).await;
+
+    // A second till on the same file, mid-read. Nothing here is unusual: it
+    // is what a second window, or a copy being verified, looks like from
+    // SQLite's side.
+    let mut reader = dzpos_core::db::open(h.db()).unwrap();
+    reader.batch_execute("BEGIN").unwrap();
+    dzpos_core::services::products::list(&mut reader, SHOP).unwrap();
+
+    let (status, body) = call(&h.app, "POST", &format!("/backups/{name}/restore"), None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "storage");
+
+    // The connection was never closed, so the till answers as it did. (The
+    // service lists by name, so the pair reads alphabetically.)
+    assert_eq!(
+        product_names(&h.app).await,
+        vec!["Huile Elio 5L", "Semoule 10kg"],
+        "the shop file was replaced by a restore that should not have got there"
+    );
+    reader.batch_execute("COMMIT").unwrap();
+}
+
 /// The rename at step 7 does not happen and the file it would have replaced
 /// cannot be opened either. Nothing was put back and this process no longer
 /// serves the shop file, which is one answer, not two: `storage` alone would
