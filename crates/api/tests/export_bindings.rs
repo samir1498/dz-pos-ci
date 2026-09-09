@@ -29,12 +29,47 @@ const FILES: [&str; 7] = [
 /// committed one in both directions, so a new or a deleted DTO fails the
 /// gate. With no override the test writes the committed directory in place,
 /// which is how a developer regenerates it.
+/// Where the bindings are written. Never the committed directory by
+/// default: a plain `cargo test --workspace` used to regenerate
+/// `packages/shared/src/generated` in place, so the CI diff that ran after
+/// it compared fresh against fresh and a stale commit passed. The
+/// `types` recipe points this at the committed dir on purpose; the
+/// `types-check` recipe and CI point it at a temp dir and diff.
 fn out_dir() -> std::path::PathBuf {
     match std::env::var_os("DZPOS_TS_OUT_DIR") {
         Some(dir) => std::path::PathBuf::from(dir),
-        None => std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../packages/shared/src/generated"),
+        None => std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ts-bindings"),
     }
+}
+
+/// The DTO source, read at compile time so the export list below cannot
+/// drift from it: a DTO that names an `export_to` file and is missing from
+/// `FILES` (or the other way round) fails here, and a bare `#[ts(export)]`
+/// is refused because ts-rs would then write it to `crates/api/bindings`
+/// from a generated lib test, outside the directory the gate diffs.
+const DTO_SOURCE: &str = include_str!("../src/dto.rs");
+
+#[test]
+fn every_exported_dto_is_in_the_list_and_none_uses_the_bare_export() {
+    let mut named: Vec<&str> = DTO_SOURCE
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            line.strip_prefix("#[ts(export_to = \"")
+                .and_then(|rest| rest.strip_suffix("\")]"))
+        })
+        .collect();
+    named.sort_unstable();
+    let mut listed = FILES.to_vec();
+    listed.sort_unstable();
+    assert_eq!(
+        named, listed,
+        "the export_to names in dto.rs and FILES in this test differ"
+    );
+    assert!(
+        !DTO_SOURCE.contains("#[ts(export)]"),
+        "use #[ts(export_to = \"Name.ts\")] and list it in FILES; a bare export writes to crates/api/bindings"
+    );
 }
 
 /// ts-rs calls an `i64` a `bigint` by default, which would not survive

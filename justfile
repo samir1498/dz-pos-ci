@@ -30,10 +30,19 @@ build:
 types-check:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [ -e crates/api/bindings ]; then
+        echo "crates/api/bindings exists: a DTO used a bare #[ts(export)]; use export_to and the FILES list" >&2
+        exit 1
+    fi
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' EXIT
     DZPOS_TS_OUT_DIR="$tmp" cargo test -p dzpos-api --test export_bindings
     diff -r "$tmp" packages/shared/src/generated
+
+# regenerate the committed TS types after a DTO change (the test never
+# writes there on its own, so `cargo test` cannot mask a stale commit)
+types:
+    DZPOS_TS_OUT_DIR=packages/shared/src/generated cargo test -p dzpos-api --test export_bindings
 
 # everything a PR needs, in order; stops at the first failure
 gates: fmt clippy types-check test build

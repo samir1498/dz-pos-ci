@@ -34,7 +34,9 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       # Linux only: on Windows autocrlf rewrites the generated files and the
-      # diff would fail on line endings rather than on a stale type.
+      # diff would fail on line endings rather than on a stale type. The
+      # workspace test above writes its bindings under target/, never into
+      # the committed dir, so this diff sees the commit as it was pushed.
       - name: Generated TS types are current
         if: runner.os == 'Linux'
         run: |
