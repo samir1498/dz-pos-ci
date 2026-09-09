@@ -41,11 +41,53 @@ pub enum Key {
     ThankYou,
     /// The dinar, as it is written after an amount.
     Currency,
+
+    // The A4 facture (features.md §3 and §4). The three kinds the template
+    // titles itself with, then the fields décret 05-468 art. 3 asks a
+    // facture to carry.
+    /// The heading of a facture, in the printed case: a title is read
+    /// across a desk, so it is stored as it prints and not uppercased by a
+    /// stylesheet a print driver may drop.
+    Facture,
+    /// A facture that was cancelled keeps its number and says so
+    /// (features.md, Numbering row).
+    FactureCancelled,
+    Avoir,
+    Proforma,
+    /// The facture an avoir is written against.
+    ReferencedDocument,
+    Seller,
+    Buyer,
+    Designation,
+    Qty,
+    /// The unit price column of a réel facture: "hors taxes" is one of the
+    /// mentions décret 05-468 art. 3 asks for by name.
+    UnitPriceHt,
+    /// The same column under the IFU, where naming the tax is forbidden
+    /// (CTCA 2026 art. 64).
+    UnitPrice,
+    LineTotalHt,
+    LineTotal,
+    SubtotalHt,
+    Subtotal,
+    /// The HT the tax of a recap row was taken on.
+    TvaBase,
+    TotalTtc,
+    /// The words line: décret 05-468 art. 3 asks the total to be written
+    /// "en chiffres et en lettres".
+    InWords,
+    Balance,
+    OldBalance,
+    ThisDocument,
+    TotalDebt,
+    /// What the two parties put on the paper at the bottom of a facture
+    /// (décret 05-468 art. 4).
+    Cachet,
 }
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 15] = [
+    pub const ALL: [Key; 38] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -61,6 +103,29 @@ impl Key {
         Key::Change,
         Key::ThankYou,
         Key::Currency,
+        Key::Facture,
+        Key::FactureCancelled,
+        Key::Avoir,
+        Key::Proforma,
+        Key::ReferencedDocument,
+        Key::Seller,
+        Key::Buyer,
+        Key::Designation,
+        Key::Qty,
+        Key::UnitPriceHt,
+        Key::UnitPrice,
+        Key::LineTotalHt,
+        Key::LineTotal,
+        Key::SubtotalHt,
+        Key::Subtotal,
+        Key::TvaBase,
+        Key::TotalTtc,
+        Key::InWords,
+        Key::Balance,
+        Key::OldBalance,
+        Key::ThisDocument,
+        Key::TotalDebt,
+        Key::Cachet,
     ];
 }
 
@@ -130,5 +195,100 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::Currency, Lang::Fr) => "DA",
         (Key::Currency, Lang::En) => "DZD",
         (Key::Currency, Lang::Ar) => "د.ج",
+
+        (Key::Facture, Lang::Fr) => "FACTURE",
+        (Key::Facture, Lang::En) => "INVOICE",
+        (Key::Facture, Lang::Ar) => "فاتورة",
+
+        (Key::FactureCancelled, Lang::Fr) => "FACTURE ANNULÉE",
+        (Key::FactureCancelled, Lang::En) => "CANCELLED INVOICE",
+        (Key::FactureCancelled, Lang::Ar) => "فاتورة ملغاة",
+
+        (Key::Avoir, Lang::Fr) => "AVOIR",
+        (Key::Avoir, Lang::En) => "CREDIT NOTE",
+        (Key::Avoir, Lang::Ar) => "إشعار دائن",
+
+        (Key::Proforma, Lang::Fr) => "PROFORMA",
+        (Key::Proforma, Lang::En) => "PRO FORMA INVOICE",
+        (Key::Proforma, Lang::Ar) => "فاتورة أولية",
+
+        (Key::ReferencedDocument, Lang::Fr) => "Facture référencée",
+        (Key::ReferencedDocument, Lang::En) => "Referenced invoice",
+        (Key::ReferencedDocument, Lang::Ar) => "الفاتورة المرجعية",
+
+        (Key::Seller, Lang::Fr) => "Vendeur",
+        (Key::Seller, Lang::En) => "Seller",
+        (Key::Seller, Lang::Ar) => "البائع",
+
+        (Key::Buyer, Lang::Fr) => "Client",
+        (Key::Buyer, Lang::En) => "Customer",
+        (Key::Buyer, Lang::Ar) => "الزبون",
+
+        (Key::Designation, Lang::Fr) => "Désignation",
+        (Key::Designation, Lang::En) => "Description",
+        (Key::Designation, Lang::Ar) => "التعيين",
+
+        (Key::Qty, Lang::Fr) => "Qté",
+        (Key::Qty, Lang::En) => "Qty",
+        (Key::Qty, Lang::Ar) => "الكمية",
+
+        (Key::UnitPriceHt, Lang::Fr) => "Prix unitaire HT",
+        (Key::UnitPriceHt, Lang::En) => "Unit price excl. tax",
+        (Key::UnitPriceHt, Lang::Ar) => "سعر الوحدة خارج الرسم",
+
+        (Key::UnitPrice, Lang::Fr) => "Prix unitaire",
+        (Key::UnitPrice, Lang::En) => "Unit price",
+        (Key::UnitPrice, Lang::Ar) => "سعر الوحدة",
+
+        (Key::LineTotalHt, Lang::Fr) => "Montant HT",
+        (Key::LineTotalHt, Lang::En) => "Amount excl. tax",
+        (Key::LineTotalHt, Lang::Ar) => "المبلغ خارج الرسم",
+
+        (Key::LineTotal, Lang::Fr) => "Montant",
+        (Key::LineTotal, Lang::En) => "Amount",
+        (Key::LineTotal, Lang::Ar) => "المبلغ",
+
+        (Key::SubtotalHt, Lang::Fr) => "Sous-total HT",
+        (Key::SubtotalHt, Lang::En) => "Subtotal excl. tax",
+        (Key::SubtotalHt, Lang::Ar) => "المجموع الفرعي خارج الرسم",
+
+        (Key::Subtotal, Lang::Fr) => "Sous-total",
+        (Key::Subtotal, Lang::En) => "Subtotal",
+        (Key::Subtotal, Lang::Ar) => "المجموع الفرعي",
+
+        (Key::TvaBase, Lang::Fr) => "Base",
+        (Key::TvaBase, Lang::En) => "Base",
+        (Key::TvaBase, Lang::Ar) => "الوعاء",
+
+        (Key::TotalTtc, Lang::Fr) => "Total TTC",
+        (Key::TotalTtc, Lang::En) => "Total incl. tax",
+        (Key::TotalTtc, Lang::Ar) => "المجموع مع الرسم",
+
+        // The décret's own wording, which names the facture whatever kind
+        // the document is; T9 splits the sentence per kind if the comptable
+        // asks for it on an avoir.
+        (Key::InWords, Lang::Fr) => "Arrêtée la présente facture à la somme de",
+        (Key::InWords, Lang::En) => "This invoice is closed at the sum of",
+        (Key::InWords, Lang::Ar) => "أوقفت هذه الفاتورة بمبلغ",
+
+        (Key::Balance, Lang::Fr) => "Solde",
+        (Key::Balance, Lang::En) => "Balance",
+        (Key::Balance, Lang::Ar) => "الرصيد",
+
+        (Key::OldBalance, Lang::Fr) => "Ancien solde",
+        (Key::OldBalance, Lang::En) => "Previous balance",
+        (Key::OldBalance, Lang::Ar) => "الرصيد السابق",
+
+        (Key::ThisDocument, Lang::Fr) => "Ce document",
+        (Key::ThisDocument, Lang::En) => "This document",
+        (Key::ThisDocument, Lang::Ar) => "هذه الوثيقة",
+
+        (Key::TotalDebt, Lang::Fr) => "Solde total",
+        (Key::TotalDebt, Lang::En) => "Total owed",
+        (Key::TotalDebt, Lang::Ar) => "الرصيد الإجمالي",
+
+        (Key::Cachet, Lang::Fr) => "Cachet et signature",
+        (Key::Cachet, Lang::En) => "Stamp and signature",
+        (Key::Cachet, Lang::Ar) => "الختم والتوقيع",
     }
 }
