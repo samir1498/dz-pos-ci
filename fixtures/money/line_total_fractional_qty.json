@@ -1,0 +1,163 @@
+{
+  "name": "line_total_fractional_qty",
+  "rule": "docs/features.md, fiscal rules: a line quantity is integer thousandths of the unit, so a kilo product never needs a float. The line gross is unit_price x qty_milli / 1000, rounded once to the centime, half away from zero, before the line discount is taken off. Amounts are integer centimes. Expected values are written by hand, never computed.",
+  "line_cases": [
+    {
+      "name": "a whole kilo is the unit price once",
+      "unit_price": 25000,
+      "qty_milli": 1000,
+      "expected": 25000
+    },
+    {
+      "name": "half a kilo of a 250,00 DA kilo",
+      "unit_price": 25000,
+      "qty_milli": 500,
+      "expected": 12500
+    },
+    {
+      "name": "a quarter kilo of the same",
+      "unit_price": 25000,
+      "qty_milli": 250,
+      "expected": 6250
+    },
+    {
+      "name": "a half centime rounds away from zero, never down",
+      "unit_price": 333,
+      "qty_milli": 1500,
+      "expected": 500
+    },
+    {
+      "name": "just under the half centime rounds down",
+      "unit_price": 333,
+      "qty_milli": 1499,
+      "expected": 499
+    },
+    {
+      "name": "just over the half centime rounds up",
+      "unit_price": 333,
+      "qty_milli": 1504,
+      "expected": 501
+    },
+    {
+      "name": "one gram of a 4,90 DA unit is worth nothing",
+      "unit_price": 490,
+      "qty_milli": 1,
+      "expected": 0
+    },
+    {
+      "name": "one gram worth exactly half a centime rounds up",
+      "unit_price": 500,
+      "qty_milli": 1,
+      "expected": 1
+    },
+    {
+      "name": "three whole pieces of an odd price",
+      "unit_price": 19999,
+      "qty_milli": 3000,
+      "expected": 59997
+    },
+    {
+      "name": "nothing weighed is nothing owed",
+      "unit_price": 19999,
+      "qty_milli": 0,
+      "expected": 0
+    },
+    {
+      "name": "1,750 kg of a 1 234,56 DA kilo divides exactly",
+      "unit_price": 123456,
+      "qty_milli": 1750,
+      "expected": 216048
+    },
+    {
+      "name": "a large price and a fractional quantity keep every centime",
+      "unit_price": 123456789,
+      "qty_milli": 2500,
+      "expected": 308641973
+    }
+  ],
+  "line_overflow_cases": [
+    {
+      "name": "two units of the largest amount i64 holds overflows the line",
+      "unit_price": 9223372036854775807,
+      "qty_milli": 2000
+    }
+  ],
+  "totals_cases": [
+    {
+      "name": "two fractional lines are each rounded on their own, never on the raw sum",
+      "input": {
+        "lines": [
+          {
+            "qty_milli": 1500,
+            "unit_price": 333,
+            "line_discount": 0,
+            "rate_bps": 1900
+          },
+          {
+            "qty_milli": 1500,
+            "unit_price": 333,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
+      },
+      "expected": {
+        "total_ht": 1000,
+        "discount": 0,
+        "subtotal_ht": 1000,
+        "tva_by_rate": [
+          {
+            "rate_bps": 1900,
+            "base": 1000,
+            "amount": 190
+          }
+        ],
+        "tva": 190,
+        "total_ttc": 1190,
+        "stamp": 0,
+        "net_to_pay": 1190
+      }
+    },
+    {
+      "name": "a kilo and a half at 9 %, a line discount off the rounded gross, cash stamp",
+      "input": {
+        "lines": [
+          {
+            "qty_milli": 1500,
+            "unit_price": 25000,
+            "line_discount": 500,
+            "rate_bps": 900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
+      },
+      "expected": {
+        "total_ht": 37000,
+        "discount": 0,
+        "subtotal_ht": 37000,
+        "tva_by_rate": [
+          {
+            "rate_bps": 900,
+            "base": 37000,
+            "amount": 3330
+          }
+        ],
+        "tva": 3330,
+        "total_ttc": 40330,
+        "stamp": 500,
+        "net_to_pay": 40830
+      }
+    }
+  ]
+}

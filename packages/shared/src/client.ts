@@ -10,7 +10,15 @@ import type { BackupDto } from "./generated/BackupDto";
 import type { BackupsDto } from "./generated/BackupsDto";
 import type { CategoryDto } from "./generated/CategoryDto";
 import type { HealthDto } from "./generated/HealthDto";
+import type { DocumentKindDto } from "./generated/DocumentKindDto";
+import type { DocumentStatusDto } from "./generated/DocumentStatusDto";
 import type { NewProductDto } from "./generated/NewProductDto";
+import type { NewSaleDto } from "./generated/NewSaleDto";
+import type { PaymentModeDto } from "./generated/PaymentModeDto";
+import type { SaleDto } from "./generated/SaleDto";
+import type { SaleLineDto } from "./generated/SaleLineDto";
+import type { SaleTotalsDto } from "./generated/SaleTotalsDto";
+import type { SaleTvaDto } from "./generated/SaleTvaDto";
 import type { ProductDto } from "./generated/ProductDto";
 import type { RegimeChangeDto } from "./generated/RegimeChangeDto";
 import type { RestoreDto } from "./generated/RestoreDto";
@@ -179,6 +187,100 @@ export function isRestore(value: unknown): value is RestoreDto {
   );
 }
 
+const PAYMENT_MODES: readonly PaymentModeDto[] = ["cash", "card", "credit"];
+
+function isPaymentMode(value: unknown): value is PaymentModeDto {
+  return typeof value === "string" && PAYMENT_MODES.some((m) => m === value);
+}
+
+const DOCUMENT_KINDS: readonly DocumentKindDto[] = [
+  "ticket",
+  "facture",
+  "proforma",
+  "bon_de_livraison",
+  "avoir",
+  "bon_de_reception",
+];
+
+function isDocumentKind(value: unknown): value is DocumentKindDto {
+  return typeof value === "string" && DOCUMENT_KINDS.some((k) => k === value);
+}
+
+const DOCUMENT_STATUSES: readonly DocumentStatusDto[] = ["issued", "cancelled"];
+
+function isDocumentStatus(value: unknown): value is DocumentStatusDto {
+  return typeof value === "string" && DOCUMENT_STATUSES.some((s) => s === value);
+}
+
+function isSaleLine(value: unknown): value is SaleLineDto {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.position === "number" &&
+    isNullableNumber(value.product_id) &&
+    typeof value.name === "string" &&
+    isNullableString(value.barcode) &&
+    isExactInteger(value.qty_milli) &&
+    isExactInteger(value.unit_price_centimes) &&
+    isExactInteger(value.line_discount_centimes) &&
+    typeof value.rate_bps === "number" &&
+    isExactInteger(value.line_total_centimes)
+  );
+}
+
+function isSaleTva(value: unknown): value is SaleTvaDto {
+  return (
+    isRecord(value) &&
+    typeof value.rate_bps === "number" &&
+    isExactInteger(value.base_centimes) &&
+    isExactInteger(value.amount_centimes)
+  );
+}
+
+/** Every column of the totals table, each an exact integer of centimes: a
+ *  total JSON.parse had to round is refused rather than printed. */
+function isSaleTotals(value: unknown): value is SaleTotalsDto {
+  return (
+    isRecord(value) &&
+    isExactInteger(value.total_ht_centimes) &&
+    isExactInteger(value.discount_centimes) &&
+    isExactInteger(value.subtotal_ht_centimes) &&
+    isExactInteger(value.tva_centimes) &&
+    isExactInteger(value.total_ttc_centimes) &&
+    isExactInteger(value.stamp_centimes) &&
+    isExactInteger(value.net_to_pay_centimes)
+  );
+}
+
+export function isSale(value: unknown): value is SaleDto {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.shop_id === "number" &&
+    isDocumentKind(value.kind) &&
+    typeof value.series === "string" &&
+    isExactInteger(value.number) &&
+    typeof value.issued_at === "string" &&
+    typeof value.user_id === "number" &&
+    isRegime(value.regime) &&
+    isPaymentMode(value.payment_mode) &&
+    isStore(value.seller) &&
+    isNullableNumber(value.customer_id) &&
+    isSaleTotals(value.totals) &&
+    Array.isArray(value.tva) &&
+    value.tva.every(isSaleTva) &&
+    isNullableExactInteger(value.tendered_centimes) &&
+    isNullableExactInteger(value.change_centimes) &&
+    isDocumentStatus(value.status) &&
+    Array.isArray(value.lines) &&
+    value.lines.every(isSaleLine)
+  );
+}
+
+function isSaleList(value: unknown): value is SaleDto[] {
+  return Array.isArray(value) && value.every(isSale);
+}
+
 async function unwrap(res: Response): Promise<unknown> {
   const text = await res.text();
   let body: unknown = null;
@@ -303,6 +405,26 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         method: "POST",
       });
       return narrow(body, isRestore, "restore answer");
+    },
+
+    /** Rings up the basket. The server dates the document and assigns the
+     * number; neither is on the request. */
+    async createSale(input: NewSaleDto): Promise<SaleDto> {
+      const body = await send("/sales", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isSale, "sale");
+    },
+
+    async getSale(id: number): Promise<SaleDto> {
+      return narrow(await send(`/sales/${id}`), isSale, "sale");
+    },
+
+    /** Newest first, tickets only in M1. */
+    async listSales(): Promise<SaleDto[]> {
+      return narrow(await send("/sales"), isSaleList, "sale list");
     },
 
     async createProduct(input: NewProductDto): Promise<ProductDto> {

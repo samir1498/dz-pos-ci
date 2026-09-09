@@ -10,13 +10,14 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto, DatedRegimeDto, HealthDto,
-    NewProductDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SettingsDto, StoreDto,
-    UnitDto,
+    ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto, DatedRegimeDto,
+    DocumentKindDto, DocumentStatusDto, HealthDto, NewProductDto, NewSaleDto, NewSaleLineDto,
+    PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SaleDto, SaleLineDto,
+    SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 15] = [
+const FILES: [&str; 24] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -32,6 +33,15 @@ const FILES: [&str; 15] = [
     "BackupDto.ts",
     "BackupsDto.ts",
     "RestoreDto.ts",
+    "PaymentModeDto.ts",
+    "DocumentKindDto.ts",
+    "DocumentStatusDto.ts",
+    "SaleLineDto.ts",
+    "SaleTvaDto.ts",
+    "SaleTotalsDto.ts",
+    "SaleDto.ts",
+    "NewSaleLineDto.ts",
+    "NewSaleDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -104,6 +114,15 @@ fn export_bindings() {
     BackupDto::export_all(&cfg).unwrap();
     BackupsDto::export_all(&cfg).unwrap();
     RestoreDto::export_all(&cfg).unwrap();
+    PaymentModeDto::export_all(&cfg).unwrap();
+    DocumentKindDto::export_all(&cfg).unwrap();
+    DocumentStatusDto::export_all(&cfg).unwrap();
+    SaleLineDto::export_all(&cfg).unwrap();
+    SaleTvaDto::export_all(&cfg).unwrap();
+    SaleTotalsDto::export_all(&cfg).unwrap();
+    SaleDto::export_all(&cfg).unwrap();
+    NewSaleLineDto::export_all(&cfg).unwrap();
+    NewSaleDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

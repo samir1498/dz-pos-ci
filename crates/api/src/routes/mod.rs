@@ -4,6 +4,7 @@
 pub mod backups;
 pub mod categories;
 pub mod products;
+pub mod sales;
 pub mod settings;
 
 use axum::extract::State;

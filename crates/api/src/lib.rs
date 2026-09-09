@@ -36,6 +36,10 @@ pub struct Restored {
 /// Where backups land when the caller names no folder: beside the shop file.
 /// One folder per shop file, so two tills on one machine never share copies.
 pub const BACKUP_DIR_NAME: &str = "backups";
+/// The owner the first migration seeds. Every document, ledger row and audit
+/// entry carries a user from the first sale (features.md §5).
+/// TODO(M4): the user comes from the request identity, not from here.
+pub const SEEDED_OWNER_USER_ID: i32 = 1;
 
 /// The connection and the one shop this server answers for. A caller never
 /// chooses the shop (rule 3); the process is started with it.
@@ -53,6 +57,8 @@ pub struct AppState {
     db_path: Arc<PathBuf>,
     backup_dir: Arc<PathBuf>,
     pub shop_id: i32,
+    /// Who the writes are recorded under until M4 brings login.
+    pub user_id: i32,
 }
 
 impl AppState {
@@ -72,6 +78,7 @@ impl AppState {
             db_path: Arc::new(db.as_ref().to_path_buf()),
             backup_dir: Arc::new(backup_dir.as_ref().to_path_buf()),
             shop_id,
+            user_id: SEEDED_OWNER_USER_ID,
         })
     }
 
@@ -408,6 +415,9 @@ pub fn router_with_origin(
             "/products/{id}",
             get(routes::products::get_one).put(routes::products::update),
         )
+        .route("/sales", get(routes::sales::list))
+        .route("/sales", post(routes::sales::create))
+        .route("/sales/{id}", get(routes::sales::get_one))
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))

@@ -3,11 +3,13 @@
 //! readable after the shop changes régime (features.md, Régime fiscal row).
 
 use chrono::NaiveDateTime;
+use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::money::Regime;
 use crate::repos::settings as repo;
+use crate::services::audit;
 
 /// The key holding the shop's régime fiscal. `ifu` or `reel`; the migration
 /// carries the same CHECK.
@@ -89,22 +91,42 @@ fn parse(value: &str) -> Result<Regime, CoreError> {
 pub fn set_regime(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    user_id: i32,
     regime: Regime,
     valid_from: NaiveDateTime,
 ) -> Result<(), CoreError> {
-    // The shop is already under that régime on that day: nothing to
-    // record. Accepting it would move the "since" date a comptable reads
-    // to the day of the click. Before the first row there is no régime to
-    // compare with, so a first entry is always accepted.
-    if repo::value_as_of(conn, shop_id, REGIME_FISCAL, valid_from)?.as_deref()
-        == Some(stored(regime))
-    {
-        return Err(CoreError::validation(
-            REGIME_FISCAL,
-            "the shop is already under that régime on that day",
-        ));
-    }
-    repo::append(conn, shop_id, REGIME_FISCAL, stored(regime), valid_from)
+    conn.transaction(|conn| {
+        let before = repo::value_as_of(conn, shop_id, REGIME_FISCAL, valid_from)?;
+        // The shop is already under that régime on that day: nothing to
+        // record. Accepting it would move the "since" date a comptable reads
+        // to the day of the click. Before the first row there is no régime to
+        // compare with, so a first entry is always accepted.
+        if before.as_deref() == Some(stored(regime)) {
+            return Err(CoreError::validation(
+                REGIME_FISCAL,
+                "the shop is already under that régime on that day",
+            ));
+        }
+        repo::append(conn, shop_id, REGIME_FISCAL, stored(regime), valid_from)?;
+        audit::record(
+            conn,
+            shop_id,
+            user_id,
+            audit::Change {
+                action: audit::ACTION_SET_REGIME,
+                entity: REGIME_FISCAL,
+                entity_id: Some(shop_id),
+                before: before.map(|value| serde_json::json!({ "regime": value }).to_string()),
+                after: Some(
+                    serde_json::json!({
+                        "regime": stored(regime),
+                        "valid_from": valid_from.to_string(),
+                    })
+                    .to_string(),
+                ),
+            },
+        )
+    })
 }
 
 const fn stored(regime: Regime) -> &'static str {
