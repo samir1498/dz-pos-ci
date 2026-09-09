@@ -15,15 +15,9 @@ use crate::error::CoreError;
 use crate::lang::Lang;
 use crate::models::document::{Document, DocumentLine, SellerBlock};
 use crate::money::format::{format_centimes, format_qty};
-use crate::money::{Bps, Money, PaymentMode, Regime};
+use crate::money::{PaymentMode, Regime};
 use crate::print::strings::{text, Key};
-
-/// `TK-000123`: the kind's short prefix, a hyphen, and the number in the
-/// series padded to six digits. The stored `series` is the counter's name
-/// (`doc_ticket`), which is a column and not something a customer quotes;
-/// the prefix is the printed form of the same series and lives beside it on
-/// `DocumentKind` so the two cannot drift.
-const NUMBER_DIGITS: usize = 6;
+use crate::print::{number, payment_mode_key, percent, some_amount};
 
 /// The date and time as the shop reads them. `issued_at` is already on the
 /// shop's calendar (`services::clock` writes it there, UTC+1 all year), so
@@ -157,7 +151,7 @@ fn view(doc: &Document, lang: Lang) -> TicketView {
         net_to_pay_label: text(Key::NetToPay, lang),
         net_to_pay: format_centimes(totals.net_to_pay),
         payment_mode_label: text(Key::PaymentMode, lang),
-        payment_mode: text(payment_mode(doc.payment_mode), lang),
+        payment_mode: text(payment_mode_key(doc.payment_mode), lang),
         tendered_label: text(Key::Tendered, lang),
         tendered: cash.then(|| doc.tendered.map(format_centimes)).flatten(),
         change_label: text(Key::Change, lang),
@@ -165,21 +159,6 @@ fn view(doc: &Document, lang: Lang) -> TicketView {
         currency: text(Key::Currency, lang),
         thank_you: text(Key::ThankYou, lang),
     }
-}
-
-/// A row that is only there when there is something on it. Zero is not a
-/// discount and not a stamp; a ticket says nothing about either.
-fn some_amount(amount: Money) -> Option<String> {
-    (amount != Money::ZERO).then(|| format_centimes(amount))
-}
-
-fn number(doc: &Document) -> String {
-    format!(
-        "{}-{:0width$}",
-        doc.kind.number_prefix(),
-        doc.number,
-        width = NUMBER_DIGITS
-    )
 }
 
 fn seller(seller: &SellerBlock) -> SellerView {
@@ -216,42 +195,3 @@ fn line(line: &DocumentLine, reel: bool) -> LineView {
     }
 }
 
-/// A rate in basis points as a person reads it: 1900 is `19 %`, 950 is
-/// `9,5 %`. The space before the sign is a narrow no-break one, the same
-/// character the thousands separator uses, so a rate never breaks across
-/// two lines of a 72 mm column.
-fn percent(rate: Bps) -> String {
-    let bps = rate.as_u32();
-    let whole = bps / 100;
-    let rest = bps % 100;
-    if rest == 0 {
-        return format!("{whole}\u{202f}%");
-    }
-    let decimals = format!("{rest:02}");
-    format!("{whole},{}\u{202f}%", decimals.trim_end_matches('0'))
-}
-
-const fn payment_mode(mode: PaymentMode) -> Key {
-    match mode {
-        PaymentMode::Cash => Key::Cash,
-        PaymentMode::Card => Key::Card,
-        PaymentMode::Credit => Key::Credit,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::percent;
-    use crate::money::Bps;
-
-    #[test]
-    fn a_rate_is_a_percentage_with_the_decimals_it_needs() {
-        let bps = |v: u32| Bps::new(v).unwrap_or(Bps::ZERO);
-        assert_eq!(percent(bps(1900)), "19\u{202f}%");
-        assert_eq!(percent(bps(900)), "9\u{202f}%");
-        assert_eq!(percent(bps(0)), "0\u{202f}%");
-        assert_eq!(percent(bps(950)), "9,5\u{202f}%");
-        assert_eq!(percent(bps(1)), "0,01\u{202f}%");
-        assert_eq!(percent(bps(10_000)), "100\u{202f}%");
-    }
-}

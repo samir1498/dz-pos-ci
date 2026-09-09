@@ -1,0 +1,154 @@
+{#- The A4 facture, and the same page on A5: one standalone file, no
+external stylesheet and no image, so the bytes this renders are the bytes a
+browser prints through the OS dialog and the bytes a server hands over
+(features.md §4). The template holds no rule: every string, every amount,
+every "only if present" and the sheet size are decided in
+crates/core/src/print/facture.rs and arrive here already made.
+
+No length in this stylesheet is written as a percentage: an IFU document
+must not name the tax in any form (CTCA 2026 art. 64) and its golden proves
+the absence by reading the file for "%", so the per-cent sign appears on a
+réel facture's rate column and nowhere else. -#}
+<!doctype html>
+<html lang="{{ lang_tag }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<title>{{ title }} {{ number }}</title>
+{%- if arabic_unreviewed %}
+<!-- The Arabic wording of this template is unreviewed by a native speaker, like words_ar (research R6). -->
+{%- endif %}
+<style>
+@page { size: {{ paper_size }}; margin: 12mm }
+body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", Arial, sans-serif }
+.doc { max-inline-size: 186mm; margin: 0 auto }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; border-block-end: 2px solid #000; padding-block-end: 3mm }
+.head h1 { font-size: 20px; margin: 0 0 1mm }
+.ident { text-align: end }
+.num { white-space: nowrap }
+.parties { display: flex; gap: 6mm; margin-block-start: 6mm }
+.party { flex: 1 1 0; border: 1px solid #000; padding: 3mm }
+.party h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 2mm }
+.party .who { font-weight: 700 }
+.label { color: #333 }
+.lines { display: flex; margin-block-start: 6mm }
+.lines table { flex: 1 1 auto }
+table { border-collapse: collapse }
+th, td { border: 1px solid #000; padding: 1.6mm 2mm; text-align: start; vertical-align: top }
+th { background: #eee; font-weight: 700 }
+td.n, th.n { text-align: end; white-space: nowrap }
+.totals { display: flex; justify-content: flex-end; margin-block-start: 4mm }
+.totals table { inline-size: 96mm }
+.totals td { border: none; padding: 1mm 2mm }
+.totals tr.net td { border-block-start: 1px solid #000; font-weight: 700; font-size: 13px }
+.cur { margin-inline-start: .4em }
+.words { margin-block-start: 5mm; border: 1px solid #000; padding: 3mm }
+.blocks { display: flex; gap: 6mm; margin-block-start: 5mm }
+.block { flex: 1 1 0; border: 1px solid #000; padding: 3mm }
+.block h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 2mm }
+.block .row { display: flex; justify-content: space-between; gap: 4mm }
+.block .row.total { font-weight: 700 }
+.sign { display: flex; justify-content: space-between; gap: 20mm; margin-block-start: 10mm }
+.sign div { flex: 1 1 0; border-block-start: 1px solid #000; padding-block-start: 2mm; min-block-size: 22mm }
+</style>
+</head>
+<body>
+<article class="doc">
+<header class="head">
+<div>
+<h1>{{ title }}</h1>
+<div class="num">{{ number }}</div>
+<div class="num">{{ issued_at }}</div>
+{%- if let Some(reference) = reference %}
+<div><span class="label">{{ reference_label }}</span> <span class="num">{{ reference }}</span></div>
+{%- endif %}
+</div>
+{#- The letterhead: the shop's name and nothing else. Its address, its
+phone and its four identifiers are the seller block below, where décret
+05-468 art. 3 wants them read, and printing them twice on one page would be
+two places for a comptable to check against each other. #}
+<div class="ident">
+<div class="who">{{ seller.name }}</div>
+</div>
+</header>
+<section class="parties">
+<div class="party">
+<h2>{{ seller.title }}</h2>
+<div class="who">{{ seller.name }}</div>
+{%- if let Some(address) = seller.address %}
+<div>{{ address }}</div>
+{%- endif %}
+{%- if let Some(phone) = seller.phone %}
+<div class="num">{{ phone }}</div>
+{%- endif %}
+{%- for id in seller.ids %}
+<div><span class="label">{{ id.label }}</span> <span class="num">{{ id.value }}</span></div>
+{%- endfor %}
+</div>
+<div class="party">
+<h2>{{ buyer.title }}</h2>
+<div class="who">{{ buyer.name }}</div>
+{%- if let Some(address) = buyer.address %}
+<div>{{ address }}</div>
+{%- endif %}
+{%- for id in buyer.ids %}
+<div><span class="label">{{ id.label }}</span> <span class="num">{{ id.value }}</span></div>
+{%- endfor %}
+</div>
+</section>
+<div class="lines">
+<table>
+<thead>
+<tr><th>{{ designation_label }}</th><th class="n">{{ qty_label }}</th><th class="n">{{ unit_price_label }}</th>{% if show_line_discount %}<th class="n">{{ line_discount_label }}</th>{% endif %}{% if show_rate %}<th class="n">{{ rate_label }}</th>{% endif %}<th class="n">{{ line_total_label }}</th></tr>
+</thead>
+<tbody>
+{%- for line in lines %}
+<tr><td>{{ line.name }}</td><td class="n num">{{ line.qty }}</td><td class="n"><span class="amount amount-unit-price">{{ line.unit_price }}</span></td>{% if show_line_discount %}<td class="n">{% if let Some(discount) = line.discount %}<span class="amount amount-line-discount">-{{ discount }}</span>{% endif %}</td>{% endif %}{% if let Some(rate) = line.rate %}<td class="n num">{{ rate }}</td>{% endif %}<td class="n"><span class="amount amount-line">{{ line.total }}</span></td></tr>
+{%- endfor %}
+</tbody>
+</table>
+</div>
+<div class="totals">
+<table>
+<tbody>
+<tr><td>{{ total_label }}</td><td class="n"><span class="amount amount-total">{{ total_amount }}</span><span class="cur">{{ currency }}</span></td></tr>
+{%- if let Some(discount) = discount %}
+<tr><td>{{ discount_label }}</td><td class="n"><span class="amount amount-discount">-{{ discount }}</span><span class="cur">{{ currency }}</span></td></tr>
+{%- endif %}
+{%- if let Some(subtotal) = subtotal %}
+<tr><td>{{ subtotal_label }}</td><td class="n"><span class="amount amount-subtotal">{{ subtotal }}</span><span class="cur">{{ currency }}</span></td></tr>
+{%- endif %}
+{%- for tva in tva_rows %}
+<tr><td>{{ tva.label }} <span class="label">{{ tva.base_label }} <span class="amount amount-tva-base">{{ tva.base }}</span></span></td><td class="n"><span class="amount amount-tva">{{ tva.amount }}</span><span class="cur">{{ currency }}</span></td></tr>
+{%- endfor %}
+{%- if let Some(total_ttc) = total_ttc %}
+<tr><td>{{ total_ttc_label }}</td><td class="n"><span class="amount amount-total-ttc">{{ total_ttc }}</span><span class="cur">{{ currency }}</span></td></tr>
+{%- endif %}
+{%- if let Some(stamp) = stamp %}
+<tr><td>{{ stamp_label }}</td><td class="n"><span class="amount amount-stamp">{{ stamp }}</span><span class="cur">{{ currency }}</span></td></tr>
+{%- endif %}
+<tr class="net"><td>{{ net_to_pay_label }}</td><td class="n"><span class="amount amount-net-to-pay">{{ net_to_pay }}</span><span class="cur">{{ currency }}</span></td></tr>
+</tbody>
+</table>
+</div>
+<p class="words">{{ in_words_label }} <strong class="in-words">{{ in_words }}</strong></p>
+<section class="blocks">
+<div class="block">
+<h2>{{ payment_mode_label }}</h2>
+<div>{{ payment_mode }}</div>
+</div>
+{%- if let Some(balance) = balance %}
+<div class="block">
+<h2>{{ balance.title }}</h2>
+<div class="row"><span>{{ balance.old_label }}</span><span><span class="amount amount-old-balance">{{ balance.old }}</span><span class="cur">{{ currency }}</span></span></div>
+<div class="row"><span>{{ balance.this_label }}</span><span><span class="amount amount-this-document">{{ balance.this }}</span><span class="cur">{{ currency }}</span></span></div>
+<div class="row total"><span>{{ balance.total_label }}</span><span><span class="amount amount-total-debt">{{ balance.total }}</span><span class="cur">{{ currency }}</span></span></div>
+</div>
+{%- endif %}
+</section>
+<section class="sign">
+<div>{{ seller_label }} · {{ cachet_label }}</div>
+<div>{{ buyer_label }} · {{ cachet_label }}</div>
+</section>
+</article>
+</body>
+</html>
