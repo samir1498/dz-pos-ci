@@ -387,6 +387,12 @@ async fn another_shops_customer_is_not_found_on_every_route() {
             format!("/customers/{id}/adjustments"),
             Some(json!({ "amount_centimes": 1_000, "note": null })),
         ),
+        ("GET", format!("/customers/{id}/payments"), None),
+        (
+            "POST",
+            format!("/customers/{id}/payments"),
+            Some(json!({ "amount_centimes": 1_000, "payment_mode": "cash", "note": null })),
+        ),
     ] {
         let (status, answer) = call(&other, method, &uri, body).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{method} {uri}: {answer}");
@@ -420,6 +426,8 @@ async fn every_customer_route_needs_the_launch_token() {
         ("PUT", "/customers/1"),
         ("GET", "/customers/1/ledger"),
         ("POST", "/customers/1/adjustments"),
+        ("GET", "/customers/1/payments"),
+        ("POST", "/customers/1/payments"),
     ] {
         let req = Request::builder()
             .method(method)
@@ -494,4 +502,260 @@ async fn an_amount_past_the_safe_integer_bound_is_422_naming_the_field() {
         0,
         "the refused correction landed anyway: {ledger}"
     );
+}
+
+// ---------------------------------------------------------------- payments
+//
+// The unpaid documents below are written straight through the core, on a
+// second connection to the same shop file, rather than sold on credit: the
+// credit sale is being written on its own branch and what these assert is the
+// settlement half of the contract.
+
+/// A facture made out to `customer` for `net` centimes, unpaid, issued on the
+/// day given so the oldest-first order is a fact of the fixture.
+fn a_facture_on_credit(path: &std::path::Path, customer_id: i32, net: i64, day: u32) -> i32 {
+    use dzpos_core::money::{Money, PaymentMode, Regime, Totals};
+    use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry};
+    use dzpos_core::services::documents::{
+        self, BalanceTriple, DocumentKind, NewDocument, PartyBlock, PartyKind, SellerBlock,
+    };
+
+    let mut conn = dzpos_core::db::open(path).unwrap();
+    let net = Money::centimes(net);
+    let issued_at = chrono::NaiveDate::from_ymd_opt(2026, 9, day)
+        .and_then(|d| d.and_hms_opt(10, 0, 0))
+        .unwrap();
+    let before = debt::balance(&mut conn, SHOP, customer_id).unwrap();
+    let doc = documents::issue(
+        &mut conn,
+        SHOP,
+        NewDocument {
+            kind: DocumentKind::Facture,
+            issued_at,
+            user_id: 1,
+            regime: Regime::Reel,
+            payment_mode: PaymentMode::Credit,
+            seller: SellerBlock {
+                name: "Mon magasin".to_string(),
+                rc: None,
+                nif: None,
+                nis: None,
+                ai: None,
+                address: None,
+                phone: None,
+            },
+            customer_id: Some(customer_id),
+            buyer: Some(PartyBlock {
+                name: "Entreprise Benali".to_string(),
+                party_kind: PartyKind::Company,
+                rc: None,
+                nif: None,
+                nis: None,
+                ai: None,
+                address: None,
+            }),
+            ref_document_id: None,
+            balance: Some(BalanceTriple {
+                old_balance: before,
+                remaining_debt: net,
+                total_debt: before.checked_add(net).unwrap(),
+            }),
+            totals: Totals {
+                total_ht: net,
+                discount: Money::ZERO,
+                subtotal_ht: net,
+                tva_by_rate: Vec::new(),
+                tva: Money::ZERO,
+                total_ttc: net,
+                stamp: Money::ZERO,
+                net_to_pay: net,
+            },
+            tendered: None,
+            change: None,
+            lines: Vec::new(),
+        },
+    )
+    .unwrap();
+    debt::append(
+        &mut conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id,
+            document_id: Some(doc.id),
+            kind: DebtKind::Sale,
+            debit: net,
+            credit: Money::ZERO,
+            user_id: 1,
+            note: None,
+        },
+    )
+    .unwrap();
+    doc.id
+}
+
+fn remaining_debt(path: &std::path::Path, document_id: i32) -> i64 {
+    let mut conn = dzpos_core::db::open(path).unwrap();
+    dzpos_core::services::documents::get(&mut conn, SHOP, document_id)
+        .unwrap()
+        .balance
+        .expect("a facture issued on credit carries the balance triple")
+        .remaining_debt
+        .as_centimes()
+}
+
+#[tokio::test]
+async fn a_payment_settles_the_oldest_facture_first_and_answers_the_new_balance() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = i32::try_from(id_of(&made)).unwrap();
+    let first = a_facture_on_credit(&h.path, id, 100_000, 10);
+    let second = a_facture_on_credit(&h.path, id, 200_000, 11);
+
+    let (status, answer) = call(
+        &h.app,
+        "POST",
+        &format!("/customers/{id}/payments"),
+        Some(json!({ "amount_centimes": 150_000, "payment_mode": "cash", "note": "acompte" })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{answer}");
+    assert_eq!(answer["customer_id"], id);
+    assert_eq!(answer["balance_centimes"], 150_000);
+    let payment = &answer["payments"][0];
+    assert_eq!(payment["amount_centimes"], 150_000);
+    assert_eq!(payment["payment_mode"], "cash");
+    assert_eq!(payment["note"], "acompte");
+    assert_eq!(payment["balance_after_centimes"], 150_000);
+    assert_eq!(payment["allocations"][0]["document_id"], first);
+    assert_eq!(payment["allocations"][0]["amount_centimes"], 100_000);
+    assert_eq!(payment["allocations"][1]["document_id"], second);
+    assert_eq!(payment["allocations"][1]["amount_centimes"], 50_000);
+
+    // The document's own column moved with the money, so a reprint says what
+    // is left on this facture and not what it asked for.
+    assert_eq!(remaining_debt(&h.path, first), 0);
+    assert_eq!(remaining_debt(&h.path, second), 150_000);
+
+    // The fiche beside the list carries the same figure.
+    let (_, fiche) = call(&h.app, "GET", &format!("/customers/{id}"), None).await;
+    assert_eq!(fiche["balance_centimes"], 150_000);
+}
+
+#[tokio::test]
+async fn a_payment_above_the_debt_is_422_carrying_what_is_outstanding() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = i32::try_from(id_of(&made)).unwrap();
+    a_facture_on_credit(&h.path, id, 100_000, 10);
+
+    let (status, answer) = call(
+        &h.app,
+        "POST",
+        &format!("/customers/{id}/payments"),
+        Some(json!({ "amount_centimes": 200_000, "payment_mode": "cash", "note": null })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{answer}");
+    assert_eq!(answer["error"]["code"], "validation");
+    // "too much" is useless without the amount that would not have been.
+    assert_eq!(answer["error"]["details"]["field"], "amount_centimes");
+    assert_eq!(answer["error"]["details"]["outstanding_centimes"], 100_000);
+
+    let (_, payments) = call(&h.app, "GET", &format!("/customers/{id}/payments"), None).await;
+    assert_eq!(
+        payments["payments"].as_array().map(Vec::len),
+        Some(0),
+        "a refused payment landed anyway: {payments}"
+    );
+    assert_eq!(payments["balance_centimes"], 100_000);
+}
+
+#[tokio::test]
+async fn a_refusal_with_nothing_to_add_carries_no_details_at_all() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = id_of(&made);
+
+    let (status, answer) = call(
+        &h.app,
+        "POST",
+        &format!("/customers/{id}/adjustments"),
+        Some(json!({ "amount_centimes": 0, "note": null })),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{answer}");
+    assert_eq!(answer["error"]["code"], "validation");
+    assert!(
+        answer["error"].get("details").is_none(),
+        "an error with nothing to add grew a payload: {answer}"
+    );
+}
+
+#[tokio::test]
+async fn the_payments_of_a_customer_read_back_newest_first() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = i32::try_from(id_of(&made)).unwrap();
+    a_facture_on_credit(&h.path, id, 100_000, 10);
+    let second = a_facture_on_credit(&h.path, id, 200_000, 11);
+    for amount in [150_000, 20_000] {
+        let (status, answer) = call(
+            &h.app,
+            "POST",
+            &format!("/customers/{id}/payments"),
+            Some(json!({ "amount_centimes": amount, "payment_mode": "card", "note": null })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{answer}");
+    }
+
+    let (status, answer) = call(&h.app, "GET", &format!("/customers/{id}/payments"), None).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(answer["balance_centimes"], 130_000);
+    let payments = answer["payments"].as_array().unwrap();
+    assert_eq!(payments.len(), 2);
+    assert_eq!(payments[0]["amount_centimes"], 20_000);
+    assert_eq!(payments[0]["allocations"][0]["document_id"], second);
+    assert_eq!(payments[1]["amount_centimes"], 150_000);
+}
+
+#[tokio::test]
+async fn a_payment_of_nothing_and_a_mode_that_is_not_one_are_both_refused() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = i32::try_from(id_of(&made)).unwrap();
+    a_facture_on_credit(&h.path, id, 100_000, 10);
+
+    for (body, code) in [
+        (
+            json!({ "amount_centimes": 0, "payment_mode": "cash", "note": null }),
+            "validation",
+        ),
+        // Settling a credit with more credit is not a payment.
+        (
+            json!({ "amount_centimes": 1_000, "payment_mode": "credit", "note": null }),
+            "bad_request",
+        ),
+        (
+            json!({ "amount_centimes": 1_000, "payment_mode": "cash", "bogus": 1 }),
+            "bad_request",
+        ),
+    ] {
+        let (status, answer) = call(
+            &h.app,
+            "POST",
+            &format!("/customers/{id}/payments"),
+            Some(body.clone()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}: {answer}");
+        assert_eq!(answer["error"]["code"], code, "{body}");
+    }
+
+    let (_, payments) = call(&h.app, "GET", &format!("/customers/{id}/payments"), None).await;
+    assert_eq!(payments["payments"].as_array().map(Vec::len), Some(0));
 }

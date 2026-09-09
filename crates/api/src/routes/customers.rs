@@ -10,12 +10,15 @@ use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
+use dzpos_core::db::Conn;
+use dzpos_core::error::CoreError;
 use dzpos_core::services::customers::NewCustomer;
-use dzpos_core::services::{customers as service, debt};
+use dzpos_core::services::{clock, customers as service, debt};
 use serde::Deserialize;
 
 use crate::dto::{
-    money_field, AdjustmentDto, CustomerDto, CustomerLedgerDto, CustomerWriteDto, NewCustomerDto,
+    money_field, AdjustmentDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto,
+    CustomerWriteDto, NewCustomerDto, NewPaymentDto, PaymentDto,
 };
 use crate::error::ApiError;
 use crate::AppState;
@@ -134,6 +137,69 @@ pub async fn adjust(
         .blocking(move |c| debt::adjust(c, shop, user, id, amount, note))
         .await?;
     Ok((StatusCode::CREATED, Json(envelope(id, written.statement))))
+}
+
+/// Money against the debt (features.md §2). One transaction in the core: the
+/// movement, the documents it settled and the remaining debt on each of them.
+///
+/// The answer is the whole list of payments again, the way an adjustment
+/// answers the whole ledger: the screen shows the new payment with its
+/// allocations and the new balance without a second call, and what it shows
+/// is what the core stored rather than what the form sent.
+pub async fn pay(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    body: Result<Json<NewPaymentDto>, JsonRejection>,
+) -> Result<(StatusCode, Json<CustomerPaymentsDto>), ApiError> {
+    let id = path_id(id)?;
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let amount = dto.amount()?;
+    let mode = dto.payment_mode.into();
+    let note = dto.note;
+    let shop = state.shop_id;
+    // TODO(M4): the user comes from the request identity, not from the state.
+    let user = state.user_id;
+    // The moment is the server's, like a document's `issued_at`: a till whose
+    // clock is wrong must not decide which side of a statement's date range a
+    // payment falls on.
+    let at = clock::now();
+    let written = state
+        .blocking(move |c| {
+            debt::pay(c, shop, user, id, amount, mode, note, at)?;
+            payments_envelope(c, shop, id)
+        })
+        .await?;
+    Ok((StatusCode::CREATED, Json(written)))
+}
+
+/// The customer's payments, newest first, each with what it settled.
+pub async fn payments(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+) -> Result<Json<CustomerPaymentsDto>, ApiError> {
+    let id = path_id(id)?;
+    let shop = state.shop_id;
+    let found = state
+        .blocking(move |c| payments_envelope(c, shop, id))
+        .await?;
+    Ok(Json(found))
+}
+
+fn payments_envelope(
+    conn: &mut Conn,
+    shop: i32,
+    customer_id: i32,
+) -> Result<CustomerPaymentsDto, CoreError> {
+    let payments = debt::payments(conn, shop, customer_id)?;
+    // The balance is the ledger's whole sum, not the newest payment's: a sale
+    // written after the last payment moved it, and the fiche beside this list
+    // shows the same figure.
+    let balance = debt::balance(conn, shop, customer_id)?;
+    Ok(CustomerPaymentsDto {
+        customer_id,
+        balance_centimes: balance.as_centimes(),
+        payments: payments.into_iter().map(PaymentDto::from).collect(),
+    })
 }
 
 fn envelope(customer_id: i32, statement: debt::Statement) -> CustomerLedgerDto {

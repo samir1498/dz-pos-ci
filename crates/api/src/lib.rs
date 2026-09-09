@@ -444,6 +444,8 @@ pub fn router_with_origin(
             get(routes::customers::get_one).put(routes::customers::update),
         )
         .route("/customers/{id}/ledger", get(routes::customers::ledger))
+        .route("/customers/{id}/payments", get(routes::customers::payments))
+        .route("/customers/{id}/payments", post(routes::customers::pay))
         .route(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),

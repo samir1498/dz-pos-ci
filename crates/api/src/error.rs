@@ -62,6 +62,22 @@ struct Body {
 struct Payload {
     code: &'static str,
     message: String,
+    /// Left out entirely when the refusal has nothing to add, so the body a
+    /// caller already parses is the body it was.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<Details>,
+}
+
+/// What a refusal carries beyond its code: the field it is about, and the
+/// figures a screen needs to say something a person can act on. A payment
+/// above the debt is the first of them: "too much" is useless without the
+/// amount that would not have been.
+#[derive(Serialize)]
+struct Details {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outstanding_centimes: Option<i64>,
 }
 
 impl ApiError {
@@ -77,6 +93,24 @@ impl ApiError {
             }
             other => other.to_string(),
         }
+    }
+
+    /// The figures this refusal carries. `None` for every error that has
+    /// only a code to give, which is all of them but one today.
+    fn details(&self) -> Option<Details> {
+        let outstanding = match self {
+            ApiError::Core(CoreError::PaymentAboveDebt {
+                outstanding_centimes,
+            })
+            | ApiError::Request(CoreError::PaymentAboveDebt {
+                outstanding_centimes,
+            }) => *outstanding_centimes,
+            _ => return None,
+        };
+        Some(Details {
+            field: Some("amount_centimes"),
+            outstanding_centimes: Some(outstanding),
+        })
     }
 
     fn parts(&self) -> (StatusCode, &'static str) {
@@ -104,7 +138,9 @@ impl ApiError {
 /// and the caller has nothing to correct: 500, not 422.
 const fn status_for(e: &CoreError) -> StatusCode {
     match e {
-        CoreError::Validation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+        CoreError::Validation { .. } | CoreError::PaymentAboveDebt { .. } => {
+            StatusCode::UNPROCESSABLE_ENTITY
+        }
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
         // A template that will not render is the app's own bug: the
@@ -153,10 +189,15 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = self.parts();
         let message = self.message();
+        let details = self.details();
         let mut res = (
             status,
             Json(Body {
-                error: Payload { code, message },
+                error: Payload {
+                    code,
+                    message,
+                    details,
+                },
             }),
         )
             .into_response();

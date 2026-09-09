@@ -10,15 +10,17 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto,
-    CustomerDto, CustomerLedgerDto, CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto,
-    DocumentKindDto, DocumentStatusDto, HealthDto, NewCustomerDto, NewProductDto, NewSaleDto,
-    NewSaleLineDto, PartyKindDto, PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto,
-    RestoreDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto, UnitDto,
+    AdjustmentDto, ApiErrorDetailsDto, ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto,
+    CategoryDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto,
+    DatedRegimeDto, DebtEntryDto, DebtKindDto, DocumentKindDto, DocumentStatusDto, HealthDto,
+    NewCustomerDto, NewPaymentDto, NewProductDto, NewSaleDto, NewSaleLineDto, PartyKindDto,
+    PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto,
+    RegimeChangeDto, RegimeDto, RestoreDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
+    SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 32] = [
+const FILES: [&str; 38] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -26,6 +28,7 @@ const FILES: [&str; 32] = [
     "HealthDto.ts",
     "ApiErrorDto.ts",
     "ApiErrorPayloadDto.ts",
+    "ApiErrorDetailsDto.ts",
     "StoreDto.ts",
     "RegimeDto.ts",
     "DatedRegimeDto.ts",
@@ -51,6 +54,11 @@ const FILES: [&str; 32] = [
     "DebtEntryDto.ts",
     "CustomerLedgerDto.ts",
     "AdjustmentDto.ts",
+    "PaymentMethodDto.ts",
+    "PaymentAllocationDto.ts",
+    "PaymentDto.ts",
+    "CustomerPaymentsDto.ts",
+    "NewPaymentDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -140,6 +148,12 @@ fn export_bindings() {
     DebtEntryDto::export_all(&cfg).unwrap();
     CustomerLedgerDto::export_all(&cfg).unwrap();
     AdjustmentDto::export_all(&cfg).unwrap();
+    ApiErrorDetailsDto::export_all(&cfg).unwrap();
+    PaymentMethodDto::export_all(&cfg).unwrap();
+    PaymentAllocationDto::export_all(&cfg).unwrap();
+    PaymentDto::export_all(&cfg).unwrap();
+    CustomerPaymentsDto::export_all(&cfg).unwrap();
+    NewPaymentDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");
