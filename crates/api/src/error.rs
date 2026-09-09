@@ -44,6 +44,20 @@ struct Payload {
 }
 
 impl ApiError {
+    /// What the wire carries as `message`. A storage fault keeps its SQL
+    /// text on the server: the driver names tables and columns, and
+    /// docs/architecture.md promises no Rust or SQL text ever reaches a
+    /// screen.
+    fn message(&self) -> String {
+        match self {
+            ApiError::Core(CoreError::Query(_) | CoreError::Db(_))
+            | ApiError::Request(CoreError::Query(_) | CoreError::Db(_)) => {
+                "the shop file could not complete the operation".to_owned()
+            }
+            other => other.to_string(),
+        }
+    }
+
     fn parts(&self) -> (StatusCode, &'static str) {
         match self {
             // The code is the core's own (architecture.md: map, never
@@ -106,7 +120,7 @@ fn unknown_field(text: &str) -> Option<String> {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = self.parts();
-        let message = self.to_string();
+        let message = self.message();
         (
             status,
             Json(Body {
@@ -139,5 +153,25 @@ mod unknown_field_tests {
             Some("bogus")
         );
         assert_eq!(unknown_field("something else"), None);
+    }
+
+    #[test]
+    fn a_storage_fault_keeps_the_drivers_text_off_the_wire() {
+        use super::{ApiError, CoreError};
+        use diesel::result::{DatabaseErrorKind, Error};
+        let raw = Error::DatabaseError(
+            DatabaseErrorKind::UniqueViolation,
+            Box::new("UNIQUE constraint failed: products.barcode".to_owned()),
+        );
+        let err = ApiError::Core(CoreError::Query(raw));
+        let message = err.message();
+        assert!(!message.contains("constraint"), "{message}");
+        assert!(!message.contains("products"), "{message}");
+        assert_eq!(err.parts().1, "storage");
+        assert_eq!(
+            ApiError::Core(CoreError::validation("name", "is empty")).message(),
+            CoreError::validation("name", "is empty").to_string(),
+            "a rule's own message still goes through"
+        );
     }
 }
