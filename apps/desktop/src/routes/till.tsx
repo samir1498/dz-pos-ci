@@ -790,6 +790,10 @@ function Receipt({ id }: { id: number }) {
         <iframe
           title={t("till_receipt")}
           srcDoc={ticket.data}
+          // An empty sandbox: the ticket carries no script and needs no
+          // origin, so the page it renders in cannot reach this one even if
+          // a product name ever slipped past the template's escaping.
+          sandbox=""
           className="h-96 w-full border-0"
           data-testid="till-ticket"
         />
