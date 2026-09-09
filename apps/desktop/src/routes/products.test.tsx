@@ -238,14 +238,13 @@ describe("the add form", () => {
 
   test("when the categories cannot be loaded the form stays closed and nothing is posted", async () => {
     const user = userEvent.setup();
-    const answer = fetchMock.getMockImplementation();
-    fetchMock.mockImplementation((input: unknown, init?: RequestInit) => {
-      if (String(input).endsWith("/categories")) {
-        return Promise.resolve(json(500, { error: { code: "storage", message: "x" } }));
-      }
-      if (answer === undefined) throw new Error("no stub");
-      return answer(input, init);
-    });
+    fetchMock.mockImplementation((input: unknown) =>
+      Promise.resolve(
+        String(input).endsWith("/categories")
+          ? json(500, { error: { code: "storage", message: "x" } })
+          : json(200, rows),
+      ),
+    );
     mount();
     await screen.findByText("Aucun produit pour le moment.");
     await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
