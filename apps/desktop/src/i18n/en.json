@@ -83,5 +83,17 @@
   "field_valid_from": "From",
   "regime_change_hint": "The change applies to sales from that day on. Tickets already issued keep the regime they were made under.",
   "action_apply": "Apply",
-  "error_day_invalid": "Invalid date."
+  "error_day_invalid": "Invalid date.",
+  "settings_backups": "Backups",
+  "settings_backups_hint": "A copy of the shop file is taken every day. The last thirty are kept.",
+  "backups_newest_label": "Latest backup",
+  "backups_none": "No backup yet.",
+  "backups_created": "Backup taken.",
+  "backups_restored": "Backup restored.",
+  "backups_confirm_restore": "Restore this backup? Everything changed since will be lost. A copy of the current state is kept beside the shop file.",
+  "action_backup_now": "Back up now",
+  "action_restore": "Restore",
+  "action_restoring": "Restoring…",
+  "unit_kb": "kB",
+  "unit_mb": "MB"
 }

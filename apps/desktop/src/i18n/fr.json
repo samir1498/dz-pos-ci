@@ -83,5 +83,17 @@
   "field_valid_from": "À partir du",
   "regime_change_hint": "Le changement s'applique aux ventes à partir de cette date. Les tickets déjà émis gardent le régime sous lequel ils ont été faits.",
   "action_apply": "Appliquer",
-  "error_day_invalid": "Date invalide."
+  "error_day_invalid": "Date invalide.",
+  "settings_backups": "Sauvegardes",
+  "settings_backups_hint": "Une copie du fichier du magasin est faite chaque jour. Les trente dernières sont gardées.",
+  "backups_newest_label": "Dernière sauvegarde",
+  "backups_none": "Aucune sauvegarde pour l'instant.",
+  "backups_created": "Sauvegarde faite.",
+  "backups_restored": "Sauvegarde restaurée.",
+  "backups_confirm_restore": "Restaurer cette sauvegarde ? Les changements faits depuis seront perdus. Une copie de l'état actuel est gardée à côté du fichier du magasin.",
+  "action_backup_now": "Sauvegarder maintenant",
+  "action_restore": "Restaurer",
+  "action_restoring": "Restauration…",
+  "unit_kb": "ko",
+  "unit_mb": "Mo"
 }

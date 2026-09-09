@@ -38,3 +38,4 @@ export const api = createClient(apiBaseUrl(), { token: apiToken() });
 export const productsQueryKey: readonly string[] = ["products"];
 export const categoriesQueryKey: readonly string[] = ["categories"];
 export const settingsQueryKey: readonly string[] = ["settings"];
+export const backupsQueryKey: readonly string[] = ["backups"];

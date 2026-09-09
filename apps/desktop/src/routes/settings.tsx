@@ -9,6 +9,7 @@ import { useState } from "react";
 import { ApiError } from "@dzpos/shared";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
 import { api, settingsQueryKey } from "@/api";
+import { BackupsPanel } from "@/components/BackupsPanel";
 import { isKey, useTranslation, type Key } from "@/i18n";
 
 export const Route = createFileRoute("/settings")({ component: SettingsScreen });
@@ -76,6 +77,7 @@ export function SettingsScreen() {
             onSaved={setStoreSaved}
           />
           <RegimePanel current={settings.data.regime} planned={settings.data.regime_planned} />
+          <BackupsPanel />
         </>
       ) : null}
     </section>
