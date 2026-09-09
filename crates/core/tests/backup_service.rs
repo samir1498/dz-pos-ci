@@ -204,6 +204,13 @@ fn a_backup_is_due_when_there_is_none_or_the_newest_is_a_day_old() {
     let now = at(10, 12);
     assert!(backup::is_due(None, now), "no backup at all");
     assert!(backup::is_due(Some(at(9, 11)), now), "25 hours old");
+    // The boundary itself: a day exactly is a day, so the copy is due. This
+    // is the assertion that goes red if the comparison loosens to "more
+    // than a day", which would push every copy an hour later than the last.
+    assert!(
+        backup::is_due(Some(at(9, 12)), now),
+        "24 hours old to the second"
+    );
     assert!(!backup::is_due(Some(at(9, 13)), now), "23 hours old");
     assert!(!backup::is_due(Some(at(10, 12)), now), "taken this minute");
     // A clock that went backwards (the till's date was corrected) must not
