@@ -1,4 +1,4 @@
-# CLAUDE.md — dz-pos
+# CLAUDE.md for dz-pos
 
 Placeholder-named product. Read `README.md` first. Every rule lives in
 `context/` (the pc-ctx store) so the laptop clone and every session read
@@ -29,7 +29,8 @@ the same pages; this file is the index.
 
 ## Non-negotiables (repeated here because they are cheap to forget)
 - Money is integer centimes, checked arithmetic, no `f64` near a total.
-- No `unwrap` / `expect` in shipped code (clippy denies it). No TS `as`.
+- No `unwrap` / `expect` in shipped code (clippy denies it). No TS `as`
+  type assertions (`as const` and `satisfies` are fine).
 - Branch + PR for code, `ctx:` trailer in the trailer block; only `context/`
   bookkeeping goes straight to `main`.
 - Never excuse a failure as already present before your change; state the

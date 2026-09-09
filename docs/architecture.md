@@ -1,4 +1,4 @@
-# Architecture — how dz-pos is built
+# Architecture: how dz-pos is built
 
 Normative. The reasoning behind each rule is in the research repo
 (`architecture-notes.md` in the dz-pos competitor folder); this file is
@@ -113,6 +113,26 @@ only in `packages/shared`.
   disk encryption on the server; the app does not roll its own. Backups are
   copies of the file, restorable from the settings screen and tested by
   the backup test opening the copy.
+
+## Release
+
+Decided (Samir, 2026-09-08): the version is semver plus the git short hash
+plus the build date, all three embedded in the binary at build time and
+shown in About. The bundle identifier `com.dzpos.app` changes exactly
+once, with the final name, before the first tag (open decision 2 in
+`features.md`).
+
+Raised in the 2026-09-08 handoff, still open, each settled before
+`docs/roadmap.md` M5 closes:
+
+- Whether the version also heads the log file and the support bundle.
+- Migrations tied to the app version, with an automatic backup of the
+  SQLite file before any migration runs.
+- Tauri updater signing key: who generates it and who holds it; it never
+  enters the repo, CI signs with a secret.
+- Windows code-signing certificate: cost and lead time, for Anouar.
+- Whether a tag on `main` is the only thing that builds the installer and
+  publishes the GitHub release.
 
 ## Testing matrix
 

@@ -23,6 +23,11 @@ function isLang(v: string | null): v is Lang {
   return v !== null && v in LANGS;
 }
 
+/// English is the key set every language is checked against.
+export function isKey(v: string): v is Key {
+  return v in en;
+}
+
 function initialLang(): Lang {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);

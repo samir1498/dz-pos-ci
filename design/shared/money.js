@@ -1,56 +1,139 @@
-// Money in integer centimes. First draft of packages/shared.
+// Money in integer centimes. First draft of packages/shared; the Rust core
+// in crates/core/src/money is the reference and both are pinned by the same
+// files under fixtures/money/, loaded here by money.test.js.
 // Rules mirror docs/features.md "Fiscal rules"; fixture names in comments.
 
-export const STAMP_RATE_PCT = 1; // stamp_cash_only_clamped
-export const STAMP_MIN = 500; // 5 DZD
-export const STAMP_MAX = 250_000; // 2 500 DZD
+/** Basis points in one whole: 10 000 bps = 100 %. */
+export const BPS_PER_WHOLE = 10_000;
 
-// Half away from zero on an integer × percent. tva_rounding_once_per_rate
-export function pct(amount, ratePct) {
-  const raw = amount * ratePct;
-  const sign = raw < 0 ? -1 : 1;
-  return sign * Math.floor((Math.abs(raw) + 50) / 100);
+// ---- droit de timbre: stamp_progressive_tranches ----
+/** Nothing is due at or below 300,00 DA. */
+export const STAMP_FLOOR = 30_000;
+/** One tranche, 100,00 DA; the count is rounded up. */
+export const STAMP_TRANCHE = 10_000;
+/** Highest amount charged at 1,00 DA per tranche: 30 000,00 DA. */
+export const STAMP_BAND_LOW = 3_000_000;
+/** Highest amount charged at 1,50 DA per tranche: 100 000,00 DA. */
+export const STAMP_BAND_MID = 10_000_000;
+export const STAMP_RATE_LOW = 100;
+export const STAMP_RATE_MID = 150;
+export const STAMP_RATE_HIGH = 200;
+/** Nothing due is charged below 5,00 DA. */
+export const STAMP_MIN = 500;
+
+/** Refused input, named like the Rust MoneyError variant. */
+export class MoneyError extends Error {
+  constructor(variant) {
+    super(variant);
+    this.name = "MoneyError";
+    this.variant = variant;
+  }
 }
 
-export function clamp(v, lo, hi) {
-  return Math.min(hi, Math.max(lo, v));
+/** amount × rate, rounded once to the centime, half away from zero.
+ *  tva_rounding_once_per_rate */
+export function pct(amount, rateBps) {
+  if (rateBps < 0 || rateBps > BPS_PER_WHOLE) throw new MoneyError("RateOutOfRange");
+  const raw = amount * rateBps;
+  const sign = raw < 0 ? -1 : 1;
+  return sign * Math.floor((Math.abs(raw) + BPS_PER_WHOLE / 2) / BPS_PER_WHOLE);
+}
+
+/** Droit de timbre on total_ttc. Cash only; zero at or under 300,00 DA;
+ *  ceil(amount / 100,00 DA) tranches at the band rate of the whole amount;
+ *  minimum 5,00 DA; no cap. stamp_progressive_tranches */
+export function stamp(totalTtc, mode) {
+  if (mode !== "cash" || totalTtc <= STAMP_FLOOR) return 0;
+  const tranches = Math.ceil(totalTtc / STAMP_TRANCHE);
+  const rate =
+    totalTtc <= STAMP_BAND_LOW
+      ? STAMP_RATE_LOW
+      : totalTtc <= STAMP_BAND_MID
+        ? STAMP_RATE_MID
+        : STAMP_RATE_HIGH;
+  return Math.max(tranches * rate, STAMP_MIN);
+}
+
+/** HT per rate group, by rising rate, and the sum of the groups. */
+function groupByRate(lines) {
+  const groups = [];
+  let totalHt = 0;
+  for (const l of lines) {
+    const lineDiscount = l.lineDiscount || 0;
+    if (l.qty < 0) throw new MoneyError("NegativeQuantity");
+    if (l.unitPrice < 0) throw new MoneyError("NegativeUnitPrice");
+    if (lineDiscount < 0) throw new MoneyError("NegativeDiscount");
+    const gross = l.qty * l.unitPrice;
+    if (lineDiscount > gross) throw new MoneyError("LineDiscountAboveLine");
+    const net = gross - lineDiscount;
+    totalHt += net;
+    const g = groups.find((x) => x.rateBps === l.rateBps);
+    if (g) g.ht += net;
+    else groups.push({ rateBps: l.rateBps, ht: net });
+  }
+  groups.sort((a, b) => a.rateBps - b.rateBps);
+  return { groups, totalHt };
+}
+
+/** The global discount each group carries: its proportional share rounded
+ *  down, the leftover centimes going to the group with the largest HT
+ *  subtotal, the lower rate winning a tie, never past what the group has
+ *  left.
+ *  discount_spread_largest_remainder */
+function spreadDiscount(groups, totalHt, discount) {
+  const shares = groups.map(() => 0);
+  if (discount === 0 || groups.length === 0) return shares;
+  // BigInt keeps discount × ht exact past Number.MAX_SAFE_INTEGER.
+  const total = BigInt(totalHt);
+  let allocated = 0;
+  groups.forEach((g, i) => {
+    shares[i] = Number((BigInt(discount) * BigInt(g.ht)) / total);
+    allocated += shares[i];
+  });
+  let remainder = discount - allocated;
+  // The leftover centimes go to the largest HT group, but a share never
+  // exceeds its group's HT: when the discount leaves fewer centimes than
+  // there are groups the largest one may have no room, and what it cannot
+  // take rolls to the next largest. Groups rise by rate and the sort is
+  // stable, so the lower rate wins a tie.
+  const bySize = groups.map((g, i) => i).sort((a, b) => groups[b].ht - groups[a].ht);
+  for (const i of bySize) {
+    if (remainder === 0) break;
+    const taken = Math.min(groups[i].ht - shares[i], remainder);
+    shares[i] += taken;
+    remainder -= taken;
+  }
+  return shares;
 }
 
 /**
- * lines: [{ qty, unitPrice, lineDiscount, tvaRate }]
- * opts: { globalDiscount, paymentMode, stampEnabled }
+ * Every column of the totals table in docs/features.md §3.
+ * lines: [{ qty, unitPrice, lineDiscount, rateBps }]
+ * opts: { globalDiscount, paymentMode, stampEnabled, regime }
  */
 export function computeTotals(lines, opts) {
-  const byRate = new Map();
-  let totalHt = 0;
-  for (const l of lines) {
-    const lineHt = l.qty * l.unitPrice - (l.lineDiscount || 0);
-    totalHt += lineHt;
-    byRate.set(l.tvaRate, (byRate.get(l.tvaRate) || 0) + lineHt);
-  }
-  const discount = clamp(opts.globalDiscount || 0, 0, totalHt);
-  // Global discount spread across rate groups proportionally, remainder to the largest.
-  let allocated = 0;
-  const subtotalByRate = [];
-  const groups = [...byRate.entries()].sort((a, b) => b[1] - a[1]);
-  groups.forEach(([rate, ht], i) => {
-    let share = totalHt === 0 ? 0 : Math.floor((discount * ht) / totalHt);
-    if (i === groups.length - 1) share = discount - allocated;
-    allocated += share;
-    subtotalByRate.push({ rate, subtotal: ht - share });
-  });
+  const { groups, totalHt } = groupByRate(lines);
+  const discount = opts.globalDiscount || 0;
+  if (discount < 0) throw new MoneyError("NegativeDiscount");
+  if (discount > totalHt) throw new MoneyError("GlobalDiscountAboveTotal");
   const subtotalHt = totalHt - discount;
+
+  // Under the IFU the unit price is the single price: no TVA row, no TVA.
+  // regime_ifu_prints_no_tva
+  const tvaByRate = [];
   let tva = 0;
-  const tvaByRate = subtotalByRate.map(({ rate, subtotal }) => {
-    const amount = pct(subtotal, rate);
-    tva += amount;
-    return { rate, base: subtotal, amount };
-  });
+  if ((opts.regime || "reel") === "reel") {
+    const shares = spreadDiscount(groups, totalHt, discount);
+    groups.forEach((g, i) => {
+      const base = g.ht - shares[i];
+      const amount = pct(base, g.rateBps);
+      tva += amount;
+      tvaByRate.push({ rateBps: g.rateBps, base, amount });
+    });
+  }
+
   const totalTtc = subtotalHt + tva;
-  const stamp =
-    opts.stampEnabled && opts.paymentMode === "cash" && totalTtc > 0
-      ? clamp(pct(totalTtc, STAMP_RATE_PCT), STAMP_MIN, STAMP_MAX)
-      : 0;
+  const due = opts.stampEnabled ? stamp(totalTtc, opts.paymentMode) : 0;
   return {
     totalHt,
     discount,
@@ -58,8 +141,8 @@ export function computeTotals(lines, opts) {
     tvaByRate,
     tva,
     totalTtc,
-    stamp,
-    netToPay: totalTtc + stamp,
+    stamp: due,
+    netToPay: totalTtc + due,
   };
 }
 
@@ -82,99 +165,144 @@ export function fmtInt(centimes, lang = "fr") {
   });
 }
 
-// ---- amount in words: fr and en implemented; ar is a static placeholder
-// in the mockup (words_ar_golden pending). ----
-const FR_U = [
-  "zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf",
-  "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize",
-  "dix-sept", "dix-huit", "dix-neuf",
-];
-const FR_T = ["", "", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"];
+// ---- amount in words: fr and en follow crates/core/src/money/words.rs
+// rule for rule, and design/money.test.js pins both to fixtures/money/
+// words_{fr,en}_golden.json. Arabic stays a placeholder in the mockup until
+// the native review (R6). ----
 
-function fr999(n) {
-  let out = [];
-  const h = Math.floor(n / 100);
-  const r = n % 100;
-  if (h) out.push(h === 1 ? "cent" : `${FR_U[h]} cent${r === 0 ? "s" : ""}`);
-  if (r) {
-    if (r < 20) out.push(FR_U[r]);
-    else {
-      const t = Math.floor(r / 10);
-      const u = r % 10;
-      if (t === 7 || t === 9) {
-        out.push(`${FR_T[t]}${u === 1 && t === 7 ? " et " : "-"}${FR_U[10 + u]}`);
-      } else {
-        let s = FR_T[t];
-        if (u === 1 && t !== 8) s += " et un";
-        else if (u) s += `-${FR_U[u]}`;
-        else if (t === 8) s += "s";
-        out.push(s);
-      }
-    }
-  }
-  return out.join(" ");
-}
+/** The largest amount in dinars the three scales cover: 999 999 999 999. */
+const MAX_WORDS_DINARS = 999_999_999_999;
 
-function frWords(n) {
-  if (n === 0) return "zéro";
-  const parts = [];
-  const scales = [
-    [1_000_000_000, "milliard", "milliards"],
-    [1_000_000, "million", "millions"],
-    [1000, "mille", "mille"],
+function groups(n) {
+  return [
+    Math.floor(n / 1_000_000_000),
+    Math.floor(n / 1_000_000) % 1000,
+    Math.floor(n / 1000) % 1000,
+    n % 1000,
   ];
-  for (const [v, s1, sN] of scales) {
-    const q = Math.floor(n / v);
-    if (q) {
-      parts.push(q === 1 && v === 1000 ? s1 : `${fr999(q)} ${q > 1 ? sN : s1}`);
-      n %= v;
-    }
-  }
-  if (n) parts.push(fr999(n));
-  return parts.join(" ");
 }
 
-const EN_U = [
-  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-  "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-  "seventeen", "eighteen", "nineteen",
+const FR_UNIT = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"];
+const FR_TEN_PLUS = [
+  "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf",
 ];
-const EN_T = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const FR_TENS = { 2: "vingt", 3: "trente", 4: "quarante", 5: "cinquante", 6: "soixante" };
 
-function en999(n) {
-  const out = [];
-  const h = Math.floor(n / 100);
-  const r = n % 100;
-  if (h) out.push(`${EN_U[h]} hundred`);
-  if (r < 20 && r) out.push(EN_U[r]);
-  else if (r) out.push(`${EN_T[Math.floor(r / 10)]}${r % 10 ? "-" + EN_U[r % 10] : ""}`);
-  return out.join(" ");
+// `pluralS` is false when a number word follows, which is what stops the
+// `s` of `quatre-vingts` before `mille`.
+function frUnder100(n, pluralS) {
+  const tens = Math.floor(n / 10);
+  const unit = n % 10;
+  if (tens === 0) return FR_UNIT[unit];
+  if (tens === 1) return FR_TEN_PLUS[unit];
+  if (tens <= 6) {
+    const base = FR_TENS[tens];
+    if (unit === 0) return base;
+    if (unit === 1) return `${base}-et-un`;
+    return `${base}-${FR_UNIT[unit]}`;
+  }
+  if (tens === 7) {
+    if (unit === 0) return "soixante-dix";
+    if (unit === 1) return "soixante-et-onze";
+    return `soixante-${FR_TEN_PLUS[unit]}`;
+  }
+  if (tens === 8) {
+    if (unit === 0) return pluralS ? "quatre-vingts" : "quatre-vingt";
+    return `quatre-vingt-${FR_UNIT[unit]}`;
+  }
+  return `quatre-vingt-${FR_TEN_PLUS[unit]}`;
 }
 
-function enWords(n) {
-  if (n === 0) return "zero";
+function frGroup(g, pluralS) {
+  const hundreds = Math.floor(g / 100);
+  const rest = g % 100;
+  let head = "";
+  if (hundreds === 1) head = "cent";
+  // `cent` takes the s only when it is multiplied and final.
+  else if (hundreds > 1) head = `${FR_UNIT[hundreds]}-cent${rest === 0 && pluralS ? "s" : ""}`;
+  if (rest === 0) return head;
+  const tail = frUnder100(rest, pluralS);
+  return hundreds === 0 ? tail : `${head}-${tail}`;
+}
+
+// The number in words, and whether it ends on `million` or `milliard`.
+// Those two are nouns, so what they count takes `de`: `deux millions de
+// dinars`, against `deux millions deux-cents dinars`.
+function frNumber(n) {
+  if (n === 0) return ["zéro", false];
+  const [milliards, millions, thousands, units] = groups(n);
   const parts = [];
-  for (const [v, s] of [[1_000_000_000, "billion"], [1_000_000, "million"], [1000, "thousand"]]) {
-    const q = Math.floor(n / v);
-    if (q) {
-      parts.push(`${en999(q)} ${s}`);
-      n %= v;
-    }
+  if (milliards > 0) parts.push(`${frGroup(milliards, true)} milliard${milliards > 1 ? "s" : ""}`);
+  if (millions > 0) parts.push(`${frGroup(millions, true)} million${millions > 1 ? "s" : ""}`);
+  // `mille` is invariable and hyphenates onto the units group.
+  const tail = [];
+  if (thousands === 1) tail.push("mille");
+  else if (thousands > 1) tail.push(`${frGroup(thousands, false)}-mille`);
+  if (units > 0) tail.push(frGroup(units, true));
+  const joined = tail.join("-");
+  if (joined) parts.push(joined);
+  return [parts.join(" "), joined === ""];
+}
+
+function fr(dinars, sub) {
+  const [number, endsOnANoun] = frNumber(dinars);
+  const unit = dinars <= 1 ? "dinar" : "dinars";
+  let out = `${number} ${endsOnANoun ? "de " : ""}${unit}`;
+  if (sub > 0) out += ` et ${frUnder100(sub, true)} ${sub === 1 ? "centime" : "centimes"}`;
+  return out;
+}
+
+const EN_UNDER_20 = [
+  "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+];
+const EN_TENS = { 2: "twenty", 3: "thirty", 4: "forty", 5: "fifty", 6: "sixty", 7: "seventy", 8: "eighty", 9: "ninety" };
+
+function enUnder100(n) {
+  if (n < 20) return EN_UNDER_20[n];
+  const base = EN_TENS[Math.floor(n / 10)];
+  const unit = n % 10;
+  return unit === 0 ? base : `${base}-${EN_UNDER_20[unit]}`;
+}
+
+function enGroup(g) {
+  const hundreds = Math.floor(g / 100);
+  const rest = g % 100;
+  if (hundreds === 0) return enUnder100(rest);
+  if (rest === 0) return `${EN_UNDER_20[hundreds]} hundred`;
+  return `${EN_UNDER_20[hundreds]} hundred and ${enUnder100(rest)}`;
+}
+
+function enNumber(n) {
+  if (n === 0) return "zero";
+  const [billions, millions, thousands, units] = groups(n);
+  const parts = [];
+  if (billions > 0) parts.push(`${enGroup(billions)} billion`);
+  if (millions > 0) parts.push(`${enGroup(millions)} million`);
+  if (thousands > 0) parts.push(`${enGroup(thousands)} thousand`);
+  if (units > 0) {
+    // British usage: "one thousand and one", "one thousand two hundred".
+    if (parts.length > 0 && units < 100) parts.push(`and ${enUnder100(units)}`);
+    else parts.push(enGroup(units));
   }
-  if (n) parts.push(en999(n));
   return parts.join(" ");
 }
 
+function en(dinars, sub) {
+  let out = `${enNumber(dinars)} ${dinars === 1 ? "dinar" : "dinars"}`;
+  if (sub > 0) out += ` and ${enUnder100(sub)} ${sub === 1 ? "centime" : "centimes"}`;
+  return out;
+}
+
+/** `net_to_pay` written out in `lang`, dinars and centimes. Throws the
+ *  same two refusals as the core: a negative amount, and one past the
+ *  scales it knows. */
 export function amountInWords(centimes, lang) {
+  if (!Number.isSafeInteger(centimes) || centimes < 0) throw new MoneyError("Negative");
   const dinars = Math.floor(centimes / 100);
-  const cents = centimes % 100;
-  if (lang === "fr") {
-    const d = `${frWords(dinars)} dinar${dinars > 1 ? "s" : ""}`;
-    return cents ? `${d} et ${frWords(cents)} centime${cents > 1 ? "s" : ""}` : d;
-  }
-  if (lang === "en") {
-    const d = `${enWords(dinars)} dinar${dinars > 1 ? "s" : ""}`;
-    return cents ? `${d} and ${enWords(cents)} centime${cents > 1 ? "s" : ""}` : d;
-  }
+  const sub = centimes % 100;
+  if (dinars > MAX_WORDS_DINARS) throw new MoneyError("Overflow");
+  if (lang === "fr") return fr(dinars, sub);
+  if (lang === "en") return en(dinars, sub);
   return "— المبلغ بالحروف (ثابت في النموذج) —";
 }

@@ -1,4 +1,4 @@
-# Features — what dz-pos does
+# Features: what dz-pos does
 
 Normative. If a screen or a rule is not here, it is not in scope. The
 competitor teardown, the Algerian facture field list and the market notes
@@ -23,16 +23,24 @@ not scheduled; **open** waits on a decision listed at the bottom.
 ## Build order
 
 Each step is usable on its own and ships with its tests before the next
-starts.
+starts. `docs/roadmap.md` holds the milestones, what each one demos and
+what blocks it; this list is the order in one glance.
 
-1. Products, suppliers, purchases into stock, sales, expenses, daily backup,
-   dashboard — the inventory baseline.
-2. Customers with a debt ledger and credit limit.
-3. Invoice model: the fiscal document with every legal field.
-4. Print engine: thermal 80mm and A4/A5, three languages, golden-file tested.
+1. Money core: centimes, TVA, stamp, amount in words, the first migration,
+   `crates/api` with products.
+2. A cash sale with a printed 80mm ticket: products, till, the ticket
+   series, stock ledger, the user on every row and the audit log, settings
+   with the régime fiscal, three languages, daily backup.
+3. Customers with a debt ledger and credit limit, and the invoice model
+   with every legal field: facture, avoir, proforma, statement.
+4. Stock in: suppliers, purchases, expenses, dashboard, Excel.
 5. Users and roles.
-6. LAN mode: one desktop serves, phones and second tills pair by QR.
-7. Cloud mode — only after Anouar decides (open decision 1).
+6. First release: installer, updater, signing, versioned migrations.
+7. LAN mode: one desktop serves, phones and second tills pair by QR.
+8. Cloud mode, only after Anouar decides (open decision 1).
+
+The sections below keep their original numbering; it names the area, not
+the order.
 
 ## 1. Inventory baseline (v1)
 
@@ -50,11 +58,11 @@ for the rest. Saving a purchase moves stock in and adds the unpaid part to
 the supplier's debt. A purchase can be received in parts.
 
 **Sale (till).** Lines (product, quantity, unit price, line discount),
-global discount, payment mode (cash, card, cheque, transfer, credit), amount
-tendered, change. Anonymous sale is allowed; a credit sale requires a
-customer. Saving a sale moves stock out and, if credit, adds to the
-customer's debt. Every sale is a fiscal document (see §3) even when it is a
-simple ticket.
+global discount, payment mode (cash; credit on the customer's ledger; card
+on a TPE with no integration, decided 2026-09-08), amount tendered,
+change. Anonymous sale is allowed; a credit sale requires a customer.
+Saving a sale moves stock out and, if credit, adds to the customer's debt.
+Every sale is a fiscal document (see §3) even when it is a simple ticket.
 
 **Stock movements.** Append-only ledger: every change to quantity on hand
 is a row with type (purchase, sale, adjustment, return, opening), quantity,
@@ -116,12 +124,15 @@ discount, TVA rate, line total HT.
 | `net_to_pay` | `total_ttc + stamp` |
 | `amount_in_words` | `net_to_pay` written out in the print language |
 | `old_balance`, `remaining_debt`, `total_debt` | from the ledger at issue time |
-| `payment_mode` | cash, card, cheque, transfer, credit |
+| `payment_mode` | cash, card, credit in v1; cheque and transfer are parked (the column admits them) |
 
-Numbering: per kind, per year, gapless, assigned at issue and never reused;
-a cancelled facture gets an avoir, it is not deleted.
+Numbering: per kind, gapless, assigned at issue and never reused; a
+cancelled facture keeps its number and is marked "facture annulée"; an
+avoir is its own kind with its own series. A yearly reset of the series is
+common practice but not in the decree; confirm with the comptable (R8)
+before it becomes a setting.
 
-### Fiscal rules — current assumptions
+### Fiscal rules: current assumptions
 
 Each row names the fixture that pins it and the source that decides it.
 "assumption" means nobody has read the law for it yet; a source cites code,
@@ -131,11 +142,12 @@ first release.**
 
 | Rule | Assumption | Fixture | Source |
 |---|---|---|---|
-| Money representation | integer centimes; no float anywhere in core | `money_no_float` | design choice, not law |
+| Money representation | integer centimes; no float anywhere in core; rates are integer basis points, 0 to 10 000 (1900 = 19 %), a rate above one whole is refused | `money_no_float`, invalid rates in `tva_rounding_once_per_rate` | design choice, not law |
 | Rounding | integer centimes; TVA per rate group on the group's HT subtotal, rounded once, half away from zero, to the centime. A design choice: no text prescribes facture rounding | `tva_rounding_once_per_rate` | CTCA 2026 art. 80bis → CIDTA 2026 art. 324 governs the tax return (base to the lower dinar / ten dinars, duty to the nearest 10 centimes), not the document. Comptable to confirm facture practice |
+| Global discount spread | the global discount is allocated to the rate groups in proportion to each group's HT subtotal; each share is rounded down to the centime and the centimes left over go to the group with the largest HT subtotal, the lower rate winning a tie, never past that group's own HT (what it cannot take rolls to the next largest). The group bases always sum back to `total_ht − discount` and none is negative, so no centime is invented or lost. An assumption: no text says how a global discount splits across rates. Confirm with the comptable (R8) | `discount_spread_largest_remainder` (the `totals_cases` array in `tva_rounding_once_per_rate`) | design choice, not law |
 | TVA rates | 19 % standard, 9 % reduced, 0 % exempt; rate per product, defaulted from category | `tva_rates_table` | CTCA 2026 art. 21 (19 %), art. 23 (9 %, list by tariff line) |
 | Régime fiscal | shop-level, dated setting `ifu` or `réel`. IFU: single price per product, no TVA rate, no HT/TTC, no TVA line on any document; réel: the TVA rows above. Documents keep the regime they were issued under | `regime_ifu_prints_no_tva` | CIDTA 2026 art. 282 ter (8 M DA threshold), 282 sexies (rates); CTCA 2026 art. 2-12 (out of TVA scope), art. 64 (must not mention TVA) |
-| Droit de timbre | cash only (electronic exempt); nothing at 300 DA or less; tranches = ceil(amount / 100 DA); 1 DA per tranche up to 30 000 DA, 1,5 DA up to 100 000 DA, 2 DA above, the whole amount at its band's rate (no progressivity); minimum 5 DA; no cap. Open: half-dinar on odd tranches at 1,5 | `stamp_progressive_tranches` (replaces `stamp_cash_only_clamped`) | Code du timbre 2026 art. 100-I and 258 quinquies; DGI circular 14/MF/DGI/LF.2025 (examples 1–3) |
+| Droit de timbre | cash only (electronic exempt); nothing at 300 DA or less; tranches = ceil(amount / 100 DA); 1 DA per tranche up to 30 000 DA, 1,5 DA up to 100 000 DA, 2 DA above, the whole amount at its band's rate (no progressivity); minimum 5 DA; no cap. The base is `total_ttc`, the amount before the stamp itself: the text says "amount" and names no base, so this is an assumption to confirm with the comptable (R8). Open: half-dinar on odd tranches at 1,5. It is exact in centimes and only matters if the tax must be paid in whole dinars | `stamp_progressive_tranches` (replaces `stamp_cash_only_clamped`) | Code du timbre 2026 art. 100-I and 258 quinquies; DGI circular 14/MF/DGI/LF.2025 (examples 1–3) |
 | Amount in words | French, Arabic and English generators, dinars and centimes | `words_{fr,ar,en}_golden` | décret 05-468: total TTC "en chiffres et en lettres"; Arabic wording not yet sourced |
 | Party identifiers | `facture`: seller RC + NIS (+ NIF, AI as on every facture in circulation), buyer RC + NIS, or name + address when the buyer is a consumer; stamp and signature blocks; `ticket`: seller identity only | `facture_requires_party_ids` | décret 05-468 art. 3 and 4; NIF/AI from tax texts, article to cite (R3) |
 | Numbering | one uninterrupted chronological series per document kind; a cancelled document keeps its number and is marked "facture annulée"; numbers never reused | `numbering_gapless` | décret 05-468 art. 10 |
@@ -143,9 +155,10 @@ first release.**
 ## 4. Printing (v1)
 
 - Templates: `ticket_80mm`, `facture_a4`, `facture_a5`, `proforma_a4`,
-  `bon_de_livraison_a4`, `avoir_a4`, `statement_a4`, `barcode_label`. Each
-  in ar/fr/en. HTML rendered by the core, not the UI, so desktop and any
-  server print the same bytes.
+  `avoir_a4`, `statement_a4`, `barcode_label`. Each in ar/fr/en. HTML
+  rendered by the core, not the UI, so desktop and any server print the
+  same bytes. `bon_de_livraison_a4` is parked with the facture
+  récapitulative (see Later); the `kind` stays in the model.
 - Golden-file test for every template × language against fixed fixtures.
   A template change is a reviewed golden diff.
 - Thermal: ESC/POS over USB or Bluetooth from the desktop; from the phone
@@ -158,10 +171,13 @@ Owner, manager, cashier. Login by PIN on the till, password elsewhere.
 Permissions: sell, give discount above X %, override credit block, see cost
 prices and margins, edit products, edit settings, see reports. Every
 document records the user. Audit log of sensitive actions (price change,
-discount override, delete, settings change) — an ISO-27001 control we get
-for nearly free by writing it now.
+discount override, delete, settings change), an ISO-27001 control we get
+for nearly free by writing it now. An owner user exists from the first
+migration, so every document, ledger row and audit entry carries a user
+from the first sale (build-order step 2); PIN, roles and permissions
+arrive in step 5.
 
-## 6. LAN mode (v1, after 1–5)
+## 6. LAN mode (v1, after the desktop milestones)
 
 Exactly one desktop is the server; it advertises via mDNS and shows a QR
 (host, port, short-lived pairing token). A phone or a second till scans it
@@ -173,7 +189,7 @@ show one instruction.
 ## 7. Cloud mode (open)
 
 Same core binary hosted, one SQLite file per shop, account login. Not
-started until decision 1. Nothing in 1–6 may assume it does not exist:
+started until decision 1. Nothing built before it may assume it does not exist:
 every query is scoped by `shop_id`, every client talks HTTP.
 
 ## Later, agreed
@@ -182,13 +198,20 @@ every query is scoped by `shop_id`, every client talks HTTP.
 - AI invoice scanning on the phone (the one modern thing the competitor has).
 - Phone-only offline via the Rust core compiled into the RN app (uniffi),
   never a TypeScript reimplementation of the calculations.
+- Cheque and transfer as payment modes (decided 2026-09-08: v1 is cash,
+  credit, card on a TPE).
+- Bon de livraison and facture récapitulative together (décret 05-468
+  art. 14–17 allow the first only with the second and a wilaya
+  authorisation). The `bon_de_livraison` kind exists in the model; no
+  template or screen until then.
 
 ## Open decisions
 
 1. **SaaS with an account, offline licence, or both.** Anouar. Changes
-   pricing, hosting and step 7 only.
-2. **Product name and GitHub org.** Anouar; name research continues. Changes
-   the bundle identifier once, before the first release.
+   pricing, hosting and step 8 only.
+2. **Product name.** Anouar; "Dinar" proposed and the org `Dinar-dz` created
+   on 2026-09-08. The name changes the bundle identifier once, before the
+   first release.
 3. ~~TVA per product or one global rate.~~ **Decided 2026-09-08 (Samir):
    per product, defaulted from the category.** CTCA art. 23 lists the 9 %
    goods by customs tariff line, so the rate is a property of the product.

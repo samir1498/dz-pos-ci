@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-diesel = { workspace = true, features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+diesel = { workspace = true, features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35"] }
 diesel_migrations = "2.2"
 # bundled: one binary, no system sqlite on the shop's Windows PC
 libsqlite3-sys = { version = "0.37", features = ["bundled"] }
@@ -14,6 +14,9 @@ thiserror = "2"
 
 [dev-dependencies]
 tempfile = "3"
+# Fixtures under fixtures/money are JSON; proptest for the money invariants.
+serde_json = { workspace = true }
+proptest = "1.11"
 
 [lints]
 workspace = true

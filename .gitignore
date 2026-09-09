@@ -8,4 +8,6 @@ dist/
 apps/desktop/src-tauri/gen/
 coverage/
 lcov.info
+apps/desktop/e2e/.artifacts/
 .env
+.claude/worktrees/

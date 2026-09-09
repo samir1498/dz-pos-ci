@@ -22,18 +22,59 @@ test:
 build:
     pnpm -r build
 
+# regenerate the TS types from crates/api and fail if the commit is stale.
+# `git diff --exit-code` used to be the check and it ignores untracked files,
+# so a brand new DTO passed the gate; it also never noticed an orphan left
+# behind by a DTO that was deleted. Generating into a temp directory and
+# running `diff -r` both ways catches each of those.
+types-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -e crates/api/bindings ]; then
+        echo "crates/api/bindings exists: a DTO used a bare #[ts(export)]; use export_to and the FILES list" >&2
+        exit 1
+    fi
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    DZPOS_TS_OUT_DIR="$tmp" cargo test -p dzpos-api --test export_bindings
+    diff -r "$tmp" packages/shared/src/generated
+
+# regenerate the committed TS types after a DTO change (the test never
+# writes there on its own, so `cargo test` cannot mask a stale commit)
+types:
+    DZPOS_TS_OUT_DIR=packages/shared/src/generated cargo test -p dzpos-api --test export_bindings
+
 # everything a PR needs, in order; stops at the first failure
-gates: fmt clippy test build
+gates: fmt clippy types-check test build
 
 # ---- dev ----
 
-# web UI only, reachable from the laptop over Tailscale
+# the API against a development database; the browser UI talks to this one.
+# The API names the origins it answers (the dev Vite port and the Tauri
+# ones); a browser on another machine needs its origin passed here:
+# `just api 4317 .dev/dev.db http://100.111.55.62:5173`
+api port="4317" db=".dev/dev.db" origin="":
+    cargo run -p dzpos-api -- --db {{db}} --port {{port}} {{ if origin != "" { "--allow-origin " + origin } else { "" } }}
+
+# web UI only, reachable from the laptop over Tailscale. Needs `just api`
+# started with the laptop's origin as its third argument, or the API
+# refuses the browser (CORS names its origins).
 dev:
     pnpm desktop dev --host
 
 # native window; needs a display, so run on the laptop
 tauri:
     pnpm desktop tauri dev
+
+# ---- e2e (headless chromium; starts its own API and Vite) ----
+
+# the whole products suite against a throwaway database
+e2e:
+    pnpm desktop e2e
+
+# only the test that writes apps/desktop/e2e/screenshots/products.png
+screenshot:
+    pnpm desktop e2e -g screenshot
 
 # ---- mockups (design/) ----
 

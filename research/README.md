@@ -10,7 +10,7 @@ and `docs/` (the spec). pc-ctx's research domain is bound here through
 | Folder | What goes there |
 |---|---|
 | `legal-fiscal/` | what the law says: droit de timbre, TVA, facture mentions, IFU, numbering, amount in words. Each doc cites code + article + year. `sources/` holds the official PDFs the docs quote (DGI codes fiscaux, Journal Officiel). |
-| `tooling/` | official skills, MCP servers and plugins evaluated for the stack (Tauri, Expo, Rust, Playwright), with install commands and a verdict. |
+| `tooling/` | official skills, MCP servers and plugins evaluated for the stack (Tauri, Expo, Rust, Playwright), with install commands and a verdict. Also conventions read out of another codebase before adopting them here. |
 | `competitors/` | Lumina POS teardown, MonStock gap analysis, market landscape, brief for Anouar. |
 | `market/` | pricing, distribution, shop interviews when they happen. |
 

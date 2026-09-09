@@ -23,8 +23,9 @@ commit.
 ```
 crates/core      Rust: models, diesel repos, services, migrations (SQLite)
 apps/desktop     Tauri 2 + React 19 + Vite; Rust side in src-tauri/
-apps/mobile      Expo / React Native — placeholder, not started
-docs/            features.md and architecture.md — the spec every task cites
+apps/mobile      Expo / React Native, placeholder, not started
+docs/            features.md and architecture.md, the spec every task cites;
+                 roadmap.md, the milestones to a first shop
 ```
 
 Cargo workspace at the root, pnpm workspace over `apps/*`.
@@ -47,7 +48,7 @@ UI in a browser with Tauri IPC unavailable; `tauri dev` needs a display
 
 From the architecture notes; the reasons are there.
 
-1. The mobile app never knows which mode it is in — one HTTP contract.
+1. The mobile app never knows which mode it is in, one HTTP contract.
 2. `dzpos-core` sits behind one HTTP service layer; Tauri commands and the
    phone are equal callers.
 3. `shop_id` on every table from day one, even single-shop.
@@ -60,6 +61,6 @@ From the architecture notes; the reasons are there.
 
 `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, `cargo
 llvm-cov`, `pnpm -r build`, `pnpm -r test`. CI runs them on Linux and
-Windows. Sonar: not wired yet — Rust support on the team server is
+Windows. Sonar: not wired yet, Rust support on the team server is
 unverified (`rust:S1481` probe returned 404); check before promising a gate
 on the core.
