@@ -401,3 +401,35 @@ fn an_allocation_never_reaches_across_shops() {
     );
     assert!(debt::allocations(&mut conn, SHOP, 1).unwrap().is_empty());
 }
+
+#[test]
+fn a_movement_pointing_at_another_shops_document_is_refused() {
+    // The sale that raised the debt is named by id, and the foreign key
+    // would take the neighbour's facture: a statement would then cite a
+    // document this shop never issued (rule 3).
+    let (_dir, mut conn) = open_temp();
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(&mut conn)
+        .unwrap();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    a_document(&mut conn, 1, 2, 1);
+
+    let mut entry = movement(customer, DebtKind::Sale, 100_000, 0);
+    entry.document_id = Some(1);
+    let err = debt::append(&mut conn, SHOP, entry).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::NotFound {
+                entity: "document",
+                ..
+            }
+        ),
+        "{err}"
+    );
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, customer).unwrap(),
+        Money::ZERO,
+        "the refused movement landed anyway"
+    );
+}

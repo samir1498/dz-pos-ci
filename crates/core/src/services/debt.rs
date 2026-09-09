@@ -57,6 +57,12 @@ pub fn append(
     entry: NewDebtEntry,
 ) -> Result<DebtEntry, CoreError> {
     ensure_customer(conn, shop_id, entry.customer_id)?;
+    // The document a movement cites is checked the same way the allocation's
+    // is: a statement that names a document this shop never issued is worse
+    // than one that names none.
+    if let Some(document_id) = entry.document_id {
+        ensure_document(conn, shop_id, document_id)?;
+    }
     if entry.debit.is_negative() {
         return Err(CoreError::validation(
             "debit",
