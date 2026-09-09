@@ -5,6 +5,7 @@ pub mod error;
 pub mod lang;
 pub mod models;
 pub mod money;
+pub mod print;
 // Crate-internal on purpose: architecture.md says HTTP, Tauri and mobile
 // call services, never diesel. The visibility is the enforcement.
 pub(crate) mod repos;
