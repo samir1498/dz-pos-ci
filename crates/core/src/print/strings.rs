@@ -384,9 +384,10 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::TotalTtc, Lang::En) => "Total incl. tax",
         (Key::TotalTtc, Lang::Ar) => "المجموع مع الرسم",
 
-        // The décret's own wording, which names the facture whatever kind
-        // the document is; T9 splits the sentence per kind if the comptable
-        // asks for it on an avoir.
+        // The décret's own wording, for the paper it is written on. T9 split
+        // the sentence per kind rather than have an avoir call itself a
+        // facture on the line a comptable reads first; the two new sentences
+        // are unreviewed wording, like this dictionary's Arabic.
         (Key::InWords, Lang::Fr) => "Arrêtée la présente facture à la somme de",
         (Key::InWords, Lang::En) => "This invoice is closed at the sum of",
         (Key::InWords, Lang::Ar) => "أوقفت هذه الفاتورة بمبلغ",

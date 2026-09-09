@@ -17,8 +17,9 @@
 //!
 //! The little parser below is the ticket test's, copied rather than shared:
 //! two golden suites that check each other's files through one helper can
-//! both be made green by editing the helper once. T9 folds them together if
-//! the avoir and proforma suites want the same shape.
+//! both be made green by editing the helper once. T9 added the avoir, the
+//! proforma and the cancelled reprint to this file and left the two suites
+//! apart for the same reason.
 
 use std::path::PathBuf;
 
@@ -1162,6 +1163,25 @@ fn an_avoir_prints_the_number_of_the_facture_it_references() {
         "print"
     );
 
+    // The line says "avoir sur facture", so the paper it names has to be one.
+    // A reference that is a ticket, an avoir or a proforma is refused rather
+    // than named as a facture on a page a comptable reads.
+    for kind in [
+        DocumentKind::Ticket,
+        DocumentKind::Avoir,
+        DocumentKind::Proforma,
+    ] {
+        let mut not_a_facture = fixed_facture(Case::Credit);
+        not_a_facture.kind = kind;
+        assert_eq!(
+            render_facture_with_reference(&avoir, Some(&not_a_facture), Lang::Fr, Paper::A4)
+                .unwrap_err()
+                .code(),
+            "print",
+            "{kind:?}"
+        );
+    }
+
     // A facture that references nothing prints with no reference row.
     let plain = render_facture(&facture, Lang::Fr, Paper::A4).unwrap();
     assert!(!plain.contains(text(Key::AvoirOnFacture, Lang::Fr)));
@@ -1560,21 +1580,34 @@ fn a_cancelled_reprint_differs_from_the_live_facture_in_the_cancellation_only() 
 
         let after_lines: Vec<&str> = after.lines().collect();
         let before_lines: Vec<&str> = before.lines().collect();
-        let differing: Vec<&str> = after_lines
+        // What the cancelled page adds: the mark, the line under the number
+        // and the heading that says the document is cancelled.
+        let added: Vec<&str> = after_lines
             .iter()
             .filter(|line| !before_lines.contains(line))
             .copied()
             .collect();
-        assert!(
-            !differing.is_empty(),
-            "{lang:?}: nothing says it was cancelled"
-        );
-        for line in &differing {
+        assert!(!added.is_empty(), "{lang:?}: nothing says it was cancelled");
+        for line in &added {
             assert!(
                 line.contains("class=\"annulee\"")
                     || line.contains("class=\"cancelled\"")
                     || line.contains(text(Key::FactureCancelled, lang)),
                 "{lang:?}: {line} is neither the heading nor the cancellation"
+            );
+        }
+        // And what it drops, which has to be that same heading and nothing
+        // else: a reprint that lost the payment mode or the signature block
+        // would pass a check that only read the lines it added.
+        let dropped: Vec<&str> = before_lines
+            .iter()
+            .filter(|line| !after_lines.contains(line))
+            .copied()
+            .collect();
+        for line in &dropped {
+            assert!(
+                line.contains(text(Key::Facture, lang)),
+                "{lang:?}: the cancelled reprint dropped {line}"
             );
         }
         // The mark, the day, the reason, and the number the document keeps.
