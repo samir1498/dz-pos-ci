@@ -10,22 +10,27 @@ the same pages; this file is the index.
 - `docs/features.md` (spec, fiscal rules with fixture names) and
   `docs/architecture.md` (the six rules, layers, error policy).
 - `context/progress/now.md` and `ctx status` for what is
-  in flight.
+  in flight. The status site for Anouar is https://dinar-reports.pages.dev/
+  (generator in `~/.dz-night/report/` on the WSL box).
 
 ## Processes (`context/processes/`)
 - `coding-rules`: Rust, TypeScript, CSS; layering; comments; money in centimes.
-- `quality-gates`: the five gates, what counts as tested, the extra layers
+- `quality-gates`: `just gates` and `just e2e`, what counts as tested, the extra layers
   for money, roles and deletion.
 - `machines-and-heavy-jobs`: WSL box vs laptop, the shared-box claim rule,
   no worktrees while one session per machine works the repo.
 - `security-and-provenance`: ISO 27001 controls per feature; where a
   learned fact or a fiscal claim gets written.
 - `git-and-planning`: branch + PR, the `ctx:` trailer, session rituals.
+- `frontend-conventions`: folder shape, the design package tiers, which
+  runner owns which layer.
 
 ## Skills (`.claude/skills/`, symlinked into `~/.claude/skills/` on the WSL box)
-`step-by-step` (one step per message, wait for Samir; the ladder is in
-`context/progress/now.md`) · `dz-context` · `dz-money` · `dz-review` · `dz-pr` ·
+`step-by-step` (one step per message when Samir drives by hand; M1 runs
+as a loop instead, see `context/progress/now.md`) · `dz-context` · `dz-money` · `dz-review` · `dz-pr` ·
 `dz-mockup` · `laptop-dev` · `git-commit-convention` · `dont-sound-like-ai`.
+User-level `stale-check` (any repo) reads `.claude/stale-homes.md` here for
+where each duplicated fact lives and how a fix is routed.
 
 ## Non-negotiables (repeated here because they are cheap to forget)
 - Money is integer centimes, checked arithmetic, no `f64` near a total.

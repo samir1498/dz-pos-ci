@@ -1,6 +1,7 @@
 // Tier 1. Raw ramps, no roles. Values copied from design/shared/tokens.css,
 // which is the hand-written source while the mockups still load it directly.
-// Nothing outside src/semantic.ts imports this file: eslint bans the path.
+// Nothing outside src/semantic.ts imports this file; a convention, not yet
+// a lint rule.
 
 export type PrimitiveFamily = "stone" | "teal" | "red" | "amber" | "blue";
 

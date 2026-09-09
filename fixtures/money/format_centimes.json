@@ -1,0 +1,29 @@
+{
+  "name": "format_centimes",
+  "rule": "docs/features.md §4 Printing: an amount is shown as grouped dinars, a comma, then exactly two centime digits, with no currency word and Western digits in every language. Thousands are grouped with a narrow no-break space, U+202F, which stands in the expected strings below as itself and looks like a space that a copy and paste must not turn into an ordinary one. A quantity is thousandths of the unit, comma decimal, trailing zeros trimmed, and it is never grouped: 1000000 is a thousand units, not a total.",
+  "runners": "crates/core/tests/money_fixtures.rs (dzpos_core::money::format) and packages/shared/src/money.test.ts (formatCentimes, formatQty). The printed ticket and the screen show the same amount because both read this file.",
+  "cases": [
+    { "name": "zero still shows both centime digits", "centimes": 0, "expected": "0,00" },
+    { "name": "a single centime keeps its leading zero", "centimes": 5, "expected": "0,05" },
+    { "name": "a trailing zero centime is not trimmed", "centimes": 920, "expected": "9,20" },
+    { "name": "dinars and centimes split at the comma", "centimes": 1234, "expected": "12,34" },
+    { "name": "the first group appears at a thousand dinars", "centimes": 100000, "expected": "1 000,00" },
+    { "name": "under a thousand nothing is grouped", "centimes": 85000, "expected": "850,00" },
+    { "name": "the fixed ticket net to pay", "centimes": 93784, "expected": "937,84" },
+    { "name": "a negative amount keeps the sign before the digits", "centimes": -1234, "expected": "-12,34" },
+    { "name": "a negative under one dinar keeps the sign", "centimes": -5, "expected": "-0,05" },
+    { "name": "an amount a float would round survives exactly", "centimes": 1000000000001, "expected": "10 000 000 000,01" },
+    { "name": "the last amount before a group appears", "centimes": 99999, "expected": "999,99" }
+  ],
+  "qty_cases": [
+    { "name": "a whole quantity shows no decimals", "milli": 2000, "expected": "2" },
+    { "name": "half a kilo is one trimmed decimal", "milli": 1500, "expected": "1,5" },
+    { "name": "two dozen pieces", "milli": 24000, "expected": "24" },
+    { "name": "one thousandth keeps its leading zeros", "milli": 1, "expected": "0,001" },
+    { "name": "two decimals are kept and the third trimmed", "milli": 1250, "expected": "1,25" },
+    { "name": "three decimals are all kept", "milli": 1005, "expected": "1,005" },
+    { "name": "a returned quantity keeps the sign", "milli": -1500, "expected": "-1,5" },
+    { "name": "zero is zero, not 0,000", "milli": 0, "expected": "0" },
+    { "name": "a quantity is never grouped", "milli": 1000000, "expected": "1000" }
+  ]
+}

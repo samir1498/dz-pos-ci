@@ -17,6 +17,7 @@ import {
 import type { CategoryDto, NewProductDto, ProductDto, UnitDto } from "@dzpos/shared";
 import { api, categoriesQueryKey, productsQueryKey } from "@/api";
 import { isKey, useTranslation, type Key } from "@/i18n";
+import { RATES, rateCellLabel, rateLabel } from "@/lib/rate";
 
 export const Route = createFileRoute("/products")({ component: ProductsScreen });
 
@@ -29,36 +30,31 @@ const UNIT_KEY: Record<UnitDto, Key> = {
   box: "unit_box",
 };
 
-/** features.md, TVA rates row: 19 % standard, 9 % reduced, 0 % exempt. */
-const RATES: readonly { bps: number; key: Key }[] = [
-  { bps: 1900, key: "rate_1900" },
-  { bps: 900, key: "rate_900" },
-  { bps: 0, key: "rate_0" },
-];
-
 const FALLBACK_RATE_BPS = 1900;
 
-/** "7 %" for 700 bps: the label of a rate the fixed list does not carry. */
-function rateLabel(bps: number): string {
-  const percent = bps / 100;
-  return `${Number.isInteger(percent) ? percent : percent.toFixed(2).replace(".", ",")} %`;
-}
-
 /**
- * The fixed choices plus any category default the list does not carry.
- * The migration allows any rate between 0 and 10 000 bps on a category;
- * without this a 700 bps category showed "19 %" while the form posted 700.
+ * The fixed choices plus any category default (or stored product rate) the
+ * list does not carry. The migration allows any rate between 0 and 10 000
+ * bps on a category; without this a 700 bps category showed "19 %" while
+ * the form posted 700.
  */
 function rateOptions(
   categories: readonly CategoryDto[],
   t: (key: Key) => string,
+  stored?: number,
 ): { value: string; label: string }[] {
   const fixed = RATES.map((rate) => ({ value: String(rate.bps), label: t(rate.key) }));
   const known = new Set(RATES.map((rate) => rate.bps));
-  const extra = [...new Set(categories.map((c) => c.default_rate_bps))]
+  const candidates = categories.map((c) => c.default_rate_bps);
+  // A product edited later keeps showing the rate it was stored with, even
+  // one no category offers any more.
+  if (stored !== undefined) candidates.push(stored);
+  const percentSign = t("percent_sign");
+  const decimalSeparator = t("decimal_separator");
+  const extra = [...new Set(candidates)]
     .filter((bps) => !known.has(bps))
     .sort((a, b) => b - a)
-    .map((bps) => ({ value: String(bps), label: rateLabel(bps) }));
+    .map((bps) => ({ value: String(bps), label: rateLabel(bps, percentSign, decimalSeparator) }));
   return [...fixed, ...extra];
 }
 
@@ -68,6 +64,7 @@ const ERROR_KEY: Record<string, Key> = {
   not_found: "error_not_found",
   money: "error_money",
   storage: "error_storage",
+  restart_needed: "error_restart_needed",
   bad_request: "error_bad_request",
   bad_response: "error_bad_response",
   unreachable: "error_unreachable",
@@ -83,7 +80,9 @@ function errorKey(error: unknown): Key {
 
 export function ProductsScreen() {
   const { t } = useTranslation();
-  const [adding, setAdding] = useState(false);
+  // One form, two jobs: `null` is closed, "new" is the add form, a product
+  // is the edit form for that row.
+  const [open, setOpen] = useState<"new" | ProductDto | null>(null);
   const products = useQuery({ queryKey: productsQueryKey, queryFn: () => api.listProducts() });
   // The form needs the shop's real categories before it can offer one, so
   // the query lives here and the form is rendered once it has answered.
@@ -99,17 +98,22 @@ export function ProductsScreen() {
         <button
           type="button"
           className="rounded border px-3 py-1.5"
-          onClick={() => setAdding((open) => !open)}
+          onClick={() => setOpen((current) => (current === null ? "new" : null))}
         >
-          {adding ? t("action_cancel") : t("products_add")}
+          {open !== null ? t("action_cancel") : t("products_add")}
         </button>
       </header>
 
-      {adding && categories.isSuccess ? (
-        <AddProductForm categories={categories.data} onDone={() => setAdding(false)} />
+      {open !== null && categories.isSuccess ? (
+        <ProductForm
+          key={open === "new" ? "new" : open.id}
+          categories={categories.data}
+          initial={open === "new" ? null : open}
+          onDone={() => setOpen(null)}
+        />
       ) : null}
-      {adding && categories.isPending ? <p>{t("products_loading")}</p> : null}
-      {adding && categories.isError ? (
+      {open !== null && categories.isPending ? <p>{t("products_loading")}</p> : null}
+      {open !== null && categories.isError ? (
         <p role="alert" className="text-red-700">
           {t(errorKey(categories.error))}
         </p>
@@ -121,12 +125,20 @@ export function ProductsScreen() {
           {t(errorKey(products.error))}
         </p>
       ) : null}
-      {products.isSuccess ? <ProductTable rows={products.data} /> : null}
+      {products.isSuccess ? (
+        <ProductTable rows={products.data} onEdit={(row) => setOpen(row)} />
+      ) : null}
     </section>
   );
 }
 
-function ProductTable({ rows }: { rows: ProductDto[] }) {
+function ProductTable({
+  rows,
+  onEdit,
+}: {
+  rows: ProductDto[];
+  onEdit: (row: ProductDto) => void;
+}) {
   const { t } = useTranslation();
   if (rows.length === 0) return <p>{t("products_empty")}</p>;
   return (
@@ -138,19 +150,53 @@ function ProductTable({ rows }: { rows: ProductDto[] }) {
           <th scope="col" className="text-start pb-2">{t("col_barcode")}</th>
           <th scope="col" className="text-start pb-2">{t("col_unit")}</th>
           <th scope="col" className="text-end pb-2">{t("col_price")}</th>
+          <th scope="col" className="text-end pb-2">{t("col_rate")}</th>
           <th scope="col" className="text-end pb-2">{t("col_stock")}</th>
+          <th scope="col" className="pb-2">
+            <span className="sr-only">{t("products_edit")}</span>
+          </th>
         </tr>
       </thead>
       <tbody>
         {rows.map((p) => (
-          <tr key={p.id} className="border-t">
-            <td className="py-1.5 pe-3">{p.name}</td>
-            <td className="py-1.5 pe-3 font-mono">{p.barcode ?? ""}</td>
+          <tr key={p.id} className={p.active ? "border-t" : "border-t opacity-60"}>
+            <td className="py-1.5 pe-3">
+              {p.name}
+              {p.active ? null : (
+                <span className="ms-2 rounded border px-1 text-xs uppercase">
+                  {t("products_inactive")}
+                </span>
+              )}
+            </td>
+            {/* dir="ltr" on the four cells below: a barcode, a price, a
+                rate and a quantity are read left to right with Western
+                digits regardless of the screen's language (a decision,
+                features.md names no rule for it). Without it the Unicode
+                bidi algorithm is free to reorder the space and the sign
+                around the digits inside an RTL row. */}
+            <td className="py-1.5 pe-3 font-mono" dir="ltr">
+              {p.barcode ?? ""}
+            </td>
             <td className="py-1.5 pe-3">{t(UNIT_KEY[p.unit])}</td>
-            <td className="py-1.5 ps-3 text-end font-mono">
+            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
               {formatCentimes(p.selling_centimes)}
             </td>
-            <td className="py-1.5 ps-3 text-end font-mono">{formatQty(p.qty_on_hand_milli)}</td>
+            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
+              {rateCellLabel(p.rate_bps, t)}
+            </td>
+            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
+              {formatQty(p.qty_on_hand_milli)}
+            </td>
+            <td className="py-1.5 ps-3 text-end">
+              <button
+                type="button"
+                className="rounded border px-2 py-0.5 text-sm"
+                aria-label={`${t("products_edit")} ${p.name}`}
+                onClick={() => onEdit(p)}
+              >
+                {t("products_edit")}
+              </button>
+            </td>
           </tr>
         ))}
       </tbody>
@@ -158,19 +204,28 @@ function ProductTable({ rows }: { rows: ProductDto[] }) {
   );
 }
 
-function AddProductForm({
+/**
+ * Add and edit are one form: the same fields, the same validators, one
+ * request shape (`NewProductDto` is the whole product either way). With
+ * `initial` the fields start from the stored row and the save is a PUT to
+ * that row; without it they start blank and the save is a POST.
+ */
+function ProductForm({
   categories,
+  initial,
   onDone,
 }: {
   categories: CategoryDto[];
+  initial: ProductDto | null;
   onDone: () => void;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<Key | null>(null);
 
-  const create = useMutation({
-    mutationFn: (input: NewProductDto) => api.createProduct(input),
+  const save = useMutation({
+    mutationFn: (input: NewProductDto) =>
+      initial === null ? api.createProduct(input) : api.updateProduct(initial.id, input),
     onSuccess: async () => {
       setServerError(null);
       await queryClient.invalidateQueries({ queryKey: productsQueryKey });
@@ -181,25 +236,48 @@ function AddProductForm({
 
   const first = categories[0];
   const form = useForm({
-    defaultValues: {
-      name: "",
-      barcode: "",
-      category: first === undefined ? "" : String(first.id),
-      rate: String(first?.default_rate_bps ?? FALLBACK_RATE_BPS),
-      unit: "piece",
-      cost: "",
-      price: "",
-      stock: "",
-    },
+    defaultValues:
+      initial === null
+        ? {
+            name: "",
+            barcode: "",
+            category: first === undefined ? "" : String(first.id),
+            rate: String(first?.default_rate_bps ?? FALLBACK_RATE_BPS),
+            unit: "piece",
+            cost: "",
+            price: "",
+            wholesale: "",
+            stock: "",
+            lowStock: "",
+            active: true,
+          }
+        : {
+            name: initial.name,
+            barcode: initial.barcode ?? "",
+            category: initial.category_id === null ? "" : String(initial.category_id),
+            rate: String(initial.rate_bps),
+            unit: initial.unit,
+            cost: formatCentimes(initial.cost_centimes),
+            price: formatCentimes(initial.selling_centimes),
+            wholesale:
+              initial.wholesale_centimes === null ? "" : formatCentimes(initial.wholesale_centimes),
+            stock: formatQty(initial.qty_on_hand_milli),
+            lowStock: initial.low_stock_at_milli === 0 ? "" : formatQty(initial.low_stock_at_milli),
+            active: initial.active,
+          },
     onSubmit: async ({ value }) => {
       // The validators have already refused anything unreadable, so these
       // fall back only for the blank case they allow.
       const cost = optional(value.cost, parseAmountToCentimes) ?? 0;
       const price = parseAmountToCentimes(value.price) ?? 0;
       const stock = optional(value.stock, parseQtyToMilli) ?? 0;
+      const lowStock = optional(value.lowStock, parseQtyToMilli) ?? 0;
+      // A blank wholesale price is "none", not a price of zero.
+      const wholesale =
+        value.wholesale.trim() === "" ? null : parseAmountToCentimes(value.wholesale);
       // The rejection is deliberately swallowed: onError has already turned
       // the server's code into a translated message on the form.
-      await create
+      await save
         .mutateAsync({
           name: value.name,
           barcode: value.barcode.trim() === "" ? null : value.barcode.trim(),
@@ -207,13 +285,13 @@ function AddProductForm({
           unit: toUnit(value.unit),
           cost_centimes: cost,
           selling_centimes: price,
-          wholesale_centimes: null,
+          wholesale_centimes: wholesale,
           qty_on_hand_milli: stock,
-          low_stock_at_milli: 0,
+          low_stock_at_milli: lowStock,
           // Sent, never left to the server to infer: the shop chose a rate on
           // this screen and the product has to carry the one it chose.
           rate_bps: Number(value.rate),
-          active: true,
+          active: value.active,
         })
         .catch(() => undefined);
     },
@@ -253,11 +331,14 @@ function AddProductForm({
           <label className="flex flex-col gap-1">
             <span>{t("field_barcode")}</span>
             <input
+              dir="ltr"
               className="rounded border px-2 py-1 font-mono"
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
             />
-            <span className="text-sm opacity-70">{t("field_barcode_hint")}</span>
+            {initial === null ? (
+              <span className="text-sm opacity-70">{t("field_barcode_hint")}</span>
+            ) : null}
           </label>
         )}
       </form.Field>
@@ -279,6 +360,7 @@ function AddProductForm({
                 }
               }}
             >
+              <option value="">{t("category_none")}</option>
               {categories.map((c) => (
                 <option key={c.id} value={String(c.id)}>
                   {c.name}
@@ -298,7 +380,7 @@ function AddProductForm({
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
             >
-              {rateOptions(categories, t).map((rate) => (
+              {rateOptions(categories, t, initial?.rate_bps).map((rate) => (
                 <option key={rate.value} value={rate.value}>
                   {rate.label}
                 </option>
@@ -335,16 +417,12 @@ function AddProductForm({
         }}
       >
         {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_price")}</span>
-            <input
-              inputMode="decimal"
-              className="rounded border px-2 py-1 font-mono text-end"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-            />
-            <FieldError messages={field.state.meta.errors} />
-          </label>
+          <AmountField
+            label={t("field_price")}
+            value={field.state.value}
+            onChange={field.handleChange}
+            errors={field.state.meta.errors}
+          />
         )}
       </form.Field>
 
@@ -358,16 +436,31 @@ function AddProductForm({
         }}
       >
         {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_cost")}</span>
-            <input
-              inputMode="decimal"
-              className="rounded border px-2 py-1 font-mono text-end"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-            />
-            <FieldError messages={field.state.meta.errors} />
-          </label>
+          <AmountField
+            label={t("field_cost")}
+            value={field.state.value}
+            onChange={field.handleChange}
+            errors={field.state.meta.errors}
+          />
+        )}
+      </form.Field>
+
+      <form.Field
+        name="wholesale"
+        validators={{
+          onSubmit: ({ value }) =>
+            value.trim() !== "" && parseAmountToCentimes(value) === null
+              ? "error_wholesale_invalid"
+              : undefined,
+        }}
+      >
+        {(field) => (
+          <AmountField
+            label={t("field_wholesale")}
+            value={field.state.value}
+            onChange={field.handleChange}
+            errors={field.state.meta.errors}
+          />
         )}
       </form.Field>
 
@@ -379,15 +472,46 @@ function AddProductForm({
         }}
       >
         {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_stock")}</span>
+          <AmountField
+            label={t("field_stock")}
+            value={field.state.value}
+            onChange={field.handleChange}
+            errors={field.state.meta.errors}
+            // The ledger owns the quantity once the product exists; the
+            // fiche shows it and the core ignores it on an update.
+            readOnly={initial !== null}
+          />
+        )}
+      </form.Field>
+
+      <form.Field
+        name="lowStock"
+        validators={{
+          onSubmit: ({ value }) =>
+            optional(value, parseQtyToMilli) === undefined
+              ? "error_low_stock_invalid"
+              : undefined,
+        }}
+      >
+        {(field) => (
+          <AmountField
+            label={t("field_low_stock")}
+            value={field.state.value}
+            onChange={field.handleChange}
+            errors={field.state.meta.errors}
+          />
+        )}
+      </form.Field>
+
+      <form.Field name="active">
+        {(field) => (
+          <label className="flex items-center gap-2">
             <input
-              inputMode="decimal"
-              className="rounded border px-2 py-1 font-mono text-end"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
+              type="checkbox"
+              checked={field.state.value}
+              onChange={(e) => field.handleChange(e.target.checked)}
             />
-            <FieldError messages={field.state.meta.errors} />
+            <span>{t("field_active")}</span>
           </label>
         )}
       </form.Field>
@@ -399,14 +523,48 @@ function AddProductForm({
       ) : null}
 
       <div className="flex gap-2">
-        <button type="submit" className="rounded border px-3 py-1.5" disabled={create.isPending}>
-          {create.isPending ? t("action_saving") : t("action_save")}
+        <button type="submit" className="rounded border px-3 py-1.5" disabled={save.isPending}>
+          {save.isPending ? t("action_saving") : t("action_save")}
         </button>
         <button type="button" className="rounded border px-3 py-1.5" onClick={onDone}>
           {t("action_cancel")}
         </button>
       </div>
     </form>
+  );
+}
+
+/** A decimal typed by a person: an amount in dinars or a quantity. */
+function AmountField({
+  label,
+  value,
+  onChange,
+  errors,
+  readOnly = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  errors: unknown[];
+  readOnly?: boolean;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span>{label}</span>
+      <input
+        dir="ltr"
+        inputMode="decimal"
+        className={
+          readOnly
+            ? "rounded border px-2 py-1 font-mono text-end opacity-60"
+            : "rounded border px-2 py-1 font-mono text-end"
+        }
+        value={value}
+        readOnly={readOnly}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <FieldError messages={errors} />
+    </label>
   );
 }
 

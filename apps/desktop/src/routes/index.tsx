@@ -1,7 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+// The till is the home. A cashier opens this window to sell, so the first
+// screen is the one that sells; the redirect runs before the route loads,
+// which keeps "dz-pos" from flashing on every launch.
 
-export const Route = createFileRoute("/")({ component: Home });
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-function Home() {
-  return <p>dz-pos</p>;
-}
+export const Route = createFileRoute("/")({
+  beforeLoad: () => {
+    throw redirect({ to: "/till" });
+  },
+});

@@ -10,4 +10,5 @@ coverage/
 lcov.info
 apps/desktop/e2e/.artifacts/
 .env
+.dev/
 .claude/worktrees/

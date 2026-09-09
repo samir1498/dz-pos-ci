@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from "./routes/__root"
 import { Route as IndexRouteImport } from "./routes/index"
 import { Route as ProductsRouteImport } from "./routes/products"
+import { Route as SettingsRouteImport } from "./routes/settings"
+import { Route as TillRouteImport } from "./routes/till"
 
 const IndexRoute = IndexRouteImport.update({
   id: "/",
@@ -22,31 +24,49 @@ const ProductsRoute = ProductsRouteImport.update({
   path: "/products",
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: "/settings",
+  path: "/settings",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TillRoute = TillRouteImport.update({
+  id: "/till",
+  path: "/till",
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
   "/products": typeof ProductsRoute
+  "/settings": typeof SettingsRoute
+  "/till": typeof TillRoute
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
   "/products": typeof ProductsRoute
+  "/settings": typeof SettingsRoute
+  "/till": typeof TillRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   "/": typeof IndexRoute
   "/products": typeof ProductsRoute
+  "/settings": typeof SettingsRoute
+  "/till": typeof TillRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: "/" | "/products"
+  fullPaths: "/" | "/products" | "/settings" | "/till"
   fileRoutesByTo: FileRoutesByTo
-  to: "/" | "/products"
-  id: "__root__" | "/" | "/products"
+  to: "/" | "/products" | "/settings" | "/till"
+  id: "__root__" | "/" | "/products" | "/settings" | "/till"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ProductsRoute: typeof ProductsRoute
+  SettingsRoute: typeof SettingsRoute
+  TillRoute: typeof TillRoute
 }
 
 declare module "@tanstack/react-router" {
@@ -65,12 +85,28 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof ProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/settings": {
+      id: "/settings"
+      path: "/settings"
+      fullPath: "/settings"
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/till": {
+      id: "/till"
+      path: "/till"
+      fullPath: "/till"
+      preLoaderRoute: typeof TillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ProductsRoute: ProductsRoute,
+  SettingsRoute: SettingsRoute,
+  TillRoute: TillRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -12,13 +12,10 @@
 
 use super::Money;
 
-/// The print language of a document.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Lang {
-    Fr,
-    En,
-    Ar,
-}
+/// The print language of a document. It lives in `crate::lang` now that a
+/// printed template needs it outside the money module; this re-export is
+/// what keeps `money::words::Lang` the name every caller already uses.
+pub use crate::lang::Lang;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum WordsError {

@@ -33,6 +33,38 @@ fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
     (dir, conn)
 }
 
+/// A database carrying the first `n` migrations and nothing after them, so
+/// migration `n + 1` can be applied to a file that already holds a shop's
+/// data. Every migration ships with a test that opens one of these
+/// (architecture.md, Data).
+fn open_at_migration(n: usize) -> (tempfile::TempDir, SqliteConnection) {
+    use diesel::connection::SimpleConnection;
+    use diesel_migrations::MigrationHarness;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let mut conn = SqliteConnection::establish(&path.to_string_lossy()).unwrap();
+    conn.batch_execute("PRAGMA foreign_keys=ON;").unwrap();
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    assert!(pending.len() > n, "there is no migration after {n}");
+    for migration in pending.iter().take(n) {
+        conn.run_migration(migration).unwrap();
+    }
+    (dir, conn)
+}
+
+/// What `shops(id)` does to a row of `table` when the shop is deleted, as
+/// SQLite itself reports it.
+fn on_delete_from_shops(conn: &mut SqliteConnection, table: &str) -> String {
+    let rows: Vec<Name> = diesel::sql_query(format!(
+        "SELECT \"on_delete\" AS name FROM pragma_foreign_key_list('{table}') \
+         WHERE \"table\" = 'shops'"
+    ))
+    .load(conn)
+    .unwrap();
+    assert_eq!(rows.len(), 1, "{table} has no foreign key onto shops");
+    rows[0].name.clone()
+}
+
 fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
     let row: Count = diesel::sql_query(sql).get_result(conn).unwrap();
     row.n
@@ -51,11 +83,16 @@ fn migration_creates_every_table() {
     assert_eq!(
         names,
         vec![
+            "audit_log",
             "categories",
             "counters",
+            "document_lines",
+            "document_tva",
+            "documents",
             "products",
             "settings",
             "shops",
+            "stock_movements",
             "users"
         ]
     );
@@ -66,7 +103,18 @@ fn every_table_carries_shop_id() {
     // Rule 3 in docs/architecture.md: `shop_id` from day one, on every table.
     // `shops` carries it as its own primary key.
     let (_dir, mut conn) = open_temp();
-    for table in ["categories", "counters", "products", "settings", "users"] {
+    for table in [
+        "audit_log",
+        "categories",
+        "counters",
+        "document_lines",
+        "document_tva",
+        "documents",
+        "products",
+        "settings",
+        "stock_movements",
+        "users",
+    ] {
         let n = count(
             &mut conn,
             &format!(
@@ -128,6 +176,11 @@ fn every_table_is_strict() {
         "counters",
         "categories",
         "products",
+        "documents",
+        "document_lines",
+        "document_tva",
+        "stock_movements",
+        "audit_log",
     ] {
         let strict = count(
             &mut conn,
@@ -148,6 +201,50 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
         ),
         "categories" => ("shop_id, name, default_rate_bps", &["1", "'c'", "1900"]),
         "counters" => ("shop_id, name, next_value", &["1", "'probe'", "1"]),
+        "documents" => (
+            "shop_id, kind, series, number, issued_at, user_id, regime, payment_mode, \
+             seller_name, total_ht_centimes, discount_centimes, subtotal_ht_centimes, \
+             tva_centimes, total_ttc_centimes, stamp_centimes, net_to_pay_centimes, \
+             tendered_centimes, change_centimes, status",
+            &[
+                "1",
+                "'ticket'",
+                "'doc_ticket'",
+                "1",
+                "'2026-09-09 10:00:00'",
+                "1",
+                "'reel'",
+                "'cash'",
+                "'Mon magasin'",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "'issued'",
+            ],
+        ),
+        "document_lines" => (
+            "shop_id, document_id, position, name, qty_milli, unit_price_centimes, \
+             line_discount_centimes, rate_bps, line_total_centimes",
+            &["1", "1", "0", "'p'", "1000", "0", "0", "1900", "0"],
+        ),
+        "document_tva" => (
+            "shop_id, document_id, rate_bps, base_centimes, amount_centimes",
+            &["1", "1", "1900", "0", "0"],
+        ),
+        "stock_movements" => (
+            "shop_id, product_id, kind, qty_milli, unit_cost_centimes, user_id",
+            &["1", "1", "'sale'", "-1000", "0", "1"],
+        ),
+        "audit_log" => (
+            "shop_id, user_id, action, entity, entity_id",
+            &["1", "1", "'update'", "'product'", "1"],
+        ),
         other => panic!("no insert template for {other}"),
     };
     let names: Vec<&str> = columns.split(',').map(str::trim).collect();
@@ -392,12 +489,382 @@ fn barcode_is_unique_per_shop_and_may_be_null() {
     );
 }
 
+/// The probe rows of the document tables are unique on more than one column,
+/// so a row that landed is cleared before the next valid one is tried.
+fn clear(conn: &mut SqliteConnection, table: &str) {
+    let sql = match table {
+        // The seeded document is what the line, TVA and movement probes point
+        // at, so it stays; the probe rows above it go.
+        "documents" => "DELETE FROM documents WHERE series <> 'seed'".to_string(),
+        other => format!("DELETE FROM {other}"),
+    };
+    diesel::sql_query(sql).execute(conn).unwrap();
+}
+
+/// A product and a document the line and movement probes can point at.
+fn seed_for_probes(conn: &mut SqliteConnection) {
+    diesel::sql_query(
+        "INSERT INTO products (id, shop_id, name, unit, cost_centimes, selling_centimes, \
+         qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+         VALUES (1, 1, 'p', 'piece', 0, 0, 0, 0, 1900)",
+    )
+    .execute(conn)
+    .unwrap();
+    diesel::sql_query(insert_with("documents", "series", "'seed'"))
+        .execute(conn)
+        .unwrap();
+}
+
+#[test]
+fn every_money_and_quantity_column_of_a_document_refuses_a_real_a_text_and_a_negative() {
+    // Same rule 6 probe as the first migration's tables: a wrong centime on a
+    // stored document is a legal problem, and a dropped CHECK goes red here.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    let columns = [
+        ("documents", "total_ht_centimes"),
+        ("documents", "discount_centimes"),
+        ("documents", "subtotal_ht_centimes"),
+        ("documents", "tva_centimes"),
+        ("documents", "total_ttc_centimes"),
+        ("documents", "stamp_centimes"),
+        ("documents", "net_to_pay_centimes"),
+        ("documents", "tendered_centimes"),
+        ("documents", "change_centimes"),
+        ("document_lines", "unit_price_centimes"),
+        ("document_lines", "line_discount_centimes"),
+        ("document_lines", "line_total_centimes"),
+        ("document_tva", "base_centimes"),
+        ("document_tva", "amount_centimes"),
+        ("stock_movements", "unit_cost_centimes"),
+    ];
+    for (table, column) in columns {
+        assert!(
+            probe(&mut conn, table, column, "0").is_ok(),
+            "{table}.{column}: an integer was refused"
+        );
+        clear(&mut conn, table);
+        for bad in ["19.99", "'19.99'", "'abc'", "-1"] {
+            assert!(
+                probe(&mut conn, table, column, bad).is_err(),
+                "{table}.{column} accepted {bad}"
+            );
+        }
+    }
+    // A sold quantity is above zero; a ledger movement is signed, since a sale
+    // takes stock out.
+    for bad in ["0", "-1000", "1.5", "'abc'"] {
+        assert!(
+            probe(&mut conn, "document_lines", "qty_milli", bad).is_err(),
+            "document_lines.qty_milli accepted {bad}"
+        );
+    }
+    assert!(probe(&mut conn, "stock_movements", "qty_milli", "-1500").is_ok());
+    clear(&mut conn, "stock_movements");
+    for bad in ["1.5", "'abc'"] {
+        assert!(
+            probe(&mut conn, "stock_movements", "qty_milli", bad).is_err(),
+            "stock_movements.qty_milli accepted {bad}"
+        );
+    }
+}
+
+#[test]
+fn a_document_only_takes_the_kinds_regimes_modes_and_states_the_spec_names() {
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    let sets = [
+        (
+            "kind",
+            vec![
+                "'ticket'",
+                "'facture'",
+                "'proforma'",
+                "'bon_de_livraison'",
+                "'avoir'",
+                "'bon_de_reception'",
+            ],
+            vec!["'recu'", "''"],
+        ),
+        ("regime", vec!["'ifu'", "'reel'"], vec!["'forfait'", "''"]),
+        (
+            "payment_mode",
+            vec!["'cash'", "'card'", "'credit'", "'cheque'", "'transfer'"],
+            vec!["'bitcoin'", "''"],
+        ),
+        (
+            "status",
+            vec!["'issued'", "'cancelled'"],
+            vec!["'draft'", "''"],
+        ),
+    ];
+    for (column, good, bad) in sets {
+        for value in good {
+            assert!(
+                probe(&mut conn, "documents", column, value).is_ok(),
+                "documents.{column} refused {value}"
+            );
+            clear(&mut conn, "documents");
+        }
+        for value in bad {
+            assert!(
+                probe(&mut conn, "documents", column, value).is_err(),
+                "documents.{column} accepted {value}"
+            );
+        }
+    }
+    for value in [
+        "'opening'",
+        "'purchase'",
+        "'sale'",
+        "'adjustment'",
+        "'return'",
+    ] {
+        assert!(
+            probe(&mut conn, "stock_movements", "kind", value).is_ok(),
+            "stock_movements.kind refused {value}"
+        );
+    }
+    assert!(probe(&mut conn, "stock_movements", "kind", "'shrinkage'").is_err());
+}
+
+#[test]
+fn a_number_is_unique_inside_its_series_and_free_in_another() {
+    // features.md, Numbering row: one uninterrupted series per kind, numbers
+    // never reused. The uniqueness is what makes the counter's gapless
+    // promise checkable by the file itself.
+    let (_dir, mut conn) = open_temp();
+    let row = |series: &str, number: i64| {
+        insert_with("documents", "series", &format!("'{series}'"))
+            .replace(", 1, '2026-09-09", &format!(", {number}, '2026-09-09"))
+    };
+    assert!(diesel::sql_query(row("doc_ticket", 1))
+        .execute(&mut conn)
+        .is_ok());
+    assert!(
+        diesel::sql_query(row("doc_ticket", 1))
+            .execute(&mut conn)
+            .is_err(),
+        "a ticket number came round twice"
+    );
+    assert!(
+        diesel::sql_query(row("doc_facture", 1))
+            .execute(&mut conn)
+            .is_ok(),
+        "the facture series must start at its own 1"
+    );
+    assert!(diesel::sql_query(row("doc_ticket", 2))
+        .execute(&mut conn)
+        .is_ok());
+}
+
+#[test]
+fn a_database_at_the_first_migration_takes_the_second() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it.
+    let (_dir, mut conn) = open_at_migration(1);
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ),
+        0,
+        "the first migration already carries documents"
+    );
+    use diesel_migrations::MigrationHarness;
+    conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ),
+        1
+    );
+    // The first migration's seeded rows survive: a shop that already sells is
+    // what this migration runs on.
+    assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);
+    assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM users"), 1);
+
+    // And the upgraded file sells: the point of the migration is a till that
+    // keeps working, not a schema that merely applies.
+    use dzpos_core::models::product::{NewProduct, Unit};
+    use dzpos_core::money::{Bps, Money, PaymentMode};
+    use dzpos_core::services::sales::{NewSale, NewSaleLine};
+    use dzpos_core::services::{products, sales};
+    let product = products::create(
+        &mut conn,
+        1,
+        1,
+        NewProduct {
+            name: "Sucre".to_string(),
+            barcode: None,
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(500),
+            selling: Money::centimes(1_000),
+            wholesale: None,
+            qty_on_hand_milli: 5_000,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(1900).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap();
+    let sale = sales::issue(
+        &mut conn,
+        1,
+        1,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id: product.id,
+                qty_milli: 2_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(5_000)),
+            issued_at: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(sale.number, 1);
+    assert_eq!(sale.totals.total_ht, Money::centimes(2_000));
+    assert_eq!(
+        products::get(&mut conn, 1, product.id)
+            .unwrap()
+            .qty_on_hand_milli,
+        3_000
+    );
+}
+
+#[test]
+fn a_database_at_the_second_migration_takes_the_third() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. The file this one
+    // runs on already has a ledger, so the copy is what has to be proved, not
+    // only the new foreign key.
+    let (_dir, mut conn) = open_at_migration(2);
+    assert_eq!(
+        on_delete_from_shops(&mut conn, "stock_movements"),
+        "CASCADE",
+        "migration 2 is not the version this test claims to start from"
+    );
+    diesel::sql_query(
+        "INSERT INTO products (id, shop_id, name, unit, cost_centimes, selling_centimes, \
+         qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+         VALUES (7, 1, 'Sucre', 'piece', 0, 0, 4000, 0, 1900)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO stock_movements (id, shop_id, product_id, kind, qty_milli, \
+         unit_cost_centimes, user_id, created_at) \
+         VALUES (4, 1, 7, 'opening', 4000, 820, 1, '2026-09-09 08:00:00')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    use diesel_migrations::MigrationHarness;
+    conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+
+    assert_eq!(
+        on_delete_from_shops(&mut conn, "stock_movements"),
+        "RESTRICT"
+    );
+    // The row came across whole and kept its id: an id that moved would make
+    // every ledger export written before this migration name a different row.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM stock_movements WHERE id = 4 AND shop_id = 1 \
+             AND product_id = 7 AND kind = 'opening' AND qty_milli = 4000 \
+             AND unit_cost_centimes = 820 AND document_id IS NULL AND user_id = 1 \
+             AND created_at = '2026-09-09 08:00:00'"
+        ),
+        1,
+        "the movement did not survive the table recreation unchanged"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' \
+             AND name = 'idx_stock_movements_shop_product'"
+        ),
+        1,
+        "the index went with the dropped table and was not put back"
+    );
+    // AUTOINCREMENT counts from sqlite_sequence, and that row is keyed by
+    // table name: a rename that lost it would hand the next movement id 5
+    // over again the day row 4 is deleted.
+    diesel::sql_query(
+        "INSERT INTO stock_movements (shop_id, product_id, kind, qty_milli, \
+         unit_cost_centimes, user_id) VALUES (1, 7, 'sale', -1000, 820, 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        count(&mut conn, "SELECT MAX(id) AS n FROM stock_movements"),
+        5,
+        "the sequence did not follow the table through the rename"
+    );
+    // And the upgraded file still sells: the ledger is what a sale writes to.
+    assert!(
+        diesel::sql_query("DELETE FROM shops WHERE id = 1")
+            .execute(&mut conn)
+            .is_err(),
+        "a shop with a ledger and no document was deleted"
+    );
+    assert_eq!(
+        count(&mut conn, "SELECT COUNT(*) AS n FROM stock_movements"),
+        2
+    );
+}
+
 #[test]
 fn the_migration_reverts_and_reapplies() {
     // architecture.md, Data: a migration ships with a test that runs it.
-    // This is the first one, so the round trip is what there is to prove.
+    // Reverting all the way back to an empty file is what proves each
+    // down.sql undoes its own up.sql and nothing else.
     use diesel_migrations::MigrationHarness;
     let (_dir, mut conn) = open_temp();
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // The third one only recreates stock_movements, so its down leaves the
+    // second migration's tables standing and puts the CASCADE back.
+    assert_eq!(
+        on_delete_from_shops(&mut conn, "stock_movements"),
+        "CASCADE",
+        "the restrict down.sql did not put migration 2's foreign key back"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ),
+        1,
+        "the restrict down.sql took the second migration's tables with it"
+    );
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ),
+        0,
+        "the documents down.sql left its tables behind"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'products'"
+        ),
+        1,
+        "the documents down.sql took the first migration's tables with it"
+    );
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     assert_eq!(
@@ -411,6 +878,28 @@ fn the_migration_reverts_and_reapplies() {
     conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
         .unwrap();
     assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);
+    assert_eq!(
+        on_delete_from_shops(&mut conn, "stock_movements"),
+        "RESTRICT",
+        "the file reapplied to a schema the third migration had already fixed"
+    );
+}
+
+#[test]
+fn every_ledger_table_restricts_the_shop_it_belongs_to() {
+    // A shop that has sold, been audited or moved stock is never deleted:
+    // décret 05-468 art. 10 for the series, ISO 27001 for the trail, and
+    // features.md §1 for the ledger the stock on hand is only a cache of.
+    // stock_movements shipped as CASCADE in migration 2 and migration 3 is
+    // what put it with the others.
+    let (_dir, mut conn) = open_temp();
+    for table in ["documents", "audit_log", "stock_movements"] {
+        assert_eq!(
+            on_delete_from_shops(&mut conn, table),
+            "RESTRICT",
+            "{table} lets a shop delete take it"
+        );
+    }
 }
 
 #[test]
@@ -430,4 +919,109 @@ fn foreign_keys_are_enforced() {
         orphan.is_err(),
         "a product landed under a shop that does not exist"
     );
+}
+
+#[test]
+fn a_product_with_a_movement_cannot_be_deleted() {
+    // The ledger is the truth about what left the shelf (features.md §1) and a
+    // document line keeps its own snapshot of the product, so a delete that
+    // took the movements with it would leave the sold lines standing and the
+    // stock they came out of gone. M3 archives a product instead.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    diesel::sql_query(insert_with("stock_movements", "kind", "'sale'"))
+        .execute(&mut conn)
+        .unwrap();
+    let deleted = diesel::sql_query("DELETE FROM products WHERE id = 1").execute(&mut conn);
+    assert!(
+        deleted.is_err(),
+        "a product with a movement was deleted and took its ledger with it"
+    );
+    assert_eq!(
+        count(&mut conn, "SELECT COUNT(*) AS n FROM stock_movements"),
+        1
+    );
+}
+
+#[test]
+fn a_shop_with_a_document_an_audit_entry_or_a_movement_cannot_be_deleted() {
+    // A fiscal document, the audit trail and the stock ledger outlive the row
+    // that points at them: décret 05-468 art. 10 wants an uninterrupted
+    // series, and a series a DELETE can empty is not one. A shop whose only
+    // rows are opening movements is the case the third migration is for: it
+    // has no document yet and its ledger is still what the stock it reports
+    // is made of. The second shop carries only the row under test, so each FK
+    // is the reason its own delete fails.
+    //
+    // `is_err()` alone would stay green on a CHECK, a locked file or a typo in
+    // the DELETE, so the reason is asserted and the row is counted after: the
+    // point is not that the statement failed, it is that the ledger is still
+    // there. diesel maps the bundled SQLite's foreign key error to
+    // `DatabaseErrorKind::Unknown` rather than `ForeignKeyViolation`, so the
+    // engine's own sentence is what names the reason here.
+    use diesel::result::Error as DieselError;
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    for (what, table, insert) in [
+        (
+            "a document",
+            "documents",
+            "INSERT INTO documents (shop_id, kind, series, number, issued_at, user_id, \
+             regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+             subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+             net_to_pay_centimes, status) \
+             VALUES (2, 'ticket', 'doc_ticket', 1, '2026-09-09 10:00:00', 1, 'reel', \
+             'cash', 'Autre magasin', 0, 0, 0, 0, 0, 0, 0, 'issued')",
+        ),
+        (
+            "an audit entry",
+            "audit_log",
+            "INSERT INTO audit_log (shop_id, user_id, action, entity, entity_id) \
+             VALUES (2, 1, 'update', 'product', 1)",
+        ),
+        (
+            "an opening movement",
+            "stock_movements",
+            "INSERT INTO stock_movements (shop_id, product_id, kind, qty_milli, \
+             unit_cost_centimes, user_id) VALUES (2, 1, 'opening', 1000, 0, 1)",
+        ),
+    ] {
+        diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Autre magasin')")
+            .execute(&mut conn)
+            .unwrap();
+        diesel::sql_query(insert).execute(&mut conn).unwrap();
+        let deleted = diesel::sql_query("DELETE FROM shops WHERE id = 2").execute(&mut conn);
+        let err = deleted
+            .err()
+            .unwrap_or_else(|| panic!("a shop was deleted and took {what} with it"));
+        let reason = match &err {
+            DieselError::DatabaseError(_, info) => info.message().to_string(),
+            other => panic!("{what}: the delete failed outside the database: {other:?}"),
+        };
+        assert_eq!(
+            reason, "FOREIGN KEY constraint failed",
+            "{what}: the delete failed for something other than the foreign key"
+        );
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!("SELECT COUNT(*) AS n FROM {table} WHERE shop_id = 2")
+            ),
+            1,
+            "{what} did not survive the refused delete"
+        );
+        assert_eq!(
+            count(&mut conn, "SELECT COUNT(*) AS n FROM shops WHERE id = 2"),
+            1,
+            "the shop row went even though the delete was refused"
+        );
+        for cleanup in [
+            "DELETE FROM stock_movements WHERE shop_id = 2",
+            "DELETE FROM documents WHERE shop_id = 2",
+            "DELETE FROM audit_log WHERE shop_id = 2",
+            "DELETE FROM shops WHERE id = 2",
+        ] {
+            diesel::sql_query(cleanup).execute(&mut conn).unwrap();
+        }
+    }
 }

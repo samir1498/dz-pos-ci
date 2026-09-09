@@ -14,7 +14,7 @@ test sees.
 | Thing | Home |
 |---|---|
 | The rules in prose, each with its fixture name | `docs/features.md`, fiscal rules table |
-| Constants (rates, stamp bounds, rounding mode) | one module: `crates/core/src/money/` (Rust), mirrored in `packages/shared` once generated; until then `design/shared/money.js` |
+| Constants (rates, stamp bounds, rounding mode) | one module: `crates/core/src/money/` (Rust), display side in `packages/shared/src/money.ts`; `design/shared/money.js` is the mockup copy the shared fixtures pin |
 | Fixtures | `fixtures/money/*.json`, loaded by `cargo test` and by vitest. One file, two runners. |
 | Property tests | `crates/core/tests/money_prop.rs` (proptest) |
 

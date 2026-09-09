@@ -1,0 +1,78 @@
+{#- The 80 mm ticket. One page, no external file: the bytes this renders
+are the bytes a browser prints and the bytes a server hands over, so the
+stylesheet is inline (features.md §4). The template holds no rule: every
+string, every amount and every "only if present" is decided in
+crates/core/src/print/ticket.rs and arrives here already made. -#}
+<!doctype html>
+<html lang="{{ lang_tag }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<title>{{ title }} {{ number }}</title>
+{%- if arabic_unreviewed %}
+<!-- The Arabic wording of this template is unreviewed by a native speaker, like words_ar (research R6). -->
+{%- endif %}
+<style>
+@page { size: 80mm auto; margin: 0 }
+body { margin: 0; background: #fff; color: #000 }
+.ticket { inline-size: 72mm; margin: 0 auto; padding: 4mm 0; font: 12px/1.45 "DejaVu Sans Mono", "Courier New", monospace }
+.center { text-align: center }
+.name { font-size: 15px; font-weight: 700 }
+.dashed { border-block-start: 1px dashed #000; margin-block: 2mm }
+.row { display: flex; justify-content: space-between; gap: 3mm }
+.row .label { overflow-wrap: anywhere }
+.amount, .num { white-space: nowrap }
+.cur { margin-inline-start: .4em }
+.item-name { overflow-wrap: anywhere }
+.item-detail { color: #333 }
+.net { font-weight: 700; font-size: 14px }
+</style>
+</head>
+<body>
+<article class="ticket">
+<div class="center">
+<div class="name">{{ seller.name }}</div>
+{%- if let Some(address) = seller.address %}
+<div>{{ address }}</div>
+{%- endif %}
+{%- if let Some(phone) = seller.phone %}
+<div class="num">{{ phone }}</div>
+{%- endif %}
+{%- for id in seller.ids %}
+<div>{{ id.label }} <span class="num">{{ id.value }}</span></div>
+{%- endfor %}
+</div>
+<div class="dashed"></div>
+<div class="row"><span class="num">{{ number }}</span><span class="num">{{ issued_at }}</span></div>
+<div class="dashed"></div>
+{%- for line in lines %}
+<div class="item-name">{{ line.name }}</div>
+<div class="row item-detail"><span class="num">{{ line.qty }} × {{ line.unit_price }}{% if let Some(rate) = line.rate %} · {{ rate }}{% endif %}</span><span class="amount amount-line">{{ line.total }}</span></div>
+{%- if let Some(discount) = line.discount %}
+<div class="row item-detail"><span class="label">{{ discount_label }}</span><span class="amount amount-line-discount">-{{ discount }}</span></div>
+{%- endif %}
+{%- endfor %}
+<div class="dashed"></div>
+<div class="row"><span class="label">{{ total_label }}</span><span class="amount amount-total">{{ total_amount }}</span><span class="cur">{{ currency }}</span></div>
+{%- if let Some(discount) = discount %}
+<div class="row"><span class="label">{{ discount_label }}</span><span class="amount amount-discount">-{{ discount }}</span><span class="cur">{{ currency }}</span></div>
+{%- endif %}
+{%- for tva in tva_rows %}
+<div class="row"><span class="label">{{ tva.label }}</span><span class="amount amount-tva">{{ tva.amount }}</span><span class="cur">{{ currency }}</span></div>
+{%- endfor %}
+{%- if let Some(stamp) = stamp %}
+<div class="row"><span class="label">{{ stamp_label }}</span><span class="amount amount-stamp">{{ stamp }}</span><span class="cur">{{ currency }}</span></div>
+{%- endif %}
+<div class="row net"><span class="label">{{ net_to_pay_label }}</span><span class="amount amount-net-to-pay">{{ net_to_pay }}</span><span class="cur">{{ currency }}</span></div>
+<div class="dashed"></div>
+<div class="row"><span class="label">{{ payment_mode_label }}</span><span>{{ payment_mode }}</span></div>
+{%- if let Some(tendered) = tendered %}
+<div class="row"><span class="label">{{ tendered_label }}</span><span class="amount amount-tendered">{{ tendered }}</span><span class="cur">{{ currency }}</span></div>
+{%- endif %}
+{%- if let Some(change) = change %}
+<div class="row"><span class="label">{{ change_label }}</span><span class="amount amount-change">{{ change }}</span><span class="cur">{{ currency }}</span></div>
+{%- endif %}
+<div class="dashed"></div>
+<div class="center">{{ thank_you }}</div>
+</article>
+</body>
+</html>

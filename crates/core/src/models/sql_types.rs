@@ -1,6 +1,10 @@
 //! Storage-side types. `money/mod.rs` stays free of diesel, so the
 //! centimes conversion for `Money` lives in `product.rs` next to the row it
-//! maps. `Unit` is defined here and carries its own diesel derives.
+//! maps, and `Regime` and `PaymentMode` convert in `document.rs`.
+//!
+//! Each enum here is one column with a CHECK behind it. The macro writes the
+//! same four impls every time; hand-written, they drifted from the CHECK the
+//! moment a variant was added to one and not the other.
 
 use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::expression::AsExpression;
@@ -8,67 +12,142 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Text;
 use diesel::sqlite::Sqlite;
 
-/// Unit of measure. The products CHECK constraint allows exactly these.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    serde::Serialize,
-    serde::Deserialize,
-    AsExpression,
-    FromSqlRow,
-)]
-#[diesel(sql_type = Text)]
-#[serde(rename_all = "lowercase")]
-pub enum Unit {
-    Piece,
-    Kg,
-    Litre,
-    Box,
+/// An enum stored as the exact text its column's CHECK allows.
+macro_rules! text_enum {
+    (
+        $(#[$meta:meta])*
+        $name:ident { $($variant:ident => $stored:literal),+ $(,)? }
+    ) => {
+        $(#[$meta])*
+        #[derive(
+            Debug,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            Hash,
+            serde::Serialize,
+            serde::Deserialize,
+            AsExpression,
+            FromSqlRow,
+        )]
+        #[diesel(sql_type = Text)]
+        #[serde(rename_all = "snake_case")]
+        pub enum $name {
+            $($variant),+
+        }
+
+        impl $name {
+            pub const fn as_str(self) -> &'static str {
+                match self {
+                    $($name::$variant => $stored),+
+                }
+            }
+
+            pub fn parse(s: &str) -> Option<Self> {
+                match s {
+                    $($stored => Some($name::$variant),)+
+                    _ => None,
+                }
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(self.as_str())
+            }
+        }
+
+        impl FromSql<Text, Sqlite> for $name {
+            fn from_sql(
+                value: <Sqlite as diesel::backend::Backend>::RawValue<'_>,
+            ) -> deserialize::Result<Self> {
+                let raw = <String as FromSql<Text, Sqlite>>::from_sql(value)?;
+                $name::parse(&raw)
+                    .ok_or_else(|| format!(concat!("unknown ", stringify!($name), ": {}"), raw).into())
+            }
+        }
+
+        impl ToSql<Text, Sqlite> for $name {
+            fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> serialize::Result {
+                out.set_value(self.as_str().to_string());
+                Ok(serialize::IsNull::No)
+            }
+        }
+    };
 }
 
-impl Unit {
-    pub const fn as_str(self) -> &'static str {
+text_enum! {
+    /// Unit of measure. The products CHECK constraint allows exactly these.
+    Unit {
+        Piece => "piece",
+        Kg => "kg",
+        Litre => "litre",
+        Box => "box",
+    }
+}
+
+text_enum! {
+    /// Why stock moved (features.md §1, Stock movements). The ledger is the
+    /// truth; the product's quantity is a cache of it.
+    MovementKind {
+        Opening => "opening",
+        Purchase => "purchase",
+        Sale => "sale",
+        Adjustment => "adjustment",
+        Return => "return",
+    }
+}
+
+text_enum! {
+    /// The document kinds of features.md §3. M1 issues `Ticket` only; the
+    /// others exist so a later milestone adds a screen, not a migration.
+    DocumentKind {
+        Ticket => "ticket",
+        Facture => "facture",
+        Proforma => "proforma",
+        BonDeLivraison => "bon_de_livraison",
+        Avoir => "avoir",
+        BonDeReception => "bon_de_reception",
+    }
+}
+
+text_enum! {
+    /// A cancelled document keeps its number and its row, so the series never
+    /// gaps (features.md, Numbering row).
+    DocumentStatus {
+        Issued => "issued",
+        Cancelled => "cancelled",
+    }
+}
+
+impl DocumentKind {
+    /// The counter series this kind takes its numbers from. One series per
+    /// kind, uninterrupted (décret 05-468 art. 10).
+    pub const fn series(self) -> &'static str {
         match self {
-            Unit::Piece => "piece",
-            Unit::Kg => "kg",
-            Unit::Litre => "litre",
-            Unit::Box => "box",
+            DocumentKind::Ticket => "doc_ticket",
+            DocumentKind::Facture => "doc_facture",
+            DocumentKind::Proforma => "doc_proforma",
+            DocumentKind::BonDeLivraison => "doc_bon_de_livraison",
+            DocumentKind::Avoir => "doc_avoir",
+            DocumentKind::BonDeReception => "doc_bon_de_reception",
         }
     }
 
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "piece" => Some(Unit::Piece),
-            "kg" => Some(Unit::Kg),
-            "litre" => Some(Unit::Litre),
-            "box" => Some(Unit::Box),
-            _ => None,
+    /// The printed form of the same series. `series` above is the counter's
+    /// name and a column value; this is what a customer reads back over the
+    /// phone, and a printed number is `{prefix}-{number:06}`: `TK-000123`.
+    /// The two live side by side so a kind can never have one without the
+    /// other.
+    pub const fn number_prefix(self) -> &'static str {
+        match self {
+            DocumentKind::Ticket => "TK",
+            DocumentKind::Facture => "FA",
+            DocumentKind::Proforma => "PF",
+            DocumentKind::BonDeLivraison => "BL",
+            DocumentKind::Avoir => "AV",
+            DocumentKind::BonDeReception => "BR",
         }
-    }
-}
-
-impl std::fmt::Display for Unit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl FromSql<Text, Sqlite> for Unit {
-    fn from_sql(
-        value: <Sqlite as diesel::backend::Backend>::RawValue<'_>,
-    ) -> deserialize::Result<Self> {
-        let raw = <String as FromSql<Text, Sqlite>>::from_sql(value)?;
-        Unit::parse(&raw).ok_or_else(|| format!("unknown unit of measure: {raw}").into())
-    }
-}
-
-impl ToSql<Text, Sqlite> for Unit {
-    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> serialize::Result {
-        out.set_value(self.as_str().to_string());
-        Ok(serialize::IsNull::No)
     }
 }

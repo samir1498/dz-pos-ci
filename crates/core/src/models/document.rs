@@ -1,0 +1,360 @@
+//! A fiscal document, its lines and its TVA recap (features.md §3). Every
+//! kind shares this shape; only numbering, legal blocks and stock effect
+//! differ. Amounts are `Money`, the `*_centimes` columns the `i64` behind
+//! them, and `Regime` and `PaymentMode` convert to their column text here so
+//! the money module stays free of diesel.
+
+use chrono::NaiveDateTime;
+use diesel::prelude::*;
+
+use crate::error::CoreError;
+use crate::models::shop::Shop;
+use crate::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
+use crate::schema::{document_lines, document_tva, documents};
+
+pub use super::sql_types::{DocumentKind, DocumentStatus};
+
+/// The seven seller fields as they were on the day. Snapshotted, never
+/// joined: `shops` is replaced in place, so a reprint that read it live
+/// would print a document the shop never issued.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SellerBlock {
+    pub name: String,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    pub address: Option<String>,
+    pub phone: Option<String>,
+}
+
+impl From<Shop> for SellerBlock {
+    fn from(s: Shop) -> Self {
+        SellerBlock {
+            name: s.name,
+            rc: s.rc,
+            nif: s.nif,
+            nis: s.nis,
+            ai: s.ai,
+            address: s.address,
+            phone: s.phone,
+        }
+    }
+}
+
+/// One sold line as it was sold. `name` and `barcode` are snapshots: the
+/// product may be renamed or deleted and a reprint still shows what the
+/// customer was handed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentLine {
+    pub id: i32,
+    pub position: i32,
+    pub product_id: Option<i32>,
+    pub name: String,
+    pub barcode: Option<String>,
+    pub qty_milli: i64,
+    pub unit_price: Money,
+    pub line_discount: Money,
+    pub rate_bps: Bps,
+    pub line_total: Money,
+}
+
+/// A line as a caller hands it over, before it has an id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewDocumentLine {
+    pub product_id: Option<i32>,
+    pub name: String,
+    pub barcode: Option<String>,
+    pub qty_milli: i64,
+    pub unit_price: Money,
+    pub line_discount: Money,
+    pub rate_bps: Bps,
+    pub line_total: Money,
+}
+
+/// A document as the rest of the app sees it. `totals` carries the TVA recap
+/// read back from `document_tva`, so a reprint never recomputes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Document {
+    pub id: i32,
+    pub shop_id: i32,
+    pub kind: DocumentKind,
+    pub series: String,
+    pub number: i64,
+    pub issued_at: NaiveDateTime,
+    pub user_id: i32,
+    pub regime: Regime,
+    pub payment_mode: PaymentMode,
+    pub seller: SellerBlock,
+    pub customer_id: Option<i32>,
+    pub totals: Totals,
+    pub tendered: Option<Money>,
+    pub change: Option<Money>,
+    pub status: DocumentStatus,
+    pub lines: Vec<DocumentLine>,
+    pub created_at: NaiveDateTime,
+}
+
+/// A document as a service hands it over. The number and the series are the
+/// numbering's to assign, never the caller's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewDocument {
+    pub kind: DocumentKind,
+    pub issued_at: NaiveDateTime,
+    pub user_id: i32,
+    pub regime: Regime,
+    pub payment_mode: PaymentMode,
+    pub seller: SellerBlock,
+    pub customer_id: Option<i32>,
+    pub totals: Totals,
+    pub tendered: Option<Money>,
+    pub change: Option<Money>,
+    pub lines: Vec<NewDocumentLine>,
+}
+
+/// The column text for a régime and a payment mode. The migration carries
+/// the same CHECK; this is the one place the two spellings meet.
+pub(crate) const fn regime_stored(regime: Regime) -> &'static str {
+    match regime {
+        Regime::Reel => "reel",
+        Regime::Ifu => "ifu",
+    }
+}
+
+pub(crate) fn regime_parse(value: &str) -> Result<Regime, CoreError> {
+    match value {
+        "reel" => Ok(Regime::Reel),
+        "ifu" => Ok(Regime::Ifu),
+        other => Err(CoreError::validation(
+            "regime",
+            &format!("{other} is not a régime fiscal"),
+        )),
+    }
+}
+
+pub(crate) const fn payment_mode_stored(mode: PaymentMode) -> &'static str {
+    match mode {
+        PaymentMode::Cash => "cash",
+        PaymentMode::Card => "card",
+        PaymentMode::Credit => "credit",
+    }
+}
+
+/// cheque and transfer are parked payment modes (features.md, Later): the
+/// column admits them so adding one is not a migration, and the enum does
+/// not, because whether a cheque carries the droit de timbre is undecided.
+pub(crate) fn payment_mode_parse(value: &str) -> Result<PaymentMode, CoreError> {
+    match value {
+        "cash" => Ok(PaymentMode::Cash),
+        "card" => Ok(PaymentMode::Card),
+        "credit" => Ok(PaymentMode::Credit),
+        other => Err(CoreError::validation(
+            "payment_mode",
+            &format!("{other} is not a payment mode this version issues"),
+        )),
+    }
+}
+
+fn bps(raw: i32) -> Result<Bps, CoreError> {
+    let raw = u32::try_from(raw).map_err(|_| crate::money::MoneyError::RateOutOfRange)?;
+    Ok(Bps::new(raw)?)
+}
+
+#[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
+#[diesel(table_name = documents)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub(crate) struct DocumentRow {
+    pub id: i32,
+    pub shop_id: i32,
+    pub kind: DocumentKind,
+    pub series: String,
+    pub number: i64,
+    pub issued_at: NaiveDateTime,
+    pub user_id: i32,
+    pub regime: String,
+    pub payment_mode: String,
+    pub seller_name: String,
+    pub seller_rc: Option<String>,
+    pub seller_nif: Option<String>,
+    pub seller_nis: Option<String>,
+    pub seller_ai: Option<String>,
+    pub seller_address: Option<String>,
+    pub seller_phone: Option<String>,
+    pub customer_id: Option<i32>,
+    pub total_ht_centimes: i64,
+    pub discount_centimes: i64,
+    pub subtotal_ht_centimes: i64,
+    pub tva_centimes: i64,
+    pub total_ttc_centimes: i64,
+    pub stamp_centimes: i64,
+    pub net_to_pay_centimes: i64,
+    pub tendered_centimes: Option<i64>,
+    pub change_centimes: Option<i64>,
+    pub status: DocumentStatus,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = documents)]
+pub(crate) struct DocumentRowWrite {
+    pub shop_id: i32,
+    pub kind: DocumentKind,
+    pub series: String,
+    pub number: i64,
+    pub issued_at: NaiveDateTime,
+    pub user_id: i32,
+    pub regime: &'static str,
+    pub payment_mode: &'static str,
+    pub seller_name: String,
+    pub seller_rc: Option<String>,
+    pub seller_nif: Option<String>,
+    pub seller_nis: Option<String>,
+    pub seller_ai: Option<String>,
+    pub seller_address: Option<String>,
+    pub seller_phone: Option<String>,
+    pub customer_id: Option<i32>,
+    pub total_ht_centimes: i64,
+    pub discount_centimes: i64,
+    pub subtotal_ht_centimes: i64,
+    pub tva_centimes: i64,
+    pub total_ttc_centimes: i64,
+    pub stamp_centimes: i64,
+    pub net_to_pay_centimes: i64,
+    pub tendered_centimes: Option<i64>,
+    pub change_centimes: Option<i64>,
+    pub status: DocumentStatus,
+}
+
+#[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
+#[diesel(table_name = document_lines)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub(crate) struct DocumentLineRow {
+    pub id: i32,
+    pub position: i32,
+    pub product_id: Option<i32>,
+    pub name: String,
+    pub barcode: Option<String>,
+    pub qty_milli: i64,
+    pub unit_price_centimes: i64,
+    pub line_discount_centimes: i64,
+    pub rate_bps: i32,
+    pub line_total_centimes: i64,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = document_lines)]
+pub(crate) struct DocumentLineRowWrite {
+    pub shop_id: i32,
+    pub document_id: i32,
+    pub position: i32,
+    pub product_id: Option<i32>,
+    pub name: String,
+    pub barcode: Option<String>,
+    pub qty_milli: i64,
+    pub unit_price_centimes: i64,
+    pub line_discount_centimes: i64,
+    pub rate_bps: i32,
+    pub line_total_centimes: i64,
+}
+
+// Only the three columns a recap row prints. The document it belongs to is
+// the query's filter, so selecting it back would be dead weight.
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = document_tva)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub(crate) struct DocumentTvaRow {
+    pub rate_bps: i32,
+    pub base_centimes: i64,
+    pub amount_centimes: i64,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = document_tva)]
+pub(crate) struct DocumentTvaRowWrite {
+    pub shop_id: i32,
+    pub document_id: i32,
+    pub rate_bps: i32,
+    pub base_centimes: i64,
+    pub amount_centimes: i64,
+}
+
+impl TryFrom<DocumentLineRow> for DocumentLine {
+    type Error = CoreError;
+
+    fn try_from(r: DocumentLineRow) -> Result<Self, CoreError> {
+        Ok(DocumentLine {
+            id: r.id,
+            position: r.position,
+            product_id: r.product_id,
+            name: r.name,
+            barcode: r.barcode,
+            qty_milli: r.qty_milli,
+            unit_price: Money::centimes(r.unit_price_centimes),
+            line_discount: Money::centimes(r.line_discount_centimes),
+            rate_bps: bps(r.rate_bps)?,
+            line_total: Money::centimes(r.line_total_centimes),
+        })
+    }
+}
+
+impl TryFrom<DocumentTvaRow> for TvaLine {
+    type Error = CoreError;
+
+    fn try_from(r: DocumentTvaRow) -> Result<Self, CoreError> {
+        Ok(TvaLine {
+            rate: bps(r.rate_bps)?,
+            base: Money::centimes(r.base_centimes),
+            amount: Money::centimes(r.amount_centimes),
+        })
+    }
+}
+
+/// The stored row plus the lines and TVA rows read with it.
+pub(crate) fn assemble(
+    row: DocumentRow,
+    lines: Vec<DocumentLineRow>,
+    tva: Vec<DocumentTvaRow>,
+) -> Result<Document, CoreError> {
+    Ok(Document {
+        id: row.id,
+        shop_id: row.shop_id,
+        kind: row.kind,
+        series: row.series,
+        number: row.number,
+        issued_at: row.issued_at,
+        user_id: row.user_id,
+        regime: regime_parse(&row.regime)?,
+        payment_mode: payment_mode_parse(&row.payment_mode)?,
+        seller: SellerBlock {
+            name: row.seller_name,
+            rc: row.seller_rc,
+            nif: row.seller_nif,
+            nis: row.seller_nis,
+            ai: row.seller_ai,
+            address: row.seller_address,
+            phone: row.seller_phone,
+        },
+        customer_id: row.customer_id,
+        totals: Totals {
+            total_ht: Money::centimes(row.total_ht_centimes),
+            discount: Money::centimes(row.discount_centimes),
+            subtotal_ht: Money::centimes(row.subtotal_ht_centimes),
+            tva_by_rate: tva
+                .into_iter()
+                .map(TvaLine::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
+            tva: Money::centimes(row.tva_centimes),
+            total_ttc: Money::centimes(row.total_ttc_centimes),
+            stamp: Money::centimes(row.stamp_centimes),
+            net_to_pay: Money::centimes(row.net_to_pay_centimes),
+        },
+        tendered: row.tendered_centimes.map(Money::centimes),
+        change: row.change_centimes.map(Money::centimes),
+        status: row.status,
+        lines: lines
+            .into_iter()
+            .map(DocumentLine::try_from)
+            .collect::<Result<Vec<_>, _>>()?,
+        created_at: row.created_at,
+    })
+}

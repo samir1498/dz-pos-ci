@@ -12,6 +12,8 @@ use dzpos_core::services::products;
 
 const SHOP: i32 = 1;
 const SEEDED_CATEGORY: i32 = 1;
+/// The owner the first migration seeds. TODO(M4): the real user.
+const OWNER: i32 = 1;
 
 fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
     let dir = tempfile::tempdir().unwrap();
@@ -21,7 +23,7 @@ fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
 }
 
 /// A second shop with a category of its own, and that category's id. There
-/// is no shops service yet (M7 pairs a second till), so the rows go in raw:
+/// is no shops service yet (M6 pairs a second till), so the rows go in raw:
 /// what is under test is the service's scoping, never this seed.
 fn seed_second_shop(conn: &mut SqliteConnection) -> i32 {
     use diesel::prelude::*;
@@ -71,7 +73,7 @@ fn a_new_database_lists_no_products() {
 #[test]
 fn create_then_list_and_get_round_trip() {
     let (_dir, mut conn) = open_temp();
-    let made = products::create(&mut conn, SHOP, draft("Huile Elio 5L")).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("Huile Elio 5L")).unwrap();
     assert_eq!(made.shop_id, SHOP);
     assert_eq!(made.name, "Huile Elio 5L");
     assert_eq!(made.cost, Money::centimes(820));
@@ -94,7 +96,7 @@ fn money_survives_the_database_as_centimes() {
     d.cost = Money::centimes(9_007_199_254_740_993);
     d.selling = Money::centimes(9_007_199_254_740_995);
     d.wholesale = Some(Money::centimes(1));
-    let made = products::create(&mut conn, SHOP, d).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, d).unwrap();
     let back = products::get(&mut conn, SHOP, made.id).unwrap();
     assert_eq!(back.cost.as_centimes(), 9_007_199_254_740_993);
     assert_eq!(back.selling.as_centimes(), 9_007_199_254_740_995);
@@ -105,8 +107,8 @@ fn money_survives_the_database_as_centimes() {
 fn a_blank_barcode_is_auto_numbered_and_unique() {
     // features.md §1: barcode unique, optional, auto-generated numeric if blank.
     let (_dir, mut conn) = open_temp();
-    let a = products::create(&mut conn, SHOP, draft("A")).unwrap();
-    let b = products::create(&mut conn, SHOP, draft("B")).unwrap();
+    let a = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
+    let b = products::create(&mut conn, SHOP, OWNER, draft("B")).unwrap();
     let (ba, bb) = (a.barcode.unwrap(), b.barcode.unwrap());
     assert_ne!(ba, bb);
     for code in [&ba, &bb] {
@@ -131,10 +133,10 @@ fn a_typed_barcode_sitting_on_the_next_auto_number_does_not_block_it() {
     let (_dir, mut conn) = open_temp();
     let mut taken = draft("Saisi à la main");
     taken.barcode = Some("2000010000029".to_string());
-    products::create(&mut conn, SHOP, taken).unwrap();
+    products::create(&mut conn, SHOP, OWNER, taken).unwrap();
 
-    let a = products::create(&mut conn, SHOP, draft("A")).unwrap();
-    let b = products::create(&mut conn, SHOP, draft("B")).unwrap();
+    let a = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
+    let b = products::create(&mut conn, SHOP, OWNER, draft("B")).unwrap();
     let (ba, bb) = (a.barcode.unwrap(), b.barcode.unwrap());
     assert_ne!(ba, bb, "two blank creates got the same number");
     for code in [&ba, &bb] {
@@ -154,12 +156,12 @@ fn each_shop_numbers_its_own_in_store_barcodes() {
     let (_dir, mut conn) = open_temp();
     seed_second_shop(&mut conn);
     for name in ["A", "B", "C"] {
-        products::create(&mut conn, SHOP, draft(name)).unwrap();
+        products::create(&mut conn, SHOP, OWNER, draft(name)).unwrap();
     }
     let mut for_shop_two = draft("Deuxième A");
     for_shop_two.category_id = None;
     for_shop_two.rate_bps = Some(Bps::new(900).unwrap());
-    let other = products::create(&mut conn, 2, for_shop_two).unwrap();
+    let other = products::create(&mut conn, 2, OWNER, for_shop_two).unwrap();
     assert_eq!(
         other.barcode.as_deref(),
         Some("2000020000019"),
@@ -182,7 +184,7 @@ fn each_shop_numbers_its_own_in_store_barcodes() {
         shop_one_next, 4,
         "shop 1's counter moved because of shop 2's product"
     );
-    let next = products::create(&mut conn, SHOP, draft("D")).unwrap();
+    let next = products::create(&mut conn, SHOP, OWNER, draft("D")).unwrap();
     assert_eq!(
         next.barcode.as_deref(),
         Some("2000010000043"),
@@ -205,7 +207,7 @@ fn a_spent_barcode_series_is_not_blamed_on_the_user() {
     ))
     .execute(&mut conn)
     .unwrap();
-    let err = products::create(&mut conn, SHOP, draft("A")).unwrap_err();
+    let err = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap_err();
     assert_eq!(err.code(), "exhausted", "{err}");
     assert_eq!(
         products::list(&mut conn, SHOP).unwrap().len(),
@@ -219,7 +221,7 @@ fn whitespace_only_barcode_counts_as_blank() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");
     d.barcode = Some("   ".to_string());
-    let made = products::create(&mut conn, SHOP, d).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, d).unwrap();
     assert_eq!(made.barcode.map(|b| b.len()), Some(13));
 }
 
@@ -228,7 +230,7 @@ fn a_given_barcode_is_kept_verbatim() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");
     d.barcode = Some(" 6130001000018 ".to_string());
-    let made = products::create(&mut conn, SHOP, d).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, d).unwrap();
     assert_eq!(made.barcode.as_deref(), Some("6130001000018"));
 }
 
@@ -237,11 +239,11 @@ fn a_duplicate_barcode_in_the_same_shop_is_rejected() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");
     d.barcode = Some("6130001000018".to_string());
-    products::create(&mut conn, SHOP, d).unwrap();
+    products::create(&mut conn, SHOP, OWNER, d).unwrap();
 
     let mut e = draft("B");
     e.barcode = Some("6130001000018".to_string());
-    match products::create(&mut conn, SHOP, e) {
+    match products::create(&mut conn, SHOP, OWNER, e) {
         Err(CoreError::DuplicateBarcode(code)) => assert_eq!(code, "6130001000018"),
         other => panic!("expected DuplicateBarcode, got {other:?}"),
     }
@@ -257,13 +259,13 @@ fn one_barcode_may_exist_once_in_each_shop() {
 
     let mut mine = draft("Huile Elio 5L");
     mine.barcode = Some("6130001000018".to_string());
-    let ours = products::create(&mut conn, SHOP, mine).unwrap();
+    let ours = products::create(&mut conn, SHOP, OWNER, mine).unwrap();
     assert_eq!(ours.shop_id, SHOP);
 
     let mut yours = draft("Huile Elio 5L");
     yours.barcode = Some("6130001000018".to_string());
     yours.category_id = Some(theirs);
-    let made = products::create(&mut conn, 2, yours).unwrap();
+    let made = products::create(&mut conn, 2, OWNER, yours).unwrap();
     assert_eq!(made.shop_id, 2);
     assert_eq!(made.barcode.as_deref(), Some("6130001000018"));
 
@@ -277,7 +279,7 @@ fn an_empty_name_is_rejected() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("  ");
     d.barcode = None;
-    match products::create(&mut conn, SHOP, d) {
+    match products::create(&mut conn, SHOP, OWNER, d) {
         Err(CoreError::Validation { field, .. }) => assert_eq!(field, "name"),
         other => panic!("expected a name validation error, got {other:?}"),
     }
@@ -288,7 +290,7 @@ fn a_negative_selling_price_is_rejected() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");
     d.selling = Money::centimes(-1);
-    match products::create(&mut conn, SHOP, d) {
+    match products::create(&mut conn, SHOP, OWNER, d) {
         Err(CoreError::Validation { field, .. }) => assert_eq!(field, "selling_centimes"),
         other => panic!("expected a selling validation error, got {other:?}"),
     }
@@ -299,7 +301,7 @@ fn a_negative_cost_is_rejected() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");
     d.cost = Money::centimes(-1);
-    match products::create(&mut conn, SHOP, d) {
+    match products::create(&mut conn, SHOP, OWNER, d) {
         Err(CoreError::Validation { field, .. }) => assert_eq!(field, "cost_centimes"),
         other => panic!("expected a cost validation error, got {other:?}"),
     }
@@ -311,7 +313,7 @@ fn a_zero_selling_price_is_allowed() {
     let mut d = draft("Échantillon");
     d.selling = Money::ZERO;
     assert_eq!(
-        products::create(&mut conn, SHOP, d).unwrap().selling,
+        products::create(&mut conn, SHOP, OWNER, d).unwrap().selling,
         Money::ZERO
     );
 }
@@ -320,7 +322,7 @@ fn a_zero_selling_price_is_allowed() {
 fn the_rate_defaults_from_the_category() {
     // The seeded category "Général" carries 1900 bps (features.md, TVA rates).
     let (_dir, mut conn) = open_temp();
-    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
     assert_eq!(made.rate_bps, Bps::new(1900).unwrap());
 }
 
@@ -330,7 +332,9 @@ fn an_explicit_rate_beats_the_category_default() {
     let mut d = draft("Farine");
     d.rate_bps = Some(Bps::new(900).unwrap());
     assert_eq!(
-        products::create(&mut conn, SHOP, d).unwrap().rate_bps,
+        products::create(&mut conn, SHOP, OWNER, d)
+            .unwrap()
+            .rate_bps,
         Bps::new(900).unwrap()
     );
 }
@@ -340,7 +344,7 @@ fn without_a_category_the_rate_must_be_given() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");
     d.category_id = None;
-    match products::create(&mut conn, SHOP, d) {
+    match products::create(&mut conn, SHOP, OWNER, d) {
         Err(CoreError::Validation { field, .. }) => assert_eq!(field, "rate_bps"),
         other => panic!("expected a rate validation error, got {other:?}"),
     }
@@ -350,7 +354,9 @@ fn without_a_category_the_rate_must_be_given() {
     e.category_id = None;
     e.rate_bps = Some(Bps::new(0).unwrap());
     assert_eq!(
-        products::create(&mut conn2, SHOP, e).unwrap().rate_bps,
+        products::create(&mut conn2, SHOP, OWNER, e)
+            .unwrap()
+            .rate_bps,
         Bps::new(0).unwrap()
     );
 }
@@ -360,7 +366,7 @@ fn a_category_from_another_shop_is_rejected() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");
     d.category_id = Some(4242);
-    match products::create(&mut conn, SHOP, d) {
+    match products::create(&mut conn, SHOP, OWNER, d) {
         Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "category"),
         other => panic!("expected a category NotFound, got {other:?}"),
     }
@@ -375,7 +381,7 @@ fn another_shops_category_is_rejected_even_when_the_rate_is_explicit() {
     let mut d = draft("A");
     d.category_id = Some(theirs);
     d.rate_bps = Some(Bps::new(1900).unwrap());
-    match products::create(&mut conn, SHOP, d) {
+    match products::create(&mut conn, SHOP, OWNER, d) {
         Err(CoreError::NotFound { entity, id }) => {
             assert_eq!(entity, "category");
             assert_eq!(id, theirs);
@@ -399,7 +405,7 @@ fn a_category_that_no_longer_exists_is_not_found_rather_than_a_storage_failure()
     let mut d = draft("Orpheline");
     d.category_id = Some(gone);
     d.rate_bps = Some(Bps::new(900).unwrap());
-    let err = products::create(&mut conn, 2, d).unwrap_err();
+    let err = products::create(&mut conn, 2, OWNER, d).unwrap_err();
     assert_eq!(err.code(), "not_found", "{err}");
 }
 
@@ -407,11 +413,11 @@ fn a_category_that_no_longer_exists_is_not_found_rather_than_a_storage_failure()
 fn an_update_onto_another_shops_category_is_rejected_too() {
     let (_dir, mut conn) = open_temp();
     let theirs = seed_second_shop(&mut conn);
-    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
     let mut d = draft("A");
     d.category_id = Some(theirs);
     d.rate_bps = Some(Bps::new(1900).unwrap());
-    match products::update(&mut conn, SHOP, made.id, d) {
+    match products::update(&mut conn, SHOP, OWNER, made.id, d) {
         Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "category"),
         other => panic!("expected a category NotFound, got {other:?}"),
     }
@@ -421,7 +427,7 @@ fn an_update_onto_another_shops_category_is_rejected_too() {
 fn get_and_list_are_scoped_by_shop() {
     // Rule 3: every query is scoped by shop_id, so another shop sees nothing.
     let (_dir, mut conn) = open_temp();
-    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
     assert!(products::list(&mut conn, 2).unwrap().is_empty());
     match products::get(&mut conn, 2, made.id) {
         Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "product"),
@@ -444,12 +450,12 @@ fn get_on_a_missing_id_is_not_found() {
 #[test]
 fn update_changes_the_row_and_keeps_the_id() {
     let (_dir, mut conn) = open_temp();
-    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
     let mut d = draft("A renommé");
     d.selling = Money::centimes(1_050);
     d.unit = Unit::Kg;
     d.active = false;
-    let after = products::update(&mut conn, SHOP, made.id, d).unwrap();
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, d).unwrap();
     assert_eq!(after.id, made.id);
     assert_eq!(after.name, "A renommé");
     assert_eq!(after.selling, Money::centimes(1_050));
@@ -461,19 +467,19 @@ fn update_changes_the_row_and_keeps_the_id() {
 #[test]
 fn update_keeps_the_existing_barcode_when_none_is_given() {
     let (_dir, mut conn) = open_temp();
-    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
-    let after = products::update(&mut conn, SHOP, made.id, draft("A")).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, draft("A")).unwrap();
     assert_eq!(after.barcode, made.barcode);
 }
 
 #[test]
 fn update_onto_another_products_barcode_is_rejected() {
     let (_dir, mut conn) = open_temp();
-    let a = products::create(&mut conn, SHOP, draft("A")).unwrap();
-    let b = products::create(&mut conn, SHOP, draft("B")).unwrap();
+    let a = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
+    let b = products::create(&mut conn, SHOP, OWNER, draft("B")).unwrap();
     let mut d = draft("B");
     d.barcode = a.barcode.clone();
-    match products::update(&mut conn, SHOP, b.id, d) {
+    match products::update(&mut conn, SHOP, OWNER, b.id, d) {
         Err(CoreError::DuplicateBarcode(_)) => {}
         other => panic!("expected DuplicateBarcode, got {other:?}"),
     }
@@ -482,8 +488,8 @@ fn update_onto_another_products_barcode_is_rejected() {
 #[test]
 fn update_is_scoped_by_shop() {
     let (_dir, mut conn) = open_temp();
-    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
-    match products::update(&mut conn, 2, made.id, draft("stolen")) {
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
+    match products::update(&mut conn, 2, OWNER, made.id, draft("stolen")) {
         Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "product"),
         other => panic!("expected NotFound, got {other:?}"),
     }
@@ -496,7 +502,7 @@ fn every_error_carries_a_stable_code_for_the_ui() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft(" ");
     d.barcode = None;
-    let err = products::create(&mut conn, SHOP, d).unwrap_err();
+    let err = products::create(&mut conn, SHOP, OWNER, d).unwrap_err();
     assert_eq!(err.code(), "validation");
     assert_eq!(
         products::get(&mut conn, SHOP, 1).unwrap_err().code(),
@@ -510,7 +516,7 @@ fn a_rate_above_one_whole_never_panics_on_the_way_out() {
     // import, a repaired database) must come back as an error, not a panic.
     use diesel::prelude::*;
     let (_dir, mut conn) = open_temp();
-    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
     // The migration's CHECK now refuses this row, which is the point of the
     // constraint. The pragma stands in for the file this test is about: one
     // written by an old import or a repair tool that never saw the CHECK.
@@ -538,7 +544,133 @@ fn units_round_trip_through_the_database() {
     {
         let mut d = draft(&format!("p{i}"));
         d.unit = unit;
-        let made = products::create(&mut conn, SHOP, d).unwrap();
+        let made = products::create(&mut conn, SHOP, OWNER, d).unwrap();
         assert_eq!(products::get(&mut conn, SHOP, made.id).unwrap().unit, unit);
     }
+}
+
+#[test]
+fn an_update_sending_the_products_own_barcode_back_is_not_a_duplicate() {
+    // The screen sends every field back, the barcode included; the row's
+    // own number must not collide with itself.
+    let (_dir, mut conn) = open_temp();
+    let mut a = draft("A");
+    a.barcode = Some("6130000000011".to_string());
+    let a = products::create(&mut conn, SHOP, OWNER, a).unwrap();
+    let mut same = draft("A renamed");
+    same.barcode = a.barcode.clone();
+    let after = products::update(&mut conn, SHOP, OWNER, a.id, same).unwrap();
+    assert_eq!(after.name, "A renamed");
+    assert_eq!(after.barcode, a.barcode);
+}
+
+#[test]
+fn an_update_changes_every_field_the_spec_names_and_can_deactivate() {
+    let (_dir, mut conn) = open_temp();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
+    let edited = NewProduct {
+        name: "A+".to_string(),
+        barcode: None,
+        category_id: Some(SEEDED_CATEGORY),
+        unit: Unit::Kg,
+        cost: Money::centimes(1_000),
+        selling: Money::centimes(1_500),
+        wholesale: Some(Money::centimes(1_200)),
+        qty_on_hand_milli: 24_000,
+        low_stock_at_milli: 500,
+        rate_bps: Some(Bps::new(900).unwrap()),
+        active: false,
+    };
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, edited).unwrap();
+    assert_eq!(after.id, made.id);
+    assert_eq!(after.name, "A+");
+    assert_eq!(
+        after.barcode, made.barcode,
+        "a blank barcode keeps the number"
+    );
+    assert_eq!(after.category_id, Some(SEEDED_CATEGORY));
+    assert_eq!(after.unit, Unit::Kg);
+    assert_eq!(after.cost, Money::centimes(1_000));
+    assert_eq!(after.selling, Money::centimes(1_500));
+    assert_eq!(after.wholesale, Some(Money::centimes(1_200)));
+    assert_eq!(after.low_stock_at_milli, 500);
+    assert_eq!(after.rate_bps, Bps::new(900).unwrap());
+    assert!(!after.active);
+    // Deactivated, it is still listed: the shop decides what to show.
+    assert_eq!(products::list(&mut conn, SHOP).unwrap().len(), 1);
+
+    // A value set once can be cleared again: the changeset writes NULL for
+    // a None, it does not skip the column.
+    let mut cleared = draft("A+");
+    cleared.wholesale = None;
+    cleared.category_id = None;
+    cleared.rate_bps = Some(Bps::new(0).unwrap());
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, cleared).unwrap();
+    assert_eq!(after.wholesale, None);
+    assert_eq!(after.category_id, None);
+}
+
+#[test]
+fn an_update_never_touches_the_quantity_on_hand() {
+    // features.md §1: quantity on hand is derived from the stock ledger and
+    // cached on the product. An edit of the fiche carries the field on the
+    // wire (one shape for add and edit) but the service keeps the stored
+    // quantity; a sale landing between the read and the save is not undone
+    // by a price change. Adjustments come with the ledger (M1 T3).
+    let (_dir, mut conn) = open_temp();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
+    assert_eq!(
+        made.qty_on_hand_milli, 24_000,
+        "create sets the opening stock"
+    );
+    let mut d = draft("A");
+    d.qty_on_hand_milli = 1_000;
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, d).unwrap();
+    assert_eq!(after.qty_on_hand_milli, 24_000);
+}
+
+#[test]
+fn an_update_of_a_missing_product_is_not_found_with_its_id() {
+    let (_dir, mut conn) = open_temp();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
+    match products::update(&mut conn, SHOP, OWNER, made.id + 100, draft("X")) {
+        Err(CoreError::NotFound { entity, id }) => {
+            assert_eq!(entity, "product");
+            assert_eq!(id, made.id + 100);
+        }
+        other => panic!("expected a product NotFound, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_price_change_leaves_an_audit_entry_and_a_rename_does_not() {
+    // features.md §5 names the price and the active flag as the sensitive
+    // edits. The entry has to hold the old and the new value: an entry that
+    // only says "something changed" answers no question a comptable asks.
+    use dzpos_core::services::audit;
+    let (_dir, mut conn) = open_temp();
+    let made = products::create(&mut conn, SHOP, OWNER, draft("Sucre")).unwrap();
+
+    let renamed = draft("Sucre roux");
+    products::update(&mut conn, SHOP, OWNER, made.id, renamed).unwrap();
+    assert!(
+        audit::list(&mut conn, SHOP).unwrap().is_empty(),
+        "a rename was logged and would bury the price changes"
+    );
+
+    let mut dearer = draft("Sucre roux");
+    dearer.selling = Money::centimes(1_050);
+    products::update(&mut conn, SHOP, OWNER, made.id, dearer).unwrap();
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    assert_eq!(entries.len(), 1, "the price change was not logged");
+    let entry = &entries[0];
+    assert_eq!(entry.action, "update");
+    assert_eq!(entry.entity, "product");
+    assert_eq!(entry.entity_id, Some(made.id));
+    assert_eq!(entry.user_id, OWNER);
+    let before = entry.before.clone().expect("no before");
+    let after = entry.after.clone().expect("no after");
+    assert!(before.contains("920"), "the old price is missing: {before}");
+    assert!(after.contains("1050"), "the new price is missing: {after}");
 }

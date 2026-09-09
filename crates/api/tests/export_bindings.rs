@@ -10,11 +10,14 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    ApiErrorDto, ApiErrorPayloadDto, CategoryDto, HealthDto, NewProductDto, ProductDto, UnitDto,
+    ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto, DatedRegimeDto,
+    DocumentKindDto, DocumentStatusDto, HealthDto, NewProductDto, NewSaleDto, NewSaleLineDto,
+    PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SaleDto, SaleLineDto,
+    SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 7] = [
+const FILES: [&str; 24] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -22,13 +25,25 @@ const FILES: [&str; 7] = [
     "HealthDto.ts",
     "ApiErrorDto.ts",
     "ApiErrorPayloadDto.ts",
+    "StoreDto.ts",
+    "RegimeDto.ts",
+    "DatedRegimeDto.ts",
+    "SettingsDto.ts",
+    "RegimeChangeDto.ts",
+    "BackupDto.ts",
+    "BackupsDto.ts",
+    "RestoreDto.ts",
+    "PaymentModeDto.ts",
+    "DocumentKindDto.ts",
+    "DocumentStatusDto.ts",
+    "SaleLineDto.ts",
+    "SaleTvaDto.ts",
+    "SaleTotalsDto.ts",
+    "SaleDto.ts",
+    "NewSaleLineDto.ts",
+    "NewSaleDto.ts",
 ];
 
-/// Where the bindings are written. `just types-check` points
-/// `DZPOS_TS_OUT_DIR` at a temp directory and diffs the result against the
-/// committed one in both directions, so a new or a deleted DTO fails the
-/// gate. With no override the test writes the committed directory in place,
-/// which is how a developer regenerates it.
 /// Where the bindings are written. Never the committed directory by
 /// default: a plain `cargo test --workspace` used to regenerate
 /// `packages/shared/src/generated` in place, so the CI diff that ran after
@@ -91,6 +106,23 @@ fn export_bindings() {
     HealthDto::export_all(&cfg).unwrap();
     ApiErrorDto::export_all(&cfg).unwrap();
     ApiErrorPayloadDto::export_all(&cfg).unwrap();
+    StoreDto::export_all(&cfg).unwrap();
+    RegimeDto::export_all(&cfg).unwrap();
+    DatedRegimeDto::export_all(&cfg).unwrap();
+    SettingsDto::export_all(&cfg).unwrap();
+    RegimeChangeDto::export_all(&cfg).unwrap();
+    BackupDto::export_all(&cfg).unwrap();
+    BackupsDto::export_all(&cfg).unwrap();
+    RestoreDto::export_all(&cfg).unwrap();
+    PaymentModeDto::export_all(&cfg).unwrap();
+    DocumentKindDto::export_all(&cfg).unwrap();
+    DocumentStatusDto::export_all(&cfg).unwrap();
+    SaleLineDto::export_all(&cfg).unwrap();
+    SaleTvaDto::export_all(&cfg).unwrap();
+    SaleTotalsDto::export_all(&cfg).unwrap();
+    SaleDto::export_all(&cfg).unwrap();
+    NewSaleLineDto::export_all(&cfg).unwrap();
+    NewSaleDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

@@ -29,6 +29,44 @@ pub fn value_as_of(
         .optional()?)
 }
 
+/// The row current at `at`, with the moment it took effect. What the
+/// settings screen shows next to the régime: "réel since 2026-01-01".
+pub fn current_as_of(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    key: &str,
+    at: NaiveDateTime,
+) -> Result<Option<(String, NaiveDateTime)>, CoreError> {
+    Ok(settings::table
+        .filter(settings::shop_id.eq(shop_id))
+        .filter(settings::key.eq(key.to_string()))
+        .filter(settings::valid_from.le(at))
+        .order((settings::valid_from.desc(), settings::seq.desc()))
+        .select((settings::value, settings::valid_from))
+        .first(conn)
+        .optional()?)
+}
+
+/// The first row dated after `at`: a change the shop has entered that has
+/// not taken effect yet. `None` when nothing is planned.
+pub fn next_after(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    key: &str,
+    at: NaiveDateTime,
+) -> Result<Option<(String, NaiveDateTime)>, CoreError> {
+    Ok(settings::table
+        .filter(settings::shop_id.eq(shop_id))
+        .filter(settings::key.eq(key.to_string()))
+        .filter(settings::valid_from.gt(at))
+        // Two planned rows on the same future date: the later insert is
+        // the later decision, and that is the one that will apply.
+        .order((settings::valid_from.asc(), settings::seq.desc()))
+        .select((settings::value, settings::valid_from))
+        .first(conn)
+        .optional()?)
+}
+
 /// Appends a row to the series. A setting is never updated in place: the
 /// document issued yesterday has to keep reading yesterday's value.
 pub fn append(

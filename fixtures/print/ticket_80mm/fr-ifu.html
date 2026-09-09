@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>Ticket TK-000123</title>
+<style>
+@page { size: 80mm auto; margin: 0 }
+body { margin: 0; background: #fff; color: #000 }
+.ticket { inline-size: 72mm; margin: 0 auto; padding: 4mm 0; font: 12px/1.45 "DejaVu Sans Mono", "Courier New", monospace }
+.center { text-align: center }
+.name { font-size: 15px; font-weight: 700 }
+.dashed { border-block-start: 1px dashed #000; margin-block: 2mm }
+.row { display: flex; justify-content: space-between; gap: 3mm }
+.row .label { overflow-wrap: anywhere }
+.amount, .num { white-space: nowrap }
+.cur { margin-inline-start: .4em }
+.item-name { overflow-wrap: anywhere }
+.item-detail { color: #333 }
+.net { font-weight: 700; font-size: 14px }
+</style>
+</head>
+<body>
+<article class="ticket">
+<div class="center">
+<div class="name">Mon magasin</div>
+<div>12 rue Didouche Mourad, Alger</div>
+<div class="num">0555 12 34 56</div>
+<div>NIF <span class="num">000216001234567</span></div>
+<div>RC <span class="num">16/00-1234567 B 25</span></div>
+</div>
+<div class="dashed"></div>
+<div class="row"><span class="num">TK-000123</span><span class="num">09/09/2026 14:05</span></div>
+<div class="dashed"></div>
+<div class="item-name">Café moulu 250 g</div>
+<div class="row item-detail"><span class="num">2 × 150,00</span><span class="amount amount-line">300,00</span></div>
+<div class="item-name">Farine</div>
+<div class="row item-detail"><span class="num">1,5 × 320,00</span><span class="amount amount-line">480,00</span></div>
+<div class="item-name">Pain</div>
+<div class="row item-detail"><span class="num">1 × 80,00</span><span class="amount amount-line">70,00</span></div>
+<div class="row item-detail"><span class="label">Remise</span><span class="amount amount-line-discount">-10,00</span></div>
+<div class="dashed"></div>
+<div class="row"><span class="label">Total</span><span class="amount amount-total">850,00</span><span class="cur">DA</span></div>
+<div class="row"><span class="label">Remise</span><span class="amount amount-discount">-20,00</span><span class="cur">DA</span></div>
+<div class="row"><span class="label">Droit de timbre</span><span class="amount amount-stamp">9,00</span><span class="cur">DA</span></div>
+<div class="row net"><span class="label">Net à payer</span><span class="amount amount-net-to-pay">839,00</span><span class="cur">DA</span></div>
+<div class="dashed"></div>
+<div class="row"><span class="label">Mode de paiement</span><span>Espèces</span></div>
+<div class="row"><span class="label">Montant reçu</span><span class="amount amount-tendered">1 000,00</span><span class="cur">DA</span></div>
+<div class="row"><span class="label">Monnaie à rendre</span><span class="amount amount-change">161,00</span><span class="cur">DA</span></div>
+<div class="dashed"></div>
+<div class="center">Merci de votre visite</div>
+</article>
+</body>
+</html>

@@ -7,6 +7,7 @@ pub mod words;
 
 use serde::{Deserialize, Serialize};
 
+pub mod format;
 pub mod stamp;
 pub mod totals;
 
@@ -15,6 +16,10 @@ pub use totals::{compute_totals, Line, Regime, Totals, TotalsOptions, TvaLine};
 
 /// Basis points in one whole: 10 000 bps = 100 %.
 pub const BPS_PER_WHOLE: i64 = 10_000;
+
+/// Thousandths in one unit. A quantity is an integer count of these, so a
+/// kilo product sells 1,5 kg as 1500 and no float reaches a line total.
+pub const MILLI_PER_UNIT: i64 = 1_000;
 
 /// A whole amount of centimes. `Money::centimes(1250)` is 12,50 DA.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -87,6 +92,31 @@ impl Money {
             .ok_or(MoneyError::Overflow)
     }
 
+    /// A line's gross amount: `self × qty_milli / 1000`, rounded once to
+    /// the centime, half away from zero, before any line discount. i128
+    /// holds the product exactly; two i64 factors can overflow i64.
+    /// Fixture `line_total_fractional_qty`.
+    pub fn checked_mul_milli(self, qty_milli: i64) -> Result<Money, MoneyError> {
+        let raw = i128::from(self.0)
+            .checked_mul(i128::from(qty_milli))
+            .ok_or(MoneyError::Overflow)?;
+        let per_unit = i128::from(MILLI_PER_UNIT);
+        let magnitude = raw.checked_abs().ok_or(MoneyError::Overflow)?;
+        let half_up = magnitude
+            .checked_add(per_unit / 2)
+            .ok_or(MoneyError::Overflow)?
+            .checked_div(per_unit)
+            .ok_or(MoneyError::Overflow)?;
+        let signed = if raw < 0 {
+            half_up.checked_neg().ok_or(MoneyError::Overflow)?
+        } else {
+            half_up
+        };
+        i64::try_from(signed)
+            .map(Money)
+            .map_err(|_| MoneyError::Overflow)
+    }
+
     /// `self × rate`, rounded once to the centime, half away from zero.
     /// Fixture `tva_rounding_once_per_rate`.
     pub fn pct(self, rate: Bps) -> Result<Money, MoneyError> {
@@ -110,6 +140,11 @@ impl Money {
 }
 
 impl Bps {
+    /// No rate at all: an exempt line under the réel, and every line under
+    /// the IFU, where the price is a single price and the document mentions
+    /// no TVA (fixture `regime_ifu_prints_no_tva`).
+    pub const ZERO: Bps = Bps(0);
+
     /// A rate is at most one whole; 19 typed as 190 000 must not become
     /// 1 900 % TVA (fixture `tva_rounding_once_per_rate`, invalid rates).
     pub fn new(v: u32) -> Result<Self, MoneyError> {

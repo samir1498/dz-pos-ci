@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import formatFixture from "../../../fixtures/money/format_centimes.json";
 import {
   formatCentimes,
   formatQty,
@@ -45,6 +46,39 @@ describe("formatQty", () => {
     expect(formatQty(1)).toBe("0,001");
     expect(formatQty(0)).toBe("0");
     expect(formatQty(-1_500)).toBe("-1,5");
+  });
+});
+
+// The ticket the core prints reads the same cases through
+// `dzpos_core::money::format` (crates/core/tests/money_fixtures.rs). A
+// customer sees the total on the screen and then on paper, so the two
+// formatters are one rule and this file is half of the proof.
+describe("fixtures/money/format_centimes.json", () => {
+  // Imported rather than read: tsc types every case from the file itself,
+  // so a fixture that loses a field fails the type check before a test runs.
+  const amounts = formatFixture.cases.map((c) => ({
+    name: c.name,
+    value: c.centimes,
+    expected: c.expected,
+  }));
+  const quantities = formatFixture.qty_cases.map((c) => ({
+    name: c.name,
+    value: c.milli,
+    expected: c.expected,
+  }));
+
+  test("keeps its cases", () => {
+    expect(formatFixture.name).toBe("format_centimes");
+    expect(amounts.length).toBeGreaterThanOrEqual(10);
+    expect(quantities.length).toBeGreaterThan(0);
+  });
+
+  test.each(amounts)("$name", ({ value, expected }) => {
+    expect(formatCentimes(value)).toBe(expected);
+  });
+
+  test.each(quantities)("$name", ({ value, expected }) => {
+    expect(formatQty(value)).toBe(expected);
   });
 });
 

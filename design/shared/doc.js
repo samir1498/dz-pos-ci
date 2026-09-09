@@ -1,7 +1,7 @@
 // Printed-document renderers: A4 facture and 80 mm ticket.
 // Pure function of (sale, lang) — same contract as crates/core::documents.
 import { STORE } from "./data.js";
-import { amountInWords, fmt } from "./money.js";
+import { amountInWords, fmt, lineTotal, qtyLabel } from "./money.js";
 import { t } from "./i18n.js";
 
 const esc = (s) =>
@@ -41,6 +41,12 @@ export function renderA4(sale, lang) {
   const buyer = customer ?? { name: t("walk_in") };
   const oldBalance = customer?.debt ?? 0;
   const remaining = paymentMode === "credit" ? totals.netToPay : 0;
+  // The recap says on its own whether the document carries TVA: under the
+  // réel there is a row per rate group, 0 % included, and under the IFU
+  // there is none (regime_ifu_prints_no_tva). Reading the lines instead
+  // would drop the column from a réel facture whose lines are all exempt,
+  // and that column is a legal field of a facture (décret 05-468 art. 3).
+  const showTva = totals.tvaByRate.length > 0;
   return `<article class="doc doc-a4" dir="${lang === "ar" ? "rtl" : "ltr"}">
     <header style="display:flex;justify-content:space-between;align-items:flex-start">
       <div><h1>${t("invoice").toUpperCase()}</h1>
@@ -53,12 +59,12 @@ export function renderA4(sale, lang) {
       ${partyBlock(t("buyer"), buyer)}
     </div>
     <table>
-      <thead><tr><th>${t("designation")}</th><th class="n">${t("qty")}</th><th class="n">${t("unit_price")}</th><th class="n">${t("tva")}</th><th class="n">${t("line_total")}</th></tr></thead>
+      <thead><tr><th>${t("designation")}</th><th class="n">${t("qty")}</th><th class="n">${t("unit_price")}</th>${showTva ? `<th class="n">${t("tva")}</th>` : ""}<th class="n">${t("line_total")}</th></tr></thead>
       <tbody>${lines
         .map(
           (l) => `<tr><td>${esc(lang === "ar" ? l.product.ar : l.product.name)}</td>
-          <td class="n num">${l.qty}</td><td class="n num">${fmt(l.unitPrice, lang)}</td>
-          <td class="n num">${l.rateBps / 100}%</td><td class="n num">${fmt(l.qty * l.unitPrice - (l.lineDiscount || 0), lang)}</td></tr>`,
+          <td class="n num">${qtyLabel(l.qtyMilli)}</td><td class="n num">${fmt(l.unitPrice, lang)}</td>
+          ${showTva ? `<td class="n num">${l.rateBps / 100}%</td>` : ""}<td class="n num">${fmt(lineTotal(l.unitPrice, l.qtyMilli) - (l.lineDiscount || 0), lang)}</td></tr>`,
         )
         .join("")}</tbody>
     </table>
@@ -89,7 +95,7 @@ export function renderTicket(sale, lang) {
       ${lines
         .map(
           (l) => `<tr><td colspan="2">${esc(lang === "ar" ? l.product.ar : l.product.name)}</td></tr>
-        <tr><td class="num muted">${l.qty} × ${fmt(l.unitPrice, lang)}</td><td class="n num">${fmt(l.qty * l.unitPrice - (l.lineDiscount || 0), lang)}</td></tr>`,
+        <tr><td class="num muted">${qtyLabel(l.qtyMilli)} × ${fmt(l.unitPrice, lang)}</td><td class="n num">${fmt(lineTotal(l.unitPrice, l.qtyMilli) - (l.lineDiscount || 0), lang)}</td></tr>`,
         )
         .join("")}
     </table>

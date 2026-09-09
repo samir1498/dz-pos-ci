@@ -1,8 +1,11 @@
 //! HTTP handlers. They translate, they do not decide: every rule lives in
 //! `dzpos_core::services`.
 
+pub mod backups;
 pub mod categories;
 pub mod products;
+pub mod sales;
+pub mod settings;
 
 use axum::extract::State;
 use axum::Json;

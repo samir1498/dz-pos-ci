@@ -7,6 +7,7 @@
 // 2026-09-08); this config is the interim local driver.
 
 import { defineConfig, devices } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,13 +18,61 @@ const artifactsDir = path.join(desktopDir, "e2e", ".artifacts");
 
 /** Deleted before every run, so the first screen is always the empty state. */
 const tempDb = path.join(artifactsDir, "e2e.db");
+/** The API puts its copies beside the database. Deleted with it: the backups
+ * spec starts from "no copy at all", and a folder left by the last run would
+ * make that first assertion pass or fail on history. */
+const tempBackups = path.join(artifactsDir, "backups");
 
-// Fixed ports, deliberately beside the dev ones (4317 API, 5173 Vite) so a
-// running `just api` / `just dev` pair does not collide with a test run.
-const apiPort = 4319;
-const webPort = 5174;
+// Ports beside the dev ones (4317 API, 5173 Vite) so a running `just api`
+// / `just dev` pair does not collide with a test run. Two checkouts on one
+// box (a worktree per task in the M1 loop) each pass their own pair.
+function port(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const value = raw === undefined || raw === "" ? fallback : Number(raw);
+  if (!Number.isInteger(value) || value < 1024 || value > 65535) {
+    throw new Error(`${name} must be a port between 1024 and 65535, got ${raw}`);
+  }
+  return value;
+}
+const apiPort = port("DZPOS_E2E_API_PORT", 4319);
+const webPort = port("DZPOS_E2E_WEB_PORT", 5174);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const baseURL = `http://127.0.0.1:${webPort}`;
+
+// One project per UI language (T7). Each sets `dzpos-lang` in localStorage
+// through `storageState` before the app's first script runs, the way
+// I18nProvider reads it (src/i18n/index.tsx, `initialLang`), and a browser
+// `locale` matching it so the OS-level bits (date pickers, number input
+// spinners) agree with the page. All three share the one webServer pair
+// and its one SQLite file below, so `just e2e` runs one Playwright
+// invocation per project rather than passing all three here: three
+// projects sharing a single run would share the one database too, and the
+// products suite's first assertion needs an empty table, which only the
+// first project to touch it would still have.
+const LANGS = ["fr", "en", "ar"] as const;
+type LangCode = (typeof LANGS)[number];
+const LOCALE: Record<LangCode, string> = { fr: "fr-FR", en: "en-US", ar: "ar-DZ" };
+
+function storageStateFor(lang: LangCode) {
+  return {
+    cookies: [],
+    origins: [{ origin: baseURL, localStorage: [{ name: "dzpos-lang", value: lang }] }],
+  };
+}
+
+// The API refuses every call that does not show its launch token; the
+// desktop makes one per launch, this run makes one per suite and hands it
+// to both servers, the way the Tauri process hands it to its webview.
+//
+// It goes through the environment rather than staying a module constant
+// because a worker re-imports this file in its own process: a bare
+// `randomBytes` here would give each worker a different token from the one
+// the API was started with, and a spec that seeds a row through `request`
+// would be refused. The runner is the first to load this file, so it is the
+// one that mints the token; every worker it spawns inherits the variable and
+// takes that branch. `e2e/api.ts` reads the same variable.
+const launchToken = process.env.DZPOS_E2E_TOKEN ?? randomBytes(32).toString("hex");
+process.env.DZPOS_E2E_TOKEN = launchToken;
 
 const home = process.env.HOME ?? "";
 const cargoEnv = {
@@ -52,12 +101,15 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
 
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
+  projects: LANGS.map((lang) => ({
+    name: lang,
+    use: {
+      ...devices["Desktop Chrome"],
+      viewport: { width: 1280, height: 800 },
+      locale: LOCALE[lang],
+      storageState: storageStateFor(lang),
     },
-  ],
+  })),
 
   webServer: [
     {
@@ -66,9 +118,9 @@ export default defineConfig({
       // The API names its allowed origins (the dev Vite port and the Tauri
       // ones); the test Vite runs on another port, so it is passed in the
       // way the SSH case is: one extra origin on the command line.
-      command: `rm -f "${tempDb}" "${tempDb}-shm" "${tempDb}-wal" && cargo run -p dzpos-api -- --db "${tempDb}" --port ${apiPort} --allow-origin ${baseURL}`,
+      command: `rm -f "${tempDb}" "${tempDb}-shm" "${tempDb}-wal" "${tempDb}".before-restore-*.sqlite && rm -rf "${tempBackups}" && cargo run -p dzpos-api -- --db "${tempDb}" --port ${apiPort} --allow-origin ${baseURL}`,
       cwd: repoRoot,
-      env: cargoEnv,
+      env: { ...cargoEnv, DZPOS_API_TOKEN: launchToken },
       url: `${apiUrl}/health`,
       reuseExistingServer: false,
       // A cold cargo build takes minutes on this box.
@@ -81,7 +133,7 @@ export default defineConfig({
       // here keeps the test API out of the app's source.
       command: `pnpm exec vite --port ${webPort} --strictPort`,
       cwd: desktopDir,
-      env: { VITE_API_URL: apiUrl },
+      env: { VITE_API_URL: apiUrl, VITE_API_TOKEN: launchToken },
       url: baseURL,
       reuseExistingServer: false,
       timeout: 120_000,

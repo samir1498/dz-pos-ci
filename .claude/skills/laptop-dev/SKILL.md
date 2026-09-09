@@ -54,7 +54,7 @@ for the full timeout.
 
 | What | Command (inside `zsh -lic "cd ~/Developer/dz-pos && …"`) | Where it shows |
 |---|---|---|
-| Web UI only | `pnpm desktop dev --host` | `http://100.111.55.62:5173` — from the laptop browser and from this box |
+| Web UI only | `just api 4317 .dev/dev.db http://100.111.55.62:5173` in one shell, then `just dev` | `http://100.111.55.62:5173` — from the laptop browser and from this box |
 | Native Tauri window | `DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 pnpm desktop tauri dev` | window on the laptop screen; first build is minutes, cached after |
 | Expo (later) | `REACT_NATIVE_PACKAGER_HOSTNAME=100.111.55.62 pnpm --filter mobile start` | Expo Go on the phone over Tailscale |
 | Rust / web tests | not on the laptop — run `cargo test` and `pnpm -r test` here; the laptop is for things that need a screen |

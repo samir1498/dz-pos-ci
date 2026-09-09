@@ -139,7 +139,7 @@
       "input": {
         "lines": [
           {
-            "qty": 3,
+            "qty_milli": 3000,
             "unit_price": 40000,
             "line_discount": 0,
             "rate_bps": 1900
@@ -174,7 +174,7 @@
       "input": {
         "lines": [
           {
-            "qty": 3,
+            "qty_milli": 3000,
             "unit_price": 40000,
             "line_discount": 0,
             "rate_bps": 1900
@@ -209,13 +209,13 @@
       "input": {
         "lines": [
           {
-            "qty": 2,
+            "qty_milli": 2000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 1900
           },
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 12000,
             "line_discount": 2000,
             "rate_bps": 900
@@ -255,13 +255,13 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 1900
           },
           {
-            "qty": 2,
+            "qty_milli": 2000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 900
@@ -301,13 +301,13 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 100,
             "line_discount": 0,
             "rate_bps": 1900
           },
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 99,
             "line_discount": 0,
             "rate_bps": 900
@@ -347,13 +347,13 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 1900
           },
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 900
@@ -393,19 +393,19 @@
       "input": {
         "lines": [
           {
-            "qty": 5,
+            "qty_milli": 5000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 1900
           },
           {
-            "qty": 3,
+            "qty_milli": 3000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 900
           },
           {
-            "qty": 2,
+            "qty_milli": 2000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 0
@@ -450,7 +450,7 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 1900
@@ -485,7 +485,7 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 5000000,
             "line_discount": 0,
             "rate_bps": 1900
@@ -520,7 +520,7 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 100000,
             "line_discount": 0,
             "rate_bps": 1900
@@ -555,13 +555,13 @@
       "input": {
         "lines": [
           {
-            "qty": 2,
+            "qty_milli": 2000,
             "unit_price": 15000,
             "line_discount": 0,
             "rate_bps": 1900
           },
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 5000,
             "line_discount": 0,
             "rate_bps": 900
@@ -590,19 +590,19 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 1000,
             "line_discount": 0,
             "rate_bps": 0
           },
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 2000,
             "line_discount": 0,
             "rate_bps": 900
           },
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 3000,
             "line_discount": 0,
             "rate_bps": 1900
@@ -641,6 +641,52 @@
         "stamp": 0,
         "net_to_pay": 1
       }
+    },
+    {
+      "name": "till_cash_sale_two_rates: the basket the till e2e rings up, 2 x 400,00 at 19 % and 1,5 kg x 200,00 at 9 %. HT 800,00 + 300,00 = 1 100,00, TVA 152,00 + 27,00 = 179,00, TTC 1 279,00, cash stamp ceil(127 900 / 10 000) = 13 tranches x 1,00 = 13,00, net 1 292,00",
+      "input": {
+        "lines": [
+          {
+            "qty_milli": 2000,
+            "unit_price": 40000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          },
+          {
+            "qty_milli": 1500,
+            "unit_price": 20000,
+            "line_discount": 0,
+            "rate_bps": 900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
+      },
+      "expected": {
+        "total_ht": 110000,
+        "discount": 0,
+        "subtotal_ht": 110000,
+        "tva_by_rate": [
+          {
+            "rate_bps": 900,
+            "base": 30000,
+            "amount": 2700
+          },
+          {
+            "rate_bps": 1900,
+            "base": 80000,
+            "amount": 15200
+          }
+        ],
+        "tva": 17900,
+        "total_ttc": 127900,
+        "stamp": 1300,
+        "net_to_pay": 129200
+      }
     }
   ],
   "totals_error_cases": [
@@ -649,7 +695,7 @@
       "input": {
         "lines": [
           {
-            "qty": -1,
+            "qty_milli": -1000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 1900
@@ -669,7 +715,7 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": -10000,
             "line_discount": 0,
             "rate_bps": 1900
@@ -689,7 +735,7 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 10000,
             "line_discount": 10001,
             "rate_bps": 1900
@@ -709,7 +755,7 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 10000,
             "line_discount": -1,
             "rate_bps": 1900
@@ -729,7 +775,7 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 1900
@@ -749,7 +795,7 @@
       "input": {
         "lines": [
           {
-            "qty": 1,
+            "qty_milli": 1000,
             "unit_price": 10000,
             "line_discount": 0,
             "rate_bps": 1900

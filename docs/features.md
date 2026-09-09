@@ -63,6 +63,11 @@ on a TPE with no integration, decided 2026-09-08), amount tendered,
 change. Anonymous sale is allowed; a credit sale requires a customer.
 Saving a sale moves stock out and, if credit, adds to the customer's debt.
 Every sale is a fiscal document (see §3) even when it is a simple ticket.
+The till screen adds one rule the spec does not name: a product whose unit
+is piece or box is sold in whole units, so a typed "1,5" is refused on the
+line before the sale is posted (kg and litre take it). The core does not
+enforce this; a half box is not something a receipt can say, and nothing
+else was catching it.
 
 **Stock movements.** Append-only ledger: every change to quantity on hand
 is a row with type (purchase, sale, adjustment, return, opening), quantity,
@@ -126,6 +131,32 @@ discount, TVA rate, line total HT.
 | `old_balance`, `remaining_debt`, `total_debt` | from the ledger at issue time |
 | `payment_mode` | cash, card, credit in v1; cheque and transfer are parked (the column admits them) |
 
+**Facture or ticket at the till.** Loi 04-02 du 23 juin 2004 art. 10, as
+rewritten whole by loi 10-06 du 15 août 2010 art. 3, decides it, and it
+decides it by who the buyer is, not by an amount. There is no threshold in
+the text.
+
+- A sale to a consumer is a `ticket`. « Les ventes de biens ou les
+  prestations de services faites au consommateur doivent faire l'objet d'un
+  ticket de caisse ou d'un bon justifiant la transaction. » That is the
+  till's default and it needs nothing from the customer.
+- A sale to an agent économique carrying on an activity listed in art. 2
+  (production, distribution, services, artisanat, pêche, agriculture) is a
+  `facture`, and the buyer is under a matching duty to ask for one.
+- Any buyer who asks turns the sale into a `facture`: « Toutefois, la
+  facture ou le document en tenant lieu doit être délivré si le client en
+  fait la demande » (art. 10 al. 3; décret 05-468 art. 2 repeats it from the
+  facture side).
+- The document is due « dès la réalisation de la vente », so the choice is
+  made at the till, before the sale is saved, and never by a later reprint.
+
+A till cannot tell a consumer from a professional on its own, so the
+operator decides: the sale screen carries a one-tap switch from ticket to
+facture that pulls in the buyer block. A facture to a consumer needs only
+« ses nom, prénom(s) et adresse » (décret 05-468 art. 3-2, last alinéa); a
+facture to a trader needs the party identifiers of the row below. M1 issues
+tickets only, since the buyer block arrives with customers in M2.
+
 Numbering: per kind, gapless, assigned at issue and never reused; a
 cancelled facture keeps its number and is marked "facture annulée"; an
 avoir is its own kind with its own series. A yearly reset of the series is
@@ -144,11 +175,13 @@ first release.**
 |---|---|---|---|
 | Money representation | integer centimes; no float anywhere in core; rates are integer basis points, 0 to 10 000 (1900 = 19 %), a rate above one whole is refused | `money_no_float`, invalid rates in `tva_rounding_once_per_rate` | design choice, not law |
 | Rounding | integer centimes; TVA per rate group on the group's HT subtotal, rounded once, half away from zero, to the centime. A design choice: no text prescribes facture rounding | `tva_rounding_once_per_rate` | CTCA 2026 art. 80bis → CIDTA 2026 art. 324 governs the tax return (base to the lower dinar / ten dinars, duty to the nearest 10 centimes), not the document. Comptable to confirm facture practice |
+| Line quantity and line total | a quantity is an integer number of thousandths of the unit (1500 is 1,5 kg), so a product sold by weight or by volume never needs a float. The line gross is `unit_price × qty_milli / 1000` rounded to the centime, half away from zero, once per line and before the line discount is taken off it. An assumption: no text says how a weighed line is rounded. Confirm with the comptable (R8) | `line_total_fractional_qty` | design choice, not law |
 | Global discount spread | the global discount is allocated to the rate groups in proportion to each group's HT subtotal; each share is rounded down to the centime and the centimes left over go to the group with the largest HT subtotal, the lower rate winning a tie, never past that group's own HT (what it cannot take rolls to the next largest). The group bases always sum back to `total_ht − discount` and none is negative, so no centime is invented or lost. An assumption: no text says how a global discount splits across rates. Confirm with the comptable (R8) | `discount_spread_largest_remainder` (the `totals_cases` array in `tva_rounding_once_per_rate`) | design choice, not law |
 | TVA rates | 19 % standard, 9 % reduced, 0 % exempt; rate per product, defaulted from category | `tva_rates_table` | CTCA 2026 art. 21 (19 %), art. 23 (9 %, list by tariff line) |
 | Régime fiscal | shop-level, dated setting `ifu` or `réel`. IFU: single price per product, no TVA rate, no HT/TTC, no TVA line on any document; réel: the TVA rows above. Documents keep the regime they were issued under | `regime_ifu_prints_no_tva` | CIDTA 2026 art. 282 ter (8 M DA threshold), 282 sexies (rates); CTCA 2026 art. 2-12 (out of TVA scope), art. 64 (must not mention TVA) |
 | Droit de timbre | cash only (electronic exempt); nothing at 300 DA or less; tranches = ceil(amount / 100 DA); 1 DA per tranche up to 30 000 DA, 1,5 DA up to 100 000 DA, 2 DA above, the whole amount at its band's rate (no progressivity); minimum 5 DA; no cap. The base is `total_ttc`, the amount before the stamp itself: the text says "amount" and names no base, so this is an assumption to confirm with the comptable (R8). Open: half-dinar on odd tranches at 1,5. It is exact in centimes and only matters if the tax must be paid in whole dinars | `stamp_progressive_tranches` (replaces `stamp_cash_only_clamped`) | Code du timbre 2026 art. 100-I and 258 quinquies; DGI circular 14/MF/DGI/LF.2025 (examples 1–3) |
 | Amount in words | French, Arabic and English generators, dinars and centimes | `words_{fr,ar,en}_golden` | décret 05-468: total TTC "en chiffres et en lettres"; Arabic wording not yet sourced |
+| Printed wording | the words a document prints live in the core, three languages per key. The Arabic is unreviewed by a native speaker, exactly like `words_ar`, and the Arabic ticket golden says so in its own header comment | `fixtures/print/ticket_80mm/ar.html`, `ar-ifu.html` | none yet; R6 covers both this and the amount in words |
 | Party identifiers | `facture`: seller RC + NIS (+ NIF, AI as on every facture in circulation), buyer RC + NIS, or name + address when the buyer is a consumer; stamp and signature blocks; `ticket`: seller identity only | `facture_requires_party_ids` | décret 05-468 art. 3 and 4; NIF/AI from tax texts, article to cite (R3) |
 | Numbering | one uninterrupted chronological series per document kind; a cancelled document keeps its number and is marked "facture annulée"; numbers never reused | `numbering_gapless` | décret 05-468 art. 10 |
 
@@ -160,10 +193,35 @@ first release.**
   same bytes. `bon_de_livraison_a4` is parked with the facture
   récapitulative (see Later); the `kind` stays in the model.
 - Golden-file test for every template × language against fixed fixtures.
-  A template change is a reviewed golden diff.
+  A template change is a reviewed golden diff. `ticket_80mm` is done:
+  one basket sold three ways, three languages each.
+  `fixtures/print/ticket_80mm/{fr,en,ar}.html` is réel and cash,
+  `{fr,en,ar}-ifu.html` is the IFU, and `{fr,en,ar}-card.html` is réel and
+  card, which has no stamp row and neither half of the change. Pinned by
+  `crates/core/tests/print_ticket.rs`. `UPDATE_GOLDENS=1` rewrites them and
+  fails the run on purpose, and every amount in a golden is parsed back out
+  of the file against the document's stored totals, so a golden that drifts
+  from the money cannot be accepted by regenerating it.
+- The print language is the language the till is being used in, passed by
+  the caller on each call (`GET /sales/{id}/ticket?lang=fr|en|ar`). There is
+  no separate print-language setting in v1.
+- Numbers are Western digits in every language, comma decimal, thousands
+  grouped with a narrow no-break space (U+202F), and no currency word on a
+  line: `fixtures/money/format_centimes.json` pins the core's formatter and
+  the desktop's to each other. A document's printed number is
+  `{prefix}-{number:06}`, `TK-000123` for a ticket.
+- The words a document prints are the core's own dictionary
+  (`crates/core/src/print/strings.rs`), not the desktop's i18n JSON: a
+  server with no UI prints the same paper. The Arabic in it is unreviewed by
+  a native speaker, like `words_ar` (R6).
+- Under the IFU the ticket has no TVA recap, no rate on a line and no "HT"
+  on its total row: the document must not mention the tax at all
+  (`regime_ifu_prints_no_tva`), and "hors taxe" names one.
 - Thermal: ESC/POS over USB or Bluetooth from the desktop; from the phone
   via the desktop in LAN mode. "Any printer" means the OS print dialog for
   A4/A5 and raw ESC/POS for 80mm.
+- Later: a QR code on the ticket, the shop's logo, and a footer text the
+  owner sets. None of the three is in M1.
 
 ## 5. Users and roles (v1)
 
