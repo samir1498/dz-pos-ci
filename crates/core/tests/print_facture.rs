@@ -1654,17 +1654,44 @@ fn the_avoir_names_its_last_row_as_its_own_amount_and_not_as_a_net_to_pay() {
 /// the page is refused the way an IFU document carrying a TVA recap is.
 #[test]
 fn a_proforma_carrying_a_debt_is_refused_not_quietly_stripped() {
+    let zero = BalanceTriple {
+        old_balance: Money::ZERO,
+        remaining_debt: Money::ZERO,
+        total_debt: Money::ZERO,
+    };
+    // Three zeroes is the triple a proforma stores, and it prints.
     let mut doc = fixed_facture(Case::Proforma);
-    doc.balance = Some(BalanceTriple {
-        old_balance: Money::centimes(150_000),
-        remaining_debt: doc.totals.net_to_pay,
-        total_debt: Money::centimes(150_000)
-            .checked_add(doc.totals.net_to_pay)
-            .unwrap(),
-    });
-    for lang in Lang::ALL {
-        let err = render_facture(&doc, lang, Paper::A4).unwrap_err();
-        assert_eq!(err.code(), "print", "{lang:?}: {err:?}");
+    doc.balance = Some(zero);
+    assert!(render_facture(&doc, Lang::Fr, Paper::A4).is_ok());
+
+    // One field at a time, so a check that read the closing balance alone
+    // would let a proforma carrying an old balance through, and one that
+    // read the document's own row would let the two others through. Each
+    // triple below is a ledger a proforma cannot have touched.
+    let debt = Money::centimes(150_000);
+    let sub_cases = [
+        BalanceTriple {
+            old_balance: debt,
+            ..zero
+        },
+        BalanceTriple {
+            remaining_debt: debt,
+            ..zero
+        },
+        BalanceTriple {
+            total_debt: debt,
+            ..zero
+        },
+    ];
+    for triple in sub_cases {
+        let mut doc = fixed_facture(Case::Proforma);
+        doc.balance = Some(triple);
+        for lang in Lang::ALL {
+            let err = render_facture(&doc, lang, Paper::A4)
+                .err()
+                .unwrap_or_else(|| panic!("{lang:?} {triple:?} printed a proforma with a debt"));
+            assert_eq!(err.code(), "print", "{lang:?} {triple:?}: {err:?}");
+        }
     }
 }
 
