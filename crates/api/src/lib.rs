@@ -135,16 +135,21 @@ impl AppState {
     /// The ways it can fail, and what each answers:
     ///
     /// - anything up to step 6 leaves the shop file exactly as it was and
-    ///   the connection where it was, and takes the staged copy with it: a
-    ///   whole database under a name nothing reads is a copy of the shop
-    ///   that no screen lists and no prune counts;
+    ///   the connection where it was, and takes the staged copy and the
+    ///   safety copy with it. The staged one is a whole database under a name
+    ///   nothing reads; the safety one holds the same data as the shop file
+    ///   still standing beside it, and it is listed on the backups screen and
+    ///   counted by no prune, so a restore refused once a day would fill the
+    ///   folder with copies of a file that never moved;
     /// - the rename at 7 failing leaves the shop file as it was, sidecars
-    ///   included, and it is reopened: the restore did not happen and the
-    ///   till goes on working. If that reopen fails too, both halves are
-    ///   logged and the answer is `NotRestoredRestartNeeded`: the file on
-    ///   disk is the one that was always there, and this process is no
-    ///   longer serving it, so the app has to be relaunched to come back on
-    ///   the data it had before;
+    ///   included, and it is reopened: the restore did not happen, the till
+    ///   goes on working and the safety copy goes with the staged one for the
+    ///   same reason. If that reopen fails too, both halves are logged, the
+    ///   safety copy is kept and the answer is `NotRestoredRestartNeeded`:
+    ///   the file on disk is the one that was always there, but nothing in
+    ///   this process could open it, so the copy that was taken while it
+    ///   could is the one database known to open and it stays. The app has to
+    ///   be relaunched to come back on the data it had before;
     /// - a sidecar at 8, or the reopen at 9, failing leaves the slot empty
     ///   on purpose and answers `RestartNeeded`. The copy is in place, and
     ///   SQLite replays whatever `-wal` it finds beside a file it opens, so
@@ -160,17 +165,27 @@ impl AppState {
         let safety_copy = backup::safety_name(db, crate::routes::backups::now());
         let safety = db.with_file_name(&safety_copy);
         let live = guard.as_mut().ok_or(ApiError::Unavailable)?;
-        backup::copy_to(live, &safety).map_err(ApiError::from)?;
+        if let Err(e) = backup::copy_to(live, &safety) {
+            // `VACUUM INTO` that stopped part way through still wrote a file,
+            // and it is a torn one under the name the backups screen lists
+            // safety copies by.
+            let _ = remove_if_present(&safety);
+            return Err(ApiError::from(e));
+        }
 
         let staged = sibling(db, ".restoring.tmp");
         // A leftover from a run that died mid-restore would make the copy
         // below fail; it describes nothing that is still wanted.
-        remove_if_present(&staged).map_err(core_io)?;
+        if let Err(e) = remove_if_present(&staged) {
+            let _ = std::fs::remove_file(&safety);
+            return Err(core_io(e));
+        }
         if let Err(e) = std::fs::copy(backup_path, &staged) {
             // A copy that stopped part way through still wrote a file, and
             // it is a torn one under a name that means "ready to be renamed
             // over the shop file".
             let _ = std::fs::remove_file(&staged);
+            let _ = std::fs::remove_file(&safety);
             return Err(core_io(e));
         }
 
@@ -185,9 +200,13 @@ impl AppState {
         // whole database sitting beside the shop file under a name no screen
         // lists and no prune counts; the next restore would delete it
         // anyway, and until then it is a copy of the shop nobody knows is
-        // there.
+        // there. The safety copy goes with it: the shop file was never
+        // touched and this connection is still serving it, so the copy holds
+        // the same data as the file next to it and nothing would ever prune
+        // it away.
         if let Err(e) = fold_log_back(&mut guard) {
             let _ = std::fs::remove_file(&staged);
+            let _ = std::fs::remove_file(&safety);
             return Err(e);
         }
 
@@ -198,7 +217,16 @@ impl AppState {
 
         if let Err(rename_failed) = std::fs::rename(&staged, db) {
             let _ = std::fs::remove_file(&staged);
-            return Err(reopen_original(&mut guard, db, rename_failed));
+            let answer = reopen_original(&mut guard, db, rename_failed);
+            // A filled slot means the shop file is there and opens, so the
+            // safety copy is a duplicate of it and goes the way the staged
+            // copy just did. An empty one means nothing here could open that
+            // file: the copy taken while it still could is then the one
+            // database known to open, and it stays for the owner to find.
+            if guard.is_some() {
+                let _ = std::fs::remove_file(&safety);
+            }
+            return Err(answer);
         }
 
         // The copy is in place. The sidecars beside it belong to the file it

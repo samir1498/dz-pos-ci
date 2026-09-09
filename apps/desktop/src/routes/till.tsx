@@ -34,7 +34,13 @@ import type {
   TotalsLine,
   UnitDto,
 } from "@dzpos/shared";
-import { api, categoriesQueryKey, productsQueryKey, saleQueryKey, settingsQueryKey } from "@/api";
+import {
+  api,
+  categoriesQueryKey,
+  productsQueryKey,
+  saleTicketQueryKey,
+  settingsQueryKey,
+} from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { rateCellLabel } from "@/lib/rate";
 
@@ -58,6 +64,7 @@ const ERROR_KEY: Record<string, Key> = {
   duplicate_barcode: "error_duplicate_barcode",
   not_found: "error_not_found",
   money: "error_money",
+  print: "error_print",
   storage: "error_storage",
   exhausted: "error_exhausted",
   bad_request: "error_bad_request",
@@ -750,71 +757,46 @@ function Confirmation({
 }
 
 /**
- * The print stub of M1. T5 owns the ticket template and T6 the printer; what
- * this does is read the stored document back and show what would be printed,
- * so the number, the lines and the totals on screen are the ones the file
- * holds rather than anything this session computed.
+ * The ticket itself, not a screen that resembles it. `GET /sales/{id}/ticket`
+ * hands back the 80 mm page the core rendered from the stored document, and
+ * that page goes into an iframe as it came: the cashier is looking at what
+ * the printer will put on paper, down to the rounding, rather than at a
+ * second rendering of the same numbers that could disagree with it.
+ *
+ * The language is the one the till is being used in. The core prints in the
+ * language it is told, and a cashier working in Arabic hands over an Arabic
+ * ticket.
+ *
+ * `srcDoc` rather than a `src` URL: the page arrives as a string the client
+ * already fetched with the launch token, and an iframe pointed at the route
+ * would ask for it again without one.
  */
 function Receipt({ id }: { id: number }) {
-  const { t } = useTranslation();
-  const sale = useQuery({ queryKey: saleQueryKey(id), queryFn: () => api.getSale(id) });
+  const { t, lang } = useTranslation();
+  const ticket = useQuery({
+    queryKey: saleTicketQueryKey(id, lang),
+    queryFn: () => api.getSaleTicket(id, lang),
+  });
   return (
     <section aria-label={t("till_receipt")} className="flex flex-col gap-2 rounded border p-3">
       <strong>{t("till_receipt")}</strong>
-      {sale.isPending ? <p>{t("products_loading")}</p> : null}
-      {sale.isError ? (
+      {ticket.isPending ? <p>{t("products_loading")}</p> : null}
+      {ticket.isError ? (
         <p role="alert" className="text-red-700">
-          {t(errorKey(sale.error))}
+          {t(errorKey(ticket.error))}
         </p>
       ) : null}
-      {sale.isSuccess ? (
-        <>
-          <table className="w-full text-sm">
-            <caption className="sr-only">{t("till_receipt")}</caption>
-            <thead>
-              <tr>
-                <th scope="col" className="text-start">
-                  {t("col_name")}
-                </th>
-                <th scope="col" className="text-end">
-                  {t("field_qty")}
-                </th>
-                <th scope="col" className="text-end">
-                  {t("col_price")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sale.data.lines.map((l) => (
-                <tr key={l.id}>
-                  <td className="pe-2">{l.name}</td>
-                  <td className="text-end font-mono" dir="ltr">
-                    {formatQty(l.qty_milli)}
-                  </td>
-                  <td className="text-end font-mono" dir="ltr">
-                    {formatCentimes(l.line_total_centimes)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <TotalsTable
-            totals={{
-              totalHt: sale.data.totals.total_ht_centimes,
-              discount: sale.data.totals.discount_centimes,
-              subtotalHt: sale.data.totals.subtotal_ht_centimes,
-              tvaByRate: sale.data.tva.map((g) => ({
-                rateBps: g.rate_bps,
-                base: g.base_centimes,
-                amount: g.amount_centimes,
-              })),
-              tva: sale.data.totals.tva_centimes,
-              totalTtc: sale.data.totals.total_ttc_centimes,
-              stamp: sale.data.totals.stamp_centimes,
-              netToPay: sale.data.totals.net_to_pay_centimes,
-            }}
-          />
-        </>
+      {ticket.isSuccess ? (
+        <iframe
+          title={t("till_receipt")}
+          srcDoc={ticket.data}
+          // An empty sandbox: the ticket carries no script and needs no
+          // origin, so the page it renders in cannot reach this one even if
+          // a product name ever slipped past the template's escaping.
+          sandbox=""
+          className="h-96 w-full border-0"
+          data-testid="till-ticket"
+        />
       ) : null}
     </section>
   );

@@ -141,5 +141,6 @@
   "error_discount_invalid": "تخفيض غير صالح.",
   "error_discount_above_line": "التخفيض يتجاوز السطر.",
   "error_discount_above_total": "التخفيض يتجاوز السلة.",
-  "error_tendered_short": "المبلغ المدفوع أقل من الصافي المستحق."
+  "error_tendered_short": "المبلغ المدفوع أقل من الصافي المستحق.",
+  "error_print": "تعذر تجهيز التذكرة للطباعة."
 }

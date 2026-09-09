@@ -495,6 +495,20 @@ async fn a_restore_stops_before_the_rename_when_the_log_cannot_be_folded_back() 
         Vec::<std::path::PathBuf>::new(),
         "a restore that was refused left its staged copy behind"
     );
+
+    // And so is the safety copy taken on the way in. The shop file was never
+    // replaced and the connection above still answers from it, so the copy
+    // holds the same data as the file that is still there: keeping it would
+    // leave a second whole database beside the shop, listed on the backups
+    // screen, that nothing ever prunes and that grows by one every time a
+    // second till happens to be mid-read.
+    assert_eq!(
+        h.safety_copies(),
+        Vec::<std::path::PathBuf>::new(),
+        "a refused restore left a safety copy nothing prunes"
+    );
+    let (_, listed) = call(&h.app, "GET", "/backups", None).await;
+    assert_eq!(listed["safety_copies"], json!([]));
     reader.batch_execute("COMMIT").unwrap();
 }
 
@@ -510,6 +524,12 @@ async fn a_restore_stops_before_the_rename_when_the_log_cannot_be_folded_back() 
 /// succeed is covered where it can be: `reopen_original` in `lib.rs`. Here
 /// the file that still opens is the safety copy, which is what the owner has
 /// left.
+///
+/// It survives because the reopen failed. Every other refusal drops the
+/// safety copy, since the shop file is standing right there holding the same
+/// data; this is the one where nothing in the process could open that file,
+/// so the copy taken while it still could is the only database known to
+/// open, and deleting it would leave the owner with a folder.
 #[cfg(unix)]
 #[tokio::test]
 async fn a_rename_that_cannot_happen_answers_that_nothing_was_restored() {

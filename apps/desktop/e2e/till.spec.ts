@@ -224,15 +224,19 @@ test("sells two rates for cash, matches the fixture totals, reduces the stock an
   await expect(done).not.toContainText(sale.series);
   await expect(page.getByText(t("till_cart_empty"))).toBeVisible();
 
-  // The print stub reads the stored document back rather than the screen.
+  // The print button shows the page the core rendered from the stored
+  // document, in the language the till is being used in, so what is on
+  // screen is the paper the printer will put out.
   await page.getByRole("button", { name: t("till_print"), exact: true }).click();
   const receipt = page.getByRole("region", { name: t("till_receipt") });
-  await expect(receipt.getByText(COFFEE)).toBeVisible();
-  await expect(receipt.getByText(TOMATO)).toBeVisible();
-  // The amount too, not only the names: the panel is a read of the stored
-  // document, so its net to pay is the fixture's, formatted the way the
-  // shop reads money.
-  await expect(receipt.getByTestId("total-net-to-pay")).toHaveText(
+  const ticket = receipt.frameLocator("iframe");
+  await expect(ticket.getByText(COFFEE)).toBeVisible();
+  await expect(ticket.getByText(TOMATO)).toBeVisible();
+  // The amount too, not only the names: the page is rendered from the stored
+  // document, so its net to pay is the fixture's, formatted the way the shop
+  // reads money. This is the one assertion in the suite that reads the core's
+  // own formatting rather than the client's, and they have to agree.
+  await expect(ticket.locator(".amount-net-to-pay")).toHaveText(
     formatCentimes(expected.net_to_pay),
   );
 

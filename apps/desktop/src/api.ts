@@ -6,6 +6,7 @@
 // in (architecture.md rule 1).
 
 import { createClient } from "@dzpos/shared";
+import type { PrintLang } from "@dzpos/shared";
 
 const FALLBACK = "http://127.0.0.1:4317";
 
@@ -40,8 +41,14 @@ export const categoriesQueryKey: readonly string[] = ["categories"];
 export const settingsQueryKey: readonly string[] = ["settings"];
 export const backupsQueryKey: readonly string[] = ["backups"];
 
-/** One stored sale. A factory rather than a literal at the call site, so
- * the id is always the second element and never a template string. */
-export function saleQueryKey(id: number): readonly (string | number)[] {
-  return ["sale", id];
+/** The rendered ticket of one stored sale. A factory rather than a literal
+ * at the call site, so the id is always the second element and never a
+ * template string. The language is part of the key: the core renders the
+ * page in it, so the same sale in Arabic is a different document and must
+ * not be answered from the French one already in the cache. */
+export function saleTicketQueryKey(
+  id: number,
+  lang: PrintLang,
+): readonly (string | number)[] {
+  return ["sale-ticket", id, lang];
 }

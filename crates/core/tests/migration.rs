@@ -33,9 +33,11 @@ fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
     (dir, conn)
 }
 
-/// A database carrying the first migration and nothing after it, so a later
-/// migration can be applied to a file that already holds a shop's data.
-fn open_at_first_migration() -> (tempfile::TempDir, SqliteConnection) {
+/// A database carrying the first `n` migrations and nothing after them, so
+/// migration `n + 1` can be applied to a file that already holds a shop's
+/// data. Every migration ships with a test that opens one of these
+/// (architecture.md, Data).
+fn open_at_migration(n: usize) -> (tempfile::TempDir, SqliteConnection) {
     use diesel::connection::SimpleConnection;
     use diesel_migrations::MigrationHarness;
     let dir = tempfile::tempdir().unwrap();
@@ -43,9 +45,24 @@ fn open_at_first_migration() -> (tempfile::TempDir, SqliteConnection) {
     let mut conn = SqliteConnection::establish(&path.to_string_lossy()).unwrap();
     conn.batch_execute("PRAGMA foreign_keys=ON;").unwrap();
     let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
-    let first = pending.first().expect("no migration to apply");
-    conn.run_migration(first).unwrap();
+    assert!(pending.len() > n, "there is no migration after {n}");
+    for migration in pending.iter().take(n) {
+        conn.run_migration(migration).unwrap();
+    }
     (dir, conn)
+}
+
+/// What `shops(id)` does to a row of `table` when the shop is deleted, as
+/// SQLite itself reports it.
+fn on_delete_from_shops(conn: &mut SqliteConnection, table: &str) -> String {
+    let rows: Vec<Name> = diesel::sql_query(format!(
+        "SELECT \"on_delete\" AS name FROM pragma_foreign_key_list('{table}') \
+         WHERE \"table\" = 'shops'"
+    ))
+    .load(conn)
+    .unwrap();
+    assert_eq!(rows.len(), 1, "{table} has no foreign key onto shops");
+    rows[0].name.clone()
 }
 
 fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
@@ -645,7 +662,7 @@ fn a_number_is_unique_inside_its_series_and_free_in_another() {
 fn a_database_at_the_first_migration_takes_the_second() {
     // architecture.md, Data: a migration ships with a test that opens a
     // database built by the previous ones and applies it.
-    let (_dir, mut conn) = open_at_first_migration();
+    let (_dir, mut conn) = open_at_migration(1);
     assert_eq!(
         count(
             &mut conn,
@@ -723,13 +740,113 @@ fn a_database_at_the_first_migration_takes_the_second() {
 }
 
 #[test]
+fn a_database_at_the_second_migration_takes_the_third() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. The file this one
+    // runs on already has a ledger, so the copy is what has to be proved, not
+    // only the new foreign key.
+    let (_dir, mut conn) = open_at_migration(2);
+    assert_eq!(
+        on_delete_from_shops(&mut conn, "stock_movements"),
+        "CASCADE",
+        "migration 2 is not the version this test claims to start from"
+    );
+    diesel::sql_query(
+        "INSERT INTO products (id, shop_id, name, unit, cost_centimes, selling_centimes, \
+         qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+         VALUES (7, 1, 'Sucre', 'piece', 0, 0, 4000, 0, 1900)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO stock_movements (id, shop_id, product_id, kind, qty_milli, \
+         unit_cost_centimes, user_id, created_at) \
+         VALUES (4, 1, 7, 'opening', 4000, 820, 1, '2026-09-09 08:00:00')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    use diesel_migrations::MigrationHarness;
+    conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+
+    assert_eq!(
+        on_delete_from_shops(&mut conn, "stock_movements"),
+        "RESTRICT"
+    );
+    // The row came across whole and kept its id: an id that moved would make
+    // every ledger export written before this migration name a different row.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM stock_movements WHERE id = 4 AND shop_id = 1 \
+             AND product_id = 7 AND kind = 'opening' AND qty_milli = 4000 \
+             AND unit_cost_centimes = 820 AND document_id IS NULL AND user_id = 1 \
+             AND created_at = '2026-09-09 08:00:00'"
+        ),
+        1,
+        "the movement did not survive the table recreation unchanged"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' \
+             AND name = 'idx_stock_movements_shop_product'"
+        ),
+        1,
+        "the index went with the dropped table and was not put back"
+    );
+    // AUTOINCREMENT counts from sqlite_sequence, and that row is keyed by
+    // table name: a rename that lost it would hand the next movement id 5
+    // over again the day row 4 is deleted.
+    diesel::sql_query(
+        "INSERT INTO stock_movements (shop_id, product_id, kind, qty_milli, \
+         unit_cost_centimes, user_id) VALUES (1, 7, 'sale', -1000, 820, 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        count(&mut conn, "SELECT MAX(id) AS n FROM stock_movements"),
+        5,
+        "the sequence did not follow the table through the rename"
+    );
+    // And the upgraded file still sells: the ledger is what a sale writes to.
+    assert!(
+        diesel::sql_query("DELETE FROM shops WHERE id = 1")
+            .execute(&mut conn)
+            .is_err(),
+        "a shop with a ledger and no document was deleted"
+    );
+    assert_eq!(
+        count(&mut conn, "SELECT COUNT(*) AS n FROM stock_movements"),
+        2
+    );
+}
+
+#[test]
 fn the_migration_reverts_and_reapplies() {
     // architecture.md, Data: a migration ships with a test that runs it.
-    // This is the first one, so the round trip is what there is to prove.
+    // Reverting all the way back to an empty file is what proves each
+    // down.sql undoes its own up.sql and nothing else.
     use diesel_migrations::MigrationHarness;
     let (_dir, mut conn) = open_temp();
-    // Reverting twice walks back to an empty file, which is what proves each
-    // down.sql undoes its own up.sql and nothing else.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // The third one only recreates stock_movements, so its down leaves the
+    // second migration's tables standing and puts the CASCADE back.
+    assert_eq!(
+        on_delete_from_shops(&mut conn, "stock_movements"),
+        "CASCADE",
+        "the restrict down.sql did not put migration 2's foreign key back"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ),
+        1,
+        "the restrict down.sql took the second migration's tables with it"
+    );
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     assert_eq!(
@@ -761,6 +878,28 @@ fn the_migration_reverts_and_reapplies() {
     conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
         .unwrap();
     assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);
+    assert_eq!(
+        on_delete_from_shops(&mut conn, "stock_movements"),
+        "RESTRICT",
+        "the file reapplied to a schema the third migration had already fixed"
+    );
+}
+
+#[test]
+fn every_ledger_table_restricts_the_shop_it_belongs_to() {
+    // A shop that has sold, been audited or moved stock is never deleted:
+    // décret 05-468 art. 10 for the series, ISO 27001 for the trail, and
+    // features.md §1 for the ledger the stock on hand is only a cache of.
+    // stock_movements shipped as CASCADE in migration 2 and migration 3 is
+    // what put it with the others.
+    let (_dir, mut conn) = open_temp();
+    for table in ["documents", "audit_log", "stock_movements"] {
+        assert_eq!(
+            on_delete_from_shops(&mut conn, table),
+            "RESTRICT",
+            "{table} lets a shop delete take it"
+        );
+    }
 }
 
 #[test]
@@ -805,16 +944,28 @@ fn a_product_with_a_movement_cannot_be_deleted() {
 }
 
 #[test]
-fn a_shop_with_a_document_or_an_audit_entry_cannot_be_deleted() {
-    // A fiscal document and the audit trail outlive the row that points at
-    // them: décret 05-468 art. 10 wants an uninterrupted series, and a series
-    // a DELETE can empty is not one. The second shop carries only the row
-    // under test, so each FK is the reason its own delete fails.
+fn a_shop_with_a_document_an_audit_entry_or_a_movement_cannot_be_deleted() {
+    // A fiscal document, the audit trail and the stock ledger outlive the row
+    // that points at them: décret 05-468 art. 10 wants an uninterrupted
+    // series, and a series a DELETE can empty is not one. A shop whose only
+    // rows are opening movements is the case the third migration is for: it
+    // has no document yet and its ledger is still what the stock it reports
+    // is made of. The second shop carries only the row under test, so each FK
+    // is the reason its own delete fails.
+    //
+    // `is_err()` alone would stay green on a CHECK, a locked file or a typo in
+    // the DELETE, so the reason is asserted and the row is counted after: the
+    // point is not that the statement failed, it is that the ledger is still
+    // there. diesel maps the bundled SQLite's foreign key error to
+    // `DatabaseErrorKind::Unknown` rather than `ForeignKeyViolation`, so the
+    // engine's own sentence is what names the reason here.
+    use diesel::result::Error as DieselError;
     let (_dir, mut conn) = open_temp();
     seed_for_probes(&mut conn);
-    for (what, insert) in [
+    for (what, table, insert) in [
         (
             "a document",
+            "documents",
             "INSERT INTO documents (shop_id, kind, series, number, issued_at, user_id, \
              regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
              subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
@@ -824,8 +975,15 @@ fn a_shop_with_a_document_or_an_audit_entry_cannot_be_deleted() {
         ),
         (
             "an audit entry",
+            "audit_log",
             "INSERT INTO audit_log (shop_id, user_id, action, entity, entity_id) \
              VALUES (2, 1, 'update', 'product', 1)",
+        ),
+        (
+            "an opening movement",
+            "stock_movements",
+            "INSERT INTO stock_movements (shop_id, product_id, kind, qty_milli, \
+             unit_cost_centimes, user_id) VALUES (2, 1, 'opening', 1000, 0, 1)",
         ),
     ] {
         diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Autre magasin')")
@@ -833,18 +991,37 @@ fn a_shop_with_a_document_or_an_audit_entry_cannot_be_deleted() {
             .unwrap();
         diesel::sql_query(insert).execute(&mut conn).unwrap();
         let deleted = diesel::sql_query("DELETE FROM shops WHERE id = 2").execute(&mut conn);
-        assert!(
-            deleted.is_err(),
-            "a shop was deleted and took {what} with it"
+        let err = deleted
+            .err()
+            .unwrap_or_else(|| panic!("a shop was deleted and took {what} with it"));
+        let reason = match &err {
+            DieselError::DatabaseError(_, info) => info.message().to_string(),
+            other => panic!("{what}: the delete failed outside the database: {other:?}"),
+        };
+        assert_eq!(
+            reason, "FOREIGN KEY constraint failed",
+            "{what}: the delete failed for something other than the foreign key"
         );
-        diesel::sql_query("DELETE FROM documents WHERE shop_id = 2")
-            .execute(&mut conn)
-            .unwrap();
-        diesel::sql_query("DELETE FROM audit_log WHERE shop_id = 2")
-            .execute(&mut conn)
-            .unwrap();
-        diesel::sql_query("DELETE FROM shops WHERE id = 2")
-            .execute(&mut conn)
-            .unwrap();
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!("SELECT COUNT(*) AS n FROM {table} WHERE shop_id = 2")
+            ),
+            1,
+            "{what} did not survive the refused delete"
+        );
+        assert_eq!(
+            count(&mut conn, "SELECT COUNT(*) AS n FROM shops WHERE id = 2"),
+            1,
+            "the shop row went even though the delete was refused"
+        );
+        for cleanup in [
+            "DELETE FROM stock_movements WHERE shop_id = 2",
+            "DELETE FROM documents WHERE shop_id = 2",
+            "DELETE FROM audit_log WHERE shop_id = 2",
+            "DELETE FROM shops WHERE id = 2",
+        ] {
+            diesel::sql_query(cleanup).execute(&mut conn).unwrap();
+        }
     }
 }

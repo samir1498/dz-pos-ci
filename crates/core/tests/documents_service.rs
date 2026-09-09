@@ -306,14 +306,16 @@ fn the_list_is_newest_first_and_filters_by_kind() {
 #[test]
 fn two_documents_in_the_same_second_show_the_higher_id_first() {
     // issued_at is whole seconds and a busy till issues two tickets inside
-    // one, so the till expects the later sale first. The rows go in with the
-    // higher id first, so insertion order and the order under test disagree.
+    // one, so the till expects the later sale first. The ids are written by
+    // hand, the higher one first, so the order under test is the reverse of
+    // rowid order and a query that fell back to the file's own order would
+    // hand back 10 before 20.
     //
     // This pins what the screen shows, not the `id DESC` clause that
     // promises it: with the clause removed the query still passes, because
     // idx_documents_shop_issued is scanned backwards and equal issued_at
     // values come out by falling rowid anyway. Drop that index as well and
-    // the sort falls back to insertion order and this goes red.
+    // the sort falls back to rowid order and this goes red.
     let (_dir, mut conn) = open_temp();
     for (id, number) in [(20, 1), (10, 2)] {
         diesel::sql_query(format!(
@@ -374,6 +376,12 @@ fn a_line_keeps_its_snapshot_when_the_product_is_deleted() {
 /// stored TVA recap. The columns a reprint reads are the ones a paper
 /// document is made of, so nothing may drift between them: the query is the
 /// invariant, and the test that runs it names no expected numbers at all.
+///
+/// Every subquery is COALESCEd, because `SUM` over no rows is NULL and every
+/// comparison with NULL is NULL, which a WHERE reads as false. A document
+/// whose lines were deleted, or a réel document whose recap rows were, would
+/// otherwise be the one thing this query is blind to: the emptier the row set
+/// the more certainly it passed.
 fn totals_that_disagree_with_their_lines(conn: &mut SqliteConnection) -> Vec<i32> {
     #[derive(diesel::QueryableByName)]
     struct Id {
@@ -382,15 +390,16 @@ fn totals_that_disagree_with_their_lines(conn: &mut SqliteConnection) -> Vec<i32
     }
     let rows: Vec<Id> = diesel::sql_query(
         "SELECT d.id FROM documents d WHERE \
-         d.total_ht_centimes != (SELECT SUM(line_total_centimes) FROM document_lines l \
-             WHERE l.document_id = d.id) \
+         d.total_ht_centimes != COALESCE((SELECT SUM(line_total_centimes) \
+             FROM document_lines l WHERE l.document_id = d.id), 0) \
          OR d.subtotal_ht_centimes != d.total_ht_centimes - d.discount_centimes \
          OR d.total_ttc_centimes != d.subtotal_ht_centimes + d.tva_centimes \
          OR d.net_to_pay_centimes != d.total_ttc_centimes + d.stamp_centimes \
          OR d.tva_centimes != COALESCE((SELECT SUM(amount_centimes) FROM document_tva t \
              WHERE t.document_id = d.id), 0) \
-         OR (d.regime = 'reel' AND d.subtotal_ht_centimes != (SELECT SUM(base_centimes) \
-             FROM document_tva t WHERE t.document_id = d.id)) \
+         OR (d.regime = 'reel' AND d.subtotal_ht_centimes != \
+             COALESCE((SELECT SUM(base_centimes) FROM document_tva t \
+                 WHERE t.document_id = d.id), 0)) \
          OR (d.regime = 'ifu' AND EXISTS (SELECT 1 FROM document_tva t \
              WHERE t.document_id = d.id))",
     )
@@ -453,7 +462,7 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
     )
     .unwrap();
     // A card sale: no stamp, nothing tendered.
-    sales::issue(
+    let card = sales::issue(
         &mut conn,
         SHOP,
         OWNER,
@@ -466,8 +475,25 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
         },
     )
     .unwrap();
+    // Réel at 0%: one recap row, a base equal to the subtotal and an amount of
+    // zero. It is the only document whose recap the tva_centimes disjunct
+    // cannot speak for, so it is what proves the base-sum disjunct on its own.
+    let exempt_product = priced(&mut conn, "Semoule", 12_000, 0);
+    let exempt = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![sold(exempt_product, 2_000)],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(100_000)),
+            issued_at: Some(at(9, 12)),
+        },
+    )
+    .unwrap();
     // Under the IFU: no recap row at all, and the stamp still applies.
-    settings::set_regime(&mut conn, SHOP, OWNER, Regime::Ifu, at(9, 12)).unwrap();
+    settings::set_regime(&mut conn, SHOP, OWNER, Regime::Ifu, at(9, 13)).unwrap();
     let ifu = sales::issue(
         &mut conn,
         SHOP,
@@ -477,7 +503,7 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             global_discount: Money::centimes(500),
             payment_mode: PaymentMode::Cash,
             tendered: Some(Money::centimes(100_000)),
-            issued_at: Some(at(9, 13)),
+            issued_at: Some(at(9, 14)),
         },
     )
     .unwrap();
@@ -487,27 +513,81 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
         Vec::<i32>::new()
     );
 
-    // The query bites: one centime moved on one stored column and the
-    // document is named. Without this the test would pass on a query that
-    // compares nothing.
+    // The query bites, on each of the seven columns a paper document is made
+    // of and one at a time. A query that compared nothing, or that lost one
+    // of its disjuncts to a later edit, would pass the sweep above and go red
+    // on whichever column that disjunct is the only one to speak for.
+    for column in [
+        "total_ht_centimes",
+        "discount_centimes",
+        "subtotal_ht_centimes",
+        "tva_centimes",
+        "total_ttc_centimes",
+        "stamp_centimes",
+        "net_to_pay_centimes",
+    ] {
+        let moved = |conn: &mut SqliteConnection, by: &str| {
+            diesel::sql_query(format!(
+                "UPDATE documents SET {column} = {column} {by} 1 WHERE id = {}",
+                ifu.id
+            ))
+            .execute(conn)
+            .unwrap();
+        };
+        moved(&mut conn, "+");
+        assert_eq!(
+            totals_that_disagree_with_their_lines(&mut conn),
+            vec![ifu.id],
+            "one centime on {column} left the document standing"
+        );
+        moved(&mut conn, "-");
+        assert_eq!(
+            totals_that_disagree_with_their_lines(&mut conn),
+            Vec::<i32>::new(),
+            "{column} was not put back"
+        );
+    }
+
+    // A document with no lines at all. SUM over no rows is NULL and a
+    // comparison with NULL is not true, so without the COALESCE this is the
+    // document the query cannot see: its totals stand and nothing backs them.
     diesel::sql_query(format!(
-        "UPDATE documents SET total_ht_centimes = total_ht_centimes + 1 WHERE id = {}",
-        ifu.id
+        "DELETE FROM document_lines WHERE document_id = {}",
+        card.id
     ))
     .execute(&mut conn)
     .unwrap();
     assert_eq!(
         totals_that_disagree_with_their_lines(&mut conn),
-        vec![ifu.id]
+        vec![card.id],
+        "a document whose lines are gone was not named"
     );
     diesel::sql_query(format!(
-        "UPDATE documents SET total_ht_centimes = total_ht_centimes - 1 WHERE id = {}",
-        ifu.id
+        "INSERT INTO document_lines (shop_id, document_id, position, name, qty_milli, \
+         unit_price_centimes, line_discount_centimes, rate_bps, line_total_centimes) \
+         SELECT {SHOP}, {0}, 0, 'Sucre', 1000, total_ht_centimes, 0, 1900, total_ht_centimes \
+         FROM documents WHERE id = {0}",
+        card.id
     ))
     .execute(&mut conn)
     .unwrap();
     assert_eq!(
         totals_that_disagree_with_their_lines(&mut conn),
         Vec::<i32>::new()
+    );
+
+    // A réel document whose recap rows are gone. Its TVA is zero, so the
+    // tva_centimes disjunct still agrees with the empty recap and only the
+    // base sum can name it: the same NULL, on the other subquery.
+    diesel::sql_query(format!(
+        "DELETE FROM document_tva WHERE document_id = {}",
+        exempt.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        totals_that_disagree_with_their_lines(&mut conn),
+        vec![exempt.id],
+        "a réel document with no recap left was not named"
     );
 }

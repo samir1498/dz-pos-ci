@@ -150,9 +150,20 @@ function isInit(value: unknown): value is RequestInit {
   return typeof value === "object" && value !== null;
 }
 
+/** The 80 mm page the core renders from the stored document. The panel shows
+ * this, not a second rendering of the same numbers, so the string here is
+ * what the assertions look for. */
+const TICKET_HTML =
+  '<!doctype html><html><body><div class="amount-net-to-pay">1 292,00</div></body></html>';
+
+function html(status: number, body: string): Response {
+  return new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
 let fetchMock: ReturnType<typeof vi.fn>;
 let rows: ProductDto[];
 let saleAnswer: (() => Response) | null;
+let ticketAnswer: (() => Response) | null;
 
 /** The JSON body of the POST to /sales, or undefined if none was made. */
 function salePost(): Record<string, unknown> | undefined {
@@ -170,9 +181,18 @@ function posted(): boolean {
   return salePost() !== undefined;
 }
 
+/** The URL the print button asked the ticket for, or undefined if it never
+ * asked. The query string carries the language, so it is kept whole. */
+function ticketFetch(): string | undefined {
+  return fetchMock.mock.calls
+    .map((call) => String(call[0]))
+    .find((url) => url.includes(`/sales/${sale.id}/ticket`));
+}
+
 beforeEach(() => {
   rows = [coffee, tomato, crate, salt];
   saleAnswer = null;
+  ticketAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "POST" && url.endsWith("/sales")) {
@@ -180,6 +200,9 @@ beforeEach(() => {
     }
     if (url.endsWith("/categories")) return Promise.resolve(json(200, categories));
     if (url.endsWith("/settings")) return Promise.resolve(json(200, settings));
+    if (url.includes(`/sales/${sale.id}/ticket`)) {
+      return Promise.resolve(ticketAnswer !== null ? ticketAnswer() : html(200, TICKET_HTML));
+    }
     if (url.endsWith(`/sales/${sale.id}`)) return Promise.resolve(json(200, sale));
     return Promise.resolve(json(200, rows));
   });
@@ -624,7 +647,7 @@ describe("paying", () => {
     expect(box).toHaveValue("");
   });
 
-  test("the print stub opens the stored ticket, lines and totals from the DTO", async () => {
+  test("the print button shows the page the core rendered, in an iframe", async () => {
     const user = userEvent.setup();
     mount();
     await ringUpTheFixtureBasket(user);
@@ -634,9 +657,31 @@ describe("paying", () => {
     await user.click(screen.getByRole("button", { name: "Imprimer" }));
 
     const receipt = await screen.findByRole("region", { name: "Détail du ticket" });
-    expect(within(receipt).getByText(coffee.name)).toBeInTheDocument();
-    expect(within(receipt).getByText(tomato.name)).toBeInTheDocument();
-    expect(within(receipt).getByText("1 292,00")).toBeInTheDocument();
+    const frame = await within(receipt).findByTestId("till-ticket");
+    // The page goes in as it came. A panel that re-rendered the numbers
+    // could disagree with the paper the printer puts out; this cannot.
+    expect(frame).toHaveAttribute("srcdoc", TICKET_HTML);
+    expect(ticketFetch()).toBe(`http://127.0.0.1:4317/sales/${sale.id}/ticket?lang=fr`);
+  });
+
+  test("a ticket the core could not render is shown by its code", async () => {
+    const user = userEvent.setup();
+    ticketAnswer = () =>
+      json(500, {
+        error: { code: "print", message: "ticket_80mm.html: unknown variable net_to_pay" },
+      });
+    mount();
+    await ringUpTheFixtureBasket(user);
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    await screen.findByRole("status");
+    await user.click(screen.getByRole("button", { name: "Imprimer" }));
+
+    expect(
+      await screen.findByText("Le ticket n'a pas pu être préparé pour l'impression."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/ticket_80mm/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("till-ticket")).not.toBeInTheDocument();
   });
 
   test("the API's refusal is shown by its code, never its message", async () => {
@@ -661,5 +706,22 @@ describe("in Arabic", () => {
     await user.click(tile(coffee));
     const cell = screen.getByTestId("total-net-to-pay");
     expect(cell).toHaveAttribute("dir", "ltr");
+  });
+
+  test("the ticket is asked for in the language the till is being used in", async () => {
+    // The core prints in the language it is told. A cashier working in
+    // Arabic hands over an Arabic ticket, so the UI language is what goes on
+    // the query string; the French test above passes on a hardcoded "fr".
+    const user = userEvent.setup();
+    mount("ar");
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await user.type(screen.getByLabelText("المبلغ المدفوع (دج)"), "1500");
+    await user.click(screen.getByRole("button", { name: "الدفع" }));
+    await screen.findByRole("status");
+    await user.click(screen.getByRole("button", { name: "طباعة" }));
+
+    await screen.findByTestId("till-ticket");
+    expect(ticketFetch()).toBe(`http://127.0.0.1:4317/sales/${sale.id}/ticket?lang=ar`);
   });
 });
