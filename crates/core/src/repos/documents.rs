@@ -7,7 +7,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::document::{
     assemble, Document, DocumentKind, DocumentLineRow, DocumentLineRowWrite, DocumentRow,
-    DocumentRowWrite, DocumentTvaRow, DocumentTvaRowWrite,
+    DocumentRowWrite, DocumentStatus, DocumentTvaRow, DocumentTvaRowWrite,
 };
 use crate::schema::{document_lines, document_tva, documents, products};
 
@@ -74,6 +74,10 @@ pub fn belongs_to_shop(
 /// One document's id, what is still unpaid on it and what it asked for, for
 /// every document of this customer that still carries debt, oldest first.
 ///
+/// Only a document that still stands: a cancelled facture is not a debt any
+/// more, whatever its `remaining_debt` column was left holding, and money
+/// handed over settles the paper the customer can still be shown.
+///
 /// `issued_at` is whole seconds and two documents can land inside one, so the
 /// id breaks the tie: settling oldest first has to mean one order and not
 /// whichever order the file happened to answer in.
@@ -85,6 +89,7 @@ pub fn unpaid_of_customer(
     let rows: Vec<(i32, Option<i64>, i64)> = documents::table
         .filter(documents::shop_id.eq(shop_id))
         .filter(documents::customer_id.eq(customer_id))
+        .filter(documents::status.eq(DocumentStatus::Issued))
         .filter(documents::remaining_debt_centimes.gt(0))
         .order((documents::issued_at.asc(), documents::id.asc()))
         .select((

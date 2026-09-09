@@ -1428,3 +1428,49 @@ fn the_first_and_the_last_moment_of_a_range_are_inside_it() {
     assert_eq!(range.opening, Money::centimes(10_000));
     assert_eq!(range.closing, Money::centimes(60_000));
 }
+
+#[test]
+fn a_cancelled_document_takes_none_of_a_payment() {
+    // A cancelled facture is not a debt any more: whatever is left on its
+    // `remaining_debt` column, money handed over settles the paper that still
+    // stands. The ledger row the cancellation writes is what moves the
+    // balance (T6); this only refuses to fill the cancelled sheet.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let cancelled = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let standing = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    diesel::sql_query(format!(
+        "UPDATE documents SET status = 'cancelled' WHERE id = {cancelled}"
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(50_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(
+        paid.allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [standing],
+        "the payment filled a cancelled document"
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, cancelled),
+        Money::centimes(100_000)
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, standing),
+        Money::centimes(150_000)
+    );
+}
