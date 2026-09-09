@@ -41,6 +41,12 @@ const STAMP: &str = "%Y%m%d-%H%M%S";
 /// owner replaced it.
 const SAFETY_INFIX: &str = ".before-restore-";
 
+/// The first sixteen bytes of every SQLite file. Checked before the file is
+/// opened, because SQLite opens lazily: without it a text file and a torn
+/// database both fail at the first query, and the copy the owner picked
+/// would be refused with the wrong reason.
+const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
+
 /// What a copy is called while SQLite is still writing it. One extension
 /// past what [`taken_at`] accepts, so a copy that never finished is invisible
 /// to `list`, to `is_due` and to the restore route.
@@ -291,6 +297,9 @@ pub fn verify(path: &Path) -> Result<Summary, CoreError> {
     if !std::fs::metadata(path).is_ok_and(|m| m.is_file()) {
         return Err(refused("is not a file this shop can read"));
     }
+    if !starts_like_sqlite(path) {
+        return Err(refused("is not a database"));
+    }
     let url = path.to_string_lossy();
     let mut conn =
         SqliteConnection::establish(&url).map_err(|_| refused("does not open as a database"))?;
@@ -299,9 +308,14 @@ pub fn verify(path: &Path) -> Result<Summary, CoreError> {
     conn.batch_execute("PRAGMA query_only = ON;")
         .map_err(|_| refused("does not open as a database"))?;
 
+    // Damage inside the file surfaces either as a row naming what is wrong
+    // or as an error on the read itself, depending on which page is torn.
+    // Both are the integrity check saying no, and the message says so: the
+    // file opened, so "not a database" would be the wrong thing to tell
+    // someone choosing between copies.
     let checked: Vec<IntegrityRow> = diesel::sql_query("PRAGMA integrity_check")
         .load(&mut conn)
-        .map_err(|_| refused("is not a database"))?;
+        .map_err(|_| refused("failed SQLite's integrity check"))?;
     if !checked.iter().all(|row| row.integrity_check == "ok") {
         return Err(refused("failed SQLite's integrity check"));
     }
@@ -356,6 +370,16 @@ fn count(conn: &mut SqliteConnection, table: &str) -> Result<Option<i64>, CoreEr
         .get_result(conn)
         .map_err(|_| refused("is not a dz-pos shop file"))?;
     Ok(Some(row.n))
+}
+
+/// Does the file begin the way every SQLite file does?
+fn starts_like_sqlite(path: &Path) -> bool {
+    use std::io::Read;
+    let mut head = [0_u8; SQLITE_MAGIC.len()];
+    std::fs::File::open(path)
+        .and_then(|mut f| f.read_exact(&mut head))
+        .is_ok()
+        && &head == SQLITE_MAGIC
 }
 
 fn refused(why: &str) -> CoreError {

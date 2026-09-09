@@ -113,10 +113,23 @@ fn a_file_that_is_not_a_database_or_is_torn_fails_verify() {
     std::fs::write(&made.path, &bytes).unwrap();
     let torn = backup::verify(&made.path).unwrap_err();
     assert_eq!(torn.code(), "validation", "{torn}");
+    // Named, not just refused: a torn page and a file that was never a
+    // database are both "validation", so only the message says which check
+    // caught it. Drop the integrity check and this assertion goes red while
+    // the code above still passes.
+    assert!(
+        torn.to_string().contains("integrity check"),
+        "the check that caught it is not named: {torn}"
+    );
 
     let junk = dir.path().join("dzpos-20260107-093000.sqlite");
     std::fs::write(&junk, b"not a database at all, just text").unwrap();
-    assert_eq!(backup::verify(&junk).unwrap_err().code(), "validation");
+    let not_a_db = backup::verify(&junk).unwrap_err();
+    assert_eq!(not_a_db.code(), "validation");
+    assert!(
+        !not_a_db.to_string().contains("integrity check"),
+        "a file that never was a database blamed the integrity check: {not_a_db}"
+    );
 
     let missing = dir.path().join("dzpos-20260106-093000.sqlite");
     assert_eq!(backup::verify(&missing).unwrap_err().code(), "validation");
