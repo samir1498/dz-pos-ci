@@ -17,9 +17,13 @@
 --
 -- Amounts are at or above zero on every kind. An avoir carries positive
 -- amounts and its kind is what says the money goes the other way.
+--
+-- shop_id RESTRICTs rather than cascades: décret 05-468 art. 10 wants an
+-- uninterrupted series, and a series one DELETE can empty is not one. A shop
+-- that has issued a document is never deleted.
 CREATE TABLE documents (
     id                   INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    shop_id              INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+    shop_id              INTEGER NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
     kind                 TEXT NOT NULL CHECK (kind IN
                              ('ticket', 'facture', 'proforma', 'bon_de_livraison',
                               'avoir', 'bon_de_reception')),
@@ -124,10 +128,15 @@ CREATE TABLE document_tva (
 -- The append-only stock ledger (features.md §1, Stock movements). It is the
 -- truth; products.qty_on_hand_milli is a cache re-derived from it.
 -- qty_milli is signed: a sale is negative, a purchase positive.
+--
+-- product_id RESTRICTs: a document line keeps its own snapshot of the product
+-- and survives the delete, so a ledger that went with the product would leave
+-- the sold lines standing and the stock they came out of gone. M3 archives a
+-- product that has moved instead of deleting it.
 CREATE TABLE stock_movements (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     shop_id            INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-    product_id         INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    product_id         INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
     kind               TEXT NOT NULL CHECK (kind IN
                            ('opening', 'purchase', 'sale', 'adjustment', 'return')),
     qty_milli          INTEGER NOT NULL CHECK (typeof(qty_milli) = 'integer'),
@@ -142,9 +151,11 @@ CREATE INDEX idx_stock_movements_shop_product ON stock_movements (shop_id, produ
 -- Sensitive actions, an ISO 27001 control we get nearly free by writing it
 -- now (features.md §5). "before" and "after" hold JSON documents; they are
 -- quoted because BEFORE is a keyword to SQLite's trigger syntax.
+--
+-- shop_id RESTRICTs: an audit trail a DELETE can erase is not one.
 CREATE TABLE audit_log (
     id         INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    shop_id    INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+    shop_id    INTEGER NOT NULL REFERENCES shops(id) ON DELETE RESTRICT,
     user_id    INTEGER NOT NULL REFERENCES users(id),
     action     TEXT NOT NULL,
     entity     TEXT NOT NULL,

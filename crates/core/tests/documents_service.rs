@@ -343,6 +343,18 @@ fn a_line_keeps_its_snapshot_when_the_product_is_deleted() {
         draft(DocumentKind::Ticket, Some(p), at(9, 10)),
     )
     .unwrap();
+    // The ledger holds the product down first: creating it wrote an opening
+    // movement, and stock_movements.product_id RESTRICTs. Only once the
+    // ledger is gone can the delete reach the line's snapshot at all.
+    assert!(
+        diesel::sql_query(format!("DELETE FROM products WHERE id = {p}"))
+            .execute(&mut conn)
+            .is_err(),
+        "a product with a movement was deleted"
+    );
+    diesel::sql_query(format!("DELETE FROM stock_movements WHERE product_id = {p}"))
+        .execute(&mut conn)
+        .unwrap();
     diesel::sql_query(format!("DELETE FROM products WHERE id = {p}"))
         .execute(&mut conn)
         .unwrap();

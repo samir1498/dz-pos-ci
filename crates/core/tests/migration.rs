@@ -781,3 +781,67 @@ fn foreign_keys_are_enforced() {
         "a product landed under a shop that does not exist"
     );
 }
+
+#[test]
+fn a_product_with_a_movement_cannot_be_deleted() {
+    // The ledger is the truth about what left the shelf (features.md §1) and a
+    // document line keeps its own snapshot of the product, so a delete that
+    // took the movements with it would leave the sold lines standing and the
+    // stock they came out of gone. M3 archives a product instead.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    diesel::sql_query(insert_with("stock_movements", "kind", "'sale'"))
+        .execute(&mut conn)
+        .unwrap();
+    let deleted = diesel::sql_query("DELETE FROM products WHERE id = 1").execute(&mut conn);
+    assert!(
+        deleted.is_err(),
+        "a product with a movement was deleted and took its ledger with it"
+    );
+    assert_eq!(
+        count(&mut conn, "SELECT COUNT(*) AS n FROM stock_movements"),
+        1
+    );
+}
+
+#[test]
+fn a_shop_with_a_document_or_an_audit_entry_cannot_be_deleted() {
+    // A fiscal document and the audit trail outlive the row that points at
+    // them: décret 05-468 art. 10 wants an uninterrupted series, and a series
+    // a DELETE can empty is not one. The second shop carries only the row
+    // under test, so each FK is the reason its own delete fails.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    for (what, insert) in [
+        (
+            "a document",
+            "INSERT INTO documents (shop_id, kind, series, number, issued_at, user_id, \
+             regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+             subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+             net_to_pay_centimes, status) \
+             VALUES (2, 'ticket', 'doc_ticket', 1, '2026-09-09 10:00:00', 1, 'reel', \
+             'cash', 'Autre magasin', 0, 0, 0, 0, 0, 0, 0, 'issued')",
+        ),
+        (
+            "an audit entry",
+            "INSERT INTO audit_log (shop_id, user_id, action, entity, entity_id) \
+             VALUES (2, 1, 'update', 'product', 1)",
+        ),
+    ] {
+        diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Autre magasin')")
+            .execute(&mut conn)
+            .unwrap();
+        diesel::sql_query(insert).execute(&mut conn).unwrap();
+        let deleted = diesel::sql_query("DELETE FROM shops WHERE id = 2").execute(&mut conn);
+        assert!(deleted.is_err(), "a shop was deleted and took {what} with it");
+        diesel::sql_query("DELETE FROM documents WHERE shop_id = 2")
+            .execute(&mut conn)
+            .unwrap();
+        diesel::sql_query("DELETE FROM audit_log WHERE shop_id = 2")
+            .execute(&mut conn)
+            .unwrap();
+        diesel::sql_query("DELETE FROM shops WHERE id = 2")
+            .execute(&mut conn)
+            .unwrap();
+    }
+}
