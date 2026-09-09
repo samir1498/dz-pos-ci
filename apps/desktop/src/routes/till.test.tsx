@@ -378,6 +378,26 @@ describe("the quantity a line carries", () => {
     expect(screen.getByText("Le panier est vide.")).toBeInTheDocument();
   });
 
+  test("a quantity that does not read as a number survives both buttons", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(tomato));
+    const qty = () => screen.getByLabelText(`Quantité ${tomato.name}`);
+    // An emptied box on the way to a new weight. Reading it as zero would
+    // delete the line on minus and write 1 over it on plus; `add` keeps such
+    // a line too.
+    await user.clear(qty());
+    await user.click(screen.getByRole("button", { name: `Un de moins ${tomato.name}` }));
+    expect(qty()).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: `Un de plus ${tomato.name}` }));
+    expect(qty()).toHaveValue("");
+    // A lone separator is the same: digits are still to come.
+    await user.type(qty(), ",");
+    await user.click(screen.getByRole("button", { name: `Un de moins ${tomato.name}` }));
+    expect(qty()).toHaveValue(",");
+  });
+
   test("the minus button on a single unit takes the line off", async () => {
     const user = userEvent.setup();
     mount();

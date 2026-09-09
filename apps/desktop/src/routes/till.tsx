@@ -201,11 +201,16 @@ export function TillScreen() {
   // The two buttons move a line by one whole unit. A step that lands at or
   // below zero takes the line off, the way the × does: raising 0,5 kg to a
   // full kilo would charge the customer for weight the scale never read.
+  // A box that does not read as a number yet (emptied, or a lone separator)
+  // is left alone, the way `add` keeps such a line: reading it as zero would
+  // delete the line on one button and write 1 over what is being typed on
+  // the other.
   function step(id: number, by: number) {
     setCart((current) =>
       current.flatMap((l) => {
         if (l.product.id !== id) return [l];
-        const milli = parseQtyToMilli(l.qtyText) ?? 0;
+        const milli = parseQtyToMilli(l.qtyText);
+        if (milli === null) return [l];
         const next = milli + by;
         if (next <= 0) return [];
         return [{ ...l, qtyText: formatQty(next) }];
