@@ -30,7 +30,7 @@ tasks:
     status: 'blocked'
   - id: 'T7'
     desc: 'Three languages and RTL on every M1 screen (products, settings, till), a Playwright pass per language'
-    status: 'pending'
+    status: 'done'
   - id: 'T8'
     desc: 'Daily backup of the SQLite file, keep 30, restore from settings, the backup test opens the copy; checkpoint PR to main closes M1 except T6'
     status: 'pending'
