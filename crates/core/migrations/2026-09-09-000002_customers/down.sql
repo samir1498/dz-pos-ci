@@ -67,6 +67,12 @@ CREATE TABLE documents_without_customers (
 
 -- Ids carry over, as they did on the way up, and the buyer block and the
 -- balance triple are dropped with the old table: a revert is a revert.
+-- `customer_id` is written as NULL rather than kept. The customers table is
+-- dropped below, so a kept id would point at nothing, and reapplying the
+-- migration would copy it into a column that references a table recreated
+-- empty: orphans the file would carry from then on. A downgrade loses which
+-- customer a document was made out to; the buyer block printed on the paper
+-- is lost with it, and that is the cost of going backwards.
 -- The old `kind` CHECK has no `quittance` in it, so a file carrying one would
 -- fail this INSERT and the revert would stop rather than lose the row.
 -- Nothing issues a quittance in this milestone, so no file carries one.
@@ -78,7 +84,7 @@ INSERT INTO documents_without_customers
      net_to_pay_centimes, tendered_centimes, change_centimes, status, created_at)
 SELECT id, shop_id, kind, series, number, issued_at, user_id, regime, payment_mode,
        seller_name, seller_rc, seller_nif, seller_nis, seller_ai, seller_address,
-       seller_phone, customer_id, total_ht_centimes, discount_centimes,
+       seller_phone, NULL, total_ht_centimes, discount_centimes,
        subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes,
        net_to_pay_centimes, tendered_centimes, change_centimes, status, created_at
 FROM documents;

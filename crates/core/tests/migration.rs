@@ -1199,19 +1199,12 @@ fn a_database_at_the_third_migration_takes_the_fourth() {
     );
 }
 
-#[test]
-fn the_migration_reverts_and_reapplies() {
-    // architecture.md, Data: a migration ships with a test that runs it.
-    // Reverting all the way back to an empty file is what proves each
-    // down.sql undoes its own up.sql and nothing else.
-    use diesel_migrations::MigrationHarness;
-    let (_dir, mut conn) = open_temp();
-    // A revert on an empty file proves the tables move and says nothing about
-    // the rows: the down.sql copies documents back the way the up.sql copied
-    // them across, and a facture with a buyer, a balance and a debt behind it
-    // is what that copy has to carry.
+/// Customer 1, facture 4 made out to them with a buyer block and a balance
+/// triple, and the ledger movement the sale wrote. Every figure here is read
+/// back by the tests that revert the migration.
+fn seed_a_facture_naming_a_customer(conn: &mut SqliteConnection) {
     diesel::sql_query(insert_with("customers", "name", "'Entreprise Benali'"))
-        .execute(&mut conn)
+        .execute(conn)
         .unwrap();
     diesel::sql_query(
         "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
@@ -1224,26 +1217,42 @@ fn the_migration_reverts_and_reapplies() {
          '16/00-7654321 B 22', '000216007654321', 100000, 0, 100000, 19000, 119000, 0, \
          119000, 250000, 119000, 369000)",
     )
-    .execute(&mut conn)
+    .execute(conn)
     .unwrap();
     diesel::sql_query(
         "INSERT INTO debt_ledger (shop_id, customer_id, document_id, kind, debit_centimes, \
          credit_centimes, user_id) VALUES (1, 1, 4, 'sale', 119000, 0, 1)",
     )
-    .execute(&mut conn)
+    .execute(conn)
     .unwrap();
+}
+
+#[test]
+fn the_migration_reverts_and_reapplies() {
+    // architecture.md, Data: a migration ships with a test that runs it.
+    // Reverting all the way back to an empty file is what proves each
+    // down.sql undoes its own up.sql and nothing else.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_temp();
+    // A revert on an empty file proves the tables move and says nothing about
+    // the rows: the down.sql copies documents back the way the up.sql copied
+    // them across, and a facture with a buyer, a balance and a debt behind it
+    // is what that copy has to carry.
+    seed_a_facture_naming_a_customer(&mut conn);
 
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     // The facture is still there, keeping its id, its number and the totals a
     // comptable reads. The buyer block and the balance are gone with the
-    // columns that held them, which is what reverting this migration means.
+    // columns that held them, and `customer_id` is emptied on purpose: the
+    // customers table goes with them, so a kept id would name nothing. A
+    // downgrade loses which customer a document was made out to.
     assert_eq!(
         count(
             &mut conn,
             "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
              AND series = 'doc_facture' AND net_to_pay_centimes = 119000 \
-             AND customer_id = 1 AND seller_name = 'Mon magasin'"
+             AND customer_id IS NULL AND seller_name = 'Mon magasin'"
         ),
         1,
         "the facture did not survive the down copy"
@@ -1584,4 +1593,36 @@ fn the_debt_tables_keep_what_they_name_and_lose_only_what_they_may() {
         "a document an allocation settled was deleted"
     );
     assert_eq!(orphan_rows(&mut conn), 0);
+}
+
+#[test]
+fn a_facture_naming_a_customer_goes_down_and_up_without_orphaning_itself() {
+    // The round trip above walks the file all the way back, which empties it
+    // before anything is reapplied. This one reverts the fourth migration
+    // only and puts it straight back, which is the move a developer makes and
+    // the one where a kept `customer_id` would come back up pointing into a
+    // `customers` table that was just recreated empty.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_temp();
+    seed_a_facture_naming_a_customer(&mut conn);
+
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+
+    assert_eq!(
+        orphan_rows(&mut conn),
+        0,
+        "the reapplied file has a row pointing at a customer that is not there"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND customer_id IS NULL"
+        ),
+        1,
+        "the facture kept a customer id the down.sql had no customer to keep"
+    );
 }
