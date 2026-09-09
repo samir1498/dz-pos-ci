@@ -22,27 +22,35 @@ commit.
 
 ```
 crates/core      Rust: models, diesel repos, services, migrations (SQLite)
-apps/desktop     Tauri 2 + React 19 + Vite; Rust side in src-tauri/
+crates/api       Rust: axum HTTP server over core; launch token; the only door
+apps/desktop     Tauri 2 + React 19 + Vite; Rust side in src-tauri/; e2e/
 apps/mobile      Expo / React Native, placeholder, not started
+packages/shared  TS: API client, types generated from crates/api, money display
+packages/design  TS: design tokens in three tiers
+fixtures/        money fixtures read by cargo test and vitest alike
 docs/            features.md and architecture.md, the spec every task cites;
                  roadmap.md, the milestones to a first shop
 ```
 
-Cargo workspace at the root, pnpm workspace over `apps/*`.
+Cargo workspace at the root, pnpm workspace over `apps/*`, `packages/*`
+and `design`.
 `.npmrc` sets `node-linker=hoisted` for Metro.
 
 ## Commands
 
+The `justfile` at the root is the list; `just` alone prints it.
+
 ```
-cargo test --workspace                       # Rust
-cargo llvm-cov --workspace --lcov --output-path lcov.info
-pnpm install && pnpm -r build && pnpm -r test # web
-pnpm desktop tauri dev                       # desktop app (needs Linux webkit deps, see ci.yml)
+just gates        # fmt, clippy, generated types check, tests, builds; what a PR needs
+just e2e          # Playwright against a fresh API and database
+just api          # the API on 4317 with a dev database and a fresh launch token
+just dev          # the web UI on 5173, reads the token just api wrote
+just tauri        # the native window; needs a display
 ```
 
-Over SSH: `ssh -L 5173:localhost:5173 <box>` then `pnpm desktop dev` shows the
-UI in a browser with Tauri IPC unavailable; `tauri dev` needs a display
-(WSLg / `xvfb-run`).
+Every API route but `/health` needs the launch token, so `just api` runs
+first and `just dev` after it. From another machine, pass the browser's
+origin to `just api` (its third argument) or the API refuses it.
 
 ## Rules that are not negotiable
 
@@ -59,8 +67,10 @@ From the architecture notes; the reasons are there.
 
 ## Quality gates
 
-`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, `cargo
-llvm-cov`, `pnpm -r build`, `pnpm -r test`. CI runs them on Linux and
-Windows. Sonar: not wired yet, Rust support on the team server is
+`just gates`: `cargo fmt --check`, `cargo clippy --all-targets -D
+warnings`, the generated TypeScript types diffed against the Rust DTOs,
+`cargo test`, `pnpm -r test`, `pnpm -r build`. CI runs the same on Linux
+and Windows, plus coverage with `cargo llvm-cov`. `just e2e` runs before a
+merge but not in CI yet. Sonar: not wired yet, Rust support on the team server is
 unverified (`rust:S1481` probe returned 404); check before promising a gate
 on the core.

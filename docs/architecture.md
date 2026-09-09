@@ -13,12 +13,13 @@ the short form every task cites.
 | Desktop | Tauri 2, React 19, Vite, Tailwind 4, TanStack Router/Query | `apps/desktop` |
 | Mobile | Expo / React Native | `apps/mobile`, not started |
 | Shared TS | `packages/shared`: API client, generated types, money formatting | `packages/shared/package.json` |
+| Design tokens | `packages/design`: primitives, semantic roles, CSS output | `packages/design/package.json` |
 
-Candidates checked on crates.io on 2026-09-07 and not yet chosen: axum
-0.8.9 and tokio 1.53.1 for the API; ts-rs 12.0.1 for generating the TS
-types; proptest 1.11.0 for property tests; insta 1.48.0 for golden files;
-mdns-sd 0.21.2 for LAN discovery. Pin the version in the Cargo.toml when a
-crate is first used; this table does not decide.
+In use and pinned in their Cargo.toml: axum and tokio for the API, ts-rs
+for the TS types, proptest for property tests. Checked on crates.io on
+2026-09-07 and not yet chosen: insta 1.48.0 for golden files; mdns-sd
+0.21.2 for LAN discovery. Pin the version when a crate is first used; this
+table does not decide.
 
 ## The six rules
 
@@ -45,8 +46,8 @@ The desktop webview talks to a localhost HTTP server that the Tauri process
 starts, not to Tauri IPC. Tauri stays for what only it can do: window,
 tray, native print dialog, file pickers, auto-update. Two things follow:
 
-- `pnpm desktop dev` in a browser over SSH shows real data as soon as the
-  API is running on the box. The IPC gap that made the first preview
+- `just api` then `just dev` shows real data in a browser on another
+  machine, launch token included. The IPC gap that made the first preview
   hollow disappears.
 - The API crate is the product's only entry point, so its tests are the
   product's tests. UI tests check rendering, not business rules.
@@ -87,7 +88,8 @@ crates/api        HTTP routes over services; launch token; shop scoping
 apps/desktop      React UI + src-tauri (starts the API, owns the window)
 apps/mobile       Expo app, same API client                        (later)
 packages/shared   TS: API client, types generated from Rust, money
-docs/             this file, features.md, decisions as they land
+packages/design   TS: design tokens, three tiers
+docs/             this file, features.md, roadmap.md
 ```
 
 Dependency direction is one way: `api → core`, `desktop → api`,
@@ -108,12 +110,13 @@ Dependency direction is one way: `api → core`, `desktop → api`,
 
 Anouar's "no error slop" rule, made concrete:
 
-- One error enum per layer (`DbError`, `ServiceError`, `ApiError`), each
-  wrapping the one below with `thiserror`. The API maps `ServiceError`
-  variants to HTTP status codes in one place.
+- One error enum per layer (`CoreError` in `crates/core`, wrapping
+  `DbError` and `MoneyError`; `ApiError` in `crates/api`), each wrapping
+  the one below with `thiserror`. The API maps `CoreError` variants to
+  HTTP status codes in one place (`crates/api/src/error.rs`).
 - No `unwrap` or `expect` outside tests and `build.rs`. Enforced by
   `clippy::unwrap_used` and `clippy::expect_used` in the workspace
-  `[lints]` table, landing with the first service code.
+  `[lints]` table.
 - Every user-facing error has a translation key. The UI never shows a Rust
   or SQL message.
 - Money arithmetic uses checked operations; overflow is an error, not a
@@ -176,18 +179,20 @@ Raised in the 2026-09-08 handoff, still open, each settled before
 | API routes | request tests against an in-process server and temp DB | same |
 | Coverage | `cargo llvm-cov` → lcov artifact; Sonar ingestion once Rust support on the team server is verified | Linux job |
 | React components | vitest + Testing Library, jsdom | every push |
-| Desktop end-to-end | tauri-driver + WebDriver under `xvfb-run` | later, nightly |
+| Browser end-to-end | Playwright + chromium against a fresh API and database (`just e2e`); ObserveOne is the recorded tool, Playwright the interim | before a merge, not in CI yet |
 | Mobile | Jest (RN preset), Maestro flows on a real device | later |
 
-Gates already in CI: `cargo fmt --check`, `cargo clippy -D warnings`,
-`cargo test`, `cargo llvm-cov`, `pnpm -r build`, `pnpm -r test`. A change
+Gates (`just gates`, and CI): `cargo fmt --check`, `cargo clippy
+--all-targets -D warnings`, the generated TS types diffed against the
+DTOs, `cargo test`, `pnpm -r test`, `pnpm -r build`; CI adds `cargo
+llvm-cov`. A change
 is done when they pass and the behaviour was driven, not when they pass.
 
 ## Local development
 
 - Everything runs on the WSL box. Rust and web tests run there directly.
-- UI: `pnpm desktop dev` bound to the box's Tailscale address; open it
-  from the laptop's browser. Real data once the API runs.
+- UI: `just api 4317 .dev/dev.db http://<laptop>:5173` then `just dev`;
+  open it from the laptop's browser. The token travels with `just dev`.
 - Native window: `pnpm desktop tauri dev` needs a display (WSLg or
   `xvfb-run`). Windows builds come from CI.
 - Phone: Expo Go over Tailscale, EAS for builds.

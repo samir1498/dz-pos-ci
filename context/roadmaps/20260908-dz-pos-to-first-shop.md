@@ -16,10 +16,10 @@ entries:
     note: 'M0: R3, R6, R7, R8, R9 open; R8 and R6 gate M2, R3 gates M5'
   - ref: 'repo-tooling-skills-and-rules-for-dz-pos'
     status: 'in-progress'
-    note: 'M0: laptop clone, Sonar Rust check, CI clippy --all-targets, dz-review sections from pc-review'
+    note: 'open: laptop clone, Sonar Rust check'
   - ref: 'm1-sale-and-ticket-on-one-desktop'
     status: 'in-progress'
-    note: 'M1 started 2026-09-09; first task planned with Samir step by step'
+    note: 'M1 on m1/2026-09-09 as a loop since 2026-09-09; T0, T1 done, T2 in progress'
   - ref: 'm2-facture-customers-and-credit'
     status: 'planned'
     note: 'M2: blocked on a real printed facture, Arabic words review, accountant answers'
@@ -45,6 +45,6 @@ customers and credit; M3 stock in, expenses, reports; M4 team; M5 first
 release; M6 the phone in the shop. Cloud mode waits on open decision 1.
 No dates; a milestone closes when its demo runs on a real machine.
 
-M0 is the three existing plans (money module, legal and tooling research,
-repo tooling). M1 to M6 are stub plans that receive tasks when their
-milestone starts.
+M0 was the three existing plans (money module, legal and tooling research,
+repo tooling). M1 carries its tasks; M2 to M6 are stub plans that receive
+tasks when their milestone starts.

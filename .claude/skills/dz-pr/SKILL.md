@@ -7,8 +7,10 @@ disable-model-invocation: true
 
 ## Branch
 
-`feature/<name>`, `fix/<name>`, `chore/<name>`, `docs/<name>`. Branched off
-`origin/main`. One session works this repo per machine, so no worktree; if
+`feature/<name>`, `fix/<name>`, `chore/<name>`, `docs/<name>` off
+`origin/main`; inside a milestone, `m<N>/<task>` off the milestone branch
+(`m1/2026-09-09`), and the milestone branch itself goes to `main` at its
+checkpoint tasks. One session works this repo per machine, so no worktree; if
 that changes, `CLAUDE.md` says what to do.
 
 ## Gates first, evidence in hand
@@ -16,11 +18,8 @@ that changes, `CLAUDE.md` says what to do.
 Run these from the repo root and keep the tail of each output for the body:
 
 ```
-cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-pnpm -r build
-pnpm -r test
+just gates   # fmt, clippy, generated types check, cargo test, pnpm test, builds
+just e2e     # Playwright against a fresh API and database
 ```
 
 A green CI run is not tested. Say what you drove by hand or by script:

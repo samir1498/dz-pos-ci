@@ -32,7 +32,7 @@ enough; no worktree ceremony. If two sessions ever work it on the same box,
 move to `.claude/worktrees/<name>` the way the ObserveOne repos do.
 
 ## Dev servers
-Nothing runs by default. The web UI (`pnpm desktop dev --host`) can run on
+Nothing runs by default. The web UI (`just api`, then `just dev`) can run on
 either machine; the native window only on the laptop. Say which servers
 you started and stop them when done; use a pid file or `fuser -k
 <port>/tcp`, never `pkill -f` in a chained command (it matches the shell

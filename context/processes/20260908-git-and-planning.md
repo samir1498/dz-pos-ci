@@ -10,7 +10,10 @@ tldr: 'Branch + PR, ctx trailer, the context store and session rituals'
 
 ## Git
 - Branch off `origin/main` (`feature/`, `fix/`, `chore/`, `docs/`) and
-  open a PR with the `dz-pr` skill. Code never lands on `main` without a PR.
+  open a PR with the `dz-pr` skill. Inside a milestone, task branches
+  (`m1/<task>`) merge into the milestone branch (`m1/2026-09-09`) after
+  gates and a review, and the milestone branch goes to `main` by PR at
+  its checkpoint tasks. Code never lands on `main` without a PR.
 - `context/` bookkeeping (plan status, progress entries, handoffs, a
   reference page) commits straight to `main` with a `docs(context):`
   subject, the way `observeone-context` pushes to its own main. A PR per
