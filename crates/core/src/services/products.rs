@@ -11,6 +11,7 @@ use crate::money::{Bps, Money};
 use crate::repos::categories as categories_repo;
 use crate::repos::counters;
 use crate::repos::products as repo;
+use crate::services::audit;
 use crate::services::stock;
 
 /// GS1 prefix 2 is reserved for restricted circulation: codes a shop makes
@@ -73,6 +74,7 @@ pub fn create(
 pub fn update(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    user_id: i32,
     id: i32,
     new: NewProduct,
 ) -> Result<Product, CoreError> {
@@ -85,15 +87,50 @@ pub fn update(
         // A blank barcode on an update means "leave it alone"; the product
         // already has a number and renumbering it would orphan printed labels.
         if write.barcode.is_none() {
-            write.barcode = before.barcode;
+            write.barcode.clone_from(&before.barcode);
         }
         // The quantity on hand belongs to the stock ledger (features.md §1),
         // not to the fiche: an edit made from a list read minutes ago must
         // not undo the sales since. The field rides along on the wire because
         // add and edit share one shape; here it is the stored value.
         write.qty_on_hand_milli = before.qty_on_hand_milli;
-        repo::update(conn, shop_id, id, &write)
+        let after = repo::update(conn, shop_id, id, &write)?;
+        // Only a price or the active flag: features.md §5 names those as the
+        // sensitive ones, and logging a renamed product on every edit would
+        // bury them.
+        if price_or_active_changed(&before, &after) {
+            audit::record(
+                conn,
+                shop_id,
+                user_id,
+                audit::Change {
+                    action: audit::ACTION_UPDATE,
+                    entity: "product",
+                    entity_id: Some(id),
+                    before: Some(as_json(&before)),
+                    after: Some(as_json(&after)),
+                },
+            )?;
+        }
+        Ok(after)
     })
+}
+
+fn price_or_active_changed(before: &Product, after: &Product) -> bool {
+    before.cost != after.cost
+        || before.selling != after.selling
+        || before.wholesale != after.wholesale
+        || before.active != after.active
+}
+
+fn as_json(p: &Product) -> String {
+    serde_json::json!({
+        "cost_centimes": p.cost.as_centimes(),
+        "selling_centimes": p.selling.as_centimes(),
+        "wholesale_centimes": p.wholesale.map(Money::as_centimes),
+        "active": p.active,
+    })
+    .to_string()
 }
 
 fn validate(

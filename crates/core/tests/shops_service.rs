@@ -9,6 +9,8 @@ use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::services::shops;
 
 const SHOP: i32 = 1;
+/// The owner the first migration seeds. TODO(M4): the real user.
+const OWNER: i32 = 1;
 
 fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
     let dir = tempfile::tempdir().unwrap();
@@ -45,7 +47,7 @@ fn the_seeded_shop_has_a_name_and_no_identifiers() {
 #[test]
 fn an_update_stores_every_field_of_the_seller_block() {
     let (_dir, mut conn) = open_temp();
-    let after = shops::update_store(&mut conn, SHOP, full_block()).unwrap();
+    let after = shops::update_store(&mut conn, SHOP, OWNER, full_block()).unwrap();
     let want = full_block();
     assert_eq!(after.name, want.name);
     assert_eq!(after.rc, want.rc);
@@ -64,13 +66,13 @@ fn an_update_stores_every_field_of_the_seller_block() {
 #[test]
 fn a_cleared_identifier_is_stored_as_nothing_not_as_a_space() {
     let (_dir, mut conn) = open_temp();
-    shops::update_store(&mut conn, SHOP, full_block()).unwrap();
+    shops::update_store(&mut conn, SHOP, OWNER, full_block()).unwrap();
     let cleared = StoreBlock {
         rc: None,
         nif: Some("   ".to_string()),
         ..full_block()
     };
-    let after = shops::update_store(&mut conn, SHOP, cleared).unwrap();
+    let after = shops::update_store(&mut conn, SHOP, OWNER, cleared).unwrap();
     assert_eq!(after.rc, None, "a None over a stored value clears it");
     assert_eq!(after.nif, None, "blank text clears it too");
     assert_eq!(after.nis, full_block().nis, "the fields sent again stay");
@@ -84,7 +86,7 @@ fn values_are_trimmed_before_they_are_stored() {
         phone: Some(" 0555 12 34 56 ".to_string()),
         ..full_block()
     };
-    let after = shops::update_store(&mut conn, SHOP, padded).unwrap();
+    let after = shops::update_store(&mut conn, SHOP, OWNER, padded).unwrap();
     assert_eq!(after.name, "Superette El Baraka");
     assert_eq!(after.phone.as_deref(), Some("0555 12 34 56"));
 }
@@ -96,6 +98,7 @@ fn a_blank_name_is_refused_and_nothing_changes() {
         let err = shops::update_store(
             &mut conn,
             SHOP,
+            OWNER,
             StoreBlock {
                 name: name.to_string(),
                 ..full_block()
@@ -119,6 +122,7 @@ fn a_field_longer_than_a_document_can_print_is_refused() {
     let err = shops::update_store(
         &mut conn,
         SHOP,
+        OWNER,
         StoreBlock {
             address: Some(long),
             ..full_block()
@@ -130,6 +134,7 @@ fn a_field_longer_than_a_document_can_print_is_refused() {
     let ok = shops::update_store(
         &mut conn,
         SHOP,
+        OWNER,
         StoreBlock {
             address: Some("y".repeat(200)),
             ..full_block()
@@ -152,7 +157,7 @@ fn another_shop_is_not_found_on_read_or_write() {
         })
     ));
     assert!(matches!(
-        shops::update_store(&mut conn, 2, full_block()),
+        shops::update_store(&mut conn, 2, OWNER, full_block()),
         Err(CoreError::NotFound {
             entity: "shop",
             id: 2

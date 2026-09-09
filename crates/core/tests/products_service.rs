@@ -417,7 +417,7 @@ fn an_update_onto_another_shops_category_is_rejected_too() {
     let mut d = draft("A");
     d.category_id = Some(theirs);
     d.rate_bps = Some(Bps::new(1900).unwrap());
-    match products::update(&mut conn, SHOP, made.id, d) {
+    match products::update(&mut conn, SHOP, OWNER, made.id, d) {
         Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "category"),
         other => panic!("expected a category NotFound, got {other:?}"),
     }
@@ -455,7 +455,7 @@ fn update_changes_the_row_and_keeps_the_id() {
     d.selling = Money::centimes(1_050);
     d.unit = Unit::Kg;
     d.active = false;
-    let after = products::update(&mut conn, SHOP, made.id, d).unwrap();
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, d).unwrap();
     assert_eq!(after.id, made.id);
     assert_eq!(after.name, "A renommé");
     assert_eq!(after.selling, Money::centimes(1_050));
@@ -468,7 +468,7 @@ fn update_changes_the_row_and_keeps_the_id() {
 fn update_keeps_the_existing_barcode_when_none_is_given() {
     let (_dir, mut conn) = open_temp();
     let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
-    let after = products::update(&mut conn, SHOP, made.id, draft("A")).unwrap();
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, draft("A")).unwrap();
     assert_eq!(after.barcode, made.barcode);
 }
 
@@ -479,7 +479,7 @@ fn update_onto_another_products_barcode_is_rejected() {
     let b = products::create(&mut conn, SHOP, OWNER, draft("B")).unwrap();
     let mut d = draft("B");
     d.barcode = a.barcode.clone();
-    match products::update(&mut conn, SHOP, b.id, d) {
+    match products::update(&mut conn, SHOP, OWNER, b.id, d) {
         Err(CoreError::DuplicateBarcode(_)) => {}
         other => panic!("expected DuplicateBarcode, got {other:?}"),
     }
@@ -489,7 +489,7 @@ fn update_onto_another_products_barcode_is_rejected() {
 fn update_is_scoped_by_shop() {
     let (_dir, mut conn) = open_temp();
     let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
-    match products::update(&mut conn, 2, made.id, draft("stolen")) {
+    match products::update(&mut conn, 2, OWNER, made.id, draft("stolen")) {
         Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "product"),
         other => panic!("expected NotFound, got {other:?}"),
     }
@@ -559,7 +559,7 @@ fn an_update_sending_the_products_own_barcode_back_is_not_a_duplicate() {
     let a = products::create(&mut conn, SHOP, OWNER, a).unwrap();
     let mut same = draft("A renamed");
     same.barcode = a.barcode.clone();
-    let after = products::update(&mut conn, SHOP, a.id, same).unwrap();
+    let after = products::update(&mut conn, SHOP, OWNER, a.id, same).unwrap();
     assert_eq!(after.name, "A renamed");
     assert_eq!(after.barcode, a.barcode);
 }
@@ -581,7 +581,7 @@ fn an_update_changes_every_field_the_spec_names_and_can_deactivate() {
         rate_bps: Some(Bps::new(900).unwrap()),
         active: false,
     };
-    let after = products::update(&mut conn, SHOP, made.id, edited).unwrap();
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, edited).unwrap();
     assert_eq!(after.id, made.id);
     assert_eq!(after.name, "A+");
     assert_eq!(
@@ -605,7 +605,7 @@ fn an_update_changes_every_field_the_spec_names_and_can_deactivate() {
     cleared.wholesale = None;
     cleared.category_id = None;
     cleared.rate_bps = Some(Bps::new(0).unwrap());
-    let after = products::update(&mut conn, SHOP, made.id, cleared).unwrap();
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, cleared).unwrap();
     assert_eq!(after.wholesale, None);
     assert_eq!(after.category_id, None);
 }
@@ -625,7 +625,7 @@ fn an_update_never_touches_the_quantity_on_hand() {
     );
     let mut d = draft("A");
     d.qty_on_hand_milli = 1_000;
-    let after = products::update(&mut conn, SHOP, made.id, d).unwrap();
+    let after = products::update(&mut conn, SHOP, OWNER, made.id, d).unwrap();
     assert_eq!(after.qty_on_hand_milli, 24_000);
 }
 
@@ -633,7 +633,7 @@ fn an_update_never_touches_the_quantity_on_hand() {
 fn an_update_of_a_missing_product_is_not_found_with_its_id() {
     let (_dir, mut conn) = open_temp();
     let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
-    match products::update(&mut conn, SHOP, made.id + 100, draft("X")) {
+    match products::update(&mut conn, SHOP, OWNER, made.id + 100, draft("X")) {
         Err(CoreError::NotFound { entity, id }) => {
             assert_eq!(entity, "product");
             assert_eq!(id, made.id + 100);

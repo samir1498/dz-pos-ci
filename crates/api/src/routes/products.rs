@@ -58,8 +58,9 @@ pub async fn update(
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = NewProduct::try_from(dto)?;
     let shop = state.shop_id;
+    let user = state.user_id;
     let after = state
-        .blocking(move |c| service::update(c, shop, id, new))
+        .blocking(move |c| service::update(c, shop, user, id, new))
         .await?;
     Ok(Json(ProductDto::from(after)))
 }

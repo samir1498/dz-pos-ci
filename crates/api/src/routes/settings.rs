@@ -45,8 +45,9 @@ pub async fn update_store(
     let Json(dto) = body.map_err(ApiError::from)?;
     let block = StoreBlock::from(dto);
     let shop = state.shop_id;
+    let user = state.user_id;
     let after = state
-        .blocking(move |c| shops::update_store(c, shop, block))
+        .blocking(move |c| shops::update_store(c, shop, user, block))
         .await?;
     Ok(Json(StoreDto::from(after)))
 }
@@ -62,9 +63,10 @@ pub async fn change_regime(
     let from = parse_day("valid_from", &dto.valid_from)?.and_time(NaiveTime::MIN);
     let regime = dto.regime.into();
     let shop = state.shop_id;
+    let user = state.user_id;
     let all = state
         .blocking(move |c| {
-            settings::set_regime(c, shop, regime, from)?;
+            settings::set_regime(c, shop, user, regime, from)?;
             read_all(c, shop)
         })
         .await?;
