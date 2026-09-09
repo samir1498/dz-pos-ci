@@ -15,7 +15,7 @@ tasks:
     status: 'pending'
   - id: 'T5'
     desc: 'facture_a4 template on the ticket_80mm pattern (print/facture.rs, askama, the paper dictionary grows), amount_in_words on net_to_pay, balance block, stamp and signature blocks, goldens ×3 under fixtures/print/facture_a4 with every amount parsed back, A5 as a Paper parameter toggling @page size with a test that the two renders differ only there; Arabic disclosed unreviewed (R6); GET /sales/{id}/facture?lang= only after T4 (needs T1 only to build the Document by hand)'
-    status: 'pending'
+    status: 'done'
   - id: 'T8'
     desc: 'The customer debt slip on 80 mm (balance and last movements, goldens ×3), the combined dz-review Pass 2 over T3, T4, T6 and T7 (money, numbering, deletion), features.md §3 and §4 updated to what M2 shipped, the checkpoint PR that closes M2'
     status: 'pending'
