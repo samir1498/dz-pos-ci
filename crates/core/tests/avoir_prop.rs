@@ -27,32 +27,56 @@ const SHOP: i32 = 1;
 const OWNER: i32 = 1;
 
 /// Prices whose tax lands between two centimes at the rates a shop uses, and
-/// quantities that split into halves and thirds. 50 at 19 % is 9,5 centimes a
-/// unit and 80 at 19 % is 15,2: one rounds up and the other down, which is the
-/// pair that makes a sum of slices land on either side of its facture.
+/// prices so small that a slice of a line is worth more than its share. 50 at
+/// 19 % is 9,5 centimes a unit and 80 at 19 % is 15,2: one rounds up and the
+/// other down, which is the pair that makes a sum of slices land on either
+/// side of its facture. 1 and 2 are the other end: half a unit at 0,01 costs
+/// a centime, so two halves cost more than the whole.
 fn a_price() -> impl Strategy<Value = i64> {
-    prop_oneof![Just(50i64), Just(80), Just(333), Just(777), Just(1_999)]
+    prop_oneof![
+        Just(1i64),
+        Just(2),
+        Just(50),
+        Just(80),
+        Just(333),
+        Just(777),
+        Just(1_999)
+    ]
 }
 
 fn a_rate() -> impl Strategy<Value = u32> {
     prop_oneof![Just(1900u32), Just(900), Just(0)]
 }
 
-/// Two or three lines, each a price, a rate and a quantity in thousandths,
-/// with a global discount small enough to leave every line positive.
-type Basket = (Vec<(i64, u32, i64)>, i64);
+/// Two or three lines, each a price, a rate, a quantity in thousandths and a
+/// line discount, with a global discount small enough to leave every line
+/// positive. The line discount is what makes a slice of a line round away
+/// from its share of it, on top of the tax.
+type Basket = (Vec<(i64, u32, i64, i64)>, i64);
 
 fn a_basket() -> impl Strategy<Value = Basket> {
     (
-        prop::collection::vec((a_price(), a_rate(), 1_000i64..=6_000), 2..=3),
+        prop::collection::vec((a_price(), a_rate(), 1_000i64..=6_000, 0i64..=3), 2..=3),
         0i64..=97,
     )
 }
 
 /// How each line is cut up: for every line, the quantities of the successive
-/// partial avoirs. What is left after them is taken by the closing one.
-fn a_split() -> impl Strategy<Value = Vec<Vec<u32>>> {
-    prop::collection::vec(prop::collection::vec(1u32..=3, 0..=3), 3)
+/// partial avoirs, in thousandths. Half a unit is in there because half of a
+/// price rounds, and the rounding is the whole subject.
+fn a_cut() -> impl Strategy<Value = i64> {
+    prop_oneof![Just(500i64), Just(1_000), Just(2_000), Just(3_000)]
+}
+
+fn a_split() -> impl Strategy<Value = Vec<Vec<i64>>> {
+    prop::collection::vec(prop::collection::vec(a_cut(), 0..=3), 3)
+}
+
+/// The gross of a line, rounded the way `Money::checked_mul_milli` rounds it:
+/// half away from zero. A line discount above that is refused by the sale, so
+/// the generated one is held at it.
+fn gross(price: i64, qty_milli: i64) -> i64 {
+    (price * qty_milli + 500) / 1_000
 }
 
 proptest! {
@@ -69,13 +93,20 @@ proptest! {
         let lines: Vec<NewSaleLine> = basket
             .iter()
             .enumerate()
-            .map(|(n, (price, rate, qty))| NewSaleLine {
+            .map(|(n, (price, rate, qty, discount))| NewSaleLine {
                 product_id: a_product(&mut conn, n, *price, *rate),
                 qty_milli: *qty,
                 unit_price: None,
-                line_discount: Money::ZERO,
+                line_discount: Money::centimes((*discount).min(gross(*price, *qty))),
             })
             .collect();
+        // A basket of a few centimes cannot carry a remise of ninety-seven, so
+        // the generated one is held under what the lines come to.
+        let basket_ht: i64 = basket
+            .iter()
+            .map(|(price, _, qty, d)| gross(*price, *qty) - (*d).min(gross(*price, *qty)))
+            .sum();
+        let discount = discount.min((basket_ht - 1).max(0));
         let facture = sales::issue(
             &mut conn,
             SHOP,
@@ -104,7 +135,7 @@ proptest! {
             let mut asked: Vec<AvoirLine> = Vec::new();
             let mut would_close = true;
             for (n, line) in facture.lines.iter().enumerate() {
-                let want = i64::from(cuts.get(n).copied().unwrap_or(0)) * 1_000;
+                let want = cuts.get(n).copied().unwrap_or(0);
                 let left = left_on(&mut conn, &facture, line.id);
                 // A partial may empty a line, which is the case worth reaching:
                 // the closing avoir then carries a line whose quantity is spent

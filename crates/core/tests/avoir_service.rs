@@ -1173,6 +1173,270 @@ fn an_ifu_partial_carries_its_share_of_the_remise() {
     assert_eq!(ttc, facture.totals.total_ttc.as_centimes(), "TTC");
 }
 
+/// Half a unit at 0,01 costs a centime, because a half centime rounds up. Four
+/// units are worth four centimes and eight halves of them are worth eight, so
+/// a facture credited half a unit at a time was locked: the sixth avoir left
+/// the closing one an HT of minus two centimes and the annulation was refused
+/// outright.
+///
+/// A slice is never worth more than the line it credits still has, so the
+/// halves that credit nothing are written for nothing.
+#[test]
+fn a_slice_is_never_worth_more_than_the_line_it_credits_has_left() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Allumette", 1, 1900);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 4_000)], PaymentMode::Credit, 10);
+    assert_eq!(facture.totals.total_ht, Money::centimes(4));
+    let line_id = facture.lines[0].id;
+
+    for day in 11..=16 {
+        avoir::issue(
+            &mut conn,
+            SHOP,
+            OWNER,
+            facture.id,
+            Some(vec![AvoirLine {
+                document_line_id: line_id,
+                qty_milli: 500,
+            }]),
+            None,
+            Some(at(day)),
+        )
+        .unwrap_or_else(|e| panic!("the half unit of day {day} was refused: {e:?}"));
+    }
+
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        "commande annulée".to_string(),
+        Some(at(17)),
+    )
+    .unwrap_or_else(|e| panic!("the cancellation was refused: {e:?}"));
+
+    let (ht, _, _, _, ttc) = avoir_sum(&mut conn, facture.id);
+    assert_eq!(ht, facture.totals.total_ht.as_centimes(), "HT");
+    assert_eq!(ttc, facture.totals.total_ttc.as_centimes(), "TTC");
+    no_line_below_zero(&mut conn, facture.id);
+    assert_eq!(debt::balance(&mut conn, SHOP, c).unwrap(), Money::ZERO);
+}
+
+/// The same cap read on the line rather than on the facture. A line of one
+/// unit at 0,02 with a centime off is worth a centime; 0,999 of it rounds to
+/// two, and the closing avoir stored a line of minus one centime, which
+/// nothing refused because the facture's other line kept every total above
+/// zero.
+#[test]
+fn a_slice_of_a_discounted_line_never_stores_a_line_below_zero() {
+    let (_dir, mut conn) = open_temp();
+    let small = product(&mut conn, "Sachet", 2, 1900);
+    let big = product(&mut conn, "Ciment", 100_000, 1900);
+    let c = a_customer(&mut conn);
+    let facture = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![
+                NewSaleLine {
+                    product_id: small,
+                    qty_milli: 1_000,
+                    unit_price: None,
+                    line_discount: Money::centimes(1),
+                },
+                line(big, 1_000),
+            ],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Credit,
+            tendered: None,
+            customer_id: Some(c),
+            override_credit: false,
+            kind: SaleKind::Facture,
+            issued_at: Some(at(10)),
+        },
+    )
+    .unwrap()
+    .document;
+    assert_eq!(facture.lines[0].line_total, Money::centimes(1));
+
+    let partial = avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        Some(vec![AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 999,
+        }]),
+        None,
+        Some(at(11)),
+    )
+    .unwrap();
+    assert_eq!(
+        partial.lines[0].line_total,
+        Money::centimes(1),
+        "the slice gave back more than the line it credits was worth"
+    );
+
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        "commande annulée".to_string(),
+        Some(at(12)),
+    )
+    .unwrap_or_else(|e| panic!("the cancellation was refused: {e:?}"));
+    no_line_below_zero(&mut conn, facture.id);
+    let (ht, _, _, _, ttc) = avoir_sum(&mut conn, facture.id);
+    assert_eq!(ht, facture.totals.total_ht.as_centimes(), "HT");
+    assert_eq!(ttc, facture.totals.total_ttc.as_centimes(), "TTC");
+}
+
+/// The closing avoir on a line whose goods have all come back in halves. Line
+/// A is worth nothing at all, a centime of goods with a centime off, and two
+/// half-unit avoirs take its quantity away without taking any money. The
+/// remainder for that line is then a quantity of zero with a line discount
+/// still on it, and the table refuses a line with no quantity, so the
+/// annulation was refused.
+///
+/// A line with no goods left is not written at all (`avoir_prop`, fourth
+/// regression seed).
+#[test]
+fn the_closing_avoir_writes_no_line_for_goods_that_have_all_come_back() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Allumette", 1, 1900);
+    let c = a_customer(&mut conn);
+    let facture = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![
+                NewSaleLine {
+                    product_id: p,
+                    qty_milli: 1_000,
+                    unit_price: None,
+                    line_discount: Money::centimes(1),
+                },
+                line(p, 1_000),
+            ],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Credit,
+            tendered: None,
+            customer_id: Some(c),
+            override_credit: false,
+            kind: SaleKind::Facture,
+            issued_at: Some(at(10)),
+        },
+    )
+    .unwrap()
+    .document;
+    assert_eq!(facture.lines[0].line_total, Money::ZERO);
+
+    for day in 11..=12 {
+        avoir::issue(
+            &mut conn,
+            SHOP,
+            OWNER,
+            facture.id,
+            Some(vec![AvoirLine {
+                document_line_id: facture.lines[0].id,
+                qty_milli: 500,
+            }]),
+            None,
+            Some(at(day)),
+        )
+        .unwrap();
+    }
+
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        "commande annulée".to_string(),
+        Some(at(13)),
+    )
+    .unwrap_or_else(|e| panic!("the cancellation was refused: {e:?}"));
+    no_line_below_zero(&mut conn, facture.id);
+    let (ht, _, _, _, ttc) = avoir_sum(&mut conn, facture.id);
+    assert_eq!(ht, facture.totals.total_ht.as_centimes(), "HT");
+    assert_eq!(ttc, facture.totals.total_ttc.as_centimes(), "TTC");
+}
+
+/// A row written straight into the table crediting more of a line than the
+/// line ever held. The quantity in the remainder was clamped at zero while
+/// the money beside it was subtracted honestly, so the closing avoir came out
+/// of a facture the file already disagrees with. It is refused instead.
+#[test]
+fn an_avoir_crediting_more_of_a_line_than_it_holds_is_refused() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(
+        &mut conn,
+        c,
+        vec![line(p, 1_000), line(p, 1_000)],
+        PaymentMode::Credit,
+        10,
+    );
+
+    // An avoir for no money at all, so what refuses it is the quantity and
+    // not the running total.
+    diesel::sql_query(format!(
+        "INSERT INTO documents (shop_id, kind, series, number, issued_at, user_id, regime, \
+         payment_mode, seller_name, customer_id, ref_document_id, total_ht_centimes, \
+         discount_centimes, subtotal_ht_centimes, tva_centimes, total_ttc_centimes, \
+         stamp_centimes, net_to_pay_centimes, status) \
+         VALUES (1, 'avoir', 'doc_avoir', 99, '2026-09-11 10:00:00', 1, 'reel', 'credit', \
+         'Mon magasin', {c}, {}, 0, 0, 0, 0, 0, 0, 0, 'issued')",
+        facture.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(format!(
+        "INSERT INTO document_lines (shop_id, document_id, position, product_id, name, \
+         qty_milli, unit_price_centimes, line_discount_centimes, rate_bps, \
+         line_total_centimes, ref_line_id) \
+         SELECT 1, id, 0, {p}, 'Ciment', 9_000, 0, 0, 0, 0, {} FROM documents \
+         WHERE kind = 'avoir' AND number = 99",
+        facture.lines[0].id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let err =
+        avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(12))).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "lines"),
+        "{err:?}"
+    );
+}
+
+/// No avoir on this facture stores a line for less than nothing, and none
+/// stores a line with no quantity: a line of minus a centime is a paper nobody
+/// can read, and every line of a document carries goods.
+fn no_line_below_zero(conn: &mut SqliteConnection, facture_id: i32) {
+    for a in avoir::list_for(conn, SHOP, facture_id).unwrap() {
+        for l in &a.lines {
+            assert!(
+                l.line_total >= Money::ZERO,
+                "avoir {} stores a line of {:?}",
+                a.id,
+                l.line_total
+            );
+            assert!(
+                l.qty_milli > 0,
+                "avoir {} stores a line with no quantity on it",
+                a.id
+            );
+        }
+    }
+}
+
 /// A facture on credit carrying a global discount, which is where the rounding
 /// of a slice and the rounding of the facture part company.
 fn a_discounted_facture(

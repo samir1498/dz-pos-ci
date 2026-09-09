@@ -32,7 +32,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::stock::{Movement, MovementKind};
-use crate::money::{Bps, Line, Money, MoneyError, Regime, Totals, TvaLine};
+use crate::money::{Bps, Money, MoneyError, Regime, Totals, TvaLine};
 use crate::repos::documents as repo;
 use crate::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
@@ -113,7 +113,8 @@ pub fn issue(
             let summed = lines
                 .iter()
                 .try_fold(Money::ZERO, |acc, l| acc.checked_add(l.line_total))?;
-            if below_zero(&totals) || summed != totals.total_ht {
+            let a_line_below_zero = lines.iter().any(|l| l.line_total.is_negative());
+            if below_zero(&totals) || a_line_below_zero || summed != totals.total_ht {
                 return Err(CoreError::validation(
                     "lines",
                     "the avoirs on this facture would come to more than it asked for",
@@ -122,17 +123,36 @@ pub fn issue(
             (totals, lines)
         } else {
             // Every line is priced as it was sold, so a reprint of the two
-            // papers side by side shows the same unit price and the same rate.
-            let money_lines: Vec<Line> = coming_back
-                .iter()
-                .map(|(line, qty_milli, line_discount)| Line {
+            // papers side by side shows the same unit price and the same rate,
+            // and never for more than the facture line still holds. Half a
+            // unit at 0,01 costs a centime on its own paper, so two halves
+            // credit two centimes of a line worth one, and the credit note
+            // that closes the facture is left owing the difference.
+            let mut slice: Vec<SliceLine> = Vec::new();
+            let mut document_lines = Vec::new();
+            for (line, qty_milli, line_discount) in &coming_back {
+                let asked = line
+                    .unit_price
+                    .checked_mul_milli(*qty_milli)?
+                    .checked_sub(*line_discount)?;
+                let line_total = asked.min(left_on_line(line, &earlier)?);
+                slice.push(SliceLine {
+                    rate: line.rate_bps,
+                    ht: line_total,
+                });
+                document_lines.push(NewDocumentLine {
+                    product_id: line.product_id,
+                    name: line.name.clone(),
+                    barcode: line.barcode.clone(),
                     qty_milli: *qty_milli,
                     unit_price: line.unit_price,
                     line_discount: *line_discount,
-                    rate: line.rate_bps,
-                })
-                .collect();
-            let totals = slice_totals(&facture, &earlier, &money_lines)?;
+                    rate_bps: line.rate_bps,
+                    line_total,
+                    ref_line_id: Some(line.id),
+                });
+            }
+            let totals = slice_totals(&facture, &earlier, &slice)?;
 
             // The safety net under the quantities: a line's remaining quantity
             // is checked above, and this is checked against the one figure the
@@ -151,27 +171,7 @@ pub fn issue(
                 ));
             }
 
-            let lines = coming_back
-                .iter()
-                .zip(&money_lines)
-                .map(|((line, qty_milli, line_discount), money)| {
-                    Ok(NewDocumentLine {
-                        product_id: line.product_id,
-                        name: line.name.clone(),
-                        barcode: line.barcode.clone(),
-                        qty_milli: *qty_milli,
-                        unit_price: line.unit_price,
-                        line_discount: *line_discount,
-                        rate_bps: line.rate_bps,
-                        line_total: money
-                            .unit_price
-                            .checked_mul_milli(*qty_milli)?
-                            .checked_sub(*line_discount)?,
-                        ref_line_id: Some(line.id),
-                    })
-                })
-                .collect::<Result<Vec<_>, MoneyError>>()?;
-            (totals, lines)
+            (totals, document_lines)
         };
 
         let customer_id = facture.customer_id;
@@ -434,9 +434,10 @@ fn closes_the_facture(facture: &Document, credited: &[(i32, i64)], coming: &Comi
 /// back, so the figure being reproduced is the facture's `total_ttc` and the
 /// avoir's own stamp stays at zero.
 ///
-/// A line that comes to nothing at all is dropped; a line whose quantity is
-/// spent but whose centimes are not is kept, because that centime is the whole
-/// reason this function exists.
+/// A line whose goods have all come back is dropped, and any centime still on
+/// it moves to a line of the same rate that has goods: that centime is the
+/// whole reason this function exists, and a document line with no quantity is
+/// not a line a paper can print.
 fn remainder(
     facture: &Document,
     earlier: &[Document],
@@ -476,6 +477,7 @@ fn remainder(
         .retain(|r: &TvaLine| r.base != Money::ZERO || r.amount != Money::ZERO);
 
     let mut lines = Vec::new();
+    let mut stray: Vec<(Bps, Money)> = Vec::new();
     for line in &facture.lines {
         let mut qty_milli = line.qty_milli;
         let mut line_discount = line.line_discount;
@@ -486,12 +488,34 @@ fn remainder(
                 .iter()
                 .filter(|l| l.ref_line_id == Some(line.id))
             {
-                qty_milli = qty_milli.saturating_sub(taken.qty_milli);
+                // Checked, like the money beside it. A quantity that goes
+                // below zero is an avoir crediting more of a line than the
+                // line ever held, which is the file disagreeing with itself
+                // and not a remainder to be clamped quietly.
+                qty_milli = qty_milli
+                    .checked_sub(taken.qty_milli)
+                    .filter(|left| *left >= 0)
+                    .ok_or_else(|| {
+                        CoreError::validation(
+                            "lines",
+                            "an avoir on this facture credits more of a line than it holds",
+                        )
+                    })?;
                 line_discount = line_discount.checked_sub(taken.line_discount)?;
                 line_total = line_total.checked_sub(taken.line_total)?;
             }
         }
-        if qty_milli == 0 && line_total == Money::ZERO && line_discount == Money::ZERO {
+        // A line with no goods left on it is not written at all: every line of
+        // a document carries a quantity above zero, and a line of nothing is
+        // not a line. Money still on such a line moves to a line of the same
+        // rate that does have goods, so the avoir still adds up to its own
+        // total and rate by rate. Its remaining line discount goes with the
+        // line: that column describes what was taken off goods, and the goods
+        // have all come back.
+        if qty_milli == 0 {
+            if line_total != Money::ZERO {
+                stray.push((line.rate_bps, line_total));
+            }
             continue;
         }
         lines.push(NewDocumentLine {
@@ -505,6 +529,15 @@ fn remainder(
             line_total,
             ref_line_id: Some(line.id),
         });
+    }
+    for (rate, amount) in stray {
+        let Some(host) = lines.iter_mut().find(|l| l.rate_bps == rate) else {
+            return Err(CoreError::validation(
+                "lines",
+                "what is left of this facture is money on a line that has no goods left",
+            ));
+        };
+        host.line_total = host.line_total.checked_add(amount)?;
     }
     Ok((totals, lines))
 }
@@ -663,7 +696,7 @@ fn prorated_discount(line: &DocumentLine, qty_milli: i64) -> Result<Money, CoreE
 fn slice_totals(
     facture: &Document,
     earlier: &[Document],
-    lines: &[Line],
+    lines: &[SliceLine],
 ) -> Result<Totals, CoreError> {
     let (groups, total_ht) = grouped(lines)?;
 
@@ -736,7 +769,7 @@ fn slice_totals(
 fn global_discount(
     facture: &Document,
     earlier: &[Document],
-    lines: &[Line],
+    lines: &[SliceLine],
 ) -> Result<Money, CoreError> {
     if facture.totals.discount == Money::ZERO || facture.totals.total_ht == Money::ZERO {
         return Ok(Money::ZERO);
@@ -752,8 +785,7 @@ fn global_discount(
     }
     let mut credited_ht = Money::ZERO;
     for line in lines {
-        let gross = line.unit_price.checked_mul_milli(line.qty_milli)?;
-        credited_ht = credited_ht.checked_add(gross.checked_sub(line.line_discount)?)?;
+        credited_ht = credited_ht.checked_add(line.ht)?;
     }
     if credited_ht >= left_ht {
         return Ok(left_discount);
@@ -761,18 +793,40 @@ fn global_discount(
     Ok(up(left_discount, credited_ht, left_ht)?.min(left_discount))
 }
 
+/// One line of an avoir as the totals read it: the rate it is at and what it
+/// comes to once the cap on its facture line has been applied.
+pub struct SliceLine {
+    rate: Bps,
+    ht: Money,
+}
+
+/// What one facture line still has on it in money, after the avoirs already
+/// written. Never below zero: a line credited to the centime has nothing left
+/// to give, and the quantity still on it comes back for no money.
+fn left_on_line(line: &DocumentLine, earlier: &[Document]) -> Result<Money, CoreError> {
+    let mut left = line.line_total;
+    for avoir in earlier {
+        for taken in avoir
+            .lines
+            .iter()
+            .filter(|l| l.ref_line_id == Some(line.id))
+        {
+            left = left.checked_sub(taken.line_total)?;
+        }
+    }
+    Ok(left.max(Money::ZERO))
+}
+
 /// HT per rate group of the lines coming back, by rising rate, and their sum:
 /// the grouping the money functions do, on the slice's own lines.
-fn grouped(lines: &[Line]) -> Result<(Vec<(Bps, Money)>, Money), CoreError> {
+fn grouped(lines: &[SliceLine]) -> Result<(Vec<(Bps, Money)>, Money), CoreError> {
     let mut groups: Vec<(Bps, Money)> = Vec::new();
     let mut total_ht = Money::ZERO;
     for line in lines {
-        let gross = line.unit_price.checked_mul_milli(line.qty_milli)?;
-        let net = gross.checked_sub(line.line_discount)?;
-        total_ht = total_ht.checked_add(net)?;
+        total_ht = total_ht.checked_add(line.ht)?;
         match groups.iter_mut().find(|(rate, _)| *rate == line.rate) {
-            Some((_, ht)) => *ht = ht.checked_add(net)?,
-            None => groups.push((line.rate, net)),
+            Some((_, ht)) => *ht = ht.checked_add(line.ht)?,
+            None => groups.push((line.rate, line.ht)),
         }
     }
     groups.sort_by_key(|(rate, _)| *rate);

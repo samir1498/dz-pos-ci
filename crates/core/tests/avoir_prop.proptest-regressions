@@ -8,3 +8,4 @@ cc 5c58d7f442b5c565fb0f5fa9b503c3e8d21db8317ed58a734762367577fb6175 # shrinks to
 cc e5c60062a17463a8e0b0f9ca21b65ff2c5df0f2c982cb64b1456141b6f8604a3 # shrinks to (basket, discount) = ([(80, 1900, 1682), (50, 900, 1000)], 1), split = [[], [], [2]]
 cc 985376a92f4fa34c626fb366c267641c0670c8beeced89d209beaae6ef2b9294 # shrinks to (basket, discount) = ([(50, 1900, 4150), (1999, 900, 2944)], 30), split = [[2], [3, 1], []]
 cc 916c14da59427b15aa05ecfb2e1d429895c59e7b4ad769bca7cf82e75b7090cf # shrinks to (basket, discount) = ([(50, 1900, 4001), (50, 1900, 1250)], 0), split = [[3, 1], [1, 1], []]
+cc 59d13e22c1d11c392adcd6e9704255df2ee13f26f18dd49ec2ebfdd01e374fb8 # shrinks to (basket, discount) = ([(1, 1900, 1000, 0), (1, 1900, 1000, 0)], 3), split = [[], [], []]
