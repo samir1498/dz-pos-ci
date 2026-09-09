@@ -63,6 +63,11 @@ on a TPE with no integration, decided 2026-09-08), amount tendered,
 change. Anonymous sale is allowed; a credit sale requires a customer.
 Saving a sale moves stock out and, if credit, adds to the customer's debt.
 Every sale is a fiscal document (see §3) even when it is a simple ticket.
+The till screen adds one rule the spec does not name: a product whose unit
+is piece or box is sold in whole units, so a typed "1,5" is refused on the
+line before the sale is posted (kg and litre take it). The core does not
+enforce this; a half box is not something a receipt can say, and nothing
+else was catching it.
 
 **Stock movements.** Append-only ledger: every change to quantity on hand
 is a row with type (purchase, sale, adjustment, return, opening), quantity,
