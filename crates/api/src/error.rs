@@ -58,10 +58,20 @@ struct Body {
     error: Payload,
 }
 
+/// The envelope's payload. The two credit amounts are the one exception to
+/// "a code and a sentence": the till has to say by how much a credit limit
+/// was passed, and re-deriving that on the screen would be a second answer
+/// to what a customer owes (architecture.md rule 2). They are left out of
+/// every other error's body rather than sent as nulls, so nothing else on
+/// the wire changed shape.
 #[derive(Serialize)]
 struct Payload {
     code: &'static str,
     message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    balance_after_centimes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    credit_limit_centimes: Option<i64>,
 }
 
 impl ApiError {
@@ -97,6 +107,25 @@ impl ApiError {
             ),
         }
     }
+
+    /// The two amounts a credit refusal carries, in centimes. Every other
+    /// error carries neither, and the fields are then absent from the body.
+    const fn credit_amounts(&self) -> (Option<i64>, Option<i64>) {
+        match self {
+            ApiError::Core(CoreError::CreditLimit {
+                balance_after,
+                credit_limit,
+            })
+            | ApiError::Request(CoreError::CreditLimit {
+                balance_after,
+                credit_limit,
+            }) => (
+                Some(balance_after.as_centimes()),
+                Some(credit_limit.as_centimes()),
+            ),
+            _ => (None, None),
+        }
+    }
 }
 
 /// What a core error means once a service has run. A `Money` error here is a
@@ -104,7 +133,14 @@ impl ApiError {
 /// and the caller has nothing to correct: 500, not 422.
 const fn status_for(e: &CoreError) -> StatusCode {
     match e {
-        CoreError::Validation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+        // A credit refusal is the request itself the server will not carry
+        // out: the basket is well formed and the caller can act on it, by
+        // paying another way or by resending with `override`. The two
+        // amounts in the payload are what the till renders, so it sits with
+        // the 422s and not with the conflicts.
+        CoreError::Validation { .. } | CoreError::CreditLimit { .. } => {
+            StatusCode::UNPROCESSABLE_ENTITY
+        }
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
         // A template that will not render is the app's own bug: the
@@ -153,10 +189,16 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = self.parts();
         let message = self.message();
+        let (balance_after_centimes, credit_limit_centimes) = self.credit_amounts();
         let mut res = (
             status,
             Json(Body {
-                error: Payload { code, message },
+                error: Payload {
+                    code,
+                    message,
+                    balance_after_centimes,
+                    credit_limit_centimes,
+                },
             }),
         )
             .into_response();

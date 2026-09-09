@@ -18,7 +18,7 @@ use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
 use dzpos_core::services::backup::Backup;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
 use dzpos_core::services::debt::{DebtKind, LedgerLine};
-use dzpos_core::services::sales::{NewSale, NewSaleLine};
+use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, Warning};
 use dzpos_core::services::settings::DatedRegime;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -216,6 +216,16 @@ pub struct ApiErrorDto {
 pub struct ApiErrorPayloadDto {
     pub code: String,
     pub message: String,
+    /// Only on `credit_limit`: what the customer would owe once this sale
+    /// landed, and the limit that refused it. Absent from every other error,
+    /// so the till reads them as optional and never as a zero somebody meant
+    /// (crates/api/src/error.rs writes them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub balance_after_centimes: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub credit_limit_centimes: Option<i64>,
 }
 
 /// The seller block a ticket prints (features.md §3). Sent whole on every
@@ -531,6 +541,18 @@ pub struct SaleTotalsDto {
     pub net_to_pay_centimes: i64,
 }
 
+/// What the customer owed before this document, what it leaves unpaid, and
+/// what they owe now (features.md §3, the balance triple). Stored on the
+/// document at issue and never recomputed, so a screen and a reprint say the
+/// same thing. Null on a document that names no customer.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SaleBalanceDto.ts")]
+pub struct SaleBalanceDto {
+    pub old_balance_centimes: i64,
+    pub remaining_debt_centimes: i64,
+    pub total_debt_centimes: i64,
+}
+
 /// A sale as the till reads it back: the document, its lines and its TVA
 /// recap in one answer, so the receipt view makes one call.
 #[derive(Debug, Clone, Serialize, TS)]
@@ -548,12 +570,37 @@ pub struct SaleDto {
     pub payment_mode: PaymentModeDto,
     pub seller: StoreDto,
     pub customer_id: Option<i32>,
+    pub balance: Option<SaleBalanceDto>,
     pub totals: SaleTotalsDto,
     pub tva: Vec<SaleTvaDto>,
     pub tendered_centimes: Option<i64>,
     pub change_centimes: Option<i64>,
     pub status: DocumentStatusDto,
     pub lines: Vec<SaleLineDto>,
+    /// What the till should say while still handing over the ticket, null
+    /// when there is nothing to say. A read of a stored document carries
+    /// none: a warning is about the moment the sale was rung up, not about
+    /// the paper.
+    pub warning: Option<SaleWarningDto>,
+}
+
+/// What the till should say about a sale that went through anyway. A union
+/// rather than a string, so the day a second warning exists the screens that
+/// match on this one stop compiling instead of quietly ignoring it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "SaleWarningDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum SaleWarningDto {
+    /// The balance this sale leaves reached the customer's warn threshold.
+    NearLimit,
+}
+
+impl From<Warning> for SaleWarningDto {
+    fn from(w: Warning) -> Self {
+        match w {
+            Warning::NearLimit => SaleWarningDto::NearLimit,
+        }
+    }
 }
 
 impl From<Document> for SaleDto {
@@ -578,6 +625,11 @@ impl From<Document> for SaleDto {
                 phone: d.seller.phone,
             },
             customer_id: d.customer_id,
+            balance: d.balance.map(|b| SaleBalanceDto {
+                old_balance_centimes: b.old_balance.as_centimes(),
+                remaining_debt_centimes: b.remaining_debt.as_centimes(),
+                total_debt_centimes: b.total_debt.as_centimes(),
+            }),
             totals: SaleTotalsDto {
                 total_ht_centimes: d.totals.total_ht.as_centimes(),
                 discount_centimes: d.totals.discount.as_centimes(),
@@ -592,6 +644,16 @@ impl From<Document> for SaleDto {
             change_centimes: d.change.map(Money::as_centimes),
             status: d.status.into(),
             lines: d.lines.into_iter().map(Into::into).collect(),
+            warning: None,
+        }
+    }
+}
+
+impl From<Sale> for SaleDto {
+    fn from(s: Sale) -> Self {
+        SaleDto {
+            warning: s.warning.map(Into::into),
+            ..SaleDto::from(s.document)
         }
     }
 }
@@ -624,6 +686,16 @@ pub struct NewSaleDto {
     pub payment_mode: PaymentModeDto,
     #[serde(default)]
     pub tendered_centimes: Option<i64>,
+    /// Who the sale is made out to. Required on credit; on cash and card it
+    /// names the buyer on the document and moves no debt.
+    #[serde(default)]
+    pub customer_id: Option<i32>,
+    /// Sell past the customer's credit limit on purpose. `override` on the
+    /// wire because that is what the button says; `override` is a Rust
+    /// keyword, so the field is spelled out here and renamed on both sides.
+    #[serde(default, rename = "override")]
+    #[ts(rename = "override")]
+    pub override_credit: bool,
 }
 
 impl TryFrom<NewSaleDto> for NewSale {
@@ -658,6 +730,8 @@ impl TryFrom<NewSaleDto> for NewSale {
                 .map(|c| within_js_safe_range("tendered_centimes", c))
                 .transpose()?
                 .map(Money::centimes),
+            customer_id: d.customer_id,
+            override_credit: d.override_credit,
             // The server dates the document (core, services::clock).
             issued_at: None,
         })

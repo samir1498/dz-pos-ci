@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { CategoryDto, ProductDto, SaleDto, SettingsDto } from "@dzpos/shared";
+import type { CategoryDto, CustomerDto, ProductDto, SaleDto, SettingsDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import { TillScreen } from "./till";
 
@@ -95,6 +95,7 @@ const sale: SaleDto = {
   payment_mode: "cash",
   seller: settings.store,
   customer_id: null,
+  balance: null,
   totals: {
     total_ht_centimes: 110_000,
     discount_centimes: 0,
@@ -137,7 +138,49 @@ const sale: SaleDto = {
       line_total_centimes: 30_000,
     },
   ],
+  warning: null,
 };
+
+/** A customer who can buy on credit: 5 000,00 of limit, warned at 4 000,00,
+ * owing nothing yet. The e2e drives the same three numbers. */
+const amrani: CustomerDto = {
+  id: 3,
+  shop_id: 1,
+  name: "Entreprise Amrani",
+  party_kind: "company",
+  phone: "0555 00 11 22",
+  address: null,
+  rc: null,
+  nif: null,
+  nis: null,
+  ai: null,
+  credit_limit_centimes: 500_000,
+  warn_threshold_centimes: 400_000,
+  notes: null,
+  active: true,
+  balance_centimes: 0,
+};
+
+/** Zero limit is no credit at all, which is not the same answer as no limit
+ * (features.md §1). */
+const noCredit: CustomerDto = {
+  ...amrani,
+  id: 4,
+  name: "Boutique Kaci",
+  credit_limit_centimes: 0,
+  warn_threshold_centimes: null,
+};
+
+/** Already past what the shop allowed: the banner says so before a line is
+ * even in the cart. */
+const overLimit: CustomerDto = {
+  ...amrani,
+  id: 5,
+  name: "Garage Sadi",
+  balance_centimes: 600_000,
+};
+
+const anonymous: CustomerDto = { ...amrani, id: 6, name: "Fiche fermée", active: false };
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -162,19 +205,27 @@ function html(status: number, body: string): Response {
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let rows: ProductDto[];
+let customerRows: CustomerDto[];
 let saleAnswer: (() => Response) | null;
 let ticketAnswer: (() => Response) | null;
 
-/** The JSON body of the POST to /sales, or undefined if none was made. */
-function salePost(): Record<string, unknown> | undefined {
+/** Every JSON body posted to /sales, oldest first. An override sends the
+ * basket a second time, so the two calls have to be told apart. */
+function salePosts(): Record<string, unknown>[] {
+  const bodies: Record<string, unknown>[] = [];
   for (const call of fetchMock.mock.calls) {
     const init: unknown = call[1];
     if (isInit(init) && init.method === "POST" && String(call[0]).endsWith("/sales")) {
       if (typeof init.body !== "string") throw new Error("the till posted no JSON body");
-      return JSON.parse(init.body);
+      bodies.push(JSON.parse(init.body));
     }
   }
-  return undefined;
+  return bodies;
+}
+
+/** The JSON body of the first POST to /sales, or undefined if none was made. */
+function salePost(): Record<string, unknown> | undefined {
+  return salePosts()[0];
 }
 
 function posted(): boolean {
@@ -191,6 +242,7 @@ function ticketFetch(): string | undefined {
 
 beforeEach(() => {
   rows = [coffee, tomato, crate, salt];
+  customerRows = [amrani, noCredit, overLimit, anonymous];
   saleAnswer = null;
   ticketAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
@@ -198,6 +250,7 @@ beforeEach(() => {
     if (init?.method === "POST" && url.endsWith("/sales")) {
       return Promise.resolve(saleAnswer !== null ? saleAnswer() : json(201, sale));
     }
+    if (url.includes("/customers")) return Promise.resolve(json(200, customerRows));
     if (url.endsWith("/categories")) return Promise.resolve(json(200, categories));
     if (url.endsWith("/settings")) return Promise.resolve(json(200, settings));
     if (url.includes(`/sales/${sale.id}/ticket`)) {
@@ -571,6 +624,8 @@ describe("paying", () => {
       global_discount_centimes: 0,
       payment_mode: "cash",
       tendered_centimes: 150_000,
+      customer_id: null,
+      override: false,
     });
   });
 
@@ -605,13 +660,13 @@ describe("paying", () => {
     expect(posted()).toBe(false);
   });
 
-  test("credit is drawn, disabled, and says when it arrives", async () => {
+  test("credit is drawn, disabled and says what it needs until a customer is picked", async () => {
     mount();
     const credit = await screen.findByRole("radio", { name: "Crédit" });
     expect(credit).toBeDisabled();
     expect(credit.closest("label")).toHaveAttribute(
       "title",
-      "Une vente à crédit a besoin d'un compte client, prévu dans la prochaine version.",
+      "Choisissez un client qui peut acheter à crédit.",
     );
   });
 
@@ -723,5 +778,173 @@ describe("in Arabic", () => {
 
     await screen.findByTestId("till-ticket");
     expect(ticketFetch()).toBe(`http://127.0.0.1:4317/sales/${sale.id}/ticket?lang=ar`);
+  });
+});
+
+// The sale on credit. The rules are the core's (features.md §1); what is
+// pinned here is what the screen posts, what it refuses to post, and what it
+// shows a cashier when the server refuses.
+describe("on credit", () => {
+  /** Rings up one coffee and picks the customer, which is the shortest
+   * basket that can go on credit. */
+  async function ringUpFor(
+    user: ReturnType<typeof userEvent.setup>,
+    customer: CustomerDto,
+  ): Promise<void> {
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await screen.findByRole("option", { name: customer.name });
+    await user.selectOptions(screen.getByLabelText("Client", { selector: "select" }), [
+      String(customer.id),
+    ]);
+  }
+
+  async function payOnCredit(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+    await user.click(screen.getByRole("radio", { name: "Crédit" }));
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+  }
+
+  test("the body carries the customer and the credit mode", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpFor(user, amrani);
+    await payOnCredit(user);
+
+    await screen.findByRole("status");
+    expect(salePost()).toMatchObject({
+      payment_mode: "credit",
+      customer_id: amrani.id,
+      tendered_centimes: null,
+      override: false,
+    });
+  });
+
+  test("credit is not on offer without a customer, and nothing is posted", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    const credit = screen.getByRole("radio", { name: "Crédit" });
+    expect(credit).toBeDisabled();
+    await user.click(credit);
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    expect(posted()).toBe(false);
+  });
+
+  test("a customer with a limit of zero cannot buy on credit", async () => {
+    // Zero is no credit at all; null would be no limit at all. The screen
+    // has to tell the two apart the way the core does.
+    const user = userEvent.setup();
+    mount();
+    await ringUpFor(user, noCredit);
+    expect(screen.getByRole("radio", { name: "Crédit" })).toBeDisabled();
+  });
+
+  test("a customer already past the limit is flagged before a line is rung up", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpFor(user, overLimit);
+    const banner = await screen.findByTestId("till-limit-banner");
+    expect(banner).toHaveTextContent("Plafond dépassé");
+    // The two amounts, the customer's own balance against their limit.
+    expect(banner).toHaveTextContent("6 000,00");
+    expect(banner).toHaveTextContent("5 000,00");
+  });
+
+  test("a closed fiche is never offered", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await screen.findByRole("option", { name: amrani.name });
+    expect(screen.queryByRole("option", { name: anonymous.name })).not.toBeInTheDocument();
+  });
+
+  test("the refusal shows both amounts and the override resends the same basket", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "credit_limit",
+          message: "past the limit",
+          balance_after_centimes: 550_000,
+          credit_limit_centimes: 500_000,
+        },
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await payOnCredit(user);
+
+    expect(await screen.findByTestId("till-balance-after")).toHaveTextContent("5 500,00");
+    expect(screen.getByTestId("till-credit-limit")).toHaveTextContent("5 000,00");
+    const refused = salePost();
+    expect(refused).toMatchObject({ override: false });
+
+    // The override asks first, and a cashier who says no sends nothing.
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await user.click(screen.getByRole("button", { name: "Forcer la vente" }));
+    expect(confirm).toHaveBeenCalled();
+    expect(fetchMock.mock.calls.filter((c) => String(c[0]).endsWith("/sales")).length).toBe(1);
+
+    // Said yes, the same basket goes again with the flag on.
+    confirm.mockReturnValue(true);
+    saleAnswer = () =>
+      json(201, { ...sale, payment_mode: "credit", customer_id: amrani.id, tendered_centimes: null });
+    await user.click(screen.getByRole("button", { name: "Forcer la vente" }));
+    await screen.findByRole("status");
+    const posts = salePosts();
+    expect(posts).toHaveLength(2);
+    expect(posts[1]).toEqual({ ...refused, override: true });
+  });
+
+  test("editing the basket takes the refusal away, so the override cannot resend what is gone", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "credit_limit",
+          message: "past the limit",
+          balance_after_centimes: 550_000,
+          credit_limit_centimes: 500_000,
+        },
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await payOnCredit(user);
+    await screen.findByTestId("till-balance-after");
+
+    // The line the refusal was about goes off the cart. What the button
+    // would resend is no longer what the cashier is looking at, so there
+    // is no button.
+    await user.click(screen.getByRole("button", { name: `Un de moins ${coffee.name}` }));
+    expect(screen.queryByRole("button", { name: "Forcer la vente" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("till-balance-after")).not.toBeInTheDocument();
+    expect(salePosts()).toHaveLength(1);
+  });
+
+  test("a sale that reaches the warning threshold still goes through and says so", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(201, {
+        ...sale,
+        payment_mode: "credit",
+        customer_id: amrani.id,
+        tendered_centimes: null,
+        change_centimes: null,
+        balance: {
+          old_balance_centimes: 0,
+          remaining_debt_centimes: 450_000,
+          total_debt_centimes: 450_000,
+        },
+        warning: "near_limit",
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await payOnCredit(user);
+
+    const done = await screen.findByRole("status");
+    expect(within(done).getByTestId("till-near-limit")).toBeInTheDocument();
+    // The balance the document stores, not one the screen worked out.
+    expect(within(done).getByTestId("till-new-balance")).toHaveTextContent("4 500,00");
   });
 });

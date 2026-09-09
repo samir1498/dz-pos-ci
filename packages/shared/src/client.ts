@@ -23,8 +23,10 @@ import type { DocumentStatusDto } from "./generated/DocumentStatusDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { PaymentModeDto } from "./generated/PaymentModeDto";
+import type { SaleWarningDto } from "./generated/SaleWarningDto";
 import type { SaleDto } from "./generated/SaleDto";
 import type { SaleLineDto } from "./generated/SaleLineDto";
+import type { SaleBalanceDto } from "./generated/SaleBalanceDto";
 import type { SaleTotalsDto } from "./generated/SaleTotalsDto";
 import type { SaleTvaDto } from "./generated/SaleTvaDto";
 import type { ProductDto } from "./generated/ProductDto";
@@ -36,16 +38,30 @@ import type { SettingsDto } from "./generated/SettingsDto";
 import type { StoreDto } from "./generated/StoreDto";
 import type { UnitDto } from "./generated/UnitDto";
 
-/** An error the server described. `code` is a translation key. */
+/** An error the server described. `code` is a translation key.
+ *
+ * `balanceAfterCentimes` and `creditLimitCentimes` are on a `credit_limit`
+ * refusal and on nothing else: the till has to say by how much a limit was
+ * passed, and working that out on the screen would be a second answer to
+ * what a customer owes. Undefined everywhere else, never zero. */
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
+  readonly balanceAfterCentimes?: number;
+  readonly creditLimitCentimes?: number;
 
-  constructor(code: string, message: string, status: number) {
+  constructor(
+    code: string,
+    message: string,
+    status: number,
+    credit?: { balanceAfterCentimes?: number; creditLimitCentimes?: number },
+  ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
+    this.balanceAfterCentimes = credit?.balanceAfterCentimes;
+    this.creditLimitCentimes = credit?.creditLimitCentimes;
   }
 }
 
@@ -71,8 +87,22 @@ export function isApiErrorBody(value: unknown): value is ApiErrorDto {
   if (!isRecord(value)) return false;
   const { error } = value;
   return (
-    isRecord(error) && typeof error.code === "string" && typeof error.message === "string"
+    isRecord(error) &&
+    typeof error.code === "string" &&
+    typeof error.message === "string" &&
+    isOptionalExactInteger(error.balance_after_centimes) &&
+    isOptionalExactInteger(error.credit_limit_centimes)
   );
+}
+
+/** The error the envelope described, with the two credit amounts when it
+ * carried them. One place builds it, so both callers of `unwrap` read a
+ * refusal the same way. */
+function apiError(body: ApiErrorDto, status: number): ApiError {
+  return new ApiError(body.error.code, body.error.message, status, {
+    balanceAfterCentimes: body.error.balance_after_centimes,
+    creditLimitCentimes: body.error.credit_limit_centimes,
+  });
 }
 
 export function isCategory(value: unknown): value is CategoryDto {
@@ -100,6 +130,12 @@ function isExactInteger(value: unknown): value is number {
 
 function isNullableExactInteger(value: unknown): value is number | null {
   return value === null || isExactInteger(value);
+}
+
+/** A field the server leaves out rather than sending as null. Absent is an
+ * answer here: only a credit refusal carries the two amounts. */
+function isOptionalExactInteger(value: unknown): value is number | undefined {
+  return value === undefined || isExactInteger(value);
 }
 
 export function isProduct(value: unknown): value is ProductDto {
@@ -201,6 +237,12 @@ function isPaymentMode(value: unknown): value is PaymentModeDto {
   return typeof value === "string" && PAYMENT_MODES.some((m) => m === value);
 }
 
+const SALE_WARNINGS: readonly SaleWarningDto[] = ["near_limit"];
+
+function isNullableSaleWarning(value: unknown): value is SaleWarningDto | null {
+  return value === null || (typeof value === "string" && SALE_WARNINGS.some((w) => w === value));
+}
+
 const DOCUMENT_KINDS: readonly DocumentKindDto[] = [
   "ticket",
   "facture",
@@ -246,6 +288,19 @@ function isSaleTva(value: unknown): value is SaleTvaDto {
   );
 }
 
+/** The balance triple, or null on a document that names no customer. Three
+ *  exact integers or nothing: two of three would be a closing balance its
+ *  own opening balance does not explain. */
+function isSaleBalance(value: unknown): value is SaleBalanceDto | null {
+  return (
+    value === null ||
+    (isRecord(value) &&
+      isExactInteger(value.old_balance_centimes) &&
+      isExactInteger(value.remaining_debt_centimes) &&
+      isExactInteger(value.total_debt_centimes))
+  );
+}
+
 /** Every column of the totals table, each an exact integer of centimes: a
  *  total JSON.parse had to round is refused rather than printed. */
 function isSaleTotals(value: unknown): value is SaleTotalsDto {
@@ -275,6 +330,7 @@ export function isSale(value: unknown): value is SaleDto {
     isPaymentMode(value.payment_mode) &&
     isStore(value.seller) &&
     isNullableNumber(value.customer_id) &&
+    isSaleBalance(value.balance) &&
     isSaleTotals(value.totals) &&
     Array.isArray(value.tva) &&
     value.tva.every(isSaleTva) &&
@@ -282,7 +338,8 @@ export function isSale(value: unknown): value is SaleDto {
     isNullableExactInteger(value.change_centimes) &&
     isDocumentStatus(value.status) &&
     Array.isArray(value.lines) &&
-    value.lines.every(isSaleLine)
+    value.lines.every(isSaleLine) &&
+    isNullableSaleWarning(value.warning)
   );
 }
 
@@ -374,7 +431,7 @@ async function unwrap(res: Response): Promise<unknown> {
   }
   if (res.ok) return body;
   if (isApiErrorBody(body)) {
-    throw new ApiError(body.error.code, body.error.message, res.status);
+    throw apiError(body, res.status);
   }
   // The server always sends the shape above; anything else is the network
   // or a proxy, so the UI still gets a key it can translate.
@@ -399,7 +456,7 @@ async function unwrapText(res: Response): Promise<string> {
     body = null;
   }
   if (isApiErrorBody(body)) {
-    throw new ApiError(body.error.code, body.error.message, res.status);
+    throw apiError(body, res.status);
   }
   throw new ApiError("unreachable", `HTTP ${res.status}`, res.status);
 }

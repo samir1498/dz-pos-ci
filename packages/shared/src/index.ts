@@ -30,6 +30,8 @@ export type { SaleDto } from "./generated/SaleDto";
 export type { SaleLineDto } from "./generated/SaleLineDto";
 export type { SaleTvaDto } from "./generated/SaleTvaDto";
 export type { SaleTotalsDto } from "./generated/SaleTotalsDto";
+export type { SaleBalanceDto } from "./generated/SaleBalanceDto";
+export type { SaleWarningDto } from "./generated/SaleWarningDto";
 export type { NewSaleDto } from "./generated/NewSaleDto";
 export type { NewSaleLineDto } from "./generated/NewSaleLineDto";
 

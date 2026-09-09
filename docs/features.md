@@ -69,6 +69,36 @@ line before the sale is posted (kg and litre take it). The core does not
 enforce this; a half box is not something a receipt can say, and nothing
 else was catching it.
 
+**Credit at the till.** A credit sale names a customer; without one it is
+refused on the `customer_id` field, because the ledger is per customer and
+money owed by nobody has nowhere to sit. The customer has to be active and
+of the shop. A closed fiche is named on no document at all, cash and card
+included: closing it says the shop has stopped trading with that customer,
+and a paid ticket made out to them would say otherwise. What the customer's credit limit is tested against is the
+balance the sale would leave behind, `old_balance + net_to_pay`, not the
+basket: a customer 100,00 under their limit cannot buy 200,00 on credit
+however small each basket is. A null credit limit is no limit at all and a
+zero one is no credit at all, which are two different answers. Passing the
+limit refuses the sale with the code `credit_limit`, which carries the
+balance after and the limit so the till can say by how much; the refusal
+happens before the document number is taken, so a blocked sale burns none.
+A null warn threshold is no warning; reaching one is enough to warn, and a
+warned sale still goes through, so the answer carries `near_limit` beside
+the document rather than refusing it.
+
+The owner can pass the block by sending the sale again with `override`.
+That sale is written like any other and an audit row records it
+(`sale.credit_override`, with the balance, the limit and the document it
+produced). Until M4 there are no roles in the app, so the API accepts an
+override from anyone; the log is what carries the accountability in the
+meantime.
+
+A cash or a card sale may also name a customer. The document then carries
+the buyer block and the balance triple with a `remaining_debt` of nothing,
+and no ledger movement is written: nothing is owed. The buyer block is
+snapshotted onto every document that names a customer, a ticket included,
+so the facture switch has nothing to backfill.
+
 **Stock movements.** Append-only ledger: every change to quantity on hand
 is a row with type (purchase, sale, adjustment, return, opening), quantity,
 unit cost, reference to the source document, user, timestamp. Quantity on
@@ -160,6 +190,22 @@ discount, TVA rate, line total HT.
 | `amount_in_words` | `net_to_pay` written out in the print language |
 | `old_balance`, `remaining_debt`, `total_debt` | from the ledger at issue time |
 | `payment_mode` | cash, card, credit in v1; cheque and transfer are parked (the column admits them) |
+
+The balance triple, in the words that decide it. `old_balance` is what the
+customer owed before this document. `total_debt` is what they owe after it.
+`remaining_debt` is this document's own unpaid part at issue: `net_to_pay`
+on a credit sale, zero on a cash or a card one. All three are read from the
+ledger when the document is issued and stored on it, so a reprint six
+months later prints the balance the customer was handed and never a sum of
+today's ledger. A document that names no customer stores none of the three.
+
+Because the limit is tested on `total_debt` and not on the basket, a
+customer whose balance is negative may buy on credit up to what the shop
+already holds for them, whatever the limit says. A deposit or an avoir
+leaves `old_balance` below zero; a 200,00 basket against a 300,00 credit
+balance leaves `total_debt` at -100,00, which is past no limit, not even a
+limit of zero. That is the same rule read from the other side, not an
+exception to it: what the block asks is what the customer will owe.
 
 **Facture or ticket at the till.** Loi 04-02 du 23 juin 2004 art. 10, as
 rewritten whole by loi 10-06 du 15 août 2010 art. 3, decides it, and it

@@ -421,6 +421,7 @@ const sale: SaleDto = {
     phone: null,
   },
   customer_id: null,
+  balance: null,
   totals: {
     total_ht_centimes: 22_000,
     discount_centimes: 0,
@@ -448,6 +449,7 @@ const sale: SaleDto = {
       line_total_centimes: 22_000,
     },
   ],
+  warning: null,
 };
 
 describe("sales", () => {
@@ -472,12 +474,80 @@ describe("sales", () => {
       global_discount_centimes: 0,
       payment_mode: "cash",
       tendered_centimes: 30_000,
+      customer_id: null,
+      override: false,
     };
     const api = createClient("http://127.0.0.1:4317", fetchStub);
     await expect(api.createSale(basket)).resolves.toEqual(sale);
     expect(calls[0]?.url).toBe("http://127.0.0.1:4317/sales");
     expect(calls[0]?.init?.method).toBe("POST");
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(basket);
+  });
+
+  test("a warning the app does not know is refused, the way an unknown mode is", async () => {
+    // `near_limit` is the only one there is. A screen that matches on the
+    // union would fall through a second one silently, so the guard stops it
+    // at the door instead.
+    const stub: typeof fetch = async () =>
+      new Response(JSON.stringify({ ...sale, warning: "over_limit" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    const api = createClient("http://127.0.0.1:4317", stub);
+    await expect(
+      api.createSale({
+        lines: [],
+        global_discount_centimes: 0,
+        payment_mode: "credit",
+        tendered_centimes: null,
+        customer_id: 3,
+        override: false,
+      }),
+    ).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  test("a credit refusal carries the balance after and the limit, other errors carry neither", async () => {
+    const refusal: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "credit_limit",
+            message: "past the limit",
+            balance_after_centimes: 550_000,
+            credit_limit_centimes: 500_000,
+          },
+        }),
+        { status: 422, headers: { "content-type": "application/json" } },
+      );
+    const api = createClient("http://127.0.0.1:4317", refusal);
+    await expect(
+      api.createSale({
+        lines: [],
+        global_discount_centimes: 0,
+        payment_mode: "credit",
+        tendered_centimes: null,
+        customer_id: 3,
+        override: false,
+      }),
+    ).rejects.toMatchObject({
+      code: "credit_limit",
+      status: 422,
+      balanceAfterCentimes: 550_000,
+      creditLimitCentimes: 500_000,
+    });
+
+    // Absent, not zero: a screen that read a missing amount as nothing would
+    // tell a cashier the limit is 0,00 on every other refusal.
+    const plain: typeof fetch = async () =>
+      new Response(JSON.stringify({ error: { code: "validation", message: "no" } }), {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      });
+    await expect(createClient("http://x", plain).getSale(1)).rejects.toMatchObject({
+      code: "validation",
+      balanceAfterCentimes: undefined,
+      creditLimitCentimes: undefined,
+    });
   });
 
   test("a sale is read back by id and the list is one call", async () => {
@@ -552,6 +622,8 @@ describe("sales", () => {
         global_discount_centimes: 0,
         payment_mode: "cash",
         tendered_centimes: null,
+        customer_id: null,
+        override: false,
       }),
     ).rejects.toMatchObject({ code: "validation", status: 422 });
   });
