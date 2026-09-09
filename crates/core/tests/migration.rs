@@ -1072,9 +1072,7 @@ fn a_database_at_the_third_migration_takes_the_fourth() {
         assert_eq!(
             count(
                 &mut conn,
-                &format!(
-                    "SELECT COUNT(*) AS n FROM {table} WHERE id = {id} AND document_id = 3"
-                )
+                &format!("SELECT COUNT(*) AS n FROM {table} WHERE id = {id} AND document_id = 3")
             ),
             1,
             "{table} lost its row when documents was rebuilt"

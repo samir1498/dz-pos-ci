@@ -92,10 +92,29 @@ import products from Excel with a downloadable template.
 private person, required for a company the moment an invoice is issued to
 them), credit limit, warning threshold, opening debt, notes.
 
+The stored fiche differs from that list in four places (migration
+`2026-09-09-000002_customers`). It carries a `party_kind`, `company` or
+`consumer`, and an `active` flag the way a product does. The name is
+required, because the buyer block prints it and the list is ordered by it.
+The opening debt is not a column: it is the first `opening` row of the debt
+ledger, so the balance has one source and correcting it later is an
+`adjustment` movement a comptable can read. A null credit limit is no limit
+and a zero one is no credit at all; a null warning threshold is no warning.
+
+`party_kind` is a field on the fiche, never inferred from whether an RC was
+typed in. Loi 04-02 art. 10 decides ticket against facture by who the buyer
+is, and `facture_requires_party_ids` asks a different set of fields of a
+company than of a consumer, so an inference would flip the rule the moment
+somebody clears a field.
+
 **Debt ledger.** Append-only per party (customer or supplier): document
 reference, amount owed added, amount paid, running balance. A payment can
 settle several documents oldest-first. The till warns at the threshold and
 blocks at the limit; blocking is overridable by a user with the permission.
+
+One row raises the debt or lowers it, never both and never neither, and the
+balance is the sum of the table rather than a stored number. It may go below
+zero: a customer who overpays is owed money and the statement prints it.
 
 **Statement.** Printable per-party statement for a date range: opening
 balance, movements, closing balance.
@@ -105,7 +124,11 @@ balance, movements, closing balance.
 One document type with a `kind`: `ticket` (till receipt), `facture`,
 `proforma`, `bon_de_livraison`, `avoir` (credit note), `bon_de_reception`.
 All kinds share the same lines and totals; only numbering, legal blocks and
-stock effect differ.
+stock effect differ. The column admits a seventh value, `quittance`, the
+stamped receipt for a payment on account; nothing issues one until the
+comptable says whether such a payment needs its own numbered document (R8),
+and the value is admitted now because adding a kind once there are documents
+means rebuilding the table.
 
 **Seller block** (from store settings): name, RC, NIF, NIS, AI, address,
 phone, fax, email.

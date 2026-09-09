@@ -245,7 +245,10 @@ fn a_create_and_an_update_each_leave_an_audit_entry_with_before_and_after() {
     assert_eq!(created.action, "create");
     assert_eq!(created.entity, "customer");
     assert_eq!(created.entity_id, Some(made.id));
-    assert_eq!(created.before, None, "a fiche that did not exist had no before");
+    assert_eq!(
+        created.before, None,
+        "a fiche that did not exist had no before"
+    );
     let after = created.after.as_deref().unwrap();
     assert!(after.contains("Entreprise Benali"), "{after}");
     assert!(

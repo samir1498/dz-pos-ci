@@ -75,4 +75,3 @@ fn validate(block: &StoreBlock) -> Result<ShopRowWrite, CoreError> {
         phone: optional_field("phone", block.phone.as_deref())?,
     })
 }
-
