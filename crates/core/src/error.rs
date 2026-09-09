@@ -25,6 +25,12 @@ pub enum CoreError {
     Db(#[from] DbError),
     #[error("query failed: {0}")]
     Query(#[from] diesel::result::Error),
+    /// A file the app owns (a backup copy, the shop file being replaced)
+    /// could not be read, written or moved. The message is fixed on purpose:
+    /// `io::Error` prints the path it failed on, and no path belongs on the
+    /// wire. The cause stays on the `source` for the server's own log.
+    #[error("the shop's files could not complete the operation")]
+    Io(#[from] std::io::Error),
 }
 
 impl CoreError {
@@ -36,7 +42,7 @@ impl CoreError {
             CoreError::DuplicateBarcode(_) => "duplicate_barcode",
             CoreError::Exhausted { .. } => "exhausted",
             CoreError::Money(_) => "money",
-            CoreError::Db(_) | CoreError::Query(_) => "storage",
+            CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) => "storage",
         }
     }
 

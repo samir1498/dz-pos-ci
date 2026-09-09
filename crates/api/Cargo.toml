@@ -8,7 +8,8 @@ dzpos-core = { path = "../core" }
 # Versions checked on crates.io 2026-09-08; these are the current stable
 # releases and the candidates docs/architecture.md already named.
 axum = "0.8.9"
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net"] }
+# "time": the daily backup task sleeps between checks.
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "time"] }
 tower-http = { version = "0.7.1", features = ["cors"] }
 clap = { version = "4.6.6", features = ["derive"] }
 ts-rs = "12.0.1"

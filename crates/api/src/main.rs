@@ -18,6 +18,15 @@ struct Args {
     /// The one shop this server answers for.
     #[arg(long, default_value_t = 1)]
     shop: i32,
+    /// Where the copies of the shop file go. Default: `backups` beside the
+    /// database.
+    #[arg(long)]
+    backup_dir: Option<std::path::PathBuf>,
+    /// Take a copy of the shop file at launch if the newest is a day old,
+    /// and keep checking while the server runs. The desktop does this on its
+    /// own; the flag is how the loop is exercised without Tauri.
+    #[arg(long, default_value_t = false)]
+    daily_backup: bool,
     /// One more browser origin cleared to call this server, on top of the
     /// app's own. The UI served from this box and opened on another machine
     /// needs it: `--allow-origin http://100.111.55.62:5173`.
@@ -67,7 +76,16 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
             true,
         ),
     };
-    let state = dzpos_api::AppState::open(&args.db, args.shop)?;
+    let backup_dir = args
+        .backup_dir
+        .clone()
+        .unwrap_or_else(|| dzpos_api::default_backup_dir(&args.db));
+    let state = dzpos_api::AppState::open_with_backup_dir(&args.db, args.shop, &backup_dir)?;
+    if args.daily_backup {
+        // Detached on purpose: the copy is a chore, and the server answering
+        // never waits on it.
+        tokio::spawn(dzpos_api::daily::run(state.clone()));
+    }
     let (listener, port) = dzpos_api::bind(args.port).await?;
     if made_here {
         // The operator's own terminal is the only place it goes; the UI

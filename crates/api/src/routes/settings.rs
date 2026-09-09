@@ -15,8 +15,9 @@ use crate::error::ApiError;
 use crate::AppState;
 
 /// This moment on the shop's calendar. The offset itself lives in the core
-/// (services::clock): a document's issued_at reads the same clock.
-fn now() -> NaiveDateTime {
+/// (services::clock): a document's issued_at reads the same clock, and the
+/// backups route stamps its copies with it.
+pub(crate) fn now() -> NaiveDateTime {
     clock::now()
 }
 

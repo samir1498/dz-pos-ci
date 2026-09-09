@@ -34,6 +34,23 @@ pub enum ApiError {
     MethodNotAllowed,
     #[error("the database connection is unusable")]
     Unavailable,
+    /// The shop file is not open in this process and nothing here will open
+    /// it again. A restore closed it and could not get it back, so the file
+    /// on disk is whole and this process is the part that is broken. The one
+    /// thing that helps is relaunching, and the code says so rather than
+    /// leaving the screen to guess at "storage".
+    #[error("the shop file is not open in this app any more; close it and start it again")]
+    RestartNeeded,
+    /// The same, plus the half a person needs to hear first: the restore did
+    /// not happen. The shop file was never renamed over, so what is on disk
+    /// is the state that was always there, and the copy the owner picked was
+    /// not put in place. Its own code, because the answer after the relaunch
+    /// is different: the till comes back on the old data, not the restored
+    /// data.
+    #[error(
+        "the restore did not happen and the shop file could not be reopened; nothing was replaced, so close the app and start it again"
+    )]
+    NotRestoredRestartNeeded,
 }
 
 #[derive(Serialize)]
@@ -73,6 +90,11 @@ impl ApiError {
             ApiError::NoRoute => (StatusCode::NOT_FOUND, "not_found"),
             ApiError::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed"),
             ApiError::Unavailable => (StatusCode::INTERNAL_SERVER_ERROR, "storage"),
+            ApiError::RestartNeeded => (StatusCode::INTERNAL_SERVER_ERROR, "restart_needed"),
+            ApiError::NotRestoredRestartNeeded => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "restore_failed_restart_needed",
+            ),
         }
     }
 }
@@ -85,7 +107,7 @@ const fn status_for(e: &CoreError) -> StatusCode {
         CoreError::Validation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
-        CoreError::Money(_) | CoreError::Db(_) | CoreError::Query(_) => {
+        CoreError::Money(_) | CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) => {
             StatusCode::INTERNAL_SERVER_ERROR
         }
     }
@@ -184,5 +206,34 @@ mod unknown_field_tests {
             CoreError::validation("name", "is empty").to_string(),
             "a rule's own message still goes through"
         );
+    }
+}
+
+#[cfg(test)]
+mod restart_code_tests {
+    use super::{ApiError, StatusCode};
+
+    /// The two answers a closed shop file can get, and they are not the same
+    /// answer. Both are 500 and both mean relaunch, but one of them also says
+    /// the restore did not happen, and that is what decides which data the
+    /// owner will be looking at afterwards. A screen can only tell them apart
+    /// by the code.
+    #[test]
+    fn a_closed_shop_file_says_relaunch_and_says_whether_it_was_restored() {
+        assert_eq!(
+            ApiError::RestartNeeded.parts(),
+            (StatusCode::INTERNAL_SERVER_ERROR, "restart_needed")
+        );
+        assert_eq!(
+            ApiError::NotRestoredRestartNeeded.parts(),
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "restore_failed_restart_needed"
+            )
+        );
+
+        let says = ApiError::NotRestoredRestartNeeded.message();
+        assert!(says.contains("did not happen"), "{says}");
+        assert!(says.contains("start it again"), "{says}");
     }
 }

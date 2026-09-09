@@ -12,6 +12,9 @@ export type { RegimeDto } from "./generated/RegimeDto";
 export type { DatedRegimeDto } from "./generated/DatedRegimeDto";
 export type { SettingsDto } from "./generated/SettingsDto";
 export type { RegimeChangeDto } from "./generated/RegimeChangeDto";
+export type { BackupDto } from "./generated/BackupDto";
+export type { BackupsDto } from "./generated/BackupsDto";
+export type { RestoreDto } from "./generated/RestoreDto";
 export type { PaymentModeDto } from "./generated/PaymentModeDto";
 export type { DocumentKindDto } from "./generated/DocumentKindDto";
 export type { DocumentStatusDto } from "./generated/DocumentStatusDto";
@@ -26,7 +29,10 @@ export {
   ApiError,
   createClient,
   isApiErrorBody,
+  isBackup,
+  isBackups,
   isCategory,
+  isRestore,
   isSale,
   isSettings,
   isStore,

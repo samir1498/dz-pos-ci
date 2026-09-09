@@ -6,6 +6,8 @@
 // half-typed object into the UI.
 
 import type { ApiErrorDto } from "./generated/ApiErrorDto";
+import type { BackupDto } from "./generated/BackupDto";
+import type { BackupsDto } from "./generated/BackupsDto";
 import type { CategoryDto } from "./generated/CategoryDto";
 import type { HealthDto } from "./generated/HealthDto";
 import type { DocumentKindDto } from "./generated/DocumentKindDto";
@@ -19,6 +21,7 @@ import type { SaleTotalsDto } from "./generated/SaleTotalsDto";
 import type { SaleTvaDto } from "./generated/SaleTvaDto";
 import type { ProductDto } from "./generated/ProductDto";
 import type { RegimeChangeDto } from "./generated/RegimeChangeDto";
+import type { RestoreDto } from "./generated/RestoreDto";
 import type { DatedRegimeDto } from "./generated/DatedRegimeDto";
 import type { RegimeDto } from "./generated/RegimeDto";
 import type { SettingsDto } from "./generated/SettingsDto";
@@ -150,6 +153,37 @@ export function isSettings(value: unknown): value is SettingsDto {
     isStore(value.store) &&
     isDatedRegime(value.regime) &&
     (value.regime_planned === null || isDatedRegime(value.regime_planned))
+  );
+}
+
+export function isBackup(value: unknown): value is BackupDto {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.taken_at === "string" &&
+    // A file size, so an integer: a fractional byte count means the server
+    // is not the one this client was generated against.
+    isExactInteger(value.bytes)
+  );
+}
+
+function isBackupList(value: unknown): value is BackupDto[] {
+  return Array.isArray(value) && value.every(isBackup);
+}
+
+export function isBackups(value: unknown): value is BackupsDto {
+  return (
+    isRecord(value) && isBackupList(value.backups) && isBackupList(value.safety_copies)
+  );
+}
+
+export function isRestore(value: unknown): value is RestoreDto {
+  return (
+    isRecord(value) &&
+    typeof value.restored_from === "string" &&
+    typeof value.safety_copy === "string" &&
+    isExactInteger(value.products) &&
+    isNullableExactInteger(value.documents)
   );
 }
 
@@ -349,6 +383,28 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         body: JSON.stringify(input),
       });
       return narrow(body, isSettings, "settings");
+    },
+
+    /** The copies of the shop file the server keeps, newest first: the daily
+     * ones, and the copies taken on the way into a restore, which are kept
+     * under different rules and so travel in their own list. */
+    async listBackups(): Promise<BackupsDto> {
+      return narrow(await send("/backups"), isBackups, "backup list");
+    },
+
+    /** One more copy, taken now. The server names it and prunes the folder. */
+    async createBackup(): Promise<BackupDto> {
+      return narrow(await send("/backups", { method: "POST" }), isBackup, "backup");
+    },
+
+    /** Puts the shop file back from a copy. The name is the server's own, and
+     * it is encoded rather than spliced, so a name that somehow carried a
+     * separator reaches the server as one segment and is refused there. */
+    async restoreBackup(name: string): Promise<RestoreDto> {
+      const body = await send(`/backups/${encodeURIComponent(name)}/restore`, {
+        method: "POST",
+      });
+      return narrow(body, isRestore, "restore answer");
     },
 
     /** Rings up the basket. The server dates the document and assigns the

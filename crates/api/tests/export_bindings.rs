@@ -10,14 +10,14 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    ApiErrorDto, ApiErrorPayloadDto, CategoryDto, DatedRegimeDto, DocumentKindDto,
-    DocumentStatusDto, HealthDto, NewProductDto, NewSaleDto, NewSaleLineDto, PaymentModeDto,
-    ProductDto, RegimeChangeDto, RegimeDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
-    SettingsDto, StoreDto, UnitDto,
+    ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto, DatedRegimeDto,
+    DocumentKindDto, DocumentStatusDto, HealthDto, NewProductDto, NewSaleDto, NewSaleLineDto,
+    PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SaleDto, SaleLineDto,
+    SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 21] = [
+const FILES: [&str; 24] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -30,6 +30,9 @@ const FILES: [&str; 21] = [
     "DatedRegimeDto.ts",
     "SettingsDto.ts",
     "RegimeChangeDto.ts",
+    "BackupDto.ts",
+    "BackupsDto.ts",
+    "RestoreDto.ts",
     "PaymentModeDto.ts",
     "DocumentKindDto.ts",
     "DocumentStatusDto.ts",
@@ -108,6 +111,9 @@ fn export_bindings() {
     DatedRegimeDto::export_all(&cfg).unwrap();
     SettingsDto::export_all(&cfg).unwrap();
     RegimeChangeDto::export_all(&cfg).unwrap();
+    BackupDto::export_all(&cfg).unwrap();
+    BackupsDto::export_all(&cfg).unwrap();
+    RestoreDto::export_all(&cfg).unwrap();
     PaymentModeDto::export_all(&cfg).unwrap();
     DocumentKindDto::export_all(&cfg).unwrap();
     DocumentStatusDto::export_all(&cfg).unwrap();
