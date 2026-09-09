@@ -38,6 +38,30 @@ const RATES: readonly { bps: number; key: Key }[] = [
 
 const FALLBACK_RATE_BPS = 1900;
 
+/** "7 %" for 700 bps: the label of a rate the fixed list does not carry. */
+function rateLabel(bps: number): string {
+  const percent = bps / 100;
+  return `${Number.isInteger(percent) ? percent : percent.toFixed(2).replace(".", ",")} %`;
+}
+
+/**
+ * The fixed choices plus any category default the list does not carry.
+ * The migration allows any rate between 0 and 10 000 bps on a category;
+ * without this a 700 bps category showed "19 %" while the form posted 700.
+ */
+function rateOptions(
+  categories: readonly CategoryDto[],
+  t: (key: Key) => string,
+): { value: string; label: string }[] {
+  const fixed = RATES.map((rate) => ({ value: String(rate.bps), label: t(rate.key) }));
+  const known = new Set(RATES.map((rate) => rate.bps));
+  const extra = [...new Set(categories.map((c) => c.default_rate_bps))]
+    .filter((bps) => !known.has(bps))
+    .sort((a, b) => b - a)
+    .map((bps) => ({ value: String(bps), label: rateLabel(bps) }));
+  return [...fixed, ...extra];
+}
+
 const ERROR_KEY: Record<string, Key> = {
   validation: "error_validation",
   duplicate_barcode: "error_duplicate_barcode",
@@ -274,9 +298,9 @@ function AddProductForm({
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
             >
-              {RATES.map((rate) => (
-                <option key={rate.bps} value={String(rate.bps)}>
-                  {t(rate.key)}
+              {rateOptions(categories, t).map((rate) => (
+                <option key={rate.value} value={rate.value}>
+                  {rate.label}
                 </option>
               ))}
             </select>

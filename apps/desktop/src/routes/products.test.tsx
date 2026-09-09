@@ -201,6 +201,26 @@ describe("the add form", () => {
     expect(sentBody().rate_bps).toBe(900);
   });
 
+  test("a category rate the fixed list lacks is shown as what it will post", async () => {
+    // The migration allows any rate from 0 to 10 000 bps on a category; a
+    // 700 bps one used to display "19 %" while the form posted 700.
+    const user = userEvent.setup();
+    categories = [{ ...general, default_rate_bps: 700 }];
+    mount();
+    await openTheForm(user);
+
+    const rate = screen.getByLabelText("TVA");
+    expect(rate).toHaveValue("700");
+    expect(screen.getByRole("option", { name: "7 %" })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Nom"), "Farine");
+    await user.type(screen.getByLabelText("Prix de vente"), "10");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(sentBody().rate_bps).toBe(700);
+  });
+
   test("the rate follows the category that was chosen", async () => {
     const user = userEvent.setup();
     categories = [general, alimentaire];
