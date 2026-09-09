@@ -10,10 +10,10 @@ use dzpos_core::lang::Lang;
 use dzpos_core::print::{render_facture, render_ticket, Paper};
 use dzpos_core::services::documents::DocumentKind;
 use dzpos_core::services::sales::{NewSale, SaleKind};
-use dzpos_core::services::{documents, sales};
+use dzpos_core::services::{avoir, documents, sales};
 use serde::Deserialize;
 
-use crate::dto::{NewSaleDto, SaleDto, SaleKindDto};
+use crate::dto::{CancelDocumentDto, NewAvoirDto, NewSaleDto, SaleDto, SaleKindDto};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -36,8 +36,8 @@ pub async fn list(
     State(state): State<AppState>,
     query: Result<Query<ListQuery>, QueryRejection>,
 ) -> Result<Json<Vec<SaleDto>>, ApiError> {
-    let Query(ListQuery { kind }) =
-        query.map_err(|_| ApiError::BadRequest("kind must be ticket or facture".into()))?;
+    let Query(ListQuery { kind }) = query
+        .map_err(|_| ApiError::BadRequest("kind must be ticket, facture or proforma".into()))?;
     let kind = kind.map(|k| SaleKind::from(k).document_kind());
     let shop = state.shop_id;
     let found = state
@@ -138,4 +138,66 @@ pub async fn create(
         .blocking(move |c| sales::issue(c, shop, user, new))
         .await?;
     Ok((StatusCode::CREATED, Json(SaleDto::from(made))))
+}
+
+/// Writes a credit note against the facture in the path (features.md §3).
+///
+/// The body names the lines coming back, or nothing at all for the whole of
+/// what is left on the facture. Every rule is the core's: what a line has left
+/// to credit, the running total against what the facture asked for, the stock
+/// coming back and the ledger movement with what it settled.
+pub async fn avoir(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    body: Result<Json<NewAvoirDto>, JsonRejection>,
+) -> Result<(StatusCode, Json<SaleDto>), ApiError> {
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let lines = dto.lines();
+    let reason = dto.reason;
+    let shop = state.shop_id;
+    // TODO(M4): the user comes from the request identity, not from the state.
+    let user = state.user_id;
+    let made = state
+        .blocking(move |c| avoir::issue(c, shop, user, id, lines, reason, None))
+        .await?;
+    Ok((StatusCode::CREATED, Json(SaleDto::from(made))))
+}
+
+/// Every avoir written against one facture, oldest first. A ticket's id or a
+/// document of another shop answers 404 rather than an empty list: an empty
+/// list would read as "this facture has no credit notes".
+pub async fn avoirs(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+) -> Result<Json<Vec<SaleDto>>, ApiError> {
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let shop = state.shop_id;
+    let found = state
+        .blocking(move |c| avoir::list_for(c, shop, id))
+        .await?;
+    Ok(Json(found.into_iter().map(SaleDto::from).collect()))
+}
+
+/// Annuls the document in the path. It keeps its number and its row; what it
+/// stops doing is asking for its amount and holding the goods off the shelf.
+/// A facture that put money on an account is undone through an avoir the core
+/// writes in the same transaction, and the answer carries the block naming it.
+pub async fn cancel(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    body: Result<Json<CancelDocumentDto>, JsonRejection>,
+) -> Result<Json<SaleDto>, ApiError> {
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let Json(CancelDocumentDto { reason }) = body.map_err(ApiError::from)?;
+    let shop = state.shop_id;
+    // TODO(M4): the user comes from the request identity, not from the state.
+    let user = state.user_id;
+    let done = state
+        .blocking(move |c| documents::cancel(c, shop, user, id, reason, None))
+        .await?;
+    Ok(Json(SaleDto::from(done)))
 }

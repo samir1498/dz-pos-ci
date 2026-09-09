@@ -15,6 +15,7 @@ use dzpos_core::models::document::{Document, DocumentKind, DocumentLine, Documen
 use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::models::shop::{Shop, StoreBlock};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
+use dzpos_core::services::avoir::AvoirLine;
 use dzpos_core::services::backup::Backup;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
 use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
@@ -476,10 +477,14 @@ impl From<DocumentKind> for DocumentKindDto {
     }
 }
 
-/// The paper the till rings a basket up on (features.md §3). Two values and
-/// not `DocumentKindDto`: an avoir and a bon de livraison are their own
+/// The paper the till rings a basket up on (features.md §3). Three values
+/// and not `DocumentKindDto`: an avoir and a bon de livraison are their own
 /// writes with their own rules, and a till that could name one on `POST
 /// /sales` would be issuing a document nobody asked for.
+///
+/// A proforma is here because the till is where the basket is. It is the one
+/// value that ends in no sale: the core hands it to `services::proforma`,
+/// which writes the quotation and moves neither stock nor debt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[ts(export_to = "SaleKindDto.ts")]
 #[serde(rename_all = "snake_case")]
@@ -487,6 +492,7 @@ pub enum SaleKindDto {
     #[default]
     Ticket,
     Facture,
+    Proforma,
 }
 
 impl From<SaleKindDto> for SaleKind {
@@ -494,6 +500,7 @@ impl From<SaleKindDto> for SaleKind {
         match k {
             SaleKindDto::Ticket => SaleKind::Ticket,
             SaleKindDto::Facture => SaleKind::Facture,
+            SaleKindDto::Proforma => SaleKind::Proforma,
         }
     }
 }
@@ -532,6 +539,9 @@ pub struct SaleLineDto {
     pub line_discount_centimes: i64,
     pub rate_bps: u32,
     pub line_total_centimes: i64,
+    /// The facture line this one credits, on an avoir line and nowhere else.
+    /// The screen showing an avoir beside its facture lines the two up by it.
+    pub ref_line_id: Option<i32>,
 }
 
 impl From<DocumentLine> for SaleLineDto {
@@ -547,6 +557,7 @@ impl From<DocumentLine> for SaleLineDto {
             line_discount_centimes: l.line_discount.as_centimes(),
             rate_bps: l.rate_bps.as_u32(),
             line_total_centimes: l.line_total.as_centimes(),
+            ref_line_id: l.ref_line_id,
         }
     }
 }
@@ -621,6 +632,9 @@ pub struct SaleDto {
     pub payment_mode: PaymentModeDto,
     pub seller: StoreDto,
     pub customer_id: Option<i32>,
+    /// The facture an avoir is written against, null on every other kind.
+    /// The screen showing an avoir follows it to name the paper it credits.
+    pub ref_document_id: Option<i32>,
     /// Null on a document with no customer, which is every cash ticket.
     pub balance: Option<SaleBalanceDto>,
     pub totals: SaleTotalsDto,
@@ -628,6 +642,9 @@ pub struct SaleDto {
     pub tendered_centimes: Option<i64>,
     pub change_centimes: Option<i64>,
     pub status: DocumentStatusDto,
+    /// Filled exactly when `status` is `cancelled`: when it was annulled, by
+    /// whom, why, and the avoir that carried the money back when one did.
+    pub cancellation: Option<SaleCancellationDto>,
     pub lines: Vec<SaleLineDto>,
     /// What the till should say while still handing over the ticket, null
     /// when there is nothing to say. A read of a stored document carries
@@ -678,6 +695,7 @@ impl From<Document> for SaleDto {
                 phone: d.seller.phone,
             },
             customer_id: d.customer_id,
+            ref_document_id: d.ref_document_id,
             balance: d.balance.map(|b| SaleBalanceDto {
                 old_balance_centimes: b.old_balance.as_centimes(),
                 remaining_debt_centimes: b.remaining_debt.as_centimes(),
@@ -696,6 +714,12 @@ impl From<Document> for SaleDto {
             tendered_centimes: d.tendered.map(Money::as_centimes),
             change_centimes: d.change.map(Money::as_centimes),
             status: d.status.into(),
+            cancellation: d.cancellation.map(|c| SaleCancellationDto {
+                cancelled_at: c.at.format(DATE_TIME_FORMAT).to_string(),
+                cancelled_by: c.by,
+                reason: c.reason,
+                avoir_document_id: c.avoir_document_id,
+            }),
             lines: d.lines.into_iter().map(Into::into).collect(),
             warning: None,
         }
@@ -853,6 +877,63 @@ impl From<DebtKind> for DebtKindDto {
             DebtKind::Adjustment => DebtKindDto::Adjustment,
         }
     }
+}
+
+/// What a cancellation left on the document it annulled (features.md §3).
+/// Whole or absent: a screen never has to ask whether the date is there
+/// while the reason is not.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SaleCancellationDto.ts")]
+pub struct SaleCancellationDto {
+    /// `YYYY-MM-DD HH:MM:SS` on the shop's calendar.
+    pub cancelled_at: String,
+    pub cancelled_by: i32,
+    pub reason: String,
+    /// The avoir the cancellation issued, null when there was nothing to
+    /// carry back: a cash ticket owed nobody anything.
+    pub avoir_document_id: Option<i32>,
+}
+
+/// One line of a facture and how much of it is coming back on an avoir. The
+/// line is named by id and never by the product on it: a facture carries one
+/// product on two lines as soon as a line discount is involved.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "AvoirLineDto.ts")]
+pub struct AvoirLineDto {
+    pub document_line_id: i32,
+    pub qty_milli: i64,
+}
+
+/// What is coming back on a credit note. `lines` unset is the whole of what
+/// is left on the facture, which is what the "avoir the lot" button sends and
+/// what a cancellation uses.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewAvoirDto.ts")]
+pub struct NewAvoirDto {
+    pub lines: Option<Vec<AvoirLineDto>>,
+    pub reason: Option<String>,
+}
+
+impl NewAvoirDto {
+    pub fn lines(&self) -> Option<Vec<AvoirLine>> {
+        self.lines.as_ref().map(|lines| {
+            lines
+                .iter()
+                .map(|l| AvoirLine {
+                    document_line_id: l.document_line_id,
+                    qty_milli: l.qty_milli,
+                })
+                .collect()
+        })
+    }
+}
+
+/// Why a document is being annulled. Required: a document annulled for no
+/// stated reason is what features.md §5 keeps a log against.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "CancelDocumentDto.ts")]
+pub struct CancelDocumentDto {
+    pub reason: String,
 }
 
 /// The fiche as a screen reads it, with what the customer owes. The balance
