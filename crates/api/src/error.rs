@@ -85,7 +85,7 @@ const fn status_for(e: &CoreError) -> StatusCode {
         CoreError::Validation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
-        CoreError::Money(_) | CoreError::Db(_) | CoreError::Query(_) => {
+        CoreError::Money(_) | CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) => {
             StatusCode::INTERNAL_SERVER_ERROR
         }
     }

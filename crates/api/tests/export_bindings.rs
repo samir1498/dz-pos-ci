@@ -10,12 +10,13 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    ApiErrorDto, ApiErrorPayloadDto, CategoryDto, DatedRegimeDto, HealthDto, NewProductDto,
-    ProductDto, RegimeChangeDto, RegimeDto, SettingsDto, StoreDto, UnitDto,
+    ApiErrorDto, ApiErrorPayloadDto, BackupDto, CategoryDto, DatedRegimeDto, HealthDto,
+    NewProductDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SettingsDto, StoreDto,
+    UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 12] = [
+const FILES: [&str; 14] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -28,6 +29,8 @@ const FILES: [&str; 12] = [
     "DatedRegimeDto.ts",
     "SettingsDto.ts",
     "RegimeChangeDto.ts",
+    "BackupDto.ts",
+    "RestoreDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -97,6 +100,8 @@ fn export_bindings() {
     DatedRegimeDto::export_all(&cfg).unwrap();
     SettingsDto::export_all(&cfg).unwrap();
     RegimeChangeDto::export_all(&cfg).unwrap();
+    BackupDto::export_all(&cfg).unwrap();
+    RestoreDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

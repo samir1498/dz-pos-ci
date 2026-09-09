@@ -12,8 +12,19 @@ export type { RegimeDto } from "./generated/RegimeDto";
 export type { DatedRegimeDto } from "./generated/DatedRegimeDto";
 export type { SettingsDto } from "./generated/SettingsDto";
 export type { RegimeChangeDto } from "./generated/RegimeChangeDto";
+export type { BackupDto } from "./generated/BackupDto";
+export type { RestoreDto } from "./generated/RestoreDto";
 
-export { ApiError, createClient, isApiErrorBody, isCategory, isSettings, isStore } from "./client";
+export {
+  ApiError,
+  createClient,
+  isApiErrorBody,
+  isBackup,
+  isCategory,
+  isRestore,
+  isSettings,
+  isStore,
+} from "./client";
 export type { ClientOptions } from "./client";
 export type { ApiClient } from "./client";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";

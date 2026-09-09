@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { ApiError, createClient, isApiErrorBody } from "./client";
+import type { BackupDto } from "./generated/BackupDto";
 import type { NewProductDto } from "./generated/NewProductDto";
+import type { RestoreDto } from "./generated/RestoreDto";
 import type { ProductDto } from "./generated/ProductDto";
 import type { SettingsDto } from "./generated/SettingsDto";
 import type { StoreDto } from "./generated/StoreDto";
@@ -300,5 +302,90 @@ describe("isApiErrorBody", () => {
     expect(isApiErrorBody({ code: "x", message: "y" })).toBe(false);
     expect(isApiErrorBody(null)).toBe(false);
     expect(isApiErrorBody("nope")).toBe(false);
+  });
+});
+
+describe("backups", () => {
+  const backup: BackupDto = {
+    name: "dzpos-20260908-093000.sqlite",
+    taken_at: "2026-09-08T09:30:00",
+    bytes: 143_360,
+  };
+
+  test("lists the copies the server reports", async () => {
+    const api = createClient("http://127.0.0.1:4317", stub(200, [backup]));
+    await expect(api.listBackups()).resolves.toEqual([backup]);
+  });
+
+  test("a copy of the wrong shape is refused, never handed to the UI", async () => {
+    for (const bad of [
+      [{ name: "dzpos-20260908-093000.sqlite", taken_at: "2026-09-08T09:30:00" }],
+      [{ name: 1, taken_at: "2026-09-08T09:30:00", bytes: 10 }],
+      [{ ...backup, bytes: 1.5 }],
+      { name: "dzpos-20260908-093000.sqlite" },
+    ]) {
+      const api = createClient("http://x", stub(200, bad));
+      await expect(api.listBackups()).rejects.toMatchObject({ code: "bad_response" });
+    }
+  });
+
+  test("creating one posts to /backups and returns what was written", async () => {
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(backup), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.createBackup()).resolves.toEqual(backup);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/backups");
+    expect(calls[0]?.init?.method).toBe("POST");
+  });
+
+  test("restoring names the copy in the path and returns the counts", async () => {
+    const answer: RestoreDto = {
+      restored_from: backup.name,
+      products: 12,
+      documents: null,
+    };
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(answer), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.restoreBackup(backup.name)).resolves.toEqual(answer);
+    expect(calls[0]?.url).toBe(
+      "http://127.0.0.1:4317/backups/dzpos-20260908-093000.sqlite/restore",
+    );
+    expect(calls[0]?.init?.method).toBe("POST");
+  });
+
+  test("a name the server never wrote is encoded, never spliced into the path", async () => {
+    const calls: string[] = [];
+    const fetchStub: typeof fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify({ error: { code: "validation", message: "no" } }), {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.restoreBackup("../../etc/passwd")).rejects.toMatchObject({
+      code: "validation",
+    });
+    expect(calls[0]).toBe("http://127.0.0.1:4317/backups/..%2F..%2Fetc%2Fpasswd/restore");
+  });
+
+  test("a restore answer of the wrong shape is refused", async () => {
+    const api = createClient("http://x", stub(200, { restored_from: backup.name }));
+    await expect(api.restoreBackup(backup.name)).rejects.toMatchObject({
+      code: "bad_response",
+    });
   });
 });

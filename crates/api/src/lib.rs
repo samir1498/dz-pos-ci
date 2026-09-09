@@ -7,35 +7,141 @@ pub mod error;
 pub mod routes;
 pub mod token;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use axum::http::{header, HeaderValue, Method};
 use axum::middleware::from_fn_with_state;
 use axum::routing::{get, post, put};
 use axum::Router;
+use chrono::NaiveDateTime;
 use dzpos_core::db::Conn;
 use dzpos_core::error::CoreError;
+use dzpos_core::services::backup::{self, Backup, Summary};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::error::ApiError;
 pub use crate::token::LaunchToken;
 
+/// Where backups land when the caller names no folder: beside the shop file.
+/// One folder per shop file, so two tills on one machine never share copies.
+pub const BACKUP_DIR_NAME: &str = "backups";
+
 /// The connection and the one shop this server answers for. A caller never
 /// chooses the shop (rule 3); the process is started with it.
+///
+/// The file's own path is held too, because a restore replaces it: the
+/// connection alone cannot say which file it is open on once it is closed.
 #[derive(Clone)]
 pub struct AppState {
     conn: Arc<Mutex<Conn>>,
+    db_path: Arc<PathBuf>,
+    backup_dir: Arc<PathBuf>,
     pub shop_id: i32,
 }
 
 impl AppState {
     pub fn open(db: impl AsRef<Path>, shop_id: i32) -> Result<Self, CoreError> {
-        let conn = dzpos_core::db::open(db)?;
+        let dir = default_backup_dir(db.as_ref());
+        AppState::open_with_backup_dir(db, shop_id, dir)
+    }
+
+    pub fn open_with_backup_dir(
+        db: impl AsRef<Path>,
+        shop_id: i32,
+        backup_dir: impl AsRef<Path>,
+    ) -> Result<Self, CoreError> {
+        let conn = dzpos_core::db::open(db.as_ref())?;
         Ok(AppState {
             conn: Arc::new(Mutex::new(conn)),
+            db_path: Arc::new(db.as_ref().to_path_buf()),
+            backup_dir: Arc::new(backup_dir.as_ref().to_path_buf()),
             shop_id,
         })
+    }
+
+    pub fn db_path(&self) -> &Path {
+        &self.db_path
+    }
+
+    pub fn backup_dir(&self) -> &Path {
+        &self.backup_dir
+    }
+
+    /// A copy of the shop file, taken at `at`, and the folder pruned back to
+    /// thirty.
+    pub fn create_backup(&self, at: NaiveDateTime) -> Result<Backup, ApiError> {
+        let dir = Arc::clone(&self.backup_dir);
+        self.with_conn(|conn| backup::create(conn, &dir, at))
+    }
+
+    /// Replaces the shop file with one of its copies, then reopens the
+    /// connection on it, so the running server answers from the restored
+    /// file without the app being restarted.
+    ///
+    /// The order is the whole guarantee, and it is:
+    ///
+    /// 1. check the copy (`backup::verify`); a copy that is torn or that a
+    ///    newer app version wrote never gets as far as touching the file;
+    /// 2. take the connection's lock, so no handler is mid-query;
+    /// 3. `VACUUM INTO <db>.before-restore-<stamp>.sqlite`, the safety copy,
+    ///    beside the shop file and never counted among the thirty;
+    /// 4. copy the chosen backup to `<db>.restoring.tmp`, in the same folder
+    ///    so the rename below cannot cross a file system;
+    /// 5. close the live connection (swapped for an in-memory one, which is
+    ///    what releases the file handle);
+    /// 6. delete the live file's `-wal` and `-shm` sidecars, which belong to
+    ///    the file that is about to go and would otherwise be replayed into
+    ///    the new one;
+    /// 7. rename `<db>.restoring.tmp` over the shop file;
+    /// 8. reopen through `db::open`, which runs any migration the copy is
+    ///    behind on, and put that connection back under the lock.
+    ///
+    /// A failure before step 5 leaves the shop file exactly as it was. A
+    /// failure after it reopens the path before returning, so the mutex
+    /// never holds the in-memory placeholder past this call.
+    pub fn restore(&self, backup_path: &Path) -> Result<Summary, ApiError> {
+        let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
+        let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
+        let db = self.db_path.as_path();
+
+        let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S%3f");
+        let safety = sibling(db, &format!(".before-restore-{stamp}.sqlite"));
+        backup::copy_to(&mut guard, &safety).map_err(ApiError::from)?;
+
+        let staged = sibling(db, ".restoring.tmp");
+        // A leftover from a run that died mid-restore would make the copy
+        // below fail; it describes nothing that is still wanted.
+        remove_if_present(&staged).map_err(core_io)?;
+        std::fs::copy(backup_path, &staged).map_err(core_io)?;
+
+        // From here the live file is being replaced. Everything that can
+        // still fail reopens the connection before it returns.
+        let placeholder = match dzpos_core::db::open_placeholder() {
+            Ok(conn) => conn,
+            Err(e) => {
+                let _ = std::fs::remove_file(&staged);
+                return Err(ApiError::from(CoreError::from(e)));
+            }
+        };
+        drop(std::mem::replace(&mut *guard, placeholder));
+
+        let swapped = swap_in(&staged, db);
+        // Whatever happened, the lock must come back holding a connection to
+        // the shop file: the restored one, or the one that was there.
+        let reopened = dzpos_core::db::open(db);
+        match (swapped, reopened) {
+            (Ok(()), Ok(conn)) => {
+                *guard = conn;
+                Ok(summary)
+            }
+            (Err(e), Ok(conn)) => {
+                *guard = conn;
+                let _ = std::fs::remove_file(&staged);
+                Err(ApiError::from(e))
+            }
+            (_, Err(e)) => Err(ApiError::from(CoreError::from(e))),
+        }
     }
 
     /// Runs one closure against the connection. A poisoned lock means an
@@ -60,6 +166,47 @@ impl AppState {
             .await
             .map_err(|_| ApiError::Unavailable)?
     }
+}
+
+/// `<db folder>/backups`. A shop file with no parent (a bare `t.db` on a
+/// relative path) keeps the folder in the working directory.
+pub fn default_backup_dir(db: &Path) -> PathBuf {
+    match db.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent.join(BACKUP_DIR_NAME),
+        _ => PathBuf::from(BACKUP_DIR_NAME),
+    }
+}
+
+/// `<db>` with `suffix` appended to the whole file name, not to its
+/// extension: `shop.db` becomes `shop.db.restoring.tmp`, which no backup
+/// name pattern matches and no `db::open` will ever be handed.
+fn sibling(db: &Path, suffix: &str) -> PathBuf {
+    let mut name = db.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+fn remove_if_present(path: &Path) -> Result<(), std::io::Error> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+/// The sidecars belong to the file that is going, and SQLite would replay a
+/// leftover `-wal` into whatever file it finds under that name. They go
+/// before the rename, and a rename inside one folder is atomic.
+fn swap_in(staged: &Path, db: &Path) -> Result<(), dzpos_core::error::CoreError> {
+    for sidecar in ["-wal", "-shm", "-journal"] {
+        remove_if_present(&sibling(db, sidecar))?;
+    }
+    std::fs::rename(staged, db)?;
+    Ok(())
+}
+
+fn core_io(e: std::io::Error) -> ApiError {
+    ApiError::from(CoreError::from(e))
 }
 
 /// The origins the product's own screens are served from: the browser
@@ -127,6 +274,9 @@ pub fn router_with_origin(
         get(routes::health).fallback(routes::method_not_allowed),
     );
     let guarded = Router::new()
+        .route("/backups", get(routes::backups::list))
+        .route("/backups", post(routes::backups::create))
+        .route("/backups/{name}/restore", post(routes::backups::restore))
         .route("/categories", get(routes::categories::list))
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))

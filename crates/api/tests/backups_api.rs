@@ -1,0 +1,293 @@
+// Tests may panic; the deny is for shipped code.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
+//! The backup routes and the restore that swaps the live file underneath a
+//! running server. In-process router, real temp SQLite file, real copies on
+//! disk: a restore that only passed against a mock would be worthless.
+
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use http_body_util::BodyExt;
+use serde_json::{json, Value};
+use tower::ServiceExt;
+
+const SHOP: i32 = 1;
+const TOKEN: &str = "test-launch-token";
+
+fn token() -> dzpos_api::LaunchToken {
+    dzpos_api::LaunchToken::from_secret(TOKEN).unwrap()
+}
+
+struct Harness {
+    dir: tempfile::TempDir,
+    app: axum::Router,
+}
+
+impl Harness {
+    fn db(&self) -> std::path::PathBuf {
+        self.dir.path().join("t.db")
+    }
+
+    /// The copy taken just before a restore, kept beside the shop file and
+    /// never counted among the thirty.
+    fn safety_copies(&self) -> Vec<std::path::PathBuf> {
+        let mut found: Vec<std::path::PathBuf> = std::fs::read_dir(self.dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("t.db.before-restore-"))
+            })
+            .collect();
+        found.sort();
+        found
+    }
+}
+
+fn harness() -> Harness {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    Harness {
+        dir,
+        app: dzpos_api::router(state, &token()),
+    }
+}
+
+async fn call(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+) -> (StatusCode, Value) {
+    let req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {TOKEN}"));
+    let req = match body {
+        Some(v) => req
+            .header("content-type", "application/json")
+            .body(Body::from(v.to_string()))
+            .unwrap(),
+        None => req.body(Body::empty()).unwrap(),
+    };
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let value = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+    };
+    (status, value)
+}
+
+fn product(name: &str) -> Value {
+    json!({
+        "name": name,
+        "category_id": 1,
+        "unit": "piece",
+        "cost_centimes": 820,
+        "selling_centimes": 920
+    })
+}
+
+async fn product_names(app: &axum::Router) -> Vec<String> {
+    let (status, body) = call(app, "GET", "/products", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    body.as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["name"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn a_fresh_shop_has_no_copies_and_a_post_makes_one() {
+    let h = harness();
+    let (status, body) = call(&h.app, "GET", "/backups", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body, json!([]));
+
+    let (status, made) = call(&h.app, "POST", "/backups", None).await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+    let name = made["name"].as_str().unwrap().to_string();
+    assert!(
+        regex_lite_matches(&name),
+        "{name} is not dzpos-YYYYMMDD-HHMMSS.sqlite"
+    );
+    assert!(made["bytes"].as_i64().unwrap() > 0);
+    assert_eq!(made["taken_at"].as_str().unwrap().len(), 19, "{made}");
+
+    // The folder is beside the shop file, made on demand.
+    let on_disk = h.dir.path().join("backups").join(&name);
+    assert!(on_disk.is_file(), "{on_disk:?} was not written");
+
+    let (_, listed) = call(&h.app, "GET", "/backups", None).await;
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert_eq!(listed[0], made);
+}
+
+#[tokio::test]
+async fn a_restore_puts_the_file_back_and_keeps_what_was_there_in_a_safety_copy() {
+    let h = harness();
+    let (status, _) = call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (_, made) = call(&h.app, "POST", "/backups", None).await;
+    let name = made["name"].as_str().unwrap().to_string();
+
+    // Added after the copy: the restore must lose it, and the safety copy
+    // must be the only place it survives.
+    let (status, _) = call(&h.app, "POST", "/products", Some(product("Huile Elio 5L"))).await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(product_names(&h.app).await.len(), 2);
+
+    let (status, back) = call(&h.app, "POST", &format!("/backups/{name}/restore"), None).await;
+    assert_eq!(status, StatusCode::OK, "{back}");
+    assert_eq!(back["restored_from"], json!(name));
+    assert_eq!(back["products"], json!(1));
+    assert_eq!(back["documents"], Value::Null);
+
+    // The same running server answers from the file it just swapped in.
+    assert_eq!(product_names(&h.app).await, vec!["Semoule 10kg"]);
+
+    let safety = h.safety_copies();
+    assert_eq!(safety.len(), 1, "{safety:?}");
+    let mut kept = dzpos_core::db::open(&safety[0]).unwrap();
+    let names: Vec<String> = dzpos_core::services::products::list(&mut kept, SHOP)
+        .unwrap()
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    // The service lists by name, so the pair reads alphabetically; what
+    // matters is that both are in the copy taken just before the swap.
+    assert_eq!(names, vec!["Huile Elio 5L", "Semoule 10kg"]);
+
+    // The safety copy sits beside the shop file, not in the thirty.
+    let (_, listed) = call(&h.app, "GET", "/backups", None).await;
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+
+    // The staged copy is gone: the rename moved it, it was not left beside
+    // the shop file. (The `-wal` beside the shop file now is the restored
+    // file's own, written when db::open put it back into WAL mode; the old
+    // one going is what the product list above already proves.)
+    assert!(!h.dir.path().join("t.db.restoring.tmp").exists());
+    assert!(h.db().is_file());
+}
+
+#[tokio::test]
+async fn a_name_that_is_not_one_this_app_wrote_is_refused_and_changes_nothing() {
+    let h = harness();
+    call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
+    let (_, made) = call(&h.app, "POST", "/backups", None).await;
+    let good = made["name"].as_str().unwrap().to_string();
+
+    for name in [
+        "..%2F..%2Fetc%2Fpasswd",
+        "..%2Fbackups%2Fdzpos-20260908-093000.sqlite",
+        "%2Fetc%2Fpasswd",
+        "dzpos-20260908-093000.sqlite.bak",
+        "t.db",
+        "dzpos-20261308-093000.sqlite",
+    ] {
+        let (status, body) = call(&h.app, "POST", &format!("/backups/{name}/restore"), None).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{name} -> {body}");
+        assert_eq!(body["error"]["code"], "validation", "{name} -> {body}");
+        assert!(
+            !body["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains(h.dir.path().to_str().unwrap()),
+            "a path reached the wire: {body}"
+        );
+    }
+
+    // A well-formed name with no copy behind it is refused the same way.
+    let (status, body) = call(
+        &h.app,
+        "POST",
+        "/backups/dzpos-20200101-000000.sqlite/restore",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+
+    // Nothing was restored, nothing was copied aside.
+    assert_eq!(product_names(&h.app).await, vec!["Semoule 10kg"]);
+    assert!(h.safety_copies().is_empty());
+    let (_, listed) = call(&h.app, "GET", "/backups", None).await;
+    assert_eq!(listed[0]["name"], json!(good));
+}
+
+#[tokio::test]
+async fn a_copy_a_newer_version_wrote_is_refused_and_the_live_file_is_untouched() {
+    use diesel::prelude::*;
+
+    let h = harness();
+    call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
+    let (_, made) = call(&h.app, "POST", "/backups", None).await;
+    let name = made["name"].as_str().unwrap().to_string();
+
+    let copy_path = h.dir.path().join("backups").join(&name);
+    let mut copy = dzpos_core::db::open(&copy_path).unwrap();
+    diesel::sql_query("INSERT INTO __diesel_schema_migrations (version) VALUES ('29990101000000')")
+        .execute(&mut copy)
+        .unwrap();
+    drop(copy);
+
+    call(&h.app, "POST", "/products", Some(product("Huile Elio 5L"))).await;
+    let (status, body) = call(&h.app, "POST", &format!("/backups/{name}/restore"), None).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["error"]["code"], "validation");
+
+    // The refusal happened before anything was moved.
+    assert_eq!(product_names(&h.app).await.len(), 2);
+    assert!(h.safety_copies().is_empty());
+}
+
+#[tokio::test]
+async fn the_backup_routes_need_the_token_and_refuse_other_methods() {
+    let h = harness();
+    for (method, uri) in [
+        ("GET", "/backups"),
+        ("POST", "/backups"),
+        ("POST", "/backups/dzpos-20260908-093000.sqlite/restore"),
+    ] {
+        let req = Request::builder()
+            .method(method)
+            .uri(uri)
+            .body(Body::empty())
+            .unwrap();
+        let res = h.app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{method} {uri}");
+    }
+    for (method, uri) in [
+        ("PUT", "/backups"),
+        ("DELETE", "/backups"),
+        ("GET", "/backups/dzpos-20260908-093000.sqlite/restore"),
+    ] {
+        let (status, body) = call(&h.app, method, uri, None).await;
+        assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED, "{method} {uri}");
+        assert_eq!(body["error"]["code"], "method_not_allowed");
+    }
+}
+
+/// `dzpos-` + 8 digits + `-` + 6 digits + `.sqlite`, without pulling a regex
+/// crate into the API's dev dependencies for one assertion.
+fn regex_lite_matches(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("dzpos-") else {
+        return false;
+    };
+    let Some(stamp) = rest.strip_suffix(".sqlite") else {
+        return false;
+    };
+    let Some((day, time)) = stamp.split_once('-') else {
+        return false;
+    };
+    day.len() == 8
+        && time.len() == 6
+        && day.chars().all(|c| c.is_ascii_digit())
+        && time.chars().all(|c| c.is_ascii_digit())
+}

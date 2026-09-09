@@ -6,11 +6,13 @@
 // half-typed object into the UI.
 
 import type { ApiErrorDto } from "./generated/ApiErrorDto";
+import type { BackupDto } from "./generated/BackupDto";
 import type { CategoryDto } from "./generated/CategoryDto";
 import type { HealthDto } from "./generated/HealthDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { ProductDto } from "./generated/ProductDto";
 import type { RegimeChangeDto } from "./generated/RegimeChangeDto";
+import type { RestoreDto } from "./generated/RestoreDto";
 import type { DatedRegimeDto } from "./generated/DatedRegimeDto";
 import type { RegimeDto } from "./generated/RegimeDto";
 import type { SettingsDto } from "./generated/SettingsDto";
@@ -145,6 +147,30 @@ export function isSettings(value: unknown): value is SettingsDto {
   );
 }
 
+export function isBackup(value: unknown): value is BackupDto {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.taken_at === "string" &&
+    // A file size, so an integer: a fractional byte count means the server
+    // is not the one this client was generated against.
+    isExactInteger(value.bytes)
+  );
+}
+
+function isBackupList(value: unknown): value is BackupDto[] {
+  return Array.isArray(value) && value.every(isBackup);
+}
+
+export function isRestore(value: unknown): value is RestoreDto {
+  return (
+    isRecord(value) &&
+    typeof value.restored_from === "string" &&
+    isExactInteger(value.products) &&
+    isNullableExactInteger(value.documents)
+  );
+}
+
 async function unwrap(res: Response): Promise<unknown> {
   const text = await res.text();
   let body: unknown = null;
@@ -247,6 +273,26 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         body: JSON.stringify(input),
       });
       return narrow(body, isSettings, "settings");
+    },
+
+    /** The copies of the shop file the server keeps, newest first. */
+    async listBackups(): Promise<BackupDto[]> {
+      return narrow(await send("/backups"), isBackupList, "backup list");
+    },
+
+    /** One more copy, taken now. The server names it and prunes the folder. */
+    async createBackup(): Promise<BackupDto> {
+      return narrow(await send("/backups", { method: "POST" }), isBackup, "backup");
+    },
+
+    /** Puts the shop file back from a copy. The name is the server's own, and
+     * it is encoded rather than spliced, so a name that somehow carried a
+     * separator reaches the server as one segment and is refused there. */
+    async restoreBackup(name: string): Promise<RestoreDto> {
+      const body = await send(`/backups/${encodeURIComponent(name)}/restore`, {
+        method: "POST",
+      });
+      return narrow(body, isRestore, "restore answer");
     },
 
     async createProduct(input: NewProductDto): Promise<ProductDto> {
