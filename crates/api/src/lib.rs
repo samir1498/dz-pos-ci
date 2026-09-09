@@ -447,6 +447,10 @@ pub fn router_with_origin(
         .route("/customers/{id}/payments", get(routes::customers::payments))
         .route("/customers/{id}/payments", post(routes::customers::pay))
         .route(
+            "/customers/{id}/statement",
+            get(routes::customers::statement),
+        )
+        .route(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),
         )

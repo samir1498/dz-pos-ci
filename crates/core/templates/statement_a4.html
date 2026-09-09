@@ -1,0 +1,81 @@
+{#- The A4 statement of account, on the facture's pattern: one standalone
+file, no external stylesheet and no image, so the bytes this renders are the
+bytes a browser prints through the OS dialog and the bytes a server hands
+over (features.md §4). The template holds no rule: every string, every
+amount, every "only if present" and the sheet size are decided in
+crates/core/src/print/statement.rs and arrive here already made.
+
+The running balance is the core's. Nothing on this page adds a column up. -#}
+<!doctype html>
+<html lang="{{ lang_tag }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+{%- if arabic_unreviewed %}
+<!-- The Arabic wording of this template is unreviewed by a native speaker, like words_ar (research R6). -->
+{%- endif %}
+<style>
+@page { size: {{ paper_size }}; margin: 12mm }
+body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", Arial, sans-serif }
+.doc { max-inline-size: 186mm; margin: 0 auto }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; border-block-end: 2px solid #000; padding-block-end: 3mm }
+.head h1 { font-size: 20px; margin: 0 0 1mm }
+.num { white-space: nowrap }
+.party { border: 1px solid #000; padding: 3mm; margin-block-start: 6mm }
+.party h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 2mm }
+.party .who { font-weight: 700 }
+.label { color: #333 }
+.lines { display: flex; margin-block-start: 6mm }
+.lines table { flex: 1 1 auto }
+table { border-collapse: collapse }
+th, td { border: 1px solid #000; padding: 1.6mm 2mm; text-align: start; vertical-align: top }
+th { background: #eee; font-weight: 700 }
+td.n, th.n { text-align: end; white-space: nowrap }
+tr.edge td { font-weight: 700; background: #f6f6f6 }
+.none { margin-block-start: 6mm; border: 1px dashed #000; padding: 3mm }
+.words { margin-block-start: 5mm; border: 1px solid #000; padding: 3mm }
+.cur { margin-inline-start: .4em }
+</style>
+</head>
+<body>
+<article class="doc">
+<header class="head">
+<div>
+<h1>{{ title }}</h1>
+<div><span class="label">{{ period_label }}</span> <span class="num">{{ period }}</span></div>
+</div>
+</header>
+<section class="party">
+<h2>{{ customer.title }}</h2>
+<div class="who">{{ customer.name }}</div>
+{%- if let Some(address) = customer.address %}
+<div>{{ address }}</div>
+{%- endif %}
+{%- if let Some(phone) = customer.phone %}
+<div class="num">{{ phone }}</div>
+{%- endif %}
+{%- for id in customer.ids %}
+<div><span class="label">{{ id.label }}</span> <span class="num">{{ id.value }}</span></div>
+{%- endfor %}
+</section>
+<div class="lines">
+<table>
+<thead>
+<tr><th>{{ date_label }}</th><th>{{ movement_label }}</th><th>{{ document_label }}</th><th class="n">{{ debit_label }}</th><th class="n">{{ credit_label }}</th><th class="n">{{ balance_label }}</th></tr>
+</thead>
+<tbody>
+<tr class="edge"><td class="num">{{ from }}</td><td colspan="2">{{ opening_label }}</td><td class="n"></td><td class="n"></td><td class="n"><span class="amount amount-opening">{{ opening }}</span></td></tr>
+{%- for row in movements %}
+<tr><td class="num">{{ row.date }}</td><td>{{ row.kind }}</td><td class="num">{% if let Some(document) = row.document %}{{ document }}{% endif %}</td><td class="n">{% if let Some(debit) = row.debit %}<span class="amount amount-debit">{{ debit }}</span>{% endif %}</td><td class="n">{% if let Some(credit) = row.credit %}<span class="amount amount-credit">{{ credit }}</span>{% endif %}</td><td class="n"><span class="amount amount-running">{{ row.balance }}</span></td></tr>
+{%- endfor %}
+<tr class="edge"><td class="num">{{ to }}</td><td colspan="2">{{ closing_label }}</td><td class="n"></td><td class="n"></td><td class="n"><span class="amount amount-closing">{{ closing }}</span><span class="cur">{{ currency }}</span></td></tr>
+</tbody>
+</table>
+</div>
+{%- if movements.is_empty() %}
+<p class="none">{{ no_movement }}</p>
+{%- endif %}
+<p class="words">{{ in_words_label }} <strong class="in-words">{{ in_words }}</strong>{% if let Some(in_favour) = in_favour %} <span class="in-favour">{{ in_favour }}</span>{% endif %}</p>
+</article>
+</body>
+</html>

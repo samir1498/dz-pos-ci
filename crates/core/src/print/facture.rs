@@ -45,7 +45,7 @@ impl Paper {
     /// The value of the CSS `size` descriptor. The two named page sizes are
     /// CSS's own, so the browser and the print dialog agree on the sheet
     /// without the template naming millimetres.
-    const fn css_size(self) -> &'static str {
+    pub(crate) const fn css_size(self) -> &'static str {
         match self {
             Paper::A4 => "A4",
             Paper::A5 => "A5",

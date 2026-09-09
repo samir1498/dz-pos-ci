@@ -389,6 +389,11 @@ async fn another_shops_customer_is_not_found_on_every_route() {
         ),
         ("GET", format!("/customers/{id}/payments"), None),
         (
+            "GET",
+            format!("/customers/{id}/statement?from=2026-01-01&to=2026-09-30&lang=fr"),
+            None,
+        ),
+        (
             "POST",
             format!("/customers/{id}/payments"),
             Some(json!({ "amount_centimes": 1_000, "payment_mode": "cash", "note": null })),
@@ -428,6 +433,7 @@ async fn every_customer_route_needs_the_launch_token() {
         ("POST", "/customers/1/adjustments"),
         ("GET", "/customers/1/payments"),
         ("POST", "/customers/1/payments"),
+        ("GET", "/customers/1/statement?from=2026-01-01&to=2026-09-30&lang=fr"),
     ] {
         let req = Request::builder()
             .method(method)
@@ -758,4 +764,87 @@ async fn a_payment_of_nothing_and_a_mode_that_is_not_one_are_both_refused() {
 
     let (_, payments) = call(&h.app, "GET", &format!("/customers/{id}/payments"), None).await;
     assert_eq!(payments["payments"].as_array().map(Vec::len), Some(0));
+}
+
+/// The statement route answers a page, not JSON, so it is called on its own
+/// rather than through `call`.
+async fn page(app: &axum::Router, uri: &str) -> (StatusCode, String) {
+    let req = Request::builder()
+        .method("GET")
+        .uri(uri)
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (status, String::from_utf8(bytes.to_vec()).unwrap())
+}
+
+#[tokio::test]
+async fn the_statement_prints_the_range_with_the_closing_balance_in_words() {
+    let h = harness();
+    let mut with_debt = draft("Entreprise Benali");
+    with_debt["opening_debt_centimes"] = json!(150_000);
+    let made = create(&h.app, with_debt).await;
+    let id = i32::try_from(id_of(&made)).unwrap();
+    a_facture_on_credit(&h.path, id, 200_000, 5);
+    let (status, answer) = call(
+        &h.app,
+        "POST",
+        &format!("/customers/{id}/payments"),
+        Some(json!({ "amount_centimes": 50_000, "payment_mode": "cash", "note": null })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{answer}");
+
+    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let (status, html) = page(
+        &h.app,
+        &format!("/customers/{id}/statement?from=2026-01-01&to={today}&lang=fr"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK, "{html}");
+    assert!(html.contains("RELEVÉ DE COMPTE"), "{html}");
+    assert!(html.contains("Entreprise Benali"));
+    // 3 000,00 owed: 1 500,00 carried over, 2 000,00 on the facture, 500,00
+    // paid off it.
+    assert!(
+        html.contains("amount-closing\">3\u{202f}000,00"),
+        "the closing balance is not on the page"
+    );
+    assert!(html.contains("trois-mille dinars"), "the words are missing");
+    // Every movement of the range, and the facture named under the number a
+    // customer quotes.
+    assert!(html.contains("FA-000001"));
+    assert!(html.contains("Paiement"));
+}
+
+#[tokio::test]
+async fn a_statement_range_that_is_not_two_days_the_right_way_round_is_422() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = id_of(&made);
+
+    for (query, field) in [
+        ("from=2026-1-1&to=2026-09-30&lang=fr", "from"),
+        ("from=2026-01-01&to=2026-09-31&lang=fr", "to"),
+        ("from=2026-09-30&to=2026-09-01&lang=fr", "to"),
+    ] {
+        let (status, html) = page(&h.app, &format!("/customers/{id}/statement?{query}")).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{query}: {html}");
+        assert!(html.contains("\"validation\""), "{query}: {html}");
+        assert!(html.contains(field), "{query}: {html}");
+    }
+
+    // A language the app does not print is the caller's mistake and leaves in
+    // the same envelope.
+    let (status, html) = page(
+        &h.app,
+        &format!("/customers/{id}/statement?from=2026-01-01&to=2026-09-30&lang=de"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{html}");
+    assert!(html.contains("\"bad_request\""), "{html}");
 }

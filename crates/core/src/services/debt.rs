@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
@@ -23,6 +23,7 @@ use crate::models::debt::{DebtAllocationRowWrite, DebtRowWrite};
 use crate::money::Money;
 use crate::repos::customers as customers_repo;
 use crate::repos::debt as repo;
+use crate::models::document::DocumentKind;
 use crate::repos::documents as documents_repo;
 use crate::services::{audit, optional_field};
 
@@ -109,6 +110,106 @@ pub fn statement(
     Ok(Statement {
         balance: running,
         lines,
+    })
+}
+
+/// The document a movement cites, as a statement prints it: the kind decides
+/// the printed prefix and the number is the one the series handed out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DocumentRef {
+    pub kind: DocumentKind,
+    pub number: i64,
+}
+
+/// One movement of a statement: the row, the balance as of it, and the
+/// document it cites when it cites one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatementEntry {
+    pub entry: DebtEntry,
+    pub balance_after: Money,
+    pub document: Option<DocumentRef>,
+}
+
+/// A customer's account over a range of days: what they owed on the morning
+/// of `from`, every movement between the two days, and what they owed on the
+/// evening of `to`.
+///
+/// The opening balance is the running balance of the newest movement before
+/// the range, and the closing balance is the newest one inside it, so neither
+/// is a second sum of the ledger: they are read off the same running column
+/// `statement` builds, and a page printing them can add nothing up.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RangedStatement {
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+    pub opening: Money,
+    /// Oldest first, which is the order a statement is read in.
+    pub entries: Vec<StatementEntry>,
+    pub closing: Money,
+}
+
+/// The customer's account between two days, both included (features.md §2).
+///
+/// `to` is inclusive to the end of its day: a range asked for as one day is
+/// that day's movements, and a payment taken at 16:30 falls inside a range
+/// that ends on the day it was taken.
+pub fn statement_between(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Result<RangedStatement, CoreError> {
+    if from > to {
+        return Err(CoreError::validation(
+            "to",
+            "a range ends on the day it starts or later",
+        ));
+    }
+    let whole = statement(conn, shop_id, customer_id)?;
+    let mut opening = Money::ZERO;
+    let mut inside = Vec::new();
+    // `statement` answers newest first; a statement is read the other way.
+    for line in whole.lines.into_iter().rev() {
+        let day = line.entry.created_at.date();
+        if day < from {
+            // The last one before the range is what the customer owed when it
+            // opened, so the column is followed rather than summed again.
+            opening = line.balance_after;
+        } else if day <= to {
+            inside.push(line);
+        }
+    }
+    let closing = inside
+        .last()
+        .map_or(opening, |line: &LedgerLine| line.balance_after);
+    let cited: Vec<i32> = inside
+        .iter()
+        .filter_map(|line| line.entry.document_id)
+        .collect();
+    let named = documents_repo::kinds_and_numbers(conn, shop_id, &cited)?;
+    let entries = inside
+        .into_iter()
+        .map(|line| StatementEntry {
+            document: line.entry.document_id.and_then(|id| {
+                named
+                    .iter()
+                    .find(|(found, _, _)| *found == id)
+                    .map(|(_, kind, number)| DocumentRef {
+                        kind: *kind,
+                        number: *number,
+                    })
+            }),
+            entry: line.entry,
+            balance_after: line.balance_after,
+        })
+        .collect();
+    Ok(RangedStatement {
+        from,
+        to,
+        opening,
+        entries,
+        closing,
     })
 }
 

@@ -20,7 +20,7 @@ use dzpos_core::print::strings::{text, Key};
 fn the_dictionary_lists_every_key_once() {
     assert_eq!(
         Key::ALL.len(),
-        38,
+        55,
         "a key was added to the enum, not to ALL"
     );
     let listed: HashSet<Key> = Key::ALL.into_iter().collect();

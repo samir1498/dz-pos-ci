@@ -1205,3 +1205,131 @@ fn the_payments_of_a_customer_read_back_newest_first_with_what_each_one_settled(
         [first, second]
     );
 }
+
+#[test]
+fn a_statement_opens_at_what_was_owed_before_the_range_and_closes_at_the_last_movement_in_it() {
+    let (_dir, mut conn) = open_temp();
+    let customer = customers::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        fiche("Entreprise Benali"),
+        Some(Money::centimes(150_000)),
+    )
+    .unwrap()
+    .id;
+    // Three movements dated by hand: one before the range, one inside it and
+    // one after. A range that took the wrong side of either day would read
+    // the wrong opening or the wrong closing balance.
+    let document = a_document_on_credit(&mut conn, customer, 200_000, 5);
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(50_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(100_000),
+        PaymentMethod::Card,
+        None,
+        at(25),
+    )
+    .unwrap();
+
+    let range = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2026, 9, 10).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 9, 20).unwrap(),
+    )
+    .unwrap();
+
+    // The opening balance is the running balance of the newest movement
+    // before the range: the opening row and the facture, both dated earlier.
+    assert_eq!(range.opening, Money::centimes(350_000));
+    assert_eq!(range.entries.len(), 1, "the range took a movement outside it");
+    assert_eq!(range.entries[0].entry.kind, DebtKind::Payment);
+    assert_eq!(range.entries[0].balance_after, Money::centimes(300_000));
+    assert_eq!(range.closing, Money::centimes(300_000));
+    // A payment cites no document; the sale does, and it is outside this
+    // range, so nothing here names one.
+    assert_eq!(range.entries[0].document, None);
+
+    // The same range widened to the sale picks up the document the movement
+    // cites, under the kind and the number a customer quotes.
+    let wider = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2026, 9, 5).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 9, 20).unwrap(),
+    )
+    .unwrap();
+    let sale = wider
+        .entries
+        .iter()
+        .find(|line| line.entry.kind == DebtKind::Sale)
+        .expect("the widened range dropped the sale");
+    assert_eq!(sale.entry.document_id, Some(document));
+    assert_eq!(
+        sale.document.map(|d| d.kind),
+        Some(dzpos_core::services::documents::DocumentKind::Facture)
+    );
+}
+
+#[test]
+fn a_range_that_ends_before_it_starts_is_refused() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+
+    let refused = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2026, 9, 20).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 9, 10).unwrap(),
+    )
+    .unwrap_err();
+
+    assert!(
+        matches!(refused, CoreError::Validation { ref field, .. } if field == "to"),
+        "{refused:?}"
+    );
+}
+
+#[test]
+fn a_range_with_nothing_in_it_closes_where_it_opened() {
+    let (_dir, mut conn) = open_temp();
+    let customer = customers::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        fiche("Entreprise Benali"),
+        Some(Money::centimes(150_000)),
+    )
+    .unwrap()
+    .id;
+
+    let range = debt::statement_between(
+        &mut conn,
+        SHOP,
+        customer,
+        NaiveDate::from_ymd_opt(2027, 1, 1).unwrap(),
+        NaiveDate::from_ymd_opt(2027, 1, 31).unwrap(),
+    )
+    .unwrap();
+
+    assert!(range.entries.is_empty());
+    assert_eq!(range.opening, Money::centimes(150_000));
+    assert_eq!(range.closing, range.opening);
+}

@@ -10,14 +10,17 @@ use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
+use axum::response::Html;
 use dzpos_core::db::Conn;
+use dzpos_core::lang::Lang;
+use dzpos_core::print::{render_statement, Paper};
 use dzpos_core::error::CoreError;
 use dzpos_core::services::customers::NewCustomer;
 use dzpos_core::services::{clock, customers as service, debt};
 use serde::Deserialize;
 
 use crate::dto::{
-    money_field, AdjustmentDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto,
+    money_field, parse_day, AdjustmentDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto,
     CustomerWriteDto, NewCustomerDto, NewPaymentDto, PaymentDto,
 };
 use crate::error::ApiError;
@@ -183,6 +186,46 @@ pub async fn payments(
         .blocking(move |c| payments_envelope(c, shop, id))
         .await?;
     Ok(Json(found))
+}
+
+/// The days a statement covers and the language it prints in. Named by the
+/// caller on every call rather than read from a setting, like the ticket's:
+/// a document prints in the language the app is being used in, and the screen
+/// is the only place that knows which that is (features.md §4).
+#[derive(Deserialize)]
+pub struct StatementQuery {
+    from: String,
+    to: String,
+    lang: Lang,
+}
+
+/// The statement of account for a range of days, as the HTML page the core
+/// rendered (features.md §2 and §4). The core renders it, so the desktop and
+/// a server with no screen hand over the same bytes.
+pub async fn statement(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    range: Result<Query<StatementQuery>, QueryRejection>,
+) -> Result<Html<String>, ApiError> {
+    let id = path_id(id)?;
+    let Query(StatementQuery { from, to, lang }) = range.map_err(|_| {
+        ApiError::BadRequest("from and to are days written YYYY-MM-DD and lang is fr, en or ar".into())
+    })?;
+    let from = parse_day("from", &from)?;
+    let to = parse_day("to", &to)?;
+    let shop = state.shop_id;
+    let page = state
+        .blocking(move |c| {
+            // The fiche as it stands, not as it stood: a statement is a page
+            // about the account, and the address it is posted to is the one
+            // on the fiche today. The buyer block a facture snapshotted is
+            // the other question, and the facture answers it.
+            let customer = service::get(c, shop, id)?;
+            let statement = debt::statement_between(c, shop, id, from, to)?;
+            render_statement(&customer, &statement, lang, Paper::A4)
+        })
+        .await?;
+    Ok(Html(page))
 }
 
 fn payments_envelope(
