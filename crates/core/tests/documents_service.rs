@@ -461,6 +461,8 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             global_discount: Money::centimes(1_000),
             payment_mode: PaymentMode::Cash,
             tendered: Some(Money::centimes(100_000)),
+            customer_id: None,
+            override_credit: false,
             issued_at: Some(at(9, 10)),
         },
     )
@@ -475,10 +477,13 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             global_discount: Money::ZERO,
             payment_mode: PaymentMode::Card,
             tendered: None,
+            customer_id: None,
+            override_credit: false,
             issued_at: Some(at(9, 11)),
         },
     )
-    .unwrap();
+    .unwrap()
+    .document;
     // Réel at 0%: one recap row, a base equal to the subtotal and an amount of
     // zero. It is the only document whose recap the tva_centimes disjunct
     // cannot speak for, so it is what proves the base-sum disjunct on its own.
@@ -492,10 +497,13 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             global_discount: Money::ZERO,
             payment_mode: PaymentMode::Cash,
             tendered: Some(Money::centimes(100_000)),
+            customer_id: None,
+            override_credit: false,
             issued_at: Some(at(9, 12)),
         },
     )
-    .unwrap();
+    .unwrap()
+    .document;
     // Under the IFU: no recap row at all, and the stamp still applies.
     settings::set_regime(&mut conn, SHOP, OWNER, Regime::Ifu, at(9, 13)).unwrap();
     let ifu = sales::issue(
@@ -507,10 +515,13 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             global_discount: Money::centimes(500),
             payment_mode: PaymentMode::Cash,
             tendered: Some(Money::centimes(100_000)),
+            customer_id: None,
+            override_credit: false,
             issued_at: Some(at(9, 14)),
         },
     )
-    .unwrap();
+    .unwrap()
+    .document;
 
     assert_eq!(
         totals_that_disagree_with_their_lines(&mut conn),

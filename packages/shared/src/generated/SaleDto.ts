@@ -3,6 +3,7 @@ import type { DocumentKindDto } from "./DocumentKindDto";
 import type { DocumentStatusDto } from "./DocumentStatusDto";
 import type { PaymentModeDto } from "./PaymentModeDto";
 import type { RegimeDto } from "./RegimeDto";
+import type { SaleBalanceDto } from "./SaleBalanceDto";
 import type { SaleLineDto } from "./SaleLineDto";
 import type { SaleTotalsDto } from "./SaleTotalsDto";
 import type { SaleTvaDto } from "./SaleTvaDto";
@@ -16,4 +17,11 @@ export type SaleDto = { id: number, shop_id: number, kind: DocumentKindDto, seri
 /**
  * `YYYY-MM-DD HH:MM:SS` on the shop's calendar (core, services::clock).
  */
-issued_at: string, user_id: number, regime: RegimeDto, payment_mode: PaymentModeDto, seller: StoreDto, customer_id: number | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, tendered_centimes: number | null, change_centimes: number | null, status: DocumentStatusDto, lines: Array<SaleLineDto>, };
+issued_at: string, user_id: number, regime: RegimeDto, payment_mode: PaymentModeDto, seller: StoreDto, customer_id: number | null, balance: SaleBalanceDto | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, tendered_centimes: number | null, change_centimes: number | null, status: DocumentStatusDto, lines: Array<SaleLineDto>, 
+/**
+ * What the till should say while still handing over the ticket:
+ * `near_limit` when the sale took the customer to their warn threshold,
+ * null otherwise. A read of a stored document carries none: a warning
+ * is about the moment the sale was rung up, not about the paper.
+ */
+warning: string | null, };

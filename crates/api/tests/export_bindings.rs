@@ -14,11 +14,12 @@ use dzpos_api::dto::{
     CustomerDto, CustomerLedgerDto, CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto,
     DocumentKindDto, DocumentStatusDto, HealthDto, NewCustomerDto, NewProductDto, NewSaleDto,
     NewSaleLineDto, PartyKindDto, PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto,
-    RestoreDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto, UnitDto,
+    RestoreDto, SaleBalanceDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto,
+    UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 32] = [
+const FILES: [&str; 33] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -40,6 +41,7 @@ const FILES: [&str; 32] = [
     "SaleLineDto.ts",
     "SaleTvaDto.ts",
     "SaleTotalsDto.ts",
+    "SaleBalanceDto.ts",
     "SaleDto.ts",
     "NewSaleLineDto.ts",
     "NewSaleDto.ts",

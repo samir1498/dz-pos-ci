@@ -78,6 +78,9 @@ pub async fn create(
     let shop = state.shop_id;
     // TODO(M4): the user comes from the request identity, not from the state.
     let user = state.user_id;
+    // The warning the core answered with travels on this one answer only:
+    // it is about the moment the sale was rung up, and a later read of the
+    // same document carries none.
     let made = state
         .blocking(move |c| sales::issue(c, shop, user, new))
         .await?;

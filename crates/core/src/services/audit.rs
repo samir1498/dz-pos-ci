@@ -21,6 +21,11 @@ pub const ACTION_SET_REGIME: &str = "set_regime";
 /// entry carries the balance before and after, so the log reads as the
 /// change it was without anyone summing the ledger again.
 pub const ACTION_ADJUST_DEBT: &str = "adjust_debt";
+/// A credit sale taken past the customer's credit limit on purpose. The
+/// entry carries the balance and the limit the rule refused on, and the
+/// document the decision produced, so the log reads as the decision it was.
+/// Until M4 there are no roles and anyone may take it (features.md §1).
+pub const ACTION_CREDIT_OVERRIDE: &str = "sale.credit_override";
 
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.

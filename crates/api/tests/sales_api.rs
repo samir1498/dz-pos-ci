@@ -266,7 +266,7 @@ async fn an_inactive_product_is_422_with_the_validation_code() {
 }
 
 #[tokio::test]
-async fn a_credit_sale_is_422_until_customers_exist() {
+async fn a_credit_sale_with_no_customer_is_422_on_the_customer_field() {
     let (_dir, app) = app();
     let p = product(&app, "Sucre", 1_000, 1900).await;
     let (status, body) = call(
@@ -391,4 +391,164 @@ async fn a_method_the_route_does_not_take_answers_405_in_the_envelope() {
     let (status, body) = call(&app, "DELETE", "/sales", None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
     assert_eq!(code(&body), "method_not_allowed");
+}
+
+/// A fiche through the API, so the test never reaches past the routes.
+async fn customer(
+    app: &axum::Router,
+    name: &str,
+    credit_limit: Option<i64>,
+    warn_threshold: Option<i64>,
+) -> i64 {
+    let (status, body) = call(
+        app,
+        "POST",
+        "/customers",
+        Some(json!({
+            "name": name,
+            "party_kind": "company",
+            "phone": null,
+            "address": null,
+            "rc": null,
+            "nif": null,
+            "nis": null,
+            "ai": null,
+            "credit_limit_centimes": credit_limit,
+            "warn_threshold_centimes": warn_threshold,
+            "notes": null,
+            "active": true,
+            "opening_debt_centimes": null,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    body["id"].as_i64().unwrap()
+}
+
+#[tokio::test]
+async fn a_credit_sale_answers_the_balance_triple_and_the_ledger_carries_the_document() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let c = customer(&app, "Entreprise Amrani", Some(1_000_000), None).await;
+    let (status, sale) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 2_000 }],
+            "payment_mode": "credit",
+            "customer_id": c,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{sale}");
+    assert_eq!(sale["customer_id"].as_i64(), Some(c));
+    assert_eq!(sale["payment_mode"], "credit");
+    assert_eq!(sale["totals"]["stamp_centimes"], 0, "credit pays no stamp");
+    assert_eq!(sale["balance"]["old_balance_centimes"], 0);
+    assert_eq!(sale["balance"]["remaining_debt_centimes"], 200_000);
+    assert_eq!(sale["balance"]["total_debt_centimes"], 200_000);
+    assert_eq!(sale["warning"], Value::Null, "no threshold, no warning");
+
+    let (status, ledger) = call(&app, "GET", &format!("/customers/{c}/ledger"), None).await;
+    assert_eq!(status, StatusCode::OK, "{ledger}");
+    assert_eq!(ledger["balance_centimes"], 200_000);
+    let entry = &ledger["entries"][0];
+    assert_eq!(entry["kind"], "sale");
+    assert_eq!(entry["debit_centimes"], 200_000);
+    assert_eq!(entry["document_id"].as_i64(), sale["id"].as_i64());
+}
+
+#[tokio::test]
+async fn a_sale_past_the_credit_limit_is_409_carrying_both_amounts_and_the_override_takes_it() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let c = customer(&app, "Entreprise Amrani", Some(50_000), None).await;
+    let body = json!({
+        "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+        "payment_mode": "credit",
+        "customer_id": c,
+    });
+    let (status, refused) = call(&app, "POST", "/sales", Some(body.clone())).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{refused}");
+    assert_eq!(code(&refused), "credit_limit");
+    // The two amounts the till has to show. They are on the envelope because
+    // a screen may not re-derive what a customer owes (architecture.md rule 2).
+    assert_eq!(refused["error"]["balance_after_centimes"], 100_000);
+    assert_eq!(refused["error"]["credit_limit_centimes"], 50_000);
+    // Nothing was written, so no number was taken.
+    let (_, sales) = call(&app, "GET", "/sales", None).await;
+    assert_eq!(sales.as_array().map(Vec::len), Some(0));
+
+    let mut passed = body;
+    passed["override"] = json!(true);
+    let (status, sale) = call(&app, "POST", "/sales", Some(passed)).await;
+    assert_eq!(status, StatusCode::CREATED, "{sale}");
+    assert_eq!(sale["number"], 1, "the refusal burned no number");
+    assert_eq!(sale["balance"]["total_debt_centimes"], 100_000);
+}
+
+#[tokio::test]
+async fn a_sale_that_reaches_the_warn_threshold_answers_created_with_the_warning() {
+    let (_dir, app) = app();
+    let p = product(&app, "Sac", 10_000, 0).await;
+    let c = customer(&app, "Entreprise Amrani", Some(100_000), Some(40_000)).await;
+    let (status, sale) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 4_000 }],
+            "payment_mode": "credit",
+            "customer_id": c,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{sale}");
+    assert_eq!(sale["warning"], "near_limit");
+    // Read back, the document carries no warning: it was about the moment
+    // the sale was rung up, not about the paper.
+    let id = sale["id"].as_i64().unwrap();
+    let (_, stored) = call(&app, "GET", &format!("/sales/{id}"), None).await;
+    assert_eq!(stored["warning"], Value::Null);
+}
+
+#[tokio::test]
+async fn a_card_sale_with_a_customer_names_the_buyer_and_writes_no_debt_row() {
+    let (_dir, app) = app();
+    let p = product(&app, "Sac", 10_000, 0).await;
+    // No credit at all, which is not a rule about a sale that is paid for.
+    let c = customer(&app, "Entreprise Amrani", Some(0), Some(0)).await;
+    let (status, sale) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "card",
+            "customer_id": c,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{sale}");
+    assert_eq!(sale["customer_id"].as_i64(), Some(c));
+    assert_eq!(sale["balance"]["remaining_debt_centimes"], 0);
+    assert_eq!(sale["warning"], Value::Null);
+
+    let (_, ledger) = call(&app, "GET", &format!("/customers/{c}/ledger"), None).await;
+    assert_eq!(ledger["balance_centimes"], 0);
+    assert_eq!(ledger["entries"].as_array().map(Vec::len), Some(0));
+}
+
+#[tokio::test]
+async fn an_error_that_is_not_a_credit_refusal_carries_neither_amount() {
+    let (_dir, app) = app();
+    let (status, body) = call(&app, "GET", "/sales/404", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    let payload = body["error"].as_object().unwrap();
+    assert_eq!(
+        payload.keys().collect::<Vec<_>>(),
+        vec!["code", "message"],
+        "every other error kept the two-field envelope"
+    );
 }
