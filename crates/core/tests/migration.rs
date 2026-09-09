@@ -1465,3 +1465,78 @@ fn a_shop_with_a_document_an_audit_entry_or_a_movement_cannot_be_deleted() {
         }
     }
 }
+
+#[test]
+fn the_debt_tables_keep_what_they_name_and_lose_only_what_they_may() {
+    // The four foreign key actions migration 4 chose, each read off the file
+    // rather than off the schema: a customer with a history cannot be
+    // deleted, a payment and a document an allocation settles cannot be
+    // deleted, and a document a movement merely cites goes away leaving the
+    // movement behind, because what the customer owes is not a fact about
+    // the document that caused it.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    diesel::sql_query(insert_with("customers", "name", "'Entreprise Benali'"))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, document_id, kind, \
+         debit_centimes, credit_centimes, user_id) \
+         VALUES (1, 1, 1, 1, 'sale', 100000, 0, 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    assert!(
+        diesel::sql_query("DELETE FROM customers WHERE id = 1")
+            .execute(&mut conn)
+            .is_err(),
+        "a customer with a ledger behind them was deleted"
+    );
+
+    // The sale is deleted; what the customer owes for it is not.
+    diesel::sql_query("DELETE FROM documents WHERE id = 1")
+        .execute(&mut conn)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_ledger WHERE id = 1 AND document_id IS NULL \
+             AND debit_centimes = 100000"
+        ),
+        1,
+        "the movement went with the document instead of losing its id"
+    );
+
+    // A payment and the document it settled, this time with the allocation
+    // that ties them together.
+    diesel::sql_query(insert_with("documents", "number", "2"))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, kind, debit_centimes, \
+         credit_centimes, user_id) VALUES (2, 1, 1, 'payment', 0, 50000, 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_allocations (shop_id, payment_ledger_id, document_id, \
+         amount_centimes) VALUES (1, 2, 2, 50000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    assert!(
+        diesel::sql_query("DELETE FROM debt_ledger WHERE id = 2")
+            .execute(&mut conn)
+            .is_err(),
+        "a payment an allocation settles with was deleted"
+    );
+    assert!(
+        diesel::sql_query("DELETE FROM documents WHERE id = 2")
+            .execute(&mut conn)
+            .is_err(),
+        "a document an allocation settled was deleted"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
