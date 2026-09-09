@@ -7,3 +7,6 @@
 //! diff, never a green run nobody read.
 
 pub mod strings;
+pub mod ticket;
+
+pub use ticket::render_ticket;

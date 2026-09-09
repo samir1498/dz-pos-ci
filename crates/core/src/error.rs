@@ -31,6 +31,12 @@ pub enum CoreError {
     /// wire. The cause stays on the `source` for the server's own log.
     #[error("the shop's files could not complete the operation")]
     Io(#[from] std::io::Error),
+    /// A printed template failed to render. The template and the data it is
+    /// given are both the app's own, so this is a bug in the app and never
+    /// something a caller can correct; the API answers 500 and the message
+    /// stays fixed, like the file one.
+    #[error("the document could not be rendered for printing")]
+    Render(#[from] askama::Error),
 }
 
 impl CoreError {
@@ -43,6 +49,7 @@ impl CoreError {
             CoreError::Exhausted { .. } => "exhausted",
             CoreError::Money(_) => "money",
             CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) => "storage",
+            CoreError::Render(_) => "print",
         }
     }
 

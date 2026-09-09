@@ -134,4 +134,20 @@ impl DocumentKind {
             DocumentKind::BonDeReception => "doc_bon_de_reception",
         }
     }
+
+    /// The printed form of the same series. `series` above is the counter's
+    /// name and a column value; this is what a customer reads back over the
+    /// phone, and a printed number is `{prefix}-{number:06}`: `TK-000123`.
+    /// The two live side by side so a kind can never have one without the
+    /// other.
+    pub const fn number_prefix(self) -> &'static str {
+        match self {
+            DocumentKind::Ticket => "TK",
+            DocumentKind::Facture => "FA",
+            DocumentKind::Proforma => "PF",
+            DocumentKind::BonDeLivraison => "BL",
+            DocumentKind::Avoir => "AV",
+            DocumentKind::BonDeReception => "BR",
+        }
+    }
 }

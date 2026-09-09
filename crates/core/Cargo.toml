@@ -13,6 +13,7 @@ serde = { workspace = true, features = ["derive"] }
 # The audit log stores the row before and after as JSON text (features.md §5).
 serde_json = { workspace = true }
 thiserror = "2"
+askama = { version = "0.16.1", default-features = false, features = ["std", "derive"] }
 
 [dev-dependencies]
 tempfile = "3"
