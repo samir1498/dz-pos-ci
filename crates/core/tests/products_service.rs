@@ -146,6 +146,34 @@ fn a_typed_barcode_sitting_on_the_next_auto_number_does_not_block_it() {
 }
 
 #[test]
+fn each_shop_numbers_its_own_in_store_barcodes() {
+    // The series is per (shop_id, name): shop 2's first blank product gets
+    // shop 2's sequence 1, and shop 1's counter does not move for it. With
+    // the shop hardcoded in the counter repo both shops would share one
+    // series and this goes red.
+    let (_dir, mut conn) = open_temp();
+    seed_second_shop(&mut conn);
+    for name in ["A", "B", "C"] {
+        products::create(&mut conn, SHOP, draft(name)).unwrap();
+    }
+    let mut for_shop_two = draft("Deuxième A");
+    for_shop_two.category_id = None;
+    for_shop_two.rate_bps = Some(Bps::new(900).unwrap());
+    let other = products::create(&mut conn, 2, for_shop_two).unwrap();
+    assert_eq!(
+        other.barcode.as_deref(),
+        Some("2000020000019"),
+        "shop 2 did not start its own series at 1"
+    );
+    let next = products::create(&mut conn, SHOP, draft("D")).unwrap();
+    assert_eq!(
+        next.barcode.as_deref(),
+        Some("2000010000043"),
+        "shop 1's series moved because of shop 2's product"
+    );
+}
+
+#[test]
 fn whitespace_only_barcode_counts_as_blank() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");

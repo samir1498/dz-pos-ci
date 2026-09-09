@@ -117,7 +117,9 @@ fn the_bundled_sqlite_is_new_enough_for_strict_tables() {
 #[test]
 fn every_table_is_strict() {
     // A STRICT table refuses text where an integer belongs, so a price can
-    // never be read back as something other than centimes.
+    // never be read back as something other than centimes. The flag is read
+    // from pragma_table_list: grepping the CREATE text for the word matched
+    // a comment and stayed green with STRICT removed.
     let (_dir, mut conn) = open_temp();
     for table in [
         "shops",
@@ -127,84 +129,132 @@ fn every_table_is_strict() {
         "categories",
         "products",
     ] {
-        let n = count(
+        let strict = count(
             &mut conn,
-            &format!(
-                "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
-                 AND name = '{table}' AND sql LIKE '%STRICT%'"
-            ),
+            &format!("SELECT strict AS n FROM pragma_table_list WHERE name = '{table}'"),
         );
-        assert_eq!(n, 1, "{table} is not STRICT");
+        assert_eq!(strict, 1, "{table} is not STRICT");
     }
 }
 
-/// Inserts a product row with `cost_centimes` set to whatever SQL literal is
-/// given, bypassing every Rust type on the way in.
-fn insert_cost(conn: &mut SqliteConnection, literal: &str) -> QueryResult<usize> {
-    diesel::sql_query(format!(
-        "INSERT INTO products (shop_id, name, unit, cost_centimes, selling_centimes, \
-         qty_on_hand_milli, low_stock_at_milli, rate_bps) \
-         VALUES (1, 'p', 'piece', {literal}, 0, 0, 0, 1900)"
-    ))
-    .execute(conn)
+/// One INSERT per table with every constrained column at a valid value, so a
+/// probe can swap a single column for a bad literal.
+fn insert_with(table: &str, column: &str, literal: &str) -> String {
+    let (columns, values): (&str, &[&str]) = match table {
+        "products" => (
+            "shop_id, name, unit, cost_centimes, selling_centimes, wholesale_centimes, \
+             qty_on_hand_milli, low_stock_at_milli, rate_bps",
+            &["1", "'p'", "'piece'", "0", "0", "0", "0", "0", "1900"],
+        ),
+        "categories" => (
+            "shop_id, name, default_rate_bps",
+            &["1", "'c'", "1900"],
+        ),
+        "counters" => ("shop_id, name, next_value", &["1", "'probe'", "1"]),
+        other => panic!("no insert template for {other}"),
+    };
+    let names: Vec<&str> = columns.split(',').map(str::trim).collect();
+    assert_eq!(names.len(), values.len(), "template for {table} is uneven");
+    let at = names
+        .iter()
+        .position(|n| *n == column)
+        .unwrap_or_else(|| panic!("{table} template has no column {column}"));
+    let mut row: Vec<&str> = values.to_vec();
+    row[at] = literal;
+    format!(
+        "INSERT INTO {table} ({}) VALUES ({})",
+        names.join(", "),
+        row.join(", ")
+    )
+}
+
+fn probe(conn: &mut SqliteConnection, table: &str, column: &str, literal: &str) -> QueryResult<usize> {
+    diesel::sql_query(insert_with(table, column, literal)).execute(conn)
 }
 
 #[test]
-fn a_money_column_refuses_a_real_a_text_and_a_negative() {
-    // Rule 6: money is integer centimes. 19.99 was read back as Money(19).
+fn every_money_and_rate_column_refuses_a_real_a_text_and_a_negative() {
+    // Rule 6: money is integer centimes. 19.99 was once read back as
+    // Money(19). Every constrained column of every table is probed, so a
+    // dropped CHECK on any one of them goes red here.
     let (_dir, mut conn) = open_temp();
-    assert!(
-        insert_cost(&mut conn, "0").is_ok(),
-        "an integer was refused"
-    );
-    assert!(
-        insert_cost(&mut conn, "19.99").is_err(),
-        "a real amount was accepted into a *_centimes column"
-    );
-    assert!(
-        insert_cost(&mut conn, "'19.99'").is_err(),
-        "a text amount was accepted into a *_centimes column"
-    );
-    assert!(
-        insert_cost(&mut conn, "-1").is_err(),
-        "a negative amount was accepted into a *_centimes column"
-    );
+    let money_columns = [
+        ("products", "cost_centimes"),
+        ("products", "selling_centimes"),
+        ("products", "wholesale_centimes"),
+        ("products", "low_stock_at_milli"),
+    ];
+    for (table, column) in money_columns {
+        assert!(
+            probe(&mut conn, table, column, "0").is_ok(),
+            "{table}.{column}: an integer was refused"
+        );
+        for bad in ["19.99", "'19.99'", "'abc'", "-1"] {
+            assert!(
+                probe(&mut conn, table, column, bad).is_err(),
+                "{table}.{column} accepted {bad}"
+            );
+        }
+    }
+    // A stock count may be negative (a sale before the receipt is keyed in);
+    // it still has to be an integer of milli-units.
+    assert!(probe(&mut conn, "products", "qty_on_hand_milli", "-1").is_ok());
+    for bad in ["1.5", "'abc'"] {
+        assert!(
+            probe(&mut conn, "products", "qty_on_hand_milli", bad).is_err(),
+            "products.qty_on_hand_milli accepted {bad}"
+        );
+    }
+    // A counter starts at 1 and only ever goes up.
+    assert!(probe(&mut conn, "counters", "next_value", "1").is_ok());
+    for bad in ["0", "-1", "1.5", "'abc'"] {
+        assert!(
+            probe(&mut conn, "counters", "next_value", bad).is_err(),
+            "counters.next_value accepted {bad}"
+        );
+    }
 }
 
 #[test]
 fn a_rate_column_refuses_anything_outside_zero_to_one_whole() {
     let (_dir, mut conn) = open_temp();
-    let product = |conn: &mut SqliteConnection, rate: &str| {
-        diesel::sql_query(format!(
-            "INSERT INTO products (shop_id, name, unit, cost_centimes, selling_centimes, \
-             qty_on_hand_milli, low_stock_at_milli, rate_bps) \
-             VALUES (1, 'p', 'piece', 0, 0, 0, 0, {rate})"
-        ))
-        .execute(conn)
-    };
-    assert!(product(&mut conn, "0").is_ok());
-    assert!(product(&mut conn, "10000").is_ok());
-    assert!(
-        product(&mut conn, "190000").is_err(),
-        "a rate above one whole was accepted"
-    );
-    assert!(
-        product(&mut conn, "-1").is_err(),
-        "a negative rate was accepted"
-    );
+    for (table, column) in [("products", "rate_bps"), ("categories", "default_rate_bps")] {
+        for fine in ["0", "10000"] {
+            assert!(
+                probe(&mut conn, table, column, fine).is_ok(),
+                "{table}.{column} refused {fine}"
+            );
+            // A category name is unique per shop, so the probe row goes
+            // before the next valid value lands on the same name.
+            diesel::sql_query(format!("DELETE FROM {table} WHERE name IN ('p', 'c')"))
+                .execute(&mut conn)
+                .unwrap();
+        }
+        for bad in ["190000", "10001", "-1", "1.5", "'abc'"] {
+            assert!(
+                probe(&mut conn, table, column, bad).is_err(),
+                "{table}.{column} accepted {bad}"
+            );
+        }
+    }
+}
 
-    let category = |conn: &mut SqliteConnection, rate: &str| {
-        diesel::sql_query(format!(
-            "INSERT INTO categories (shop_id, name, default_rate_bps) \
-             VALUES (1, 'c{rate}', {rate})"
-        ))
-        .execute(conn)
-    };
-    assert!(category(&mut conn, "900").is_ok());
-    assert!(
-        category(&mut conn, "190000").is_err(),
-        "a category default rate above one whole was accepted"
+#[test]
+fn a_lossless_real_is_stored_as_an_integer_by_strict_itself() {
+    // STRICT coerces 19.0 and '19' to integer 19 before any CHECK runs, so
+    // the typeof() clauses in the migration never see a real. They stay as
+    // a statement of intent; this pins what the engine actually does, so a
+    // future comment cannot claim more.
+    let (_dir, mut conn) = open_temp();
+    for literal in ["19.0", "'19'"] {
+        probe(&mut conn, "products", "cost_centimes", literal).unwrap();
+    }
+    let integers = count(
+        &mut conn,
+        "SELECT COUNT(*) AS n FROM products \
+         WHERE cost_centimes = 19 AND typeof(cost_centimes) = 'integer'",
     );
+    assert_eq!(integers, 2, "a lossless real or a numeric text was not coerced to integer");
 }
 
 #[test]

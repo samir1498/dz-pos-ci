@@ -91,9 +91,11 @@ CREATE TABLE products (
     barcode            TEXT,
     category_id        INTEGER REFERENCES categories(id) ON DELETE SET NULL,
     unit               TEXT NOT NULL CHECK (unit IN ('piece', 'kg', 'litre', 'box')),
-    -- typeof() alongside STRICT because STRICT converts a lossless real
-    -- (19.0) to an integer, and a price that arrived as a float is a bug
-    -- upstream even when it converts cleanly.
+    -- typeof() alongside STRICT is a statement of intent, not a second
+    -- guard: STRICT coerces a lossless real (19.0) or a numeric text ('19')
+    -- to the integer before any CHECK runs, so the clause never sees a real
+    -- today. A price that arrived as a float is a bug upstream all the same
+    -- (rule 6); the service layer only ever binds i64.
     cost_centimes      INTEGER NOT NULL
         CHECK (typeof(cost_centimes) = 'integer' AND cost_centimes >= 0),
     -- Under the IFU régime this is the single price the customer pays and
