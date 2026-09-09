@@ -107,6 +107,13 @@ is, and `facture_requires_party_ids` asks a different set of fields of a
 company than of a consumer, so an inference would flip the rule the moment
 somebody clears a field.
 
+The customers screen opens a company fiche with neither RC nor NIF: the
+identifiers are asked for when a facture is issued to it, not to open its
+record. It offers no delete (the ledger holds the fiche); a shop that has
+stopped dealing with somebody clears `active`. The list shows one tag per
+customer, and when two apply the order is over the limit, then no credit at
+all (a zero limit), then the warning threshold.
+
 **Debt ledger.** Append-only per party (customer or supplier): document
 reference, amount owed added, amount paid, running balance. A payment can
 settle several documents oldest-first. The till warns at the threshold and
