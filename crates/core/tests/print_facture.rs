@@ -622,9 +622,17 @@ fn mark_rule(html: &str) -> String {
     rest[..end].to_owned()
 }
 
-/// Everything from the lines table to the end of the words line: the whole
-/// of the money on this page in one string, so two renders can be compared
-/// for it without the comparison naming each amount and forgetting one.
+/// The page from the opening of the lines table to the end of the words
+/// line, in one string: the lines with their quantities, prices and rates,
+/// the totals table down to the net row, and the sentence writing that
+/// figure out. Two renders can be compared for all of it at once, without
+/// the comparison naming each amount and forgetting one.
+///
+/// What it does not cover is the rest of the page: the framed blocks, the
+/// signatures, and the heading above the parties. A test comparing two
+/// renders reads those separately (`a_cancelled_reprint_differs_from_the_
+/// live_facture_in_the_cancellation_only` does it line by line, in both
+/// directions).
 fn money_block(html: &str) -> String {
     let opening = "<div class=\"lines\">";
     let rest = html
@@ -634,6 +642,20 @@ fn money_block(html: &str) -> String {
     let end = rest
         .find("</p>")
         .expect("the words line never closes the money block");
+    rest[..end].to_owned()
+}
+
+/// The heading, as the file carries it: the contents of the `h1`. Read as
+/// the element and not as text anywhere on the page, because a title is a
+/// word the page repeats elsewhere: the Arabic proforma's notice opens with
+/// the very words of its heading, so a page titled "facture" would carry
+/// "فاتورة أولية" all the same.
+fn heading(html: &str) -> String {
+    let rest = html
+        .split_once("<h1>")
+        .unwrap_or_else(|| panic!("the page carries no heading"))
+        .1;
+    let end = rest.find("</h1>").expect("the heading never closes");
     rest[..end].to_owned()
 }
 
@@ -1557,7 +1579,7 @@ fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
     for lang in Lang::ALL {
         let html = fixture.render(lang, Paper::A4);
         assert!(html.contains(text(Key::ProformaNotice, lang)), "{lang:?}");
-        assert!(html.contains(text(Key::Proforma, lang)), "{lang:?}");
+        assert_eq!(heading(&html), text(Key::Proforma, lang), "{lang:?}");
         assert!(html.contains("PF-000005"), "{lang:?}");
         for absent in ["old-balance", "this-document", "total-debt"] {
             assert!(
