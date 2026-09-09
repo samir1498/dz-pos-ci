@@ -92,6 +92,8 @@ CREATE INDEX idx_documents_shop_issued ON documents (shop_id, issued_at);
 -- Last, now that nothing references it.
 DROP TABLE customers;
 
+-- Reports orphans as rows rather than failing, the same as on the way up:
+-- the round trip in crates/core/tests/migration.rs is what fails.
 PRAGMA foreign_key_check;
 
 COMMIT;

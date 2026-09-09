@@ -245,8 +245,11 @@ CREATE TABLE debt_allocations (
 ) STRICT;
 CREATE INDEX idx_debt_allocations_document ON debt_allocations (shop_id, document_id);
 
--- Step 8 of the procedure: with the keys off, nothing above was checked, so
--- the file says for itself that no child row lost its parent.
+-- Step 8 of the procedure: with the keys off, nothing above was checked. The
+-- pragma reports orphans as rows and never fails a statement, so it cannot
+-- stop this migration on its own; it is here for a person running the file by
+-- hand. The guard is crates/core/tests/migration.rs, which queries
+-- pragma_foreign_key_check after migrating and fails if it returns anything.
 PRAGMA foreign_key_check;
 
 COMMIT;

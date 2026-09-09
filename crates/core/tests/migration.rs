@@ -65,6 +65,14 @@ fn on_delete_from_shops(conn: &mut SqliteConnection, table: &str) -> String {
     rows[0].name.clone()
 }
 
+/// Orphans the file carries: rows whose parent is gone. `PRAGMA
+/// foreign_key_check` reports them as rows and never fails a statement, so a
+/// migration that runs with the keys off cannot catch its own; this is where
+/// they are caught.
+fn orphan_rows(conn: &mut SqliteConnection) -> i32 {
+    count(conn, "SELECT COUNT(*) AS n FROM pragma_foreign_key_check")
+}
+
 fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
     let row: Count = diesel::sql_query(sql).get_result(conn).unwrap();
     row.n
@@ -1060,14 +1068,8 @@ fn a_database_at_the_third_migration_takes_the_fourth() {
     conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
         .unwrap();
 
-    // The rebuild ran with the foreign keys off, so the file is only as sound
-    // as what this reports: a row pointing at a parent that is gone shows up
-    // here and nowhere else.
     assert_eq!(
-        count(
-            &mut conn,
-            "SELECT COUNT(*) AS n FROM pragma_foreign_key_check"
-        ),
+        orphan_rows(&mut conn),
         0,
         "the rebuilt file has a row pointing at a parent that is not there"
     );
@@ -1293,6 +1295,11 @@ fn the_migration_reverts_and_reapplies() {
     );
     conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
         .unwrap();
+    assert_eq!(
+        orphan_rows(&mut conn),
+        0,
+        "the reapplied file has a row pointing at a parent that is not there"
+    );
     assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);
     assert_eq!(
         on_delete_from_shops(&mut conn, "stock_movements"),
