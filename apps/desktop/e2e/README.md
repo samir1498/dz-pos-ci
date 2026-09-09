@@ -41,6 +41,13 @@ the box's Tailscale address and port (`http://100.x.y.z:4317`), otherwise
 the app falls back to `http://127.0.0.1:4317` on the laptop and finds
 nothing there.
 
+The API side of the same case is `--allow-origin`: the server names the
+browser origins it answers (the dev Vite port and the Tauri ones), so a
+browser on the laptop is refused until its origin is passed, one value,
+`scheme://host[:port]` with no path: `just api 4317 .dev/dev.db
+http://100.111.55.62:5173`. The e2e config passes its own Vite port the
+same way.
+
 The first run after a clean checkout compiles `dzpos-api`, which takes
 minutes. The API webServer has a ten minute start timeout for that.
 

@@ -49,11 +49,16 @@ gates: fmt clippy types-check test build
 
 # ---- dev ----
 
-# the API against a development database; the browser UI talks to this one
-api port="4317" db=".dev/dev.db":
-    cargo run -p dzpos-api -- --db {{db}} --port {{port}}
+# the API against a development database; the browser UI talks to this one.
+# The API names the origins it answers (the dev Vite port and the Tauri
+# ones); a browser on another machine needs its origin passed here:
+# `just api 4317 .dev/dev.db http://100.111.55.62:5173`
+api port="4317" db=".dev/dev.db" origin="":
+    cargo run -p dzpos-api -- --db {{db}} --port {{port}} {{ if origin != "" { "--allow-origin " + origin } else { "" } }}
 
-# web UI only, reachable from the laptop over Tailscale. Needs `just api`.
+# web UI only, reachable from the laptop over Tailscale. Needs `just api`
+# started with the laptop's origin as its third argument, or the API
+# refuses the browser (CORS names its origins).
 dev:
     pnpm desktop dev --host
 
