@@ -1206,8 +1206,53 @@ fn the_migration_reverts_and_reapplies() {
     // down.sql undoes its own up.sql and nothing else.
     use diesel_migrations::MigrationHarness;
     let (_dir, mut conn) = open_temp();
+    // A revert on an empty file proves the tables move and says nothing about
+    // the rows: the down.sql copies documents back the way the up.sql copied
+    // them across, and a facture with a buyer, a balance and a debt behind it
+    // is what that copy has to carry.
+    diesel::sql_query(insert_with("customers", "name", "'Entreprise Benali'"))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
+         regime, payment_mode, seller_name, customer_id, buyer_name, buyer_party_kind, \
+         buyer_rc, buyer_nif, total_ht_centimes, discount_centimes, subtotal_ht_centimes, \
+         tva_centimes, total_ttc_centimes, stamp_centimes, net_to_pay_centimes, \
+         old_balance_centimes, remaining_debt_centimes, total_debt_centimes) \
+         VALUES (4, 1, 'facture', 'doc_facture', 7, '2026-09-09 10:00:00', 1, 'reel', \
+         'credit', 'Mon magasin', 1, 'Entreprise Benali', 'company', \
+         '16/00-7654321 B 22', '000216007654321', 100000, 0, 100000, 19000, 119000, 0, \
+         119000, 250000, 119000, 369000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (shop_id, customer_id, document_id, kind, debit_centimes, \
+         credit_centimes, user_id) VALUES (1, 1, 4, 'sale', 119000, 0, 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
+    // The facture is still there, keeping its id, its number and the totals a
+    // comptable reads. The buyer block and the balance are gone with the
+    // columns that held them, which is what reverting this migration means.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND series = 'doc_facture' AND net_to_pay_centimes = 119000 \
+             AND customer_id = 1 AND seller_name = 'Mon magasin'"
+        ),
+        1,
+        "the facture did not survive the down copy"
+    );
+    assert_eq!(
+        count(&mut conn, "SELECT COUNT(*) AS n FROM documents"),
+        1,
+        "the down copy left a document behind or wrote one twice"
+    );
     // The fourth one rebuilds documents, so its down has to rebuild it again
     // and put the three tables it added away, without taking documents with
     // them.
