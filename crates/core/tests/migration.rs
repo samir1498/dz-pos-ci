@@ -33,6 +33,21 @@ fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
     (dir, conn)
 }
 
+/// A database carrying the first migration and nothing after it, so a later
+/// migration can be applied to a file that already holds a shop's data.
+fn open_at_first_migration() -> (tempfile::TempDir, SqliteConnection) {
+    use diesel::connection::SimpleConnection;
+    use diesel_migrations::MigrationHarness;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let mut conn = SqliteConnection::establish(&path.to_string_lossy()).unwrap();
+    conn.batch_execute("PRAGMA foreign_keys=ON;").unwrap();
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    let first = pending.first().expect("no migration to apply");
+    conn.run_migration(first).unwrap();
+    (dir, conn)
+}
+
 fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
     let row: Count = diesel::sql_query(sql).get_result(conn).unwrap();
     row.n
@@ -51,11 +66,16 @@ fn migration_creates_every_table() {
     assert_eq!(
         names,
         vec![
+            "audit_log",
             "categories",
             "counters",
+            "document_lines",
+            "document_tva",
+            "documents",
             "products",
             "settings",
             "shops",
+            "stock_movements",
             "users"
         ]
     );
@@ -66,7 +86,18 @@ fn every_table_carries_shop_id() {
     // Rule 3 in docs/architecture.md: `shop_id` from day one, on every table.
     // `shops` carries it as its own primary key.
     let (_dir, mut conn) = open_temp();
-    for table in ["categories", "counters", "products", "settings", "users"] {
+    for table in [
+        "audit_log",
+        "categories",
+        "counters",
+        "document_lines",
+        "document_tva",
+        "documents",
+        "products",
+        "settings",
+        "stock_movements",
+        "users",
+    ] {
         let n = count(
             &mut conn,
             &format!(
@@ -128,6 +159,11 @@ fn every_table_is_strict() {
         "counters",
         "categories",
         "products",
+        "documents",
+        "document_lines",
+        "document_tva",
+        "stock_movements",
+        "audit_log",
     ] {
         let strict = count(
             &mut conn,
@@ -148,6 +184,50 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
         ),
         "categories" => ("shop_id, name, default_rate_bps", &["1", "'c'", "1900"]),
         "counters" => ("shop_id, name, next_value", &["1", "'probe'", "1"]),
+        "documents" => (
+            "shop_id, kind, series, number, issued_at, user_id, regime, payment_mode, \
+             seller_name, total_ht_centimes, discount_centimes, subtotal_ht_centimes, \
+             tva_centimes, total_ttc_centimes, stamp_centimes, net_to_pay_centimes, \
+             tendered_centimes, change_centimes, status",
+            &[
+                "1",
+                "'ticket'",
+                "'doc_ticket'",
+                "1",
+                "'2026-09-09 10:00:00'",
+                "1",
+                "'reel'",
+                "'cash'",
+                "'Mon magasin'",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "'issued'",
+            ],
+        ),
+        "document_lines" => (
+            "shop_id, document_id, position, name, qty_milli, unit_price_centimes, \
+             line_discount_centimes, rate_bps, line_total_centimes",
+            &["1", "1", "0", "'p'", "1000", "0", "0", "1900", "0"],
+        ),
+        "document_tva" => (
+            "shop_id, document_id, rate_bps, base_centimes, amount_centimes",
+            &["1", "1", "1900", "0", "0"],
+        ),
+        "stock_movements" => (
+            "shop_id, product_id, kind, qty_milli, unit_cost_centimes, user_id",
+            &["1", "1", "'sale'", "-1000", "0", "1"],
+        ),
+        "audit_log" => (
+            "shop_id, user_id, action, entity, entity_id",
+            &["1", "1", "'update'", "'product'", "1"],
+        ),
         other => panic!("no insert template for {other}"),
     };
     let names: Vec<&str> = columns.split(',').map(str::trim).collect();
@@ -392,12 +472,230 @@ fn barcode_is_unique_per_shop_and_may_be_null() {
     );
 }
 
+/// The probe rows of the document tables are unique on more than one column,
+/// so a row that landed is cleared before the next valid one is tried.
+fn clear(conn: &mut SqliteConnection, table: &str) {
+    let sql = match table {
+        // The seeded document is what the line, TVA and movement probes point
+        // at, so it stays; the probe rows above it go.
+        "documents" => "DELETE FROM documents WHERE series <> 'seed'".to_string(),
+        other => format!("DELETE FROM {other}"),
+    };
+    diesel::sql_query(sql).execute(conn).unwrap();
+}
+
+/// A product and a document the line and movement probes can point at.
+fn seed_for_probes(conn: &mut SqliteConnection) {
+    diesel::sql_query(
+        "INSERT INTO products (id, shop_id, name, unit, cost_centimes, selling_centimes, \
+         qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+         VALUES (1, 1, 'p', 'piece', 0, 0, 0, 0, 1900)",
+    )
+    .execute(conn)
+    .unwrap();
+    diesel::sql_query(insert_with("documents", "series", "'seed'"))
+        .execute(conn)
+        .unwrap();
+}
+
+#[test]
+fn every_money_and_quantity_column_of_a_document_refuses_a_real_a_text_and_a_negative() {
+    // Same rule 6 probe as the first migration's tables: a wrong centime on a
+    // stored document is a legal problem, and a dropped CHECK goes red here.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    let columns = [
+        ("documents", "total_ht_centimes"),
+        ("documents", "discount_centimes"),
+        ("documents", "subtotal_ht_centimes"),
+        ("documents", "tva_centimes"),
+        ("documents", "total_ttc_centimes"),
+        ("documents", "stamp_centimes"),
+        ("documents", "net_to_pay_centimes"),
+        ("documents", "tendered_centimes"),
+        ("documents", "change_centimes"),
+        ("document_lines", "unit_price_centimes"),
+        ("document_lines", "line_discount_centimes"),
+        ("document_lines", "line_total_centimes"),
+        ("document_tva", "base_centimes"),
+        ("document_tva", "amount_centimes"),
+        ("stock_movements", "unit_cost_centimes"),
+    ];
+    for (table, column) in columns {
+        assert!(
+            probe(&mut conn, table, column, "0").is_ok(),
+            "{table}.{column}: an integer was refused"
+        );
+        clear(&mut conn, table);
+        for bad in ["19.99", "'19.99'", "'abc'", "-1"] {
+            assert!(
+                probe(&mut conn, table, column, bad).is_err(),
+                "{table}.{column} accepted {bad}"
+            );
+        }
+    }
+    // A sold quantity is above zero; a ledger movement is signed, since a sale
+    // takes stock out.
+    for bad in ["0", "-1000", "1.5", "'abc'"] {
+        assert!(
+            probe(&mut conn, "document_lines", "qty_milli", bad).is_err(),
+            "document_lines.qty_milli accepted {bad}"
+        );
+    }
+    assert!(probe(&mut conn, "stock_movements", "qty_milli", "-1500").is_ok());
+    clear(&mut conn, "stock_movements");
+    for bad in ["1.5", "'abc'"] {
+        assert!(
+            probe(&mut conn, "stock_movements", "qty_milli", bad).is_err(),
+            "stock_movements.qty_milli accepted {bad}"
+        );
+    }
+}
+
+#[test]
+fn a_document_only_takes_the_kinds_regimes_modes_and_states_the_spec_names() {
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    let sets = [
+        (
+            "kind",
+            vec![
+                "'ticket'",
+                "'facture'",
+                "'proforma'",
+                "'bon_de_livraison'",
+                "'avoir'",
+                "'bon_de_reception'",
+            ],
+            vec!["'recu'", "''"],
+        ),
+        ("regime", vec!["'ifu'", "'reel'"], vec!["'forfait'", "''"]),
+        (
+            "payment_mode",
+            vec!["'cash'", "'card'", "'credit'", "'cheque'", "'transfer'"],
+            vec!["'bitcoin'", "''"],
+        ),
+        (
+            "status",
+            vec!["'issued'", "'cancelled'"],
+            vec!["'draft'", "''"],
+        ),
+    ];
+    for (column, good, bad) in sets {
+        for value in good {
+            assert!(
+                probe(&mut conn, "documents", column, value).is_ok(),
+                "documents.{column} refused {value}"
+            );
+            clear(&mut conn, "documents");
+        }
+        for value in bad {
+            assert!(
+                probe(&mut conn, "documents", column, value).is_err(),
+                "documents.{column} accepted {value}"
+            );
+        }
+    }
+    for value in [
+        "'opening'",
+        "'purchase'",
+        "'sale'",
+        "'adjustment'",
+        "'return'",
+    ] {
+        assert!(
+            probe(&mut conn, "stock_movements", "kind", value).is_ok(),
+            "stock_movements.kind refused {value}"
+        );
+    }
+    assert!(probe(&mut conn, "stock_movements", "kind", "'shrinkage'").is_err());
+}
+
+#[test]
+fn a_number_is_unique_inside_its_series_and_free_in_another() {
+    // features.md, Numbering row: one uninterrupted series per kind, numbers
+    // never reused. The uniqueness is what makes the counter's gapless
+    // promise checkable by the file itself.
+    let (_dir, mut conn) = open_temp();
+    let row = |series: &str, number: i64| {
+        insert_with("documents", "series", &format!("'{series}'"))
+            .replace(", 1, '2026-09-09", &format!(", {number}, '2026-09-09"))
+    };
+    assert!(diesel::sql_query(row("doc_ticket", 1))
+        .execute(&mut conn)
+        .is_ok());
+    assert!(
+        diesel::sql_query(row("doc_ticket", 1))
+            .execute(&mut conn)
+            .is_err(),
+        "a ticket number came round twice"
+    );
+    assert!(
+        diesel::sql_query(row("doc_facture", 1))
+            .execute(&mut conn)
+            .is_ok(),
+        "the facture series must start at its own 1"
+    );
+    assert!(diesel::sql_query(row("doc_ticket", 2))
+        .execute(&mut conn)
+        .is_ok());
+}
+
+#[test]
+fn a_database_at_the_first_migration_takes_the_second() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it.
+    let (_dir, mut conn) = open_at_first_migration();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ),
+        0,
+        "the first migration already carries documents"
+    );
+    use diesel_migrations::MigrationHarness;
+    conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ),
+        1
+    );
+    // The first migration's seeded rows survive: a shop that already sells is
+    // what this migration runs on.
+    assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);
+    assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM users"), 1);
+}
+
 #[test]
 fn the_migration_reverts_and_reapplies() {
     // architecture.md, Data: a migration ships with a test that runs it.
     // This is the first one, so the round trip is what there is to prove.
     use diesel_migrations::MigrationHarness;
     let (_dir, mut conn) = open_temp();
+    // Reverting twice walks back to an empty file, which is what proves each
+    // down.sql undoes its own up.sql and nothing else.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ),
+        0,
+        "the documents down.sql left its tables behind"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'products'"
+        ),
+        1,
+        "the documents down.sql took the first migration's tables with it"
+    );
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     assert_eq!(
