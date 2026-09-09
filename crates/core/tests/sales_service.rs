@@ -1866,3 +1866,46 @@ fn an_override_the_party_ids_then_refuse_leaves_no_log_row_and_no_number() {
     assert_eq!(counter(&mut conn, "doc_facture"), 1);
     assert_eq!(counter(&mut conn, "doc_ticket"), 1);
 }
+
+#[test]
+fn a_facture_worth_nothing_is_still_issued_and_still_takes_its_number() {
+    // A basket a discount emptied, or an exchange settled line for line. No
+    // text read so far says a document has to be worth something, so the
+    // core issues it and the paper prints 0,00; the comptable has the last
+    // word (R8). What the test pins is that it is a whole document: its own
+    // number out of its own series, and no debt row for a zero.
+    let (_dir, mut conn) = open_temp();
+    seller_ready(&mut conn);
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+    let c = party(
+        &mut conn,
+        "Entreprise Amrani",
+        PartyKind::Company,
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        None,
+    );
+
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            global_discount: Money::centimes(100_000),
+            ..facture(c, vec![line(p, 1_000)], PaymentMode::Credit)
+        },
+    )
+    .unwrap();
+
+    assert_eq!(doc.kind, DocumentKind::Facture);
+    assert_eq!(doc.number, 1);
+    assert_eq!(doc.totals.total_ht, Money::centimes(100_000));
+    assert_eq!(doc.totals.discount, Money::centimes(100_000));
+    assert_eq!(doc.totals.tva, Money::ZERO);
+    assert_eq!(doc.totals.net_to_pay, Money::ZERO);
+    assert_eq!(counter(&mut conn, "doc_facture"), 2, "the number is spent");
+    assert!(
+        debt::ledger(&mut conn, SHOP, c).unwrap().is_empty(),
+        "a movement of zero would sit in every statement the customer is handed"
+    );
+}
