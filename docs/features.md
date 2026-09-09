@@ -237,8 +237,17 @@ A till cannot tell a consumer from a professional on its own, so the
 operator decides: the sale screen carries a one-tap switch from ticket to
 facture that pulls in the buyer block. A facture to a consumer needs only
 « ses nom, prénom(s) et adresse » (décret 05-468 art. 3-2, last alinéa); a
-facture to a trader needs the party identifiers of the row below. M1 issues
-tickets only, since the buyer block arrives with customers in M2.
+facture to a trader needs the party identifiers of the row below. The till
+sends the choice as `kind` on the sale (`ticket` or `facture`, ticket by
+default), and a facture is refused unless both halves carry what the row
+below asks: the shop's own RC and NIS from its settings, and from the fiche
+either the buyer's RC and NIS or, for a consumer, a name and an address. The
+refusal names the side and the identifiers that are missing, and it happens
+before a number is taken, so neither series gaps over it. A facture whose
+`net_to_pay` is zero — a basket a discount emptied, an exchange settled line
+for line — is issued today like any other and takes its number, because no
+text read so far says a document has to be worth something; confirm with the
+comptable (R8) before a shop leans on it.
 
 Numbering: per kind, gapless, assigned at issue and never reused; a
 cancelled facture keeps its number and is marked "facture annulée"; an

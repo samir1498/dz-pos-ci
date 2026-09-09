@@ -552,3 +552,332 @@ async fn an_error_that_is_not_a_credit_refusal_carries_neither_amount() {
         "every other error kept the two-field envelope"
     );
 }
+
+// ---- the facture at the till (features.md §3)
+
+/// The shop's own block as a facture needs it, through the route a shop
+/// owner would use.
+async fn seller_ready(app: &axum::Router) {
+    let (status, body) = call(
+        app,
+        "PUT",
+        "/settings/store",
+        Some(json!({
+            "name": "Supérette El Bahdja",
+            "rc": "16/00-1234567 B 21",
+            "nif": "000216001234567",
+            "nis": "098216001234567",
+            "ai": "16123456789",
+            "address": "Rue Didouche Mourad, Alger",
+            "phone": "021 00 00 00",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+}
+
+/// A fiche with only the identifiers the caller hands over, so a test can
+/// take one away and see which refusal it earns.
+async fn party(
+    app: &axum::Router,
+    name: &str,
+    party_kind: &str,
+    rc: Option<&str>,
+    nis: Option<&str>,
+    address: Option<&str>,
+) -> i64 {
+    let (status, body) = call(
+        app,
+        "POST",
+        "/customers",
+        Some(json!({
+            "name": name,
+            "party_kind": party_kind,
+            "phone": null,
+            "address": address,
+            "rc": rc,
+            "nif": null,
+            "nis": nis,
+            "ai": null,
+            "credit_limit_centimes": null,
+            "warn_threshold_centimes": null,
+            "notes": null,
+            "active": true,
+            "opening_debt_centimes": null,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    body["id"].as_i64().unwrap()
+}
+
+#[tokio::test]
+async fn the_kind_crosses_the_wire_and_a_facture_numbers_in_its_own_series() {
+    let (_dir, app) = app();
+    seller_ready(&app).await;
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let c = party(
+        &app,
+        "Entreprise Amrani",
+        "company",
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        None,
+    )
+    .await;
+
+    // No `kind` at all: the field defaults to a ticket, so a caller written
+    // before the switch existed keeps issuing what it always did.
+    let (status, ticket) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 200_000,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{ticket}");
+    assert_eq!(ticket["kind"], json!("ticket"));
+    assert_eq!(ticket["series"], json!("doc_ticket"));
+    assert_eq!(ticket["number"], json!(1));
+
+    let (status, facture) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "credit",
+            "customer_id": c,
+            "kind": "facture",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{facture}");
+    assert_eq!(facture["kind"], json!("facture"));
+    assert_eq!(facture["series"], json!("doc_facture"));
+    assert_eq!(facture["number"], json!(1), "its own series starts at one");
+
+    // The read back says the same: the kind is stored, not answered once.
+    let id = facture["id"].as_i64().unwrap();
+    let (_, again) = call(&app, "GET", &format!("/sales/{id}"), None).await;
+    assert_eq!(again["kind"], json!("facture"));
+    assert_eq!(again["customer_id"], json!(c));
+}
+
+#[tokio::test]
+async fn a_facture_the_party_blocks_refuse_is_422_naming_the_side_and_the_fields() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let c = party(
+        &app,
+        "Entreprise Amrani",
+        "company",
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        None,
+    )
+    .await;
+    let facture = json!({
+        "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+        "payment_mode": "cash",
+        "tendered_centimes": 200_000,
+        "customer_id": c,
+        "kind": "facture",
+    });
+
+    // The shop has filled nothing in yet, so the seller is the side that
+    // refuses and the cashier is sent to the settings.
+    let (status, body) = call(&app, "POST", "/sales", Some(facture.clone())).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(code(&body), "party_ids");
+    assert_eq!(body["error"]["party_side"], json!("seller"));
+    assert_eq!(body["error"]["missing_ids"], json!(["rc", "nis"]));
+
+    seller_ready(&app).await;
+    let bare = party(&app, "Sarl Bendiba", "company", None, None, None).await;
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 200_000,
+            "customer_id": bare,
+            "kind": "facture",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(code(&body), "party_ids");
+    assert_eq!(body["error"]["party_side"], json!("buyer"));
+    assert_eq!(body["error"]["missing_ids"], json!(["rc", "nis"]));
+
+    // A facture with nobody to make it out to is the customer field, not a
+    // block that is short: there is no block at all.
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 200_000,
+            "kind": "facture",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(code(&body), "validation");
+
+    // Nothing above took a number: the facture series is still untouched
+    // and the first one that goes through is FA number 1.
+    let (status, ok) = call(&app, "POST", "/sales", Some(facture)).await;
+    assert_eq!(status, StatusCode::CREATED, "{ok}");
+    assert_eq!(ok["number"], json!(1));
+    assert_eq!(ok["series"], json!("doc_facture"));
+}
+
+#[tokio::test]
+async fn a_consumer_buying_on_a_facture_is_asked_for_an_address_and_not_for_an_rc() {
+    let (_dir, app) = app();
+    seller_ready(&app).await;
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let named = party(
+        &app,
+        "Karim Belkacem",
+        "consumer",
+        None,
+        None,
+        Some("12 rue des Frères Bouadou, Bir Mourad Raïs"),
+    )
+    .await;
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 200_000,
+            "customer_id": named,
+            "kind": "facture",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+
+    let nowhere = party(&app, "Yacine Hamdi", "consumer", None, None, None).await;
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 200_000,
+            "customer_id": nowhere,
+            "kind": "facture",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(code(&body), "party_ids");
+    assert_eq!(body["error"]["party_side"], json!("buyer"));
+    assert_eq!(body["error"]["missing_ids"], json!(["address"]));
+}
+
+#[tokio::test]
+async fn a_kind_the_till_cannot_ring_up_is_refused_at_the_edge() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    // `avoir` is a document kind and not a sale kind: it has its own write,
+    // its own rules and its own series, and the till may not reach it here.
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 200_000,
+            "kind": "avoir",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(code(&body), "bad_request");
+}
+
+#[tokio::test]
+async fn the_list_carries_both_kinds_newest_first_and_the_filter_narrows_it() {
+    let (_dir, app) = app();
+    seller_ready(&app).await;
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let c = party(
+        &app,
+        "Entreprise Amrani",
+        "company",
+        Some("16/00-7654321 B 22"),
+        Some("098216007654321"),
+        None,
+    )
+    .await;
+    let basket = json!({
+        "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+        "payment_mode": "cash",
+        "tendered_centimes": 200_000,
+    });
+    let (_, ticket) = call(&app, "POST", "/sales", Some(basket)).await;
+    let (_, facture) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "credit",
+            "customer_id": c,
+            "kind": "facture",
+        })),
+    )
+    .await;
+
+    // Everything the till issued, the last one first. A facture that fell
+    // off this list would be unreachable the moment the print panel closed.
+    let (status, all) = call(&app, "GET", "/sales", None).await;
+    assert_eq!(status, StatusCode::OK, "{all}");
+    let rows = all.as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["id"], facture["id"]);
+    assert_eq!(rows[0]["kind"], json!("facture"));
+    assert_eq!(rows[0]["printed_number"], json!("FA-000001"));
+    assert_eq!(rows[1]["id"], ticket["id"]);
+    assert_eq!(rows[1]["kind"], json!("ticket"));
+    assert_eq!(rows[1]["printed_number"], json!("TK-000001"));
+
+    for (kind, expected) in [("ticket", &ticket), ("facture", &facture)] {
+        let (status, only) = call(&app, "GET", &format!("/sales?kind={kind}"), None).await;
+        assert_eq!(status, StatusCode::OK, "{only}");
+        let rows = only.as_array().unwrap();
+        assert_eq!(rows.len(), 1, "{kind}: {only}");
+        assert_eq!(rows[0]["id"], expected["id"]);
+        assert_eq!(rows[0]["kind"], json!(kind));
+    }
+}
+
+#[tokio::test]
+async fn a_kind_the_till_never_issues_is_refused_rather_than_ignored() {
+    // A filter the server does not understand is not an empty filter: a
+    // screen asking for `avoir` and being handed every document would be
+    // showing the wrong list with no way to tell.
+    let (_dir, app) = app();
+    for uri in ["/sales?kind=avoir", "/sales?kind=Ticket", "/sales?kind="] {
+        let (status, body) = call(&app, "GET", uri, None).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{uri}: {body}");
+        assert_eq!(code(&body), "bad_request", "{uri}");
+    }
+}

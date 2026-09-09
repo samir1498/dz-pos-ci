@@ -17,4 +17,12 @@ field?: string,
  * customer actually owes. "Too much" is useless without the amount that
  * would not have been.
  */
-outstanding_centimes?: number, };
+outstanding_centimes?: number, 
+/**
+ * Only on `party_ids`: which half of the facture is short (`seller` or
+ * `buyer`) and which identifiers it is short of (`rc`, `nis`, `name`,
+ * `address`). The till sends the cashier to the settings or to the
+ * fiche on the side, and names the fields from the list; neither is
+ * re-derived from the code (architecture.md rule 2).
+ */
+party_side?: string, missing_ids?: Array<string>, };

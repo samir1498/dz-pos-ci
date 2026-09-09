@@ -11,7 +11,7 @@
 // there to keep a cashier from posting a basket the core would reject; the
 // core still refuses it, and its code is what the screen shows if it does.
 
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -26,11 +26,14 @@ import {
 } from "@dzpos/shared";
 import type {
   CustomerDto,
+  DocumentKindDto,
   NewSaleDto,
   PaymentModeDto,
+  PrintPaper,
   ProductDto,
   RegimeDto,
   SaleDto,
+  SaleKindDto,
   SaleWarningDto,
   Totals,
   TotalsLine,
@@ -41,6 +44,7 @@ import {
   categoriesQueryKey,
   customersQueryKey,
   productsQueryKey,
+  saleFactureQueryKey,
   saleTicketQueryKey,
   settingsQueryKey,
 } from "@/api";
@@ -72,6 +76,7 @@ const ERROR_KEY: Record<string, Key> = {
   exhausted: "error_exhausted",
   bad_request: "error_bad_request",
   credit_limit: "error_credit_limit",
+  party_ids: "error_party_ids",
   unauthorized: "error_unauthorized",
   bad_response: "error_bad_response",
   unreachable: "error_unreachable",
@@ -100,6 +105,41 @@ function creditRefusal(error: unknown, body: NewSaleDto): CreditRefusal | null {
   const { balanceAfterCentimes, creditLimitCentimes } = error;
   if (balanceAfterCentimes === undefined || creditLimitCentimes === undefined) return null;
   return { balanceAfterCentimes, creditLimitCentimes, body };
+}
+
+/** A facture the party blocks refuse, as the server described it: which
+ * half is short and of which identifiers. Both come off the wire; the screen
+ * decides neither, the way it decides neither credit amount. */
+interface PartyRefusal {
+  readonly side: "seller" | "buyer";
+  readonly missing: readonly Key[];
+}
+
+/** The identifiers a facture can be short of, as their own labels. The
+ * server sends the field names décret 05-468 art. 3 names; anything else is
+ * a server this screen does not recognise, and the refusal then falls back
+ * to its one line of text rather than showing a raw key. */
+const PARTY_FIELD: Record<string, Key> = {
+  rc: "field_rc",
+  nis: "field_nis",
+  name: "field_name",
+  address: "field_address",
+};
+
+/** The refusal, if this error is one and named a side and fields the screen
+ * knows. */
+function partyRefusal(error: unknown): PartyRefusal | null {
+  if (!(error instanceof ApiError) || error.code !== "party_ids") return null;
+  const { partySide, missingIds } = error;
+  if (partySide !== "seller" && partySide !== "buyer") return null;
+  if (missingIds === undefined || missingIds.length === 0) return null;
+  const missing: Key[] = [];
+  for (const field of missingIds) {
+    const key = PARTY_FIELD[field];
+    if (key === undefined) return null;
+    missing.push(key);
+  }
+  return { side: partySide, missing };
 }
 
 /** What the picked customer's own standing says, before this basket. Over
@@ -209,6 +249,12 @@ export function TillScreen() {
   const [customer, setCustomer] = useState<CustomerDto | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [refusal, setRefusal] = useState<CreditRefusal | null>(null);
+  // Ticket or facture, and on a facture the sheet the print panel lays out.
+  // The choice is made before the sale is saved and never by a reprint
+  // (features.md §3: the document is due « dès la réalisation de la vente »).
+  const [kind, setKind] = useState<SaleKindDto>("ticket");
+  const [paper, setPaper] = useState<PrintPaper>("a4");
+  const [partyProblem, setPartyProblem] = useState<PartyRefusal | null>(null);
 
   const products = useQuery({ queryKey: productsQueryKey, queryFn: () => api.listProducts() });
   const categories = useQuery({ queryKey: categoriesQueryKey, queryFn: () => api.listCategories() });
@@ -235,6 +281,10 @@ export function TillScreen() {
       setCustomer(null);
       setCustomerSearch("");
       setMode("cash");
+      // The next basket is a ticket until somebody says otherwise: a
+      // consumer is the till's ordinary case and asks nothing of the buyer.
+      setKind("ticket");
+      setPartyProblem(null);
       await queryClient.invalidateQueries({ queryKey: customersQueryKey });
       // The next customer's first scan goes into this box; a filter left
       // over from the last basket would take its digits on the end and
@@ -246,10 +296,12 @@ export function TillScreen() {
     },
     onError: (error: unknown, input: NewSaleDto) => {
       const refused = creditRefusal(error, input);
+      const short = partyRefusal(error);
       setRefusal(refused);
-      // The credit panel says the whole thing, amounts included, so the one
-      // line of generic text underneath would only repeat it worse.
-      setServerError(refused === null ? errorKey(error) : null);
+      setPartyProblem(short);
+      // Each panel says the whole thing, amounts or fields included, so the
+      // one line of generic text underneath would only repeat it worse.
+      setServerError(refused === null && short === null ? errorKey(error) : null);
     },
   });
 
@@ -398,8 +450,9 @@ export function TillScreen() {
       tendered_centimes: mode === "cash" ? (tendered ?? 0) : null,
       customer_id: customer?.id ?? null,
       override,
+      kind,
     }),
-    [cart, customer, globalDiscount, mode, read, tendered],
+    [cart, customer, globalDiscount, kind, mode, read, tendered],
   );
 
   const submit = useCallback(() => {
@@ -560,12 +613,33 @@ export function TillScreen() {
           onPick={(next) => {
             setCustomer(next);
             setRefusal(null);
+            setPartyProblem(null);
+            // A facture is made out to somebody. Unpicking the customer
+            // falls back to a ticket rather than leaving the switch on a
+            // choice the pay button would refuse.
+            if (next === null) setKind("ticket");
             // A customer who cannot buy on credit cannot leave the till on
             // credit either: the mode falls back rather than sitting on a
             // choice the pay button silently refuses.
             if (!takesCredit(next)) setMode((m) => (m === "credit" ? "cash" : m));
           }}
         />
+
+        <fieldset className="flex flex-wrap gap-3 border-0 p-0">
+          <legend className="mb-1">{t("till_kind")}</legend>
+          <KindChoice kind="ticket" current={kind} label={t("till_ticket")} onPick={setKind} />
+          {/* Loi 04-02 art. 10 decides the paper by who the buyer is, and
+              décret 05-468 art. 3 puts that buyer on it, so the choice is
+              there once a fiche is picked and not before. */}
+          <KindChoice
+            kind="facture"
+            current={kind}
+            label={t("till_facture")}
+            title={customer === null ? t("till_facture_needs_customer") : undefined}
+            disabled={customer === null}
+            onPick={setKind}
+          />
+        </fieldset>
 
         <div data-testid="cart" className="flex flex-col gap-3">
           {cart.length === 0 ? <p>{t("till_cart_empty")}</p> : null}
@@ -655,6 +729,8 @@ export function TillScreen() {
           <CreditRefused refusal={refusal} onOverride={override} pending={pay.isPending} />
         ) : null}
 
+        {partyProblem !== null ? <PartyIdsRefused refusal={partyProblem} /> : null}
+
         {serverError !== null ? (
           <p role="alert" className="text-red-700">
             {t(serverError)}
@@ -670,7 +746,9 @@ export function TillScreen() {
           {pay.isPending ? t("action_paying") : t("action_pay")}
         </button>
 
-        {receiptId !== null ? <Receipt id={receiptId} /> : null}
+        {receiptId !== null && done !== null ? (
+          <Receipt id={receiptId} kind={done.kind} paper={paper} onPaper={setPaper} />
+        ) : null}
       </aside>
     </section>
   );
@@ -800,6 +878,63 @@ function CreditRefused({
         {t("till_override")}
       </button>
     </div>
+  );
+}
+
+/** The facture the party blocks refuse, with the side and the fields the
+ * server named and a way to go and fill them in. Two screens own the two
+ * halves, so the link goes to the one that can fix this refusal and not to
+ * a generic "settings". */
+function PartyIdsRefused({ refusal }: { refusal: PartyRefusal }) {
+  const { t } = useTranslation();
+  const seller = refusal.side === "seller";
+  return (
+    <div
+      role="alert"
+      data-testid="till-party-ids"
+      className="flex flex-col gap-2 rounded border border-red-700 p-3"
+    >
+      <strong className="text-red-700">{t("error_party_ids")}</strong>
+      <p>{t(seller ? "till_party_ids_seller" : "till_party_ids_buyer")}</p>
+      <ul data-testid="till-party-ids-missing" className="list-disc ps-5">
+        {refusal.missing.map((field) => (
+          <li key={field}>{t(field)}</li>
+        ))}
+      </ul>
+      <Link to={seller ? "/settings" : "/customers"} className="underline">
+        {t(seller ? "till_party_ids_settings" : "till_party_ids_customer")}
+      </Link>
+    </div>
+  );
+}
+
+function KindChoice({
+  kind,
+  current,
+  label,
+  title,
+  disabled = false,
+  onPick,
+}: {
+  kind: SaleKindDto;
+  current: SaleKindDto;
+  label: string;
+  title?: string;
+  disabled?: boolean;
+  onPick: (kind: SaleKindDto) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2" title={title}>
+      <input
+        type="radio"
+        name="sale_kind"
+        value={kind}
+        checked={current === kind}
+        disabled={disabled}
+        onChange={() => onPick(kind)}
+      />
+      <span>{label}</span>
+    </label>
   );
 }
 
@@ -982,16 +1117,18 @@ function Confirmation({
   onNew: () => void;
 }) {
   const { t } = useTranslation();
+  const facture = sale.kind === "facture";
   return (
     <div role="status" className="flex flex-col gap-2 rounded border p-3">
-      <strong>{t("till_paid")}</strong>
+      <strong>{t(facture ? "till_paid_facture" : "till_paid")}</strong>
       <p className="flex items-center justify-between gap-2">
-        <span>{t("till_ticket")}</span>
-        {/* The number only. `series` is the code the core keys documents by
-            ("doc_ticket", models/sql_types.rs), not a word in any of the
-            three languages, and the label beside it already says ticket. */}
-        <span className="font-mono" dir="ltr">
-          {sale.number}
+        <span>{t(facture ? "till_facture" : "till_ticket")}</span>
+        {/* `printed_number` and not the integer beside it: FA-000001 is what
+            the paper says and what a customer quotes back, and the core
+            spells it once (print::number) so the screen cannot spell it
+            differently. `series` is a column value and no word at all. */}
+        <span data-testid="till-document-number" className="font-mono" dir="ltr">
+          {sale.printed_number}
         </span>
       </p>
       <p className="flex items-center justify-between gap-2">
@@ -1050,33 +1187,81 @@ function Confirmation({
  * already fetched with the launch token, and an iframe pointed at the route
  * would ask for it again without one.
  */
-function Receipt({ id }: { id: number }) {
+function Receipt({
+  id,
+  kind,
+  paper,
+  onPaper,
+}: {
+  id: number;
+  kind: DocumentKindDto;
+  paper: PrintPaper;
+  onPaper: (paper: PrintPaper) => void;
+}) {
   const { t, lang } = useTranslation();
-  const ticket = useQuery({
-    queryKey: saleTicketQueryKey(id, lang),
-    queryFn: () => api.getSaleTicket(id, lang),
+  const facture = kind === "facture";
+  const page = useQuery({
+    queryKey: facture ? saleFactureQueryKey(id, lang, paper) : saleTicketQueryKey(id, lang),
+    queryFn: () =>
+      facture ? api.getSaleFacture(id, lang, paper) : api.getSaleTicket(id, lang),
   });
   return (
     <section aria-label={t("till_receipt")} className="flex flex-col gap-2 rounded border p-3">
       <strong>{t("till_receipt")}</strong>
-      {ticket.isPending ? <p>{t("products_loading")}</p> : null}
-      {ticket.isError ? (
+      {/* A4 is what a facture is filed on; the A5 half sheet is the one a
+          counter printer is loaded with. The same page either way: the
+          sheet changes the @page size the core writes and nothing else
+          (features.md §4). */}
+      {facture ? (
+        <fieldset className="flex flex-wrap gap-3 border-0 p-0">
+          <legend className="mb-1">{t("till_paper")}</legend>
+          <PaperChoice paper="a4" current={paper} label={t("till_paper_a4")} onPick={onPaper} />
+          <PaperChoice paper="a5" current={paper} label={t("till_paper_a5")} onPick={onPaper} />
+        </fieldset>
+      ) : null}
+      {page.isPending ? <p>{t("products_loading")}</p> : null}
+      {page.isError ? (
         <p role="alert" className="text-red-700">
-          {t(errorKey(ticket.error))}
+          {t(errorKey(page.error))}
         </p>
       ) : null}
-      {ticket.isSuccess ? (
+      {page.isSuccess ? (
         <iframe
           title={t("till_receipt")}
-          srcDoc={ticket.data}
-          // An empty sandbox: the ticket carries no script and needs no
-          // origin, so the page it renders in cannot reach this one even if
-          // a product name ever slipped past the template's escaping.
+          srcDoc={page.data}
+          // An empty sandbox: the page carries no script and needs no
+          // origin, so what it renders cannot reach this one even if a
+          // product name ever slipped past the template's escaping.
           sandbox=""
           className="h-96 w-full border-0"
-          data-testid="till-ticket"
+          data-testid={facture ? "till-facture" : "till-ticket"}
         />
       ) : null}
     </section>
+  );
+}
+
+function PaperChoice({
+  paper,
+  current,
+  label,
+  onPick,
+}: {
+  paper: PrintPaper;
+  current: PrintPaper;
+  label: string;
+  onPick: (paper: PrintPaper) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        name="facture_paper"
+        value={paper}
+        checked={current === paper}
+        onChange={() => onPick(paper)}
+      />
+      <span>{label}</span>
+    </label>
   );
 }

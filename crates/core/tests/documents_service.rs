@@ -415,7 +415,7 @@ fn totals_that_disagree_with_their_lines(conn: &mut SqliteConnection) -> Vec<i32
 #[test]
 fn a_stored_total_always_adds_up_from_the_stored_lines() {
     use dzpos_core::models::product::Unit;
-    use dzpos_core::services::sales::{self, NewSale, NewSaleLine};
+    use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
     use dzpos_core::services::settings;
 
     let priced = |conn: &mut SqliteConnection, name: &str, selling: i64, rate: u32| {
@@ -463,6 +463,7 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             tendered: Some(Money::centimes(100_000)),
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9, 10)),
         },
     )
@@ -479,6 +480,7 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             tendered: None,
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9, 11)),
         },
     )
@@ -499,6 +501,7 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             tendered: Some(Money::centimes(100_000)),
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9, 12)),
         },
     )
@@ -517,6 +520,7 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             tendered: Some(Money::centimes(100_000)),
             customer_id: None,
             override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9, 14)),
         },
     )

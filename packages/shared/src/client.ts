@@ -30,6 +30,7 @@ import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { PaymentModeDto } from "./generated/PaymentModeDto";
 import type { SaleWarningDto } from "./generated/SaleWarningDto";
 import type { SaleDto } from "./generated/SaleDto";
+import type { SaleKindDto } from "./generated/SaleKindDto";
 import type { SaleLineDto } from "./generated/SaleLineDto";
 import type { SaleBalanceDto } from "./generated/SaleBalanceDto";
 import type { SaleTotalsDto } from "./generated/SaleTotalsDto";
@@ -58,6 +59,11 @@ export class ApiError extends Error {
   readonly creditLimitCentimes?: number;
   readonly field?: string;
   readonly outstandingCentimes?: number;
+  /** Only on `party_ids`: which half of the facture is short and of which
+   * identifiers. The server decides both; a screen shows them and works out
+   * neither (architecture.md rule 2). */
+  readonly partySide?: string;
+  readonly missingIds?: readonly string[];
 
   constructor(
     code: string,
@@ -68,6 +74,8 @@ export class ApiError extends Error {
       creditLimitCentimes?: number;
       field?: string;
       outstandingCentimes?: number;
+      partySide?: string;
+      missingIds?: readonly string[];
     },
   ) {
     super(message);
@@ -78,6 +86,8 @@ export class ApiError extends Error {
     this.creditLimitCentimes = figures?.creditLimitCentimes;
     this.field = figures?.field;
     this.outstandingCentimes = figures?.outstandingCentimes;
+    this.partySide = figures?.partySide;
+    this.missingIds = figures?.missingIds;
   }
 }
 
@@ -109,18 +119,24 @@ export function isApiErrorBody(value: unknown): value is ApiErrorDto {
     isOptionalExactInteger(error.balance_after_centimes) &&
     isOptionalExactInteger(error.credit_limit_centimes) &&
     (error.field === undefined || typeof error.field === "string") &&
-    isOptionalExactInteger(error.outstanding_centimes)
+    isOptionalExactInteger(error.outstanding_centimes) &&
+    (error.party_side === undefined || typeof error.party_side === "string") &&
+    (error.missing_ids === undefined ||
+      (Array.isArray(error.missing_ids) && error.missing_ids.every((v) => typeof v === "string")))
   );
 }
 
-/** The error the envelope described, with the figures it carried. One place
- * builds it, so both callers of `unwrap` read a refusal the same way. */
+/** The error the envelope described, with the figures and the party fields
+ * when it carried them. One place builds it, so both callers of `unwrap`
+ * read a refusal the same way. */
 function apiError(body: ApiErrorDto, status: number): ApiError {
   return new ApiError(body.error.code, body.error.message, status, {
     balanceAfterCentimes: body.error.balance_after_centimes,
     creditLimitCentimes: body.error.credit_limit_centimes,
     field: body.error.field,
     outstandingCentimes: body.error.outstanding_centimes,
+    partySide: body.error.party_side,
+    missingIds: body.error.missing_ids,
   });
 }
 
@@ -343,6 +359,7 @@ export function isSale(value: unknown): value is SaleDto {
     isDocumentKind(value.kind) &&
     typeof value.series === "string" &&
     isExactInteger(value.number) &&
+    typeof value.printed_number === "string" &&
     typeof value.issued_at === "string" &&
     typeof value.user_id === "number" &&
     isRegime(value.regime) &&
@@ -501,6 +518,11 @@ async function unwrap(res: Response): Promise<unknown> {
  * struct to generate it from. `crates/core/src/lang.rs` is the other half
  * and `dzpos_core::lang::Lang` refuses anything else with a 422. */
 export type PrintLang = "fr" | "en" | "ar";
+
+/** The sheet a facture is laid out for. It changes the `@page size` of the
+ * page the core renders and nothing else, so an A5 facture is the same
+ * facture on a smaller sheet (features.md §4). */
+export type PrintPaper = "a4" | "a5";
 
 /** A body that is a page, not JSON. Only the error path is JSON, and it is
  * the same envelope every other call answers with. */
@@ -662,9 +684,20 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       return sendText(`/sales/${id}/ticket?lang=${lang}`);
     },
 
-    /** Newest first, tickets only in M1. */
-    async listSales(): Promise<SaleDto[]> {
-      return narrow(await send("/sales"), isSaleList, "sale list");
+    /** The A4 or A5 facture for a sale, as the HTML page the core rendered.
+     * The same contract as the ticket, plus the sheet: the UI prints these
+     * bytes and never lays a document out itself. The id has to name a
+     * facture; a ticket's id is a 404, because a ticket is its own paper. */
+    async getSaleFacture(id: number, lang: PrintLang, paper: PrintPaper): Promise<string> {
+      return sendText(`/sales/${id}/facture?lang=${lang}&paper=${paper}`);
+    },
+
+    /** Newest first, every kind the till issues. `kind` narrows it to one
+     * series: the day's till roll asks for `ticket`, a documents screen for
+     * `facture`, and a screen that wants both asks for neither. */
+    async listSales(kind?: SaleKindDto): Promise<SaleDto[]> {
+      const query = kind === undefined ? "" : `?kind=${kind}`;
+      return narrow(await send(`/sales${query}`), isSaleList, "sale list");
     },
 
     /** The shop's customers, the active ones first. `search` is a piece of a

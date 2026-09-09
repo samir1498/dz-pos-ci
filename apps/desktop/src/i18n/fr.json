@@ -235,5 +235,17 @@
   "till_new_balance": "Nouveau solde du client",
   "till_near_limit_sold": "Ce client atteint son seuil d'alerte.",
   "error_credit_limit": "Cette vente dépasse le plafond de crédit du client.",
-  "error_credit_needs_customer": "Une vente à crédit a besoin d'un client."
+  "error_credit_needs_customer": "Une vente à crédit a besoin d'un client.",
+  "till_kind": "Document",
+  "till_facture": "Facture",
+  "till_facture_needs_customer": "Une facture est établie au nom d'un client.",
+  "till_paid_facture": "Facture émise",
+  "till_paper": "Format",
+  "till_paper_a4": "A4",
+  "till_paper_a5": "A5",
+  "error_party_ids": "Cette facture ne peut pas encore être émise : des identifiants manquent.",
+  "till_party_ids_seller": "Il manque au bloc du magasin :",
+  "till_party_ids_buyer": "Il manque à la fiche du client :",
+  "till_party_ids_settings": "Compléter les paramètres du magasin",
+  "till_party_ids_customer": "Compléter la fiche du client"
 }

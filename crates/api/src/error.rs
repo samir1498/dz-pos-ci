@@ -79,6 +79,14 @@ struct Payload {
     /// What the customer still owes, on a payment that asked for more.
     #[serde(skip_serializing_if = "Option::is_none")]
     outstanding_centimes: Option<i64>,
+    /// The same exception, for the same reason, on the facture's party
+    /// blocks: the till has to say which side is short and of what, and
+    /// working that out on the screen would be a second reading of décret
+    /// 05-468 art. 3. Absent from every other error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    party_side: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing_ids: Option<Vec<&'static str>>,
 }
 
 /// What an error carries besides its code and its sentence. One value per
@@ -90,6 +98,8 @@ struct Figures {
     credit_limit_centimes: Option<i64>,
     field: Option<&'static str>,
     outstanding_centimes: Option<i64>,
+    party_side: Option<&'static str>,
+    missing_ids: Option<Vec<&'static str>>,
 }
 
 impl Figures {
@@ -98,6 +108,8 @@ impl Figures {
         credit_limit_centimes: None,
         field: None,
         outstanding_centimes: None,
+        party_side: None,
+        missing_ids: None,
     };
 }
 
@@ -135,13 +147,16 @@ impl ApiError {
         }
     }
 
-    /// The amounts an error carries, in centimes. A credit refusal names what
-    /// the sale would have taken the customer to and the limit it passed; a
-    /// payment above the debt names what is actually owed, and the field it
-    /// is about, so the form can say "you can take at most this much" without
-    /// asking the balance again. Every other error carries none of them, and
-    /// the fields are then absent from the body.
-    const fn figures(&self) -> Figures {
+    /// What an error carries besides its code and its sentence. A credit
+    /// refusal names what the sale would have taken the customer to and the
+    /// limit it passed; a payment above the debt names what is actually
+    /// owed, and the field it is about, so the form can say "you can take at
+    /// most this much" without asking the balance again; a facture the party
+    /// blocks refuse names the side that is short and the identifiers it is
+    /// short of, because working that out on the screen would be a second
+    /// reading of décret 05-468 art. 3. Every other error carries none of
+    /// them, and the fields are then absent from the body.
+    fn figures(&self) -> Figures {
         match self {
             ApiError::Core(CoreError::CreditLimit {
                 balance_after,
@@ -165,6 +180,12 @@ impl ApiError {
                 outstanding_centimes: Some(*outstanding_centimes),
                 ..Figures::NONE
             },
+            ApiError::Core(CoreError::PartyIds { side, missing })
+            | ApiError::Request(CoreError::PartyIds { side, missing }) => Figures {
+                party_side: Some(side.as_str()),
+                missing_ids: Some(missing.clone()),
+                ..Figures::NONE
+            },
             _ => Figures::NONE,
         }
     }
@@ -181,10 +202,14 @@ const fn status_for(e: &CoreError) -> StatusCode {
         // amounts in the payload are what the till renders, so it sits with
         // the 422s and not with the conflicts.
         // A payment above the debt sits with them for the same reason: the
-        // caller can act on it, by taking what is owed instead.
+        // caller can act on it, by taking what is owed instead. So does a
+        // facture the party blocks refuse: the request is well formed and
+        // the caller can act on it, by filling the fiche or the settings in,
+        // or by ringing the same basket up as a ticket.
         CoreError::Validation { .. }
         | CoreError::CreditLimit { .. }
-        | CoreError::PaymentAboveDebt { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+        | CoreError::PaymentAboveDebt { .. }
+        | CoreError::PartyIds { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
         // A template that will not render is the app's own bug: the
@@ -238,6 +263,8 @@ impl IntoResponse for ApiError {
             credit_limit_centimes,
             field,
             outstanding_centimes,
+            party_side,
+            missing_ids,
         } = self.figures();
         let mut res = (
             status,
@@ -249,6 +276,8 @@ impl IntoResponse for ApiError {
                     credit_limit_centimes,
                     field,
                     outstanding_centimes,
+                    party_side,
+                    missing_ids,
                 },
             }),
         )
