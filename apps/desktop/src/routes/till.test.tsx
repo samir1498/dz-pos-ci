@@ -9,6 +9,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import type { CategoryDto, CustomerDto, ProductDto, SaleDto, SettingsDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import { TillScreen } from "./till";
@@ -89,6 +96,7 @@ const sale: SaleDto = {
   // series a cashier could read (crates/core/src/models/sql_types.rs).
   series: "doc_ticket",
   number: 12,
+  printed_number: "TK-000012",
   issued_at: "2026-09-09 10:00:00",
   user_id: 1,
   regime: "reel",
@@ -199,6 +207,11 @@ function isInit(value: unknown): value is RequestInit {
 const TICKET_HTML =
   '<!doctype html><html><body><div class="amount-net-to-pay">1 292,00</div></body></html>';
 
+/** The A4 page the core renders from a stored facture. Its own string, so
+ * an assertion cannot pass on the ticket's bytes by accident. */
+const FACTURE_HTML =
+  '<!doctype html><html><body><div class="title">FACTURE</div></body></html>';
+
 function html(status: number, body: string): Response {
   return new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8" } });
 }
@@ -240,6 +253,14 @@ function ticketFetch(): string | undefined {
     .find((url) => url.includes(`/sales/${sale.id}/ticket`));
 }
 
+/** The last facture URL the panel asked for, sheet and language included. */
+function facturePrinted(): string | undefined {
+  return fetchMock.mock.calls
+    .map((call) => String(call[0]))
+    .filter((url) => url.includes(`/sales/${sale.id}/facture`))
+    .pop();
+}
+
 beforeEach(() => {
   rows = [coffee, tomato, crate, salt];
   customerRows = [amrani, noCredit, overLimit, anonymous];
@@ -256,6 +277,9 @@ beforeEach(() => {
     if (url.includes(`/sales/${sale.id}/ticket`)) {
       return Promise.resolve(ticketAnswer !== null ? ticketAnswer() : html(200, TICKET_HTML));
     }
+    if (url.includes(`/sales/${sale.id}/facture`)) {
+      return Promise.resolve(html(200, FACTURE_HTML));
+    }
     if (url.endsWith(`/sales/${sale.id}`)) return Promise.resolve(json(200, sale));
     return Promise.resolve(json(200, rows));
   });
@@ -267,14 +291,31 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** The till inside a router of its own, and nothing else in it: the screen
+ * carries `Link`s to the customers and the settings screens, and a `Link`
+ * outside a router throws. The real route tree would drag the root layout
+ * and its navigation into every assertion here, so this is one route with
+ * no layout, on a memory history. */
 function mount(lang: Lang = "fr") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  const rootRoute = createRootRoute();
+  const tillRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/",
+    component: TillScreen,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([tillRoute]),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        <TillScreen />
+        {/* The router this test builds is not the app's, and the app's is
+            what the `Register` declaration types `Link` against. */}
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </I18nProvider>,
   );
@@ -626,6 +667,7 @@ describe("paying", () => {
       tendered_centimes: 150_000,
       customer_id: null,
       override: false,
+      kind: "ticket",
     });
   });
 
@@ -946,5 +988,168 @@ describe("on credit", () => {
     expect(within(done).getByTestId("till-near-limit")).toBeInTheDocument();
     // The balance the document stores, not one the screen worked out.
     expect(within(done).getByTestId("till-new-balance")).toHaveTextContent("4 500,00");
+  });
+});
+
+describe("the facture at the till", () => {
+  /** One coffee, and the customer picked, which is the shortest basket a
+   * facture can be made out for. */
+  async function ringUpFor(
+    user: ReturnType<typeof userEvent.setup>,
+    customer: CustomerDto,
+  ): Promise<void> {
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await screen.findByRole("option", { name: customer.name });
+    await user.selectOptions(screen.getByLabelText("Client", { selector: "select" }), [
+      String(customer.id),
+    ]);
+  }
+
+  /** The answer the API gives for a facture: its own kind, its own series
+   * and the number as the paper prints it. */
+  const issued: SaleDto = {
+    ...sale,
+    kind: "facture",
+    series: "doc_facture",
+    number: 1,
+    printed_number: "FA-000001",
+    customer_id: amrani.id,
+  };
+
+  test("the facture is not on offer without a customer and the body says ticket", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+
+    const facture = screen.getByRole("radio", { name: "Facture" });
+    expect(facture).toBeDisabled();
+    // Disabled and saying why, the way the credit choice does.
+    expect(facture.closest("label")).toHaveAttribute(
+      "title",
+      "Une facture est établie au nom d'un client.",
+    );
+    expect(screen.getByRole("radio", { name: "Ticket" })).toBeChecked();
+
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()).toMatchObject({ kind: "ticket" });
+  });
+
+  test("picking a customer opens the switch and the body posts the facture kind", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () => json(201, issued);
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    await screen.findByRole("status");
+    expect(salePost()).toMatchObject({ kind: "facture", customer_id: amrani.id });
+  });
+
+  test("unpicking the customer takes the sale back to a ticket", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    expect(screen.getByRole("radio", { name: "Facture" })).toBeChecked();
+
+    // Back to the walk-in customer: a facture is made out to somebody, so
+    // the switch does not stay on a choice the server would refuse.
+    await user.selectOptions(screen.getByLabelText("Client", { selector: "select" }), [""]);
+    expect(screen.getByRole("radio", { name: "Ticket" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Facture" })).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()).toMatchObject({ kind: "ticket" });
+  });
+
+  test("the refusal names the side, the identifiers and where to fill them in", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "party_ids",
+          message: "the buyer block of a facture is missing rc, nis",
+          party_side: "buyer",
+          missing_ids: ["rc", "nis"],
+        },
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    const panel = await screen.findByTestId("till-party-ids");
+    expect(within(panel).getByText("Il manque à la fiche du client :")).toBeInTheDocument();
+    const missing = within(panel).getByTestId("till-party-ids-missing");
+    expect(missing).toHaveTextContent("RC");
+    expect(missing).toHaveTextContent("NIS");
+    // The screen sends the cashier to the half it can fix, not to a
+    // generic settings page.
+    expect(within(panel).getByRole("link", { name: "Compléter la fiche du client" })).toHaveAttribute(
+      "href",
+      "/customers",
+    );
+    // The panel says the whole thing, so the generic line is not repeated
+    // underneath it.
+    expect(screen.queryByText("Identifiants manquants.")).toBeNull();
+  });
+
+  test("a seller block that is short sends the cashier to the settings instead", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "party_ids",
+          message: "the seller block of a facture is missing nis",
+          party_side: "seller",
+          missing_ids: ["nis"],
+        },
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    const panel = await screen.findByTestId("till-party-ids");
+    expect(within(panel).getByText("Il manque au bloc du magasin :")).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("link", { name: "Compléter les paramètres du magasin" }),
+    ).toHaveAttribute("href", "/settings");
+  });
+
+  test("the confirmation and the print panel are the facture's, on the sheet asked for", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () => json(201, issued);
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    const done = await screen.findByRole("status");
+    expect(within(done).getByText("Facture émise")).toBeInTheDocument();
+    // The number as the paper spells it, which is what a customer quotes.
+    expect(within(done).getByTestId("till-document-number")).toHaveTextContent("FA-000001");
+
+    await user.click(within(done).getByRole("button", { name: "Imprimer" }));
+    const frame = await screen.findByTestId("till-facture");
+    expect(frame).toHaveAttribute("srcdoc", FACTURE_HTML);
+    expect(facturePrinted()).toContain("paper=a4");
+    expect(facturePrinted()).toContain("lang=fr");
+
+    // The half sheet is the same facture on smaller paper, asked for again.
+    await user.click(screen.getByRole("radio", { name: "A5" }));
+    await waitFor(() => expect(facturePrinted()).toContain("paper=a5"));
+    expect(screen.queryByTestId("till-ticket")).toBeNull();
   });
 });

@@ -6,7 +6,7 @@
 // in (architecture.md rule 1).
 
 import { createClient } from "@dzpos/shared";
-import type { PrintLang } from "@dzpos/shared";
+import type { PrintLang, PrintPaper } from "@dzpos/shared";
 
 const FALLBACK = "http://127.0.0.1:4317";
 
@@ -60,4 +60,15 @@ export function saleTicketQueryKey(
   lang: PrintLang,
 ): readonly (string | number)[] {
   return ["sale-ticket", id, lang];
+}
+
+/** The facture is keyed by its sheet as well as its language: A4 and A5 are
+ * two pages the core renders, and a cached A4 must not be handed back when
+ * the cashier asked for the half sheet. */
+export function saleFactureQueryKey(
+  id: number,
+  lang: PrintLang,
+  paper: PrintPaper,
+): readonly (string | number)[] {
+  return ["sale-facture", id, lang, paper];
 }

@@ -31,7 +31,10 @@ use crate::print::strings::Key;
 const NUMBER_DIGITS: usize = 6;
 
 /// The number a customer quotes, `{prefix}-{number:06}` (features.md §4).
-pub(crate) fn number(doc: &Document) -> String {
+/// Public because the wire carries it too: a screen that says "Facture
+/// FA-000001" must read the same spelling the paper prints, not a second
+/// one built out of the kind and the integer.
+pub fn number(doc: &Document) -> String {
     format!(
         "{}-{:0width$}",
         doc.kind.number_prefix(),

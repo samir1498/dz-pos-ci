@@ -208,5 +208,17 @@
   "till_new_balance": "رصيد الزبون الجديد",
   "till_near_limit_sold": "بلغ هذا الزبون عتبة التنبيه.",
   "error_credit_limit": "هذا البيع يتجاوز سقف الدين المسموح للزبون.",
-  "error_credit_needs_customer": "البيع بالدين يحتاج زبونًا."
+  "error_credit_needs_customer": "البيع بالدين يحتاج زبونًا.",
+  "till_kind": "الوثيقة",
+  "till_facture": "فاتورة",
+  "till_facture_needs_customer": "تحرَّر الفاتورة باسم زبون.",
+  "till_paid_facture": "تم إصدار الفاتورة",
+  "till_paper": "المقاس",
+  "till_paper_a4": "A4",
+  "till_paper_a5": "A5",
+  "error_party_ids": "لا يمكن إصدار هذه الفاتورة بعد: هناك معرّفات ناقصة.",
+  "till_party_ids_seller": "ينقص كتلة المحل:",
+  "till_party_ids_buyer": "تنقص بطاقة الزبون:",
+  "till_party_ids_settings": "استكمال إعدادات المحل",
+  "till_party_ids_customer": "استكمال بطاقة الزبون"
 }

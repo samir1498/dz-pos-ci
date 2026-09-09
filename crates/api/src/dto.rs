@@ -596,6 +596,11 @@ pub struct SaleDto {
     pub kind: DocumentKindDto,
     pub series: String,
     pub number: i64,
+    /// The number as it is printed and as a customer quotes it back,
+    /// `FA-000001`. Built by the core beside the templates that print it
+    /// (`print::number`), so a screen naming a document and the paper in the
+    /// customer's hand cannot spell it two ways.
+    pub printed_number: String,
     /// `YYYY-MM-DD HH:MM:SS` on the shop's calendar (core, services::clock).
     pub issued_at: String,
     pub user_id: i32,
@@ -641,6 +646,7 @@ impl From<Document> for SaleDto {
         SaleDto {
             id: d.id,
             shop_id: d.shop_id,
+            printed_number: dzpos_core::print::number(&d),
             kind: d.kind.into(),
             series: d.series,
             number: d.number,

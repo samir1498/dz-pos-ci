@@ -208,5 +208,17 @@
   "till_new_balance": "Customer's new balance",
   "till_near_limit_sold": "This customer has reached their warning threshold.",
   "error_credit_limit": "This sale goes past the customer's credit limit.",
-  "error_credit_needs_customer": "A credit sale needs a customer."
+  "error_credit_needs_customer": "A credit sale needs a customer.",
+  "till_kind": "Document",
+  "till_facture": "Facture",
+  "till_facture_needs_customer": "A facture is made out to a named customer.",
+  "till_paid_facture": "Facture issued",
+  "till_paper": "Sheet",
+  "till_paper_a4": "A4",
+  "till_paper_a5": "A5",
+  "error_party_ids": "This facture cannot be issued yet: identifiers are missing.",
+  "till_party_ids_seller": "The shop's own block is missing:",
+  "till_party_ids_buyer": "The customer's fiche is missing:",
+  "till_party_ids_settings": "Fill the shop settings in",
+  "till_party_ids_customer": "Fill the customer's fiche in"
 }
