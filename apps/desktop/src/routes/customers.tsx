@@ -594,9 +594,14 @@ function AdjustForm({ customer }: { customer: CustomerDto }) {
       const centimes = parseAmountToCentimes(value.amount);
       if (centimes === null || centimes === 0) return;
       if (!window.confirm(t("customers_adjust_confirm"))) return;
-      await adjust
+      const written = await adjust
         .mutateAsync({ amount_centimes: centimes, note: cleared(value.note) })
-        .catch(() => undefined);
+        .then(() => true)
+        .catch(() => false);
+      // A refused correction keeps what was typed: the error above says what
+      // to change, and an empty box means typing the figure again to find
+      // out what was wrong with it.
+      if (!written) return;
       form.setFieldValue("amount", "");
       form.setFieldValue("note", "");
     },

@@ -352,6 +352,26 @@ describe("the ledger", () => {
     expect(() => sent("POST")).toThrow();
   });
 
+  test("a refused correction keeps the figure that was typed", async () => {
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
+    );
+    await screen.findByRole("row", { name: /solde de départ/ });
+
+    writeAnswer = () =>
+      json(422, { error: { code: "validation", message: "amount_centimes is too large" } });
+    await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
+    await userEvent.type(screen.getByLabelText(fr.field_adjust_note), "erreur de saisie");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_validation);
+    // Emptying the box on a refusal means retyping the figure to find out
+    // what was wrong with it.
+    expect(screen.getByLabelText(fr.field_adjust_amount)).toHaveValue("-500");
+    expect(screen.getByLabelText(fr.field_adjust_note)).toHaveValue("erreur de saisie");
+  });
+
   test("an adjustment of nothing is refused before it leaves the screen", async () => {
     mount();
     await userEvent.click(
