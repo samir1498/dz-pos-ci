@@ -149,6 +149,10 @@ export function TillScreen() {
       setCart([]);
       setGlobalDiscountText("");
       setTenderedText("");
+      // The next customer's first scan goes into this box; a filter left
+      // over from the last basket would take its digits on the end and
+      // match nothing.
+      setSearch("");
       // The sale moved stock, so the tiles owe the shop a new count.
       await queryClient.invalidateQueries({ queryKey: productsQueryKey });
       searchRef.current?.focus();
@@ -237,9 +241,15 @@ export function TillScreen() {
   }
 
   const netToPay = preview?.netToPay ?? 0;
-  const tendered = tenderedText.trim() === "" ? 0 : parseAmountToCentimes(tenderedText);
+  const tenderedBlank = tenderedText.trim() === "";
+  const tendered = tenderedBlank ? 0 : parseAmountToCentimes(tenderedText);
+  // An empty box on a cash sale is a cashier who has not counted the notes
+  // yet, not a mistake: the sale waits, and nothing turns red until an
+  // amount has actually been typed.
+  const tenderedMissing =
+    mode === "cash" && cart.length > 0 && preview !== null && tenderedBlank;
   const tenderedProblem: Key | null =
-    mode !== "cash" || preview === null || cart.length === 0
+    mode !== "cash" || preview === null || cart.length === 0 || tenderedBlank
       ? null
       : tendered === null || tendered < 0
         ? "error_price_invalid"
@@ -249,7 +259,8 @@ export function TillScreen() {
   const change = mode === "cash" && tendered !== null ? tendered - netToPay : 0;
 
   const problem = lineProblem ?? globalDiscountProblem ?? totalsProblem ?? tenderedProblem;
-  const canPay = cart.length > 0 && preview !== null && problem === null && !pay.isPending;
+  const canPay =
+    cart.length > 0 && preview !== null && problem === null && !tenderedMissing && !pay.isPending;
 
   const submit = useCallback(() => {
     if (!canPay || preview === null) return;
@@ -476,7 +487,7 @@ export function TillScreen() {
             />
           </label>
         ) : null}
-        {mode === "cash" && tenderedProblem === null && cart.length > 0 ? (
+        {mode === "cash" && tenderedProblem === null && !tenderedMissing && cart.length > 0 ? (
           <p className="flex items-center justify-between gap-2">
             <span>{t("till_change")}</span>
             <span data-testid="till-change" className="font-mono" dir="ltr">

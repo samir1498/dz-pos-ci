@@ -396,6 +396,19 @@ describe("the live totals", () => {
     await user.click(screen.getByRole("button", { name: "Encaisser" }));
     expect(posted()).toBe(false);
   });
+
+  test("an empty tendered box is a cashier who has not typed yet, not a mistake", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpTheFixtureBasket(user);
+    // Nothing red on a basket that was only just rung up.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("till-change")).not.toBeInTheDocument();
+    // And nothing goes out either, by the button or by the key.
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    await user.keyboard("{F9}");
+    expect(posted()).toBe(false);
+  });
 });
 
 describe("paying", () => {
@@ -472,6 +485,21 @@ describe("paying", () => {
     expect(done).toHaveTextContent("1 292,00");
     expect(done).toHaveTextContent("208,00");
     expect(screen.getByText("Le panier est vide.")).toBeInTheDocument();
+  });
+
+  test("the search box is empty again for the next customer", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpTheFixtureBasket(user);
+    const box = screen.getByLabelText("Chercher un produit ou scanner un code-barres");
+    await user.type(box, "tomate");
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    await screen.findByRole("status");
+    // A filter left behind would take the next scan's digits on its end and
+    // match nothing.
+    expect(box).toHaveValue("");
   });
 
   test("the print stub opens the stored ticket, lines and totals from the DTO", async () => {

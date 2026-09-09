@@ -31,7 +31,7 @@ const TOMATO_STOCK_MILLI = 5_000;
 const COFFEE_SOLD_MILLI = 2_000;
 const TOMATO_SOLD_MILLI = 1_500;
 
-/** 15,00 DA handed over for a 12,92 DA basket. */
+/** 1 500,00 DA handed over for a 1 292,00 DA basket. */
 const TENDERED = "1500";
 
 interface TotalsCase {
@@ -123,7 +123,9 @@ function qtyBox(page: Page, name: string) {
   return page.getByLabel(`${t("field_qty")} ${name}`, { exact: true });
 }
 
-test("sells two rates for cash, matches the fixture totals and reduces the stock", async ({
+// "screenshot" in the title on purpose: `just screenshot` greps for it, and
+// till-ar.png is committed, so the file has to be regenerable by that recipe.
+test("sells two rates for cash, matches the fixture totals, reduces the stock and saves the till screenshot in Arabic", async ({
   page,
   request,
 }) => {
