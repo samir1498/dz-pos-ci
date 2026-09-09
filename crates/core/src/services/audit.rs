@@ -17,6 +17,10 @@ pub const ACTION_CREATE: &str = "create";
 pub const ACTION_UPDATE: &str = "update";
 /// A régime change appended to the dated series.
 pub const ACTION_SET_REGIME: &str = "set_regime";
+/// A correction to what a customer owes, written as a ledger movement. The
+/// entry carries the balance before and after, so the log reads as the
+/// change it was without anyone summing the ledger again.
+pub const ACTION_ADJUST_DEBT: &str = "adjust_debt";
 
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.

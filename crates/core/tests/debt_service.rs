@@ -10,6 +10,7 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::money::Money;
+use dzpos_core::services::audit;
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
 use dzpos_core::services::debt::{self, DebtKind, NewDebtAllocation, NewDebtEntry};
 
@@ -432,4 +433,181 @@ fn a_movement_pointing_at_another_shops_document_is_refused() {
         Money::ZERO,
         "the refused movement landed anyway"
     );
+}
+
+/// The fiche prints a running balance beside each movement, and it is the
+/// core's to compute: a screen adding the column itself would be a second
+/// place the debt is worked out, and the two would disagree the day a
+/// movement is added.
+#[test]
+fn the_statement_runs_the_balance_up_from_the_oldest_movement() {
+    let (_dir, mut conn) = open_temp();
+    let id = a_customer(&mut conn, "Brahim");
+    debt::append(&mut conn, SHOP, movement(id, DebtKind::Opening, 150_000, 0)).unwrap();
+    debt::append(&mut conn, SHOP, movement(id, DebtKind::Sale, 50_000, 0)).unwrap();
+    debt::append(&mut conn, SHOP, movement(id, DebtKind::Payment, 0, 70_000)).unwrap();
+
+    let statement = debt::statement(&mut conn, SHOP, id).unwrap();
+    assert_eq!(
+        statement.balance,
+        Money::centimes(130_000),
+        "the envelope's balance is not what the ledger sums to"
+    );
+    assert_eq!(
+        statement.balance,
+        debt::balance(&mut conn, SHOP, id).unwrap(),
+        "the statement and the balance query disagree"
+    );
+    let read: Vec<(DebtKind, Money)> = statement
+        .lines
+        .iter()
+        .map(|line| (line.entry.kind, line.balance_after))
+        .collect();
+    assert_eq!(
+        read,
+        [
+            (DebtKind::Payment, Money::centimes(130_000)),
+            (DebtKind::Sale, Money::centimes(200_000)),
+            (DebtKind::Opening, Money::centimes(150_000)),
+        ],
+        "the lines read newest first and each one carries the balance as of itself"
+    );
+}
+
+#[test]
+fn a_customer_with_no_movement_has_an_empty_statement_and_owes_nothing() {
+    let (_dir, mut conn) = open_temp();
+    let id = a_customer(&mut conn, "Brahim");
+    let statement = debt::statement(&mut conn, SHOP, id).unwrap();
+    assert!(statement.lines.is_empty());
+    assert_eq!(statement.balance, Money::ZERO);
+}
+
+#[test]
+fn another_shop_reads_no_statement_of_this_shops_customer() {
+    let (_dir, mut conn) = open_temp();
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(&mut conn)
+        .unwrap();
+    let id = a_customer(&mut conn, "Brahim");
+    let err = debt::statement(&mut conn, 2, id).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::NotFound {
+                entity: "customer",
+                ..
+            }
+        ),
+        "{err}"
+    );
+}
+
+/// features.md §2: the ledger is append-only, so a wrong figure is corrected
+/// by a movement a comptable can read. The sign says which way it moves.
+#[test]
+fn an_adjustment_moves_the_debt_the_way_its_sign_says_and_answers_the_new_balance() {
+    let (_dir, mut conn) = open_temp();
+    let id = a_customer(&mut conn, "Brahim");
+    debt::append(&mut conn, SHOP, movement(id, DebtKind::Opening, 150_000, 0)).unwrap();
+
+    let down = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        id,
+        Money::centimes(-50_000),
+        Some("erreur de saisie".to_string()),
+    )
+    .unwrap();
+    assert_eq!(down.entry.kind, DebtKind::Adjustment);
+    assert_eq!(down.entry.credit, Money::centimes(50_000));
+    assert_eq!(down.entry.debit, Money::ZERO);
+    assert_eq!(down.entry.note.as_deref(), Some("erreur de saisie"));
+    assert_eq!(down.balance, Money::centimes(100_000));
+
+    let up = debt::adjust(&mut conn, SHOP, OWNER, id, Money::centimes(20_000), None).unwrap();
+    assert_eq!(up.entry.debit, Money::centimes(20_000));
+    assert_eq!(up.entry.credit, Money::ZERO);
+    assert_eq!(up.balance, Money::centimes(120_000));
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, id).unwrap(),
+        Money::centimes(120_000),
+        "the answer and the stored ledger disagree"
+    );
+    assert_eq!(debt::ledger(&mut conn, SHOP, id).unwrap().len(), 3);
+}
+
+#[test]
+fn an_adjustment_of_nothing_is_refused_and_writes_no_row() {
+    let (_dir, mut conn) = open_temp();
+    let id = a_customer(&mut conn, "Brahim");
+    let err = debt::adjust(&mut conn, SHOP, OWNER, id, Money::ZERO, None).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "amount"),
+        "{err}"
+    );
+    assert!(debt::ledger(&mut conn, SHOP, id).unwrap().is_empty());
+    assert!(audit::list(&mut conn, SHOP)
+        .unwrap()
+        .iter()
+        .all(|entry| entry.entity != "customer_debt"));
+}
+
+/// features.md §5: a correction to what somebody owes is a sensitive action,
+/// and the entry carries the two balances so a reader never has to re-derive
+/// them from the ledger.
+#[test]
+fn an_adjustment_is_audited_with_the_balance_before_and_after() {
+    let (_dir, mut conn) = open_temp();
+    let id = a_customer(&mut conn, "Brahim");
+    debt::append(&mut conn, SHOP, movement(id, DebtKind::Opening, 150_000, 0)).unwrap();
+    debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        id,
+        Money::centimes(-50_000),
+        Some("erreur de saisie".to_string()),
+    )
+    .unwrap();
+
+    let log = audit::list(&mut conn, SHOP).unwrap();
+    let entry = log
+        .iter()
+        .find(|e| e.entity == "customer_debt")
+        .expect("the adjustment left no audit entry");
+    assert_eq!(entry.action, "adjust_debt");
+    assert_eq!(entry.entity_id, Some(id));
+    assert_eq!(entry.user_id, OWNER);
+    let before: serde_json::Value =
+        serde_json::from_str(entry.before.as_deref().unwrap_or("null")).unwrap();
+    let after: serde_json::Value =
+        serde_json::from_str(entry.after.as_deref().unwrap_or("null")).unwrap();
+    assert_eq!(before["balance_centimes"], 150_000);
+    assert_eq!(after["balance_centimes"], 100_000);
+    assert_eq!(after["amount_centimes"], -50_000);
+    assert_eq!(after["note"], "erreur de saisie");
+}
+
+#[test]
+fn an_adjustment_for_another_shops_customer_is_not_found_and_writes_nothing() {
+    let (_dir, mut conn) = open_temp();
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(&mut conn)
+        .unwrap();
+    let id = a_customer(&mut conn, "Brahim");
+    let err = debt::adjust(&mut conn, 2, OWNER, id, Money::centimes(50_000), None).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::NotFound {
+                entity: "customer",
+                ..
+            }
+        ),
+        "{err}"
+    );
+    assert!(debt::ledger(&mut conn, SHOP, id).unwrap().is_empty());
+    assert!(audit::list(&mut conn, 2).unwrap().is_empty());
 }
