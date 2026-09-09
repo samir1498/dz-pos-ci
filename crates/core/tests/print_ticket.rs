@@ -18,7 +18,9 @@ use std::path::PathBuf;
 
 use chrono::NaiveDate;
 use dzpos_core::lang::Lang;
-use dzpos_core::money::{compute_totals, Bps, Line, Money, PaymentMode, Regime, TotalsOptions};
+use dzpos_core::money::{
+    compute_totals, Bps, Line, Money, PaymentMode, Regime, TotalsOptions, TvaLine,
+};
 use dzpos_core::print::render_ticket;
 use dzpos_core::print::strings::{text, Key};
 use dzpos_core::services::documents::{
@@ -382,6 +384,51 @@ fn the_digits_are_western_in_every_language() {
                 "{lang:?} {regime:?}"
             );
         }
+    }
+}
+
+/// A stored IFU document that carries a TVA recap contradicts the régime it
+/// was issued under: a restored file, a repaired row, an import. There is no
+/// honest ticket for it. Printing the recap would name a tax the document
+/// must not name (CTCA 2026 art. 64) and dropping it silently would hand the
+/// customer a total whose parts do not add up, so the printer refuses.
+#[test]
+fn an_ifu_document_carrying_a_tva_recap_is_refused_not_quietly_stripped() {
+    let mut doc = fixed_sale(Regime::Ifu);
+    doc.totals.tva_by_rate.push(TvaLine {
+        rate: Bps::new(1900).unwrap(),
+        base: Money::centimes(29_295),
+        amount: Money::centimes(5_566),
+    });
+    for lang in Lang::ALL {
+        let err = render_ticket(&doc, lang).unwrap_err();
+        assert_eq!(err.code(), "print", "{lang:?}: {err:?}");
+    }
+}
+
+/// The refusal above is about the régime, not about the recap being there:
+/// a réel document is printable whatever its recap holds. An empty one is a
+/// réel sale of nothing taxable, and a 0 % only recap is the ordinary shape
+/// of a basket of exempt goods; both still print.
+#[test]
+fn a_reel_document_prints_with_an_empty_recap_and_with_a_zero_rate_one() {
+    let mut empty = fixed_sale(Regime::Reel);
+    empty.totals.tva_by_rate.clear();
+    let mut exempt = fixed_sale(Regime::Reel);
+    exempt.totals.tva_by_rate = vec![TvaLine {
+        rate: Bps::ZERO,
+        base: exempt.totals.subtotal_ht,
+        amount: Money::ZERO,
+    }];
+    for lang in Lang::ALL {
+        assert_eq!(
+            amounts(&render_ticket(&empty, lang).unwrap(), "tva").len(),
+            0
+        );
+        assert_eq!(
+            amounts(&render_ticket(&exempt, lang).unwrap(), "tva").len(),
+            1
+        );
     }
 }
 

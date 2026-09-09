@@ -98,6 +98,22 @@ struct TicketView {
 /// Pinned byte for byte by `fixtures/print/ticket_80mm/`, six files: three
 /// languages under the réel and the same three under the IFU.
 pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, CoreError> {
+    // `regime_ifu_prints_no_tva` is a rule about the document, not a layout
+    // the template applies on the way past. A stored IFU document that
+    // carries a TVA recap contradicts the régime it was issued under (a
+    // restored file, a repaired row, an import), and there is no honest
+    // ticket for it: printing the recap names a tax the document must not
+    // name (CTCA 2026 art. 64), and dropping it quietly hands the customer
+    // a total whose parts do not add up. The refusal is the answer.
+    //
+    // The test for it is the whole point of the check: nothing this app
+    // writes can reach here, so only a file that came from somewhere else
+    // can, and that is exactly when a wrong ticket would be believed.
+    if doc.regime == Regime::Ifu && !doc.totals.tva_by_rate.is_empty() {
+        return Err(CoreError::render(
+            "an IFU document carries a TVA recap and has no printable form",
+        ));
+    }
     view(doc, lang).render().map_err(CoreError::from)
 }
 

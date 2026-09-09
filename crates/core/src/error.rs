@@ -53,6 +53,13 @@ impl CoreError {
         }
     }
 
+    /// A document the printer refuses. `reason` says which rule the stored
+    /// row breaks; it stays on the server, on the error's source chain,
+    /// because the wire message for a render failure is fixed.
+    pub fn render(reason: &'static str) -> Self {
+        CoreError::Render(askama::Error::custom(reason))
+    }
+
     pub fn validation(field: &str, message: &str) -> Self {
         CoreError::Validation {
             field: field.to_string(),
