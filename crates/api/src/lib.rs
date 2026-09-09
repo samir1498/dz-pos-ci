@@ -115,8 +115,10 @@ impl AppState {
     ///    so the rename below cannot cross a file system;
     /// 5. close the live connection, which is what releases the file handle,
     ///    leaving the slot under the lock empty;
-    /// 6. delete the live file's `-wal` and `-shm` sidecars;
-    /// 7. rename `<db>.restoring.tmp` over the shop file;
+    /// 6. rename `<db>.restoring.tmp` over the shop file;
+    /// 7. delete the old file's `-wal` and `-shm` sidecars, after the rename
+    ///    and only if it happened: until then they are what the shop file
+    ///    still needs to be whole;
     /// 8. reopen through `db::open`, which runs any migration the copy is
     ///    behind on, and put that connection back into the slot.
     ///
@@ -232,14 +234,19 @@ fn remove_if_present(path: &Path) -> Result<(), std::io::Error> {
     }
 }
 
-/// The sidecars belong to the file that is going, and SQLite would replay a
-/// leftover `-wal` into whatever file it finds under that name. They go
-/// before the rename, and a rename inside one folder is atomic.
+/// The rename first, the old file's sidecars after it, and only once it has
+/// happened. SQLite would replay a leftover `-wal` into whatever file it
+/// finds under that name, so they cannot stay across a swap; but they are
+/// also what the shop file still needs to be whole, and a rename that failed
+/// leaves that file in place to be reopened. Deleting them first threw away
+/// the last committed pages of a database that was never replaced. A rename
+/// inside one folder is atomic. There is no `-journal` to remove: the file
+/// is opened in WAL mode, so a rollback journal never exists beside it.
 fn swap_in(staged: &Path, db: &Path) -> Result<(), dzpos_core::error::CoreError> {
-    for sidecar in ["-wal", "-shm", "-journal"] {
+    std::fs::rename(staged, db)?;
+    for sidecar in ["-wal", "-shm"] {
         remove_if_present(&sibling(db, sidecar))?;
     }
-    std::fs::rename(staged, db)?;
     Ok(())
 }
 
@@ -383,5 +390,54 @@ mod origin_tests {
         ] {
             assert!(origin_from_flag(bad).is_err(), "{bad} was accepted");
         }
+    }
+}
+
+#[cfg(test)]
+mod swap_tests {
+    // Tests may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::{sibling, swap_in};
+
+    /// The sidecars are what the shop file still needs to be whole. A rename
+    /// that did not happen must not find them already deleted: the file
+    /// under that name is the one that was always there, and it is about to
+    /// be reopened.
+    #[test]
+    fn a_rename_that_fails_leaves_the_old_files_sidecars_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("t.db");
+        // A name a rename cannot write over, so the swap fails after the
+        // point where the old order had already deleted the sidecars.
+        std::fs::create_dir(&db).unwrap();
+        std::fs::write(db.join("keep"), b"not empty").unwrap();
+        let wal = sibling(&db, "-wal");
+        let shm = sibling(&db, "-shm");
+        std::fs::write(&wal, b"wal").unwrap();
+        std::fs::write(&shm, b"shm").unwrap();
+        let staged = sibling(&db, ".restoring.tmp");
+        std::fs::write(&staged, b"the copy").unwrap();
+
+        assert!(swap_in(&staged, &db).is_err(), "the rename should not work");
+        assert!(wal.is_file(), "the shop file's -wal was deleted anyway");
+        assert!(shm.is_file(), "the shop file's -shm was deleted anyway");
+    }
+
+    #[test]
+    fn a_rename_that_works_takes_the_sidecars_with_the_file_they_belonged_to() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("t.db");
+        std::fs::write(&db, b"the old shop file").unwrap();
+        std::fs::write(sibling(&db, "-wal"), b"wal").unwrap();
+        std::fs::write(sibling(&db, "-shm"), b"shm").unwrap();
+        let staged = sibling(&db, ".restoring.tmp");
+        std::fs::write(&staged, b"the copy").unwrap();
+
+        swap_in(&staged, &db).unwrap();
+        assert_eq!(std::fs::read(&db).unwrap(), b"the copy");
+        assert!(!sibling(&db, "-wal").exists());
+        assert!(!sibling(&db, "-shm").exists());
+        assert!(!staged.exists());
     }
 }
