@@ -433,7 +433,10 @@ async fn every_customer_route_needs_the_launch_token() {
         ("POST", "/customers/1/adjustments"),
         ("GET", "/customers/1/payments"),
         ("POST", "/customers/1/payments"),
-        ("GET", "/customers/1/statement?from=2026-01-01&to=2026-09-30&lang=fr"),
+        (
+            "GET",
+            "/customers/1/statement?from=2026-01-01&to=2026-09-30&lang=fr",
+        ),
     ] {
         let req = Request::builder()
             .method(method)

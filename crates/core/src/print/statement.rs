@@ -207,9 +207,7 @@ fn movement_view(line: &StatementEntry, lang: Lang) -> MovementView {
     MovementView {
         date: line.entry.created_at.format(DATE_FORMAT).to_string(),
         kind: text(kind_key(line.entry.kind), lang),
-        document: line
-            .document
-            .map(|doc| number_of(doc.kind, doc.number)),
+        document: line.document.map(|doc| number_of(doc.kind, doc.number)),
         debit: (line.entry.debit != Money::ZERO).then(|| format_centimes(line.entry.debit)),
         credit: (line.entry.credit != Money::ZERO).then(|| format_centimes(line.entry.credit)),
         balance: format_centimes(line.balance_after),

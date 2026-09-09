@@ -477,7 +477,7 @@ describe("payments", () => {
     await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "1000");
     await userEvent.click(screen.getByRole("radio", { name: fr.payment_cash }));
     await userEvent.type(screen.getByLabelText(fr.field_payment_note), "acompte");
-    await userEvent.click(screen.getByRole("button", { name: fr.action_pay }));
+    await userEvent.click(screen.getByRole("button", { name: fr.action_take_payment }));
 
     await waitFor(() => expect(sent("POST").url).toMatch(/\/customers\/3\/payments$/));
     expect(sent("POST").body).toEqual({
@@ -508,7 +508,7 @@ describe("payments", () => {
       });
 
     await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "2000");
-    await userEvent.click(screen.getByRole("button", { name: fr.action_pay }));
+    await userEvent.click(screen.getByRole("button", { name: fr.action_take_payment }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(fr.error_payment_above_debt);
@@ -522,7 +522,7 @@ describe("payments", () => {
     await openTheFiche();
 
     await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "0");
-    await userEvent.click(screen.getByRole("button", { name: fr.action_pay }));
+    await userEvent.click(screen.getByRole("button", { name: fr.action_take_payment }));
 
     expect(await screen.findByText(fr.error_payment_amount_zero)).toBeInTheDocument();
     expect(() => sent("POST")).toThrow();

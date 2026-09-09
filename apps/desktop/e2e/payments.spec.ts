@@ -175,7 +175,7 @@ test("settles two credit sales oldest first, refuses more than is owed, and prin
   await page.getByLabel(t("field_payment_amount"), { exact: true }).fill(PAYMENT_INPUT);
   await page.getByRole("radio", { name: t("payment_cash"), exact: true }).check();
   await page.getByLabel(t("field_payment_note"), { exact: true }).fill("acompte e2e");
-  await page.getByRole("button", { name: t("action_pay"), exact: true }).click();
+  await page.getByRole("button", { name: t("action_take_payment"), exact: true }).click();
   await expect(page.getByText(t("customers_paid"))).toBeVisible();
 
   // The screen and the shop file agree on the balance.
@@ -214,7 +214,7 @@ test("settles two credit sales oldest first, refuses more than is owed, and prin
   // A payment above what is left is refused, and the refusal names what is
   // still owed rather than saying only "too much".
   await page.getByLabel(t("field_payment_amount"), { exact: true }).fill(TOO_MUCH_INPUT);
-  await page.getByRole("button", { name: t("action_pay"), exact: true }).click();
+  await page.getByRole("button", { name: t("action_take_payment"), exact: true }).click();
   const refusal = page.getByRole("alert").filter({ hasText: t("error_payment_above_debt") });
   await expect(refusal).toBeVisible();
   await expect(refusal).toContainText(BALANCE_RENDERED);

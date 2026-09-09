@@ -16,8 +16,7 @@ use dzpos_api::dto::{
     NewCustomerDto, NewPaymentDto, NewProductDto, NewSaleDto, NewSaleLineDto, PartyKindDto,
     PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto,
     RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto, SaleDto, SaleLineDto, SaleTotalsDto,
-    SaleTvaDto,
-    SettingsDto, StoreDto, UnitDto,
+    SaleTvaDto, SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 

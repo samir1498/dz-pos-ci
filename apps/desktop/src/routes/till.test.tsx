@@ -95,6 +95,9 @@ const sale: SaleDto = {
   payment_mode: "cash",
   seller: settings.store,
   customer_id: null,
+  // No customer, so no debt to print: a cash ticket carries no balance
+  // triple (features.md §3).
+  balance: null,
   totals: {
     total_ht_centimes: 110_000,
     discount_centimes: 0,

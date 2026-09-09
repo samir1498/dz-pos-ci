@@ -9,12 +9,12 @@
 use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use axum::response::Html;
+use axum::Json;
 use dzpos_core::db::Conn;
+use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
 use dzpos_core::print::{render_statement, Paper};
-use dzpos_core::error::CoreError;
 use dzpos_core::services::customers::NewCustomer;
 use dzpos_core::services::{clock, customers as service, debt};
 use serde::Deserialize;
@@ -209,7 +209,9 @@ pub async fn statement(
 ) -> Result<Html<String>, ApiError> {
     let id = path_id(id)?;
     let Query(StatementQuery { from, to, lang }) = range.map_err(|_| {
-        ApiError::BadRequest("from and to are days written YYYY-MM-DD and lang is fr, en or ar".into())
+        ApiError::BadRequest(
+            "from and to are days written YYYY-MM-DD and lang is fr, en or ar".into(),
+        )
     })?;
     let from = parse_day("from", &from)?;
     let to = parse_day("to", &to)?;

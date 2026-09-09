@@ -118,10 +118,45 @@ fn facture(number: i64) -> Option<DocumentRef> {
 /// Every running balance below is written out rather than computed, so the
 /// fixture proves the column instead of repeating whatever built it.
 fn a_month() -> RangedStatement {
-    let rows: [(i32, DebtKind, i64, i64, Option<DocumentRef>, u32, i64); 3] = [
-        (11, DebtKind::Sale, 200_000, 0, facture(42), 5, 350_000),
-        (12, DebtKind::Payment, 0, 250_000, None, 12, 100_000),
-        (13, DebtKind::Adjustment, 0, 10_000, None, 20, 90_000),
+    /// One fixed row: the movement's id, why the debt moved, its two columns,
+    /// the document it cites, the day it landed and the balance it left.
+    struct Row {
+        id: i32,
+        kind: DebtKind,
+        debit: i64,
+        credit: i64,
+        document: Option<DocumentRef>,
+        day: u32,
+        balance: i64,
+    }
+    let rows = [
+        Row {
+            id: 11,
+            kind: DebtKind::Sale,
+            debit: 200_000,
+            credit: 0,
+            document: facture(42),
+            day: 5,
+            balance: 350_000,
+        },
+        Row {
+            id: 12,
+            kind: DebtKind::Payment,
+            debit: 0,
+            credit: 250_000,
+            document: None,
+            day: 12,
+            balance: 100_000,
+        },
+        Row {
+            id: 13,
+            kind: DebtKind::Adjustment,
+            debit: 0,
+            credit: 10_000,
+            document: None,
+            day: 20,
+            balance: 90_000,
+        },
     ];
     RangedStatement {
         from: day(1),
@@ -129,10 +164,17 @@ fn a_month() -> RangedStatement {
         opening: Money::centimes(OPENING),
         entries: rows
             .into_iter()
-            .map(|(id, kind, debit, credit, document, d, balance)| StatementEntry {
-                entry: movement(id, kind, debit, credit, document, at(d, 10)),
-                balance_after: Money::centimes(balance),
-                document,
+            .map(|row| StatementEntry {
+                entry: movement(
+                    row.id,
+                    row.kind,
+                    row.debit,
+                    row.credit,
+                    row.document,
+                    at(row.day, 10),
+                ),
+                balance_after: Money::centimes(row.balance),
+                document: row.document,
             })
             .collect(),
         closing: Money::centimes(90_000),
@@ -214,11 +256,7 @@ fn in_words(html: &str) -> String {
 }
 
 /// Every amount in the golden, against what the statement holds.
-fn the_golden_says_what_the_statement_holds(
-    html: &str,
-    statement: &RangedStatement,
-    lang: Lang,
-) {
+fn the_golden_says_what_the_statement_holds(html: &str, statement: &RangedStatement, lang: Lang) {
     assert_eq!(
         centimes(&one_amount(html, "opening")),
         statement.opening.as_centimes(),

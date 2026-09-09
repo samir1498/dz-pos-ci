@@ -684,7 +684,7 @@ function PaymentForm({ customer }: { customer: CustomerDto }) {
 
       <div>
         <button type="submit" className="rounded border px-3 py-1.5" disabled={pay.isPending}>
-          {pay.isPending ? t("action_saving") : t("action_pay")}
+          {pay.isPending ? t("action_saving") : t("action_take_payment")}
         </button>
       </div>
     </form>

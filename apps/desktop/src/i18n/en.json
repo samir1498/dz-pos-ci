@@ -129,7 +129,7 @@
   "pay_card": "Card",
   "pay_credit": "Credit",
   "pay_credit_later": "A credit sale needs a customer account, which arrives in the next version.",
-  "action_pay": "Take the payment",
+  "action_pay": "Pay",
   "action_paying": "Paying…",
   "till_paid": "Ticket issued",
   "till_ticket": "Ticket",
@@ -220,5 +220,6 @@
   "customers_statement_title": "Customer statement",
   "error_statement_range_invalid": "The end day is before the start day.",
   "error_payment_amount_invalid": "Invalid amount.",
-  "error_payment_amount_zero": "A payment of nothing settles nothing."
+  "error_payment_amount_zero": "A payment of nothing settles nothing.",
+  "action_take_payment": "Take the payment"
 }

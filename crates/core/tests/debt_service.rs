@@ -726,12 +726,7 @@ fn an_adjustment_answers_the_ledger_its_own_transaction_read() {
 /// A document made out to `customer` for `net` centimes, unpaid, issued on
 /// the day given so the oldest-first order is a fact of the fixture and not
 /// of the insert order.
-fn a_document_on_credit(
-    conn: &mut SqliteConnection,
-    customer_id: i32,
-    net: i64,
-    day: u32,
-) -> i32 {
+fn a_document_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, day: u32) -> i32 {
     let net = Money::centimes(net);
     let issued_at = NaiveDate::from_ymd_opt(2026, 9, day)
         .and_then(|d| d.and_hms_opt(10, 0, 0))
@@ -1085,7 +1080,10 @@ fn a_document_already_settled_by_an_allocation_nobody_wrote_a_payment_for_refuse
         debt::balance(&mut conn, SHOP, customer).unwrap(),
         Money::centimes(100_000)
     );
-    assert_eq!(remaining_debt(&mut conn, document), Money::centimes(100_000));
+    assert_eq!(
+        remaining_debt(&mut conn, document),
+        Money::centimes(100_000)
+    );
 }
 
 #[test]
@@ -1257,7 +1255,11 @@ fn a_statement_opens_at_what_was_owed_before_the_range_and_closes_at_the_last_mo
     // The opening balance is the running balance of the newest movement
     // before the range: the opening row and the facture, both dated earlier.
     assert_eq!(range.opening, Money::centimes(350_000));
-    assert_eq!(range.entries.len(), 1, "the range took a movement outside it");
+    assert_eq!(
+        range.entries.len(),
+        1,
+        "the range took a movement outside it"
+    );
     assert_eq!(range.entries[0].entry.kind, DebtKind::Payment);
     assert_eq!(range.entries[0].balance_after, Money::centimes(300_000));
     assert_eq!(range.closing, Money::centimes(300_000));

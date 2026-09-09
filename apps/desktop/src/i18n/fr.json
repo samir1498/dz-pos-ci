@@ -220,5 +220,6 @@
   "customers_statement_title": "Relevé du client",
   "error_statement_range_invalid": "La date de fin est avant la date de début.",
   "error_payment_amount_invalid": "Montant invalide.",
-  "error_payment_amount_zero": "Un paiement de zéro ne solde rien."
+  "error_payment_amount_zero": "Un paiement de zéro ne solde rien.",
+  "action_take_payment": "Encaisser"
 }

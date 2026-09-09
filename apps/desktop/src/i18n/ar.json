@@ -129,7 +129,7 @@
   "pay_card": "بطاقة",
   "pay_credit": "بالدين",
   "pay_credit_later": "البيع بالدين يحتاج حساب زبون، وهو مبرمج في الإصدار القادم.",
-  "action_pay": "تسجيل",
+  "action_pay": "الدفع",
   "action_paying": "جاري الدفع…",
   "till_paid": "تم إصدار التذكرة",
   "till_ticket": "التذكرة",
@@ -220,5 +220,6 @@
   "customers_statement_title": "كشف حساب الزبون",
   "error_statement_range_invalid": "تاريخ النهاية قبل تاريخ البداية.",
   "error_payment_amount_invalid": "مبلغ غير صالح.",
-  "error_payment_amount_zero": "دفعة بصفر لا تسدد شيئًا."
+  "error_payment_amount_zero": "دفعة بصفر لا تسدد شيئًا.",
+  "action_take_payment": "تسجيل"
 }

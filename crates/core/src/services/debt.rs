@@ -20,10 +20,10 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::debt::{DebtAllocationRowWrite, DebtRowWrite};
+use crate::models::document::DocumentKind;
 use crate::money::Money;
 use crate::repos::customers as customers_repo;
 use crate::repos::debt as repo;
-use crate::models::document::DocumentKind;
 use crate::repos::documents as documents_repo;
 use crate::services::{audit, optional_field};
 
