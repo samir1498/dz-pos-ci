@@ -119,7 +119,7 @@ two places for a comptable to check against each other. #}
 </thead>
 <tbody>
 {%- for line in lines %}
-<tr><td>{{ line.name }}</td><td class="n num">{{ line.qty }}</td><td class="n"><span class="amount amount-unit-price">{{ line.unit_price }}</span></td>{% if show_line_discount %}<td class="n">{% if let Some(discount) = line.discount %}<span class="amount amount-line-discount">-{{ discount }}</span>{% endif %}</td>{% endif %}{% if let Some(rate) = line.rate %}<td class="n num"><span class="rate rate-line">{{ rate }}</span></td>{% endif %}<td class="n"><span class="amount amount-line">{{ line.total }}</span></td></tr>
+<tr><td>{{ line.name }}</td><td class="n num"><span class="qty qty-line">{{ line.qty }}</span></td><td class="n"><span class="amount amount-unit-price">{{ line.unit_price }}</span></td>{% if show_line_discount %}<td class="n">{% if let Some(discount) = line.discount %}<span class="amount amount-line-discount">-{{ discount }}</span>{% endif %}</td>{% endif %}{% if let Some(rate) = line.rate %}<td class="n num"><span class="rate rate-line">{{ rate }}</span></td>{% endif %}<td class="n"><span class="amount amount-line">{{ line.total }}</span></td></tr>
 {%- endfor %}
 </tbody>
 </table>

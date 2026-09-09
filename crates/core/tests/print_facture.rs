@@ -526,6 +526,36 @@ fn centimes(printed: &str) -> i64 {
     sign * (whole * 100 + rest)
 }
 
+/// The text of every `<span class="qty qty-line">` in the file: the
+/// quantity cells. A quantity is a figure like any other on this page, and
+/// the one an avoir hands back is not the one the facture sold, so it is
+/// read back off the golden too.
+fn qtys(html: &str) -> Vec<String> {
+    let opening = "<span class=\"qty qty-line\">";
+    html.split(opening)
+        .skip(1)
+        .map(|rest| {
+            let end = rest.find("</span>").expect("a quantity span never closes");
+            rest[..end].to_owned()
+        })
+        .collect()
+}
+
+/// "1,5" back to 1500 thousandths, and "2" to 2000. The golden's own
+/// digits, read by a parser that shares no code with the formatter.
+fn milli(printed: &str) -> i64 {
+    let digits: String = printed
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == ',' || *c == '-')
+        .collect();
+    let (whole, rest) = digits.split_once(',').unwrap_or((digits.as_str(), ""));
+    let sign = if whole.starts_with('-') { -1 } else { 1 };
+    let whole: i64 = whole.trim_start_matches('-').parse().unwrap();
+    assert!(rest.len() <= 3, "{printed} carries more than thousandths");
+    let rest: i64 = format!("{rest:0<3}").parse().unwrap();
+    sign * (whole * 1_000 + rest)
+}
+
 /// The text of every `<span class="rate rate-{marker}">` in the file: the
 /// rate cells, which carry a figure no amount parser would catch.
 fn rates(html: &str, marker: &str) -> Vec<String> {
@@ -719,6 +749,15 @@ fn the_golden_says_what_the_document_stores(
         doc.lines.len(),
         "one unit price per line"
     );
+    // The quantity beside them: an avoir takes back a part of what the
+    // facture sold, and a page showing the facture's quantity over the
+    // avoir's amounts is a document whose own arithmetic does not hold.
+    let quantities = qtys(html);
+    assert_eq!(quantities.len(), doc.lines.len(), "one quantity per line");
+    for (printed, line) in quantities.iter().zip(&doc.lines) {
+        assert_eq!(milli(printed), line.qty_milli, "a quantity");
+    }
+
     for ((printed, unit_price), line) in lines.iter().zip(&unit_prices).zip(&doc.lines) {
         assert_eq!(centimes(printed), line.line_total.as_centimes(), "a line");
         assert_eq!(
