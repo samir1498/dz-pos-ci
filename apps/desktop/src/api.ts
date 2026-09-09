@@ -39,3 +39,9 @@ export const productsQueryKey: readonly string[] = ["products"];
 export const categoriesQueryKey: readonly string[] = ["categories"];
 export const settingsQueryKey: readonly string[] = ["settings"];
 export const backupsQueryKey: readonly string[] = ["backups"];
+
+/** One stored sale. A factory rather than a literal at the call site, so
+ * the id is always the second element and never a template string. */
+export function saleQueryKey(id: number): readonly (string | number)[] {
+  return ["sale", id];
+}

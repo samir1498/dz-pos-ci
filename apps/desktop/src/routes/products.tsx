@@ -17,6 +17,7 @@ import {
 import type { CategoryDto, NewProductDto, ProductDto, UnitDto } from "@dzpos/shared";
 import { api, categoriesQueryKey, productsQueryKey } from "@/api";
 import { isKey, useTranslation, type Key } from "@/i18n";
+import { RATES, rateCellLabel, rateLabel } from "@/lib/rate";
 
 export const Route = createFileRoute("/products")({ component: ProductsScreen });
 
@@ -29,54 +30,7 @@ const UNIT_KEY: Record<UnitDto, Key> = {
   box: "unit_box",
 };
 
-/** features.md, TVA rates row: 19 % standard, 9 % reduced, 0 % exempt. */
-const RATES: readonly { bps: number; key: Key }[] = [
-  { bps: 1900, key: "rate_1900" },
-  { bps: 900, key: "rate_900" },
-  { bps: 0, key: "rate_0" },
-];
-
 const FALLBACK_RATE_BPS = 1900;
-
-/**
- * "7 %" for 700 bps, "7,50 %" for 750: the label of a rate the fixed list
- * does not carry. Both the sign and the decimal separator come from i18n
- * (`percent_sign`, `decimal_separator`) rather than a literal "%" and a
- * hardcoded French comma, so a custom rate carries the Arabic percent
- * sign on the Arabic screen ("٪", like the fixed ones, `rate_900` and
- * friends), and, on every screen, the shop's own comma-decimal, the same
- * one `formatCentimes` and `formatQty` already use regardless of the UI
- * language.
- *
- * Ruling (coordinator review of T7, 2026-09-09): numbers follow the
- * shop's own format, not the UI language. Amounts, quantities and rates
- * all read comma-decimal in fr, en and ar today, so `decimal_separator`
- * is "," in every dictionary; it stays a per-language key rather than a
- * bare constant because it is the one place a locale that reads
- * differently would land, without touching this function again.
- */
-function rateLabel(bps: number, percentSign: string, decimalSeparator: string): string {
-  const percent = bps / 100;
-  const numeral = Number.isInteger(percent)
-    ? String(percent)
-    : percent.toFixed(2).replace(".", decimalSeparator);
-  return `${numeral} ${percentSign}`;
-}
-
-/**
- * The table's own rate cell used to call `rateLabel` for every row, fixed
- * rates included, which always renders a Latin "%": on the Arabic screen
- * the dropdown showed "9 ٪" (from `rate_900`) while the table showed
- * "9 %" for the same product. This reuses the fixed word when the stored
- * rate is one of `RATES`, and only falls back to the computed label for a
- * category rate the fixed list does not carry.
- */
-function rateCellLabel(bps: number, t: (key: Key) => string): string {
-  const fixed = RATES.find((r) => r.bps === bps);
-  return fixed !== undefined
-    ? t(fixed.key)
-    : rateLabel(bps, t("percent_sign"), t("decimal_separator"));
-}
 
 /**
  * The fixed choices plus any category default (or stored product rate) the
