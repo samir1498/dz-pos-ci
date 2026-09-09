@@ -731,3 +731,100 @@ fn a_stored_buyer_name_without_a_party_kind_is_refused() {
         "a half-written buyer block read back as a document: {err}"
     );
 }
+
+/// A customer and a document belonging to the second shop, inserted raw for
+/// the same reason its product is: the seed is not what is under test.
+fn seed_second_shop_customer_and_document(conn: &mut SqliteConnection) -> (i32, i32) {
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+    diesel::sql_query("INSERT OR IGNORE INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO customers (shop_id, name, party_kind) \
+         VALUES (2, 'Client du voisin', 'company')",
+    )
+    .execute(conn)
+    .unwrap();
+    let customer: Id = diesel::sql_query("SELECT MAX(id) AS id FROM customers WHERE shop_id = 2")
+        .get_result(conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO documents (shop_id, kind, series, number, issued_at, user_id, regime, \
+         payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+         subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+         net_to_pay_centimes) VALUES (2, 'facture', 'doc_facture', 1, \
+         '2026-09-09 10:00:00', 1, 'reel', 'credit', 'Magasin du voisin', 10000, 0, 10000, \
+         1900, 11900, 0, 11900)",
+    )
+    .execute(conn)
+    .unwrap();
+    let document: Id = diesel::sql_query("SELECT MAX(id) AS id FROM documents WHERE shop_id = 2")
+        .get_result(conn)
+        .unwrap();
+    (customer.id, document.id)
+}
+
+#[test]
+fn a_document_made_out_to_another_shops_customer_is_refused_and_burns_no_number() {
+    // Rule 3: the foreign key would take the neighbour's fiche, and the
+    // buyer block printed on the paper would name their customer.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let (elsewhere, _) = seed_second_shop_customer_and_document(&mut conn);
+
+    let mut stolen = draft(DocumentKind::Facture, Some(p), at(9, 10));
+    stolen.customer_id = Some(elsewhere);
+    let err = documents::issue(&mut conn, SHOP, stolen).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::NotFound {
+                entity: "customer",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+
+    let next = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Facture, Some(p), at(9, 11)),
+    )
+    .unwrap();
+    assert_eq!(next.number, 1, "the refused facture burned a number");
+    assert_eq!(documents::list(&mut conn, SHOP, None).unwrap().len(), 1);
+}
+
+#[test]
+fn a_document_written_against_another_shops_document_is_refused_and_burns_no_number() {
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let (_, elsewhere) = seed_second_shop_customer_and_document(&mut conn);
+
+    let mut stolen = draft(DocumentKind::Avoir, Some(p), at(9, 10));
+    stolen.ref_document_id = Some(elsewhere);
+    let err = documents::issue(&mut conn, SHOP, stolen).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::NotFound {
+                entity: "document",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+
+    let next = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Avoir, Some(p), at(9, 11)),
+    )
+    .unwrap();
+    assert_eq!(next.number, 1, "the refused avoir burned a number");
+}

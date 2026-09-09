@@ -15,6 +15,7 @@ use crate::models::document::{
 use crate::money::Money;
 use crate::repos::counters;
 use crate::repos::documents as repo;
+use crate::services::customers;
 
 pub use crate::models::document::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
@@ -47,6 +48,27 @@ pub fn issue(
     new: NewDocument,
 ) -> Result<Document, CoreError> {
     conn.transaction(|conn| {
+        // Before a number is taken, because a refused document should cost
+        // nothing at all: the rollback would give the number back, but the
+        // two ids a caller hands over are known wrong or right without
+        // touching the counter. The foreign keys alone would take the
+        // neighbour's fiche and the neighbour's facture (rule 3).
+        if let Some(customer_id) = new.customer_id {
+            if !customers::customer_belongs_to_shop(conn, shop_id, customer_id)? {
+                return Err(CoreError::NotFound {
+                    entity: "customer",
+                    id: customer_id,
+                });
+            }
+        }
+        if let Some(ref_document_id) = new.ref_document_id {
+            if !repo::belongs_to_shop(conn, shop_id, ref_document_id)? {
+                return Err(CoreError::NotFound {
+                    entity: "document",
+                    id: ref_document_id,
+                });
+            }
+        }
         let series = new.kind.series();
         let number = counters::take_next(conn, shop_id, series)?;
         let totals = &new.totals;
