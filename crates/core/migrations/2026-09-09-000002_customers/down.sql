@@ -65,8 +65,11 @@ CREATE TABLE documents_without_customers (
     UNIQUE (shop_id, series, number)
 ) STRICT;
 
--- Ids carry over, as they did on the way up. A `quittance` would have no kind
--- to land in, and nothing issues one, so the copy takes every row as it is.
+-- Ids carry over, as they did on the way up, and the buyer block and the
+-- balance triple are dropped with the old table: a revert is a revert.
+-- The old `kind` CHECK has no `quittance` in it, so a file carrying one would
+-- fail this INSERT and the revert would stop rather than lose the row.
+-- Nothing issues a quittance in this milestone, so no file carries one.
 INSERT INTO documents_without_customers
     (id, shop_id, kind, series, number, issued_at, user_id, regime, payment_mode,
      seller_name, seller_rc, seller_nif, seller_nis, seller_ai, seller_address,

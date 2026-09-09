@@ -11,7 +11,7 @@ use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::money::Money;
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
-use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry};
+use dzpos_core::services::debt::{self, DebtKind, NewDebtAllocation, NewDebtEntry};
 
 const SHOP: i32 = 1;
 /// The owner the first migration seeds.
@@ -251,4 +251,153 @@ fn a_note_longer_than_a_statement_prints_is_refused() {
         matches!(err, CoreError::Validation { ref field, .. } if field == "note"),
         "{err}"
     );
+}
+
+/// A document to settle against. The debt service is what is under test, so
+/// the row is written straight in: issuing one through the sale path would
+/// need a product, a régime and a cart, none of which this asserts anything
+/// about.
+fn a_document(conn: &mut SqliteConnection, id: i32, shop_id: i32, number: i32) {
+    diesel::sql_query(format!(
+        "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
+         regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+         subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+         net_to_pay_centimes) VALUES ({id}, {shop_id}, 'facture', 'doc_facture', {number}, \
+         '2026-09-09 10:00:00', 1, 'reel', 'credit', 'Magasin', 100000, 0, 100000, 19000, \
+         119000, 0, 119000)"
+    ))
+    .execute(conn)
+    .unwrap();
+}
+
+#[test]
+fn an_allocation_says_which_document_a_payment_settled() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    a_document(&mut conn, 1, SHOP, 1);
+    let payment = debt::append(
+        &mut conn,
+        SHOP,
+        movement(customer, DebtKind::Payment, 0, 50_000),
+    )
+    .unwrap();
+
+    let made = debt::allocate(
+        &mut conn,
+        SHOP,
+        NewDebtAllocation {
+            payment_ledger_id: payment.id,
+            document_id: 1,
+            amount: Money::centimes(50_000),
+        },
+    )
+    .unwrap();
+    let read = debt::allocations(&mut conn, SHOP, 1).unwrap();
+    assert_eq!(read, vec![made]);
+    assert_eq!(read[0].amount, Money::centimes(50_000));
+}
+
+#[test]
+fn an_allocation_of_nothing_is_refused() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    a_document(&mut conn, 1, SHOP, 1);
+    let payment = debt::append(
+        &mut conn,
+        SHOP,
+        movement(customer, DebtKind::Payment, 0, 50_000),
+    )
+    .unwrap();
+
+    for amount in [Money::ZERO, Money::centimes(-1)] {
+        let err = debt::allocate(
+            &mut conn,
+            SHOP,
+            NewDebtAllocation {
+                payment_ledger_id: payment.id,
+                document_id: 1,
+                amount,
+            },
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, CoreError::Validation { ref field, .. } if field == "amount"),
+            "{err}"
+        );
+    }
+    assert!(debt::allocations(&mut conn, SHOP, 1).unwrap().is_empty());
+}
+
+#[test]
+fn an_allocation_never_reaches_across_shops() {
+    // Rule 3: both foreign keys would take the other shop's row, so the
+    // payment and the document are each checked against the shop asking.
+    let (_dir, mut conn) = open_temp();
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(&mut conn)
+        .unwrap();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    a_document(&mut conn, 1, SHOP, 1);
+    a_document(&mut conn, 2, 2, 1);
+    let payment = debt::append(
+        &mut conn,
+        SHOP,
+        movement(customer, DebtKind::Payment, 0, 50_000),
+    )
+    .unwrap();
+
+    let stolen_document = debt::allocate(
+        &mut conn,
+        SHOP,
+        NewDebtAllocation {
+            payment_ledger_id: payment.id,
+            document_id: 2,
+            amount: Money::centimes(50_000),
+        },
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            stolen_document,
+            CoreError::NotFound {
+                entity: "document",
+                ..
+            }
+        ),
+        "{stolen_document}"
+    );
+
+    let stolen_payment = debt::allocate(
+        &mut conn,
+        2,
+        NewDebtAllocation {
+            payment_ledger_id: payment.id,
+            document_id: 2,
+            amount: Money::centimes(50_000),
+        },
+    )
+    .unwrap_err();
+    assert!(
+        matches!(
+            stolen_payment,
+            CoreError::NotFound {
+                entity: "debt_entry",
+                ..
+            }
+        ),
+        "{stolen_payment}"
+    );
+
+    let stolen_list = debt::allocations(&mut conn, 2, 1).unwrap_err();
+    assert!(
+        matches!(
+            stolen_list,
+            CoreError::NotFound {
+                entity: "document",
+                ..
+            }
+        ),
+        "{stolen_list}"
+    );
+    assert!(debt::allocations(&mut conn, SHOP, 1).unwrap().is_empty());
 }

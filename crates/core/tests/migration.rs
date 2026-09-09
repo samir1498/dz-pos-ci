@@ -1038,6 +1038,13 @@ fn a_database_at_the_third_migration_takes_the_fourth() {
     .execute(&mut conn)
     .unwrap();
     diesel::sql_query(
+        "INSERT INTO document_lines (id, shop_id, document_id, position, name, qty_milli, \
+         unit_price_centimes, line_discount_centimes, rate_bps, line_total_centimes) \
+         VALUES (8, 1, 3, 1, 'Café', 2000, 500, 0, 900, 1000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
         "INSERT INTO document_tva (id, shop_id, document_id, rate_bps, base_centimes, \
          amount_centimes) VALUES (6, 1, 3, 1900, 1000, 190)",
     )
@@ -1052,6 +1059,18 @@ fn a_database_at_the_third_migration_takes_the_fourth() {
 
     conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
         .unwrap();
+
+    // The rebuild ran with the foreign keys off, so the file is only as sound
+    // as what this reports: a row pointing at a parent that is gone shows up
+    // here and nowhere else.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_foreign_key_check"
+        ),
+        0,
+        "the rebuilt file has a row pointing at a parent that is not there"
+    );
 
     // The document came across whole, keeping the id and the number the paper
     // in the customer's hand carries.
@@ -1068,7 +1087,11 @@ fn a_database_at_the_third_migration_takes_the_fourth() {
     );
     // Every child kept its own id and its parent. A cascade that fired while
     // the old table was dropped would show up as a zero here.
-    for (table, id) in [("document_lines", 5), ("document_tva", 6)] {
+    for (table, id) in [
+        ("document_lines", 5),
+        ("document_lines", 8),
+        ("document_tva", 6),
+    ] {
         assert_eq!(
             count(
                 &mut conn,

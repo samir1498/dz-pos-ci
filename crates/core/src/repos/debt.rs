@@ -72,6 +72,22 @@ pub fn ledger(
     Ok(rows.into_iter().map(DebtEntry::from).collect())
 }
 
+/// Whether the ledger row is one of this shop's. An allocation points at a
+/// payment by id and the foreign key alone would take another shop's row.
+pub fn entry_belongs_to_shop(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    entry_id: i32,
+) -> Result<bool, CoreError> {
+    let found: Option<i32> = debt_ledger::table
+        .filter(debt_ledger::shop_id.eq(shop_id))
+        .filter(debt_ledger::id.eq(entry_id))
+        .select(debt_ledger::id)
+        .first(conn)
+        .optional()?;
+    Ok(found.is_some())
+}
+
 pub fn allocate(
     conn: &mut SqliteConnection,
     write: &DebtAllocationRowWrite,

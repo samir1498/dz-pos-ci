@@ -17,6 +17,7 @@ use crate::models::debt::{DebtAllocationRowWrite, DebtRowWrite};
 use crate::money::Money;
 use crate::repos::customers as customers_repo;
 use crate::repos::debt as repo;
+use crate::repos::documents as documents_repo;
 use crate::services::optional_field;
 
 pub use crate::models::debt::{
@@ -109,6 +110,8 @@ pub fn allocate(
             "an allocation of nothing settles nothing",
         ));
     }
+    ensure_entry(conn, shop_id, allocation.payment_ledger_id)?;
+    ensure_document(conn, shop_id, allocation.document_id)?;
     repo::allocate(
         conn,
         &DebtAllocationRowWrite {
@@ -126,11 +129,38 @@ pub fn allocations(
     shop_id: i32,
     document_id: i32,
 ) -> Result<Vec<DebtAllocation>, CoreError> {
+    ensure_document(conn, shop_id, document_id)?;
     repo::allocations(conn, shop_id, document_id)
 }
 
 /// The foreign key would accept another shop's customer, so the shop is
 /// checked here the way a document's product is (rule 3).
+/// Both foreign keys an allocation carries would take another shop's row, so
+/// each is checked against the shop asking (rule 3).
+fn ensure_entry(conn: &mut SqliteConnection, shop_id: i32, entry_id: i32) -> Result<(), CoreError> {
+    if repo::entry_belongs_to_shop(conn, shop_id, entry_id)? {
+        return Ok(());
+    }
+    Err(CoreError::NotFound {
+        entity: "debt_entry",
+        id: entry_id,
+    })
+}
+
+fn ensure_document(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+) -> Result<(), CoreError> {
+    if documents_repo::belongs_to_shop(conn, shop_id, document_id)? {
+        return Ok(());
+    }
+    Err(CoreError::NotFound {
+        entity: "document",
+        id: document_id,
+    })
+}
+
 fn ensure_customer(
     conn: &mut SqliteConnection,
     shop_id: i32,

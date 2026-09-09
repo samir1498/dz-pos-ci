@@ -55,6 +55,22 @@ pub fn product_belongs_to_shop(
     Ok(found.is_some())
 }
 
+/// Whether the document is one of this shop's, without reading it whole. A
+/// debt allocation names a document by id and nothing else.
+pub fn belongs_to_shop(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+) -> Result<bool, CoreError> {
+    let found: Option<i32> = documents::table
+        .filter(documents::shop_id.eq(shop_id))
+        .filter(documents::id.eq(document_id))
+        .select(documents::id)
+        .first(conn)
+        .optional()?;
+    Ok(found.is_some())
+}
+
 pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Document, CoreError> {
     let row: DocumentRow = documents::table
         .filter(documents::shop_id.eq(shop_id))

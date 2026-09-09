@@ -18,7 +18,7 @@ use crate::models::customer::CustomerRowWrite;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::money::Money;
 use crate::repos::customers as repo;
-use crate::services::{audit, bounded_field, clock, debt, optional_field};
+use crate::services::{audit, bounded_field, debt, optional_field};
 
 pub use crate::models::customer::{Customer, NewCustomer, PartyKind};
 
@@ -193,6 +193,10 @@ fn validate(shop_id: i32, fields: &NewCustomer) -> Result<CustomerRowWrite, Core
         warn_threshold_centimes: fields.warn_threshold.map(Money::as_centimes),
         notes: optional_field("notes", fields.notes.as_deref())?,
         active: fields.active,
-        updated_at: clock::now(),
+        // UTC, not the shop's calendar: `created_at` is SQLite's
+        // CURRENT_TIMESTAMP, which is UTC, and a fiche whose
+        // `updated_at` reads an hour after its own `created_at` is a
+        // wrong figure in a row nobody would think to doubt.
+        updated_at: chrono::Utc::now().naive_utc(),
     })
 }
