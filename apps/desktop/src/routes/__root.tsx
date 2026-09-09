@@ -11,6 +11,11 @@ function RootLayout() {
       <header className="flex items-center gap-4 border-b p-4">
         <span className="font-semibold">{t("app_name")}</span>
         <nav className="flex gap-4">
+          {/* The till comes first: it is the home and the screen the shop
+              spends its day on. */}
+          <Link to="/till" className="underline">
+            {t("nav_till")}
+          </Link>
           <Link to="/products" className="underline">
             {t("nav_products")}
           </Link>

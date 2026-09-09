@@ -165,6 +165,47 @@ async fn a_sale_reads_back_and_lists_newest_first() {
 }
 
 #[tokio::test]
+async fn a_sale_of_another_shop_is_not_found_even_by_its_own_id() {
+    // Rule 3, on the read path: the shop is the server's, and a document one
+    // shop issued is not a document another shop can open by guessing an id.
+    // Two routers over one file, the way two shops share one installation.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let mine = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap(), &token());
+    let p = product(&mine, "Sucre", 1_000, 1900).await;
+    let (status, sale) = call(
+        &mine,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 10_000,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{sale}");
+    let id = sale["id"].as_i64().unwrap();
+
+    let other = dzpos_api::router(dzpos_api::AppState::open(&path, 2).unwrap(), &token());
+    let (status, body) = call(&other, "GET", &format!("/sales/{id}"), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(code(&body), "not_found");
+    // Not "forbidden" either: the other shop is not told the document exists.
+    assert!(!body.to_string().contains("doc_ticket"), "{body}");
+
+    // And the list stays its own.
+    let (status, list) = call(&other, "GET", "/sales", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list.as_array().map(Vec::len), Some(0));
+
+    // The shop that issued it still reads it.
+    let (status, ours) = call(&mine, "GET", &format!("/sales/{id}"), None).await;
+    assert_eq!(status, StatusCode::OK, "{ours}");
+    assert_eq!(ours["id"], id);
+}
+
+#[tokio::test]
 async fn an_unknown_sale_is_404_in_the_envelope() {
     let (_dir, app) = app();
     let (status, body) = call(&app, "GET", "/sales/404", None).await;

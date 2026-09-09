@@ -40,3 +40,27 @@ export {
 export type { ClientOptions } from "./client";
 export type { ApiClient } from "./client";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";
+export {
+  BPS_PER_WHOLE,
+  MILLI_PER_UNIT,
+  MoneyError,
+  STAMP_BAND_LOW,
+  STAMP_BAND_MID,
+  STAMP_FLOOR,
+  STAMP_MIN,
+  STAMP_RATE_HIGH,
+  STAMP_RATE_LOW,
+  STAMP_RATE_MID,
+  STAMP_TRANCHE,
+  computeTotals,
+  lineTotal,
+  pct,
+  stamp,
+} from "./totals";
+export type {
+  MoneyErrorVariant,
+  Totals,
+  TotalsLine,
+  TotalsOptions,
+  TvaGroup,
+} from "./totals";

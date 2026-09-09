@@ -7,17 +7,17 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes products.png, products-ar.png, settings-ar.png
-pnpm desktop e2e --project ar     # one language, both spec files
+just screenshot                   # writes products.png, products-ar.png, settings-ar.png, till-ar.png
+pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
-`just screenshot` runs `-g screenshot` (the two tests with "screenshot" in
+`just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-matches only the products test, which writes `products.png`; the settings
-test also matches the grep in both runs (its title says "... and saves the
-settings screenshot in Arabic") but only writes a file when
-`currentLang()` is `ar`, so the fr run of it does nothing observable.
-Under ar both write: `products-ar.png` and `settings-ar.png`.
+writes only `products.png`; the settings and till tests also match the
+grep in both runs (their titles say "... screenshot in Arabic") but only
+write a file when `currentLang()` is `ar`, so the fr run of them does
+nothing observable. Under ar all three write: `products-ar.png`,
+`settings-ar.png` and `till-ar.png`.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
@@ -75,8 +75,8 @@ minutes. The API webServer has a ten minute start timeout for that.
 `ar`. A project's `use.storageState` sets `dzpos-lang` in localStorage for
 the app's origin before the page's first script runs, the way a person
 would have it already chosen (`src/i18n/index.tsx`, `initialLang`); its
-`use.locale` matches (`fr-FR`, `en-US`, `ar-DZ`). `products.spec.ts` and
-`settings.spec.ts` read their expected strings from
+`use.locale` matches (`fr-FR`, `en-US`, `ar-DZ`). The spec files read
+their expected strings from
 `src/i18n/{fr,en,ar}.json` through `messages.ts`, keyed off
 `test.info().project.name`, so the same test body runs three times with
 three different words and still checks the real UI text, not a hardcoded
@@ -99,16 +99,34 @@ second language on; use the looped `just e2e` or a single `--project`.
 
 - `products.spec.ts`: three tests on the products screen;
   `settings.spec.ts`: two on the settings screen (store block, dated
-  régime). `messages.ts` is the shared loader both use for
-  `src/i18n/{fr,en,ar}.json`, keyed off the running Playwright project, so
-  a reworded message fails the test instead of quietly passing.
-- `screenshots/products.png` (fr), `screenshots/products-ar.png` and
-  `screenshots/settings-ar.png` (ar): committed, 1280x800, full page. `en`
-  keeps no screenshot; the two languages above are enough to show the
-  layout and the RTL mirror.
+  régime); `till.spec.ts`: one whole cash sale, from `/` landing on the
+  till to the stock the sale moved. `messages.ts` is the shared loader they
+  use for `src/i18n/{fr,en,ar}.json`, keyed off the running Playwright
+  project, so a reworded message fails the test instead of quietly passing.
+  `api.ts` is where a spec that seeds its own rows finds the API port and
+  the run's launch token.
+- `screenshots/products.png` (fr), `screenshots/products-ar.png`,
+  `screenshots/settings-ar.png` and `screenshots/till-ar.png` (ar):
+  committed, 1280x800, full page. `en` keeps no screenshot; the two
+  languages above are enough to show the layout and the RTL mirror.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
   A failure's trace and its Playwright report name the project (the
   language) the failing test ran under.
+
+## The test ids
+
+`frontend-conventions` asks for `data-testid` rather than visible text
+where a flow needs a handle, and for every id a flow uses to be listed
+here. These are all of them.
+
+| Id | Where | Why not a text or role selector |
+| --- | --- | --- |
+| `regime-current` | `settings.tsx` | Two régime lines can read the same words; this one is the one in force. |
+| `regime-planned` | `settings.tsx` | Absent until a change is dated ahead, so the test counts it. |
+| `tiles` | `till.tsx` | The cart's −, + and ✕ buttons carry the product name too, so a name query without this scope matches four things. |
+| `cart` | `till.tsx` | The mirror image of the above, for a query that means the lines rather than the grid. |
+| `till-change` | `till.tsx` | An amount, so its text is a number in three locales. |
+| `total-net-to-pay` | `till.tsx` | The one totals row a test reads by value; the label beside it is translated. |
 
 ## What the suite checks and where
 
@@ -124,3 +142,10 @@ second language on; use the looped `just e2e` or a single `--project`.
   goes out, so the visible message is `error_name_required` from the UI.
   The API's `validation` code has no path to this form; the test counts
   the POSTs to prove it.
+- The till's expectation is a money fixture, not the screen: `till.spec.ts`
+  reads the `till_cash_sale_two_rates` case out of
+  `fixtures/money/tva_rounding_once_per_rate.json` and compares it column
+  for column with the totals of the issued `SaleDto`, so a screen with a
+  wrong preview and an API that agreed with it would still fail. It states
+  the réel régime itself rather than depending on the settings suite having
+  run before it, because a ticket under the IFU carries no TVA row.
