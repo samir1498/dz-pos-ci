@@ -24,7 +24,7 @@ tasks:
     status: 'done'
   - id: 'T5'
     desc: 'ticket_80mm template with golden files in fr, en and ar (Arabic disclosed as unreviewed like words_ar), rendered from the document; IFU ticket prints no TVA line (regime_ifu_prints_no_tva)'
-    status: 'pending'
+    status: 'done'
   - id: 'T6'
     desc: 'ESC/POS over USB from the desktop; code and a byte-level golden on the WSL box, the real print needs Samir at the laptop with the thermal printer'
     status: 'blocked'
