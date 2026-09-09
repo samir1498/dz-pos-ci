@@ -432,3 +432,61 @@ async fn a_sidecar_left_behind_after_the_rename_stops_the_file_being_reopened() 
         "the copy is not what is on disk"
     );
 }
+
+/// The rename at step 7 does not happen and the file it would have replaced
+/// cannot be opened either. Nothing was put back and this process no longer
+/// serves the shop file, which is one answer, not two: `storage` alone would
+/// send the screen looking for a full disk while every route 500s.
+///
+/// A folder standing where the shop file was is the only way to refuse the
+/// rename from outside the code: the staged copy is written beside the shop
+/// file, so a folder that refuses the rename would refuse the copy too, and
+/// the permission and cross-device failures need root. The reopen that does
+/// succeed is covered where it can be: `reopen_original` in `lib.rs`. Here
+/// the file that still opens is the safety copy, which is what the owner has
+/// left.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_rename_that_cannot_happen_answers_that_nothing_was_restored() {
+    let h = harness();
+    call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
+    let (_, made) = call(&h.app, "POST", "/backups", None).await;
+    let name = made["name"].as_str().unwrap().to_string();
+
+    // The live connection keeps its handle on the unlinked file, so the
+    // safety copy and the checkpoint still run; only the rename onto the
+    // name has nowhere to land.
+    std::fs::remove_file(h.db()).unwrap();
+    std::fs::create_dir(h.db()).unwrap();
+
+    let (status, body) = call(&h.app, "POST", &format!("/backups/{name}/restore"), None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "restore_failed_restart_needed");
+
+    // The slot is empty and stays empty: nothing reopens a file that is not
+    // there.
+    let (status, body) = call(&h.app, "GET", "/products", None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "restart_needed");
+
+    assert!(
+        h.db().is_dir(),
+        "something wrote over the name the rename was refused on"
+    );
+    assert!(
+        !h.dir.path().join("t.db.restoring.tmp").exists(),
+        "the staged copy outlived the restore that was refused"
+    );
+
+    // What the owner has left is the copy taken on the way in, and it opens
+    // and holds what the shop held.
+    let copies = h.safety_copies();
+    assert_eq!(copies.len(), 1, "{copies:?}");
+    let mut safety = dzpos_core::db::open(&copies[0]).unwrap();
+    let names: Vec<String> = dzpos_core::services::products::list(&mut safety, SHOP)
+        .unwrap()
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    assert_eq!(names, vec!["Semoule 10kg"]);
+}
