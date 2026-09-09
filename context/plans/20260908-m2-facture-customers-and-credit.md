@@ -30,7 +30,7 @@ tasks:
     status: 'pending'
   - id: 'T7'
     desc: 'Payments (after T2 and T3): POST /customers/{id}/payments writes the payment row and its allocations in one transaction, settles oldest-first, a partial payment leaves the remainder on the oldest, a payment above the outstanding debt is refused, the sum of allocations on a document never exceeds its net_to_pay (checked in the transaction), audited; statement_a4 (opening balance, movements, closing balance for a date range) with Key::ALL grown, goldens ×3 and words on the total; the stamped receipt for a later cash settlement waits for the comptable (R8)'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T9'
     desc: 'The avoir and proforma cases of facture_a4 (T5 titles all three kinds in one template): the avoir''s reference line and its own lines, the proforma wording, the annulée reprint of a cancelled facture, goldens ×3 for each with every amount parsed back; split into a second template only if the avoir needs more than a title and a reference; after T5 and T6''s model, same wave as T6'
     status: 'pending'
