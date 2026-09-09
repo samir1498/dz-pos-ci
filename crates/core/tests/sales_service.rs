@@ -842,6 +842,49 @@ fn a_credit_sale_writes_the_document_its_debt_row_and_the_balance_triple() {
     assert_eq!(documents::get(&mut conn, SHOP, doc.id).unwrap(), doc);
 }
 
+/// The document and the movement it writes are one event, so they are
+/// stamped with one moment. They used to be stamped with two: the document
+/// took the `issued_at` the caller gave, and the ledger row was written with
+/// no moment at all and fell back on the clock at the moment of the write.
+/// A sale rung up at 23:59:59 and saved a second later then had its paper on
+/// one day and its debt on the next, and a statement asked for the first day
+/// closed without the movement its own facture put there.
+///
+/// The last second of the day is the fixture because it is the one second
+/// where the wall clock cannot agree with it by accident.
+#[test]
+fn the_debt_row_of_a_credit_sale_is_stamped_with_the_day_the_paper_was() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(1_000_000), None);
+    let midnight = NaiveDate::from_ymd_opt(2026, 9, 9)
+        .unwrap()
+        .and_hms_opt(23, 59, 59)
+        .unwrap();
+    let mut new = credit(c, vec![line(p, 2_000)], false);
+    new.issued_at = Some(midnight);
+
+    let sale = sales::issue(&mut conn, SHOP, OWNER, new).unwrap();
+    assert_eq!(sale.document.issued_at, midnight);
+
+    let ledger = debt::ledger(&mut conn, SHOP, c).unwrap();
+    assert_eq!(ledger.len(), 1);
+    assert_eq!(
+        ledger[0].created_at, midnight,
+        "the document and its debt row straddle midnight"
+    );
+
+    // Read the way the statement reads it: the movement is inside the day the
+    // paper was issued on, which is the whole point of stamping it once.
+    let day = midnight.date();
+    let statement = debt::statement_between(&mut conn, SHOP, c, day, day).unwrap();
+    assert_eq!(
+        statement.entries.len(),
+        1,
+        "the day the facture was issued on closed without its own movement"
+    );
+}
+
 #[test]
 fn a_credit_sale_past_the_limit_is_refused_whole_and_burns_no_number() {
     let (_dir, mut conn) = open_temp();

@@ -306,8 +306,15 @@ pub fn issue(
         // the account, and a movement of zero would sit in every statement the
         // customer is ever handed (the same rule `customers::create` applies to
         // an opening debt).
+        //
+        // Stamped with the document's own `issued_at` and not with the clock
+        // at the moment of the write: the paper and the movement are one
+        // event, and a sale rung up in the last second of a day would
+        // otherwise put its facture on one day and its debt on the next, so
+        // the statement of the day the customer was handed the paper would
+        // close without the movement that paper made.
         if credit.added != Money::ZERO {
-            debt::append(
+            debt::append_at(
                 conn,
                 shop_id,
                 NewDebtEntry {
@@ -319,6 +326,7 @@ pub fn issue(
                     user_id,
                     note: None,
                 },
+                Some(issued_at),
             )?;
         }
 
