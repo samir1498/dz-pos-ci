@@ -159,11 +159,11 @@ function CustomerTable({
       <caption className="sr-only">{t("customers_title")}</caption>
       <thead>
         <tr>
-          <th scope="col" className="text-start pb-2">{t("col_name")}</th>
-          <th scope="col" className="text-start pb-2">{t("col_phone")}</th>
-          <th scope="col" className="text-end pb-2">{t("col_debt")}</th>
-          <th scope="col" className="text-end pb-2">{t("col_limit")}</th>
-          <th scope="col" className="text-start pb-2">{t("col_status")}</th>
+          <th scope="col" className="text-start pb-2 pe-3">{t("col_name")}</th>
+          <th scope="col" className="text-start pb-2 pe-3">{t("col_phone")}</th>
+          <th scope="col" className="text-end pb-2 ps-3">{t("col_debt")}</th>
+          <th scope="col" className="text-end pb-2 ps-3">{t("col_limit")}</th>
+          <th scope="col" className="text-start pb-2 ps-3 pe-3">{t("col_status")}</th>
           <th scope="col" className="pb-2">
             <span className="sr-only">{t("customers_edit")}</span>
           </th>
@@ -180,18 +180,22 @@ function CustomerTable({
                 </span>
               )}
             </td>
-            {/* dir="ltr" on the phone and the two amounts: a number is read
-                left to right with Western digits whatever the screen's
-                language, and without it the bidi algorithm is free to
-                reorder the sign and the groups inside an RTL row. */}
-            <td className="py-1.5 pe-3 font-mono" dir="ltr">
-              {c.phone ?? ""}
+            {/* dir="ltr" on the number itself, not on the cell: a phone and
+                an amount are read left to right with Western digits whatever
+                the screen's language, and without it the bidi algorithm is
+                free to reorder the sign and the groups inside an RTL row.
+                On the cell it would also flip which side the cell's own
+                padding lands on, and two columns would touch. */}
+            <td className="py-1.5 pe-3 font-mono">
+              <span dir="ltr">{c.phone ?? ""}</span>
             </td>
-            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
-              {formatCentimes(c.balance_centimes)}
+            <td className="py-1.5 ps-3 text-end font-mono">
+              <span dir="ltr">{formatCentimes(c.balance_centimes)}</span>
             </td>
-            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
-              {c.credit_limit_centimes === null ? "" : formatCentimes(c.credit_limit_centimes)}
+            <td className="py-1.5 ps-3 pe-3 text-end font-mono">
+              <span dir="ltr">
+                {c.credit_limit_centimes === null ? "" : formatCentimes(c.credit_limit_centimes)}
+              </span>
             </td>
             <td className="py-1.5 pe-3">
               <span className="rounded border px-1 text-sm">{t(statusKey(c))}</span>
@@ -458,7 +462,7 @@ function CustomerForm({
               checked={field.state.value}
               onChange={(e) => field.handleChange(e.target.checked)}
             />
-            <span>{t("field_active")}</span>
+            <span>{t("field_customer_active")}</span>
           </label>
         )}
       </form.Field>
@@ -520,34 +524,38 @@ function LedgerTable({ ledger }: { ledger: CustomerLedgerDto }) {
       <caption className="sr-only">{t("customers_ledger")}</caption>
       <thead>
         <tr>
-          <th scope="col" className="text-start pb-2">{t("col_date")}</th>
-          <th scope="col" className="text-start pb-2">{t("col_kind")}</th>
-          <th scope="col" className="text-end pb-2">{t("col_debit")}</th>
-          <th scope="col" className="text-end pb-2">{t("col_credit")}</th>
-          <th scope="col" className="text-end pb-2">{t("col_balance")}</th>
-          <th scope="col" className="text-start pb-2">{t("col_note")}</th>
+          <th scope="col" className="text-start pb-2 pe-3">{t("col_date")}</th>
+          <th scope="col" className="text-start pb-2 pe-3">{t("col_kind")}</th>
+          <th scope="col" className="text-end pb-2 ps-3">{t("col_debit")}</th>
+          <th scope="col" className="text-end pb-2 ps-3">{t("col_credit")}</th>
+          <th scope="col" className="text-end pb-2 ps-3">{t("col_balance")}</th>
+          <th scope="col" className="text-start pb-2 ps-3">{t("col_note")}</th>
         </tr>
       </thead>
       <tbody>
         {ledger.entries.map((entry) => (
           <tr key={entry.id} className="border-t">
-            <td className="py-1.5 pe-3 font-mono" dir="ltr">
-              {entry.created_at}
+            <td className="py-1.5 pe-3 font-mono">
+              <span dir="ltr">{entry.created_at}</span>
             </td>
             <td className="py-1.5 pe-3">{t(DEBT_KIND_KEY[entry.kind])}</td>
-            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
-              {entry.debit_centimes === 0 ? "" : formatCentimes(entry.debit_centimes)}
+            <td className="py-1.5 ps-3 text-end font-mono">
+              <span dir="ltr">
+                {entry.debit_centimes === 0 ? "" : formatCentimes(entry.debit_centimes)}
+              </span>
             </td>
-            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
-              {entry.credit_centimes === 0 ? "" : formatCentimes(entry.credit_centimes)}
+            <td className="py-1.5 ps-3 text-end font-mono">
+              <span dir="ltr">
+                {entry.credit_centimes === 0 ? "" : formatCentimes(entry.credit_centimes)}
+              </span>
             </td>
             {/* The running balance is the core's (services::debt): a column
                 added up here would be a second answer to what a customer
                 owes. */}
-            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
-              {formatCentimes(entry.balance_after_centimes)}
+            <td className="py-1.5 ps-3 text-end font-mono">
+              <span dir="ltr">{formatCentimes(entry.balance_after_centimes)}</span>
             </td>
-            <td className="py-1.5 pe-3">{entry.note ?? ""}</td>
+            <td className="py-1.5 ps-3">{entry.note ?? ""}</td>
           </tr>
         ))}
       </tbody>

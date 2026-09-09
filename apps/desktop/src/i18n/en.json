@@ -194,5 +194,6 @@
   "error_amount_zero": "An adjustment of zero corrects nothing.",
   "error_credit_limit_invalid": "Invalid limit.",
   "error_warn_threshold_invalid": "Invalid threshold.",
-  "error_opening_debt_invalid": "Invalid opening debt."
+  "error_opening_debt_invalid": "Invalid opening debt.",
+  "field_customer_active": "Active customer"
 }

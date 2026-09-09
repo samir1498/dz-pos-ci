@@ -194,5 +194,6 @@
   "error_amount_zero": "تسوية بصفر لا تصحّح شيئًا.",
   "error_credit_limit_invalid": "سقف غير صالح.",
   "error_warn_threshold_invalid": "عتبة غير صالحة.",
-  "error_opening_debt_invalid": "دين بداية غير صالح."
+  "error_opening_debt_invalid": "دين بداية غير صالح.",
+  "field_customer_active": "زبون نشط"
 }

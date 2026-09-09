@@ -194,5 +194,6 @@
   "error_amount_zero": "Un ajustement de zéro ne corrige rien.",
   "error_credit_limit_invalid": "Plafond invalide.",
   "error_warn_threshold_invalid": "Seuil invalide.",
-  "error_opening_debt_invalid": "Créance de départ invalide."
+  "error_opening_debt_invalid": "Créance de départ invalide.",
+  "field_customer_active": "Client actif"
 }

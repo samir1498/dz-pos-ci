@@ -259,7 +259,7 @@ describe("the fiche", () => {
     await userEvent.clear(screen.getByLabelText(fr.field_rc));
     await userEvent.clear(screen.getByLabelText(fr.field_credit_limit));
     await userEvent.click(screen.getByRole("radio", { name: fr.party_consumer }));
-    await userEvent.click(screen.getByLabelText(fr.field_active));
+    await userEvent.click(screen.getByLabelText(fr.field_customer_active));
     await userEvent.click(screen.getByRole("button", { name: fr.action_save }));
 
     await waitFor(() => expect(sent("PUT").url).toMatch(/\/customers\/3$/));
