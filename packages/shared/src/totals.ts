@@ -120,7 +120,10 @@ function safe(value: bigint): number {
 export function pct(amount: number, rateBps: number): number {
   if (rateBps < 0 || rateBps > BPS_PER_WHOLE) throw new MoneyError("RateOutOfRange");
   const per = BigInt(BPS_PER_WHOLE);
-  const raw = exact(amount) * BigInt(rateBps);
+  // The rate goes through `exact` too: a fractional or NaN rate slips past
+  // the range check above (every comparison with NaN is false) and BigInt
+  // would answer a RangeError, which is not a refusal a screen can read.
+  const raw = exact(amount) * exact(rateBps);
   const sign = raw < 0n ? -1n : 1n;
   return safe(sign * ((raw * sign + per / 2n) / per));
 }

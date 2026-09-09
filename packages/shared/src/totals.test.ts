@@ -153,6 +153,15 @@ describe("pct: one rounding per rate group, half away from zero", () => {
     expect(() => pct(Number.MAX_SAFE_INTEGER + 2, 1900)).toThrowError(/Overflow/);
   });
 
+  it("refuses a rate that is not a whole number of basis points", () => {
+    // 19,005 % is not a rate the core can hold, and NaN is what an empty
+    // field parses to: both are a MoneyError, never a RangeError out of
+    // BigInt.
+    expect(() => pct(100, 1900.5)).toThrowError(MoneyError);
+    expect(() => pct(100, 1900.5)).toThrowError(/Overflow/);
+    expect(() => pct(100, Number.NaN)).toThrowError(MoneyError);
+  });
+
   it.each(rounding.invalid_rate_cases)("refuses a rate above one whole: $name", (c) => {
     expect(() => pct(10_000, c.rate_bps)).toThrowError(/RateOutOfRange/);
   });
