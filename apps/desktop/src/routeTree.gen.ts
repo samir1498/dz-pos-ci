@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from "./routes/__root"
 import { Route as IndexRouteImport } from "./routes/index"
+import { Route as CustomersRouteImport } from "./routes/customers"
 import { Route as ProductsRouteImport } from "./routes/products"
 import { Route as SettingsRouteImport } from "./routes/settings"
 import { Route as TillRouteImport } from "./routes/till"
@@ -17,6 +18,11 @@ import { Route as TillRouteImport } from "./routes/till"
 const IndexRoute = IndexRouteImport.update({
   id: "/",
   path: "/",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CustomersRoute = CustomersRouteImport.update({
+  id: "/customers",
+  path: "/customers",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProductsRoute = ProductsRouteImport.update({
@@ -37,12 +43,14 @@ const TillRoute = TillRouteImport.update({
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
+  "/customers": typeof CustomersRoute
   "/products": typeof ProductsRoute
   "/settings": typeof SettingsRoute
   "/till": typeof TillRoute
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
+  "/customers": typeof CustomersRoute
   "/products": typeof ProductsRoute
   "/settings": typeof SettingsRoute
   "/till": typeof TillRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   "/": typeof IndexRoute
+  "/customers": typeof CustomersRoute
   "/products": typeof ProductsRoute
   "/settings": typeof SettingsRoute
   "/till": typeof TillRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: "/" | "/products" | "/settings" | "/till"
+  fullPaths: "/" | "/customers" | "/products" | "/settings" | "/till"
   fileRoutesByTo: FileRoutesByTo
-  to: "/" | "/products" | "/settings" | "/till"
-  id: "__root__" | "/" | "/products" | "/settings" | "/till"
+  to: "/" | "/customers" | "/products" | "/settings" | "/till"
+  id: "__root__" | "/" | "/customers" | "/products" | "/settings" | "/till"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CustomersRoute: typeof CustomersRoute
   ProductsRoute: typeof ProductsRoute
   SettingsRoute: typeof SettingsRoute
   TillRoute: typeof TillRoute
@@ -76,6 +86,13 @@ declare module "@tanstack/react-router" {
       path: "/"
       fullPath: "/"
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/customers": {
+      id: "/customers"
+      path: "/customers"
+      fullPath: "/customers"
+      preLoaderRoute: typeof CustomersRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/products": {
@@ -104,6 +121,7 @@ declare module "@tanstack/react-router" {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CustomersRoute: CustomersRoute,
   ProductsRoute: ProductsRoute,
   SettingsRoute: SettingsRoute,
   TillRoute: TillRoute,
