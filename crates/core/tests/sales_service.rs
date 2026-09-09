@@ -1084,7 +1084,18 @@ fn a_closed_fiche_and_another_shops_fiche_cannot_be_sold_to() {
         "{err:?}"
     );
 
-    // Rule 3: a fiche of another shop is not this shop's to sell to.
+    // Rule 3: a fiche of another shop is not this shop's to sell to. The id
+    // exists and the row is open for business, so what answers 404 here is
+    // the shop filter and nothing else.
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO customers (id, shop_id, name, party_kind, active) \
+         VALUES (404, 2, 'Ailleurs', 'company', 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
     let err = issue_sale(
         &mut conn,
         SHOP,
