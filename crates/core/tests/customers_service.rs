@@ -285,3 +285,57 @@ fn a_refused_fiche_leaves_no_audit_entry() {
     customers::create(&mut conn, SHOP, OWNER, too_long, None).unwrap_err();
     assert!(audit::list(&mut conn, SHOP).unwrap().is_empty());
 }
+
+/// A user id no row carries. `debt_ledger.user_id` and `audit_log.user_id`
+/// both have a foreign key to `users`, so a write naming this fails at the
+/// file, after the write before it has already landed.
+const NO_SUCH_USER: i32 = 999;
+
+#[test]
+fn a_create_that_fails_after_the_fiche_leaves_no_fiche() {
+    // The fiche goes in first and the opening movement second. Without the
+    // transaction the shop would keep a customer whose opening debt was
+    // never written and whose creation is in no log.
+    let (_dir, mut conn) = open_temp();
+    let err = customers::create(
+        &mut conn,
+        SHOP,
+        NO_SUCH_USER,
+        fiche("Entreprise Benali"),
+        Some(Money::centimes(250_000)),
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "storage", "{err}");
+    assert!(
+        customers::list(&mut conn, SHOP).unwrap().is_empty(),
+        "the fiche outlived the movement that failed"
+    );
+    assert!(audit::list(&mut conn, SHOP).unwrap().is_empty());
+}
+
+#[test]
+fn an_update_that_fails_at_the_audit_entry_leaves_the_fiche_as_it_was() {
+    // The audit entry is the second write of the update, so it is what proves
+    // the fiche and its log move together (features.md §5).
+    let (_dir, mut conn) = open_temp();
+    let made = customers::create(&mut conn, SHOP, OWNER, fiche("Entreprise Benali"), None).unwrap();
+    let err = customers::update(
+        &mut conn,
+        SHOP,
+        NO_SUCH_USER,
+        made.id,
+        fiche("Entreprise Benali et fils"),
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "storage", "{err}");
+    assert_eq!(
+        customers::get(&mut conn, SHOP, made.id).unwrap().name,
+        "Entreprise Benali",
+        "the fiche changed while its audit entry did not"
+    );
+    assert_eq!(
+        audit::list(&mut conn, SHOP).unwrap().len(),
+        1,
+        "the create's entry is the only one that should be there"
+    );
+}
