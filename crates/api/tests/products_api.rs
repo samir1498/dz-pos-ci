@@ -449,3 +449,29 @@ async fn the_server_only_ever_answers_for_its_own_shop() {
     let (_, list) = call(&other, "GET", "/products?shop_id=1", None).await;
     assert_eq!(list.as_array().map(Vec::len), Some(0));
 }
+
+#[tokio::test]
+async fn the_smallest_i64_is_refused_like_any_other_out_of_range_amount() {
+    // `i64::MIN` has no positive twin, so a guard written as `abs() > MAX`
+    // overflows on it: a panic in debug, a wrapped value that slips past the
+    // guard in release. It is out of the JSON-safe range like 2^53 is, and
+    // gets the same 422.
+    let h = harness();
+    for field in [
+        "cost_centimes",
+        "selling_centimes",
+        "wholesale_centimes",
+        "qty_on_hand_milli",
+        "low_stock_at_milli",
+    ] {
+        let mut body = draft();
+        body[field] = json!(i64::MIN);
+        let (status, answer) = call(&h.app, "POST", "/products", Some(body)).await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{field}: {answer}"
+        );
+        assert_eq!(answer["error"]["code"], "validation", "{field}: {answer}");
+    }
+}

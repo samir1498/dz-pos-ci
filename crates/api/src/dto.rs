@@ -123,7 +123,7 @@ const fn yes() -> bool {
 pub const MAX_SAFE_INTEGER: i64 = (1 << 53) - 1;
 
 fn within_js_safe_range(field: &'static str, value: i64) -> Result<i64, ApiError> {
-    if value.abs() > MAX_SAFE_INTEGER {
+    if !(-MAX_SAFE_INTEGER..=MAX_SAFE_INTEGER).contains(&value) {
         return Err(ApiError::Request(CoreError::validation(
             field,
             "beyond what a JSON number carries without loss (2^53 - 1)",
