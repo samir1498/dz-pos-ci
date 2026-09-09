@@ -8,8 +8,13 @@
 //! Three kinds share this template, titled by kind: `facture`, `avoir` and
 //! `proforma`. They carry the same blocks, the same lines and the same
 //! totals (décret 05-468 art. 3), and splitting them into three files would
-//! have been three goldens of the same layout drifting apart. T9 splits
-//! them if the avoir ever needs more than its title and its reference.
+//! have been three goldens of the same layout drifting apart.
+//!
+//! T9 asked whether the avoir wanted a file of its own and the answer was
+//! no: what it does not share with a facture is a title, a line naming the
+//! facture it is written against, a words line that says avoir, and the
+//! stamp row it never carries. Four conditionals against a second copy of
+//! the parties, the lines, the totals and the signature block.
 
 use askama::Template;
 
@@ -53,6 +58,17 @@ impl Paper {
     }
 }
 
+/// What the page needs that the document's own row does not carry.
+///
+/// A stored row holds ids; paper holds sentences. The facture an avoir names
+/// is an id on the row and a number and a day on the paper, so the caller
+/// that can read that document hands it over. Everything else on the page
+/// comes off the document, which stays the only source of an amount.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FactureInput<'a> {
+    pub referenced: Option<&'a Document>,
+}
+
 /// One identifier row of a party block: `RC`, `NIF`, `NIS`, `AI`. The
 /// labels are the abbreviations every Algerian document prints and are not
 /// translated, so they stay literals here rather than dictionary keys.
@@ -92,6 +108,17 @@ struct TvaRow {
     amount: String,
 }
 
+/// The line naming the facture an avoir is written against: a sentence and
+/// not a column, "Avoir sur facture FA-000042 du 09/09/2026". The number
+/// and the day are the referenced facture's, which is why they arrive from
+/// the caller and not from the avoir's own row.
+struct ReferenceView {
+    label: &'static str,
+    number: String,
+    on_label: &'static str,
+    issued_at: String,
+}
+
 /// The three amounts of the debt as they stood when the document was
 /// issued. Printed together or not at all: an old balance without the
 /// closing one is a figure the reader cannot check.
@@ -115,8 +142,7 @@ struct FactureView {
     title: &'static str,
     number: String,
     issued_at: String,
-    reference_label: &'static str,
-    reference: Option<String>,
+    reference: Option<ReferenceView>,
     seller: PartyView,
     buyer: PartyView,
     designation_label: &'static str,
@@ -157,7 +183,7 @@ struct FactureView {
 /// facture's number, which is not on the avoir's own row, so it goes
 /// through `render_facture_with_reference`.
 pub fn render_facture(doc: &Document, lang: Lang, paper: Paper) -> Result<String, CoreError> {
-    render_facture_with_reference(doc, None, lang, paper)
+    render_facture_with(doc, &FactureInput::default(), lang, paper)
 }
 
 /// The same page, given the document `doc.ref_document_id` points at.
@@ -170,6 +196,18 @@ pub fn render_facture(doc: &Document, lang: Lang, paper: Paper) -> Result<String
 pub fn render_facture_with_reference(
     doc: &Document,
     referenced: Option<&Document>,
+    lang: Lang,
+    paper: Paper,
+) -> Result<String, CoreError> {
+    render_facture_with(doc, &FactureInput { referenced }, lang, paper)
+}
+
+/// The same page, given everything the document's row does not carry. Every
+/// face of this template goes through here; the two wrappers above are the
+/// callers that have nothing to add.
+pub fn render_facture_with(
+    doc: &Document,
+    input: &FactureInput<'_>,
     lang: Lang,
     paper: Paper,
 ) -> Result<String, CoreError> {
@@ -214,7 +252,26 @@ pub fn render_facture_with_reference(
             "only a facture has a printed cancelled wording",
         ));
     }
-    let reference = reference(doc, referenced)?;
+    // An avoir hands the lines back and asks for nothing, so it carries no
+    // droit de timbre (T6, and the stamp is a cash sale's tax anyway, Code
+    // du timbre 2026 art. 100-I). A stored avoir carrying one contradicts
+    // the rule that wrote it: the recap refusal above is the honest answer
+    // here too, because dropping the row hands the buyer a total whose parts
+    // do not add up.
+    if doc.kind == DocumentKind::Avoir && doc.totals.stamp != Money::ZERO {
+        return Err(CoreError::render(
+            "an avoir carries a droit de timbre and has no printable form",
+        ));
+    }
+    // Only an avoir is written against another document. Printing "avoir sur
+    // facture" over a facture or a proforma would label the page as
+    // something it is not, and there is no other wording for a reference.
+    if doc.ref_document_id.is_some() && doc.kind != DocumentKind::Avoir {
+        return Err(CoreError::render(
+            "only an avoir names the facture it is written against",
+        ));
+    }
+    let reference = reference(doc, input.referenced, lang)?;
     view(doc, buyer, reference, lang, paper)?
         .render()
         .map_err(CoreError::from)
@@ -225,13 +282,32 @@ pub fn render_facture_with_reference(
 /// not hand over is refused: the reference is a legal mention of the avoir
 /// (décret 05-468 art. 3), so printing the page without it would drop a
 /// field and say nothing about it.
-fn reference(doc: &Document, referenced: Option<&Document>) -> Result<Option<String>, CoreError> {
+fn reference(
+    doc: &Document,
+    referenced: Option<&Document>,
+    lang: Lang,
+) -> Result<Option<ReferenceView>, CoreError> {
     match (doc.ref_document_id, referenced) {
         (None, _) => Ok(None),
         (Some(id), Some(referenced))
             if referenced.id == id && referenced.shop_id == doc.shop_id =>
         {
-            Ok(Some(number(referenced)))
+            // The sentence says "avoir sur facture", so the paper it names
+            // has to be one. An avoir written against a ticket is not a
+            // document this template can describe.
+            if referenced.kind != DocumentKind::Facture {
+                return Err(CoreError::render(
+                    "an avoir is written against a facture and this reference is another kind",
+                ));
+            }
+            Ok(Some(ReferenceView {
+                label: text(Key::AvoirOnFacture, lang),
+                number: number(referenced),
+                on_label: text(Key::IssuedOn, lang),
+                // The referenced facture's own day, which is not the
+                // avoir's: an avoir is written after the sale it corrects.
+                issued_at: referenced.issued_at.format(DATE_FORMAT).to_string(),
+            }))
         }
         (Some(_), Some(_)) => Err(CoreError::render(
             "the document handed over as the reference is not the one this document names",
@@ -245,7 +321,7 @@ fn reference(doc: &Document, referenced: Option<&Document>) -> Result<Option<Str
 fn view(
     doc: &Document,
     buyer: &PartyBlock,
-    reference: Option<String>,
+    reference: Option<ReferenceView>,
     lang: Lang,
     paper: Paper,
 ) -> Result<FactureView, CoreError> {
@@ -272,7 +348,6 @@ fn view(
         title: title(doc, lang),
         number: number(doc),
         issued_at: doc.issued_at.format(DATE_FORMAT).to_string(),
-        reference_label: text(Key::ReferencedDocument, lang),
         reference,
         seller: seller_view(&doc.seller, lang),
         buyer: buyer_view(buyer, lang),
@@ -332,7 +407,7 @@ fn view(
         stamp: some_amount(totals.stamp),
         net_to_pay_label: text(Key::NetToPay, lang),
         net_to_pay: format_centimes(totals.net_to_pay),
-        in_words_label: text(Key::InWords, lang),
+        in_words_label: text(in_words_key(doc.kind), lang),
         in_words,
         balance: doc.balance.map(|b| balance_view(b, lang)),
         payment_mode_label: text(Key::PaymentMode, lang),
@@ -355,6 +430,18 @@ const fn title(doc: &Document, lang: Lang) -> &'static str {
         _ => Key::Facture,
     };
     text(key, lang)
+}
+
+/// The opening of the words line, which names the paper it closes. Décret
+/// 05-468 art. 3 asks the total to be written out; the sentence around it
+/// says which document was closed at that sum, and an avoir saying "la
+/// présente facture" would name the wrong one. The statement already has
+/// its own for the same reason.
+const fn in_words_key(kind: DocumentKind) -> Key {
+    match kind {
+        DocumentKind::Avoir => Key::AvoirInWords,
+        _ => Key::InWords,
+    }
 }
 
 fn ids(rows: [(&'static str, Option<&String>); 4]) -> Vec<IdRow> {
@@ -428,13 +515,31 @@ fn line_view(line: &DocumentLine, reel: bool) -> LineView {
 /// signed for. Every one of the three can be negative (a customer who
 /// overpaid is owed money), so none of them is dropped for being zero.
 fn balance_view(balance: BalanceTriple, lang: Lang) -> BalanceView {
+    // A balance that closes below zero is the shop holding money for the
+    // customer, which is where an avoir leaves one who owed less than it
+    // gives back (T6: the excess becomes customer credit). The label is
+    // what changes and not the figure: the amount is printed with the sign
+    // the document stores, the way the statement prints its closing
+    // balance, so a reader who adds the three rows up gets the third.
+    //
+    // The sign decides it and not the kind: an avoir that only cuts a debt
+    // down leaves a debt, and calling that a credit would tell the customer
+    // they are owed money they are not.
+    let in_credit = balance.total_debt.as_centimes() < 0;
     BalanceView {
         title: text(Key::Balance, lang),
         old_label: text(Key::OldBalance, lang),
         old: format_centimes(balance.old_balance),
         this_label: text(Key::ThisDocument, lang),
         this: format_centimes(balance.remaining_debt),
-        total_label: text(Key::TotalDebt, lang),
+        total_label: text(
+            if in_credit {
+                Key::TotalCredit
+            } else {
+                Key::TotalDebt
+            },
+            lang,
+        ),
         total: format_centimes(balance.total_debt),
     }
 }

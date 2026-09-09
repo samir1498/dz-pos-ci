@@ -59,7 +59,7 @@ td.n, th.n { text-align: end; white-space: nowrap }
 <div class="num">{{ number }}</div>
 <div class="num">{{ issued_at }}</div>
 {%- if let Some(reference) = reference %}
-<div><span class="label">{{ reference_label }}</span> <span class="num">{{ reference }}</span></div>
+<div class="reference">{{ reference.label }} <span class="num">{{ reference.number }}</span> {{ reference.on_label }} <span class="num">{{ reference.issued_at }}</span></div>
 {%- endif %}
 </div>
 {#- The letterhead: the shop's name and nothing else. Its address, its

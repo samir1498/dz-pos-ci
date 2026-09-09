@@ -54,8 +54,13 @@ pub enum Key {
     FactureCancelled,
     Avoir,
     Proforma,
-    /// The facture an avoir is written against.
-    ReferencedDocument,
+    /// The opening of the line naming the facture an avoir is written
+    /// against, one of the mentions décret 05-468 art. 3 asks an avoir to
+    /// carry. It is the start of a sentence and not a column label:
+    /// "Avoir sur facture FA-000042 du 09/09/2026".
+    AvoirOnFacture,
+    /// What joins a document to its date in that sentence.
+    IssuedOn,
     Seller,
     Buyer,
     Designation,
@@ -74,12 +79,19 @@ pub enum Key {
     TvaBase,
     TotalTtc,
     /// The words line: décret 05-468 art. 3 asks the total to be written
-    /// "en chiffres et en lettres".
+    /// "en chiffres et en lettres". This one names a facture, so an avoir
+    /// and a proforma close themselves in their own words below rather than
+    /// call themselves a facture on their last line.
     InWords,
+    AvoirInWords,
     Balance,
     OldBalance,
     ThisDocument,
     TotalDebt,
+    /// The same row when the customer's balance closes below zero: the shop
+    /// is holding money for them, and "solde total" over a negative reads as
+    /// a debt with a typo in it.
+    TotalCredit,
     /// What the two parties put on the paper at the bottom of a facture
     /// (décret 05-468 art. 4).
     Cachet,
@@ -128,7 +140,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 55] = [
+    pub const ALL: [Key; 58] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -148,7 +160,8 @@ impl Key {
         Key::FactureCancelled,
         Key::Avoir,
         Key::Proforma,
-        Key::ReferencedDocument,
+        Key::AvoirOnFacture,
+        Key::IssuedOn,
         Key::Seller,
         Key::Buyer,
         Key::Designation,
@@ -162,10 +175,12 @@ impl Key {
         Key::TvaBase,
         Key::TotalTtc,
         Key::InWords,
+        Key::AvoirInWords,
         Key::Balance,
         Key::OldBalance,
         Key::ThisDocument,
         Key::TotalDebt,
+        Key::TotalCredit,
         Key::Cachet,
         Key::Statement,
         Key::Period,
@@ -270,9 +285,13 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::Proforma, Lang::En) => "PRO FORMA INVOICE",
         (Key::Proforma, Lang::Ar) => "فاتورة أولية",
 
-        (Key::ReferencedDocument, Lang::Fr) => "Facture référencée",
-        (Key::ReferencedDocument, Lang::En) => "Referenced invoice",
-        (Key::ReferencedDocument, Lang::Ar) => "الفاتورة المرجعية",
+        (Key::AvoirOnFacture, Lang::Fr) => "Avoir sur facture",
+        (Key::AvoirOnFacture, Lang::En) => "Credit note against invoice",
+        (Key::AvoirOnFacture, Lang::Ar) => "إشعار دائن على الفاتورة",
+
+        (Key::IssuedOn, Lang::Fr) => "du",
+        (Key::IssuedOn, Lang::En) => "dated",
+        (Key::IssuedOn, Lang::Ar) => "بتاريخ",
 
         (Key::Seller, Lang::Fr) => "Vendeur",
         (Key::Seller, Lang::En) => "Seller",
@@ -329,6 +348,13 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::InWords, Lang::En) => "This invoice is closed at the sum of",
         (Key::InWords, Lang::Ar) => "أوقفت هذه الفاتورة بمبلغ",
 
+        // The same sentence about the paper it is actually written on. An
+        // avoir that said "la présente facture" would name another
+        // document on the line a comptable reads first.
+        (Key::AvoirInWords, Lang::Fr) => "Arrêté le présent avoir à la somme de",
+        (Key::AvoirInWords, Lang::En) => "This credit note is closed at the sum of",
+        (Key::AvoirInWords, Lang::Ar) => "أوقف هذا الإشعار الدائن بمبلغ",
+
         (Key::Balance, Lang::Fr) => "Solde",
         (Key::Balance, Lang::En) => "Balance",
         (Key::Balance, Lang::Ar) => "الرصيد",
@@ -344,6 +370,10 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::TotalDebt, Lang::Fr) => "Solde total",
         (Key::TotalDebt, Lang::En) => "Total owed",
         (Key::TotalDebt, Lang::Ar) => "الرصيد الإجمالي",
+
+        (Key::TotalCredit, Lang::Fr) => "Solde créditeur",
+        (Key::TotalCredit, Lang::En) => "Credit balance",
+        (Key::TotalCredit, Lang::Ar) => "رصيد دائن",
 
         (Key::Cachet, Lang::Fr) => "Cachet et signature",
         (Key::Cachet, Lang::En) => "Stamp and signature",
