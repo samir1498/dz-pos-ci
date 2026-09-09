@@ -190,7 +190,7 @@ does. A cancelled document takes none of it: whatever its `remaining_debt`
 column still says, money handed over settles the paper that still stands.
 What no document can take stays on the balance as credit.
 
-**Corrections.** A correction is an `adjustment` movement with a note: a
+**Corrections.** A correction is an `adjustment` movement, optionally noted: a
 mistyped opening balance, a goodwill gesture, a rounding a comptable wants
 off the account. A correction of nothing is refused. Downwards it settles the
 customer's documents oldest first exactly as a payment does, because it is
@@ -204,8 +204,9 @@ who overrode it until roles land (§5).
 **One clock.** The core stamps every movement and every document on the
 shop's calendar: Algeria is UTC+1 all year with no daylight saving, so a sale
 rung up at half past midnight is already on the new day
-(`crates/core/src/services/clock.rs`). A service takes the moment as an
-argument, so no test reads the wall clock. The desktop fills a date field
+(`crates/core/src/services/clock.rs`). A service that writes a dated row
+takes the moment as an argument wherever a test has to choose it, so the
+wall clock stays out of the fixtures. The desktop fills a date field
 from the machine's own calendar for the same reason: a statement asked for
 "to today" off a UTC clock would close before that evening's movements.
 
@@ -347,7 +348,7 @@ avoir series, naming the facture it credits. It may be partial. Each of its
 lines names one line of the facture and carries a quantity no greater than
 what is left on that line once every earlier avoir is counted, and the
 running total of avoirs on one facture never passes that facture's
-`net_to_pay`. Its TVA is per rate on its own lines, computed the way a
+`total_ttc`. Its TVA is per rate on its own lines, computed the way a
 sale's is. It never carries the droit de timbre: the stamp is paid on money
 that changed hands and is not refunded with the goods, so a whole avoir of a
 stamped cash facture comes to that facture's `total_ttc` and not to its
@@ -453,7 +454,7 @@ first release.**
 | Amount in words | French, Arabic and English generators, dinars and centimes | `words_{fr,ar,en}_golden` | décret 05-468: total TTC "en chiffres et en lettres"; Arabic wording not yet sourced |
 | Printed wording | the words a document prints live in the core, three languages per key. The Arabic is unreviewed by a native speaker, exactly like `words_ar`, and the Arabic goldens say so in their own header comment | `fixtures/print/*/ar*.html`, `the_dictionary_lists_every_key_once`, `every_key_is_written_in_all_three_languages` | none yet; R6 covers both this and the amount in words |
 | Party identifiers | `facture`: seller RC + NIS (+ NIF, AI as on every facture in circulation), buyer RC + NIS, or name + address when the buyer is a consumer; stamp and signature blocks; `ticket`: seller identity only | `a_facture_to_a_company_carrying_its_identifiers_is_issued_in_the_facture_series`, `a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number`, `a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else`, `a_shop_whose_settings_carry_no_nis_cannot_issue_a_facture_at_all`, `a_blank_identifier_is_as_missing_as_no_identifier_at_all` | décret 05-468 art. 3 and 4; NIF/AI from tax texts, article to cite (R3) |
-| Avoir | a credit note is its own kind and its own series, may be partial, never carries the droit de timbre, and its TVA is per rate on its own lines. The running total of avoirs on one facture never passes that facture's `net_to_pay`, and a line is never credited past what earlier avoirs left on it. An assumption on the stamp: the Code du timbre taxes the payment and says nothing about a reversal, so not refunding it is a reading to confirm with the comptable (R8) | `a_whole_avoir_credits_the_facture_takes_its_own_number_and_carries_no_stamp`, `a_line_cannot_be_credited_past_what_earlier_avoirs_left_on_it`, `the_running_total_of_avoirs_never_passes_what_the_facture_asked_for`, `an_avoir_prints_no_stamp_and_one_that_carries_a_stamp_is_refused`, `fixtures/print/facture_a4/*-avoir.html` | Code du timbre 2026 art. 100-I for the stamp; décret 05-468 art. 10 for the series |
+| Avoir | a credit note is its own kind and its own series, may be partial, never carries the droit de timbre, and its TVA is per rate on its own lines. The running total of avoirs on one facture never passes that facture's `total_ttc` — the stamp is never given back, so capping on `net_to_pay` would leave the partials room to eat it — and a line is never credited past what earlier avoirs left on it. An assumption on the stamp: the Code du timbre taxes the payment and says nothing about a reversal, so not refunding it is a reading to confirm with the comptable (R8) | `a_whole_avoir_credits_the_facture_takes_its_own_number_and_carries_no_stamp`, `a_line_cannot_be_credited_past_what_earlier_avoirs_left_on_it`, `the_running_total_of_avoirs_never_passes_what_the_facture_asked_for`, `an_avoir_prints_no_stamp_and_one_that_carries_a_stamp_is_refused`, `fixtures/print/facture_a4/*-avoir.html` | Code du timbre 2026 art. 100-I for the stamp; décret 05-468 art. 10 for the series |
 | Partial avoir discounts | a partial avoir credits the same share of the line discount and of the global discount as it credits of the line and of the basket, each rounded down to the centime. Rounded down because a discount is what the customer was not charged, and rounding it up would credit a centime nobody paid. A whole avoir carries the whole of both with no rounding, so it reproduces the facture's `total_ttc` to the centime. An assumption: no text says how a discount splits across a partial reversal. Confirm with the comptable (R8) | `a_partial_avoir_prorates_the_discounts_of_the_line_it_credits`, `a_partial_that_empties_a_rate_gives_back_that_rate_s_remise` | design choice, not law |
 | Closing avoir | the avoirs on one facture add up to that facture less the droit de timbre. They do not do so line by line: the tax on each is rounded once on its own base, so slices of a facture sum to a centime either side of it. The avoir that takes the last quantity off the facture is the facture minus the avoirs before it, every field and every line, and the partials are capped at the facture's `total_ttc`. A design choice, not law: no text says how a reversal in parts rounds, and it is the sum a comptable reads that decides it. Confirm with the comptable (R8) | `the_avoirs_on_a_facture_add_up_to_it`, `three_one_unit_avoirs_add_up_to_the_facture_they_credit`, `two_partials_that_finish_a_facture_reproduce_every_field_of_it`, `two_partials_never_give_back_more_tax_at_a_rate_than_was_charged` | design choice, not law |
 | Numbering | one uninterrupted chronological series per document kind; a cancelled document keeps its number, is marked "facture annulée" and stores when, by whom and why it was annulled; numbers never reused, and a cancelled number is never handed out again | `two_tickets_take_the_number_after_the_last`, `each_kind_counts_in_its_own_series`, `a_refused_line_burns_no_number`, `the_proforma_and_the_facture_series_do_not_touch` | décret 05-468 art. 10 |
