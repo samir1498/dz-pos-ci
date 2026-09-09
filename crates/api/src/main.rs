@@ -71,7 +71,8 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let (listener, port) = dzpos_api::bind(args.port).await?;
     if made_here {
         // The operator's own terminal is the only place it goes; the UI
-        // needs it as VITE_API_TOKEN (`just api` writes it to .dev instead).
+        // needs it as VITE_API_TOKEN (`just api` makes one per run in .dev
+        // and `just dev` reads it, so neither prints anything).
         println!("dzpos-api launch token {}", token.expose());
     }
     // The e2e harness waits on this line to know the port is live.

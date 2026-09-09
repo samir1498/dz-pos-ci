@@ -61,8 +61,8 @@ hosting front door do that, and the core sees a token or a session.
 
 | Link | Transport | Who is calling | Where it is built |
 |---|---|---|---|
-| Desktop webview to its own core | plain HTTP on 127.0.0.1, port chosen at launch | the launch token: 32 random bytes the Tauri process makes at start, injected into its webview as `__DZPOS_API_TOKEN__` and required as `Authorization: Bearer` on every route but `/health`; CORS also lists the app's own origins | M1, `crates/api/src/token.rs` |
-| Browser preview and e2e to a standalone core | same, the token comes from `DZPOS_API_TOKEN` in the environment (never a flag: `ps` shows flags) and reaches Vite as `VITE_API_TOKEN` | same launch token | M1, `justfile`, `playwright.config.ts` |
+| Desktop webview to its own core | plain HTTP on 127.0.0.1, port chosen at launch | the launch token: 32 random bytes the Tauri process makes at start, injected into its webview as `__DZPOS_API_TOKEN__` and required as `Authorization: Bearer` on every route but `/health` (and the CORS preflight, which a browser sends bare); the origin list is a second gate a stranger's page has to pass before it can even send the header | M1, `crates/api/src/token.rs` |
+| Browser preview and e2e to a standalone core | same, the token comes from `DZPOS_API_TOKEN` in the environment (never a flag: `ps` shows flags) and reaches Vite as `VITE_API_TOKEN`; Vite inlines it into the bundle it serves, and `just dev --host` serves that bundle to every machine on the Tailscale net, so the token is made fresh per `just api` run and is worthless once that run ends | same launch token | M1, `justfile`, `playwright.config.ts` |
 | Phone or second till to the serving desktop over the shop LAN | HTTP on the LAN address the owner enabled; TLS with a self-signed certificate whose fingerprint travels in the pairing QR is the candidate, plain HTTP on a trusted Wi-Fi the alternative; open until M6 starts | a device token: the QR carries a 60-second single-use pairing token, the phone trades it for a long-lived device token stored on the phone, revocable from settings; every request shows it the way the webview shows the launch token | M6 |
 | Desktop to the hosted core (cloud mode) | HTTPS, terminated at the host's front door, the core behind it on loopback exactly as on a desktop | an account session issued by the host's login; the core receives the shop it answers for and the user from a header the front door sets and a caller cannot | after M6, open decision 1 |
 | Phone to the hosted core | same as the desktop link; the phone never knows which mode it is in (rule 1) | same account session | after M6, open decision 1 |
@@ -161,6 +161,10 @@ Raised in the 2026-09-08 handoff, still open, each settled before
 - Windows code-signing certificate: cost and lead time, for Anouar.
 - Whether a tag on `main` is the only thing that builds the installer and
   publishes the GitHub release.
+- A content security policy on the webview (`tauri.conf.json` has
+  `csp: null`): the launch token sits in a page global, so one link that
+  navigates the main frame to a remote page would hand it over. No screen
+  has such a link today; the policy is what keeps it so.
 
 ## Testing matrix
 

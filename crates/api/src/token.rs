@@ -92,11 +92,27 @@ pub async fn require(
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
+        .and_then(bearer);
     match shown {
         Some(shown) if token.matches(shown) => Ok(next.run(req).await),
         _ => Err(ApiError::Unauthorized),
     }
+}
+
+/// The credentials after a `Bearer` scheme, read the way RFC 7235 spells
+/// it: the scheme is case-insensitive and followed by one or more spaces;
+/// the token is exact. Outer whitespace was already stripped by the
+/// server, so a trailing space never reaches here.
+fn bearer(value: &str) -> Option<&str> {
+    let (scheme, rest) = value.split_once(' ')?;
+    if !scheme.eq_ignore_ascii_case("bearer") {
+        return None;
+    }
+    let token = rest.trim_start_matches(' ');
+    if token.is_empty() || token.contains(' ') {
+        return None;
+    }
+    Some(token)
 }
 
 #[cfg(test)]

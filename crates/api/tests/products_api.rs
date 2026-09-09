@@ -513,10 +513,11 @@ async fn a_spent_barcode_series_is_a_conflict_on_the_wire() {
 /// wants, or none. `call` above always shows the right token.
 async fn call_with_auth(
     app: &axum::Router,
+    method: &str,
     uri: &str,
     authorization: Option<&str>,
 ) -> axum::response::Response {
-    let req = Request::builder().method("GET").uri(uri);
+    let req = Request::builder().method(method).uri(uri);
     let req = match authorization {
         Some(value) => req.header("authorization", value),
         None => req,
@@ -548,7 +549,7 @@ async fn a_request_without_the_launch_token_is_401_in_the_envelope() {
         Some("Basic dGVzdA=="),
         Some("test-launch-token"),
     ] {
-        let res = call_with_auth(&h.app, "/products", shown).await;
+        let res = call_with_auth(&h.app, "GET", "/products", shown).await;
         assert_eq!(
             res.headers()
                 .get("www-authenticate")
@@ -568,17 +569,54 @@ async fn a_request_without_the_launch_token_is_401_in_the_envelope() {
 #[tokio::test]
 async fn a_token_that_differs_only_at_the_end_is_refused() {
     let h = harness();
-    let res = call_with_auth(&h.app, "/products", Some("Bearer test-launch-tokeN")).await;
-    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-    let res = call_with_auth(&h.app, "/products", Some("Bearer test-launch-token ")).await;
-    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    for shown in [
+        "Bearer test-launch-tokeN",
+        "Bearer test-launch-toke",
+        "Bearer test-launch-token1",
+    ] {
+        let res = call_with_auth(&h.app, "GET", "/products", Some(shown)).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{shown}");
+    }
+}
+
+#[tokio::test]
+async fn the_scheme_is_read_the_way_rfc_7235_spells_it() {
+    // The scheme is case-insensitive and may be followed by more than one
+    // space; the token itself is exact.
+    let h = harness();
+    for shown in [
+        "bearer test-launch-token",
+        "BEARER test-launch-token",
+        "Bearer  test-launch-token",
+    ] {
+        let res = call_with_auth(&h.app, "GET", "/products", Some(shown)).await;
+        assert_eq!(res.status(), StatusCode::OK, "{shown}");
+    }
+    for shown in [
+        "Bearertest-launch-token",
+        "Bearer test-launch-token extra",
+        "Token test-launch-token",
+    ] {
+        let res = call_with_auth(&h.app, "GET", "/products", Some(shown)).await;
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{shown}");
+    }
+}
+
+#[tokio::test]
+async fn a_wrong_method_on_health_answers_in_the_envelope_too() {
+    // /health lives outside the token guard, and it still owes the same
+    // JSON 405 every other route gives.
+    let h = harness();
+    let (status, body) = envelope(call_with_auth(&h.app, "PUT", "/health", None).await).await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(body["error"]["code"], "method_not_allowed");
 }
 
 #[tokio::test]
 async fn an_unknown_route_needs_the_token_too() {
     // 404 versus 401 would tell a stranger which routes exist.
     let h = harness();
-    let (status, body) = envelope(call_with_auth(&h.app, "/nowhere", None).await).await;
+    let (status, body) = envelope(call_with_auth(&h.app, "GET", "/nowhere", None).await).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body["error"]["code"], "unauthorized");
 }
@@ -588,15 +626,16 @@ async fn health_needs_no_token() {
     // The e2e harness and the desktop wait on it before the page has the
     // token; it says the process is up and which shop, nothing more.
     let h = harness();
-    let (status, body) = envelope(call_with_auth(&h.app, "/health", None).await).await;
+    let (status, body) = envelope(call_with_auth(&h.app, "GET", "/health", None).await).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["status"], "ok");
 }
 
 #[tokio::test]
-async fn the_preflight_is_answered_before_the_token_is_checked() {
+async fn the_preflight_clears_the_authorization_header() {
     // A browser sends OPTIONS without any authorization header and only
-    // then the real request with it; the preflight must clear the header.
+    // then the real request with it; the preflight must name the header
+    // as allowed or the browser never sends the token at all.
     let h = harness();
     let req = Request::builder()
         .method("OPTIONS")

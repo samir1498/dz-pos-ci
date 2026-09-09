@@ -120,7 +120,12 @@ pub fn router_with_origin(
     // "this is the desktop's own screen". Only /health answers without it.
     // TODO(M4): which user is calling. Roles arrive with users; the request
     // identity slot is this middleware, the token stays the outer check.
-    let open = Router::new().route("/health", get(routes::health));
+    // The health route owes the same JSON 405 as every guarded one; the
+    // method fallback below is the one on the router inside the guard.
+    let open = Router::new().route(
+        "/health",
+        get(routes::health).fallback(routes::method_not_allowed),
+    );
     let guarded = Router::new()
         .route("/categories", get(routes::categories::list))
         .route("/products", get(routes::products::list))
