@@ -82,8 +82,12 @@ pub(crate) struct CustomerRow {
 
 /// `updated_at` is set by the service on every write, the way a product's is:
 /// SQLite's DEFAULT only fires on the insert.
+///
+/// `treat_none_as_null`: an update carries the whole fiche, so a cleared RC or
+/// a credit limit taken off has to reach the column. Without it diesel reads
+/// `None` as "leave this one alone" and a limit could never be lifted.
 #[derive(Debug, Insertable, AsChangeset)]
-#[diesel(table_name = customers)]
+#[diesel(table_name = customers, treat_none_as_null = true)]
 pub(crate) struct CustomerRowWrite {
     pub shop_id: i32,
     pub name: String,

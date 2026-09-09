@@ -8,12 +8,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::shop::{Shop, ShopRowWrite, StoreBlock};
 use crate::repos::shops as repo;
-use crate::services::audit;
-
-/// Longest value any one field keeps. An RC is 20-odd characters and an
-/// address a few lines; anything past this is a paste gone wrong, and the
-/// ticket template would wrap it into nonsense.
-const MAX_FIELD_CHARS: usize = 200;
+use crate::services::{audit, bounded_field, optional_field};
 
 pub fn get(conn: &mut SqliteConnection, shop_id: i32) -> Result<Shop, CoreError> {
     repo::get(conn, shop_id)
@@ -69,34 +64,15 @@ fn validate(block: &StoreBlock) -> Result<ShopRowWrite, CoreError> {
             "the shop needs a name; it prints on every ticket",
         ));
     }
-    bounded("name", name)?;
+    bounded_field("name", name)?;
     Ok(ShopRowWrite {
         name: name.to_string(),
-        rc: optional("rc", block.rc.as_deref())?,
-        nif: optional("nif", block.nif.as_deref())?,
-        nis: optional("nis", block.nis.as_deref())?,
-        ai: optional("ai", block.ai.as_deref())?,
-        address: optional("address", block.address.as_deref())?,
-        phone: optional("phone", block.phone.as_deref())?,
+        rc: optional_field("rc", block.rc.as_deref())?,
+        nif: optional_field("nif", block.nif.as_deref())?,
+        nis: optional_field("nis", block.nis.as_deref())?,
+        ai: optional_field("ai", block.ai.as_deref())?,
+        address: optional_field("address", block.address.as_deref())?,
+        phone: optional_field("phone", block.phone.as_deref())?,
     })
 }
 
-/// Trimmed, and blank becomes `None`: the column is cleared, never left
-/// holding a space.
-fn optional(field: &str, value: Option<&str>) -> Result<Option<String>, CoreError> {
-    let Some(value) = value.map(str::trim).filter(|v| !v.is_empty()) else {
-        return Ok(None);
-    };
-    bounded(field, value)?;
-    Ok(Some(value.to_string()))
-}
-
-fn bounded(field: &str, value: &str) -> Result<(), CoreError> {
-    if value.chars().count() > MAX_FIELD_CHARS {
-        return Err(CoreError::validation(
-            field,
-            "longer than a ticket or a facture can print",
-        ));
-    }
-    Ok(())
-}
