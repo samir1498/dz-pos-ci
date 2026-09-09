@@ -1026,6 +1026,18 @@ async fn cancelling_a_credit_facture_answers_the_block_naming_the_avoir() {
     // The number stays, so the series never gaps.
     assert_eq!(cancelled["number"], facture["number"]);
     assert_eq!(cancelled["cancellation"]["reason"], "commande annulée");
+    // The whole block travels, not the reason alone: the annulée face of the
+    // paper prints the day, and a comptable asking why a numbered document
+    // stopped asking for its amount is owed who decided it.
+    assert_eq!(
+        cancelled["cancellation"]["cancelled_at"]
+            .as_str()
+            .expect("the moment it was annulled")
+            .len(),
+        19,
+        "{cancelled}"
+    );
+    assert_eq!(cancelled["cancellation"]["cancelled_by"], 1);
     let avoir_id = cancelled["cancellation"]["avoir_document_id"]
         .as_i64()
         .expect("a facture carrying debt is cancelled through an avoir");
@@ -1139,4 +1151,60 @@ async fn a_cancellation_with_no_reason_is_refused_on_the_field() {
             .contains("reason"),
         "{body}"
     );
+}
+
+/// A field the type does not know is refused rather than dropped. The one
+/// that matters is a misspelt `lines` on an avoir: dropped, it reads as the
+/// whole facture coming back, so a caller asking for one unit of three would
+/// have credited all three and never been told.
+#[tokio::test]
+async fn a_stray_field_is_refused_on_every_avoir_and_cancel_body() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let facture = a_credit_facture(&app, p, 3_000).await;
+    let facture_id = facture["id"].as_i64().unwrap();
+    let line_id = facture["lines"][0]["id"].as_i64().unwrap();
+
+    for body in [
+        // The misspelling itself.
+        json!({ "line": [{ "document_line_id": line_id, "qty_milli": 1_000 }], "reason": null }),
+        // A stray beside a good body.
+        json!({ "lines": null, "reason": null, "note": "retour" }),
+        // And one inside a line.
+        json!({
+            "lines": [{ "document_line_id": line_id, "qty_milli": 1_000, "product_id": 1 }],
+            "reason": null
+        }),
+    ] {
+        let (status, answer) = call(
+            &app,
+            "POST",
+            &format!("/sales/{facture_id}/avoir"),
+            Some(body.clone()),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{body} was taken: {answer}"
+        );
+    }
+
+    let (status, answer) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/cancel"),
+        Some(json!({ "reason": "erreur", "avoir": false })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{answer}");
+
+    // Nothing was written by any of them: the facture still stands and no
+    // credit note was taken out of the series.
+    let (status, still) = call(&app, "GET", &format!("/sales/{facture_id}"), None).await;
+    assert_eq!(status, StatusCode::OK, "{still}");
+    assert_eq!(still["status"], "issued");
+    let (status, avoirs) = call(&app, "GET", &format!("/sales/{facture_id}/avoirs"), None).await;
+    assert_eq!(status, StatusCode::OK, "{avoirs}");
+    assert_eq!(avoirs.as_array().map(Vec::len), Some(0), "{avoirs}");
 }
