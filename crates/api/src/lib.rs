@@ -2,6 +2,7 @@
 //! preview and, later, the phone are equal callers (architecture.md rule 2),
 //! so these routes and their tests are the product's contract.
 
+pub mod daily;
 pub mod dto;
 pub mod error;
 pub mod routes;
