@@ -128,7 +128,9 @@ impl AppState {
     /// The ways it can fail, and what each answers:
     ///
     /// - anything up to step 6 leaves the shop file exactly as it was and
-    ///   the connection where it was;
+    ///   the connection where it was, and takes the staged copy with it: a
+    ///   whole database under a name nothing reads is a copy of the shop
+    ///   that no screen lists and no prune counts;
     /// - the rename at 7 failing leaves the shop file as it was, sidecars
     ///   included, and it is reopened: the restore did not happen and the
     ///   till goes on working. If that reopen fails too, both halves are
@@ -157,15 +159,30 @@ impl AppState {
         // A leftover from a run that died mid-restore would make the copy
         // below fail; it describes nothing that is still wanted.
         remove_if_present(&staged).map_err(core_io)?;
-        std::fs::copy(backup_path, &staged).map_err(core_io)?;
+        if let Err(e) = std::fs::copy(backup_path, &staged) {
+            // A copy that stopped part way through still wrote a file, and
+            // it is a torn one under a name that means "ready to be renamed
+            // over the shop file".
+            let _ = std::fs::remove_file(&staged);
+            return Err(core_io(e));
+        }
 
         // The last thing done through the live connection: its `-wal` is
         // folded back into the file and emptied while the connection that
         // owns it is still open. After this, a sidecar that survives the
         // swap describes nothing, which is what turns the failure below from
         // data loss into a restart.
-        let live = guard.as_mut().ok_or(ApiError::Unavailable)?;
-        dzpos_core::db::checkpoint(live).map_err(|e| ApiError::from(CoreError::from(e)))?;
+        //
+        // Every way out between the copy above and the rename below goes
+        // through here, so the staged copy is removed in one place. It is a
+        // whole database sitting beside the shop file under a name no screen
+        // lists and no prune counts; the next restore would delete it
+        // anyway, and until then it is a copy of the shop nobody knows is
+        // there.
+        if let Err(e) = fold_log_back(&mut guard) {
+            let _ = std::fs::remove_file(&staged);
+            return Err(e);
+        }
 
         // From here the shop file is being replaced. Closing the connection
         // is what releases the handle, and the slot stays empty until a
@@ -257,6 +274,15 @@ fn sibling(db: &Path, suffix: &str) -> PathBuf {
     let mut name = db.as_os_str().to_os_string();
     name.push(suffix);
     PathBuf::from(name)
+}
+
+/// Step 5 of a restore, as one fallible piece so its caller has a single
+/// place to undo step 4 from. An empty slot here is not a state a restore
+/// can be in: it holds the lock, and the safety copy a moment ago went
+/// through the connection that would be missing.
+fn fold_log_back(slot: &mut Option<Conn>) -> Result<(), ApiError> {
+    let live = slot.as_mut().ok_or(ApiError::Unavailable)?;
+    dzpos_core::db::checkpoint(live).map_err(|e| ApiError::from(CoreError::from(e)))
 }
 
 fn remove_if_present(path: &Path) -> Result<(), std::io::Error> {

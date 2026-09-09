@@ -50,6 +50,23 @@ impl Harness {
     }
 }
 
+/// Anything left beside the shop file under the name a restore stages its
+/// copy at. Matched by suffix rather than by the one name, so a second
+/// staging name would be caught too.
+fn staged_copies(h: &Harness) -> Vec<std::path::PathBuf> {
+    let mut found: Vec<std::path::PathBuf> = std::fs::read_dir(h.dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.ends_with(".restoring.tmp"))
+        })
+        .collect();
+    found.sort();
+    found
+}
+
 /// Everything in the backup folder, sorted, so two readings compare.
 fn backup_files(h: &Harness) -> Vec<std::path::PathBuf> {
     let dir = h.dir.path().join("backups");
@@ -468,6 +485,15 @@ async fn a_restore_stops_before_the_rename_when_the_log_cannot_be_folded_back() 
         product_names(&h.app).await,
         vec!["Huile Elio 5L", "Semoule 10kg"],
         "the shop file was replaced by a restore that should not have got there"
+    );
+
+    // The copy staged for the rename that never came is gone. Left there it
+    // would be a whole database beside the shop file that no screen lists
+    // and no prune counts.
+    assert_eq!(
+        staged_copies(&h),
+        Vec::<std::path::PathBuf>::new(),
+        "a restore that was refused left its staged copy behind"
     );
     reader.batch_execute("COMMIT").unwrap();
 }
