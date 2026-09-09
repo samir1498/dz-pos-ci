@@ -365,3 +365,145 @@ fn a_line_keeps_its_snapshot_when_the_product_is_deleted() {
     assert_eq!(read.lines[0].name, "Sucre");
     assert_eq!(read.lines[0].product_id, None);
 }
+
+/// Every document whose stored totals disagree with its stored lines or its
+/// stored TVA recap. The columns a reprint reads are the ones a paper
+/// document is made of, so nothing may drift between them: the query is the
+/// invariant, and the test that runs it names no expected numbers at all.
+fn totals_that_disagree_with_their_lines(conn: &mut SqliteConnection) -> Vec<i32> {
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+    let rows: Vec<Id> = diesel::sql_query(
+        "SELECT d.id FROM documents d WHERE \
+         d.total_ht_centimes != (SELECT SUM(line_total_centimes) FROM document_lines l \
+             WHERE l.document_id = d.id) \
+         OR d.subtotal_ht_centimes != d.total_ht_centimes - d.discount_centimes \
+         OR d.total_ttc_centimes != d.subtotal_ht_centimes + d.tva_centimes \
+         OR d.net_to_pay_centimes != d.total_ttc_centimes + d.stamp_centimes \
+         OR d.tva_centimes != COALESCE((SELECT SUM(amount_centimes) FROM document_tva t \
+             WHERE t.document_id = d.id), 0) \
+         OR (d.regime = 'reel' AND d.subtotal_ht_centimes != (SELECT SUM(base_centimes) \
+             FROM document_tva t WHERE t.document_id = d.id)) \
+         OR (d.regime = 'ifu' AND EXISTS (SELECT 1 FROM document_tva t \
+             WHERE t.document_id = d.id))",
+    )
+    .load(conn)
+    .unwrap();
+    rows.into_iter().map(|r| r.id).collect()
+}
+
+#[test]
+fn a_stored_total_always_adds_up_from_the_stored_lines() {
+    use dzpos_core::models::product::Unit;
+    use dzpos_core::services::sales::{self, NewSale, NewSaleLine};
+    use dzpos_core::services::settings;
+
+    let priced = |conn: &mut SqliteConnection, name: &str, selling: i64, rate: u32| {
+        products::create(
+            conn,
+            SHOP,
+            OWNER,
+            NewProduct {
+                name: name.to_string(),
+                barcode: None,
+                category_id: None,
+                unit: Unit::Piece,
+                cost: Money::centimes(selling / 2),
+                selling: Money::centimes(selling),
+                wholesale: None,
+                qty_on_hand_milli: 100_000,
+                low_stock_at_milli: 0,
+                rate_bps: Some(Bps::new(rate).unwrap()),
+                active: true,
+            },
+        )
+        .unwrap()
+        .id
+    };
+    let sold = |product_id: i32, qty_milli: i64| NewSaleLine {
+        product_id,
+        qty_milli,
+        unit_price: None,
+        line_discount: Money::ZERO,
+    };
+
+    let (_dir, mut conn) = open_temp();
+    let high = priced(&mut conn, "Sucre", 20_000, 1900);
+    let low = priced(&mut conn, "Pain", 3_000, 900);
+
+    // Réel, two rates, a global discount the recap has to spread.
+    sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![sold(high, 1_500), sold(low, 2_000)],
+            global_discount: Money::centimes(1_000),
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(100_000)),
+            issued_at: Some(at(9, 10)),
+        },
+    )
+    .unwrap();
+    // A card sale: no stamp, nothing tendered.
+    sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![sold(high, 1_000)],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Card,
+            tendered: None,
+            issued_at: Some(at(9, 11)),
+        },
+    )
+    .unwrap();
+    // Under the IFU: no recap row at all, and the stamp still applies.
+    settings::set_regime(&mut conn, SHOP, OWNER, Regime::Ifu, at(9, 12)).unwrap();
+    let ifu = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![sold(high, 1_000), sold(low, 3_000)],
+            global_discount: Money::centimes(500),
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(100_000)),
+            issued_at: Some(at(9, 13)),
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        totals_that_disagree_with_their_lines(&mut conn),
+        Vec::<i32>::new()
+    );
+
+    // The query bites: one centime moved on one stored column and the
+    // document is named. Without this the test would pass on a query that
+    // compares nothing.
+    diesel::sql_query(format!(
+        "UPDATE documents SET total_ht_centimes = total_ht_centimes + 1 WHERE id = {}",
+        ifu.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        totals_that_disagree_with_their_lines(&mut conn),
+        vec![ifu.id]
+    );
+    diesel::sql_query(format!(
+        "UPDATE documents SET total_ht_centimes = total_ht_centimes - 1 WHERE id = {}",
+        ifu.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        totals_that_disagree_with_their_lines(&mut conn),
+        Vec::<i32>::new()
+    );
+}
