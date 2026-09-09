@@ -85,6 +85,17 @@ const closed: CustomerDto = {
   active: false,
 };
 
+/** An avoir left more on the fiche than was owed, so the balance is
+ *  negative: the shop holds the customer's money, not the other way round.
+ *  The sign alone would read as a debt of minus something, which is not a
+ *  sentence anyone says at a counter. */
+const holdingCredit: CustomerDto = {
+  ...benali,
+  id: 9,
+  name: "Yacine Avoir",
+  balance_centimes: -100_000,
+};
+
 const ledger: CustomerLedgerDto = {
   customer_id: 3,
   balance_centimes: 150_000,
@@ -495,6 +506,34 @@ describe("the ledger", () => {
 
     expect(await screen.findByText(fr.error_amount_zero)).toBeInTheDocument();
     expect(() => sent("POST")).toThrow();
+  });
+});
+
+describe("a credit balance", () => {
+  test("a negative balance is named a credit rather than shown as a minus debt", async () => {
+    list = [holdingCredit];
+    rows = { ...ledger, customer_id: 9, balance_centimes: -100_000, entries: [] };
+    payments = { ...noPayments, customer_id: 9, balance_centimes: -100_000 };
+    mount();
+
+    // The list says it on the row, before anything is opened.
+    const row = await screen.findByRole("row", { name: /Yacine Avoir/ });
+    expect(within(row).getByText(fr.customers_credit)).toBeInTheDocument();
+    expect(within(row).getByText("1 000,00")).toBeInTheDocument();
+    expect(within(row).queryByText("-1 000,00")).toBeNull();
+
+    // And the fiche labels the figure the same way, beside the amount rather
+    // than as a column header the whole table shares.
+    await userEvent.click(
+      screen.getByRole("button", { name: `${fr.customers_edit} Yacine Avoir` }),
+    );
+    const heading = await screen.findByRole("heading", { name: fr.customers_ledger });
+    const fiche = heading.closest("section");
+    if (fiche === null) throw new Error("the ledger heading sits in no section");
+    const said = within(fiche);
+    expect(said.getByText(fr.customers_credit)).toBeInTheDocument();
+    expect(said.getByText("1 000,00")).toBeInTheDocument();
+    expect(said.queryByText(fr.customers_balance)).toBeNull();
   });
 });
 

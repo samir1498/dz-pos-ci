@@ -1334,6 +1334,124 @@ fn seed_a_facture_naming_a_customer(conn: &mut SqliteConnection) {
 }
 
 #[test]
+fn a_database_without_the_cancellation_columns_takes_the_migration_that_adds_them() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. This one adds four
+    // nullable columns to a table that already holds documents, so what has
+    // to be proved is that the documents are still there, still say what they
+    // said, and read as never cancelled rather than as cancelled by nobody.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_before_migration("cancellation");
+    for column in [
+        "cancelled_at",
+        "cancelled_by",
+        "cancel_reason",
+        "cancel_avoir_document_id",
+    ] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM pragma_table_info('documents') \
+                     WHERE name = '{column}'"
+                )
+            ),
+            0,
+            "the file this starts from already carries {column}"
+        );
+    }
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('document_lines') \
+             WHERE name = 'ref_line_id'"
+        ),
+        0,
+        "the file this starts from already carries ref_line_id"
+    );
+    seed_a_facture_naming_a_customer(&mut conn);
+    diesel::sql_query(
+        "INSERT INTO document_lines (id, shop_id, document_id, position, name, qty_milli, \
+         unit_price_centimes, line_discount_centimes, rate_bps, line_total_centimes) \
+         VALUES (9, 1, 4, 0, 'Ciment', 1000, 100000, 0, 1900, 100000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND net_to_pay_centimes = 119000 AND status = 'issued' \
+             AND cancelled_at IS NULL AND cancelled_by IS NULL \
+             AND cancel_reason IS NULL AND cancel_avoir_document_id IS NULL"
+        ),
+        1,
+        "the facture the file already carried did not survive the new columns"
+    );
+    // A line the file already carried credits nothing, which is what every
+    // line of a ticket, a facture and a proforma says.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM document_lines WHERE id = 9 AND qty_milli = 1000 \
+             AND line_total_centimes = 100000 AND ref_line_id IS NULL"
+        ),
+        1,
+        "the line the file already carried did not survive the new column"
+    );
+    // The facture line an avoir line credits is a line of this file.
+    assert!(
+        diesel::sql_query("UPDATE document_lines SET ref_line_id = 999 WHERE id = 9")
+            .execute(&mut conn)
+            .is_err(),
+        "the credited-line reference took an id no line has"
+    );
+
+    // A cancellation is written whole: the day, the person and the reason
+    // travel together, because a document marked annulée with nobody's name
+    // on it is exactly what features.md §5 keeps a log against. Which half of
+    // a half-written block is missing is the model's answer (`cancellation`
+    // reads it back the way `buyer_block` and `balance_triple` do), so the
+    // columns only have to take the whole of one.
+    assert_eq!(
+        diesel::sql_query(
+            "UPDATE documents SET status = 'cancelled', cancelled_at = '2026-09-10 09:15:00', \
+             cancelled_by = 1, cancel_reason = 'erreur de saisie' WHERE id = 4"
+        )
+        .execute(&mut conn)
+        .unwrap(),
+        1,
+        "a whole cancellation was refused"
+    );
+    // The person who cancelled is a user of this file and the avoir a
+    // cancellation issued is a document of it, so both columns name a row
+    // rather than holding a number somebody typed.
+    for bad in ["cancelled_by = 999", "cancel_avoir_document_id = 999"] {
+        assert!(
+            diesel::sql_query(format!("UPDATE documents SET {bad} WHERE id = 4"))
+                .execute(&mut conn)
+                .is_err(),
+            "the cancellation block took an id no row has: {bad}"
+        );
+    }
+    // Who cancelled is an id and never a name typed into the wrong box. A
+    // STRICT table converts a number into text for the two TEXT columns, so
+    // the integer one is where the refusal shows (STRICT tables,
+    // architecture.md, Data).
+    assert!(
+        diesel::sql_query("UPDATE documents SET cancelled_by = 'Ahmed' WHERE id = 4")
+            .execute(&mut conn)
+            .is_err(),
+        "the cancellation block took a name where it holds a user id"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
+
+#[test]
 fn the_migration_reverts_and_reapplies() {
     // architecture.md, Data: a migration ships with a test that runs it.
     // Reverting all the way back to an empty file is what proves each
@@ -1348,7 +1466,7 @@ fn the_migration_reverts_and_reapplies() {
 
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
-    // The sixth one rebuilt the ledger to hang a two-column CHECK on it, so
+    // The seventh one rebuilt the ledger to hang a two-column CHECK on it, so
     // its down rebuilds it once more without that CHECK. The column stays: it
     // belongs to the fifth migration and comes off with the fifth
     // migration's down, below.
@@ -1377,6 +1495,49 @@ fn the_migration_reverts_and_reapplies() {
         ),
         1,
         "the check down.sql took a movement with it"
+    );
+
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // The sixth one only adds columns, so its down takes the five and leaves
+    // every document standing with the number a comptable reads and the buyer
+    // block it was made out to.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('document_lines') \
+             WHERE name = 'ref_line_id'"
+        ),
+        0,
+        "the cancellation down.sql left ref_line_id behind"
+    );
+    for column in [
+        "cancelled_at",
+        "cancelled_by",
+        "cancel_reason",
+        "cancel_avoir_document_id",
+    ] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM pragma_table_info('documents') \
+                     WHERE name = '{column}'"
+                )
+            ),
+            0,
+            "the cancellation down.sql left {column} behind"
+        );
+    }
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND series = 'doc_facture' AND net_to_pay_centimes = 119000 \
+             AND customer_id = 1 AND buyer_name = 'Entreprise Benali'"
+        ),
+        1,
+        "the cancellation down.sql took the facture or its buyer block with the columns"
     );
 
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
@@ -1777,9 +1938,11 @@ fn a_facture_naming_a_customer_goes_down_and_up_without_orphaning_itself() {
     let (_dir, mut conn) = open_temp();
     seed_a_facture_naming_a_customer(&mut conn);
 
-    // The fifth and sixth migrations sit on top of the fourth and both only
-    // touch a table the fourth created, so they come off first; the round
-    // trip above is where those steps are asserted.
+    // The fifth, sixth and seventh migrations sit on top of the fourth and
+    // only touch tables the fourth left standing, so all three come off
+    // first; the round trip above is where those steps are asserted.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)

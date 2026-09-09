@@ -71,6 +71,24 @@ pub struct BalanceTriple {
     pub total_debt: Money,
 }
 
+/// What a cancellation left on the document it annulled (features.md §3).
+///
+/// One struct and not four fields on `Document`, because the four are one
+/// fact: a document is annulled on a day, by somebody, for a reason, and
+/// sometimes with an avoir behind it. `Some` is the whole of that fact, so a
+/// caller printing the annulée face never has to ask whether the date is
+/// there while the reason is not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cancellation {
+    pub at: NaiveDateTime,
+    pub by: i32,
+    pub reason: String,
+    /// The avoir the cancellation issued. `None` when there was nothing to
+    /// carry back: a cash ticket owed nobody anything, so the stock returning
+    /// is the whole of it.
+    pub avoir_document_id: Option<i32>,
+}
+
 /// One sold line as it was sold. `name` and `barcode` are snapshots: the
 /// product may be renamed or deleted and a reprint still shows what the
 /// customer was handed.
@@ -86,6 +104,11 @@ pub struct DocumentLine {
     pub line_discount: Money,
     pub rate_bps: Bps,
     pub line_total: Money,
+    /// The facture line this one credits, on an avoir line and nowhere else
+    /// (features.md §3). What is left to credit on a facture line is its
+    /// quantity less what earlier avoirs took off that same line, so the two
+    /// are matched by id and never by which product they name.
+    pub ref_line_id: Option<i32>,
 }
 
 /// A line as a caller hands it over, before it has an id.
@@ -99,6 +122,7 @@ pub struct NewDocumentLine {
     pub line_discount: Money,
     pub rate_bps: Bps,
     pub line_total: Money,
+    pub ref_line_id: Option<i32>,
 }
 
 /// A document as the rest of the app sees it. `totals` carries the TVA recap
@@ -129,6 +153,9 @@ pub struct Document {
     pub tendered: Option<Money>,
     pub change: Option<Money>,
     pub status: DocumentStatus,
+    /// Filled exactly when `status` is `Cancelled`. The two are written
+    /// together by `documents::cancel` and read back together below.
+    pub cancellation: Option<Cancellation>,
     pub lines: Vec<DocumentLine>,
     pub created_at: NaiveDateTime,
 }
@@ -244,6 +271,10 @@ pub(crate) struct DocumentRow {
     pub total_debt_centimes: Option<i64>,
     pub status: DocumentStatus,
     pub created_at: NaiveDateTime,
+    pub cancelled_at: Option<NaiveDateTime>,
+    pub cancelled_by: Option<i32>,
+    pub cancel_reason: Option<String>,
+    pub cancel_avoir_document_id: Option<i32>,
 }
 
 #[derive(Debug, Insertable)]
@@ -288,6 +319,17 @@ pub(crate) struct DocumentRowWrite {
     pub status: DocumentStatus,
 }
 
+/// The four columns a cancellation writes, together. `AsChangeset` rather than
+/// four `set` calls at the repo, so a cancellation cannot be written half way.
+#[derive(Debug, AsChangeset)]
+#[diesel(table_name = documents)]
+pub(crate) struct CancelWrite {
+    pub cancelled_at: NaiveDateTime,
+    pub cancelled_by: i32,
+    pub cancel_reason: String,
+    pub cancel_avoir_document_id: Option<i32>,
+}
+
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
 #[diesel(table_name = document_lines)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
@@ -302,6 +344,7 @@ pub(crate) struct DocumentLineRow {
     pub line_discount_centimes: i64,
     pub rate_bps: i32,
     pub line_total_centimes: i64,
+    pub ref_line_id: Option<i32>,
 }
 
 #[derive(Debug, Insertable)]
@@ -318,6 +361,7 @@ pub(crate) struct DocumentLineRowWrite {
     pub line_discount_centimes: i64,
     pub rate_bps: i32,
     pub line_total_centimes: i64,
+    pub ref_line_id: Option<i32>,
 }
 
 // Only the three columns a recap row prints. The document it belongs to is
@@ -356,6 +400,7 @@ impl TryFrom<DocumentLineRow> for DocumentLine {
             line_discount: Money::centimes(r.line_discount_centimes),
             rate_bps: bps(r.rate_bps)?,
             line_total: Money::centimes(r.line_total_centimes),
+            ref_line_id: r.ref_line_id,
         })
     }
 }
@@ -418,6 +463,45 @@ fn balance_triple(row: &DocumentRow) -> Result<Option<BalanceTriple>, CoreError>
     }
 }
 
+/// The cancellation block, whole or not at all, and only on a document whose
+/// `status` says it was annulled. The same rule the buyer block and the
+/// balance triple follow: a row saying a facture was cancelled without saying
+/// when, or saying when without saying it was cancelled, is a write that got
+/// half way, and printing an annulée face off one of those halves would put a
+/// claim on paper that the file cannot back up.
+fn cancellation(row: &DocumentRow) -> Result<Option<Cancellation>, CoreError> {
+    let block = match (
+        row.cancelled_at,
+        row.cancelled_by,
+        row.cancel_reason.as_deref(),
+    ) {
+        (Some(at), Some(by), Some(reason)) => Some(Cancellation {
+            at,
+            by,
+            reason: reason.to_string(),
+            avoir_document_id: row.cancel_avoir_document_id,
+        }),
+        (None, None, None) => None,
+        _ => {
+            return Err(CoreError::validation(
+                "cancellation",
+                "the stored cancellation is missing its day, its author or its reason",
+            ))
+        }
+    };
+    match (row.status, block.is_some()) {
+        (DocumentStatus::Cancelled, true) | (DocumentStatus::Issued, false) => Ok(block),
+        (DocumentStatus::Cancelled, false) => Err(CoreError::validation(
+            "cancellation",
+            "the document is annulée and says nothing about when or by whom",
+        )),
+        (DocumentStatus::Issued, true) => Err(CoreError::validation(
+            "cancellation",
+            "the document carries a cancellation and still says it stands",
+        )),
+    }
+}
+
 pub(crate) fn assemble(
     row: DocumentRow,
     lines: Vec<DocumentLineRow>,
@@ -425,6 +509,7 @@ pub(crate) fn assemble(
 ) -> Result<Document, CoreError> {
     let buyer = buyer_block(&row)?;
     let balance = balance_triple(&row)?;
+    let cancellation = cancellation(&row)?;
     Ok(Document {
         id: row.id,
         shop_id: row.shop_id,
@@ -464,6 +549,7 @@ pub(crate) fn assemble(
         tendered: row.tendered_centimes.map(Money::centimes),
         change: row.change_centimes.map(Money::centimes),
         status: row.status,
+        cancellation,
         lines: lines
             .into_iter()
             .map(DocumentLine::try_from)

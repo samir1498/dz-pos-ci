@@ -428,10 +428,26 @@ export function TillScreen() {
   const creditProblem: Key | null =
     mode === "credit" && !takesCredit(customer) ? "error_credit_needs_customer" : null;
 
-  const problem =
-    lineProblem ?? globalDiscountProblem ?? totalsProblem ?? tenderedProblem ?? creditProblem;
+  // What is wrong with the basket, and what is wrong at the cash box. A
+  // quotation takes no money, so the second half is not part of what makes it
+  // sendable: a proforma is written from a basket and a customer alone. The
+  // first half still is. A quantity that is not a number and a global discount
+  // above the basket are as wrong on a quotation as on a sale, and the price a
+  // customer is quoted is the one they will be charged.
+  //
+  // Split rather than dropped whole. `preview` is null while any of the basket
+  // problems stands, so dropping them all happened to gate correctly, and the
+  // day the preview is computed some other way it would stop doing so.
+  const basketProblem = lineProblem ?? globalDiscountProblem ?? totalsProblem;
+  const tillProblem = tenderedProblem ?? creditProblem;
+  const quoting = kind === "proforma";
   const canPay =
-    cart.length > 0 && preview !== null && problem === null && !tenderedMissing && !pay.isPending;
+    cart.length > 0 &&
+    preview !== null &&
+    basketProblem === null &&
+    (quoting || tillProblem === null) &&
+    (quoting || !tenderedMissing) &&
+    !pay.isPending;
 
   const body = useCallback(
     (override: boolean): NewSaleDto => ({
@@ -447,7 +463,11 @@ export function TillScreen() {
       })),
       global_discount_centimes: globalDiscount ?? 0,
       payment_mode: mode,
-      tendered_centimes: mode === "cash" ? (tendered ?? 0) : null,
+      // Nothing is handed over on a quotation, because nothing has been
+      // bought: the core refuses an amount on one, and the mode is still
+      // sent because it is what decides the droit de timbre the facture
+      // would carry (features.md §3).
+      tendered_centimes: mode === "cash" && kind !== "proforma" ? (tendered ?? 0) : null,
       customer_id: customer?.id ?? null,
       override,
       kind,
@@ -636,6 +656,18 @@ export function TillScreen() {
             current={kind}
             label={t("till_facture")}
             title={customer === null ? t("till_facture_needs_customer") : undefined}
+            disabled={customer === null}
+            onPick={setKind}
+          />
+          {/* A quotation is the same basket priced and nothing else: it is
+              made out to a customer the way a facture is, so it appears on
+              the same terms, and it moves neither stock nor debt
+              (features.md §3). */}
+          <KindChoice
+            kind="proforma"
+            current={kind}
+            label={t("till_kind_proforma")}
+            title={customer === null ? t("till_proforma_needs_customer") : undefined}
             disabled={customer === null}
             onPick={setKind}
           />

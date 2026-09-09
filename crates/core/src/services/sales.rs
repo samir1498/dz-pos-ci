@@ -27,13 +27,15 @@ use crate::models::stock::{Movement, MovementKind};
 use crate::money::{
     compute_totals, Bps, Line, Money, MoneyError, PaymentMode, Regime, TotalsOptions,
 };
-use crate::services::{audit, clock, customers, debt, documents, products, settings, shops, stock};
+use crate::services::{
+    audit, clock, customers, debt, documents, products, proforma, settings, shops, stock,
+};
 
 /// Whether the droit de timbre applies at all. There is no shop setting for
 /// it yet; a cash payment is still what makes it due (features.md,
 /// `stamp_progressive_tranches`). It becomes a setting the day a shop needs
 /// to turn it off, not before.
-const STAMP_ENABLED: bool = true;
+pub(crate) const STAMP_ENABLED: bool = true;
 
 /// One line of the basket. `unit_price` unset takes the product's selling
 /// price, so a till that shows the price and a till that overrides it send
@@ -47,18 +49,24 @@ pub struct NewSaleLine {
     pub line_discount: Money,
 }
 
-/// The paper the till is ringing this basket up on (features.md §3). Two
+/// The paper the till is ringing this basket up on (features.md §3). Three
 /// values and not `DocumentKind`: an avoir and a bon de livraison are their
 /// own writes with their own rules, and letting the till name one would be a
 /// stock movement and a numbered document nobody asked for.
 ///
 /// A ticket is the default because a sale to a consumer is the till's
 /// ordinary case and needs nothing from the buyer (loi 04-02 art. 10 al. 1).
+///
+/// A proforma is on this switch because the till is where the basket is, and
+/// a quotation is that same basket priced. It is the one value here that ends
+/// in no sale at all: `issue` hands it straight to `services::proforma`, which
+/// writes the document and moves neither stock nor debt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SaleKind {
     #[default]
     Ticket,
     Facture,
+    Proforma,
 }
 
 impl SaleKind {
@@ -68,6 +76,7 @@ impl SaleKind {
         match self {
             SaleKind::Ticket => DocumentKind::Ticket,
             SaleKind::Facture => DocumentKind::Facture,
+            SaleKind::Proforma => DocumentKind::Proforma,
         }
     }
 }
@@ -128,6 +137,15 @@ pub fn issue(
     user_id: i32,
     new: NewSale,
 ) -> Result<Sale, CoreError> {
+    // A quotation is not a sale: it writes the document and stops. Handed
+    // over before any of the rules below, because none of them is about it,
+    // and it never warns about a credit limit it does not move.
+    if new.kind == SaleKind::Proforma {
+        return proforma::issue(conn, shop_id, user_id, new).map(|document| Sale {
+            document,
+            warning: None,
+        });
+    }
     if new.lines.is_empty() {
         return Err(CoreError::validation("lines", "a sale needs a line"));
     }
@@ -161,20 +179,8 @@ pub fn issue(
         let regime = settings::regime_as_of(conn, shop_id, issued_at)?;
         let seller = SellerBlock::from(shops::get(conn, shop_id)?);
 
-        let mut priced = Vec::with_capacity(new.lines.len());
-        for line in &new.lines {
-            priced.push(price(conn, shop_id, regime, line)?);
-        }
-
-        let money_lines: Vec<Line> = priced
-            .iter()
-            .map(|p| Line {
-                qty_milli: p.qty_milli,
-                unit_price: p.unit_price,
-                line_discount: p.line_discount,
-                rate: p.rate_bps,
-            })
-            .collect();
+        let priced = price_lines(conn, shop_id, regime, &new.lines)?;
+        let money_lines = money_lines(&priced);
         let total_ht = sum_line_totals(&money_lines)?;
         if new.global_discount > total_ht {
             return Err(CoreError::validation(
@@ -252,6 +258,9 @@ pub fn issue(
                         line_discount: p.line_discount,
                         rate_bps: p.rate_bps,
                         line_total: p.line_total,
+                        // A sold line credits nothing; only an avoir line
+                        // names the line it is written against.
+                        ref_line_id: None,
                     })
                     .collect(),
             },
@@ -288,11 +297,16 @@ pub fn issue(
         };
 
         // The ledger movement, after the document exists so it can name it.
-        // Only what the customer is left owing is written: a credit sale of a
-        // basket a discount took to nothing owes nothing, and a movement of
-        // zero would sit in every statement the customer is ever handed
-        // (the same rule `customers::create` applies to an opening debt).
-        if credit.balance.remaining_debt != Money::ZERO {
+        // The whole of what the sale put on the account is written, not what
+        // the document is left asking for: credit the customer was holding is
+        // already a movement here, and writing only the unsettled part would
+        // count that credit a second time and leave the balance short by it.
+        //
+        // A credit sale of a basket a discount took to nothing puts nothing on
+        // the account, and a movement of zero would sit in every statement the
+        // customer is ever handed (the same rule `customers::create` applies to
+        // an opening debt).
+        if credit.added != Money::ZERO {
             debt::append(
                 conn,
                 shop_id,
@@ -300,13 +314,24 @@ pub fn issue(
                     customer_id: credit.customer.id,
                     document_id: Some(document.id),
                     kind: DebtKind::Sale,
-                    debit: credit.balance.remaining_debt,
+                    debit: credit.added,
                     credit: Money::ZERO,
                     user_id,
                     note: None,
                 },
             )?;
         }
+
+        // And the credit the customer was already holding is placed on the
+        // document it just settled, so the ledger says which paper it went to
+        // rather than leaving the two to be netted out by whoever reads them.
+        debt::settle_from_credit(
+            conn,
+            shop_id,
+            credit.customer.id,
+            document.id,
+            credit.consumed,
+        )?;
 
         // An override is a decision somebody took past a rule, which is
         // exactly what features.md §5 keeps a log for. Written here rather
@@ -366,7 +391,7 @@ pub fn issue(
 /// `facture_requires_party_ids` asks a different set of fields of a company
 /// than of a consumer, and a reprint may not read that from a fiche somebody
 /// has since edited.
-fn buyer_block(customer: &Customer) -> PartyBlock {
+pub(crate) fn buyer_block(customer: &Customer) -> PartyBlock {
     PartyBlock {
         name: customer.name.clone(),
         party_kind: customer.party_kind,
@@ -459,6 +484,14 @@ fn unset(value: Option<&str>) -> bool {
 struct CreditCheck {
     customer: Customer,
     balance: BalanceTriple,
+    /// What this sale puts on the ledger: the whole net on credit, nothing on
+    /// cash or card. Not the same figure as `balance.remaining_debt` once the
+    /// customer was already holding credit, and it is this one the movement is
+    /// written for.
+    added: Money,
+    /// How much of `added` was covered at issue out of credit the customer
+    /// already held, and so is placed on this document rather than owed on it.
+    consumed: Money,
     overridden: bool,
     warning: Option<Warning>,
 }
@@ -488,12 +521,22 @@ fn credit_check(
     }
     let old_balance = debt::balance(conn, shop_id, customer_id)?;
     // Cash and card leave the ledger where it was: the customer owes nothing
-    // new, so this document's unpaid part is nothing.
-    let remaining_debt = match payment_mode {
+    // new, so this document puts nothing on it.
+    let added = match payment_mode {
         PaymentMode::Credit => net_to_pay,
         PaymentMode::Cash | PaymentMode::Card => Money::ZERO,
     };
-    let total_debt = old_balance.checked_add(remaining_debt)?;
+    // What the customer owes once the sale has landed: the whole of the sale
+    // against the balance, whichever side of zero that balance was on. Credit
+    // the customer is holding is already a movement on the ledger, so it is
+    // netted out here by the addition itself and never subtracted twice.
+    let total_debt = old_balance.checked_add(added)?;
+    // A customer holding credit has this document settled out of it at issue
+    // (features.md §3): the paper is what they pay against, so it must not ask
+    // for money the shop already has. What the credit does not cover is what
+    // the document is left asking for.
+    let consumed = debt::credit_held(old_balance)?.min(added);
+    let remaining_debt = added.checked_sub(consumed)?;
 
     let mut overridden = false;
     if payment_mode == PaymentMode::Credit {
@@ -525,6 +568,8 @@ fn credit_check(
             remaining_debt,
             total_debt,
         },
+        added,
+        consumed,
         overridden,
         warning,
     })
@@ -535,7 +580,7 @@ fn credit_check(
 /// file is at fault; a quantity and a price the caller chose whose product
 /// is past i64 centimes is the caller's arithmetic, so it is a 422 with the
 /// field named. Every other MoneyError keeps its meaning.
-fn too_large(field: &'static str) -> impl Fn(MoneyError) -> CoreError {
+pub(crate) fn too_large(field: &'static str) -> impl Fn(MoneyError) -> CoreError {
     move |e| match e {
         MoneyError::Overflow => CoreError::validation(
             field,
@@ -546,16 +591,45 @@ fn too_large(field: &'static str) -> impl Fn(MoneyError) -> CoreError {
 }
 
 /// A line with its product read and its price settled.
-struct PricedLine {
-    product_id: i32,
-    name: String,
-    barcode: Option<String>,
-    qty_milli: i64,
-    unit_price: Money,
-    line_discount: Money,
-    rate_bps: crate::money::Bps,
-    line_total: Money,
+pub(crate) struct PricedLine {
+    pub(crate) product_id: i32,
+    pub(crate) name: String,
+    pub(crate) barcode: Option<String>,
+    pub(crate) qty_milli: i64,
+    pub(crate) unit_price: Money,
+    pub(crate) line_discount: Money,
+    pub(crate) rate_bps: crate::money::Bps,
+    pub(crate) line_total: Money,
     cost: Money,
+}
+
+/// Every line of a basket, priced. The one place a caller turns what the till
+/// sent into what the document stores, so a quotation and the sale it becomes
+/// price the same basket the same way.
+pub(crate) fn price_lines(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    regime: Regime,
+    lines: &[NewSaleLine],
+) -> Result<Vec<PricedLine>, CoreError> {
+    let mut priced = Vec::with_capacity(lines.len());
+    for line in lines {
+        priced.push(price(conn, shop_id, regime, line)?);
+    }
+    Ok(priced)
+}
+
+/// The priced lines as the money module reads them.
+pub(crate) fn money_lines(priced: &[PricedLine]) -> Vec<Line> {
+    priced
+        .iter()
+        .map(|p| Line {
+            qty_milli: p.qty_milli,
+            unit_price: p.unit_price,
+            line_discount: p.line_discount,
+            rate: p.rate_bps,
+        })
+        .collect()
 }
 
 fn price(
@@ -627,7 +701,7 @@ fn price(
 /// The basket's HT, read back to compare the global discount against it.
 /// A sum that does not fit is a basket the caller sent, so it is named as
 /// one rather than raised as a money fault.
-fn sum_line_totals(lines: &[Line]) -> Result<Money, CoreError> {
+pub(crate) fn sum_line_totals(lines: &[Line]) -> Result<Money, CoreError> {
     let mut total = Money::ZERO;
     for line in lines {
         let gross = line

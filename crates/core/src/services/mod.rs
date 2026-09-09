@@ -34,6 +34,7 @@ pub(crate) fn bounded_field(field: &str, value: &str) -> Result<(), CoreError> {
 }
 
 pub mod audit;
+pub mod avoir;
 pub mod backup;
 pub mod categories;
 pub mod clock;
@@ -41,6 +42,7 @@ pub mod customers;
 pub mod debt;
 pub mod documents;
 pub mod products;
+pub mod proforma;
 pub mod sales;
 pub mod settings;
 pub mod shops;

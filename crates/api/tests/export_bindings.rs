@@ -10,17 +10,18 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto,
-    CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DatedRegimeDto,
-    DebtEntryDto, DebtKindDto, DocumentKindDto, DocumentStatusDto, HealthDto, NewCustomerDto,
-    NewPaymentDto, NewProductDto, NewSaleDto, NewSaleLineDto, PartyKindDto, PaymentAllocationDto,
-    PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto,
-    RestoreDto, SaleBalanceDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
-    SaleWarningDto, SettingsDto, StoreDto, UnitDto,
+    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AvoirLineDto, BackupDto, BackupsDto,
+    CancelDocumentDto, CategoryDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto,
+    CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto, DocumentKindDto,
+    DocumentStatusDto, HealthDto, NewAvoirDto, NewCustomerDto, NewPaymentDto, NewProductDto,
+    NewSaleDto, NewSaleLineDto, PartyKindDto, PaymentAllocationDto, PaymentDto, PaymentMethodDto,
+    PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto,
+    SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto,
+    SaleTvaDto, SaleWarningDto, SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 40] = [
+const FILES: [&str; 45] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -48,6 +49,11 @@ const FILES: [&str; 40] = [
     "NewSaleLineDto.ts",
     "NewSaleDto.ts",
     "SaleKindDto.ts",
+    "SaleCancelEffectDto.ts",
+    "SaleCancellationDto.ts",
+    "AvoirLineDto.ts",
+    "NewAvoirDto.ts",
+    "CancelDocumentDto.ts",
     "PartyKindDto.ts",
     "DebtKindDto.ts",
     "CustomerDto.ts",
@@ -145,6 +151,11 @@ fn export_bindings() {
     NewSaleLineDto::export_all(&cfg).unwrap();
     NewSaleDto::export_all(&cfg).unwrap();
     SaleKindDto::export_all(&cfg).unwrap();
+    SaleCancelEffectDto::export_all(&cfg).unwrap();
+    SaleCancellationDto::export_all(&cfg).unwrap();
+    AvoirLineDto::export_all(&cfg).unwrap();
+    NewAvoirDto::export_all(&cfg).unwrap();
+    CancelDocumentDto::export_all(&cfg).unwrap();
     PartyKindDto::export_all(&cfg).unwrap();
     DebtKindDto::export_all(&cfg).unwrap();
     CustomerDto::export_all(&cfg).unwrap();

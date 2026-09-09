@@ -4,4 +4,9 @@
  * One sold line, snapshotted at issue: the product may be renamed or
  * deleted and a reprint still shows what the customer was handed.
  */
-export type SaleLineDto = { id: number, position: number, product_id: number | null, name: string, barcode: string | null, qty_milli: number, unit_price_centimes: number, line_discount_centimes: number, rate_bps: number, line_total_centimes: number, };
+export type SaleLineDto = { id: number, position: number, product_id: number | null, name: string, barcode: string | null, qty_milli: number, unit_price_centimes: number, line_discount_centimes: number, rate_bps: number, line_total_centimes: number, 
+/**
+ * The facture line this one credits, on an avoir line and nowhere else.
+ * The screen showing an avoir beside its facture lines the two up by it.
+ */
+ref_line_id: number | null, };

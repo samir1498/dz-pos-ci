@@ -317,6 +317,7 @@ fn fixed_facture(case: Case) -> Document {
                 .unwrap()
                 .checked_sub(line.line_discount)
                 .unwrap(),
+            ref_line_id: None,
         })
         .collect();
 
@@ -390,6 +391,10 @@ fn fixed_facture(case: Case) -> Document {
         tendered: None,
         change: None,
         status: case.status(),
+        // The annulée face reads its date and its reason from the render
+        // input beside the document, so the fixture leaves the stored block
+        // empty and the cases that need one hand it over there.
+        cancellation: None,
         lines,
         created_at: issued_at,
     }

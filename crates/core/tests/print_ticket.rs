@@ -150,6 +150,7 @@ fn fixed_sale(case: Case) -> Document {
                 .unwrap()
                 .checked_sub(line.line_discount)
                 .unwrap(),
+            ref_line_id: None,
         })
         .collect();
 
@@ -218,6 +219,7 @@ fn fixed_sale(case: Case) -> Document {
         tendered,
         totals,
         status: DocumentStatus::Issued,
+        cancellation: None,
         lines,
         created_at: issued_at,
     }

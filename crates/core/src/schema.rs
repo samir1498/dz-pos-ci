@@ -120,6 +120,10 @@ diesel::table! {
         total_debt_centimes -> Nullable<BigInt>,
         status -> Text,
         created_at -> Timestamp,
+        cancelled_at -> Nullable<Timestamp>,
+        cancelled_by -> Nullable<Integer>,
+        cancel_reason -> Nullable<Text>,
+        cancel_avoir_document_id -> Nullable<Integer>,
     }
 }
 
@@ -137,6 +141,7 @@ diesel::table! {
         line_discount_centimes -> BigInt,
         rate_bps -> Integer,
         line_total_centimes -> BigInt,
+        ref_line_id -> Nullable<Integer>,
     }
 }
 

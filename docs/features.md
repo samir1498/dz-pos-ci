@@ -192,12 +192,18 @@ discount, TVA rate, line total HT.
 | `payment_mode` | cash, card, credit in v1; cheque and transfer are parked (the column admits them) |
 
 The balance triple, in the words that decide it. `old_balance` is what the
-customer owed before this document. `total_debt` is what they owe after it.
-`remaining_debt` is this document's own unpaid part at issue: `net_to_pay`
-on a credit sale, zero on a cash or a card one. All three are read from the
-ledger when the document is issued and stored on it, so a reprint six
-months later prints the balance the customer was handed and never a sum of
-today's ledger. A document that names no customer stores none of the three.
+customer owed before this document. `total_debt` is what they owe after it,
+which is `old_balance` plus the whole of what this document put on the
+account. `remaining_debt` is this document's own unpaid part at issue:
+`net_to_pay` on a credit sale, less any credit the customer was already
+holding that settled it there and then; zero on a cash or a card one; and on
+an avoir the negative of its own `net_to_pay`, which is its whole effect on
+the account. All three are read from the ledger when the document is issued
+and stored on it, so a reprint six months later prints the balance the
+customer was handed and never a sum of today's ledger. A facture's
+`remaining_debt` comes down as the paper is settled; an avoir's never does,
+because the paper states what that credit note was worth on the day it was
+written. A document that names no customer stores none of the three.
 
 `remaining_debt` is the one of the three that moves after the document is
 issued, and it moves for both of the things that lower what a customer owes:
@@ -213,6 +219,12 @@ leaves `old_balance` below zero; a 200,00 basket against a 300,00 credit
 balance leaves `total_debt` at -100,00, which is past no limit, not even a
 limit of zero. That is the same rule read from the other side, not an
 exception to it: what the block asks is what the customer will owe.
+
+A negative balance is named on the screens rather than shown as a minus:
+the customers list tags the row and the fiche labels the figure `crédit`,
+and the amount is always drawn positive. "Créance -1 000,00" is not a
+sentence said at a counter, and the sign alone is easy to miss on a line of
+figures.
 
 **Facture or ticket at the till.** Loi 04-02 du 23 juin 2004 art. 10, as
 rewritten whole by loi 10-06 du 15 août 2010 art. 3, decides it, and it
@@ -255,6 +267,97 @@ avoir is its own kind with its own series. A yearly reset of the series is
 common practice but not in the decree; confirm with the comptable (R8)
 before it becomes a setting.
 
+**Avoir.** A facture is never edited and never deleted, so a shop that has
+to carry money back writes an avoir: a second numbered document out of the
+avoir series, naming the facture it credits. It may be partial. Each of its
+lines names one line of the facture and carries a quantity no greater than
+what is left on that line once every earlier avoir is counted, and the
+running total of avoirs on one facture never passes that facture's
+`net_to_pay`. Its TVA is per rate on its own lines, computed the way a
+sale's is. It never carries the droit de timbre: the stamp is paid on money
+that changed hands and is not refunded with the goods, so a whole avoir of a
+stamped cash facture comes to that facture's `total_ttc` and not to its
+`net_to_pay`. The goods go back on `return` stock movements naming the
+avoir.
+
+On the ledger an avoir reverses the unpaid part of the facture it was
+written against first, whatever that facture's age; what that facture cannot
+take spreads over the customer's other unpaid documents oldest first, the
+way a correction downwards does; and only what no paper can take at all
+becomes credit the shop is holding. The spreading step amends the first
+ruling, which made the whole excess credit: a customer told they hold
+1 000,00 and owe 2 000,00 on an open facture at the same time is being handed
+two figures about one account for the shop to net out by hand. That last step
+is the only way a customer's balance goes below zero, and the customers
+screen shows such a balance as a credit rather than as a debt. A
+credit balance is not paid out in v1: a payment against nothing owed is
+refused, and the credit settles the next credit sale instead.
+
+**The last avoir on a facture.** Avoirs on one facture add up to that
+facture, less the droit de timbre it never refunds. They do not do so by
+themselves: the tax on an avoir is rounded once on that avoir's own base, so
+three one-unit credit notes against three units at 0,50 with 19 % come to 180
+against a facture of 179, and at 0,80 they come to 285 against 286. So the
+avoir that takes the last quantity off a facture is not computed from its own
+lines at all. It is the facture minus every avoir before it, field by field:
+HT, the discount, the subtotal, each rate's base and tax, the TTC, and the
+stored lines the same way. The earlier partials keep the slice arithmetic,
+which is right on their own paper, and the running total of the partials is
+capped at the facture's `total_ttc` rather than its `net_to_pay`, because the
+stamp is never given back and the difference would otherwise be room for the
+partials to eat.
+
+That cap is read per rate as well as on the total: a partial avoir never gives
+back more base, more TVA or more remise at one rate than the facture still has
+at that rate. Without it the subtraction goes below zero on a paper that cannot
+carry it. Two partials that between them take a whole rate group can round
+their tax to a centime more than the facture charged there, and a partial that
+takes a group's whole HT can leave behind the centime of remise the facture put
+on that group, and either way the closing avoir is asked for a base or a tax of
+minus one centime at a rate whose goods have all come back. The centime stays
+on the partial that rounded it, where it is one centime of rounding on a paper
+that is already rounding.
+
+A closing avoir can come to nothing. What is left of a facture may be a
+quantity worth no centime, and the credit note that takes it back is then
+written for 0,00: the goods go back on the shelf on it and it moves no debt at
+all, because a movement of nothing moves nothing.
+
+**Credit consumed at issue.** A customer holding credit who buys on credit
+has the new document settled out of that credit as it is issued, inside the
+sale's own transaction: an allocation from the credit onto the new document,
+and `remaining_debt = net_to_pay − consumed`. The paper is what the customer
+pays against, so it must not ask for money the shop already has. The sale's
+own ledger movement is still the whole `net_to_pay`, because the credit is
+already a movement of its own and writing only the unsettled part would
+count it twice.
+
+**Cancellation.** A document is annulled, never deleted: it keeps its number
+and its row, and stores when it was annulled, by whom, why, and the avoir
+the cancellation issued when it issued one. A ticket or a cash facture owed
+nobody anything, so only the goods come back, on a `return` movement naming
+the document itself. A facture that put money on a customer's account,
+whether still owed or since paid, is undone by a whole avoir written in the
+same transaction; a facture already credited in full is annulled with no
+second avoir. A ticket that put money on an account is undone without one: an
+avoir is written against a facture, so the goods go back and a single credit
+ledger row of kind `avoir` names the ticket, settling the ticket's unpaid part
+first and then the customer's other papers oldest first, with no number burned
+out of the avoir series. The row is the whole of the ticket and not its unpaid
+part, so a customer who had already paid something on it ends holding that
+money rather than having paid for goods they gave back. Only a ticket and a
+facture are annulled, by an allowlist rather than by naming what is refused,
+and a document is annulled once. Cancelling a ticket that has already been printed stays
+allowed until M4 brings roles, and the audit log carries who did it.
+
+**Proforma.** A quotation: made out to a named customer, priced the way the
+till prices a basket, numbered out of the proforma series, and moving
+nothing at all: no stock movement, no ledger row, a balance triple of three
+zeros. It carries the droit de timbre the facture would carry, because a
+facture that comes to more than the customer was quoted is a quotation that
+was wrong. It requires a customer but not the party identifiers décret
+05-468 art. 3 asks of a facture: a quotation comes before the paperwork.
+
 ### Fiscal rules: current assumptions
 
 Each row names the fixture that pins it and the source that decides it.
@@ -275,7 +378,10 @@ first release.**
 | Amount in words | French, Arabic and English generators, dinars and centimes | `words_{fr,ar,en}_golden` | décret 05-468: total TTC "en chiffres et en lettres"; Arabic wording not yet sourced |
 | Printed wording | the words a document prints live in the core, three languages per key. The Arabic is unreviewed by a native speaker, exactly like `words_ar`, and the Arabic goldens say so in their own header comment | `fixtures/print/ticket_80mm/ar.html`, `ar-ifu.html`, `fixtures/print/facture_a4/ar.html`, `ar-cash.html`, `ar-ifu.html` | none yet; R6 covers both this and the amount in words |
 | Party identifiers | `facture`: seller RC + NIS (+ NIF, AI as on every facture in circulation), buyer RC + NIS, or name + address when the buyer is a consumer; stamp and signature blocks; `ticket`: seller identity only | `facture_requires_party_ids` | décret 05-468 art. 3 and 4; NIF/AI from tax texts, article to cite (R3) |
-| Numbering | one uninterrupted chronological series per document kind; a cancelled document keeps its number and is marked "facture annulée"; numbers never reused | `numbering_gapless` | décret 05-468 art. 10 |
+| Avoir | a credit note is its own kind and its own series, may be partial, never carries the droit de timbre, and its TVA is per rate on its own lines. The running total of avoirs on one facture never passes that facture's `net_to_pay`, and a line is never credited past what earlier avoirs left on it. An assumption on the stamp: the Code du timbre taxes the payment and says nothing about a reversal, so not refunding it is a reading to confirm with the comptable (R8) | `crates/core/tests/avoir_service.rs`, `fixtures/print/facture_a4/*-avoir.html` | Code du timbre 2026 art. 100-I for the stamp; décret 05-468 art. 10 for the series |
+| Partial avoir discounts | a partial avoir credits the same share of the line discount and of the global discount as it credits of the line and of the basket, each rounded down to the centime. Rounded down because a discount is what the customer was not charged, and rounding it up would credit a centime nobody paid. A whole avoir carries the whole of both with no rounding, so it reproduces the facture's `total_ttc` to the centime. An assumption: no text says how a discount splits across a partial reversal. Confirm with the comptable (R8) | `avoir_partial_prorates_discounts_floor` | design choice, not law |
+| Closing avoir | the avoirs on one facture add up to that facture less the droit de timbre. They do not do so line by line: the tax on each is rounded once on its own base, so slices of a facture sum to a centime either side of it. The avoir that takes the last quantity off the facture is the facture minus the avoirs before it, every field and every line, and the partials are capped at the facture's `total_ttc`. A design choice, not law: no text says how a reversal in parts rounds, and it is the sum a comptable reads that decides it. Confirm with the comptable (R8) | `crates/core/tests/avoir_prop.rs::the_avoirs_on_a_facture_add_up_to_it`, `three_one_unit_avoirs_add_up_to_the_facture_they_credit` | design choice, not law |
+| Numbering | one uninterrupted chronological series per document kind; a cancelled document keeps its number, is marked "facture annulée" and stores when, by whom and why it was annulled; numbers never reused, and a cancelled number is never handed out again | `numbering_gapless` | décret 05-468 art. 10 |
 
 ## 4. Printing (v1)
 
