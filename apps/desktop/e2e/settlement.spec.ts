@@ -12,6 +12,11 @@
 //
 // The sale is posted through the API rather than rung up at the till: this
 // spec is about the settlement, and the till's own credit flow has its own.
+//
+// The file is named for the settlement and not for the payment so that it
+// sorts after products.spec: the specs share one shop file, run one worker at
+// a time in the order their names sort, and products.spec is the one that
+// asserts the empty list. Anything that adds a product comes after it.
 
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
@@ -24,8 +29,11 @@ function customerName(): string {
   return `Société Créance ${currentLang()}`;
 }
 
+/** Named after this spec and nothing else: the till's own specs pick their
+ * tiles by a piece of the product name, and a name that shares a prefix with
+ * one of theirs would make their click ambiguous. */
 function productName(): string {
-  return `Ciment e2e ${currentLang()}`;
+  return `Brique relevé ${currentLang()}`;
 }
 
 /** 1 000,00 then 2 000,00 sold on credit; 1 500,00 paid. The older document
