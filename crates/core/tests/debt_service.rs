@@ -1572,8 +1572,11 @@ fn a_cancelled_document_takes_none_of_a_correction_downwards_either() {
     let customer = a_customer(&mut conn, "Entreprise Benali");
     let cancelled = a_document_on_credit(&mut conn, customer, 100_000, 10);
     let standing = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    // Forged the same way as above, block and all: a document reads back as
+    // annulée only when it says when and by whom (features.md §3).
     diesel::sql_query(format!(
-        "UPDATE documents SET status = 'cancelled' WHERE id = {cancelled}"
+        "UPDATE documents SET status = 'cancelled', cancelled_at = '2026-09-11 09:00:00', \
+         cancelled_by = {OWNER}, cancel_reason = 'erreur de saisie' WHERE id = {cancelled}"
     ))
     .execute(&mut conn)
     .unwrap();
