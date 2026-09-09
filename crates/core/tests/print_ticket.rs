@@ -178,6 +178,11 @@ fn fixed_sale(case: Case) -> Document {
             phone: Some("0555 12 34 56".to_owned()),
         },
         customer_id: None,
+        // A till ticket is sold to whoever walked in: no buyer block, no
+        // credited facture, no balance.
+        buyer: None,
+        ref_document_id: None,
+        balance: None,
         change: tendered.map(|t| t.checked_sub(totals.net_to_pay).unwrap()),
         tendered,
         totals,

@@ -13,7 +13,8 @@ use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::documents::{
-    self, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, SellerBlock,
+    self, BalanceTriple, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, PartyBlock,
+    PartyKind, SellerBlock,
 };
 use dzpos_core::services::products;
 
@@ -115,6 +116,9 @@ fn draft(kind: DocumentKind, product_id: Option<i32>, issued_at: NaiveDateTime) 
             phone: None,
         },
         customer_id: None,
+        buyer: None,
+        ref_document_id: None,
+        balance: None,
         totals: totals(10_000),
         tendered: Some(Money::centimes(10_000)),
         change: Some(Money::ZERO),
@@ -589,5 +593,141 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
         totals_that_disagree_with_their_lines(&mut conn),
         vec![exempt.id],
         "a réel document with no recap left was not named"
+    );
+}
+
+/// A customer to make a facture out to. Inserted raw: what is under test here
+/// is the document, and the customer service has its own file.
+fn a_customer(conn: &mut SqliteConnection) -> i32 {
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+    diesel::sql_query(
+        "INSERT INTO customers (shop_id, name, party_kind, rc, nif) \
+         VALUES (1, 'Entreprise Benali', 'company', '16/00-7654321 B 22', '000216007654321')",
+    )
+    .execute(conn)
+    .unwrap();
+    let row: Id = diesel::sql_query("SELECT MAX(id) AS id FROM customers WHERE shop_id = 1")
+        .get_result(conn)
+        .unwrap();
+    row.id
+}
+
+#[test]
+fn a_facture_stores_its_buyer_block_and_its_balance_and_reads_them_back() {
+    // The buyer block is a snapshot, so what matters is that every field
+    // reaches the file and comes back: a field dropped between the write and
+    // the read is invisible until a comptable reads the paper.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let customer = a_customer(&mut conn);
+    let mut new = draft(DocumentKind::Facture, Some(p), at(9, 10));
+    new.customer_id = Some(customer);
+    new.buyer = Some(PartyBlock {
+        name: "Entreprise Benali".to_string(),
+        party_kind: PartyKind::Company,
+        rc: Some("16/00-7654321 B 22".to_string()),
+        nif: Some("000216007654321".to_string()),
+        nis: Some("000216007654321000".to_string()),
+        ai: None,
+        address: Some("Zone industrielle, Rouiba".to_string()),
+    });
+    new.balance = Some(BalanceTriple {
+        old_balance: Money::centimes(250_000),
+        remaining_debt: Money::centimes(260_000),
+        total_debt: Money::centimes(260_000),
+    });
+    let issued = documents::issue(&mut conn, SHOP, new).unwrap();
+
+    let read = documents::get(&mut conn, SHOP, issued.id).unwrap();
+    assert_eq!(read.customer_id, Some(customer));
+    assert_eq!(read.buyer, issued.buyer);
+    assert_eq!(
+        read.buyer.as_ref().map(|b| b.party_kind),
+        Some(PartyKind::Company)
+    );
+    assert_eq!(
+        read.buyer.as_ref().and_then(|b| b.nis.as_deref()),
+        Some("000216007654321000"),
+        "a buyer identifier was lost between the write and the read"
+    );
+    assert_eq!(
+        read.balance.map(|b| b.old_balance),
+        Some(Money::centimes(250_000))
+    );
+    assert_eq!(
+        read.balance.map(|b| b.remaining_debt),
+        Some(Money::centimes(260_000))
+    );
+    assert_eq!(read.ref_document_id, None);
+}
+
+#[test]
+fn a_ticket_with_no_customer_carries_no_buyer_and_no_balance() {
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let issued = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Ticket, Some(p), at(9, 10)),
+    )
+    .unwrap();
+    let read = documents::get(&mut conn, SHOP, issued.id).unwrap();
+    assert_eq!(read.buyer, None);
+    assert_eq!(read.balance, None);
+}
+
+#[test]
+fn a_stored_balance_missing_one_of_its_three_amounts_is_refused() {
+    // Two of three would let a facture print a closing balance its own
+    // opening balance does not explain. The service writes all three or none,
+    // so the only way in is a file written by something else, and that is an
+    // error rather than a guess.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let issued = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Ticket, Some(p), at(9, 10)),
+    )
+    .unwrap();
+    diesel::sql_query(format!(
+        "UPDATE documents SET old_balance_centimes = 1000 WHERE id = {}",
+        issued.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let err = documents::get(&mut conn, SHOP, issued.id).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "balance"),
+        "a half-written balance triple read back as a document: {err}"
+    );
+}
+
+#[test]
+fn a_stored_buyer_name_without_a_party_kind_is_refused() {
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let issued = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Ticket, Some(p), at(9, 10)),
+    )
+    .unwrap();
+    diesel::sql_query(format!(
+        "UPDATE documents SET buyer_name = 'Benali' WHERE id = {}",
+        issued.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let err = documents::get(&mut conn, SHOP, issued.id).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "buyer"),
+        "a half-written buyer block read back as a document: {err}"
     );
 }

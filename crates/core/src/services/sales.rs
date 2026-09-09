@@ -124,7 +124,13 @@ pub fn issue(
                 regime,
                 payment_mode: new.payment_mode,
                 seller,
+                // A till sale is anonymous until M2's facture screen (T3)
+                // hands one a customer, so there is no buyer block, no
+                // credited facture and no balance to print.
                 customer_id: None,
+                buyer: None,
+                ref_document_id: None,
+                balance: None,
                 totals,
                 tendered,
                 change,

@@ -103,13 +103,23 @@ fn thirty_one_backups_leave_thirty_and_the_oldest_is_the_one_gone() {
 #[test]
 fn a_file_that_is_not_a_database_or_is_torn_fails_verify() {
     let (dir, mut conn) = open_temp();
+    // A row with a name nothing else writes, so the page holding it can be
+    // found by its bytes. Halfway through the file was where this test used
+    // to write, and halfway through the file is unused space inside some page
+    // as soon as a migration adds a table: the integrity check reads none of
+    // it and the torn copy passed.
+    products::create(&mut conn, SHOP, OWNER, draft("Repere-de-page-ZZQX")).unwrap();
     let backups = dir.path().join("backups");
     let made = backup::create(&mut conn, &backups, at(8, 9)).unwrap();
 
     // A page of the copy overwritten: the header still says SQLite, so
     // nothing short of the integrity check notices.
     let mut bytes = std::fs::read(&made.path).unwrap();
-    let start = bytes.len() / 2;
+    let marker = b"Repere-de-page-ZZQX";
+    let start = bytes
+        .windows(marker.len())
+        .position(|w| w == marker)
+        .expect("the seeded row is not in the copy");
     for byte in bytes.iter_mut().skip(start).take(512) {
         *byte = 0x5a;
     }

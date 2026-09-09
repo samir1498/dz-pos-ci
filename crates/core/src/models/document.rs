@@ -12,7 +12,7 @@ use crate::models::shop::Shop;
 use crate::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use crate::schema::{document_lines, document_tva, documents};
 
-pub use super::sql_types::{DocumentKind, DocumentStatus};
+pub use super::sql_types::{DocumentKind, DocumentStatus, PartyKind};
 
 /// The seven seller fields as they were on the day. Snapshotted, never
 /// joined: `shops` is replaced in place, so a reprint that read it live
@@ -40,6 +40,35 @@ impl From<Shop> for SellerBlock {
             phone: s.phone,
         }
     }
+}
+
+/// The buyer as the document printed them (features.md §3). Snapshotted for
+/// the same reason the seller block is: the fiche is edited in place and a
+/// reprint has to show the facture the customer was handed. `party_kind`
+/// travels with it because `facture_requires_party_ids` asks a different set
+/// of fields of a company than of a consumer, and which one this buyer was on
+/// the day is not something a later reader can work out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyBlock {
+    pub name: String,
+    pub party_kind: PartyKind,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    pub address: Option<String>,
+}
+
+/// What the customer owed before this document, what this document adds, and
+/// what is left afterwards (features.md §3, totals table). Read from the
+/// ledger at issue time and stored, so a reprint never recomputes it.
+///
+/// Signed: a customer who overpaid is owed money and the paper says so.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BalanceTriple {
+    pub old_balance: Money,
+    pub remaining_debt: Money,
+    pub total_debt: Money,
 }
 
 /// One sold line as it was sold. `name` and `barcode` are snapshots: the
@@ -87,6 +116,14 @@ pub struct Document {
     pub payment_mode: PaymentMode,
     pub seller: SellerBlock,
     pub customer_id: Option<i32>,
+    /// What the paper says about the buyer. `None` on a ticket sold to
+    /// whoever walked in, which is every document M1 issued.
+    pub buyer: Option<PartyBlock>,
+    /// The facture an avoir is written against. T4 owns the rule about which
+    /// factures may be named; here it is only carried.
+    pub ref_document_id: Option<i32>,
+    /// `None` when the document has no customer and so no balance to print.
+    pub balance: Option<BalanceTriple>,
     pub totals: Totals,
     pub tendered: Option<Money>,
     pub change: Option<Money>,
@@ -106,6 +143,9 @@ pub struct NewDocument {
     pub payment_mode: PaymentMode,
     pub seller: SellerBlock,
     pub customer_id: Option<i32>,
+    pub buyer: Option<PartyBlock>,
+    pub ref_document_id: Option<i32>,
+    pub balance: Option<BalanceTriple>,
     pub totals: Totals,
     pub tendered: Option<Money>,
     pub change: Option<Money>,
@@ -181,6 +221,14 @@ pub(crate) struct DocumentRow {
     pub seller_address: Option<String>,
     pub seller_phone: Option<String>,
     pub customer_id: Option<i32>,
+    pub buyer_name: Option<String>,
+    pub buyer_party_kind: Option<PartyKind>,
+    pub buyer_rc: Option<String>,
+    pub buyer_nif: Option<String>,
+    pub buyer_nis: Option<String>,
+    pub buyer_ai: Option<String>,
+    pub buyer_address: Option<String>,
+    pub ref_document_id: Option<i32>,
     pub total_ht_centimes: i64,
     pub discount_centimes: i64,
     pub subtotal_ht_centimes: i64,
@@ -190,6 +238,9 @@ pub(crate) struct DocumentRow {
     pub net_to_pay_centimes: i64,
     pub tendered_centimes: Option<i64>,
     pub change_centimes: Option<i64>,
+    pub old_balance_centimes: Option<i64>,
+    pub remaining_debt_centimes: Option<i64>,
+    pub total_debt_centimes: Option<i64>,
     pub status: DocumentStatus,
     pub created_at: NaiveDateTime,
 }
@@ -213,6 +264,14 @@ pub(crate) struct DocumentRowWrite {
     pub seller_address: Option<String>,
     pub seller_phone: Option<String>,
     pub customer_id: Option<i32>,
+    pub buyer_name: Option<String>,
+    pub buyer_party_kind: Option<PartyKind>,
+    pub buyer_rc: Option<String>,
+    pub buyer_nif: Option<String>,
+    pub buyer_nis: Option<String>,
+    pub buyer_ai: Option<String>,
+    pub buyer_address: Option<String>,
+    pub ref_document_id: Option<i32>,
     pub total_ht_centimes: i64,
     pub discount_centimes: i64,
     pub subtotal_ht_centimes: i64,
@@ -222,6 +281,9 @@ pub(crate) struct DocumentRowWrite {
     pub net_to_pay_centimes: i64,
     pub tendered_centimes: Option<i64>,
     pub change_centimes: Option<i64>,
+    pub old_balance_centimes: Option<i64>,
+    pub remaining_debt_centimes: Option<i64>,
+    pub total_debt_centimes: Option<i64>,
     pub status: DocumentStatus,
 }
 
@@ -310,11 +372,58 @@ impl TryFrom<DocumentTvaRow> for TvaLine {
 }
 
 /// The stored row plus the lines and TVA rows read with it.
+/// The buyer block, which is there whole or not at all. A row holding an RC
+/// and no name is a write that got half way; reading it back as "no buyer"
+/// would print a facture missing the identifiers `facture_requires_party_ids`
+/// asks for and say nothing about it.
+fn buyer_block(row: &DocumentRow) -> Result<Option<PartyBlock>, CoreError> {
+    match (row.buyer_name.as_deref(), row.buyer_party_kind) {
+        (Some(name), Some(party_kind)) => Ok(Some(PartyBlock {
+            name: name.to_string(),
+            party_kind,
+            rc: row.buyer_rc.clone(),
+            nif: row.buyer_nif.clone(),
+            nis: row.buyer_nis.clone(),
+            ai: row.buyer_ai.clone(),
+            address: row.buyer_address.clone(),
+        })),
+        (None, None) => Ok(None),
+        _ => Err(CoreError::validation(
+            "buyer",
+            "the stored buyer block has a name without a party kind, or the other way round",
+        )),
+    }
+}
+
+/// The same rule for the balance triple: three amounts or none. Two of three
+/// would let a facture print a closing balance that its own opening balance
+/// does not explain.
+fn balance_triple(row: &DocumentRow) -> Result<Option<BalanceTriple>, CoreError> {
+    match (
+        row.old_balance_centimes,
+        row.remaining_debt_centimes,
+        row.total_debt_centimes,
+    ) {
+        (Some(old_balance), Some(remaining_debt), Some(total_debt)) => Ok(Some(BalanceTriple {
+            old_balance: Money::centimes(old_balance),
+            remaining_debt: Money::centimes(remaining_debt),
+            total_debt: Money::centimes(total_debt),
+        })),
+        (None, None, None) => Ok(None),
+        _ => Err(CoreError::validation(
+            "balance",
+            "the stored balance triple is missing one of its three amounts",
+        )),
+    }
+}
+
 pub(crate) fn assemble(
     row: DocumentRow,
     lines: Vec<DocumentLineRow>,
     tva: Vec<DocumentTvaRow>,
 ) -> Result<Document, CoreError> {
+    let buyer = buyer_block(&row)?;
+    let balance = balance_triple(&row)?;
     Ok(Document {
         id: row.id,
         shop_id: row.shop_id,
@@ -335,6 +444,9 @@ pub(crate) fn assemble(
             phone: row.seller_phone,
         },
         customer_id: row.customer_id,
+        buyer,
+        ref_document_id: row.ref_document_id,
+        balance,
         totals: Totals {
             total_ht: Money::centimes(row.total_ht_centimes),
             discount: Money::centimes(row.discount_centimes),
