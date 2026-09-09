@@ -216,4 +216,36 @@ describe("restoring one", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_validation);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
+
+  // The two ways a restore can leave the shop file closed. They read the
+  // same to the server and not at all the same to the owner: after one of
+  // them the copy is the shop file, after the other nothing was replaced.
+  // Falling back to "error_unknown" would hide which one happened.
+  test("a shop file the app closed and could not reopen asks for a relaunch", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    restoreAnswer = () => json(500, { error: { code: "restart_needed", message: "closed" } });
+    await restoreTheFirstCopy();
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_restart_needed);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  test("a restore that did not happen says that too, not only the relaunch", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    restoreAnswer = () =>
+      json(500, { error: { code: "restore_failed_restart_needed", message: "closed" } });
+    await restoreTheFirstCopy();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      fr.error_restore_failed_restart_needed,
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  async function restoreTheFirstCopy() {
+    const user = userEvent.setup();
+    mount();
+    const rows = await screen.findAllByTestId("backup-row");
+    const first = rows[0];
+    if (first === undefined) throw new Error("no first row");
+    await user.click(within(first).getByRole("button", { name: fr.action_restore }));
+  }
 });

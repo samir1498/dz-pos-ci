@@ -354,7 +354,9 @@ async fn a_shop_file_that_cannot_be_reopened_leaves_the_server_refusing_every_qu
 
     let (status, body) = call(&h.app, "POST", &format!("/backups/{name}/restore"), None).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(body["error"]["code"], "storage");
+    // Not "storage": the file on disk is fine and the one thing that helps
+    // is relaunching, so the screen is told that and not something vaguer.
+    assert_eq!(body["error"]["code"], "restart_needed");
 
     let before: Vec<std::path::PathBuf> = backup_files(&h);
     assert_eq!(before.len(), 1, "{before:?}");
@@ -364,14 +366,14 @@ async fn a_shop_file_that_cannot_be_reopened_leaves_the_server_refusing_every_qu
     for _ in 0..2 {
         let (status, body) = call(&h.app, "GET", "/products", None).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-        assert_eq!(body["error"]["code"], "storage");
+        assert_eq!(body["error"]["code"], "restart_needed");
     }
 
     // The one that would have done damage: a backup taken off an empty
     // stand-in, with the prune that follows it evicting a real copy.
     let (status, body) = call(&h.app, "POST", "/backups", None).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(body["error"]["code"], "storage");
+    assert_eq!(body["error"]["code"], "restart_needed");
     assert_eq!(
         backup_files(&h),
         before,
@@ -408,12 +410,12 @@ async fn a_sidecar_left_behind_after_the_rename_stops_the_file_being_reopened() 
 
     let (status, body) = call(&h.app, "POST", &format!("/backups/{name}/restore"), None).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(body["error"]["code"], "storage");
+    assert_eq!(body["error"]["code"], "restart_needed");
 
     // Nothing reopened it behind the caller.
     let (status, body) = call(&h.app, "GET", "/products", None).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
-    assert_eq!(body["error"]["code"], "storage");
+    assert_eq!(body["error"]["code"], "restart_needed");
 
     // The rename did happen, so what is on disk is the copy, whole and not
     // written to since.

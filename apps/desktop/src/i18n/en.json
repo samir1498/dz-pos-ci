@@ -97,5 +97,7 @@
   "unit_kb": "kB",
   "unit_mb": "MB",
   "settings_safety_copies": "Copies taken before a restore",
-  "settings_safety_copies_hint": "Every restore first keeps a copy of the state it replaced, beside the shop file. These are never deleted."
+  "settings_safety_copies_hint": "Every restore first keeps a copy of the state it replaced, beside the shop file. These are never deleted.",
+  "error_restart_needed": "The shop file is no longer open in the app. Close it and start it again.",
+  "error_restore_failed_restart_needed": "The restore did not happen and the shop file could not be reopened. Nothing was replaced. Close the app and start it again."
 }

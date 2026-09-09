@@ -25,6 +25,7 @@ const ERROR_KEY: Record<string, Key> = {
   validation: "error_validation",
   not_found: "error_not_found",
   storage: "error_storage",
+  restart_needed: "error_restart_needed",
   bad_request: "error_bad_request",
   bad_response: "error_bad_response",
   unauthorized: "error_unauthorized",

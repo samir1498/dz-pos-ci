@@ -125,18 +125,23 @@ impl AppState {
     /// 9. reopen through `db::open`, which runs any migration the copy is
     ///    behind on, and put that connection back into the slot.
     ///
-    /// Three ways it can fail and three different answers:
+    /// The ways it can fail, and what each answers:
     ///
     /// - anything up to step 6 leaves the shop file exactly as it was and
     ///   the connection where it was;
     /// - the rename at 7 failing leaves the shop file as it was, sidecars
-    ///   included, and it is reopened: the restore did not happen, and the
-    ///   till goes on working;
+    ///   included, and it is reopened: the restore did not happen and the
+    ///   till goes on working. If that reopen fails too, both halves are
+    ///   logged and the answer is `NotRestoredRestartNeeded`: the file on
+    ///   disk is the one that was always there, and this process is no
+    ///   longer serving it, so the app has to be relaunched to come back on
+    ///   the data it had before;
     /// - a sidecar at 8, or the reopen at 9, failing leaves the slot empty
-    ///   on purpose. The copy is in place, and SQLite replays whatever
-    ///   `-wal` it finds beside a file it opens, so nothing here opens it
-    ///   again. Both file names are logged and the app has to be restarted,
-    ///   by which time step 5 has already made anything left over harmless.
+    ///   on purpose and answers `RestartNeeded`. The copy is in place, and
+    ///   SQLite replays whatever `-wal` it finds beside a file it opens, so
+    ///   nothing here opens it again. The file names are logged, and by the
+    ///   time the app is relaunched step 5 has already made anything left
+    ///   over harmless.
     pub fn restore(&self, backup_path: &Path) -> Result<Restored, ApiError> {
         let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
@@ -169,19 +174,7 @@ impl AppState {
 
         if let Err(rename_failed) = std::fs::rename(&staged, db) {
             let _ = std::fs::remove_file(&staged);
-            // The shop file was never renamed over, so it is the one that
-            // was always there, sidecars and all; reopening it is the whole
-            // recovery. A reopen that fails too is logged rather than
-            // returned: the caller asked about the restore, and the rename
-            // is the reason it did not happen.
-            match dzpos_core::db::open(db) {
-                Ok(conn) => *guard = Some(conn),
-                Err(e) => eprintln!(
-                    "dz-pos: the restore did not happen and {} could not be reopened either: {e}",
-                    db.display()
-                ),
-            }
-            return Err(core_io(rename_failed));
+            return Err(reopen_original(&mut guard, db, rename_failed));
         }
 
         // The copy is in place. The sidecars beside it belong to the file it
@@ -194,7 +187,7 @@ impl AppState {
                 db.display(),
                 sidecar.display()
             );
-            return Err(ApiError::from(e));
+            return Err(ApiError::RestartNeeded);
         }
 
         match dzpos_core::db::open(db) {
@@ -214,7 +207,7 @@ impl AppState {
                     "dz-pos: the shop file at {} could not be reopened after the restore: {e}",
                     db.display()
                 );
-                Err(ApiError::from(CoreError::from(e)))
+                Err(ApiError::RestartNeeded)
             }
         }
     }
@@ -228,8 +221,9 @@ impl AppState {
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
         // Empty means a restore closed the file and could not reopen it.
         // Every caller is refused from here on, which is what keeps a backup
-        // or a query from running against nothing.
-        let conn = guard.as_mut().ok_or(ApiError::Unavailable)?;
+        // or a query from running against nothing, and the code says the one
+        // thing that will help: relaunch.
+        let conn = guard.as_mut().ok_or(ApiError::RestartNeeded)?;
         f(conn).map_err(ApiError::from)
     }
 
@@ -270,6 +264,30 @@ fn remove_if_present(path: &Path) -> Result<(), std::io::Error> {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e),
+    }
+}
+
+/// The recovery after a rename that did not happen. The shop file was never
+/// written over, so it is the one that was always there, sidecars and all,
+/// and reopening it is the whole recovery: the till goes on working and the
+/// caller hears about the rename.
+fn reopen_original(slot: &mut Option<Conn>, db: &Path, rename_failed: std::io::Error) -> ApiError {
+    match dzpos_core::db::open(db) {
+        Ok(conn) => {
+            *slot = Some(conn);
+            core_io(rename_failed)
+        }
+        // Nothing fills the slot, so every route 500s from here. Answering
+        // with the rename alone would describe half of that and send the
+        // screen looking for a disk that is full; the code carries both
+        // facts instead, and the relaunch is the one thing that helps.
+        Err(reopen_failed) => {
+            eprintln!(
+                "dz-pos: the restore did not happen ({rename_failed}) and {} could not be reopened either: {reopen_failed}",
+                db.display()
+            );
+            ApiError::NotRestoredRestartNeeded
+        }
     }
 }
 
@@ -471,5 +489,63 @@ mod sidecar_tests {
 
         let (named, _) = clear_sidecars(&db).unwrap_err();
         assert_eq!(named, shm);
+    }
+}
+
+#[cfg(test)]
+mod reopen_original_tests {
+    // Tests may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::{reopen_original, ApiError};
+    use dzpos_core::error::CoreError;
+
+    fn rename_failed() -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::PermissionDenied, "rename refused")
+    }
+
+    /// The ordinary half: the shop file is still there and still opens, so
+    /// the till goes on working and the only thing that went wrong is the
+    /// one the caller asked about.
+    #[test]
+    fn a_shop_file_that_opens_again_leaves_the_till_working_and_names_the_rename() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("t.db");
+        drop(dzpos_core::db::open(&db).unwrap());
+
+        let mut slot = None;
+        let err = reopen_original(&mut slot, &db, rename_failed());
+
+        assert!(slot.is_some(), "the shop file was not put back in the slot");
+        assert!(
+            matches!(err, ApiError::Core(CoreError::Io(_))),
+            "the rename is what failed and the answer should say so"
+        );
+    }
+
+    /// Both halves gone: the rename did not happen and the file it would
+    /// have replaced cannot be opened either. Answering with the rename
+    /// alone would send a screen looking for a disk problem while every
+    /// other route 500s on an empty slot, so the answer carries both facts
+    /// and the one instruction that helps.
+    #[test]
+    fn a_shop_file_that_will_not_open_either_says_both_and_asks_for_a_relaunch() {
+        let dir = tempfile::tempdir().unwrap();
+        // A folder standing where the shop file was: SQLite will not open it
+        // on any system, as any user.
+        let db = dir.path().join("t.db");
+        std::fs::create_dir(&db).unwrap();
+
+        let mut slot = None;
+        let err = reopen_original(&mut slot, &db, rename_failed());
+
+        assert!(
+            slot.is_none(),
+            "a slot filled here would answer queries from a file nobody opened"
+        );
+        assert!(
+            matches!(err, ApiError::NotRestoredRestartNeeded),
+            "the caller was told about the rename only: {err}"
+        );
     }
 }
