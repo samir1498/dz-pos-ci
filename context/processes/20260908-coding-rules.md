@@ -38,8 +38,15 @@ simple architecture. These rules are how a change meets it.
 - Types shared with TypeScript are generated with ts-rs.
 
 ## TypeScript and CSS
-- No `as` casts. A cast in a fixture makes a green test prove nothing.
+- No `as` type assertions (`x as T`, `as unknown as T`). A cast in a
+  fixture makes a green test prove nothing. `as const` and `satisfies`
+  narrow without lying and are allowed (ruling 2026-09-08).
 - Every visible string goes through i18n and exists in `ar`, `fr`, `en`.
 - Logical CSS properties only (`inline-start`, `margin-inline`). Arabic
   mirrors the layout; `left` / `right` is a bug that shows only in `ar`.
+- No hardcoded design pixel or hex in UI code. Spacing, radius and colour
+  come from `design/shared/tokens.css` (later the generated token
+  module), or from `%`, `flex`, `gap`. A value with no matching token
+  takes the closest token or a percentage of the container, never a
+  one-off number.
 

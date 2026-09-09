@@ -34,6 +34,16 @@ A new test of a money rule is not done until a mutation (flip the constant
 or the rounding direction) makes at least one named fixture fail. Commit
 before the mutation loop.
 
+Property tests: proptest in Rust, fast-check in TypeScript, for pure
+logic with a real invariant, a round trip, totality over the input
+range, an invariant that survives the operation, or an oracle to check
+against. Not for UI and not for anything behind mocked IO; a generator
+feeding a mock proves the mock, not the code. When a property test finds
+a failing case, freeze that case as a plain fixture in the same commit
+so the regression stays even if the generator's seed changes. No
+root-cause claim for a property failure without a repro that actually
+ran; a plausible read of the assertion is not evidence.
+
 Sonar: not set up for this repo yet (plan
 `repo-tooling-skills-and-rules-for-dz-pos`, T4 checks Rust support on the
 team server). Do not quote a Sonar gate until it exists.
