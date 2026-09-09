@@ -7,7 +7,6 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
-use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use dzpos_core::error::CoreError;
 use dzpos_core::services::backup;
 
@@ -15,26 +14,11 @@ use crate::dto::{BackupDto, RestoreDto};
 use crate::error::ApiError;
 use crate::AppState;
 
-/// The shop's clock: Algeria, UTC+1, no daylight saving. The same reading
-/// `routes::settings` takes for a régime day; a backup is named for the
-/// moment the shop had, not the moment UTC had, or the copy taken just after
-/// midnight would carry yesterday's date on the screen that lists it.
-const SHOP_UTC_OFFSET_SECONDS: i32 = 3600;
-
-/// `utc` read on the shop's calendar. Separate from `now` so the wall clock
-/// never enters a test.
-fn shop_time(utc: DateTime<Utc>) -> NaiveDateTime {
-    match FixedOffset::east_opt(SHOP_UTC_OFFSET_SECONDS) {
-        Some(offset) => utc.with_timezone(&offset).naive_local(),
-        // 3600 is inside the range east_opt accepts, so this arm is never
-        // taken; UTC is the honest fallback rather than a panic.
-        None => utc.naive_utc(),
-    }
-}
-
-pub fn now() -> NaiveDateTime {
-    shop_time(Utc::now())
-}
+// The shop's clock lives in `routes::settings` (Algeria, UTC+1, no daylight
+// saving) and is read from there rather than restated: a backup is named for
+// the moment the shop had, not the moment UTC had, or the copy taken just
+// after midnight would carry yesterday's date on the screen that lists it.
+pub(crate) use crate::routes::settings::now;
 
 pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<BackupDto>>, ApiError> {
     let dir = state.backup_dir().to_path_buf();

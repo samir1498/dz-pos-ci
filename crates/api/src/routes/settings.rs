@@ -21,7 +21,7 @@ const SHOP_UTC_OFFSET_SECONDS: i32 = 3600;
 
 /// `utc` read on the shop's calendar. Separate from `now()` so the wall
 /// clock never enters a test.
-fn shop_time(utc: DateTime<Utc>) -> NaiveDateTime {
+pub(crate) fn shop_time(utc: DateTime<Utc>) -> NaiveDateTime {
     match FixedOffset::east_opt(SHOP_UTC_OFFSET_SECONDS) {
         Some(offset) => utc.with_timezone(&offset).naive_local(),
         // 3600 is inside the range east_opt accepts, so this arm is never
@@ -30,7 +30,7 @@ fn shop_time(utc: DateTime<Utc>) -> NaiveDateTime {
     }
 }
 
-fn now() -> NaiveDateTime {
+pub(crate) fn now() -> NaiveDateTime {
     shop_time(Utc::now())
 }
 

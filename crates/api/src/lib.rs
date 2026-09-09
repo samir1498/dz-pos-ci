@@ -100,13 +100,18 @@ impl AppState {
     ///
     /// A failure before step 5 leaves the shop file exactly as it was. A
     /// failure after it reopens the path before returning, so the mutex
-    /// never holds the in-memory placeholder past this call.
+    /// never holds the in-memory placeholder past this call. The one case
+    /// that cannot be undone here is step 8 itself failing: the file on disk
+    /// is whole, but this process has no connection to it and answers 500
+    /// until it is restarted. The path is logged for that reason.
     pub fn restore(&self, backup_path: &Path) -> Result<Summary, ApiError> {
         let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
         let db = self.db_path.as_path();
 
-        let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S%3f");
+        // The shop's clock, the same one the copies are named for, plus the
+        // millisecond so two restores in one second keep two safety copies.
+        let stamp = crate::routes::backups::now().format("%Y%m%d-%H%M%S%3f");
         let safety = sibling(db, &format!(".before-restore-{stamp}.sqlite"));
         backup::copy_to(&mut guard, &safety).map_err(ApiError::from)?;
 
@@ -141,7 +146,18 @@ impl AppState {
                 let _ = std::fs::remove_file(&staged);
                 Err(ApiError::from(e))
             }
-            (_, Err(e)) => Err(ApiError::from(CoreError::from(e))),
+            (_, Err(e)) => {
+                // The file on disk is whole (the restored copy, with the
+                // safety copy beside it); what failed is reopening it, so
+                // the lock is left holding the placeholder and every later
+                // request answers 500 until the app is restarted. Naming the
+                // file is what lets the operator act on that.
+                eprintln!(
+                    "dz-pos: the shop file at {} could not be reopened after the restore: {e}",
+                    db.display()
+                );
+                Err(ApiError::from(CoreError::from(e)))
+            }
         }
     }
 
