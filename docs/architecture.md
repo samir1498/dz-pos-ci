@@ -106,9 +106,12 @@ Dependency direction is one way: `api → core`, `desktop → api`,
 - **services**: business rules (stock ledger, totals, TVA, stamp, numbering,
   debt). Take a connection, return domain results. This is where the tests
   concentrate.
-- **print** (`crates/core/src/print/`): document rendering to HTML from a
-  stored snapshot, one module per template (`ticket.rs` for `ticket_80mm`).
-  Pure function of (document, template, language); golden-file tested.
+- **print** (`crates/core/src/print/`): rendering to HTML from a stored
+  snapshot, one module per template (`ticket.rs`, `facture.rs`,
+  `statement.rs`, `debt_slip.rs`). Pure function of its input, the template
+  and the language; golden-file tested. The words it prints are its own
+  dictionary (`print/strings.rs`), never the desktop's i18n files, so a
+  server with no UI prints the same paper.
 
 ## Error policy
 
@@ -125,6 +128,40 @@ Anouar's "no error slop" rule, made concrete:
   or SQL message.
 - Money arithmetic uses checked operations; overflow is an error, not a
   wrap.
+
+Every failure leaves as `{ "error": { "code", "message" } }`. The code is the
+core's own; only the status is the API's to choose. The UI translates the
+code and shows the message to nobody.
+
+| Code | Status | Raised by | Carries |
+|---|---|---|---|
+| `validation` | 422 | a field the caller can correct, and a payment above what is owed | `field`, and on a payment `outstanding_centimes` |
+| `credit_limit` | 422 | a credit sale that would take the customer past their limit | `balance_after_centimes`, `credit_limit_centimes` |
+| `party_ids` | 422 | a facture either side of which is short of what décret 05-468 art. 3 asks | `party_side`, `missing_ids` |
+| `not_found` | 404 | a row that is not there, or is another shop's | |
+| `duplicate_barcode` | 409 | a barcode a product already holds | |
+| `exhausted` | 409 | a numbering series with nothing left in it | |
+| `bad_request` | 422 | a body that did not parse, before any service ran | |
+| `unauthorized` | 401 | no launch token, or the wrong one; the answer carries `WWW-Authenticate: Bearer` | |
+| `method_not_allowed` | 405 | a route that does not take that method | |
+| `money` | 500 | stored money a migration's CHECK makes impossible | |
+| `storage` | 500 | the shop file could not complete the operation | |
+| `print` | 500 | a stored row the template will not render | |
+| `restart_needed`, `restore_failed_restart_needed` | 500 | the shop file is not open in this process any more | |
+
+The three codes that carry figures are the one exception to "a code and a
+sentence", and the payload has six optional fields for them:
+`balance_after_centimes`, `credit_limit_centimes`, `field`,
+`outstanding_centimes`, `party_side` and `missing_ids`. Each is filled by the
+one error that knows it and left out of every other body rather than sent as
+a null, so an ordinary refusal is the two keys it always was. They are there
+because the till has to say by how much a limit was passed, the fiche by how
+much a payment overshot and the facture which side is short of what, and
+working any of the three out on the screen would be a second answer to a
+question the core has already answered (rule 2). A payment above the debt is
+a `validation` on `amount_centimes` rather than a code of its own: it is a
+field the caller can correct, and the figure beside it is what makes it
+correctable.
 
 ## Contract between Rust and TypeScript
 

@@ -41,6 +41,11 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
     target: "esnext",
+    // The 500 kB default warns about a first paint over a network, which is
+    // the same thing the splitting above was turned off for: the bundle is
+    // read off the disk beside the binary. Raised rather than silenced, so it
+    // still says something when the bundle grows by half again.
+    chunkSizeWarningLimit: 750,
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
