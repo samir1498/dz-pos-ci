@@ -41,10 +41,12 @@ export function renderA4(sale, lang) {
   const buyer = customer ?? { name: t("walk_in") };
   const oldBalance = customer?.debt ?? 0;
   const remaining = paymentMode === "credit" ? totals.netToPay : 0;
-  // The document says on its own whether it carries TVA: under the IFU every
-  // line is stored at rate 0 and the paper mentions no TVA at all
-  // (regime_ifu_prints_no_tva). The renderer never reads the régime.
-  const showTva = lines.some((l) => l.rateBps > 0);
+  // The recap says on its own whether the document carries TVA: under the
+  // réel there is a row per rate group, 0 % included, and under the IFU
+  // there is none (regime_ifu_prints_no_tva). Reading the lines instead
+  // would drop the column from a réel facture whose lines are all exempt,
+  // and that column is a legal field of a facture (décret 05-468 art. 3).
+  const showTva = totals.tvaByRate.length > 0;
   return `<article class="doc doc-a4" dir="${lang === "ar" ? "rtl" : "ltr"}">
     <header style="display:flex;justify-content:space-between;align-items:flex-start">
       <div><h1>${t("invoice").toUpperCase()}</h1>
