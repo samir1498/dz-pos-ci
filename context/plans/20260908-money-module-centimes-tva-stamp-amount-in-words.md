@@ -20,7 +20,7 @@ tasks:
     status: 'done'
   - id: 'T7'
     desc: 'Gates green, PR with every fiscal assumption listed'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T8'
     desc: 'Stamp rule follows research R1 (progressive tranches, electronic exempt), not the clamp; do not implement the stamp until R1 lands'
     status: 'done'

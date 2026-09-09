@@ -4,7 +4,7 @@ slug: 'frontend-conventions'
 status: 'active'
 category: 'processes'
 created: 20260908
-tldr: 'Folder shape for both apps, the three-layer design package, the import rules eslint enforces, and which test runner owns which layer'
+tldr: 'Folder shape for both apps, the three-layer design package, the import rules (a convention until a lint rule exists), and which test runner owns which layer'
 ---
 # Frontend conventions
 

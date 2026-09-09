@@ -21,6 +21,7 @@ Run `just status` from the repo root for the ladder and the plans.
 Run `just ctx show <slug>` for plan details.
 
 ## Done recently
+- 2026-09-09: M1 T2 merged into `m1/2026-09-09` (settings screen: store block, dated régime on the shop's UTC+1 calendar; the review moved the seller snapshot and back-dating into T3). Stale-info sweep of the repo: context fixed on main, docs on `m1/stale-docs`; the generic `stale-check` skill is user-level, `.claude/stale-homes.md` holds where each fact lives.
 - 2026-09-09: M1 T0 (launch token on every API route, transport-and-auth section in architecture.md) and T1 (products CRUD with edit, PUT /products/{id}) merged into `m1/2026-09-09`; checkpoint PR to main waits for `/dz-pr m1/2026-09-09`.
 - 2026-09-09: PR #14 merged, M0 closed. Review of the branch found and fixed: a near-total discount printing a negative TVA base (share now capped at the group HT), the API panicking on i64::MIN, raw SQLite text reachable on the wire, the mockup writing the amount in words differently from the core. Coverage in CI scoped to the two crates with tests.
 
@@ -28,9 +29,11 @@ Run `just ctx show <slug>` for plan details.
 
 ## Not started
 
-## Ladder (step-by-step)
+## M0 ladder (closed; kept as the record of what M0 was)
 
-Samir reviews between steps; one step in flight at a time.
+M0 ran step by step, Samir reviewing between steps. M1 runs as the loop
+described under Active; its tasks and statuses are in the M1 plan, not
+here.
 
 1. [x] Stamp, TVA, rounding, facture mentions, numbering, IFU, words read from primary sources; all in `research/legal-fiscal/2026-09-08-fiscal-sources-and-findings.md` and the Source column of `docs/features.md` (R1, R2, R4, R5 done; R3, R6 partial)
 2. [x] `Money` newtype and `pct` in `crates/core`, first fixtures, first proptest (money plan T1)
@@ -51,7 +54,7 @@ Samir reviews between steps; one step in flight at a time.
 
 - E2E: ObserveOne is the e2e tool for this product; outside skills only
   if they prove better.
-- Tauri dev loop: web UI on the WSL box (`pnpm desktop dev`); the laptop
+- Tauri dev loop: web UI on the WSL box (today `just api` then `just dev`); the laptop
   and the native window only when a feature is ready for a full-app pass.
 - Versioning from the first release: semver + git short hash + build date,
   all three embedded in the binary and shown in About.
