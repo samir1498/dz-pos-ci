@@ -98,6 +98,27 @@ e2e:
 screenshot:
     pnpm desktop e2e -g screenshot
 
+# ---- worktrees (one per task when the M1 loop runs tasks in parallel) ----
+
+# a checkout of <branch> under .claude/worktrees/<name> with its own
+# node_modules and its own cargo target (a shared target dir rebuilds
+# everything on every switch between checkouts, so each keeps its own).
+# The e2e ports are per worktree: pass DZPOS_E2E_API_PORT and
+# DZPOS_E2E_WEB_PORT when running `just e2e` there (4319/5174 are the main
+# checkout's).
+worktree name branch:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir=".claude/worktrees/{{name}}"
+    if [ -e "$dir" ]; then echo "$dir exists" >&2; exit 1; fi
+    git worktree add -b "{{branch}}" "$dir" HEAD
+    (cd "$dir" && pnpm install --frozen-lockfile --silent)
+    echo "worktree $dir on {{branch}}; run cargo there with CARGO_TARGET_DIR=$dir/target"
+
+# remove a worktree once its branch is merged
+worktree-rm name:
+    git worktree remove ".claude/worktrees/{{name}}"
+
 # ---- mockups (design/) ----
 
 mockup-serve:

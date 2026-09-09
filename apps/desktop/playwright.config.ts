@@ -19,10 +19,19 @@ const artifactsDir = path.join(desktopDir, "e2e", ".artifacts");
 /** Deleted before every run, so the first screen is always the empty state. */
 const tempDb = path.join(artifactsDir, "e2e.db");
 
-// Fixed ports, deliberately beside the dev ones (4317 API, 5173 Vite) so a
-// running `just api` / `just dev` pair does not collide with a test run.
-const apiPort = 4319;
-const webPort = 5174;
+// Ports beside the dev ones (4317 API, 5173 Vite) so a running `just api`
+// / `just dev` pair does not collide with a test run. Two checkouts on one
+// box (a worktree per task in the M1 loop) each pass their own pair.
+function port(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const value = raw === undefined || raw === "" ? fallback : Number(raw);
+  if (!Number.isInteger(value) || value < 1024 || value > 65535) {
+    throw new Error(`${name} must be a port between 1024 and 65535, got ${raw}`);
+  }
+  return value;
+}
+const apiPort = port("DZPOS_E2E_API_PORT", 4319);
+const webPort = port("DZPOS_E2E_WEB_PORT", 5174);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const baseURL = `http://127.0.0.1:${webPort}`;
 
