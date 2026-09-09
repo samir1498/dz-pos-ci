@@ -9,7 +9,7 @@ priority: 50
 tasks:
   - id: 'T2'
     desc: 'Customers service, routes (GET/POST/PUT /customers, GET /customers/{id}/ledger) and screen from the mockup (list with debt, limit and status tags; fiche drawer; ledger with running balance), opening debt as the first ledger row in the same transaction, audit log on every write, three languages and RTL, bindings regenerated, e2e per language'
-    status: 'pending'
+    status: 'done'
   - id: 'T4'
     desc: 'Facture at the till: the one-tap ticket/facture switch of features.md §3, the buyer block snapshotted from the customer at issue, facture_requires_party_ids enforced in documents::issue on both halves (seller RC+NIS plus NIF/AI when set; company buyer RC+NIS; consumer buyer name+address) before take_next; after T3, never in the same wave (both touch sales.rs and till.tsx)'
     status: 'pending'
@@ -24,7 +24,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'Credit sale at the till (after T2''s customer routes): sales::issue takes customer_id, refuses credit without one, warns at the threshold and blocks when the balance after the sale exceeds the limit (0 = no credit; owner override audited until M4), writes document, stock movements and the debt row in one transaction, snapshots the balance triple (old_balance before, total_debt after, remaining_debt = this document''s unpaid part) and writes its definition into features.md §3; till gets the customer picker and the limit banner; a blocked credit sale burns no number; ticket_80mm gains a -credit golden ×3 with the balance amounts cross-checked; dz-review lenses before merge'
-    status: 'pending'
+    status: 'in-progress'
   - id: 'T6'
     desc: 'Avoir in its own series referencing its facture, with its own lines (partial allowed, the total across avoirs never above the facture), stock back as return movements and the debt reversed as a ledger row in one transaction, any allocation excess becoming customer credit (the only way a customer holds a credit balance); cancelling a facture keeps its number, marks it annulée and, when it carried debt, issues a whole-document avoir in the same transaction; proforma in its own series, burns only its own number, moves no stock and no debt; every action audited; after T4, T5 and T7 (T7 owns debt.rs first)'
     status: 'pending'
