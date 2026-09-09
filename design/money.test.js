@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { computeTotals, pct, stamp } from "./shared/money.js";
+import { MoneyError, amountInWords, computeTotals, pct, stamp } from "./shared/money.js";
 
 function fixture(name) {
   const path = fileURLToPath(new URL(`../fixtures/money/${name}.json`, import.meta.url));
@@ -75,5 +75,22 @@ describe("stamp_progressive_tranches", () => {
   // so the JS side cannot represent that input at all.
   it.each(stampFixture.cases)("$name", (c) => {
     expect(stamp(c.input.total_ttc, c.input.mode)).toBe(c.expected.stamp);
+  });
+});
+
+// The amount in words is a legal field of the facture (décret 05-468), so
+// the mockup writes it exactly as the core does: the same golden files pin
+// both. Arabic stays a placeholder in the mockup until the native review.
+describe("amount in words follows the golden files", () => {
+  for (const lang of ["fr", "en"]) {
+    const golden = fixture(`words_${lang}_golden`);
+    it.each(golden.cases)(`${lang}: $centimes`, ({ centimes, words }) => {
+      expect(amountInWords(centimes, lang)).toBe(words);
+    });
+  }
+
+  it("refuses a negative amount and one past the scales it knows", () => {
+    expect(() => amountInWords(-1, "fr")).toThrow(MoneyError);
+    expect(() => amountInWords(100_000_000_000_000, "en")).toThrow(MoneyError);
   });
 });

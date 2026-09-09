@@ -161,99 +161,144 @@ export function fmtInt(centimes, lang = "fr") {
   });
 }
 
-// ---- amount in words: fr and en implemented; ar is a static placeholder
-// in the mockup (words_ar_golden pending). ----
-const FR_U = [
-  "zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf",
-  "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize",
-  "dix-sept", "dix-huit", "dix-neuf",
-];
-const FR_T = ["", "", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"];
+// ---- amount in words: fr and en follow crates/core/src/money/words.rs
+// rule for rule, and design/money.test.js pins both to fixtures/money/
+// words_{fr,en}_golden.json. Arabic stays a placeholder in the mockup until
+// the native review (R6). ----
 
-function fr999(n) {
-  let out = [];
-  const h = Math.floor(n / 100);
-  const r = n % 100;
-  if (h) out.push(h === 1 ? "cent" : `${FR_U[h]} cent${r === 0 ? "s" : ""}`);
-  if (r) {
-    if (r < 20) out.push(FR_U[r]);
-    else {
-      const t = Math.floor(r / 10);
-      const u = r % 10;
-      if (t === 7 || t === 9) {
-        out.push(`${FR_T[t]}${u === 1 && t === 7 ? " et " : "-"}${FR_U[10 + u]}`);
-      } else {
-        let s = FR_T[t];
-        if (u === 1 && t !== 8) s += " et un";
-        else if (u) s += `-${FR_U[u]}`;
-        else if (t === 8) s += "s";
-        out.push(s);
-      }
-    }
-  }
-  return out.join(" ");
-}
+/** The largest amount in dinars the three scales cover: 999 999 999 999. */
+const MAX_WORDS_DINARS = 999_999_999_999;
 
-function frWords(n) {
-  if (n === 0) return "zéro";
-  const parts = [];
-  const scales = [
-    [1_000_000_000, "milliard", "milliards"],
-    [1_000_000, "million", "millions"],
-    [1000, "mille", "mille"],
+function groups(n) {
+  return [
+    Math.floor(n / 1_000_000_000),
+    Math.floor(n / 1_000_000) % 1000,
+    Math.floor(n / 1000) % 1000,
+    n % 1000,
   ];
-  for (const [v, s1, sN] of scales) {
-    const q = Math.floor(n / v);
-    if (q) {
-      parts.push(q === 1 && v === 1000 ? s1 : `${fr999(q)} ${q > 1 ? sN : s1}`);
-      n %= v;
-    }
-  }
-  if (n) parts.push(fr999(n));
-  return parts.join(" ");
 }
 
-const EN_U = [
-  "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-  "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-  "seventeen", "eighteen", "nineteen",
+const FR_UNIT = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"];
+const FR_TEN_PLUS = [
+  "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf",
 ];
-const EN_T = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const FR_TENS = { 2: "vingt", 3: "trente", 4: "quarante", 5: "cinquante", 6: "soixante" };
 
-function en999(n) {
-  const out = [];
-  const h = Math.floor(n / 100);
-  const r = n % 100;
-  if (h) out.push(`${EN_U[h]} hundred`);
-  if (r < 20 && r) out.push(EN_U[r]);
-  else if (r) out.push(`${EN_T[Math.floor(r / 10)]}${r % 10 ? "-" + EN_U[r % 10] : ""}`);
-  return out.join(" ");
+// `pluralS` is false when a number word follows, which is what stops the
+// `s` of `quatre-vingts` before `mille`.
+function frUnder100(n, pluralS) {
+  const tens = Math.floor(n / 10);
+  const unit = n % 10;
+  if (tens === 0) return FR_UNIT[unit];
+  if (tens === 1) return FR_TEN_PLUS[unit];
+  if (tens <= 6) {
+    const base = FR_TENS[tens];
+    if (unit === 0) return base;
+    if (unit === 1) return `${base}-et-un`;
+    return `${base}-${FR_UNIT[unit]}`;
+  }
+  if (tens === 7) {
+    if (unit === 0) return "soixante-dix";
+    if (unit === 1) return "soixante-et-onze";
+    return `soixante-${FR_TEN_PLUS[unit]}`;
+  }
+  if (tens === 8) {
+    if (unit === 0) return pluralS ? "quatre-vingts" : "quatre-vingt";
+    return `quatre-vingt-${FR_UNIT[unit]}`;
+  }
+  return `quatre-vingt-${FR_TEN_PLUS[unit]}`;
 }
 
-function enWords(n) {
-  if (n === 0) return "zero";
+function frGroup(g, pluralS) {
+  const hundreds = Math.floor(g / 100);
+  const rest = g % 100;
+  let head = "";
+  if (hundreds === 1) head = "cent";
+  // `cent` takes the s only when it is multiplied and final.
+  else if (hundreds > 1) head = `${FR_UNIT[hundreds]}-cent${rest === 0 && pluralS ? "s" : ""}`;
+  if (rest === 0) return head;
+  const tail = frUnder100(rest, pluralS);
+  return hundreds === 0 ? tail : `${head}-${tail}`;
+}
+
+// The number in words, and whether it ends on `million` or `milliard`.
+// Those two are nouns, so what they count takes `de`: `deux millions de
+// dinars`, against `deux millions deux-cents dinars`.
+function frNumber(n) {
+  if (n === 0) return ["zéro", false];
+  const [milliards, millions, thousands, units] = groups(n);
   const parts = [];
-  for (const [v, s] of [[1_000_000_000, "billion"], [1_000_000, "million"], [1000, "thousand"]]) {
-    const q = Math.floor(n / v);
-    if (q) {
-      parts.push(`${en999(q)} ${s}`);
-      n %= v;
-    }
+  if (milliards > 0) parts.push(`${frGroup(milliards, true)} milliard${milliards > 1 ? "s" : ""}`);
+  if (millions > 0) parts.push(`${frGroup(millions, true)} million${millions > 1 ? "s" : ""}`);
+  // `mille` is invariable and hyphenates onto the units group.
+  const tail = [];
+  if (thousands === 1) tail.push("mille");
+  else if (thousands > 1) tail.push(`${frGroup(thousands, false)}-mille`);
+  if (units > 0) tail.push(frGroup(units, true));
+  const joined = tail.join("-");
+  if (joined) parts.push(joined);
+  return [parts.join(" "), joined === ""];
+}
+
+function fr(dinars, sub) {
+  const [number, endsOnANoun] = frNumber(dinars);
+  const unit = dinars <= 1 ? "dinar" : "dinars";
+  let out = `${number} ${endsOnANoun ? "de " : ""}${unit}`;
+  if (sub > 0) out += ` et ${frUnder100(sub, true)} ${sub === 1 ? "centime" : "centimes"}`;
+  return out;
+}
+
+const EN_UNDER_20 = [
+  "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+];
+const EN_TENS = { 2: "twenty", 3: "thirty", 4: "forty", 5: "fifty", 6: "sixty", 7: "seventy", 8: "eighty", 9: "ninety" };
+
+function enUnder100(n) {
+  if (n < 20) return EN_UNDER_20[n];
+  const base = EN_TENS[Math.floor(n / 10)];
+  const unit = n % 10;
+  return unit === 0 ? base : `${base}-${EN_UNDER_20[unit]}`;
+}
+
+function enGroup(g) {
+  const hundreds = Math.floor(g / 100);
+  const rest = g % 100;
+  if (hundreds === 0) return enUnder100(rest);
+  if (rest === 0) return `${EN_UNDER_20[hundreds]} hundred`;
+  return `${EN_UNDER_20[hundreds]} hundred and ${enUnder100(rest)}`;
+}
+
+function enNumber(n) {
+  if (n === 0) return "zero";
+  const [billions, millions, thousands, units] = groups(n);
+  const parts = [];
+  if (billions > 0) parts.push(`${enGroup(billions)} billion`);
+  if (millions > 0) parts.push(`${enGroup(millions)} million`);
+  if (thousands > 0) parts.push(`${enGroup(thousands)} thousand`);
+  if (units > 0) {
+    // British usage: "one thousand and one", "one thousand two hundred".
+    if (parts.length > 0 && units < 100) parts.push(`and ${enUnder100(units)}`);
+    else parts.push(enGroup(units));
   }
-  if (n) parts.push(en999(n));
   return parts.join(" ");
 }
 
+function en(dinars, sub) {
+  let out = `${enNumber(dinars)} ${dinars === 1 ? "dinar" : "dinars"}`;
+  if (sub > 0) out += ` and ${enUnder100(sub)} ${sub === 1 ? "centime" : "centimes"}`;
+  return out;
+}
+
+/** `net_to_pay` written out in `lang`, dinars and centimes. Throws the
+ *  same two refusals as the core: a negative amount, and one past the
+ *  scales it knows. */
 export function amountInWords(centimes, lang) {
+  if (!Number.isSafeInteger(centimes) || centimes < 0) throw new MoneyError("Negative");
   const dinars = Math.floor(centimes / 100);
-  const cents = centimes % 100;
-  if (lang === "fr") {
-    const d = `${frWords(dinars)} dinar${dinars > 1 ? "s" : ""}`;
-    return cents ? `${d} et ${frWords(cents)} centime${cents > 1 ? "s" : ""}` : d;
-  }
-  if (lang === "en") {
-    const d = `${enWords(dinars)} dinar${dinars > 1 ? "s" : ""}`;
-    return cents ? `${d} and ${enWords(cents)} centime${cents > 1 ? "s" : ""}` : d;
-  }
+  const sub = centimes % 100;
+  if (dinars > MAX_WORDS_DINARS) throw new MoneyError("Overflow");
+  if (lang === "fr") return fr(dinars, sub);
+  if (lang === "en") return en(dinars, sub);
   return "— المبلغ بالحروف (ثابت في النموذج) —";
 }
