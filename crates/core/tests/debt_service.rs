@@ -1445,8 +1445,13 @@ fn a_cancelled_document_takes_none_of_a_payment() {
     let customer = a_customer(&mut conn, "Entreprise Benali");
     let cancelled = a_document_on_credit(&mut conn, customer, 100_000, 10);
     let standing = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    // Forged rather than cancelled through the service: what is under test is
+    // the settlement, not the cancellation. The block travels with the status
+    // because that is what a cancelled row holds, and a document reads back as
+    // annulée only when it says when and by whom (features.md §3).
     diesel::sql_query(format!(
-        "UPDATE documents SET status = 'cancelled' WHERE id = {cancelled}"
+        "UPDATE documents SET status = 'cancelled', cancelled_at = '2026-09-11 09:00:00', \
+         cancelled_by = {OWNER}, cancel_reason = 'erreur de saisie' WHERE id = {cancelled}"
     ))
     .execute(&mut conn)
     .unwrap();

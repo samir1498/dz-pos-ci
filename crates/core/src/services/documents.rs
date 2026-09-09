@@ -18,7 +18,7 @@ use crate::repos::documents as repo;
 use crate::services::customers;
 
 pub use crate::models::document::{
-    BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
+    BalanceTriple, Cancellation, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
     NewDocumentLine, PartyBlock, PartyKind, SellerBlock,
 };
 

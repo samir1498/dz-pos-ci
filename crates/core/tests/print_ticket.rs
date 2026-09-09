@@ -218,6 +218,7 @@ fn fixed_sale(case: Case) -> Document {
         tendered,
         totals,
         status: DocumentStatus::Issued,
+        cancellation: None,
         lines,
         created_at: issued_at,
     }

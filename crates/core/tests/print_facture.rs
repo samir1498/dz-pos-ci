@@ -247,6 +247,7 @@ fn fixed_facture(case: Case) -> Document {
         tendered: None,
         change: None,
         status: DocumentStatus::Issued,
+        cancellation: None,
         lines,
         created_at: issued_at,
     }
