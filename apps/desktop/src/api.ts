@@ -93,6 +93,20 @@ export function saleFactureQueryKey(
   return ["sale-facture", id, lang, paper];
 }
 
+/** Every rendered page of one document, whatever language and whatever sheet
+ * it was asked for in. A cancellation changes the paper itself, so all of
+ * them are stale at once and naming each language and each sheet to invalidate
+ * them would be a list that goes wrong the day a fourth paper size exists.
+ *
+ * Two prefixes because the two papers are two keys: an 80 mm ticket and a
+ * sheet are rendered by different routes. */
+export function saleSheetPrefixes(id: number): readonly (readonly (string | number)[])[] {
+  return [
+    ["sale-ticket", id],
+    ["sale-facture", id],
+  ];
+}
+
 /** The document list, keyed by the kind filter so the narrowed list and the
  * whole one are two entries and a filter change is not answered from the
  * other's cache. `undefined` is every kind, which is what the route reads a

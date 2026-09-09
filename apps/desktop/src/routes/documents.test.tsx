@@ -374,6 +374,32 @@ describe("the cancellation", () => {
     });
   });
 
+  test("the sheet is fetched again, because the paper it renders now says annulée", async () => {
+    // The panel holds the page the core rendered. A cancellation changes that
+    // page, so a cache left alone would keep showing a facture that no longer
+    // exists in that form, and the shop would print it.
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("FA-000004");
+    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await screen.findByTestId("documents-sheet");
+    const before = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes("/facture?"),
+    ).length;
+    expect(before).toBeGreaterThan(0);
+
+    await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
+    await user.type(screen.getByLabelText(fr.documents_reason), "commande annulée");
+    await user.click(screen.getByRole("button", { name: fr.documents_cancel_confirm }));
+
+    await waitFor(() => {
+      const after = fetchMock.mock.calls.filter((c) =>
+        String(c[0]).includes("/facture?"),
+      ).length;
+      expect(after).toBeGreaterThan(before);
+    });
+  });
+
   test("the reason travels and the answer's block is shown", async () => {
     const user = userEvent.setup();
     mount();

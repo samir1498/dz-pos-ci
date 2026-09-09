@@ -15,6 +15,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { ApiError, formatCentimes } from "@dzpos/shared";
 import type {
@@ -27,8 +28,13 @@ import type {
 } from "@dzpos/shared";
 import {
   api,
+  customerLedgerQueryKey,
+  customerPaymentsQueryKey,
+  customersQueryKey,
+  productsQueryKey,
   saleAvoirsQueryKey,
   saleFactureQueryKey,
+  saleSheetPrefixes,
   saleTicketQueryKey,
   salesQueryKey,
   salesQueryPrefix,
@@ -281,9 +287,7 @@ function AvoirPanel({ facture }: { facture: SaleDto }) {
       setOpen(false);
       setQty({});
       setReason("");
-      await queryClient.invalidateQueries({ queryKey: ["sale", facture.id] });
-      await queryClient.invalidateQueries({ queryKey: saleAvoirsQueryKey(facture.id) });
-      await queryClient.invalidateQueries({ queryKey: salesQueryPrefix() });
+      await everythingItTouched(queryClient, facture.id, facture.customer_id);
     },
   });
 
@@ -413,6 +417,38 @@ function says(t: (k: Key) => string, effect: SaleCancelEffectDto): string {
   }
 }
 
+/** Everything an avoir or a cancellation makes stale, in one place because
+ *  the two make the same things stale.
+ *
+ *  Both write in one transaction across four tables: the document's own row,
+ *  the goods, the ledger and the allocations on the customer's other papers.
+ *  So the document, the list it sits in, the credit notes under it, the pages
+ *  the core rendered from it, the customer's own figures and the stock all
+ *  read differently afterwards, and anything left in the cache is a screen
+ *  showing a file that no longer exists.
+ *
+ *  The stock is why the products list is here: an avoir puts the goods back,
+ *  and a shop looking at a count of eight while the shelf holds eleven orders
+ *  more of it. */
+async function everythingItTouched(
+  queryClient: QueryClient,
+  documentId: number,
+  customerId: number | null,
+): Promise<void> {
+  const keys: readonly (readonly (string | number | undefined)[])[] = [
+    ["sale", documentId],
+    saleAvoirsQueryKey(documentId),
+    salesQueryPrefix(),
+    ...saleSheetPrefixes(documentId),
+    customersQueryKey,
+    productsQueryKey,
+    ...(customerId === null
+      ? []
+      : [customerLedgerQueryKey(customerId), customerPaymentsQueryKey(customerId)]),
+  ];
+  await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+}
+
 function CancelPanel({ document }: { document: SaleDto }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -423,8 +459,7 @@ function CancelPanel({ document }: { document: SaleDto }) {
     onSuccess: async () => {
       setOpen(false);
       setReason("");
-      await queryClient.invalidateQueries({ queryKey: ["sale", document.id] });
-      await queryClient.invalidateQueries({ queryKey: salesQueryPrefix() });
+      await everythingItTouched(queryClient, document.id, document.customer_id);
     },
   });
   // The server's own answer, never re-derived here. A facture whose goods have
