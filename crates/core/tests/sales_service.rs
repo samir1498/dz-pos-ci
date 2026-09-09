@@ -1050,8 +1050,20 @@ fn a_customer_in_credit_may_buy_on_credit_up_to_their_deposit() {
     .unwrap();
     let balance = doc.balance.expect("a credit sale stores its balance");
     assert_eq!(balance.old_balance, Money::centimes(-30_000));
-    assert_eq!(balance.remaining_debt, Money::centimes(20_000));
+    // The deposit covers the whole basket, so the document asks for nothing:
+    // it was settled out of the credit at issue and the customer is handed a
+    // paper that agrees with the ledger rather than one asking 200,00 of
+    // somebody who has already paid it.
+    assert_eq!(balance.remaining_debt, Money::ZERO);
     assert_eq!(balance.total_debt, Money::centimes(-10_000));
+    assert_eq!(
+        debt::allocations(&mut conn, SHOP, doc.id)
+            .unwrap()
+            .iter()
+            .map(|a| a.amount)
+            .collect::<Vec<Money>>(),
+        [Money::centimes(20_000)]
+    );
 
     let err = issue_sale(
         &mut conn,
@@ -1071,6 +1083,75 @@ fn a_customer_in_credit_may_buy_on_credit_up_to_their_deposit() {
         ),
         "{err:?}"
     );
+}
+
+#[test]
+fn a_credit_sale_is_settled_from_the_credit_the_customer_is_already_holding() {
+    // Carried from the payments review. A customer holding credit who buys on
+    // credit must not be handed a document asking for its whole net while the
+    // credit sits beside it on the ledger: the two would have to be netted out
+    // by whoever reads the paper, and the paper is what the customer pays
+    // against. The credit settles the new document at issue, inside the sale's
+    // own transaction, and what is left is what the document asks for.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", None, None);
+    // 400,00 of credit and no document outstanding, so the correction places
+    // it on nothing and it stays on the ledger unallocated.
+    let credited = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        c,
+        Money::centimes(-40_000),
+        Some("acompte".to_string()),
+    )
+    .unwrap();
+    assert!(
+        credited.allocations.is_empty(),
+        "the correction found a document to settle before there was one"
+    );
+
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap();
+
+    // The document asks for its net less what the credit took off it.
+    let net = doc.totals.net_to_pay;
+    assert_eq!(net, Money::centimes(100_000));
+    let balance = doc.balance.expect("a credit sale stores its balance");
+    assert_eq!(balance.old_balance, Money::centimes(-40_000));
+    assert_eq!(balance.remaining_debt, Money::centimes(60_000));
+    // What the customer owes once the sale has landed, which is the old
+    // balance plus the whole of the sale and not plus what is left of it.
+    assert_eq!(balance.total_debt, Money::centimes(60_000));
+
+    // One allocation, from the credit that was already there onto the new
+    // document: the ledger and the paper now say the same thing.
+    let allocations = debt::allocations(&mut conn, SHOP, doc.id).unwrap();
+    assert_eq!(allocations.len(), 1);
+    assert_eq!(allocations[0].payment_ledger_id, credited.entry.id);
+    assert_eq!(allocations[0].amount, Money::centimes(40_000));
+
+    // The sale's own movement is the whole net. The credit is already a
+    // movement of its own, and writing only the unsettled part would count it
+    // twice and leave the balance 400,00 short.
+    let ledger = debt::ledger(&mut conn, SHOP, c).unwrap();
+    let sale_row = ledger
+        .iter()
+        .find(|e| e.kind == DebtKind::Sale)
+        .expect("the sale wrote no movement");
+    assert_eq!(sale_row.debit, net);
+    assert_eq!(sale_row.document_id, Some(doc.id));
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, c).unwrap(),
+        Money::centimes(60_000)
+    );
+    assert_eq!(documents::get(&mut conn, SHOP, doc.id).unwrap(), doc);
 }
 
 #[test]

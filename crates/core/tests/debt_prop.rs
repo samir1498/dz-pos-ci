@@ -160,56 +160,33 @@ fn check(conn: &mut SqliteConnection, customer: i32, n: usize) -> Result<(), Tes
             .unwrap();
     }
     // The ledger is the truth: the papers never ask for more than it says is
-    // owed. Two things are allowed on the other side of that comparison, and
-    // both are money the ledger holds that no paper ever asked for.
+    // owed, and now for no more than that at all.
+    //
+    // The slack this used to allow was credit that landed before the document
+    // existed. A correction downwards taken while nothing was outstanding sat
+    // unallocated, the sale that followed was issued asking for its whole net,
+    // and the two were left to be netted out by whoever read them. A credit
+    // sale now consumes that credit at issue (features.md §3), so there is
+    // nothing left on the ledger for the paper to disagree with.
     //
     // A balance below zero is the shop holding money for the customer, which
     // is no document at all, so the papers are compared against nothing owed
-    // rather than against a negative. And credit that landed before the
-    // document existed — an opening credit, a correction downwards while
-    // nothing was unpaid — was never placed on anything and stays
-    // unallocated: the sale that comes afterwards is issued asking for its
-    // whole net (features.md §3), and the ledger nets the two out where the
-    // paper cannot.
+    // rather than against a negative. Reaching that state means every
+    // outstanding document has been filled, which is what makes the zero on
+    // this side of the comparison the truth rather than a floor.
     let owed = if balance.is_negative() {
         Money::ZERO
     } else {
         balance
     };
-    let unplaced = unallocated_credit(conn, customer);
     prop_assert!(
-        owed_on_paper <= owed.checked_add(unplaced).unwrap(),
-        "step {}: the documents ask for {:?} against a balance of {:?} and {:?} of credit nothing was placed on",
+        owed_on_paper <= owed,
+        "step {}: the documents ask for {:?} against a balance of {:?}",
         n,
         owed_on_paper,
-        balance,
-        unplaced
+        balance
     );
     Ok(())
-}
-
-/// Money handed over or corrected off that no document took: what a customer
-/// paid before there was anything to pay it against.
-fn unallocated_credit(conn: &mut SqliteConnection, customer: i32) -> Money {
-    #[derive(QueryableByName)]
-    struct Sum {
-        #[diesel(sql_type = diesel::sql_types::BigInt)]
-        total: i64,
-    }
-    let credited = diesel::sql_query(format!(
-        "SELECT COALESCE(SUM(credit_centimes), 0) AS total FROM debt_ledger \
-         WHERE shop_id = {SHOP} AND customer_id = {customer}"
-    ))
-    .load::<Sum>(conn)
-    .unwrap();
-    let placed = diesel::sql_query(format!(
-        "SELECT COALESCE(SUM(a.amount_centimes), 0) AS total FROM debt_allocations a \
-         JOIN debt_ledger l ON l.id = a.payment_ledger_id \
-         WHERE a.shop_id = {SHOP} AND l.customer_id = {customer}"
-    ))
-    .load::<Sum>(conn)
-    .unwrap();
-    Money::centimes(credited[0].total - placed[0].total)
 }
 
 /// Every issued document of the customer: its id, what it still asks for and
@@ -262,13 +239,20 @@ fn a_customer(conn: &mut SqliteConnection) -> i32 {
 }
 
 /// A facture on credit and the ledger row beside it, written by hand rather
-/// than sold: what is under test is the settlement, not the sale.
+/// than sold: what is under test is the settlement, not the sale. It goes
+/// through the same two calls `services::sales` makes, and in the same order,
+/// so the invariant is asserted against the rule the till applies and not
+/// against a second one written here.
 fn a_facture_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, day: u32) -> i32 {
     let net = Money::centimes(net);
     let issued_at = chrono::NaiveDate::from_ymd_opt(2026, 9, day)
         .and_then(|d| d.and_hms_opt(10, 0, 0))
         .unwrap();
     let before = debt::balance(conn, SHOP, customer_id).unwrap();
+    // Credit the customer is already holding settles the new document at
+    // issue, so what the paper asks for is what is really left on it.
+    let consumed = debt::credit_held(before).unwrap().min(net);
+    let remaining = net.checked_sub(consumed).unwrap();
     let doc = documents::issue(
         conn,
         SHOP,
@@ -300,7 +284,7 @@ fn a_facture_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, 
             ref_document_id: None,
             balance: Some(BalanceTriple {
                 old_balance: before,
-                remaining_debt: net,
+                remaining_debt: remaining,
                 total_debt: before.checked_add(net).unwrap(),
             }),
             totals: Totals {
@@ -334,5 +318,6 @@ fn a_facture_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, 
         Some(issued_at),
     )
     .unwrap();
+    debt::settle_from_credit(conn, SHOP, customer_id, doc.id, consumed).unwrap();
     doc.id
 }

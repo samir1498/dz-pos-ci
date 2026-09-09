@@ -288,11 +288,16 @@ pub fn issue(
         };
 
         // The ledger movement, after the document exists so it can name it.
-        // Only what the customer is left owing is written: a credit sale of a
-        // basket a discount took to nothing owes nothing, and a movement of
-        // zero would sit in every statement the customer is ever handed
-        // (the same rule `customers::create` applies to an opening debt).
-        if credit.balance.remaining_debt != Money::ZERO {
+        // The whole of what the sale put on the account is written, not what
+        // the document is left asking for: credit the customer was holding is
+        // already a movement here, and writing only the unsettled part would
+        // count that credit a second time and leave the balance short by it.
+        //
+        // A credit sale of a basket a discount took to nothing puts nothing on
+        // the account, and a movement of zero would sit in every statement the
+        // customer is ever handed (the same rule `customers::create` applies to
+        // an opening debt).
+        if credit.added != Money::ZERO {
             debt::append(
                 conn,
                 shop_id,
@@ -300,13 +305,24 @@ pub fn issue(
                     customer_id: credit.customer.id,
                     document_id: Some(document.id),
                     kind: DebtKind::Sale,
-                    debit: credit.balance.remaining_debt,
+                    debit: credit.added,
                     credit: Money::ZERO,
                     user_id,
                     note: None,
                 },
             )?;
         }
+
+        // And the credit the customer was already holding is placed on the
+        // document it just settled, so the ledger says which paper it went to
+        // rather than leaving the two to be netted out by whoever reads them.
+        debt::settle_from_credit(
+            conn,
+            shop_id,
+            credit.customer.id,
+            document.id,
+            credit.consumed,
+        )?;
 
         // An override is a decision somebody took past a rule, which is
         // exactly what features.md §5 keeps a log for. Written here rather
@@ -459,6 +475,14 @@ fn unset(value: Option<&str>) -> bool {
 struct CreditCheck {
     customer: Customer,
     balance: BalanceTriple,
+    /// What this sale puts on the ledger: the whole net on credit, nothing on
+    /// cash or card. Not the same figure as `balance.remaining_debt` once the
+    /// customer was already holding credit, and it is this one the movement is
+    /// written for.
+    added: Money,
+    /// How much of `added` was covered at issue out of credit the customer
+    /// already held, and so is placed on this document rather than owed on it.
+    consumed: Money,
     overridden: bool,
     warning: Option<Warning>,
 }
@@ -488,12 +512,22 @@ fn credit_check(
     }
     let old_balance = debt::balance(conn, shop_id, customer_id)?;
     // Cash and card leave the ledger where it was: the customer owes nothing
-    // new, so this document's unpaid part is nothing.
-    let remaining_debt = match payment_mode {
+    // new, so this document puts nothing on it.
+    let added = match payment_mode {
         PaymentMode::Credit => net_to_pay,
         PaymentMode::Cash | PaymentMode::Card => Money::ZERO,
     };
-    let total_debt = old_balance.checked_add(remaining_debt)?;
+    // What the customer owes once the sale has landed: the whole of the sale
+    // against the balance, whichever side of zero that balance was on. Credit
+    // the customer is holding is already a movement on the ledger, so it is
+    // netted out here by the addition itself and never subtracted twice.
+    let total_debt = old_balance.checked_add(added)?;
+    // A customer holding credit has this document settled out of it at issue
+    // (features.md §3): the paper is what they pay against, so it must not ask
+    // for money the shop already has. What the credit does not cover is what
+    // the document is left asking for.
+    let consumed = debt::credit_held(old_balance)?.min(added);
+    let remaining_debt = added.checked_sub(consumed)?;
 
     let mut overridden = false;
     if payment_mode == PaymentMode::Credit {
@@ -525,6 +559,8 @@ fn credit_check(
             remaining_debt,
             total_debt,
         },
+        added,
+        consumed,
         overridden,
         warning,
     })
