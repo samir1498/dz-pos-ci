@@ -13,10 +13,10 @@ use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::models::stock::MovementKind;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime};
-use dzpos_core::services::documents::{Document, DocumentKind};
-use dzpos_core::services::sales::{self, NewSale, NewSaleLine};
 use dzpos_core::services::customers::{NewCustomer, PartyKind};
 use dzpos_core::services::debt::DebtKind;
+use dzpos_core::services::documents::{Document, DocumentKind};
+use dzpos_core::services::sales::{self, NewSale, NewSaleLine};
 use dzpos_core::services::{audit, customers, debt, documents, products, settings, shops, stock};
 
 const SHOP: i32 = 1;
@@ -185,8 +185,7 @@ fn a_sale_beyond_the_count_goes_through_and_leaves_the_stock_negative() {
 #[test]
 fn an_unknown_product_is_not_found_and_leaves_nothing_behind() {
     let (_dir, mut conn) = open_temp();
-    let err =
-        issue_sale(&mut conn, SHOP, OWNER, cash(vec![line(404, 1_000)], 1_000)).unwrap_err();
+    let err = issue_sale(&mut conn, SHOP, OWNER, cash(vec![line(404, 1_000)], 1_000)).unwrap_err();
     assert!(
         matches!(
             err,
@@ -256,8 +255,7 @@ fn a_quantity_at_or_below_zero_is_refused() {
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Sucre", 1_000, 1900, Unit::Piece);
     for qty in [0, -1_000] {
-        let err =
-            issue_sale(&mut conn, SHOP, OWNER, cash(vec![line(p, qty)], 10_000)).unwrap_err();
+        let err = issue_sale(&mut conn, SHOP, OWNER, cash(vec![line(p, qty)], 10_000)).unwrap_err();
         assert_eq!(err.code(), "validation", "{qty} was accepted");
     }
 }
@@ -749,7 +747,13 @@ fn a_credit_sale_writes_the_document_its_debt_row_and_the_balance_triple() {
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
     let c = customer(&mut conn, "Entreprise Amrani", Some(1_000_000), None);
-    let sale = sales::issue(&mut conn, SHOP, OWNER, credit(c, vec![line(p, 2_000)], false)).unwrap();
+    let sale = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 2_000)], false),
+    )
+    .unwrap();
     let doc = sale.document;
 
     // Sold on credit, so nothing was tendered and no stamp is due: the
@@ -763,7 +767,10 @@ fn a_credit_sale_writes_the_document_its_debt_row_and_the_balance_triple() {
 
     // The buyer block is a snapshot of the fiche, party kind included, on a
     // ticket as much as on a facture.
-    let buyer = doc.buyer.clone().expect("a named customer has a buyer block");
+    let buyer = doc
+        .buyer
+        .clone()
+        .expect("a named customer has a buyer block");
     assert_eq!(buyer.name, "Entreprise Amrani");
     assert_eq!(buyer.party_kind, PartyKind::Company);
     assert_eq!(buyer.rc.as_deref(), Some("16/00-7654321 B 25"));
@@ -801,7 +808,13 @@ fn a_credit_sale_past_the_limit_is_refused_whole_and_burns_no_number() {
     let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
     // 500,00 of limit against a 1 000,00 basket.
     let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), None);
-    let err = issue_sale(&mut conn, SHOP, OWNER, credit(c, vec![line(p, 1_000)], false)).unwrap_err();
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap_err();
 
     assert_eq!(err.code(), "credit_limit", "{err:?}");
     let CoreError::CreditLimit {
@@ -837,15 +850,26 @@ fn the_limit_is_tested_on_the_balance_the_sale_leaves_behind() {
     let c = customer(&mut conn, "Entreprise Amrani", Some(100_000), None);
     debt::adjust(&mut conn, SHOP, OWNER, c, Money::centimes(60_000), None).unwrap();
 
-    let doc = issue_sale(&mut conn, SHOP, OWNER, credit(c, vec![line(p, 2_000)], false)).unwrap();
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 2_000)], false),
+    )
+    .unwrap();
     let balance = doc.balance.expect("a credit sale stores its balance");
     assert_eq!(balance.old_balance, Money::centimes(60_000));
     assert_eq!(balance.remaining_debt, Money::centimes(40_000));
     assert_eq!(balance.total_debt, Money::centimes(100_000), "at the limit");
 
     let cheap = product(&mut conn, "Clou", 1, 0, Unit::Piece);
-    let err = issue_sale(&mut conn, SHOP, OWNER, credit(c, vec![line(cheap, 1_000)], false))
-        .unwrap_err();
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(cheap, 1_000)], false),
+    )
+    .unwrap_err();
     assert_eq!(err.code(), "credit_limit", "one centime past: {err:?}");
 }
 
@@ -856,12 +880,23 @@ fn a_null_limit_never_refuses_and_a_zero_one_refuses_the_first_centime() {
     let cheap = product(&mut conn, "Clou", 1, 0, Unit::Piece);
 
     let open = customer(&mut conn, "Sans plafond", None, None);
-    let doc = issue_sale(&mut conn, SHOP, OWNER, credit(open, vec![line(p, 5_000)], false)).unwrap();
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(open, vec![line(p, 5_000)], false),
+    )
+    .unwrap();
     assert_eq!(doc.totals.net_to_pay, Money::centimes(5_000_000));
 
     let none = customer(&mut conn, "Aucun crédit", Some(0), None);
-    let err =
-        issue_sale(&mut conn, SHOP, OWNER, credit(none, vec![line(cheap, 1_000)], false)).unwrap_err();
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(none, vec![line(cheap, 1_000)], false),
+    )
+    .unwrap_err();
     assert_eq!(err.code(), "credit_limit", "{err:?}");
 }
 
@@ -873,12 +908,24 @@ fn the_warning_fires_at_the_threshold_and_the_sale_still_goes_through() {
     let c = customer(&mut conn, "Entreprise Amrani", Some(100_000), Some(40_000));
 
     // 300,00: under the threshold, nothing said.
-    let quiet = sales::issue(&mut conn, SHOP, OWNER, credit(c, vec![line(p, 3_000)], false)).unwrap();
+    let quiet = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 3_000)], false),
+    )
+    .unwrap();
     assert_eq!(quiet.warning, None);
 
     // 100,00 more lands exactly on 400,00, and the threshold is reached, not
     // passed: a shop that sets one at 400,00 wants to hear about this sale.
-    let warned = sales::issue(&mut conn, SHOP, OWNER, credit(c, vec![line(p, 1_000)], false)).unwrap();
+    let warned = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap();
     assert_eq!(warned.warning, Some(sales::Warning::NearLimit));
     assert_eq!(warned.warning.map(sales::Warning::code), Some("near_limit"));
     // The warning is informational: the document exists and the debt moved.
@@ -890,8 +937,13 @@ fn the_warning_fires_at_the_threshold_and_the_sale_still_goes_through() {
 
     // No threshold at all is no warning, whatever the balance.
     let silent = customer(&mut conn, "Sans seuil", Some(100_000), None);
-    let none = sales::issue(&mut conn, SHOP, OWNER, credit(silent, vec![line(p, 9_000)], false))
-        .unwrap();
+    let none = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(silent, vec![line(p, 9_000)], false),
+    )
+    .unwrap();
     assert_eq!(none.warning, None);
 }
 
@@ -901,7 +953,13 @@ fn an_override_takes_the_sale_past_the_limit_and_the_log_says_who() {
     let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
     let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), None);
 
-    let doc = issue_sale(&mut conn, SHOP, OWNER, credit(c, vec![line(p, 1_000)], true)).unwrap();
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], true),
+    )
+    .unwrap();
     let balance = doc.balance.expect("a credit sale stores its balance");
     assert_eq!(balance.total_debt, Money::centimes(100_000), "past 500,00");
     assert_eq!(
@@ -923,9 +981,15 @@ fn an_override_takes_the_sale_past_the_limit_and_the_log_says_who() {
         before.contains("\"balance_after_centimes\":100000"),
         "{before}"
     );
-    assert!(before.contains("\"credit_limit_centimes\":50000"), "{before}");
+    assert!(
+        before.contains("\"credit_limit_centimes\":50000"),
+        "{before}"
+    );
     let after = entry.after.clone().unwrap_or_default();
-    assert!(after.contains(&format!("\"document_id\":{}", doc.id)), "{after}");
+    assert!(
+        after.contains(&format!("\"document_id\":{}", doc.id)),
+        "{after}"
+    );
 }
 
 #[test]
@@ -935,7 +999,13 @@ fn an_override_on_a_sale_the_limit_would_have_taken_writes_no_log_row() {
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Sac", 10_000, 0, Unit::Piece);
     let c = customer(&mut conn, "Entreprise Amrani", Some(100_000), None);
-    issue_sale(&mut conn, SHOP, OWNER, credit(c, vec![line(p, 1_000)], true)).unwrap();
+    issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], true),
+    )
+    .unwrap();
     assert!(
         !audit::list(&mut conn, SHOP)
             .unwrap()
@@ -1002,15 +1072,26 @@ fn a_closed_fiche_and_another_shops_fiche_cannot_be_sold_to() {
     fields.active = false;
     customers::update(&mut conn, SHOP, OWNER, c, fields).unwrap();
 
-    let err = issue_sale(&mut conn, SHOP, OWNER, credit(c, vec![line(p, 1_000)], false)).unwrap_err();
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap_err();
     assert!(
         matches!(&err, CoreError::Validation { field, .. } if field == "customer_id"),
         "{err:?}"
     );
 
     // Rule 3: a fiche of another shop is not this shop's to sell to.
-    let err = issue_sale(&mut conn, SHOP, OWNER, credit(404, vec![line(p, 1_000)], false))
-        .unwrap_err();
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(404, vec![line(p, 1_000)], false),
+    )
+    .unwrap_err();
     assert!(
         matches!(
             err,

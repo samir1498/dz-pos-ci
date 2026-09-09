@@ -458,7 +458,12 @@ fn a_credit_ticket_says_credit_carries_no_cash_row_and_closes_on_the_debt() {
                 "the {lang:?} credit ticket keeps a {absent} row"
             );
         }
-        for label in [Key::Balance, Key::OldBalance, Key::ThisDocument, Key::TotalDebt] {
+        for label in [
+            Key::Balance,
+            Key::OldBalance,
+            Key::ThisDocument,
+            Key::TotalDebt,
+        ] {
             assert!(html.contains(text(label, lang)), "{lang:?} {label:?}");
         }
         let old = centimes(&one_amount(&html, "old-balance"));

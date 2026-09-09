@@ -14,8 +14,8 @@ use dzpos_api::dto::{
     CustomerDto, CustomerLedgerDto, CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto,
     DocumentKindDto, DocumentStatusDto, HealthDto, NewCustomerDto, NewProductDto, NewSaleDto,
     NewSaleLineDto, PartyKindDto, PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto,
-    RestoreDto, SaleBalanceDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto,
-    UnitDto,
+    RestoreDto, SaleBalanceDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto, SettingsDto,
+    StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
@@ -131,6 +131,7 @@ fn export_bindings() {
     SaleLineDto::export_all(&cfg).unwrap();
     SaleTvaDto::export_all(&cfg).unwrap();
     SaleTotalsDto::export_all(&cfg).unwrap();
+    SaleBalanceDto::export_all(&cfg).unwrap();
     SaleDto::export_all(&cfg).unwrap();
     NewSaleLineDto::export_all(&cfg).unwrap();
     NewSaleDto::export_all(&cfg).unwrap();

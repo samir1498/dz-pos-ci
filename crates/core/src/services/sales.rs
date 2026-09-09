@@ -279,9 +279,7 @@ pub fn issue(
                         })
                         .to_string(),
                     ),
-                    after: Some(
-                        serde_json::json!({ "document_id": document.id }).to_string(),
-                    ),
+                    after: Some(serde_json::json!({ "document_id": document.id }).to_string()),
                 },
             )?;
         }
