@@ -115,6 +115,10 @@ pub async fn ledger(
 /// the whole ledger again: the screen shows the new balance and the new row
 /// without a second call, and the row it just wrote is the one the core
 /// stored rather than the one the form sent.
+///
+/// The ledger is the one the write's own transaction read (core, `adjust`),
+/// not a second read afterwards: the balance answered here is the figure the
+/// audit entry carries, so the log and the screen cannot disagree.
 pub async fn adjust(
     State(state): State<AppState>,
     id: Result<Path<i32>, PathRejection>,
@@ -126,13 +130,10 @@ pub async fn adjust(
     let note = dto.note;
     let shop = state.shop_id;
     let user = state.user_id;
-    let statement = state
-        .blocking(move |c| {
-            debt::adjust(c, shop, user, id, amount, note)?;
-            debt::statement(c, shop, id)
-        })
+    let written = state
+        .blocking(move |c| debt::adjust(c, shop, user, id, amount, note))
         .await?;
-    Ok((StatusCode::CREATED, Json(envelope(id, statement))))
+    Ok((StatusCode::CREATED, Json(envelope(id, written.statement))))
 }
 
 fn envelope(customer_id: i32, statement: debt::Statement) -> CustomerLedgerDto {

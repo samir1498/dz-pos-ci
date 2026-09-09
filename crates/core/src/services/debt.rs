@@ -111,12 +111,14 @@ pub fn statement(
     })
 }
 
-/// What an adjustment left behind: the movement, and what the customer owes
-/// now.
+/// What an adjustment left behind: the movement, and the ledger as the same
+/// transaction read it once the movement had landed. The statement travels
+/// with the entry so that the balance the caller answers, the balance the
+/// audit records and the balance the ledger sums to are one figure read once.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Adjusted {
     pub entry: DebtEntry,
-    pub balance: Money,
+    pub statement: Statement,
 }
 
 /// Corrects a balance by writing a movement, never by editing one
@@ -165,7 +167,9 @@ pub fn adjust(
                 note,
             },
         )?;
-        let after = repo::balance(conn, shop_id, customer_id)?;
+        // Read once, inside the transaction: what goes into the log below is
+        // the same figure the caller is handed.
+        let after = statement(conn, shop_id, customer_id)?;
         audit::record(
             conn,
             shop_id,
@@ -179,7 +183,7 @@ pub fn adjust(
                 ),
                 after: Some(
                     serde_json::json!({
-                        "balance_centimes": after.as_centimes(),
+                        "balance_centimes": after.balance.as_centimes(),
                         "amount_centimes": amount.as_centimes(),
                         "ledger_id": entry.id,
                         "note": entry.note,
@@ -190,7 +194,7 @@ pub fn adjust(
         )?;
         Ok(Adjusted {
             entry,
-            balance: after,
+            statement: after,
         })
     })
 }

@@ -524,12 +524,12 @@ fn an_adjustment_moves_the_debt_the_way_its_sign_says_and_answers_the_new_balanc
     assert_eq!(down.entry.credit, Money::centimes(50_000));
     assert_eq!(down.entry.debit, Money::ZERO);
     assert_eq!(down.entry.note.as_deref(), Some("erreur de saisie"));
-    assert_eq!(down.balance, Money::centimes(100_000));
+    assert_eq!(down.statement.balance, Money::centimes(100_000));
 
     let up = debt::adjust(&mut conn, SHOP, OWNER, id, Money::centimes(20_000), None).unwrap();
     assert_eq!(up.entry.debit, Money::centimes(20_000));
     assert_eq!(up.entry.credit, Money::ZERO);
-    assert_eq!(up.balance, Money::centimes(120_000));
+    assert_eq!(up.statement.balance, Money::centimes(120_000));
     assert_eq!(
         debt::balance(&mut conn, SHOP, id).unwrap(),
         Money::centimes(120_000),
@@ -658,5 +658,56 @@ fn an_adjustment_that_fails_leaves_neither_the_movement_nor_the_log() {
         audit::list(&mut conn, SHOP).unwrap().len(),
         logged,
         "the failed correction left an entry behind"
+    );
+}
+
+/// The correction answers the ledger its own transaction read, and the
+/// balance the audit's after carries is that same figure. A second read
+/// afterwards would be a second answer to what the customer owes, and the
+/// two could part company between them.
+#[test]
+fn an_adjustment_answers_the_ledger_its_own_transaction_read() {
+    let (_dir, mut conn) = open_temp();
+    let id = a_customer(&mut conn, "Brahim");
+    debt::append(&mut conn, SHOP, movement(id, DebtKind::Opening, 150_000, 0)).unwrap();
+
+    let written = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        id,
+        Money::centimes(-50_000),
+        Some("erreur de saisie".to_string()),
+    )
+    .unwrap();
+
+    assert_eq!(written.statement.balance, Money::centimes(100_000));
+    let running: Vec<(DebtKind, Money)> = written
+        .statement
+        .lines
+        .iter()
+        .map(|line| (line.entry.kind, line.balance_after))
+        .collect();
+    assert_eq!(
+        running,
+        [
+            (DebtKind::Adjustment, Money::centimes(100_000)),
+            (DebtKind::Opening, Money::centimes(150_000)),
+        ],
+        "the movement it wrote is not the newest line of what it answered"
+    );
+    assert_eq!(written.statement.lines[0].entry.id, written.entry.id);
+
+    let log = audit::list(&mut conn, SHOP).unwrap();
+    let entry = log
+        .iter()
+        .find(|e| e.entity == "customer_debt")
+        .expect("the adjustment left no audit entry");
+    let after: serde_json::Value =
+        serde_json::from_str(entry.after.as_deref().unwrap_or("null")).unwrap();
+    assert_eq!(
+        after["balance_centimes"],
+        written.statement.balance.as_centimes(),
+        "the log and the answer carry two different balances"
     );
 }
