@@ -76,8 +76,9 @@ function groupByRate(lines) {
 }
 
 /** The global discount each group carries: its proportional share rounded
- *  down, the leftover centimes all going to the group with the largest HT
- *  subtotal, the lower rate winning a tie.
+ *  down, the leftover centimes going to the group with the largest HT
+ *  subtotal, the lower rate winning a tie, never past what the group has
+ *  left.
  *  discount_spread_largest_remainder */
 function spreadDiscount(groups, totalHt, discount) {
   const shares = groups.map(() => 0);
@@ -89,15 +90,18 @@ function spreadDiscount(groups, totalHt, discount) {
     shares[i] = Number((BigInt(discount) * BigInt(g.ht)) / total);
     allocated += shares[i];
   });
-  const remainder = discount - allocated;
-  if (remainder !== 0) {
-    // Groups rise by rate, so the first strict maximum is the largest HT at
-    // the lowest rate.
-    let largest = 0;
-    groups.forEach((g, i) => {
-      if (g.ht > groups[largest].ht) largest = i;
-    });
-    shares[largest] += remainder;
+  let remainder = discount - allocated;
+  // The leftover centimes go to the largest HT group, but a share never
+  // exceeds its group's HT: when the discount leaves fewer centimes than
+  // there are groups the largest one may have no room, and what it cannot
+  // take rolls to the next largest. Groups rise by rate and the sort is
+  // stable, so the lower rate wins a tie.
+  const bySize = groups.map((g, i) => i).sort((a, b) => groups[b].ht - groups[a].ht);
+  for (const i of bySize) {
+    if (remainder === 0) break;
+    const taken = Math.min(groups[i].ht - shares[i], remainder);
+    shares[i] += taken;
+    remainder -= taken;
   }
   return shares;
 }

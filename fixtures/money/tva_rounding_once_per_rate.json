@@ -3,35 +3,125 @@
   "rule": "docs/features.md, fiscal rules: rounding to the centime, half away from zero, once per rate group. Rates are basis points (1900 = 19 %). Amounts are integer centimes. Expected values are written by hand, never computed.",
   "totals_rule": "docs/features.md, fiscal rules, Global discount spread: each rate group takes the global discount in proportion to its HT subtotal, rounded down, and the leftover centimes all go to the group with the largest HT subtotal, the lower rate winning a tie. TVA is then one rounding per group on the discounted base. Under the IFU regime there are no TVA rows and no TVA.",
   "pct_cases": [
-    { "name": "19 % of 100,00 DA", "amount": 10000, "rate_bps": 1900, "expected": 1900 },
-    { "name": "9 % of 100,00 DA", "amount": 10000, "rate_bps": 900, "expected": 900 },
-    { "name": "0 % of anything", "amount": 123456, "rate_bps": 0, "expected": 0 },
-    { "name": "19 % of 0,01 DA rounds down (0,0019)", "amount": 1, "rate_bps": 1900, "expected": 0 },
-    { "name": "19 % of 0,03 DA rounds up (0,0057)", "amount": 3, "rate_bps": 1900, "expected": 1 },
-    { "name": "exact half rounds away from zero: 19 % of 2,50 DA = 0,475", "amount": 250, "rate_bps": 1900, "expected": 48 },
-    { "name": "exact half on a negative amount rounds away from zero: 19 % of -2,50 DA = -0,475", "amount": -250, "rate_bps": 1900, "expected": -48 },
-    { "name": "9 % of 12,34 DA = 1,1106", "amount": 1234, "rate_bps": 900, "expected": 111 },
-    { "name": "9 % of 12,39 DA = 1,1151", "amount": 1239, "rate_bps": 900, "expected": 112 },
-    { "name": "19 % of 999 999,99 DA = 189 999,9981", "amount": 99999999, "rate_bps": 1900, "expected": 19000000 },
-    { "name": "100 % is identity", "amount": 4242, "rate_bps": 10000, "expected": 4242 },
-    { "name": "50 % of an odd centime: 0,005 rounds up", "amount": 1, "rate_bps": 5000, "expected": 1 },
-    { "name": "50 % of minus one centime: -0,005 rounds away from zero, not to even", "amount": -1, "rate_bps": 5000, "expected": -1 },
-    { "name": "1 bps of 49,99 DA = 0,004999, below the half", "amount": 4999, "rate_bps": 1, "expected": 0 },
-    { "name": "1 bps of 50,00 DA = 0,005, exactly the half", "amount": 5000, "rate_bps": 1, "expected": 1 }
+    {
+      "name": "19 % of 100,00 DA",
+      "amount": 10000,
+      "rate_bps": 1900,
+      "expected": 1900
+    },
+    {
+      "name": "9 % of 100,00 DA",
+      "amount": 10000,
+      "rate_bps": 900,
+      "expected": 900
+    },
+    {
+      "name": "0 % of anything",
+      "amount": 123456,
+      "rate_bps": 0,
+      "expected": 0
+    },
+    {
+      "name": "19 % of 0,01 DA rounds down (0,0019)",
+      "amount": 1,
+      "rate_bps": 1900,
+      "expected": 0
+    },
+    {
+      "name": "19 % of 0,03 DA rounds up (0,0057)",
+      "amount": 3,
+      "rate_bps": 1900,
+      "expected": 1
+    },
+    {
+      "name": "exact half rounds away from zero: 19 % of 2,50 DA = 0,475",
+      "amount": 250,
+      "rate_bps": 1900,
+      "expected": 48
+    },
+    {
+      "name": "exact half on a negative amount rounds away from zero: 19 % of -2,50 DA = -0,475",
+      "amount": -250,
+      "rate_bps": 1900,
+      "expected": -48
+    },
+    {
+      "name": "9 % of 12,34 DA = 1,1106",
+      "amount": 1234,
+      "rate_bps": 900,
+      "expected": 111
+    },
+    {
+      "name": "9 % of 12,39 DA = 1,1151",
+      "amount": 1239,
+      "rate_bps": 900,
+      "expected": 112
+    },
+    {
+      "name": "19 % of 999 999,99 DA = 189 999,9981",
+      "amount": 99999999,
+      "rate_bps": 1900,
+      "expected": 19000000
+    },
+    {
+      "name": "100 % is identity",
+      "amount": 4242,
+      "rate_bps": 10000,
+      "expected": 4242
+    },
+    {
+      "name": "50 % of an odd centime: 0,005 rounds up",
+      "amount": 1,
+      "rate_bps": 5000,
+      "expected": 1
+    },
+    {
+      "name": "50 % of minus one centime: -0,005 rounds away from zero, not to even",
+      "amount": -1,
+      "rate_bps": 5000,
+      "expected": -1
+    },
+    {
+      "name": "1 bps of 49,99 DA = 0,004999, below the half",
+      "amount": 4999,
+      "rate_bps": 1,
+      "expected": 0
+    },
+    {
+      "name": "1 bps of 50,00 DA = 0,005, exactly the half",
+      "amount": 5000,
+      "rate_bps": 1,
+      "expected": 1
+    }
   ],
   "invalid_rate_cases": [
-    { "name": "one past 100 %", "rate_bps": 10001 },
-    { "name": "19 typed as percent times ten thousand", "rate_bps": 190000 }
+    {
+      "name": "one past 100 %",
+      "rate_bps": 10001
+    },
+    {
+      "name": "19 typed as percent times ten thousand",
+      "rate_bps": 190000
+    }
   ],
   "overflow_cases": [
-    { "name": "i64::MAX times 19 % overflows the intermediate product", "amount": 9223372036854775807, "rate_bps": 1900 }
+    {
+      "name": "i64::MAX times 19 % overflows the intermediate product",
+      "amount": 9223372036854775807,
+      "rate_bps": 1900
+    }
   ],
   "totals_cases": [
     {
       "name": "an empty basket is zero everywhere and carries no TVA row",
       "input": {
         "lines": [],
-        "opts": { "global_discount": 0, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 0,
@@ -47,14 +137,32 @@
     {
       "name": "one line at 19 %: 3 x 400,00 = 1 200,00 HT, TVA 228,00, TTC 1 428,00, stamp ceil(142 800 / 10 000) = 15 tranches x 1,00 = 15,00, net 1 443,00",
       "input": {
-        "lines": [{ "qty": 3, "unit_price": 40000, "line_discount": 0, "rate_bps": 1900 }],
-        "opts": { "global_discount": 0, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 3,
+            "unit_price": 40000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 120000,
         "discount": 0,
         "subtotal_ht": 120000,
-        "tva_by_rate": [{ "rate_bps": 1900, "base": 120000, "amount": 22800 }],
+        "tva_by_rate": [
+          {
+            "rate_bps": 1900,
+            "base": 120000,
+            "amount": 22800
+          }
+        ],
         "tva": 22800,
         "total_ttc": 142800,
         "stamp": 1500,
@@ -64,14 +172,32 @@
     {
       "name": "the same basket with the stamp switched off in the settings: stamp 0, net = TTC 1 428,00",
       "input": {
-        "lines": [{ "qty": 3, "unit_price": 40000, "line_discount": 0, "rate_bps": 1900 }],
-        "opts": { "global_discount": 0, "payment_mode": "cash", "stamp_enabled": false, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 3,
+            "unit_price": 40000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": false,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 120000,
         "discount": 0,
         "subtotal_ht": 120000,
-        "tva_by_rate": [{ "rate_bps": 1900, "base": 120000, "amount": 22800 }],
+        "tva_by_rate": [
+          {
+            "rate_bps": 1900,
+            "base": 120000,
+            "amount": 22800
+          }
+        ],
         "tva": 22800,
         "total_ttc": 142800,
         "stamp": 0,
@@ -82,18 +208,41 @@
       "name": "19 % 200,00 and 9 % 100,00 after a 20,00 line discount, global discount 10,00 splits 6,66 / 3,33 and the leftover centime goes to the larger 19 % group: bases 193,33 and 96,67",
       "input": {
         "lines": [
-          { "qty": 2, "unit_price": 10000, "line_discount": 0, "rate_bps": 1900 },
-          { "qty": 1, "unit_price": 12000, "line_discount": 2000, "rate_bps": 900 }
+          {
+            "qty": 2,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          },
+          {
+            "qty": 1,
+            "unit_price": 12000,
+            "line_discount": 2000,
+            "rate_bps": 900
+          }
         ],
-        "opts": { "global_discount": 1000, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "opts": {
+          "global_discount": 1000,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 30000,
         "discount": 1000,
         "subtotal_ht": 29000,
         "tva_by_rate": [
-          { "rate_bps": 900, "base": 9667, "amount": 870 },
-          { "rate_bps": 1900, "base": 19333, "amount": 3673 }
+          {
+            "rate_bps": 900,
+            "base": 9667,
+            "amount": 870
+          },
+          {
+            "rate_bps": 1900,
+            "base": 19333,
+            "amount": 3673
+          }
         ],
         "tva": 4543,
         "total_ttc": 33543,
@@ -105,18 +254,41 @@
       "name": "the same split with the 9 % group larger: 19 % 100,00 and 9 % 200,00, global discount 10,00 splits 3,33 / 6,66 and the leftover centime goes to the 9 % group, so bases are 96,67 and 193,33",
       "input": {
         "lines": [
-          { "qty": 1, "unit_price": 10000, "line_discount": 0, "rate_bps": 1900 },
-          { "qty": 2, "unit_price": 10000, "line_discount": 0, "rate_bps": 900 }
+          {
+            "qty": 1,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          },
+          {
+            "qty": 2,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 900
+          }
         ],
-        "opts": { "global_discount": 1000, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "opts": {
+          "global_discount": 1000,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 30000,
         "discount": 1000,
         "subtotal_ht": 29000,
         "tva_by_rate": [
-          { "rate_bps": 900, "base": 19333, "amount": 1740 },
-          { "rate_bps": 1900, "base": 9667, "amount": 1837 }
+          {
+            "rate_bps": 900,
+            "base": 19333,
+            "amount": 1740
+          },
+          {
+            "rate_bps": 1900,
+            "base": 9667,
+            "amount": 1837
+          }
         ],
         "tva": 3577,
         "total_ttc": 32577,
@@ -128,18 +300,41 @@
       "name": "the leftover centime moves a printed TVA amount, not only a base: 19 % 1,00 and 9 % 0,99 with a 0,57 discount give shares 0,28 and 0,28, and the leftover centime goes to the larger 19 % group, so its base is 0,71 and its TVA is 0,71 x 19 % = 0,1349 rounded to 0,13; had the centime gone to the 9 % group the 19 % base would be 0,72 and its TVA 0,1368 rounded to 0,14, one centime more on the document",
       "input": {
         "lines": [
-          { "qty": 1, "unit_price": 100, "line_discount": 0, "rate_bps": 1900 },
-          { "qty": 1, "unit_price": 99, "line_discount": 0, "rate_bps": 900 }
+          {
+            "qty": 1,
+            "unit_price": 100,
+            "line_discount": 0,
+            "rate_bps": 1900
+          },
+          {
+            "qty": 1,
+            "unit_price": 99,
+            "line_discount": 0,
+            "rate_bps": 900
+          }
         ],
-        "opts": { "global_discount": 57, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "opts": {
+          "global_discount": 57,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 199,
         "discount": 57,
         "subtotal_ht": 142,
         "tva_by_rate": [
-          { "rate_bps": 900, "base": 71, "amount": 6 },
-          { "rate_bps": 1900, "base": 71, "amount": 13 }
+          {
+            "rate_bps": 900,
+            "base": 71,
+            "amount": 6
+          },
+          {
+            "rate_bps": 1900,
+            "base": 71,
+            "amount": 13
+          }
         ],
         "tva": 19,
         "total_ttc": 161,
@@ -151,18 +346,41 @@
       "name": "two equal groups of 100,00 and a 0,03 discount: each takes 0,01 and the tie on HT is broken by the lower rate, so 9 % takes the leftover centime and its base is 99,98",
       "input": {
         "lines": [
-          { "qty": 1, "unit_price": 10000, "line_discount": 0, "rate_bps": 1900 },
-          { "qty": 1, "unit_price": 10000, "line_discount": 0, "rate_bps": 900 }
+          {
+            "qty": 1,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          },
+          {
+            "qty": 1,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 900
+          }
         ],
-        "opts": { "global_discount": 3, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "opts": {
+          "global_discount": 3,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 20000,
         "discount": 3,
         "subtotal_ht": 19997,
         "tva_by_rate": [
-          { "rate_bps": 900, "base": 9998, "amount": 900 },
-          { "rate_bps": 1900, "base": 9999, "amount": 1900 }
+          {
+            "rate_bps": 900,
+            "base": 9998,
+            "amount": 900
+          },
+          {
+            "rate_bps": 1900,
+            "base": 9999,
+            "amount": 1900
+          }
         ],
         "tva": 2800,
         "total_ttc": 22797,
@@ -174,20 +392,52 @@
       "name": "three groups 19 % 500,00, 9 % 300,00, 0 % 200,00 and a 70,01 discount: shares 35,00 / 21,00 / 14,00 leave one centime for the largest 19 % group, bases 464,99 / 279,00 / 186,00",
       "input": {
         "lines": [
-          { "qty": 5, "unit_price": 10000, "line_discount": 0, "rate_bps": 1900 },
-          { "qty": 3, "unit_price": 10000, "line_discount": 0, "rate_bps": 900 },
-          { "qty": 2, "unit_price": 10000, "line_discount": 0, "rate_bps": 0 }
+          {
+            "qty": 5,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          },
+          {
+            "qty": 3,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 900
+          },
+          {
+            "qty": 2,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 0
+          }
         ],
-        "opts": { "global_discount": 7001, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "opts": {
+          "global_discount": 7001,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 100000,
         "discount": 7001,
         "subtotal_ht": 92999,
         "tva_by_rate": [
-          { "rate_bps": 0, "base": 18600, "amount": 0 },
-          { "rate_bps": 900, "base": 27900, "amount": 2511 },
-          { "rate_bps": 1900, "base": 46499, "amount": 8835 }
+          {
+            "rate_bps": 0,
+            "base": 18600,
+            "amount": 0
+          },
+          {
+            "rate_bps": 900,
+            "base": 27900,
+            "amount": 2511
+          },
+          {
+            "rate_bps": 1900,
+            "base": 46499,
+            "amount": 8835
+          }
         ],
         "tva": 11346,
         "total_ttc": 104345,
@@ -198,14 +448,32 @@
     {
       "name": "a discount equal to the whole basket leaves a zero base and no TVA",
       "input": {
-        "lines": [{ "qty": 1, "unit_price": 10000, "line_discount": 0, "rate_bps": 1900 }],
-        "opts": { "global_discount": 10000, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 1,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 10000,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 10000,
         "discount": 10000,
         "subtotal_ht": 0,
-        "tva_by_rate": [{ "rate_bps": 1900, "base": 0, "amount": 0 }],
+        "tva_by_rate": [
+          {
+            "rate_bps": 1900,
+            "base": 0,
+            "amount": 0
+          }
+        ],
         "tva": 0,
         "total_ttc": 0,
         "stamp": 0,
@@ -215,14 +483,32 @@
     {
       "name": "a card payment of 50 000,00 HT: TVA 9 500,00, TTC 59 500,00 and no stamp, where cash would have owed 595 tranches x 1,50 = 892,50",
       "input": {
-        "lines": [{ "qty": 1, "unit_price": 5000000, "line_discount": 0, "rate_bps": 1900 }],
-        "opts": { "global_discount": 0, "payment_mode": "card", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 1,
+            "unit_price": 5000000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "card",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 5000000,
         "discount": 0,
         "subtotal_ht": 5000000,
-        "tva_by_rate": [{ "rate_bps": 1900, "base": 5000000, "amount": 950000 }],
+        "tva_by_rate": [
+          {
+            "rate_bps": 1900,
+            "base": 5000000,
+            "amount": 950000
+          }
+        ],
         "tva": 950000,
         "total_ttc": 5950000,
         "stamp": 0,
@@ -232,14 +518,32 @@
     {
       "name": "a credit sale of 1 000,00 HT at 19 %: TVA 190,00, TTC 1 190,00, no stamp at issue",
       "input": {
-        "lines": [{ "qty": 1, "unit_price": 100000, "line_discount": 0, "rate_bps": 1900 }],
-        "opts": { "global_discount": 0, "payment_mode": "credit", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 1,
+            "unit_price": 100000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "credit",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "expected": {
         "total_ht": 100000,
         "discount": 0,
         "subtotal_ht": 100000,
-        "tva_by_rate": [{ "rate_bps": 1900, "base": 100000, "amount": 19000 }],
+        "tva_by_rate": [
+          {
+            "rate_bps": 1900,
+            "base": 100000,
+            "amount": 19000
+          }
+        ],
         "tva": 19000,
         "total_ttc": 119000,
         "stamp": 0,
@@ -250,10 +554,25 @@
       "name": "regime_ifu_prints_no_tva: the same basket under the IFU has no TVA row and no TVA, the unit price is the single price, 350,00 total, stamp ceil(35 000 / 10 000) = 4 tranches x 1,00 = 4,00 raised to the 5,00 minimum",
       "input": {
         "lines": [
-          { "qty": 2, "unit_price": 15000, "line_discount": 0, "rate_bps": 1900 },
-          { "qty": 1, "unit_price": 5000, "line_discount": 0, "rate_bps": 900 }
+          {
+            "qty": 2,
+            "unit_price": 15000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          },
+          {
+            "qty": 1,
+            "unit_price": 5000,
+            "line_discount": 0,
+            "rate_bps": 900
+          }
         ],
-        "opts": { "global_discount": 0, "payment_mode": "cash", "stamp_enabled": true, "regime": "ifu" }
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "ifu"
+        }
       },
       "expected": {
         "total_ht": 35000,
@@ -265,54 +584,183 @@
         "stamp": 500,
         "net_to_pay": 35500
       }
+    },
+    {
+      "name": "discount_spread_largest_remainder, near-total: 10,00 at 0 % + 20,00 at 9 % + 30,00 at 19 % with a 59,99 discount leaves 1 centime; floored shares 9,99 / 19,99 / 29,99 leave 2 centimes over, the 30,00 group has room for 1 only, the next largest (20,00) takes the other, bases 0,01 / 0,00 / 0,00, never negative",
+      "input": {
+        "lines": [
+          {
+            "qty": 1,
+            "unit_price": 1000,
+            "line_discount": 0,
+            "rate_bps": 0
+          },
+          {
+            "qty": 1,
+            "unit_price": 2000,
+            "line_discount": 0,
+            "rate_bps": 900
+          },
+          {
+            "qty": 1,
+            "unit_price": 3000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 5999,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
+      },
+      "expected": {
+        "total_ht": 6000,
+        "discount": 5999,
+        "subtotal_ht": 1,
+        "tva_by_rate": [
+          {
+            "rate_bps": 0,
+            "base": 1,
+            "amount": 0
+          },
+          {
+            "rate_bps": 900,
+            "base": 0,
+            "amount": 0
+          },
+          {
+            "rate_bps": 1900,
+            "base": 0,
+            "amount": 0
+          }
+        ],
+        "tva": 0,
+        "total_ttc": 1,
+        "stamp": 0,
+        "net_to_pay": 1
+      }
     }
   ],
   "totals_error_cases": [
     {
       "name": "a negative quantity is refused, never treated as a return",
       "input": {
-        "lines": [{ "qty": -1, "unit_price": 10000, "line_discount": 0, "rate_bps": 1900 }],
-        "opts": { "global_discount": 0, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": -1,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "error": "NegativeQuantity"
     },
     {
       "name": "a negative unit price is refused",
       "input": {
-        "lines": [{ "qty": 1, "unit_price": -10000, "line_discount": 0, "rate_bps": 1900 }],
-        "opts": { "global_discount": 0, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 1,
+            "unit_price": -10000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "error": "NegativeUnitPrice"
     },
     {
       "name": "a line discount above the line is refused, never clamped to the line",
       "input": {
-        "lines": [{ "qty": 1, "unit_price": 10000, "line_discount": 10001, "rate_bps": 1900 }],
-        "opts": { "global_discount": 0, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 1,
+            "unit_price": 10000,
+            "line_discount": 10001,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "error": "LineDiscountAboveLine"
     },
     {
       "name": "a negative line discount is refused, never treated as a surcharge",
       "input": {
-        "lines": [{ "qty": 1, "unit_price": 10000, "line_discount": -1, "rate_bps": 1900 }],
-        "opts": { "global_discount": 0, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 1,
+            "unit_price": 10000,
+            "line_discount": -1,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 0,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "error": "NegativeDiscount"
     },
     {
       "name": "a global discount above total_ht is refused, never clamped to the basket",
       "input": {
-        "lines": [{ "qty": 1, "unit_price": 10000, "line_discount": 0, "rate_bps": 1900 }],
-        "opts": { "global_discount": 10001, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 1,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": 10001,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "error": "GlobalDiscountAboveTotal"
     },
     {
       "name": "a negative global discount is refused",
       "input": {
-        "lines": [{ "qty": 1, "unit_price": 10000, "line_discount": 0, "rate_bps": 1900 }],
-        "opts": { "global_discount": -1, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "lines": [
+          {
+            "qty": 1,
+            "unit_price": 10000,
+            "line_discount": 0,
+            "rate_bps": 1900
+          }
+        ],
+        "opts": {
+          "global_discount": -1,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "error": "NegativeDiscount"
     },
@@ -320,7 +768,12 @@
       "name": "a global discount on an empty basket is above a total_ht of zero",
       "input": {
         "lines": [],
-        "opts": { "global_discount": 1, "payment_mode": "cash", "stamp_enabled": true, "regime": "reel" }
+        "opts": {
+          "global_discount": 1,
+          "payment_mode": "cash",
+          "stamp_enabled": true,
+          "regime": "reel"
+        }
       },
       "error": "GlobalDiscountAboveTotal"
     }

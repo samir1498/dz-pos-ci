@@ -345,13 +345,28 @@ proptest! {
     }
 }
 
-/// Review of PR #14, finding 1: with "floor every share, leftover to the
-/// largest HT group" the largest group's share can exceed its own HT once
-/// the discount leaves fewer centimes than there are groups. The recap then
-/// prints a negative base. Ignored until the spread rule is decided
-/// (features.md, comptable Q7); Hamilton largest-remainder removes it.
+proptest! {
+    /// A discount within a few centimes of the total is where the spread
+    /// runs out of room. No base goes negative, and they still add up.
+    #[test]
+    fn no_base_is_negative_under_a_near_total_discount(lines in basket(), short_by in 0_i64..8, mode in any_mode()) {
+        let total_ht = compute_totals(&lines, &opts(Money::ZERO, mode, true, Regime::Reel)).unwrap().total_ht;
+        prop_assume!(total_ht.as_centimes() >= short_by);
+        let discount = total_ht.checked_sub(Money::centimes(short_by)).unwrap();
+        let t = compute_totals(&lines, &opts(discount, mode, true, Regime::Reel)).unwrap();
+        for row in &t.tva_by_rate {
+            prop_assert!(row.base >= Money::ZERO, "negative base in {:?}", t.tva_by_rate);
+        }
+        prop_assert_eq!(sum_bases(&t), t.subtotal_ht);
+    }
+}
+
+/// Review of PR #14, finding 1: with the leftover centimes all on the
+/// largest HT group, that group's share could exceed its own HT once the
+/// discount left fewer centimes than there are groups, and the recap printed
+/// a negative base. A share is now capped at its group's HT and the excess
+/// rolls to the next largest group.
 #[test]
-#[ignore = "spread rule decision pending: a near-total discount prints a negative TVA base"]
 fn a_tva_base_is_never_negative_even_under_a_near_total_discount() {
     let line = |centimes: i64, bps: u32| Line {
         qty: 1,

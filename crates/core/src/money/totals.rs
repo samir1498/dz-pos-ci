@@ -92,8 +92,9 @@ fn group_by_rate(lines: &[Line]) -> Result<(Vec<(Bps, Money)>, Money), MoneyErro
 
 /// The global discount each group carries: its proportional share rounded
 /// down, with the leftover centimes all going to the group with the largest
-/// HT subtotal, the lower rate winning a tie. Every group HT is at or above
-/// zero here, so truncating division is a floor.
+/// HT subtotal, the lower rate winning a tie, and never past what the group
+/// has left (`discount_spread_largest_remainder`, near-total case). Every
+/// group HT is at or above zero here, so truncating division is a floor.
 fn spread_discount(
     groups: &[(Bps, Money)],
     total_ht: Money,
@@ -118,17 +119,22 @@ fn spread_discount(
         shares[i] = share;
         allocated = allocated.checked_add(share)?;
     }
-    let remainder = discount.checked_sub(allocated)?;
-    if remainder != Money::ZERO {
-        // Groups are sorted by rising rate, so the first strict maximum is
-        // the largest HT at the lowest rate.
-        let mut largest = 0usize;
-        for (i, (_, ht)) in groups.iter().enumerate() {
-            if *ht > groups[largest].1 {
-                largest = i;
-            }
+    let mut remainder = discount.checked_sub(allocated)?;
+    // The leftover centimes go to the largest HT group, but a share never
+    // exceeds its group's HT: when the discount leaves fewer centimes than
+    // there are groups the largest one may have no room, and what it cannot
+    // take rolls to the next largest. Groups are sorted by rising rate and
+    // the sort is stable, so the lower rate wins a tie.
+    let mut by_size: Vec<usize> = (0..groups.len()).collect();
+    by_size.sort_by(|a, b| groups[*b].1.cmp(&groups[*a].1));
+    for i in by_size {
+        if remainder == Money::ZERO {
+            break;
         }
-        shares[largest] = shares[largest].checked_add(remainder)?;
+        let room = groups[i].1.checked_sub(shares[i])?;
+        let taken = if room < remainder { room } else { remainder };
+        shares[i] = shares[i].checked_add(taken)?;
+        remainder = remainder.checked_sub(taken)?;
     }
     Ok(shares)
 }
