@@ -24,7 +24,7 @@ function day(offsetDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-test("saves the store block and reads it back after a reload", async ({ page }) => {
+test("saves the store block, reads it back after a reload, and saves the settings screenshot in Arabic", async ({ page }) => {
   const putBodies: unknown[] = [];
   await page.route("**/settings/store", async (route) => {
     if (route.request().method() === "PUT") putBodies.push(route.request().postDataJSON());

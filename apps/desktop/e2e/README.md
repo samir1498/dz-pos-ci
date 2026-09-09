@@ -7,9 +7,17 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # only the screenshot tests, in fr and ar
+just screenshot                   # writes products.png, products-ar.png, settings-ar.png
 pnpm desktop e2e --project ar     # one language, both spec files
 ```
+
+`just screenshot` runs `-g screenshot` (the two tests with "screenshot" in
+their title) under `--project fr` then `--project ar`. Under fr that
+matches only the products test, which writes `products.png`; the settings
+test also matches the grep in both runs (its title says "... and saves the
+settings screenshot in Arabic") but only writes a file when
+`currentLang()` is `ar`, so the fr run of it does nothing observable.
+Under ar both write: `products-ar.png` and `settings-ar.png`.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
