@@ -52,6 +52,14 @@ pub enum Key {
     /// A facture that was cancelled keeps its number and says so
     /// (features.md, Numbering row).
     FactureCancelled,
+    /// The one word the mark across a cancelled reprint carries. Not the
+    /// heading, which is a sentence read at the top of the page: this is
+    /// read at arm's length, across the sheet.
+    CancelledMark,
+    /// The day the shop cancelled it, and why. Both are stored beside the
+    /// document (T6's `cancelled_at` and `cancel_reason`).
+    CancelledOn,
+    CancelReason,
     Avoir,
     Proforma,
     /// What a proforma says about itself, in a line of its own: it is a
@@ -145,7 +153,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 60] = [
+    pub const ALL: [Key; 63] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -163,6 +171,9 @@ impl Key {
         Key::Currency,
         Key::Facture,
         Key::FactureCancelled,
+        Key::CancelledMark,
+        Key::CancelledOn,
+        Key::CancelReason,
         Key::Avoir,
         Key::Proforma,
         Key::ProformaNotice,
@@ -283,6 +294,21 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::FactureCancelled, Lang::Fr) => "FACTURE ANNULÉE",
         (Key::FactureCancelled, Lang::En) => "CANCELLED INVOICE",
         (Key::FactureCancelled, Lang::Ar) => "فاتورة ملغاة",
+
+        (Key::CancelledMark, Lang::Fr) => "ANNULÉE",
+        (Key::CancelledMark, Lang::En) => "CANCELLED",
+        (Key::CancelledMark, Lang::Ar) => "ملغاة",
+
+        (Key::CancelledOn, Lang::Fr) => "Annulée le",
+        (Key::CancelledOn, Lang::En) => "Cancelled on",
+        (Key::CancelledOn, Lang::Ar) => "ألغيت في",
+
+        // The colon belongs to the wording and not to the template: French
+        // puts a narrow no-break space before it and English puts none, and
+        // a template that punctuated the line would be deciding that.
+        (Key::CancelReason, Lang::Fr) => "Motif\u{202f}:",
+        (Key::CancelReason, Lang::En) => "Reason:",
+        (Key::CancelReason, Lang::Ar) => "السبب:",
 
         (Key::Avoir, Lang::Fr) => "AVOIR",
         (Key::Avoir, Lang::En) => "CREDIT NOTE",

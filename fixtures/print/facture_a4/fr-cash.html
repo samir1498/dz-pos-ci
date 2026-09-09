@@ -6,11 +6,14 @@
 <style>
 @page { size: A4; margin: 12mm }
 body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", Arial, sans-serif }
-.doc { max-inline-size: 186mm; margin: 0 auto }
+.doc { max-inline-size: 186mm; margin: 0 auto; position: relative }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; border-block-end: 2px solid #000; padding-block-end: 3mm }
 .head h1 { font-size: 20px; margin: 0 0 1mm }
 .ident { text-align: end }
 .num { white-space: nowrap }
+.annulee { position: absolute; inset-block-start: 92mm; inset-inline: 0; text-align: center }
+.annulee span { display: inline-block; border: 3px solid #949494; color: #949494; font-size: 44px; font-weight: 700; letter-spacing: .15em; padding: 3mm 10mm; transform: rotate(-24deg) }
+.cancelled { margin-block-start: 1mm; font-weight: 700 }
 .notice { margin: 4mm 0 0; border: 1px solid #000; padding: 2mm 3mm; font-weight: 700 }
 .parties { display: flex; gap: 6mm; margin-block-start: 6mm }
 .party { flex: 1 1 0; border: 1px solid #000; padding: 3mm }

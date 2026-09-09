@@ -17,7 +17,8 @@ pub mod strings;
 pub mod ticket;
 
 pub use facture::{
-    render_facture, render_facture_with, render_facture_with_reference, FactureInput, Paper,
+    render_facture, render_facture_with, render_facture_with_reference, Cancellation, FactureInput,
+    Paper,
 };
 pub use statement::render_statement;
 pub use ticket::render_ticket;

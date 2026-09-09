@@ -2,7 +2,7 @@
 <html lang="fr" dir="ltr">
 <head>
 <meta charset="utf-8">
-<title>PROFORMA PF-000005</title>
+<title>FACTURE ANNULÉE FA-000042</title>
 <style>
 @page { size: A4; margin: 12mm }
 body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", Arial, sans-serif }
@@ -43,17 +43,18 @@ td.n, th.n { text-align: end; white-space: nowrap }
 </head>
 <body>
 <article class="doc">
+<div class="annulee"><span>ANNULÉE</span></div>
 <header class="head">
 <div>
-<h1>PROFORMA</h1>
-<div class="num">PF-000005</div>
+<h1>FACTURE ANNULÉE</h1>
+<div class="num">FA-000042</div>
 <div class="num">09/09/2026</div>
+<div class="cancelled">Annulée le <span class="num">12/09/2026</span> · Motif : Erreur de saisie &#60;quantité&#62; &#38; prix</div>
 </div>
 <div class="ident">
 <div class="who">Mon magasin</div>
 </div>
 </header>
-<p class="notice">Proforma, sans valeur comptable : ce document n’est pas une facture et ne crée aucune dette.</p>
 <section class="parties">
 <div class="party">
 <h2>Vendeur</h2>
@@ -101,11 +102,17 @@ td.n, th.n { text-align: end; white-space: nowrap }
 </tbody>
 </table>
 </div>
-<p class="words">Arrêtée la présente proforma à la somme de <strong class="in-words">neuf-cent-vingt-sept dinars et quatre-vingt-quatre centimes</strong></p>
+<p class="words">Arrêtée la présente facture à la somme de <strong class="in-words">neuf-cent-vingt-sept dinars et quatre-vingt-quatre centimes</strong></p>
 <section class="blocks">
 <div class="block">
 <h2>Mode de paiement</h2>
 <div>Crédit</div>
+</div>
+<div class="block">
+<h2>Solde</h2>
+<div class="row"><span>Ancien solde</span><span><span class="amount amount-old-balance">1 500,00</span><span class="cur">DA</span></span></div>
+<div class="row"><span>Ce document</span><span><span class="amount amount-this-document">927,84</span><span class="cur">DA</span></span></div>
+<div class="row total"><span>Solde total</span><span><span class="amount amount-total-debt">2 427,84</span><span class="cur">DA</span></span></div>
 </div>
 </section>
 <section class="sign">

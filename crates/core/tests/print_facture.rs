@@ -30,7 +30,8 @@ use dzpos_core::money::{
 };
 use dzpos_core::print::strings::{text, Key};
 use dzpos_core::print::{
-    render_facture, render_facture_with, render_facture_with_reference, FactureInput, Paper,
+    render_facture, render_facture_with, render_facture_with_reference, Cancellation, FactureInput,
+    Paper,
 };
 use dzpos_core::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, PartyBlock, PartyKind,
@@ -79,12 +80,19 @@ const OLD_BALANCE: i64 = 150_000;
 /// credit rather than debt.
 const OLD_BALANCE_BEFORE_THE_AVOIR: i64 = 30_000;
 
-/// The day the fixed sale was made, and the later day the avoir is written.
-/// They differ on purpose: a reference line that printed the avoir's own
-/// date instead of the facture's would read the same on 9 September and be
-/// wrong.
+/// The day the fixed sale was made, the later day the avoir is written and
+/// the later day the facture is cancelled. They differ on purpose: a
+/// reference line or a cancellation line that printed the document's own
+/// date instead of the one it was handed would read the same on 9 September
+/// and be wrong.
 const ISSUED: (i32, u32, u32, u32, u32) = (2026, 9, 9, 14, 5);
 const AVOIR_ISSUED: (i32, u32, u32, u32, u32) = (2026, 9, 12, 9, 20);
+const CANCELLED_AT: (i32, u32, u32, u32, u32) = (2026, 9, 12, 10, 30);
+
+/// Typed by the shop into a free-text field and printed on the paper, so it
+/// carries the markup a product name carries and for the same reason: a
+/// reason that could close a tag would break the page it explains.
+const CANCEL_REASON: &str = "Erreur de saisie <quantité> & prix";
 
 /// The same basket, invoiced three ways. The régime decides the TVA half of
 /// the paper, the payment mode decides the money half and the party kind
@@ -108,43 +116,62 @@ enum Case {
     /// The same basket quoted rather than sold: no balance block, a wording
     /// saying the page settles nothing, and the words kept.
     Proforma,
+    /// The credit facture reprinted after it was cancelled: the same money
+    /// to the centime, under the cancelled heading and behind the mark.
+    Cancelled,
 }
 
 impl Case {
-    const ALL: [Case; 5] = [
+    const ALL: [Case; 6] = [
         Case::Credit,
         Case::Cash,
         Case::Ifu,
         Case::Avoir,
         Case::Proforma,
+        Case::Cancelled,
     ];
 
     const fn regime(self) -> Regime {
         match self {
-            Case::Credit | Case::Cash | Case::Avoir | Case::Proforma => Regime::Reel,
+            Case::Credit | Case::Cash | Case::Avoir | Case::Proforma | Case::Cancelled => {
+                Regime::Reel
+            }
             Case::Ifu => Regime::Ifu,
         }
     }
 
     const fn payment_mode(self) -> PaymentMode {
         match self {
-            Case::Credit | Case::Ifu | Case::Avoir | Case::Proforma => PaymentMode::Credit,
+            Case::Credit | Case::Ifu | Case::Avoir | Case::Proforma | Case::Cancelled => {
+                PaymentMode::Credit
+            }
             Case::Cash => PaymentMode::Cash,
         }
     }
 
     const fn party_kind(self) -> PartyKind {
         match self {
-            Case::Credit | Case::Ifu | Case::Avoir | Case::Proforma => PartyKind::Company,
+            Case::Credit | Case::Ifu | Case::Avoir | Case::Proforma | Case::Cancelled => {
+                PartyKind::Company
+            }
             Case::Cash => PartyKind::Consumer,
         }
     }
 
     const fn kind(self) -> DocumentKind {
         match self {
-            Case::Credit | Case::Cash | Case::Ifu => DocumentKind::Facture,
+            Case::Credit | Case::Cash | Case::Ifu | Case::Cancelled => DocumentKind::Facture,
             Case::Avoir => DocumentKind::Avoir,
             Case::Proforma => DocumentKind::Proforma,
+        }
+    }
+
+    /// A cancelled facture keeps the number it burned (features.md,
+    /// Numbering row); every other face is a document in its own state.
+    const fn status(self) -> DocumentStatus {
+        match self {
+            Case::Cancelled => DocumentStatus::Cancelled,
+            _ => DocumentStatus::Issued,
         }
     }
 
@@ -193,6 +220,7 @@ impl Case {
             Case::Ifu => "-ifu",
             Case::Avoir => "-avoir",
             Case::Proforma => "-proforma",
+            Case::Cancelled => "-annulee",
         }
     }
 }
@@ -360,7 +388,7 @@ fn fixed_facture(case: Case) -> Document {
         // the ticket's.
         tendered: None,
         change: None,
-        status: DocumentStatus::Issued,
+        status: case.status(),
         lines,
         created_at: issued_at,
     }
@@ -375,13 +403,15 @@ fn at(when: (i32, u32, u32, u32, u32)) -> chrono::NaiveDateTime {
         .unwrap()
 }
 
-/// The document a case renders and what the page needs beside it: the
-/// facture an avoir names. That one lives outside the avoir's own row, which
-/// carries an id where the paper carries a number and a day, so the fixture
-/// hands it over the way a caller will.
+/// The document a case renders and everything the page needs beside it: the
+/// facture an avoir names, and the day and the reason a cancelled facture
+/// was cancelled. Neither is on the document's own row (the reference is an
+/// id there and a number on paper; the cancellation columns are T6's), so
+/// the fixture hands them over the way a caller will.
 struct Fixture {
     doc: Document,
     referenced: Option<Document>,
+    cancellation: Option<(chrono::NaiveDateTime, String)>,
 }
 
 impl Fixture {
@@ -389,12 +419,18 @@ impl Fixture {
         Fixture {
             doc: fixed_facture(case),
             referenced: matches!(case, Case::Avoir).then(|| fixed_facture(Case::Credit)),
+            cancellation: matches!(case, Case::Cancelled)
+                .then(|| (at(CANCELLED_AT), CANCEL_REASON.to_owned())),
         }
     }
 
     fn input(&self) -> FactureInput<'_> {
         FactureInput {
             referenced: self.referenced.as_ref(),
+            cancellation: self
+                .cancellation
+                .as_ref()
+                .map(|(at, reason)| Cancellation { at: *at, reason }),
         }
     }
 
@@ -529,6 +565,21 @@ fn reference_line(html: &str) -> String {
     let end = rest
         .find("</div>")
         .expect("the reference line never closes");
+    rest[..end].to_owned()
+}
+
+/// Everything from the lines table to the end of the words line: the whole
+/// of the money on this page in one string, so two renders can be compared
+/// for it without the comparison naming each amount and forgetting one.
+fn money_block(html: &str) -> String {
+    let opening = "<div class=\"lines\">";
+    let rest = html
+        .split_once(opening)
+        .unwrap_or_else(|| panic!("the page carries no lines table"))
+        .1;
+    let end = rest
+        .find("</p>")
+        .expect("the words line never closes the money block");
     rest[..end].to_owned()
 }
 
@@ -757,6 +808,11 @@ fn the_avoir_is_its_golden_in_every_language() {
 #[test]
 fn the_proforma_is_its_golden_in_every_language() {
     each_language_of(Case::Proforma);
+}
+
+#[test]
+fn the_cancelled_facture_is_its_golden_in_every_language() {
+    each_language_of(Case::Cancelled);
 }
 
 /// A5 is the same facture on a smaller sheet. One line of the page changes,
@@ -1478,4 +1534,106 @@ fn a_proforma_closes_itself_in_its_own_words() {
             "{lang:?}"
         );
     }
+}
+
+/// The reprint of a cancelled facture is the same document. It keeps its
+/// number and its money to the centime (features.md, Numbering row) and says
+/// on its face that it was cancelled, so what separates it from the live
+/// page is the heading, the mark and the line naming the day and the reason,
+/// and nothing else. A reprint that also moved an amount would be a second
+/// version of a document the shop already handed over.
+#[test]
+fn a_cancelled_reprint_differs_from_the_live_facture_in_the_cancellation_only() {
+    let cancelled = Fixture::of(Case::Cancelled);
+    let live = Fixture::of(Case::Credit);
+    for lang in Lang::ALL {
+        let after = cancelled.render(lang, Paper::A4);
+        let before = live.render(lang, Paper::A4);
+
+        // Everything from the lines table to the words line, which is the
+        // whole of the money on this page, byte for byte.
+        assert_eq!(
+            money_block(&after),
+            money_block(&before),
+            "{lang:?}: the cancelled reprint moved an amount"
+        );
+
+        let after_lines: Vec<&str> = after.lines().collect();
+        let before_lines: Vec<&str> = before.lines().collect();
+        let differing: Vec<&str> = after_lines
+            .iter()
+            .filter(|line| !before_lines.contains(line))
+            .copied()
+            .collect();
+        assert!(
+            !differing.is_empty(),
+            "{lang:?}: nothing says it was cancelled"
+        );
+        for line in &differing {
+            assert!(
+                line.contains("class=\"annulee\"")
+                    || line.contains("class=\"cancelled\"")
+                    || line.contains(text(Key::FactureCancelled, lang)),
+                "{lang:?}: {line} is neither the heading nor the cancellation"
+            );
+        }
+        // The mark, the day, the reason, and the number the document keeps.
+        assert!(after.contains(text(Key::CancelledMark, lang)), "{lang:?}");
+        assert!(after.contains(text(Key::CancelledOn, lang)), "{lang:?}");
+        assert!(after.contains("12/09/2026"), "{lang:?}");
+        assert!(after.contains(text(Key::CancelReason, lang)), "{lang:?}");
+        assert!(after.contains("FA-000042"), "{lang:?}");
+        // A reason typed by the shop is printed and never run, like a
+        // product name.
+        assert!(
+            after.contains("Erreur de saisie &#60;quantité&#62; &#38; prix"),
+            "{lang:?} did not escape the reason"
+        );
+        assert!(!after.contains("<quantité>"), "{lang:?}");
+
+        // The live facture carries none of it, so the mark is the status
+        // doing it and not the template printing it for everyone.
+        assert!(!before.contains(text(Key::CancelledMark, lang)), "{lang:?}");
+        assert!(!before.contains(text(Key::CancelledOn, lang)), "{lang:?}");
+    }
+}
+
+/// The mark follows the document's status and the line under the number
+/// follows what the caller read with it. A cancelled facture printed by a
+/// caller that has no cancellation columns to hand still says it is
+/// cancelled: the alternative is a void document that looks live.
+#[test]
+fn a_cancelled_facture_carries_the_mark_even_with_no_cancellation_read_with_it() {
+    let doc = fixed_facture(Case::Cancelled);
+    for lang in Lang::ALL {
+        let html = render_facture(&doc, lang, Paper::A4).unwrap();
+        assert!(html.contains(text(Key::CancelledMark, lang)), "{lang:?}");
+        assert!(html.contains(text(Key::FactureCancelled, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::CancelledOn, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::CancelReason, lang)), "{lang:?}");
+    }
+}
+
+/// A day and a reason belong to a document the shop cancelled. Printing them
+/// over a live facture would hand a customer a page saying it is void while
+/// the ledger still counts it, so the caller that hands them over for a live
+/// document is refused rather than obeyed.
+#[test]
+fn a_cancellation_printed_over_a_live_facture_is_refused() {
+    let live = fixed_facture(Case::Credit);
+    let input = FactureInput {
+        referenced: None,
+        cancellation: Some(Cancellation {
+            at: at(CANCELLED_AT),
+            reason: CANCEL_REASON,
+        }),
+    };
+    for lang in Lang::ALL {
+        let err = render_facture_with(&live, &input, lang, Paper::A4).unwrap_err();
+        assert_eq!(err.code(), "print", "{lang:?}: {err:?}");
+    }
+    // The same input over the same document once it is cancelled is the page
+    // this test is about, and it renders.
+    let cancelled = fixed_facture(Case::Cancelled);
+    assert!(render_facture_with(&cancelled, &input, Lang::Fr, Paper::A4).is_ok());
 }

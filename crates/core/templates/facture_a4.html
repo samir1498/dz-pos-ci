@@ -20,11 +20,14 @@ réel facture's rate column and nowhere else. -#}
 <style>
 @page { size: {{ paper_size }}; margin: 12mm }
 body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", Arial, sans-serif }
-.doc { max-inline-size: 186mm; margin: 0 auto }
+.doc { max-inline-size: 186mm; margin: 0 auto; position: relative }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; border-block-end: 2px solid #000; padding-block-end: 3mm }
 .head h1 { font-size: 20px; margin: 0 0 1mm }
 .ident { text-align: end }
 .num { white-space: nowrap }
+.annulee { position: absolute; inset-block-start: 92mm; inset-inline: 0; text-align: center }
+.annulee span { display: inline-block; border: 3px solid #949494; color: #949494; font-size: 44px; font-weight: 700; letter-spacing: .15em; padding: 3mm 10mm; transform: rotate(-24deg) }
+.cancelled { margin-block-start: 1mm; font-weight: 700 }
 .notice { margin: 4mm 0 0; border: 1px solid #000; padding: 2mm 3mm; font-weight: 700 }
 .parties { display: flex; gap: 6mm; margin-block-start: 6mm }
 .party { flex: 1 1 0; border: 1px solid #000; padding: 3mm }
@@ -54,11 +57,21 @@ td.n, th.n { text-align: end; white-space: nowrap }
 </head>
 <body>
 <article class="doc">
+{#- The mark a cancelled reprint carries across its face. Drawn with a
+border and a colour and never a background: a print driver may be told to
+drop backgrounds, and a cancelled facture that printed as a live one is the
+one failure this mark exists to prevent. #}
+{%- if let Some(mark) = cancelled_mark %}
+<div class="annulee"><span>{{ mark }}</span></div>
+{%- endif %}
 <header class="head">
 <div>
 <h1>{{ title }}</h1>
 <div class="num">{{ number }}</div>
 <div class="num">{{ issued_at }}</div>
+{%- if let Some(cancellation) = cancellation %}
+<div class="cancelled">{{ cancellation.on_label }} <span class="num">{{ cancellation.at }}</span> · {{ cancellation.reason_label }} {{ cancellation.reason }}</div>
+{%- endif %}
 {%- if let Some(reference) = reference %}
 <div class="reference">{{ reference.label }} <span class="num">{{ reference.number }}</span> {{ reference.on_label }} <span class="num">{{ reference.issued_at }}</span></div>
 {%- endif %}

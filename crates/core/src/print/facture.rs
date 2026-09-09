@@ -17,6 +17,7 @@
 //! the parties, the lines, the totals and the signature block.
 
 use askama::Template;
+use chrono::NaiveDateTime;
 
 use crate::error::CoreError;
 use crate::lang::Lang;
@@ -58,15 +59,30 @@ impl Paper {
     }
 }
 
+/// The day the shop cancelled a facture and why, as the caller read them
+/// beside the document. They are not on `Document`: T6 adds the
+/// `cancelled_at` and `cancel_reason` columns, and a caller that has them
+/// hands them over here. Without them a cancelled facture still prints as
+/// cancelled, because the status is on the row; it just cannot say when or
+/// why.
+#[derive(Debug, Clone, Copy)]
+pub struct Cancellation<'a> {
+    pub at: NaiveDateTime,
+    pub reason: &'a str,
+}
+
 /// What the page needs that the document's own row does not carry.
 ///
-/// A stored row holds ids; paper holds sentences. The facture an avoir names
-/// is an id on the row and a number and a day on the paper, so the caller
-/// that can read that document hands it over. Everything else on the page
-/// comes off the document, which stays the only source of an amount.
+/// Two things, and both for the same reason: a stored row holds ids and
+/// columns another task owns, and paper holds sentences. The facture an
+/// avoir names is an id on the row and a number and a day on the paper, so
+/// the caller that can read that document hands it over. Everything else on
+/// the page comes off the document, which stays the only source of an
+/// amount.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FactureInput<'a> {
     pub referenced: Option<&'a Document>,
+    pub cancellation: Option<Cancellation<'a>>,
 }
 
 /// One identifier row of a party block: `RC`, `NIF`, `NIS`, `AI`. The
@@ -119,6 +135,17 @@ struct ReferenceView {
     issued_at: String,
 }
 
+/// The line under the number of a cancelled facture: the day the shop
+/// cancelled it and the reason typed with it. The reason is free text a
+/// person wrote, so it reaches the template as a value and is escaped there
+/// like a product name.
+struct CancellationView {
+    on_label: &'static str,
+    at: String,
+    reason_label: &'static str,
+    reason: String,
+}
+
 /// The three amounts of the debt as they stood when the document was
 /// issued. Printed together or not at all: an old balance without the
 /// closing one is a figure the reader cannot check.
@@ -143,6 +170,14 @@ struct FactureView {
     number: String,
     issued_at: String,
     reference: Option<ReferenceView>,
+    /// The word across the page of a cancelled reprint. It follows the
+    /// document's status, which is on the row, so a caller with no
+    /// cancellation columns to hand still prints a void document as void.
+    cancelled_mark: Option<&'static str>,
+    /// The day and the reason under the number. These follow what the caller
+    /// read beside the document, which is why they are a second option and
+    /// not a field of the first.
+    cancellation: Option<CancellationView>,
     /// What a proforma says about itself. Every other face of this template
     /// is a document that counts, and says nothing.
     notice: Option<&'static str>,
@@ -202,7 +237,15 @@ pub fn render_facture_with_reference(
     lang: Lang,
     paper: Paper,
 ) -> Result<String, CoreError> {
-    render_facture_with(doc, &FactureInput { referenced }, lang, paper)
+    render_facture_with(
+        doc,
+        &FactureInput {
+            referenced,
+            cancellation: None,
+        },
+        lang,
+        paper,
+    )
 }
 
 /// The same page, given everything the document's row does not carry. Every
@@ -275,6 +318,14 @@ pub fn render_facture_with(
             "a proforma carries a debt and has no printable form",
         ));
     }
+    // The day and the reason belong to a document the shop cancelled.
+    // Printing them over a live facture would hand a customer a page saying
+    // it is void while the ledger still counts it.
+    if input.cancellation.is_some() && doc.status != DocumentStatus::Cancelled {
+        return Err(CoreError::render(
+            "a document that was not cancelled has no cancellation to print",
+        ));
+    }
     // Only an avoir is written against another document. Printing "avoir sur
     // facture" over a facture or a proforma would label the page as
     // something it is not, and there is no other wording for a reference.
@@ -284,7 +335,7 @@ pub fn render_facture_with(
         ));
     }
     let reference = reference(doc, input.referenced, lang)?;
-    view(doc, buyer, reference, lang, paper)?
+    view(doc, buyer, reference, input.cancellation, lang, paper)?
         .render()
         .map_err(CoreError::from)
 }
@@ -334,6 +385,7 @@ fn view(
     doc: &Document,
     buyer: &PartyBlock,
     reference: Option<ReferenceView>,
+    cancellation: Option<Cancellation<'_>>,
     lang: Lang,
     paper: Paper,
 ) -> Result<FactureView, CoreError> {
@@ -361,6 +413,14 @@ fn view(
         number: number(doc),
         issued_at: doc.issued_at.format(DATE_FORMAT).to_string(),
         reference,
+        cancelled_mark: (doc.status == DocumentStatus::Cancelled)
+            .then(|| text(Key::CancelledMark, lang)),
+        cancellation: cancellation.map(|c| CancellationView {
+            on_label: text(Key::CancelledOn, lang),
+            at: c.at.format(DATE_FORMAT).to_string(),
+            reason_label: text(Key::CancelReason, lang),
+            reason: c.reason.to_owned(),
+        }),
         notice: (doc.kind == DocumentKind::Proforma).then(|| text(Key::ProformaNotice, lang)),
         seller: seller_view(&doc.seller, lang),
         buyer: buyer_view(buyer, lang),
