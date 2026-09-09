@@ -21,12 +21,19 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use crate::error::ApiError;
 pub use crate::token::LaunchToken;
 
+/// The owner the first migration seeds. Every document, ledger row and audit
+/// entry carries a user from the first sale (features.md §5).
+/// TODO(M4): the user comes from the request identity, not from here.
+pub const SEEDED_OWNER_USER_ID: i32 = 1;
+
 /// The connection and the one shop this server answers for. A caller never
 /// chooses the shop (rule 3); the process is started with it.
 #[derive(Clone)]
 pub struct AppState {
     conn: Arc<Mutex<Conn>>,
     pub shop_id: i32,
+    /// Who the writes are recorded under until M4 brings login.
+    pub user_id: i32,
 }
 
 impl AppState {
@@ -35,6 +42,7 @@ impl AppState {
         Ok(AppState {
             conn: Arc::new(Mutex::new(conn)),
             shop_id,
+            user_id: SEEDED_OWNER_USER_ID,
         })
     }
 
@@ -134,6 +142,9 @@ pub fn router_with_origin(
             "/products/{id}",
             get(routes::products::get_one).put(routes::products::update),
         )
+        .route("/sales", get(routes::sales::list))
+        .route("/sales", post(routes::sales::create))
+        .route("/sales/{id}", get(routes::sales::get_one))
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))

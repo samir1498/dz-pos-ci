@@ -10,12 +10,14 @@ diesel_migrations = "2.2"
 libsqlite3-sys = { version = "0.37", features = ["bundled"] }
 chrono = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
+# The audit log stores the row before and after as JSON text (features.md §5).
+serde_json = { workspace = true }
 thiserror = "2"
 
 [dev-dependencies]
 tempfile = "3"
-# Fixtures under fixtures/money are JSON; proptest for the money invariants.
-serde_json = { workspace = true }
+# proptest for the money invariants; the fixtures are read with serde_json,
+# which is a normal dependency above.
 proptest = "1.11"
 
 [lints]

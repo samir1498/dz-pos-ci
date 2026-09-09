@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { ApiError, createClient, isApiErrorBody } from "./client";
+import { ApiError, createClient, isApiErrorBody, isSale } from "./client";
 import type { NewProductDto } from "./generated/NewProductDto";
+import type { NewSaleDto } from "./generated/NewSaleDto";
+import type { SaleDto } from "./generated/SaleDto";
 import type { ProductDto } from "./generated/ProductDto";
 import type { SettingsDto } from "./generated/SettingsDto";
 import type { StoreDto } from "./generated/StoreDto";
@@ -300,5 +302,138 @@ describe("isApiErrorBody", () => {
     expect(isApiErrorBody({ code: "x", message: "y" })).toBe(false);
     expect(isApiErrorBody(null)).toBe(false);
     expect(isApiErrorBody("nope")).toBe(false);
+  });
+});
+
+const sale: SaleDto = {
+  id: 1,
+  shop_id: 1,
+  kind: "ticket",
+  series: "doc_ticket",
+  number: 1,
+  issued_at: "2026-09-09 10:00:00",
+  user_id: 1,
+  regime: "reel",
+  payment_mode: "cash",
+  seller: {
+    name: "Mon magasin",
+    rc: null,
+    nif: null,
+    nis: null,
+    ai: null,
+    address: null,
+    phone: null,
+  },
+  customer_id: null,
+  totals: {
+    total_ht_centimes: 22_000,
+    discount_centimes: 0,
+    subtotal_ht_centimes: 22_000,
+    tva_centimes: 4_180,
+    total_ttc_centimes: 26_180,
+    stamp_centimes: 0,
+    net_to_pay_centimes: 26_180,
+  },
+  tva: [{ rate_bps: 1900, base_centimes: 22_000, amount_centimes: 4_180 }],
+  tendered_centimes: 30_000,
+  change_centimes: 3_820,
+  status: "issued",
+  lines: [
+    {
+      id: 1,
+      position: 0,
+      product_id: 1,
+      name: "Sucre",
+      barcode: "2000010000017",
+      qty_milli: 2_000,
+      unit_price_centimes: 11_000,
+      line_discount_centimes: 0,
+      rate_bps: 1900,
+      line_total_centimes: 22_000,
+    },
+  ],
+};
+
+describe("sales", () => {
+  test("ringing up a basket posts it and narrows the answer", async () => {
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(sale), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const basket: NewSaleDto = {
+      lines: [
+        {
+          product_id: 1,
+          qty_milli: 2_000,
+          unit_price_centimes: null,
+          line_discount_centimes: 0,
+        },
+      ],
+      global_discount_centimes: 0,
+      payment_mode: "cash",
+      tendered_centimes: 30_000,
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.createSale(basket)).resolves.toEqual(sale);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/sales");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(basket);
+  });
+
+  test("a sale is read back by id and the list is one call", async () => {
+    const fetchStub: typeof fetch = async (input) =>
+      new Response(JSON.stringify(String(input).endsWith("/sales") ? [sale] : sale), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.getSale(1)).resolves.toEqual(sale);
+    await expect(api.listSales()).resolves.toEqual([sale]);
+  });
+
+  test("a total the server could not send exactly is refused, never shown", async () => {
+    // Centimes are safe below 2^53. A number past it came out of JSON.parse
+    // already rounded, so printing it would print a wrong amount.
+    const rounded = {
+      ...sale,
+      totals: { ...sale.totals, net_to_pay_centimes: Number.MAX_SAFE_INTEGER + 2 },
+    };
+    const fetchStub: typeof fetch = async () =>
+      new Response(JSON.stringify(rounded), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.getSale(1)).rejects.toBeInstanceOf(ApiError);
+  });
+
+  test("isSale refuses a kind and a payment mode the API does not use", () => {
+    expect(isSale(sale)).toBe(true);
+    expect(isSale({ ...sale, kind: "recu" })).toBe(false);
+    expect(isSale({ ...sale, payment_mode: "bitcoin" })).toBe(false);
+    expect(isSale({ ...sale, status: "draft" })).toBe(false);
+    expect(isSale({ ...sale, lines: [{ ...sale.lines[0], qty_milli: 1.5 }] })).toBe(false);
+    expect(isSale(null)).toBe(false);
+  });
+
+  test("a refused sale surfaces the code the UI translates", async () => {
+    const fetchStub: typeof fetch = async () =>
+      new Response(JSON.stringify({ error: { code: "validation", message: "short" } }), {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      });
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(
+      api.createSale({
+        lines: [],
+        global_discount_centimes: 0,
+        payment_mode: "cash",
+        tendered_centimes: null,
+      }),
+    ).rejects.toMatchObject({ code: "validation", status: 422 });
   });
 });

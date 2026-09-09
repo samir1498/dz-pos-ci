@@ -1,5 +1,5 @@
 import { t, lang, setLang, applyDir, LANGS, LANG_LABEL } from "../shared/i18n.js";
-import { computeTotals, fmt } from "../shared/money.js";
+import { MILLI_PER_UNIT, computeTotals, fmt, lineTotal, qtyLabel } from "../shared/money.js";
 import { STORE, PRODUCTS, CATEGORIES, CUSTOMERS, LEDGER, nextNumber } from "../shared/data.js";
 import { renderTicket } from "../shared/doc.js";
 
@@ -10,7 +10,7 @@ const esc = (s) =>
 const state = {
   paired: false,
   products: PRODUCTS.map((p) => ({ ...p })),
-  cart: [], // { product, qty, unitPrice, lineDiscount, rateBps }
+  cart: [], // { product, qtyMilli, unitPrice, lineDiscount, rateBps }
   customerId: null,
   globalDiscount: 0,
   paymentMode: "cash",
@@ -74,13 +74,20 @@ function totals(mode = state.paymentMode) {
 }
 
 function cartCount() {
-  return state.cart.reduce((n, l) => n + l.qty, 0);
+  return state.cart.reduce((n, l) => n + l.qtyMilli / MILLI_PER_UNIT, 0);
 }
 
 function addToCart(p) {
   const line = state.cart.find((l) => l.product.id === p.id);
-  if (line) line.qty += 1;
-  else state.cart.push({ product: p, qty: 1, unitPrice: p.price, lineDiscount: 0, rateBps: p.tvaBps });
+  if (line) line.qtyMilli += MILLI_PER_UNIT;
+  else
+    state.cart.push({
+      product: p,
+      qtyMilli: MILLI_PER_UNIT,
+      unitPrice: p.price,
+      lineDiscount: 0,
+      rateBps: p.tvaBps,
+    });
 }
 
 function toast(msg) {
@@ -208,11 +215,11 @@ function cartScreen() {
             .map(
               (l) => `<div class="cartline">
               <div class="main"><div class="title">${esc(pname(l.product))}</div>
-                <div class="tiny num">${l.qty} × ${fmt(l.unitPrice, lang())} · ${t("tva")} ${l.rateBps / 100}%</div>
-                <div class="price num">${fmt(l.qty * l.unitPrice - l.lineDiscount, lang())}</div></div>
+                <div class="tiny num">${qtyLabel(l.qtyMilli)} × ${fmt(l.unitPrice, lang())} · ${t("tva")} ${l.rateBps / 100}%</div>
+                <div class="price num">${fmt(lineTotal(l.unitPrice, l.qtyMilli) - l.lineDiscount, lang())}</div></div>
               <div class="stepper">
                 <button type="button" data-dec="${l.product.id}" aria-label="−">−</button>
-                <span class="q num">${l.qty}</span>
+                <span class="q num">${qtyLabel(l.qtyMilli)}</span>
                 <button type="button" data-inc="${l.product.id}" aria-label="+">+</button>
                 <button type="button" class="rm" data-rm="${l.product.id}" aria-label="×">×</button>
               </div>
@@ -426,9 +433,9 @@ screenEl.addEventListener("click", (e) => {
     const id = Number(d.inc || d.dec || d.rm);
     const i = state.cart.findIndex((l) => l.product.id === id);
     if (i < 0) return;
-    if (d.inc) state.cart[i].qty += 1;
-    else if (d.dec) state.cart[i].qty -= 1;
-    if (d.rm || state.cart[i].qty <= 0) state.cart.splice(i, 1);
+    if (d.inc) state.cart[i].qtyMilli += MILLI_PER_UNIT;
+    else if (d.dec) state.cart[i].qtyMilli -= MILLI_PER_UNIT;
+    if (d.rm || state.cart[i].qtyMilli <= 0) state.cart.splice(i, 1);
     return render();
   }
   if (d.mode) {
@@ -486,7 +493,7 @@ screenEl.addEventListener("click", (e) => {
     };
     for (const l of state.cart) {
       const p = state.products.find((x) => x.id === l.product.id);
-      if (p) p.qty = Math.max(0, p.qty - l.qty);
+      if (p) p.qty = Math.max(0, p.qty - l.qtyMilli / MILLI_PER_UNIT);
     }
     state.lastSale = sale;
     state.cart = [];

@@ -1,0 +1,26 @@
+//! The only place the audit log touches diesel. Scoped by `shop_id` like
+//! every other query (rule 3).
+
+use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
+
+use crate::error::CoreError;
+use crate::models::audit::{AuditEntry, AuditRow, AuditRowWrite};
+use crate::schema::audit_log;
+
+pub fn insert(conn: &mut SqliteConnection, write: &AuditRowWrite) -> Result<(), CoreError> {
+    diesel::insert_into(audit_log::table)
+        .values(write)
+        .execute(conn)?;
+    Ok(())
+}
+
+/// Oldest first: the log is read as a story, not as a feed.
+pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<AuditEntry>, CoreError> {
+    let rows: Vec<AuditRow> = audit_log::table
+        .filter(audit_log::shop_id.eq(shop_id))
+        .order(audit_log::id.asc())
+        .select(AuditRow::as_select())
+        .load(conn)?;
+    Ok(rows.into_iter().map(AuditEntry::from).collect())
+}

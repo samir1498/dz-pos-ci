@@ -143,6 +143,89 @@ fn tva_rounding_once_per_rate_totals_error_cases() {
 }
 
 #[derive(Deserialize)]
+struct LineCase {
+    name: String,
+    unit_price: i64,
+    qty_milli: i64,
+    expected: i64,
+}
+
+#[derive(Deserialize)]
+struct LineOverflowCase {
+    name: String,
+    unit_price: i64,
+    qty_milli: i64,
+}
+
+#[derive(Deserialize)]
+struct FractionalQtyFixture {
+    name: String,
+    line_cases: Vec<LineCase>,
+    line_overflow_cases: Vec<LineOverflowCase>,
+    totals_cases: Vec<TotalsCase>,
+}
+
+/// A quantity is thousandths of the unit, so a kilo product never needs a
+/// float. The line gross is rounded once, half away from zero, before the
+/// line discount comes off.
+#[test]
+fn line_total_fractional_qty_cases() {
+    let f: FractionalQtyFixture = serde_json::from_str(&fixture("line_total_fractional_qty"))
+        .unwrap_or_else(|e| panic!("line_total_fractional_qty: {e}"));
+    assert_eq!(f.name, "line_total_fractional_qty");
+    assert!(f.line_cases.len() >= 10, "fixture lost its line cases");
+    for c in &f.line_cases {
+        let got = Money::centimes(c.unit_price)
+            .checked_mul_milli(c.qty_milli)
+            .unwrap_or_else(|e| panic!("{}: {e}", c.name));
+        assert_eq!(
+            got,
+            Money::centimes(c.expected),
+            "{}: {} × {} milli",
+            c.name,
+            c.unit_price,
+            c.qty_milli
+        );
+    }
+    for c in &f.line_overflow_cases {
+        let got = Money::centimes(c.unit_price).checked_mul_milli(c.qty_milli);
+        assert_eq!(got, Err(MoneyError::Overflow), "{}", c.name);
+    }
+}
+
+/// Rounding once per line is what the totals cases here pin: the two-line
+/// case sums to a centime more than rounding the raw product sum would.
+#[test]
+fn line_total_fractional_qty_totals_cases() {
+    let f: FractionalQtyFixture =
+        serde_json::from_str(&fixture("line_total_fractional_qty")).unwrap();
+    assert!(!f.totals_cases.is_empty(), "fixture lost its totals cases");
+    for c in &f.totals_cases {
+        let got = compute_totals(&c.input.lines, &c.input.opts)
+            .unwrap_or_else(|e| panic!("{}: {e}", c.name));
+        assert_eq!(got.total_ht, c.expected.total_ht, "total_ht: {}", c.name);
+        assert_eq!(
+            got.subtotal_ht, c.expected.subtotal_ht,
+            "subtotal_ht: {}",
+            c.name
+        );
+        assert_eq!(
+            got.tva_by_rate, c.expected.tva_by_rate,
+            "tva_by_rate: {}",
+            c.name
+        );
+        assert_eq!(got.tva, c.expected.tva, "tva: {}", c.name);
+        assert_eq!(got.total_ttc, c.expected.total_ttc, "total_ttc: {}", c.name);
+        assert_eq!(got.stamp, c.expected.stamp, "stamp: {}", c.name);
+        assert_eq!(
+            got.net_to_pay, c.expected.net_to_pay,
+            "net_to_pay: {}",
+            c.name
+        );
+    }
+}
+
+#[derive(Deserialize)]
 struct StampInput {
     total_ttc: i64,
     mode: PaymentMode,

@@ -11,9 +11,11 @@
 use chrono::NaiveDate;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::category::Category;
+use dzpos_core::models::document::{Document, DocumentKind, DocumentLine, DocumentStatus};
 use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::models::shop::{Shop, StoreBlock};
-use dzpos_core::money::{Bps, Money, Regime};
+use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
+use dzpos_core::services::sales::{NewSale, NewSaleLine};
 use dzpos_core::services::settings::DatedRegime;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -324,7 +326,287 @@ pub struct RegimeChangeDto {
     pub valid_from: String,
 }
 
+/// How the till pays (features.md §3). cheque and transfer are parked, so
+/// the wire does not offer them even though the column admits them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "PaymentModeDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum PaymentModeDto {
+    Cash,
+    Card,
+    Credit,
+}
+
+impl From<PaymentMode> for PaymentModeDto {
+    fn from(m: PaymentMode) -> Self {
+        match m {
+            PaymentMode::Cash => PaymentModeDto::Cash,
+            PaymentMode::Card => PaymentModeDto::Card,
+            PaymentMode::Credit => PaymentModeDto::Credit,
+        }
+    }
+}
+
+impl From<PaymentModeDto> for PaymentMode {
+    fn from(m: PaymentModeDto) -> Self {
+        match m {
+            PaymentModeDto::Cash => PaymentMode::Cash,
+            PaymentModeDto::Card => PaymentMode::Card,
+            PaymentModeDto::Credit => PaymentMode::Credit,
+        }
+    }
+}
+
+/// The document kinds of features.md §3. M1 issues `ticket`; the union is
+/// whole so a later milestone adds a screen, not a type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "DocumentKindDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentKindDto {
+    Ticket,
+    Facture,
+    Proforma,
+    BonDeLivraison,
+    Avoir,
+    BonDeReception,
+}
+
+impl From<DocumentKind> for DocumentKindDto {
+    fn from(k: DocumentKind) -> Self {
+        match k {
+            DocumentKind::Ticket => DocumentKindDto::Ticket,
+            DocumentKind::Facture => DocumentKindDto::Facture,
+            DocumentKind::Proforma => DocumentKindDto::Proforma,
+            DocumentKind::BonDeLivraison => DocumentKindDto::BonDeLivraison,
+            DocumentKind::Avoir => DocumentKindDto::Avoir,
+            DocumentKind::BonDeReception => DocumentKindDto::BonDeReception,
+        }
+    }
+}
+
+/// A cancelled document keeps its number and its row (features.md,
+/// Numbering row), so the state is on the wire from the first version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "DocumentStatusDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum DocumentStatusDto {
+    Issued,
+    Cancelled,
+}
+
+impl From<DocumentStatus> for DocumentStatusDto {
+    fn from(s: DocumentStatus) -> Self {
+        match s {
+            DocumentStatus::Issued => DocumentStatusDto::Issued,
+            DocumentStatus::Cancelled => DocumentStatusDto::Cancelled,
+        }
+    }
+}
+
+/// One sold line, snapshotted at issue: the product may be renamed or
+/// deleted and a reprint still shows what the customer was handed.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SaleLineDto.ts")]
+pub struct SaleLineDto {
+    pub id: i32,
+    pub position: i32,
+    pub product_id: Option<i32>,
+    pub name: String,
+    pub barcode: Option<String>,
+    pub qty_milli: i64,
+    pub unit_price_centimes: i64,
+    pub line_discount_centimes: i64,
+    pub rate_bps: u32,
+    pub line_total_centimes: i64,
+}
+
+impl From<DocumentLine> for SaleLineDto {
+    fn from(l: DocumentLine) -> Self {
+        SaleLineDto {
+            id: l.id,
+            position: l.position,
+            product_id: l.product_id,
+            name: l.name,
+            barcode: l.barcode,
+            qty_milli: l.qty_milli,
+            unit_price_centimes: l.unit_price.as_centimes(),
+            line_discount_centimes: l.line_discount.as_centimes(),
+            rate_bps: l.rate_bps.as_u32(),
+            line_total_centimes: l.line_total.as_centimes(),
+        }
+    }
+}
+
+/// One row of the TVA recap, stored at issue so a reprint never recomputes
+/// it. Empty under the IFU (`regime_ifu_prints_no_tva`).
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SaleTvaDto.ts")]
+pub struct SaleTvaDto {
+    pub rate_bps: u32,
+    pub base_centimes: i64,
+    pub amount_centimes: i64,
+}
+
+impl From<TvaLine> for SaleTvaDto {
+    fn from(t: TvaLine) -> Self {
+        SaleTvaDto {
+            rate_bps: t.rate.as_u32(),
+            base_centimes: t.base.as_centimes(),
+            amount_centimes: t.amount.as_centimes(),
+        }
+    }
+}
+
+/// The totals table of features.md §3, column for column. The amount in
+/// words is not here: it is rendered at print time in the print language.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SaleTotalsDto.ts")]
+pub struct SaleTotalsDto {
+    pub total_ht_centimes: i64,
+    pub discount_centimes: i64,
+    pub subtotal_ht_centimes: i64,
+    pub tva_centimes: i64,
+    pub total_ttc_centimes: i64,
+    pub stamp_centimes: i64,
+    pub net_to_pay_centimes: i64,
+}
+
+/// A sale as the till reads it back: the document, its lines and its TVA
+/// recap in one answer, so the receipt view makes one call.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SaleDto.ts")]
+pub struct SaleDto {
+    pub id: i32,
+    pub shop_id: i32,
+    pub kind: DocumentKindDto,
+    pub series: String,
+    pub number: i64,
+    /// `YYYY-MM-DD HH:MM:SS` on the shop's calendar (core, services::clock).
+    pub issued_at: String,
+    pub user_id: i32,
+    pub regime: RegimeDto,
+    pub payment_mode: PaymentModeDto,
+    pub seller: StoreDto,
+    pub customer_id: Option<i32>,
+    pub totals: SaleTotalsDto,
+    pub tva: Vec<SaleTvaDto>,
+    pub tendered_centimes: Option<i64>,
+    pub change_centimes: Option<i64>,
+    pub status: DocumentStatusDto,
+    pub lines: Vec<SaleLineDto>,
+}
+
+impl From<Document> for SaleDto {
+    fn from(d: Document) -> Self {
+        SaleDto {
+            id: d.id,
+            shop_id: d.shop_id,
+            kind: d.kind.into(),
+            series: d.series,
+            number: d.number,
+            issued_at: d.issued_at.format(DATE_TIME_FORMAT).to_string(),
+            user_id: d.user_id,
+            regime: d.regime.into(),
+            payment_mode: d.payment_mode.into(),
+            seller: StoreDto {
+                name: d.seller.name,
+                rc: d.seller.rc,
+                nif: d.seller.nif,
+                nis: d.seller.nis,
+                ai: d.seller.ai,
+                address: d.seller.address,
+                phone: d.seller.phone,
+            },
+            customer_id: d.customer_id,
+            totals: SaleTotalsDto {
+                total_ht_centimes: d.totals.total_ht.as_centimes(),
+                discount_centimes: d.totals.discount.as_centimes(),
+                subtotal_ht_centimes: d.totals.subtotal_ht.as_centimes(),
+                tva_centimes: d.totals.tva.as_centimes(),
+                total_ttc_centimes: d.totals.total_ttc.as_centimes(),
+                stamp_centimes: d.totals.stamp.as_centimes(),
+                net_to_pay_centimes: d.totals.net_to_pay.as_centimes(),
+            },
+            tva: d.totals.tva_by_rate.into_iter().map(Into::into).collect(),
+            tendered_centimes: d.tendered.map(Money::as_centimes),
+            change_centimes: d.change.map(Money::as_centimes),
+            status: d.status.into(),
+            lines: d.lines.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+/// One basket line. `unit_price_centimes` left out takes the product's
+/// selling price, so a till that shows the price and one that overrides it
+/// send the same shape.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewSaleLineDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewSaleLineDto {
+    pub product_id: i32,
+    pub qty_milli: i64,
+    #[serde(default)]
+    pub unit_price_centimes: Option<i64>,
+    #[serde(default)]
+    pub line_discount_centimes: i64,
+}
+
+/// The basket the till posts. `issued_at` is not on the wire: the moment a
+/// sale happened is the server's to say, on the shop's calendar, and a till
+/// with a wrong clock would otherwise date a fiscal document.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewSaleDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewSaleDto {
+    pub lines: Vec<NewSaleLineDto>,
+    #[serde(default)]
+    pub global_discount_centimes: i64,
+    pub payment_mode: PaymentModeDto,
+    #[serde(default)]
+    pub tendered_centimes: Option<i64>,
+}
+
+impl TryFrom<NewSaleDto> for NewSale {
+    type Error = ApiError;
+
+    fn try_from(d: NewSaleDto) -> Result<Self, ApiError> {
+        let mut lines = Vec::with_capacity(d.lines.len());
+        for line in d.lines {
+            lines.push(NewSaleLine {
+                product_id: line.product_id,
+                qty_milli: within_js_safe_range("qty_milli", line.qty_milli)?,
+                unit_price: line
+                    .unit_price_centimes
+                    .map(|c| within_js_safe_range("unit_price_centimes", c))
+                    .transpose()?
+                    .map(Money::centimes),
+                line_discount: Money::centimes(within_js_safe_range(
+                    "line_discount_centimes",
+                    line.line_discount_centimes,
+                )?),
+            });
+        }
+        Ok(NewSale {
+            lines,
+            global_discount: Money::centimes(within_js_safe_range(
+                "global_discount_centimes",
+                d.global_discount_centimes,
+            )?),
+            payment_mode: d.payment_mode.into(),
+            tendered: d
+                .tendered_centimes
+                .map(|c| within_js_safe_range("tendered_centimes", c))
+                .transpose()?
+                .map(Money::centimes),
+            // The server dates the document (core, services::clock).
+            issued_at: None,
+        })
+    }
+}
+
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
+/// A stored timestamp, the shape every TEXT timestamp column holds.
+pub const DATE_TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 /// `YYYY-MM-DD` and nothing else: "2026-1-5", a time, or a month 13 are the
 /// caller's mistake and answer 422 naming the field.

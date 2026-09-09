@@ -126,6 +126,32 @@ discount, TVA rate, line total HT.
 | `old_balance`, `remaining_debt`, `total_debt` | from the ledger at issue time |
 | `payment_mode` | cash, card, credit in v1; cheque and transfer are parked (the column admits them) |
 
+**Facture or ticket at the till.** Loi 04-02 du 23 juin 2004 art. 10, as
+rewritten whole by loi 10-06 du 15 août 2010 art. 3, decides it, and it
+decides it by who the buyer is, not by an amount. There is no threshold in
+the text.
+
+- A sale to a consumer is a `ticket`. « Les ventes de biens ou les
+  prestations de services faites au consommateur doivent faire l'objet d'un
+  ticket de caisse ou d'un bon justifiant la transaction. » That is the
+  till's default and it needs nothing from the customer.
+- A sale to an agent économique carrying on an activity listed in art. 2
+  (production, distribution, services, artisanat, pêche, agriculture) is a
+  `facture`, and the buyer is under a matching duty to ask for one.
+- Any buyer who asks turns the sale into a `facture`: « Toutefois, la
+  facture ou le document en tenant lieu doit être délivré si le client en
+  fait la demande » (art. 10 al. 3; décret 05-468 art. 2 repeats it from the
+  facture side).
+- The document is due « dès la réalisation de la vente », so the choice is
+  made at the till, before the sale is saved, and never by a later reprint.
+
+A till cannot tell a consumer from a professional on its own, so the
+operator decides: the sale screen carries a one-tap switch from ticket to
+facture that pulls in the buyer block. A facture to a consumer needs only
+« ses nom, prénom(s) et adresse » (décret 05-468 art. 3-2, last alinéa); a
+facture to a trader needs the party identifiers of the row below. M1 issues
+tickets only, since the buyer block arrives with customers in M2.
+
 Numbering: per kind, gapless, assigned at issue and never reused; a
 cancelled facture keeps its number and is marked "facture annulée"; an
 avoir is its own kind with its own series. A yearly reset of the series is
@@ -144,6 +170,7 @@ first release.**
 |---|---|---|---|
 | Money representation | integer centimes; no float anywhere in core; rates are integer basis points, 0 to 10 000 (1900 = 19 %), a rate above one whole is refused | `money_no_float`, invalid rates in `tva_rounding_once_per_rate` | design choice, not law |
 | Rounding | integer centimes; TVA per rate group on the group's HT subtotal, rounded once, half away from zero, to the centime. A design choice: no text prescribes facture rounding | `tva_rounding_once_per_rate` | CTCA 2026 art. 80bis → CIDTA 2026 art. 324 governs the tax return (base to the lower dinar / ten dinars, duty to the nearest 10 centimes), not the document. Comptable to confirm facture practice |
+| Line quantity and line total | a quantity is an integer number of thousandths of the unit (1500 is 1,5 kg), so a product sold by weight or by volume never needs a float. The line gross is `unit_price × qty_milli / 1000` rounded to the centime, half away from zero, once per line and before the line discount is taken off it. An assumption: no text says how a weighed line is rounded. Confirm with the comptable (R8) | `line_total_fractional_qty` | design choice, not law |
 | Global discount spread | the global discount is allocated to the rate groups in proportion to each group's HT subtotal; each share is rounded down to the centime and the centimes left over go to the group with the largest HT subtotal, the lower rate winning a tie, never past that group's own HT (what it cannot take rolls to the next largest). The group bases always sum back to `total_ht − discount` and none is negative, so no centime is invented or lost. An assumption: no text says how a global discount splits across rates. Confirm with the comptable (R8) | `discount_spread_largest_remainder` (the `totals_cases` array in `tva_rounding_once_per_rate`) | design choice, not law |
 | TVA rates | 19 % standard, 9 % reduced, 0 % exempt; rate per product, defaulted from category | `tva_rates_table` | CTCA 2026 art. 21 (19 %), art. 23 (9 %, list by tariff line) |
 | Régime fiscal | shop-level, dated setting `ifu` or `réel`. IFU: single price per product, no TVA rate, no HT/TTC, no TVA line on any document; réel: the TVA rows above. Documents keep the regime they were issued under | `regime_ifu_prints_no_tva` | CIDTA 2026 art. 282 ter (8 M DA threshold), 282 sexies (rates); CTCA 2026 art. 2-12 (out of TVA scope), art. 64 (must not mention TVA) |

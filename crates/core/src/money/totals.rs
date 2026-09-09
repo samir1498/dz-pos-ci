@@ -8,11 +8,12 @@
 use super::{stamp::stamp, Bps, Money, MoneyError, PaymentMode};
 use serde::{Deserialize, Serialize};
 
-/// One document line. `qty` is a count, `unit_price` is HT under the réel
+/// One document line. `qty_milli` is thousandths of the unit (1500 is
+/// 1,5 kg), `unit_price` is the price of one whole unit: HT under the réel
 /// regime and the single price under the IFU.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Line {
-    pub qty: i64,
+    pub qty_milli: i64,
     pub unit_price: Money,
     pub line_discount: Money,
     #[serde(rename = "rate_bps")]
@@ -66,7 +67,7 @@ fn group_by_rate(lines: &[Line]) -> Result<(Vec<(Bps, Money)>, Money), MoneyErro
     let mut groups: Vec<(Bps, Money)> = Vec::new();
     let mut total_ht = Money::ZERO;
     for line in lines {
-        if line.qty < 0 {
+        if line.qty_milli < 0 {
             return Err(MoneyError::NegativeQuantity);
         }
         if line.unit_price.is_negative() {
@@ -75,7 +76,9 @@ fn group_by_rate(lines: &[Line]) -> Result<(Vec<(Bps, Money)>, Money), MoneyErro
         if line.line_discount.is_negative() {
             return Err(MoneyError::NegativeDiscount);
         }
-        let gross = line.unit_price.checked_mul(line.qty)?;
+        // Rounded here, once, so the line total a ticket prints is the one
+        // the totals add up. The discount comes off the rounded gross.
+        let gross = line.unit_price.checked_mul_milli(line.qty_milli)?;
         if line.line_discount > gross {
             return Err(MoneyError::LineDiscountAboveLine);
         }
