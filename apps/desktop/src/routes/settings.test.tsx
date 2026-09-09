@@ -7,8 +7,9 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
-import { I18nProvider } from "@/i18n";
+import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
+import ar from "@/i18n/ar.json";
 import { SettingsScreen } from "./settings";
 
 const store: StoreDto = {
@@ -57,12 +58,12 @@ function countOf(method: string): number {
   }).length;
 }
 
-function mount() {
+function mount(lang: Lang = "fr") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <I18nProvider lang="fr">
+    <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
         <SettingsScreen />
       </QueryClientProvider>
@@ -277,5 +278,30 @@ describe("the régime form", () => {
     await screen.findByTestId("regime-planned");
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
     expect(within(regimeForm).getByRole("button", { name: fr.action_apply })).toBeEnabled();
+  });
+});
+
+describe("in Arabic", () => {
+  test("the fiscal identifiers and the phone stay left to right, the address does not", async () => {
+    current = {
+      ...seeded,
+      store: { ...store, name: "Superette El Baraka", rc: "16/00-1234567 B 20" },
+    };
+    mount("ar");
+    expect(await screen.findByLabelText(ar.field_rc)).toHaveAttribute("dir", "ltr");
+    expect(screen.getByLabelText(ar.field_nif)).toHaveAttribute("dir", "ltr");
+    expect(screen.getByLabelText(ar.field_nis)).toHaveAttribute("dir", "ltr");
+    expect(screen.getByLabelText(ar.field_ai)).toHaveAttribute("dir", "ltr");
+    expect(screen.getByLabelText(ar.field_phone)).toHaveAttribute("dir", "ltr");
+    expect(screen.getByLabelText(ar.field_address)).not.toHaveAttribute("dir");
+  });
+
+  test("the régime dates stay left to right inside the RTL panel", async () => {
+    current = { ...seeded, regime_planned: { regime: "ifu", valid_from: "2027-01-01" } };
+    mount("ar");
+    const current_ = await screen.findByTestId("regime-current");
+    expect(within(current_).getByText("2026-01-01")).toHaveAttribute("dir", "ltr");
+    const planned = screen.getByTestId("regime-planned");
+    expect(within(planned).getByText("2027-01-01")).toHaveAttribute("dir", "ltr");
   });
 });

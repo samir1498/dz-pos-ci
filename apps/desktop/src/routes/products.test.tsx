@@ -6,7 +6,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { CategoryDto, ProductDto } from "@dzpos/shared";
-import { I18nProvider } from "@/i18n";
+import { I18nProvider, type Lang } from "@/i18n";
+import ar from "@/i18n/ar.json";
 import { ProductsScreen } from "./products";
 
 const product: ProductDto = {
@@ -80,12 +81,12 @@ function sentBody(): Record<string, unknown> {
   return JSON.parse(init.body);
 }
 
-function mount() {
+function mount(lang: Lang = "fr") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <I18nProvider lang="fr">
+    <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
         <ProductsScreen />
       </QueryClientProvider>
@@ -552,5 +553,44 @@ describe("the add form, every spec field", () => {
     await waitFor(() => expect(posted()).toBe(true));
     expect(sentBody().wholesale_centimes).toBeNull();
     expect(sentBody().low_stock_at_milli).toBe(0);
+  });
+});
+
+describe("in Arabic", () => {
+  test("the table's rate cell reads the fixed word, not a computed Latin percent sign", async () => {
+    // rate_900 in ar.json is "9 ٪" (Arabic percent sign). The table cell
+    // used to call the same rateLabel() as a category rate the fixed list
+    // does not carry, which always builds a Latin "%": the row showed
+    // "9 %" while the add form's own dropdown, right above it, showed
+    // "9 ٪" for the same value.
+    rows = [{ ...product, rate_bps: 900 }];
+    mount("ar");
+    const row = (await screen.findByText("Huile Elio 5L")).closest("tr");
+    if (row === null) throw new Error("no row");
+    expect(within(row).getByText(ar.rate_900)).toBeInTheDocument();
+    expect(within(row).queryByText("9 %")).not.toBeInTheDocument();
+  });
+
+  test("a category rate outside the fixed list still uses the Arabic percent sign", async () => {
+    categories = [{ ...general, default_rate_bps: 700 }];
+    rows = [{ ...product, rate_bps: 700 }];
+    mount("ar");
+    const row = (await screen.findByText("Huile Elio 5L")).closest("tr");
+    if (row === null) throw new Error("no row");
+    expect(within(row).getByText(`7 ${ar.percent_sign}`)).toBeInTheDocument();
+  });
+
+  test("the barcode, price, rate and stock cells stay left to right", async () => {
+    rows = [product];
+    mount("ar");
+    const row = (await screen.findByText("Huile Elio 5L")).closest("tr");
+    if (row === null) throw new Error("no row");
+    const cells = within(row).getAllByRole("cell");
+    // name, barcode, unit, price, rate, stock, edit: barcode (1), price
+    // (3), rate (4) and stock (5) are the ones read left to right.
+    expect(cells[1]).toHaveAttribute("dir", "ltr");
+    expect(cells[3]).toHaveAttribute("dir", "ltr");
+    expect(cells[4]).toHaveAttribute("dir", "ltr");
+    expect(cells[5]).toHaveAttribute("dir", "ltr");
   });
 });
