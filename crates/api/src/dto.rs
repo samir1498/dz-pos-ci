@@ -11,9 +11,7 @@
 use chrono::NaiveDate;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::category::Category;
-use dzpos_core::models::document::{
-    Document, DocumentKind, DocumentLine, DocumentStatus, SellerBlock,
-};
+use dzpos_core::models::document::{Document, DocumentKind, DocumentLine, DocumentStatus};
 use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::models::shop::{Shop, StoreBlock};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
