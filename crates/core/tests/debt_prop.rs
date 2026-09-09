@@ -13,7 +13,7 @@
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
-use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals};
+use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
@@ -106,12 +106,18 @@ proptest! {
                         // No facture standing with anything left on it, or one
                         // whose whole value has already come back: the credit
                         // note has nothing to be written against.
-                        None | Some(Ok(_)) => {}
-                        Some(Err(CoreError::Validation { .. })) => {
+                        None | Some((_, Ok(_))) => {}
+                        Some((true, Err(e))) => prop_assert!(
+                            false,
+                            "step {}: the closing avoir was refused: {:?}",
+                            n,
+                            e
+                        ),
+                        Some((false, Err(CoreError::Validation { .. }))) => {
                             let after = debt::balance(&mut conn, SHOP, customer).unwrap();
                             prop_assert_eq!(before, after, "a refused avoir moved the balance");
                         }
-                        Some(Err(other)) => prop_assert!(false, "step {}: {:?}", n, other),
+                        Some((_, Err(other))) => prop_assert!(false, "step {}: {:?}", n, other),
                     }
                 }
             }
@@ -331,7 +337,15 @@ fn a_facture_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, 
                 total_ht: net,
                 discount: Money::ZERO,
                 subtotal_ht: net,
-                tva_by_rate: Vec::new(),
+                // A réel facture carries a recap row for every rate its lines
+                // are at, exempt ones included. Without the row at 0 % the
+                // first avoir writes a rate the facture does not carry, and
+                // every closing avoir after it is refused for it.
+                tva_by_rate: vec![TvaLine {
+                    rate: Bps::ZERO,
+                    base: net,
+                    amount: Money::ZERO,
+                }],
                 tva: Money::ZERO,
                 total_ttc: net,
                 stamp: Money::ZERO,
@@ -388,7 +402,7 @@ fn an_avoir(
     customer_id: i32,
     whole: bool,
     day: u32,
-) -> Option<Result<i32, CoreError>> {
+) -> Option<(bool, Result<i32, CoreError>)> {
     let issued_at = chrono::NaiveDate::from_ymd_opt(2026, 9, day)
         .and_then(|d| d.and_hms_opt(11, 0, 0))
         .unwrap();
@@ -397,6 +411,18 @@ fn an_avoir(
         .into_iter()
         .rfind(|d| d.customer_id == Some(customer_id) && d.status == DocumentStatus::Issued)?;
     let line = facture.lines.first()?;
+    let taken: i64 = avoir::list_for(conn, SHOP, facture.id)
+        .unwrap()
+        .iter()
+        .flat_map(|a| a.lines.clone())
+        .filter(|l| l.ref_line_id == Some(line.id))
+        .map(|l| l.qty_milli)
+        .sum();
+    let left = line.qty_milli - taken;
+    // The one that takes the last quantity off the facture is computed as the
+    // subtraction, and that is the one that must never be refused: a facture
+    // nobody can finish crediting is a facture nobody can annul.
+    let closing = left > 0 && (whole || left == 1_000);
     let lines = if whole {
         None
     } else {
@@ -405,5 +431,8 @@ fn an_avoir(
             qty_milli: 1_000,
         }])
     };
-    Some(avoir::issue(conn, SHOP, OWNER, facture.id, lines, None, Some(issued_at)).map(|a| a.id))
+    Some((
+        closing,
+        avoir::issue(conn, SHOP, OWNER, facture.id, lines, None, Some(issued_at)).map(|a| a.id),
+    ))
 }
