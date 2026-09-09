@@ -219,6 +219,32 @@ async fn an_amount_past_what_a_json_number_carries_is_refused_at_the_edge() {
 }
 
 #[tokio::test]
+async fn a_bad_path_and_a_wrong_method_answer_in_the_same_envelope() {
+    // Both used to leave as axum's bare text or an empty body, which the
+    // client can only read as "unreachable"; the UI then blamed the network
+    // for a wrong URL.
+    let h = harness();
+    let (status, body) = call(&h.app, "GET", "/products/abc", None).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["error"]["code"], "bad_request");
+    assert!(
+        !body["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("i32"),
+        "a Rust type name reached the wire: {body}"
+    );
+
+    let (status, body) = call(&h.app, "DELETE", "/products", None).await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+    assert_eq!(body["error"]["code"], "method_not_allowed");
+
+    let (status, body) = call(&h.app, "GET", "/nowhere", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["error"]["code"], "not_found");
+}
+
+#[tokio::test]
 async fn a_rate_above_one_whole_is_422_with_the_codes_own_name() {
     // architecture.md: the API maps the core's code, it never derives one.
     // The core calls this `money`, so the wire says `money` and the UI's

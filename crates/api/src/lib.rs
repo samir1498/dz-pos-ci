@@ -118,6 +118,7 @@ pub fn router_with_origin(state: AppState, extra: Option<HeaderValue>) -> Router
         .route("/products", post(routes::products::create))
         .route("/products/{id}", get(routes::products::get_one))
         .fallback(routes::not_found)
+        .method_not_allowed_fallback(routes::method_not_allowed)
         // Loopback is not a boundary: every browser on the machine can reach
         // 127.0.0.1, so allow_origin(Any) let any page a user happened to
         // open read and write the till. The list is what keeps a stranger's

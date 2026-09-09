@@ -26,6 +26,8 @@ pub enum ApiError {
     BadRequest(String),
     #[error("no such route")]
     NoRoute,
+    #[error("this route does not take that method")]
+    MethodNotAllowed,
     #[error("the database connection is unusable")]
     Unavailable,
 }
@@ -50,6 +52,7 @@ impl ApiError {
             ApiError::Request(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.code()),
             ApiError::BadRequest(_) => (StatusCode::UNPROCESSABLE_ENTITY, "bad_request"),
             ApiError::NoRoute => (StatusCode::NOT_FOUND, "not_found"),
+            ApiError::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed"),
             ApiError::Unavailable => (StatusCode::INTERNAL_SERVER_ERROR, "storage"),
         }
     }

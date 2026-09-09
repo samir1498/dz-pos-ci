@@ -1,4 +1,4 @@
-use axum::extract::rejection::JsonRejection;
+use axum::extract::rejection::{JsonRejection, PathRejection};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
@@ -17,8 +17,13 @@ pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<ProductDto>>
 
 pub async fn get_one(
     State(state): State<AppState>,
-    Path(id): Path<i32>,
+    id: Result<Path<i32>, PathRejection>,
 ) -> Result<Json<ProductDto>, ApiError> {
+    // `/products/abc` used to leave as axum's own text/plain 400, which the
+    // client could only read as "unreachable". Same envelope as every
+    // other refusal.
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
     let shop = state.shop_id;
     let found = state.blocking(move |c| service::get(c, shop, id)).await?;
     Ok(Json(ProductDto::from(found)))

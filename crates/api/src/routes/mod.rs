@@ -21,3 +21,9 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthDto> {
 pub async fn not_found() -> ApiError {
     ApiError::NoRoute
 }
+
+/// A known path with a method it does not take (`DELETE /products`).
+/// axum's default answer is an empty 405 the client reads as unreachable.
+pub async fn method_not_allowed() -> ApiError {
+    ApiError::MethodNotAllowed
+}
