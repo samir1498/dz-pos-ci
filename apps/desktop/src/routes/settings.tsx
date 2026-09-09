@@ -10,6 +10,7 @@ import { ApiError } from "@dzpos/shared";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
 import { api, settingsQueryKey } from "@/api";
 import { BackupsPanel } from "@/components/BackupsPanel";
+import { todayAsDay } from "@/lib/day";
 import { isKey, useTranslation, type Key } from "@/i18n";
 
 export const Route = createFileRoute("/settings")({ component: SettingsScreen });
@@ -39,14 +40,6 @@ function errorKey(error: unknown): Key {
 
 /** `YYYY-MM-DD`, the only shape the API takes a day in. */
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Today as a `YYYY-MM-DD` on the machine's own calendar. */
-function todayAsDay(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
 
 /** A fiscal value is never guessed: an unknown option blocks the submit. */
 function toRegime(value: string): RegimeDto | undefined {

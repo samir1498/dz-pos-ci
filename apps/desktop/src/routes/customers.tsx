@@ -30,6 +30,7 @@ import {
   customersQueryKey,
 } from "@/api";
 import { isKey, useTranslation, type Key } from "@/i18n";
+import { todayAsDay } from "@/lib/day";
 
 export const Route = createFileRoute("/customers")({ component: CustomersScreen });
 
@@ -795,7 +796,7 @@ function PaymentRow({ payment }: { payment: PaymentDto }) {
  */
 function StatementPanel({ customer }: { customer: CustomerDto }) {
   const { t, lang } = useTranslation();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayAsDay();
   const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
   const [to, setTo] = useState(today);
   const [asked, setAsked] = useState<{ from: string; to: string } | null>(null);
