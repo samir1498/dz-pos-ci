@@ -199,6 +199,26 @@ async fn a_validation_failure_is_422() {
 }
 
 #[tokio::test]
+async fn an_amount_past_what_a_json_number_carries_is_refused_at_the_edge() {
+    // 2^53 rounds silently in every JavaScript caller; 2^53 - 1 does not.
+    // The bound in dto.rs is enforced, not only written in a comment.
+    let h = harness();
+    for field in ["selling_centimes", "cost_centimes", "qty_on_hand_milli"] {
+        let mut d = draft();
+        d[field] = json!(9_007_199_254_740_992_i64);
+        let (status, body) = call(&h.app, "POST", "/products", Some(d)).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{field}");
+        assert_eq!(body["error"]["code"], "validation", "{field}");
+    }
+    let mut ok = draft();
+    ok["name"] = json!("Juste en dessous");
+    ok["selling_centimes"] = json!(9_007_199_254_740_991_i64);
+    let (status, made) = call(&h.app, "POST", "/products", Some(ok)).await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(made["selling_centimes"], json!(9_007_199_254_740_991_i64));
+}
+
+#[tokio::test]
 async fn a_rate_above_one_whole_is_422_with_the_codes_own_name() {
     // architecture.md: the API maps the core's code, it never derives one.
     // The core calls this `money`, so the wire says `money` and the UI's

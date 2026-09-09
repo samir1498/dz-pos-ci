@@ -5,8 +5,10 @@
 //! (architecture.md, contract between Rust and TypeScript). ts-rs would
 //! call an `i64` a `bigint`, so the exporter in `tests/export_bindings.rs`
 //! configures large ints as `number`: centimes are safe below 2^53, which
-//! is 90 trillion dinars.
+//! is 90 trillion dinars. The bound is enforced at this edge, not only
+//! written down: an amount beyond it would round silently in JavaScript.
 
+use dzpos_core::error::CoreError;
 use dzpos_core::models::category::Category;
 use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::money::{Bps, Money};
@@ -115,6 +117,21 @@ const fn yes() -> bool {
     true
 }
 
+/// The largest integer a JSON `number` carries without loss
+/// (`Number.MAX_SAFE_INTEGER`). Anything past it would be rounded by every
+/// JavaScript caller, so the API refuses it as a request error.
+pub const MAX_SAFE_INTEGER: i64 = (1 << 53) - 1;
+
+fn within_js_safe_range(field: &'static str, value: i64) -> Result<i64, ApiError> {
+    if value.abs() > MAX_SAFE_INTEGER {
+        return Err(ApiError::Request(CoreError::validation(
+            field,
+            "beyond what a JSON number carries without loss (2^53 - 1)",
+        )));
+    }
+    Ok(value)
+}
+
 impl TryFrom<NewProductDto> for NewProduct {
     type Error = ApiError;
 
@@ -131,11 +148,18 @@ impl TryFrom<NewProductDto> for NewProduct {
             barcode: d.barcode,
             category_id: d.category_id,
             unit: d.unit.into(),
-            cost: Money::centimes(d.cost_centimes),
-            selling: Money::centimes(d.selling_centimes),
-            wholesale: d.wholesale_centimes.map(Money::centimes),
-            qty_on_hand_milli: d.qty_on_hand_milli,
-            low_stock_at_milli: d.low_stock_at_milli,
+            cost: Money::centimes(within_js_safe_range("cost_centimes", d.cost_centimes)?),
+            selling: Money::centimes(within_js_safe_range(
+                "selling_centimes",
+                d.selling_centimes,
+            )?),
+            wholesale: d
+                .wholesale_centimes
+                .map(|w| within_js_safe_range("wholesale_centimes", w))
+                .transpose()?
+                .map(Money::centimes),
+            qty_on_hand_milli: within_js_safe_range("qty_on_hand_milli", d.qty_on_hand_milli)?,
+            low_stock_at_milli: within_js_safe_range("low_stock_at_milli", d.low_stock_at_milli)?,
             rate_bps,
             active: d.active,
         })

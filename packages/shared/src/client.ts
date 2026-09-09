@@ -69,6 +69,15 @@ export function isHealth(value: unknown): value is HealthDto {
   return isRecord(value) && typeof value.status === "string" && typeof value.shop_id === "number";
 }
 
+/** An amount or a quantity: an integer JSON.parse did not have to round. */
+function isExactInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value);
+}
+
+function isNullableExactInteger(value: unknown): value is number | null {
+  return value === null || isExactInteger(value);
+}
+
 export function isProduct(value: unknown): value is ProductDto {
   return (
     isRecord(value) &&
@@ -78,11 +87,11 @@ export function isProduct(value: unknown): value is ProductDto {
     isNullableString(value.barcode) &&
     isNullableNumber(value.category_id) &&
     isUnit(value.unit) &&
-    typeof value.cost_centimes === "number" &&
-    typeof value.selling_centimes === "number" &&
-    isNullableNumber(value.wholesale_centimes) &&
-    typeof value.qty_on_hand_milli === "number" &&
-    typeof value.low_stock_at_milli === "number" &&
+    isExactInteger(value.cost_centimes) &&
+    isExactInteger(value.selling_centimes) &&
+    isNullableExactInteger(value.wholesale_centimes) &&
+    isExactInteger(value.qty_on_hand_milli) &&
+    isExactInteger(value.low_stock_at_milli) &&
     typeof value.rate_bps === "number" &&
     typeof value.active === "boolean"
   );

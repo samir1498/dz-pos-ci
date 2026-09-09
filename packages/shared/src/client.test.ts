@@ -58,6 +58,17 @@ describe("createClient", () => {
     await expect(api.listProducts()).rejects.toMatchObject({ code: "bad_response" });
   });
 
+  test("a price past what a number carries exactly is refused, and so is a fraction", async () => {
+    // JSON.parse has already rounded 2^53 + 1 by the time the guard sees it;
+    // the guard refuses anything outside the safe-integer range or with a
+    // fractional part, so a lossy amount never reaches a screen.
+    for (const selling_centimes of [2 ** 53, 9.5, Number.NaN]) {
+      const broken = { ...product, selling_centimes };
+      const api = createClient("http://x", stub(200, [broken]));
+      await expect(api.listProducts()).rejects.toMatchObject({ code: "bad_response" });
+    }
+  });
+
   test("a price that arrives as a string is refused", async () => {
     const broken = { ...product, selling_centimes: "920" };
     const api = createClient("http://x", stub(200, [broken]));
