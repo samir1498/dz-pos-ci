@@ -2,6 +2,7 @@
 
 /**
  * The seller block a ticket prints (features.md §3). Sent whole on every
- * write: a field left out is a bug at the edge, a null clears the column.
+ * write: an identifier left out or sent null is cleared, a name is
+ * required, and a field the type does not know is refused.
  */
 export type StoreDto = { name: string, rc: string | null, nif: string | null, nis: string | null, ai: string | null, address: string | null, phone: string | null, };
