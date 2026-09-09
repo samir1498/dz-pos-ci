@@ -6,8 +6,12 @@ updated: '2026-09-09'
 Roadmap `dz-pos-to-first-shop` (`just ctx roadmap show dz-pos-to-first-shop`
 from the repo root, full text `docs/roadmap.md`): M0 closed on 2026-09-09
 with PR #14 merged (c3f6384, two review rounds, gates and CI green). M1 is
-active; its first task is planned with Samir step by step and lands in
-`plans/20260908-m1-sale-and-ticket-on-one-desktop.md`. M2 to M6 stay stub
+active and runs as a loop (Samir, 2026-09-09 13:36): tasks T0 to T8 in
+`plans/20260908-m1-sale-and-ticket-on-one-desktop.md`, run in sequence on
+`m1/2026-09-09`, gates and a review before every merge, checkpoint PRs to
+main at T1, T4 and T8 that Samir merges. T6 needs Samir at the laptop with
+the printer. The ledger on the WSL box (`~/.dz-night/ledger.md`) holds the
+ticks. M2 to M6 stay stub
 plans until their turn.
 
 Status site for Anouar: https://dinar-reports.pages.dev/ (progress reports
