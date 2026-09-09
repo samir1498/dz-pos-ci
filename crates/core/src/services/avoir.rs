@@ -249,45 +249,45 @@ pub fn issue(
             return Ok(avoir);
         };
 
-        // An avoir for no money moves no debt. The closing one can come to
-        // nothing when what is left of the facture is a quantity worth no
-        // centime, and the goods still come back on it.
-        if totals.net_to_pay == Money::ZERO {
-            return Ok(avoir);
-        }
+        // An avoir for no money moves no debt. The closing one comes to nothing
+        // when what is left of the facture is a quantity worth no centime: the
+        // goods come back on it and the ledger is left alone, and it is
+        // audited like any other because a numbered document was written.
+        if totals.net_to_pay != Money::ZERO {
+            // One credit movement for the whole of it, naming the avoir. What
+            // it settles is said by the allocations beside it, not by this
+            // row: an avoir can reach the facture it credits and then a
+            // second one.
+            let entry = debt::append_at(
+                conn,
+                shop_id,
+                NewDebtEntry {
+                    customer_id,
+                    document_id: Some(avoir.id),
+                    kind: DebtKind::Avoir,
+                    debit: Money::ZERO,
+                    credit: totals.net_to_pay,
+                    user_id,
+                    note: reason.clone(),
+                },
+                Some(avoir.issued_at),
+            )?;
 
-        // One credit movement for the whole of it, naming the avoir. What it
-        // settles is said by the allocations beside it, not by this row: an
-        // avoir can reach the facture it credits and then a second one.
-        let entry = debt::append_at(
-            conn,
-            shop_id,
-            NewDebtEntry {
+            // The facture this avoir was written against comes first, whatever
+            // its age: the money is going back on that paper and nowhere else.
+            // Only what it cannot take spreads over the customer's other
+            // unpaid documents, oldest first, and what no paper can take at
+            // all is left on the ledger as credit the shop is holding.
+            let on_the_facture = totals.net_to_pay.min(unpaid_on(&facture));
+            debt::settle_document(conn, shop_id, entry.id, facture_id, on_the_facture)?;
+            debt::settle_oldest_first(
+                conn,
+                shop_id,
                 customer_id,
-                document_id: Some(avoir.id),
-                kind: DebtKind::Avoir,
-                debit: Money::ZERO,
-                credit: totals.net_to_pay,
-                user_id,
-                note: reason.clone(),
-            },
-            Some(avoir.issued_at),
-        )?;
-
-        // The facture this avoir was written against comes first, whatever its
-        // age: the money is going back on that paper and nowhere else. Only
-        // what it cannot take spreads over the customer's other unpaid
-        // documents, oldest first, and what no paper can take at all is left
-        // on the ledger as credit the shop is holding.
-        let on_the_facture = totals.net_to_pay.min(unpaid_on(&facture));
-        debt::settle_document(conn, shop_id, entry.id, facture_id, on_the_facture)?;
-        debt::settle_oldest_first(
-            conn,
-            shop_id,
-            customer_id,
-            entry.id,
-            totals.net_to_pay.checked_sub(on_the_facture)?,
-        )?;
+                entry.id,
+                totals.net_to_pay.checked_sub(on_the_facture)?,
+            )?;
+        }
 
         let after = debt::balance(conn, shop_id, customer_id)?;
         let left_on_facture = documents::get(conn, shop_id, facture_id)?
@@ -670,6 +670,24 @@ fn slice_totals(
     let mut tva_by_rate = Vec::new();
     let mut discount = Money::ZERO;
     let mut tva = Money::ZERO;
+    // Under the IFU a document shows no TVA at all, so there is no recap to
+    // read a rate's remise off and nothing to hold at a rate either. The
+    // remise is taken on the whole slice instead, the way it is spread by
+    // `compute_totals`.
+    if facture.regime != Regime::Reel {
+        let share = global_discount(facture, earlier, lines)?.min(total_ht);
+        let subtotal_ht = total_ht.checked_sub(share)?;
+        return Ok(Totals {
+            total_ht,
+            discount: share,
+            subtotal_ht,
+            tva_by_rate,
+            tva,
+            total_ttc: subtotal_ht,
+            stamp: Money::ZERO,
+            net_to_pay: subtotal_ht,
+        });
+    }
     for (rate, ht) in &groups {
         let left = left_at(facture, earlier, *rate)?;
         // What this slice gives back of the facture's remise at this rate: its
@@ -682,20 +700,14 @@ fn slice_totals(
             up(left.share, *ht, left.ht)?.min(left.share)
         };
         let base = ht.checked_sub(share)?;
-        let amount = if facture.regime == Regime::Reel {
-            base.pct(*rate)?.min(left.amount)
-        } else {
-            Money::ZERO
-        };
+        let amount = base.pct(*rate)?.min(left.amount);
         discount = discount.checked_add(share)?;
         tva = tva.checked_add(amount)?;
-        if facture.regime == Regime::Reel {
-            tva_by_rate.push(TvaLine {
-                rate: *rate,
-                base,
-                amount,
-            });
-        }
+        tva_by_rate.push(TvaLine {
+            rate: *rate,
+            base,
+            amount,
+        });
     }
 
     let subtotal_ht = total_ht.checked_sub(discount)?;
@@ -710,6 +722,43 @@ fn slice_totals(
         stamp: Money::ZERO,
         net_to_pay: total_ttc,
     })
+}
+
+/// The share of the facture's global remise that comes back with these lines,
+/// for a document with no TVA recap to spread it over: the credited HT against
+/// what the facture has left, rounded up, and never more than the remise the
+/// earlier avoirs have not taken.
+///
+/// Against what is left rather than against the whole, so the shares of the
+/// successive avoirs come to the remise exactly and the last one takes
+/// whatever the divisions left. Rounded up so that a slice never leaves the
+/// rest of the facture holding a remise it has no HT left to put it on.
+fn global_discount(
+    facture: &Document,
+    earlier: &[Document],
+    lines: &[Line],
+) -> Result<Money, CoreError> {
+    if facture.totals.discount == Money::ZERO || facture.totals.total_ht == Money::ZERO {
+        return Ok(Money::ZERO);
+    }
+    let mut left_discount = facture.totals.discount;
+    let mut left_ht = facture.totals.total_ht;
+    for avoir in earlier {
+        left_discount = left_discount.checked_sub(avoir.totals.discount)?;
+        left_ht = left_ht.checked_sub(avoir.totals.total_ht)?;
+    }
+    if left_discount <= Money::ZERO || left_ht <= Money::ZERO {
+        return Ok(Money::ZERO);
+    }
+    let mut credited_ht = Money::ZERO;
+    for line in lines {
+        let gross = line.unit_price.checked_mul_milli(line.qty_milli)?;
+        credited_ht = credited_ht.checked_add(gross.checked_sub(line.line_discount)?)?;
+    }
+    if credited_ht >= left_ht {
+        return Ok(left_discount);
+    }
+    Ok(up(left_discount, credited_ht, left_ht)?.min(left_discount))
 }
 
 /// HT per rate group of the lines coming back, by rising rate, and their sum:
@@ -741,9 +790,10 @@ struct LeftAtRate {
 
 fn left_at(facture: &Document, earlier: &[Document], rate: Bps) -> Result<LeftAtRate, CoreError> {
     let ht = ht_at(&facture.lines, rate)?;
+    // A réel facture carries a recap row for every rate its lines are at, so a
+    // rate with no row is a rate with no lines: nothing was charged there and
+    // nothing is left there.
     let row = facture.totals.tva_by_rate.iter().find(|r| r.rate == rate);
-    // A facture with no recap row at this rate charged no tax on it and put no
-    // remise on it, which is what the IFU looks like.
     let mut left = LeftAtRate {
         ht,
         share: row.map_or(Ok(Money::ZERO), |r| ht.checked_sub(r.base))?,

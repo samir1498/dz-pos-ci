@@ -13,13 +13,13 @@ use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::models::stock::MovementKind;
-use dzpos_core::money::{Bps, Money, PaymentMode};
+use dzpos_core::money::{Bps, Money, PaymentMode, Regime};
 use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::customers::{NewCustomer, PartyKind};
 use dzpos_core::services::debt::{DebtKind, PaymentMethod};
 use dzpos_core::services::documents::{Document, DocumentKind, DocumentStatus};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
-use dzpos_core::services::{audit, customers, debt, documents, products, shops, stock};
+use dzpos_core::services::{audit, customers, debt, documents, products, settings, shops, stock};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
@@ -1097,6 +1097,80 @@ fn the_closing_avoir_is_written_for_nothing_when_nothing_is_left_to_credit() {
         "a credit note for nothing wrote a ledger row"
     );
     assert_eq!(debt::balance(&mut conn, SHOP, c).unwrap(), Money::ZERO);
+
+    // A numbered document was written, so the day book says who wrote it and
+    // what it was worth, which is nothing.
+    let entry = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .find(|e| {
+            e.action == "document.avoir"
+                && e.after
+                    .as_deref()
+                    .is_some_and(|a| a.contains(&format!("\"avoir_document_id\":{}", closing.id)))
+        })
+        .expect("the closing avoir wrote no audit entry");
+    let after: serde_json::Value = serde_json::from_str(&entry.after.unwrap()).unwrap();
+    assert_eq!(after["amount_centimes"], 0);
+}
+
+/// Under the IFU a document shows no TVA at all, so a partial avoir has no
+/// recap to read its share of the facture's remise off. It takes the share on
+/// the whole slice instead: without that it credits the gross and hands back
+/// money the customer never paid.
+#[test]
+fn an_ifu_partial_carries_its_share_of_the_remise() {
+    let (_dir, mut conn) = open_temp();
+    settings::set_regime(&mut conn, SHOP, OWNER, Regime::Ifu, at(9)).unwrap();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let c = a_customer(&mut conn);
+    let facture = a_discounted_facture(&mut conn, c, vec![line(p, 3_000)], Money::centimes(150));
+    assert!(
+        facture.totals.tva_by_rate.is_empty(),
+        "the IFU shows no TVA"
+    );
+    assert_eq!(facture.totals.net_to_pay, Money::centimes(299_850));
+
+    let partial = avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        Some(vec![AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 1_000,
+        }]),
+        None,
+        Some(at(11)),
+    )
+    .unwrap();
+    assert_eq!(
+        partial.totals.discount,
+        Money::centimes(50),
+        "a third of the goods comes back with a third of the remise"
+    );
+    assert_eq!(partial.totals.net_to_pay, Money::centimes(99_950));
+
+    // And the two of them still reproduce the facture.
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        "commande annulée".to_string(),
+        Some(at(12)),
+    )
+    .unwrap();
+    let (ht, discount, subtotal, tva, ttc) = avoir_sum(&mut conn, facture.id);
+    assert_eq!(ht, facture.totals.total_ht.as_centimes(), "HT");
+    assert_eq!(discount, facture.totals.discount.as_centimes(), "remise");
+    assert_eq!(
+        subtotal,
+        facture.totals.subtotal_ht.as_centimes(),
+        "sous-total"
+    );
+    assert_eq!(tva, 0, "TVA");
+    assert_eq!(ttc, facture.totals.total_ttc.as_centimes(), "TTC");
 }
 
 /// A facture on credit carrying a global discount, which is where the rounding
