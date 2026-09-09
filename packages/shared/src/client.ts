@@ -23,6 +23,7 @@ import type { DocumentStatusDto } from "./generated/DocumentStatusDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { PaymentModeDto } from "./generated/PaymentModeDto";
+import type { SaleWarningDto } from "./generated/SaleWarningDto";
 import type { SaleDto } from "./generated/SaleDto";
 import type { SaleLineDto } from "./generated/SaleLineDto";
 import type { SaleBalanceDto } from "./generated/SaleBalanceDto";
@@ -236,6 +237,12 @@ function isPaymentMode(value: unknown): value is PaymentModeDto {
   return typeof value === "string" && PAYMENT_MODES.some((m) => m === value);
 }
 
+const SALE_WARNINGS: readonly SaleWarningDto[] = ["near_limit"];
+
+function isNullableSaleWarning(value: unknown): value is SaleWarningDto | null {
+  return value === null || (typeof value === "string" && SALE_WARNINGS.some((w) => w === value));
+}
+
 const DOCUMENT_KINDS: readonly DocumentKindDto[] = [
   "ticket",
   "facture",
@@ -332,7 +339,7 @@ export function isSale(value: unknown): value is SaleDto {
     isDocumentStatus(value.status) &&
     Array.isArray(value.lines) &&
     value.lines.every(isSaleLine) &&
-    isNullableString(value.warning)
+    isNullableSaleWarning(value.warning)
   );
 }
 

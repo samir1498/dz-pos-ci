@@ -484,6 +484,28 @@ describe("sales", () => {
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(basket);
   });
 
+  test("a warning the app does not know is refused, the way an unknown mode is", async () => {
+    // `near_limit` is the only one there is. A screen that matches on the
+    // union would fall through a second one silently, so the guard stops it
+    // at the door instead.
+    const stub: typeof fetch = async () =>
+      new Response(JSON.stringify({ ...sale, warning: "over_limit" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    const api = createClient("http://127.0.0.1:4317", stub);
+    await expect(
+      api.createSale({
+        lines: [],
+        global_discount_centimes: 0,
+        payment_mode: "credit",
+        tendered_centimes: null,
+        customer_id: 3,
+        override: false,
+      }),
+    ).rejects.toMatchObject({ code: "bad_response" });
+  });
+
   test("a credit refusal carries the balance after and the limit, other errors carry neither", async () => {
     const refusal: typeof fetch = async () =>
       new Response(

@@ -18,7 +18,7 @@ use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
 use dzpos_core::services::backup::Backup;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
 use dzpos_core::services::debt::{DebtKind, LedgerLine};
-use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale};
+use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, Warning};
 use dzpos_core::services::settings::DatedRegime;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -577,11 +577,30 @@ pub struct SaleDto {
     pub change_centimes: Option<i64>,
     pub status: DocumentStatusDto,
     pub lines: Vec<SaleLineDto>,
-    /// What the till should say while still handing over the ticket:
-    /// `near_limit` when the sale took the customer to their warn threshold,
-    /// null otherwise. A read of a stored document carries none: a warning
-    /// is about the moment the sale was rung up, not about the paper.
-    pub warning: Option<String>,
+    /// What the till should say while still handing over the ticket, null
+    /// when there is nothing to say. A read of a stored document carries
+    /// none: a warning is about the moment the sale was rung up, not about
+    /// the paper.
+    pub warning: Option<SaleWarningDto>,
+}
+
+/// What the till should say about a sale that went through anyway. A union
+/// rather than a string, so the day a second warning exists the screens that
+/// match on this one stop compiling instead of quietly ignoring it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "SaleWarningDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum SaleWarningDto {
+    /// The balance this sale leaves reached the customer's warn threshold.
+    NearLimit,
+}
+
+impl From<Warning> for SaleWarningDto {
+    fn from(w: Warning) -> Self {
+        match w {
+            Warning::NearLimit => SaleWarningDto::NearLimit,
+        }
+    }
 }
 
 impl From<Document> for SaleDto {
@@ -633,7 +652,7 @@ impl From<Document> for SaleDto {
 impl From<Sale> for SaleDto {
     fn from(s: Sale) -> Self {
         SaleDto {
-            warning: s.warning.map(|w| w.code().to_owned()),
+            warning: s.warning.map(Into::into),
             ..SaleDto::from(s.document)
         }
     }

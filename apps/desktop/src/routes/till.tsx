@@ -31,6 +31,7 @@ import type {
   ProductDto,
   RegimeDto,
   SaleDto,
+  SaleWarningDto,
   Totals,
   TotalsLine,
   UnitDto,
@@ -120,6 +121,22 @@ function takesCredit(customer: CustomerDto | null): boolean {
   if (customer === null) return false;
   const limit = customer.credit_limit_centimes;
   return limit === null || limit > 0;
+}
+
+/** What the till says about a sale the server let through anyway. The switch
+ * is exhaustive on the union the server publishes: a second warning added to
+ * `SaleWarningDto` fails to compile here rather than passing the cashier in
+ * silence. */
+function warningKey(warning: SaleWarningDto | null): Key | null {
+  if (warning === null) return null;
+  switch (warning) {
+    case "near_limit":
+      return "till_near_limit_sold";
+    default: {
+      const unreachable: never = warning;
+      return unreachable;
+    }
+  }
 }
 
 /** A refusal `computeTotals` makes, as something the cashier can read. The
@@ -1001,9 +1018,9 @@ function Confirmation({
           </span>
         </p>
       ) : null}
-      {sale.warning === "near_limit" ? (
+      {warningKey(sale.warning) !== null ? (
         <p data-testid="till-near-limit" className="text-sm text-amber-700">
-          {t("till_near_limit_sold")}
+          {t(warningKey(sale.warning) ?? "error_unknown")}
         </p>
       ) : null}
       <div className="flex gap-2">
