@@ -14,9 +14,11 @@ use axum::Json;
 use dzpos_core::db::Conn;
 use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
-use dzpos_core::print::{render_statement, Paper};
+use dzpos_core::models::document::SellerBlock;
+use dzpos_core::print::debt_slip::MOVEMENTS;
+use dzpos_core::print::{render_debt_slip, render_statement, Paper};
 use dzpos_core::services::customers::NewCustomer;
-use dzpos_core::services::{clock, customers as service, debt};
+use dzpos_core::services::{clock, customers as service, debt, shops};
 use serde::Deserialize;
 
 use crate::dto::{
@@ -226,6 +228,48 @@ pub async fn statement(
             let customer = service::get(c, shop, id)?;
             let statement = debt::statement_between(c, shop, id, from, to)?;
             render_statement(&customer, &statement, lang, Paper::A4)
+        })
+        .await?;
+    Ok(Html(page))
+}
+
+/// The language a counter paper prints in. Named by the caller, like the
+/// statement's and the ticket's: a document prints in the language the app is
+/// being used in and the screen is the only place that knows which that is
+/// (features.md §4).
+#[derive(Deserialize)]
+pub struct PrintQuery {
+    lang: Lang,
+}
+
+/// The 80 mm debt slip, as the HTML page the core rendered (features.md §2
+/// and §4). What a credit customer is handed at the counter when they ask
+/// what they owe: the balance, the newest movements behind it, and a line
+/// saying the paper has no fiscal value.
+///
+/// Three reads inside one call and none of them a calculation: the shop as it
+/// stands, the fiche as it stands, and the ledger. The slip carries no number
+/// from a series, so unlike a facture there is nothing here that was
+/// snapshotted on a day and has to be printed back as it was.
+pub async fn debt_slip(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    print: Result<Query<PrintQuery>, QueryRejection>,
+) -> Result<Html<String>, ApiError> {
+    let id = path_id(id)?;
+    let Query(PrintQuery { lang }) =
+        print.map_err(|_| ApiError::BadRequest("lang is fr, en or ar".into()))?;
+    let shop = state.shop_id;
+    // The moment is the server's, the same clock the ledger's rows are
+    // stamped by: a till whose clock is wrong must not date the paper it
+    // hands over.
+    let at = clock::now();
+    let page = state
+        .blocking(move |c| {
+            let seller = SellerBlock::from(shops::get(c, shop)?);
+            let customer = service::get(c, shop, id)?;
+            let slip = debt::recent(c, shop, id, MOVEMENTS)?;
+            render_debt_slip(&seller, &customer, &slip, at, lang)
         })
         .await?;
     Ok(Html(page))

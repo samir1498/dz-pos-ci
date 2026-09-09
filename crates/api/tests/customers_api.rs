@@ -393,6 +393,7 @@ async fn another_shops_customer_is_not_found_on_every_route() {
             format!("/customers/{id}/statement?from=2026-01-01&to=2099-12-31&lang=fr"),
             None,
         ),
+        ("GET", format!("/customers/{id}/debt-slip?lang=fr"), None),
         (
             "POST",
             format!("/customers/{id}/payments"),
@@ -865,4 +866,64 @@ async fn a_statement_range_that_is_not_two_days_the_right_way_round_is_422() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{html}");
     assert!(html.contains("\"bad_request\""), "{html}");
+}
+
+#[tokio::test]
+async fn the_debt_slip_prints_the_balance_the_ledger_sums_to_and_says_it_proves_nothing() {
+    let h = harness();
+    let mut with_debt = draft("Entreprise Benali");
+    with_debt["opening_debt_centimes"] = json!(150_000);
+    let made = create(&h.app, with_debt).await;
+    let id = i32::try_from(id_of(&made)).unwrap();
+    a_facture_on_credit(&h.path, id, 200_000, 5);
+    let (status, answer) = call(
+        &h.app,
+        "POST",
+        &format!("/customers/{id}/payments"),
+        Some(json!({ "amount_centimes": 50_000, "payment_mode": "cash", "note": null })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{answer}");
+
+    let (status, html) = page(&h.app, &format!("/customers/{id}/debt-slip?lang=fr")).await;
+
+    assert_eq!(status, StatusCode::OK, "{html}");
+    assert!(html.contains("Situation de compte"), "{html}");
+    assert!(html.contains("Entreprise Benali"));
+    // The shop's own block, read as it stands today rather than snapshotted:
+    // the slip is a paper about the account and carries no series.
+    assert!(html.contains("Mon magasin"), "{html}");
+    // 3 000,00 owed: 1 500,00 carried over, 2 000,00 on the facture, 500,00
+    // paid off it.
+    assert!(
+        html.contains("amount-balance\">3\u{202f}000,00"),
+        "the balance is not on the page"
+    );
+    assert!(html.contains("trois-mille dinars"), "the words are missing");
+    assert!(html.contains("FA-000001"));
+    assert!(html.contains("Paiement"));
+    // The line that keeps it out of a comptable's file.
+    assert!(html.contains("Document sans valeur fiscale"), "{html}");
+}
+
+#[tokio::test]
+async fn a_debt_slip_in_a_language_the_app_does_not_print_is_the_callers_mistake() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = id_of(&made);
+
+    let (status, html) = page(&h.app, &format!("/customers/{id}/debt-slip?lang=de")).await;
+
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{html}");
+    assert!(html.contains("\"bad_request\""), "{html}");
+}
+
+#[tokio::test]
+async fn a_debt_slip_for_a_customer_this_shop_does_not_have_is_not_found() {
+    let h = harness();
+
+    let (status, html) = page(&h.app, "/customers/4242/debt-slip?lang=fr").await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND, "{html}");
+    assert!(html.contains("\"not_found\""), "{html}");
 }

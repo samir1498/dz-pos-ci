@@ -451,6 +451,10 @@ pub fn router_with_origin(
             get(routes::customers::statement),
         )
         .route(
+            "/customers/{id}/debt-slip",
+            get(routes::customers::debt_slip),
+        )
+        .route(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),
         )
