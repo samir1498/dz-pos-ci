@@ -83,11 +83,52 @@ pub enum Key {
     /// What the two parties put on the paper at the bottom of a facture
     /// (décret 05-468 art. 4).
     Cachet,
+
+    // The statement of account (features.md §2 and §4). What a customer is
+    // handed when they ask what they owe and how it got there.
+    /// The heading, in the printed case like the facture's.
+    Statement,
+    /// The two days the page covers.
+    Period,
+    /// What was owed on the morning of the first day.
+    OpeningBalance,
+    /// What was owed on the evening of the last.
+    ClosingBalance,
+    Date,
+    /// The column naming why the debt moved.
+    Movement,
+    /// The column carrying the number of the document a movement cites.
+    Document,
+    Debit,
+    /// The credit column of a statement. Not `Key::Credit`, which is the word
+    /// for a sale that was not paid for on the day: one is a column and the
+    /// other is a payment mode, and a translator reading one list must not
+    /// have to work out which of the two a shared key meant.
+    CreditColumn,
+    /// Why the debt moved, one per kind of ledger row (features.md §2). Read
+    /// in a table cell, so they are the sentence case a column takes and not
+    /// the heading case `Avoir` above is.
+    KindOpening,
+    KindSale,
+    KindPayment,
+    KindAvoir,
+    KindAdjustment,
+    /// The words line of a statement. Not the facture's, which says "la
+    /// présente facture" in words a comptable reads as being about one
+    /// document.
+    StatementInWords,
+    /// Added to the words line when the closing balance is below zero: the
+    /// shop is holding money for the customer, and the words themselves carry
+    /// no sign.
+    InFavourOfCustomer,
+    /// A range with nothing in it. An empty table is a page that looks broken;
+    /// a sentence saying nothing moved is an answer.
+    NoMovement,
 }
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 38] = [
+    pub const ALL: [Key; 55] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -126,6 +167,23 @@ impl Key {
         Key::ThisDocument,
         Key::TotalDebt,
         Key::Cachet,
+        Key::Statement,
+        Key::Period,
+        Key::OpeningBalance,
+        Key::ClosingBalance,
+        Key::Date,
+        Key::Movement,
+        Key::Document,
+        Key::Debit,
+        Key::CreditColumn,
+        Key::KindOpening,
+        Key::KindSale,
+        Key::KindPayment,
+        Key::KindAvoir,
+        Key::KindAdjustment,
+        Key::StatementInWords,
+        Key::InFavourOfCustomer,
+        Key::NoMovement,
     ];
 }
 
@@ -290,5 +348,73 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::Cachet, Lang::Fr) => "Cachet et signature",
         (Key::Cachet, Lang::En) => "Stamp and signature",
         (Key::Cachet, Lang::Ar) => "الختم والتوقيع",
+
+        (Key::Statement, Lang::Fr) => "RELEVÉ DE COMPTE",
+        (Key::Statement, Lang::En) => "ACCOUNT STATEMENT",
+        (Key::Statement, Lang::Ar) => "كشف الحساب",
+
+        (Key::Period, Lang::Fr) => "Période",
+        (Key::Period, Lang::En) => "Period",
+        (Key::Period, Lang::Ar) => "الفترة",
+
+        (Key::OpeningBalance, Lang::Fr) => "Solde à l\u{2019}ouverture",
+        (Key::OpeningBalance, Lang::En) => "Opening balance",
+        (Key::OpeningBalance, Lang::Ar) => "الرصيد الافتتاحي",
+
+        (Key::ClosingBalance, Lang::Fr) => "Solde à la clôture",
+        (Key::ClosingBalance, Lang::En) => "Closing balance",
+        (Key::ClosingBalance, Lang::Ar) => "الرصيد الختامي",
+
+        (Key::Date, Lang::Fr) => "Date",
+        (Key::Date, Lang::En) => "Date",
+        (Key::Date, Lang::Ar) => "التاريخ",
+
+        (Key::Movement, Lang::Fr) => "Mouvement",
+        (Key::Movement, Lang::En) => "Movement",
+        (Key::Movement, Lang::Ar) => "الحركة",
+
+        (Key::Document, Lang::Fr) => "Document",
+        (Key::Document, Lang::En) => "Document",
+        (Key::Document, Lang::Ar) => "الوثيقة",
+
+        (Key::Debit, Lang::Fr) => "Débit",
+        (Key::Debit, Lang::En) => "Debit",
+        (Key::Debit, Lang::Ar) => "مدين",
+
+        (Key::CreditColumn, Lang::Fr) => "Crédit",
+        (Key::CreditColumn, Lang::En) => "Credit",
+        (Key::CreditColumn, Lang::Ar) => "دائن",
+
+        (Key::KindOpening, Lang::Fr) => "Solde de départ",
+        (Key::KindOpening, Lang::En) => "Balance carried over",
+        (Key::KindOpening, Lang::Ar) => "رصيد مُرحَّل",
+
+        (Key::KindSale, Lang::Fr) => "Vente",
+        (Key::KindSale, Lang::En) => "Sale",
+        (Key::KindSale, Lang::Ar) => "بيع",
+
+        (Key::KindPayment, Lang::Fr) => "Paiement",
+        (Key::KindPayment, Lang::En) => "Payment",
+        (Key::KindPayment, Lang::Ar) => "دفع",
+
+        (Key::KindAvoir, Lang::Fr) => "Avoir",
+        (Key::KindAvoir, Lang::En) => "Credit note",
+        (Key::KindAvoir, Lang::Ar) => "إشعار دائن",
+
+        (Key::KindAdjustment, Lang::Fr) => "Ajustement",
+        (Key::KindAdjustment, Lang::En) => "Adjustment",
+        (Key::KindAdjustment, Lang::Ar) => "تسوية",
+
+        (Key::StatementInWords, Lang::Fr) => "Arrêté le présent relevé à la somme de",
+        (Key::StatementInWords, Lang::En) => "This statement is closed at the sum of",
+        (Key::StatementInWords, Lang::Ar) => "أوقف هذا الكشف بمبلغ",
+
+        (Key::InFavourOfCustomer, Lang::Fr) => "en faveur du client",
+        (Key::InFavourOfCustomer, Lang::En) => "in the customer\u{2019}s favour",
+        (Key::InFavourOfCustomer, Lang::Ar) => "لصالح الزبون",
+
+        (Key::NoMovement, Lang::Fr) => "Aucun mouvement sur la période",
+        (Key::NoMovement, Lang::En) => "No movement in this period",
+        (Key::NoMovement, Lang::Ar) => "لا توجد حركة في هذه الفترة",
     }
 }

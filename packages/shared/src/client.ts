@@ -15,7 +15,12 @@ import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
 import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
 import type { DebtEntryDto } from "./generated/DebtEntryDto";
 import type { DebtKindDto } from "./generated/DebtKindDto";
+import type { CustomerPaymentsDto } from "./generated/CustomerPaymentsDto";
 import type { NewCustomerDto } from "./generated/NewCustomerDto";
+import type { NewPaymentDto } from "./generated/NewPaymentDto";
+import type { PaymentAllocationDto } from "./generated/PaymentAllocationDto";
+import type { PaymentDto } from "./generated/PaymentDto";
+import type { PaymentMethodDto } from "./generated/PaymentMethodDto";
 import type { PartyKindDto } from "./generated/PartyKindDto";
 import type { HealthDto } from "./generated/HealthDto";
 import type { DocumentKindDto } from "./generated/DocumentKindDto";
@@ -43,25 +48,36 @@ import type { UnitDto } from "./generated/UnitDto";
  * `balanceAfterCentimes` and `creditLimitCentimes` are on a `credit_limit`
  * refusal and on nothing else: the till has to say by how much a limit was
  * passed, and working that out on the screen would be a second answer to
- * what a customer owes. Undefined everywhere else, never zero. */
+ * what a customer owes. `field` and `outstandingCentimes` are the same
+ * bargain on a payment above the debt: the fiche says what is actually owed
+ * because the server said it. Undefined everywhere else, never zero. */
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
   readonly balanceAfterCentimes?: number;
   readonly creditLimitCentimes?: number;
+  readonly field?: string;
+  readonly outstandingCentimes?: number;
 
   constructor(
     code: string,
     message: string,
     status: number,
-    credit?: { balanceAfterCentimes?: number; creditLimitCentimes?: number },
+    figures?: {
+      balanceAfterCentimes?: number;
+      creditLimitCentimes?: number;
+      field?: string;
+      outstandingCentimes?: number;
+    },
   ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
-    this.balanceAfterCentimes = credit?.balanceAfterCentimes;
-    this.creditLimitCentimes = credit?.creditLimitCentimes;
+    this.balanceAfterCentimes = figures?.balanceAfterCentimes;
+    this.creditLimitCentimes = figures?.creditLimitCentimes;
+    this.field = figures?.field;
+    this.outstandingCentimes = figures?.outstandingCentimes;
   }
 }
 
@@ -91,17 +107,20 @@ export function isApiErrorBody(value: unknown): value is ApiErrorDto {
     typeof error.code === "string" &&
     typeof error.message === "string" &&
     isOptionalExactInteger(error.balance_after_centimes) &&
-    isOptionalExactInteger(error.credit_limit_centimes)
+    isOptionalExactInteger(error.credit_limit_centimes) &&
+    (error.field === undefined || typeof error.field === "string") &&
+    isOptionalExactInteger(error.outstanding_centimes)
   );
 }
 
-/** The error the envelope described, with the two credit amounts when it
- * carried them. One place builds it, so both callers of `unwrap` read a
- * refusal the same way. */
+/** The error the envelope described, with the figures it carried. One place
+ * builds it, so both callers of `unwrap` read a refusal the same way. */
 function apiError(body: ApiErrorDto, status: number): ApiError {
   return new ApiError(body.error.code, body.error.message, status, {
     balanceAfterCentimes: body.error.balance_after_centimes,
     creditLimitCentimes: body.error.credit_limit_centimes,
+    field: body.error.field,
+    outstandingCentimes: body.error.outstanding_centimes,
   });
 }
 
@@ -409,6 +428,45 @@ export function isDebtEntry(value: unknown): value is DebtEntryDto {
   );
 }
 
+const PAYMENT_METHODS: readonly PaymentMethodDto[] = ["cash", "card"];
+
+function isPaymentMethod(value: unknown): value is PaymentMethodDto {
+  return typeof value === "string" && PAYMENT_METHODS.some((m) => m === value);
+}
+
+function isPaymentAllocation(value: unknown): value is PaymentAllocationDto {
+  return (
+    isRecord(value) &&
+    typeof value.document_id === "number" &&
+    isExactInteger(value.amount_centimes)
+  );
+}
+
+export function isPayment(value: unknown): value is PaymentDto {
+  return (
+    isRecord(value) &&
+    typeof value.ledger_id === "number" &&
+    typeof value.customer_id === "number" &&
+    isExactInteger(value.amount_centimes) &&
+    (value.payment_mode === null || isPaymentMethod(value.payment_mode)) &&
+    isNullableString(value.note) &&
+    isExactInteger(value.balance_after_centimes) &&
+    Array.isArray(value.allocations) &&
+    value.allocations.every(isPaymentAllocation) &&
+    typeof value.created_at === "string"
+  );
+}
+
+export function isCustomerPayments(value: unknown): value is CustomerPaymentsDto {
+  return (
+    isRecord(value) &&
+    typeof value.customer_id === "number" &&
+    isExactInteger(value.balance_centimes) &&
+    Array.isArray(value.payments) &&
+    value.payments.every(isPayment)
+  );
+}
+
 export function isCustomerLedger(value: unknown): value is CustomerLedgerDto {
   return (
     isRecord(value) &&
@@ -660,6 +718,42 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         body: JSON.stringify(input),
       });
       return narrow(body, isCustomerLedger, "customer ledger");
+    },
+
+    /** The customer's payments, newest first, each with the documents it
+     * settled. The balance in the envelope is the whole ledger's, not the
+     * newest payment's: a sale written after the last payment moved it. */
+    async customerPayments(id: number): Promise<CustomerPaymentsDto> {
+      return narrow(
+        await send(`/customers/${id}/payments`),
+        isCustomerPayments,
+        "customer payments",
+      );
+    },
+
+    /** Money against a debt. The server settles the oldest documents first
+     * and refuses a payment above what the customer owes; the answer is the
+     * whole list of payments again. */
+    async payCustomer(id: number, input: NewPaymentDto): Promise<CustomerPaymentsDto> {
+      const body = await send(`/customers/${id}/payments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isCustomerPayments, "customer payments");
+    },
+
+    /** The statement of account over a range of days, as the HTML page the
+     * core rendered. The UI prints these bytes and never builds a document of
+     * its own (features.md §4). The days are `YYYY-MM-DD`. */
+    async customerStatement(
+      id: number,
+      from: string,
+      to: string,
+      lang: PrintLang,
+    ): Promise<string> {
+      const query = new URLSearchParams({ from, to, lang });
+      return sendText(`/customers/${id}/statement?${query.toString()}`);
     },
 
     async createProduct(input: NewProductDto): Promise<ProductDto> {

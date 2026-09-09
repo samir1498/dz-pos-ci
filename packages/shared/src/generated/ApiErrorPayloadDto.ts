@@ -7,4 +7,14 @@ export type ApiErrorPayloadDto = { code: string, message: string,
  * so the till reads them as optional and never as a zero somebody meant
  * (crates/api/src/error.rs writes them).
  */
-balance_after_centimes?: number, credit_limit_centimes?: number, };
+balance_after_centimes?: number, credit_limit_centimes?: number, 
+/**
+ * The field of the request a refusal is about, when it is about one.
+ */
+field?: string, 
+/**
+ * Only on a payment refused for being more than the debt: what the
+ * customer actually owes. "Too much" is useless without the amount that
+ * would not have been.
+ */
+outstanding_centimes?: number, };

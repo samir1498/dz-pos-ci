@@ -12,10 +12,12 @@
 //! same on both and a customer comparing them must not find two spellings.
 
 pub mod facture;
+pub mod statement;
 pub mod strings;
 pub mod ticket;
 
 pub use facture::{render_facture, render_facture_with_reference, Paper};
+pub use statement::render_statement;
 pub use ticket::render_ticket;
 
 use crate::models::document::Document;
@@ -32,10 +34,17 @@ const NUMBER_DIGITS: usize = 6;
 
 /// The number a customer quotes, `{prefix}-{number:06}` (features.md §4).
 pub(crate) fn number(doc: &Document) -> String {
+    number_of(doc.kind, doc.number)
+}
+
+/// The same number, for a caller that has the kind and the number without the
+/// document: a statement names the document a movement cites and reads two
+/// columns of it, never the whole row.
+pub(crate) fn number_of(kind: crate::models::document::DocumentKind, number: i64) -> String {
     format!(
         "{}-{:0width$}",
-        doc.kind.number_prefix(),
-        doc.number,
+        kind.number_prefix(),
+        number,
         width = NUMBER_DIGITS
     )
 }

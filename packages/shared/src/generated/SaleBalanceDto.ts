@@ -4,6 +4,8 @@
  * What the customer owed before this document, what it leaves unpaid, and
  * what they owe now (features.md §3, the balance triple). Stored on the
  * document at issue and never recomputed, so a screen and a reprint say the
- * same thing. Null on a document that names no customer.
+ * same thing. `remaining_debt_centimes` is the one of the three that moves
+ * afterwards: a payment settles part of a document and the column says how
+ * much of it is left. Null on a document that names no customer.
  */
 export type SaleBalanceDto = { old_balance_centimes: number, remaining_debt_centimes: number, total_debt_centimes: number, };

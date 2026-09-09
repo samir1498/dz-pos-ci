@@ -6,7 +6,12 @@ export type { AdjustmentDto } from "./generated/AdjustmentDto";
 export type { CategoryDto } from "./generated/CategoryDto";
 export type { CustomerDto } from "./generated/CustomerDto";
 export type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
+export type { CustomerPaymentsDto } from "./generated/CustomerPaymentsDto";
 export type { CustomerWriteDto } from "./generated/CustomerWriteDto";
+export type { NewPaymentDto } from "./generated/NewPaymentDto";
+export type { PaymentAllocationDto } from "./generated/PaymentAllocationDto";
+export type { PaymentDto } from "./generated/PaymentDto";
+export type { PaymentMethodDto } from "./generated/PaymentMethodDto";
 export type { DebtEntryDto } from "./generated/DebtEntryDto";
 export type { DebtKindDto } from "./generated/DebtKindDto";
 export type { NewCustomerDto } from "./generated/NewCustomerDto";
@@ -26,11 +31,11 @@ export type { RestoreDto } from "./generated/RestoreDto";
 export type { PaymentModeDto } from "./generated/PaymentModeDto";
 export type { DocumentKindDto } from "./generated/DocumentKindDto";
 export type { DocumentStatusDto } from "./generated/DocumentStatusDto";
+export type { SaleBalanceDto } from "./generated/SaleBalanceDto";
 export type { SaleDto } from "./generated/SaleDto";
 export type { SaleLineDto } from "./generated/SaleLineDto";
 export type { SaleTvaDto } from "./generated/SaleTvaDto";
 export type { SaleTotalsDto } from "./generated/SaleTotalsDto";
-export type { SaleBalanceDto } from "./generated/SaleBalanceDto";
 export type { SaleWarningDto } from "./generated/SaleWarningDto";
 export type { NewSaleDto } from "./generated/NewSaleDto";
 export type { NewSaleLineDto } from "./generated/NewSaleLineDto";
@@ -44,7 +49,9 @@ export {
   isCategory,
   isCustomer,
   isCustomerLedger,
+  isCustomerPayments,
   isDebtEntry,
+  isPayment,
   isRestore,
   isSale,
   isSettings,

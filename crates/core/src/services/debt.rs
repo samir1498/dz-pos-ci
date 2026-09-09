@@ -14,19 +14,21 @@
 
 use std::collections::HashMap;
 
+use chrono::{NaiveDate, NaiveDateTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::debt::{DebtAllocationRowWrite, DebtRowWrite};
+use crate::models::document::DocumentKind;
 use crate::money::Money;
 use crate::repos::customers as customers_repo;
 use crate::repos::debt as repo;
 use crate::repos::documents as documents_repo;
-use crate::services::{audit, optional_field};
+use crate::services::{audit, clock, optional_field};
 
 pub use crate::models::debt::{
-    DebtAllocation, DebtEntry, DebtKind, NewDebtAllocation, NewDebtEntry,
+    DebtAllocation, DebtEntry, DebtKind, NewDebtAllocation, NewDebtEntry, PaymentMethod,
 };
 
 /// What the customer owes right now: the sum of the ledger, never a stored
@@ -111,13 +113,119 @@ pub fn statement(
     })
 }
 
-/// What an adjustment left behind: the movement, and the ledger as the same
-/// transaction read it once the movement had landed. The statement travels
-/// with the entry so that the balance the caller answers, the balance the
-/// audit records and the balance the ledger sums to are one figure read once.
+/// The document a movement cites, as a statement prints it: the kind decides
+/// the printed prefix and the number is the one the series handed out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DocumentRef {
+    pub kind: DocumentKind,
+    pub number: i64,
+}
+
+/// One movement of a statement: the row, the balance as of it, and the
+/// document it cites when it cites one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatementEntry {
+    pub entry: DebtEntry,
+    pub balance_after: Money,
+    pub document: Option<DocumentRef>,
+}
+
+/// A customer's account over a range of days: what they owed on the morning
+/// of `from`, every movement between the two days, and what they owed on the
+/// evening of `to`.
+///
+/// The opening balance is the running balance of the newest movement before
+/// the range, and the closing balance is the newest one inside it, so neither
+/// is a second sum of the ledger: they are read off the same running column
+/// `statement` builds, and a page printing them can add nothing up.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RangedStatement {
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+    pub opening: Money,
+    /// Oldest first, which is the order a statement is read in.
+    pub entries: Vec<StatementEntry>,
+    pub closing: Money,
+}
+
+/// The customer's account between two days, both included (features.md §2).
+///
+/// `to` is inclusive to the end of its day: a range asked for as one day is
+/// that day's movements, and a payment taken at 16:30 falls inside a range
+/// that ends on the day it was taken. The day a movement is compared by is
+/// the day on the shop's calendar, because every row is stamped by the shop's
+/// clock (`append_at`) and a document's `issued_at` is too.
+pub fn statement_between(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Result<RangedStatement, CoreError> {
+    if from > to {
+        return Err(CoreError::validation(
+            "to",
+            "a range ends on the day it starts or later",
+        ));
+    }
+    let whole = statement(conn, shop_id, customer_id)?;
+    let mut opening = Money::ZERO;
+    let mut inside = Vec::new();
+    // `statement` answers newest first; a statement is read the other way.
+    for line in whole.lines.into_iter().rev() {
+        let day = line.entry.created_at.date();
+        if day < from {
+            // The last one before the range is what the customer owed when it
+            // opened, so the column is followed rather than summed again.
+            opening = line.balance_after;
+        } else if day <= to {
+            inside.push(line);
+        }
+    }
+    let closing = inside
+        .last()
+        .map_or(opening, |line: &LedgerLine| line.balance_after);
+    let cited: Vec<i32> = inside
+        .iter()
+        .filter_map(|line| line.entry.document_id)
+        .collect();
+    let named = documents_repo::kinds_and_numbers(conn, shop_id, &cited)?;
+    let entries = inside
+        .into_iter()
+        .map(|line| StatementEntry {
+            document: line.entry.document_id.and_then(|id| {
+                named
+                    .iter()
+                    .find(|(found, _, _)| *found == id)
+                    .map(|(_, kind, number)| DocumentRef {
+                        kind: *kind,
+                        number: *number,
+                    })
+            }),
+            entry: line.entry,
+            balance_after: line.balance_after,
+        })
+        .collect();
+    Ok(RangedStatement {
+        from,
+        to,
+        opening,
+        entries,
+        closing,
+    })
+}
+
+/// What an adjustment left behind: the movement, what it took off the
+/// customer's documents, and the ledger as the same transaction read it once
+/// the movement had landed. The statement travels with the entry so that the
+/// balance the caller answers, the balance the audit records and the balance
+/// the ledger sums to are one figure read once.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Adjusted {
     pub entry: DebtEntry,
+    /// Oldest document first, and empty on a correction that raises the debt:
+    /// money owed that no paper asks for settles nothing.
+    pub allocations: Vec<DebtAllocation>,
     pub statement: Statement,
 }
 
@@ -125,6 +233,16 @@ pub struct Adjusted {
 /// (features.md §2). A positive amount raises what the customer owes, a
 /// negative one lowers it; zero is refused, because a correction of nothing
 /// is an empty form somebody submitted.
+///
+/// A closed fiche still takes one: a shop closes a fiche to stop selling to
+/// somebody, not to stop correcting what they owe. The sale is what a closed
+/// fiche refuses (`services::sales`).
+///
+/// A correction downwards settles the customer's documents oldest first,
+/// through the same allocation a payment goes through (features.md §3): the
+/// ledger is what a customer owes, so a document that is no longer owed in
+/// full must not go on asking for the whole of it. A correction upwards
+/// settles nothing: it is debt no paper carries, like an opening balance.
 ///
 /// The movement and its audit entry are one transaction: a change to what
 /// somebody owes with nobody's name on it is exactly what the log exists to
@@ -167,6 +285,14 @@ pub fn adjust(
                 note,
             },
         )?;
+        // A correction downwards is money off the papers, oldest first, the
+        // same way a payment is. Upwards it is debt no document carries, so
+        // there is nothing to place.
+        let allocations = if amount.is_negative() {
+            allocate_oldest_first(conn, shop_id, customer_id, entry.id, credit)?
+        } else {
+            Vec::new()
+        };
         // Read once, inside the transaction: what goes into the log below is
         // the same figure the caller is handed.
         let after = statement(conn, shop_id, customer_id)?;
@@ -187,6 +313,7 @@ pub fn adjust(
                         "amount_centimes": amount.as_centimes(),
                         "ledger_id": entry.id,
                         "note": entry.note,
+                        "allocations": allocated_json(&allocations),
                     })
                     .to_string(),
                 ),
@@ -194,9 +321,238 @@ pub fn adjust(
         )?;
         Ok(Adjusted {
             entry,
+            allocations,
             statement: after,
         })
     })
+}
+
+/// What a payment left behind: the movement, what it settled and where the
+/// balance stood once it had landed. All three are read inside the payment's
+/// own transaction, so the figure the caller answers, the figure the audit
+/// records and the figure the ledger sums to are one figure read once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Payment {
+    pub entry: DebtEntry,
+    /// Oldest document first, which is the order the money filled them in.
+    /// Empty when the customer owes on no document at all: an opening balance
+    /// and a correction cite none, and money against those settles the
+    /// balance without settling a piece of paper.
+    pub allocations: Vec<DebtAllocation>,
+    pub balance_after: Money,
+}
+
+/// Money against a debt (features.md §2). One transaction: the credit
+/// movement, the allocations that say which documents it settled, the
+/// remaining debt on each of those documents and the audit entry either all
+/// land or none of them does.
+///
+/// A payment is never more than the customer owes. Money over the debt is not
+/// a payment, it is a credit the shop is holding, and the only thing that
+/// opens one is an avoir (T6): a payment allowed to overshoot would open one
+/// silently, with no document behind it and nothing on the statement saying
+/// where it came from.
+///
+/// A closed fiche still takes one: a shop closes a fiche to stop selling to
+/// somebody, not to stop collecting from them, and a customer who owed money
+/// on the day their fiche was closed still walks in with it.
+///
+/// The documents are settled oldest first, each one taken to what is left on
+/// it and no further (features.md §2). What a payment cannot place on a
+/// document stays on the balance: an opening balance carries no document, and
+/// a payment against one is a real payment that settles no paper.
+#[allow(clippy::too_many_arguments)]
+pub fn pay(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    customer_id: i32,
+    amount: Money,
+    mode: PaymentMethod,
+    note: Option<String>,
+    at: NaiveDateTime,
+) -> Result<Payment, CoreError> {
+    ensure_customer(conn, shop_id, customer_id)?;
+    if amount.as_centimes() <= 0 {
+        return Err(CoreError::validation(
+            "amount_centimes",
+            "a payment of nothing pays nothing",
+        ));
+    }
+    let note = optional_field("note", note.as_deref())?;
+    conn.transaction(|conn| {
+        // Read inside the transaction, because it is what the amount is
+        // measured against: a second payment landing between the check and
+        // the write would otherwise take the customer into credit.
+        let outstanding = repo::balance(conn, shop_id, customer_id)?;
+        if amount > outstanding {
+            return Err(CoreError::PaymentAboveDebt {
+                // Nothing owed, or the shop owing the customer, is nothing
+                // that can be paid; the payload says zero rather than a
+                // negative a screen would have to explain.
+                outstanding_centimes: outstanding.as_centimes().max(0),
+            });
+        }
+        let entry = repo::append(
+            conn,
+            &DebtRowWrite {
+                shop_id,
+                customer_id,
+                // A payment settles documents through its allocations, which
+                // can be several: the column that names one document would
+                // have to pick.
+                document_id: None,
+                kind: DebtKind::Payment,
+                debit_centimes: 0,
+                credit_centimes: amount.as_centimes(),
+                user_id,
+                note,
+                payment_mode: Some(mode),
+                created_at: Some(at),
+            },
+        )?;
+        let allocations = allocate_oldest_first(conn, shop_id, customer_id, entry.id, amount)?;
+        let after = repo::balance(conn, shop_id, customer_id)?;
+        audit::record(
+            conn,
+            shop_id,
+            user_id,
+            audit::Change {
+                action: audit::ACTION_PAY_DEBT,
+                entity: "customer_debt",
+                entity_id: Some(customer_id),
+                before: Some(
+                    serde_json::json!({ "balance_centimes": outstanding.as_centimes() })
+                        .to_string(),
+                ),
+                after: Some(
+                    serde_json::json!({
+                        "balance_centimes": after.as_centimes(),
+                        "amount_centimes": amount.as_centimes(),
+                        "payment_mode": mode.as_str(),
+                        "ledger_id": entry.id,
+                        "allocations": allocated_json(&allocations),
+                    })
+                    .to_string(),
+                ),
+            },
+        )?;
+        Ok(Payment {
+            entry,
+            allocations,
+            balance_after: after,
+        })
+    })
+}
+
+/// What the movement settled, document by document, as the log records it.
+/// The amounts and not only the ids: a log saying a facture was settled
+/// without saying by how much cannot be read against the facture.
+fn allocated_json(allocations: &[DebtAllocation]) -> serde_json::Value {
+    serde_json::Value::Array(
+        allocations
+            .iter()
+            .map(|a| {
+                serde_json::json!({
+                    "document_id": a.document_id,
+                    "amount_centimes": a.amount.as_centimes(),
+                })
+            })
+            .collect(),
+    )
+}
+
+/// Spreads `amount` over the customer's unpaid documents, oldest first, and
+/// writes back what is left on each. Runs inside the transaction of whichever
+/// movement is settling paper: a payment, or a correction downwards.
+///
+/// The money can run out before the documents do, and the documents can run
+/// out before the money does; both are ordinary. The second one is what
+/// happens when part of the balance came from an opening row or a correction,
+/// which cite no document at all.
+fn allocate_oldest_first(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+    payment_ledger_id: i32,
+    amount: Money,
+) -> Result<Vec<DebtAllocation>, CoreError> {
+    let unpaid = documents_repo::unpaid_of_customer(conn, shop_id, customer_id)?;
+    let mut left = amount;
+    let mut written = Vec::new();
+    for (document_id, remaining_centimes, net_to_pay_centimes) in unpaid {
+        if left == Money::ZERO {
+            break;
+        }
+        let remaining = Money::centimes(remaining_centimes);
+        let take = left.min(remaining);
+        // Σ of what has been placed on this document, this allocation
+        // included, never above what the document asked for. The remaining
+        // column alone would not catch it: a row written straight into
+        // `debt_allocations` moves no column, and the document would end up
+        // settled twice over with nothing saying so.
+        let already = allocated_on(conn, shop_id, document_id)?;
+        if already.checked_add(take)? > Money::centimes(net_to_pay_centimes) {
+            return Err(CoreError::validation(
+                "amount_centimes",
+                "a document cannot be settled for more than it asked for",
+            ));
+        }
+        written.push(allocate(
+            conn,
+            shop_id,
+            NewDebtAllocation {
+                payment_ledger_id,
+                document_id,
+                amount: take,
+            },
+        )?);
+        documents_repo::set_remaining_debt(
+            conn,
+            shop_id,
+            document_id,
+            remaining.checked_sub(take)?.as_centimes(),
+        )?;
+        left = left.checked_sub(take)?;
+    }
+    Ok(written)
+}
+
+/// What every payment so far has placed on one document.
+fn allocated_on(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+) -> Result<Money, CoreError> {
+    let mut sum = Money::ZERO;
+    for allocation in repo::allocations(conn, shop_id, document_id)? {
+        sum = sum.checked_add(allocation.amount)?;
+    }
+    Ok(sum)
+}
+
+/// The payments of one customer, newest first, each with what it settled.
+pub fn payments(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+) -> Result<Vec<Payment>, CoreError> {
+    let statement = statement(conn, shop_id, customer_id)?;
+    let mut found = Vec::new();
+    for line in statement.lines {
+        if line.entry.kind != DebtKind::Payment {
+            continue;
+        }
+        let allocations = repo::allocations_of_payment(conn, shop_id, line.entry.id)?;
+        found.push(Payment {
+            entry: line.entry,
+            allocations,
+            // The balance as of the payment, which is what the movement left
+            // behind; the newest one's is what the customer owes now.
+            balance_after: line.balance_after,
+        });
+    }
+    Ok(found)
 }
 
 /// Writes one movement. Runs inside the caller's transaction.
@@ -209,6 +565,24 @@ pub fn append(
     conn: &mut SqliteConnection,
     shop_id: i32,
     entry: NewDebtEntry,
+) -> Result<DebtEntry, CoreError> {
+    append_at(conn, shop_id, entry, None)
+}
+
+/// The same movement, stamped with the moment it belongs to rather than with
+/// the moment it was written. `None` is now, on the shop's clock, which is
+/// what every caller ringing something up wants; a caller that knows when the
+/// money moved says so, and the statement's date range then reads the day the
+/// shop would say it was.
+///
+/// The column's own `CURRENT_TIMESTAMP` default is never used: it is UTC,
+/// while a document's `issued_at` is on the shop's calendar, and one hour a
+/// day the two disagree about which day a movement landed on.
+pub fn append_at(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    entry: NewDebtEntry,
+    at: Option<NaiveDateTime>,
 ) -> Result<DebtEntry, CoreError> {
     ensure_customer(conn, shop_id, entry.customer_id)?;
     // The document a movement cites is checked the same way the allocation's
@@ -253,6 +627,10 @@ pub fn append(
             credit_centimes: entry.credit.as_centimes(),
             user_id: entry.user_id,
             note,
+            // A movement that is not a payment was not handed over in
+            // anything. `pay` is the one writer that fills the mode in.
+            payment_mode: None,
+            created_at: Some(at.unwrap_or_else(clock::now)),
         },
     )
 }

@@ -58,12 +58,12 @@ struct Body {
     error: Payload,
 }
 
-/// The envelope's payload. The two credit amounts are the one exception to
-/// "a code and a sentence": the till has to say by how much a credit limit
-/// was passed, and re-deriving that on the screen would be a second answer
-/// to what a customer owes (architecture.md rule 2). They are left out of
-/// every other error's body rather than sent as nulls, so nothing else on
-/// the wire changed shape.
+/// The envelope's payload. The figures beside the code are the one exception
+/// to "a code and a sentence": the till has to say by how much a credit limit
+/// was passed and the fiche by how much a payment overshot, and re-deriving
+/// either on the screen would be a second answer to what a customer owes
+/// (architecture.md rule 2). They are left out of every other error's body
+/// rather than sent as nulls, so nothing else on the wire changed shape.
 #[derive(Serialize)]
 struct Payload {
     code: &'static str,
@@ -72,6 +72,33 @@ struct Payload {
     balance_after_centimes: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     credit_limit_centimes: Option<i64>,
+    /// Which field of the request the refusal is about, when the refusal is
+    /// about one field and the screen has somewhere to put the message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field: Option<&'static str>,
+    /// What the customer still owes, on a payment that asked for more.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outstanding_centimes: Option<i64>,
+}
+
+/// What an error carries besides its code and its sentence. One value per
+/// optional field of the payload, filled by the one error that knows it and
+/// left empty by every other, so the body of an ordinary refusal is the two
+/// keys it always was.
+struct Figures {
+    balance_after_centimes: Option<i64>,
+    credit_limit_centimes: Option<i64>,
+    field: Option<&'static str>,
+    outstanding_centimes: Option<i64>,
+}
+
+impl Figures {
+    const NONE: Self = Self {
+        balance_after_centimes: None,
+        credit_limit_centimes: None,
+        field: None,
+        outstanding_centimes: None,
+    };
 }
 
 impl ApiError {
@@ -108,9 +135,13 @@ impl ApiError {
         }
     }
 
-    /// The two amounts a credit refusal carries, in centimes. Every other
-    /// error carries neither, and the fields are then absent from the body.
-    const fn credit_amounts(&self) -> (Option<i64>, Option<i64>) {
+    /// The amounts an error carries, in centimes. A credit refusal names what
+    /// the sale would have taken the customer to and the limit it passed; a
+    /// payment above the debt names what is actually owed, and the field it
+    /// is about, so the form can say "you can take at most this much" without
+    /// asking the balance again. Every other error carries none of them, and
+    /// the fields are then absent from the body.
+    const fn figures(&self) -> Figures {
         match self {
             ApiError::Core(CoreError::CreditLimit {
                 balance_after,
@@ -119,11 +150,22 @@ impl ApiError {
             | ApiError::Request(CoreError::CreditLimit {
                 balance_after,
                 credit_limit,
-            }) => (
-                Some(balance_after.as_centimes()),
-                Some(credit_limit.as_centimes()),
-            ),
-            _ => (None, None),
+            }) => Figures {
+                balance_after_centimes: Some(balance_after.as_centimes()),
+                credit_limit_centimes: Some(credit_limit.as_centimes()),
+                ..Figures::NONE
+            },
+            ApiError::Core(CoreError::PaymentAboveDebt {
+                outstanding_centimes,
+            })
+            | ApiError::Request(CoreError::PaymentAboveDebt {
+                outstanding_centimes,
+            }) => Figures {
+                field: Some("amount_centimes"),
+                outstanding_centimes: Some(*outstanding_centimes),
+                ..Figures::NONE
+            },
+            _ => Figures::NONE,
         }
     }
 }
@@ -138,9 +180,11 @@ const fn status_for(e: &CoreError) -> StatusCode {
         // paying another way or by resending with `override`. The two
         // amounts in the payload are what the till renders, so it sits with
         // the 422s and not with the conflicts.
-        CoreError::Validation { .. } | CoreError::CreditLimit { .. } => {
-            StatusCode::UNPROCESSABLE_ENTITY
-        }
+        // A payment above the debt sits with them for the same reason: the
+        // caller can act on it, by taking what is owed instead.
+        CoreError::Validation { .. }
+        | CoreError::CreditLimit { .. }
+        | CoreError::PaymentAboveDebt { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
         // A template that will not render is the app's own bug: the
@@ -189,7 +233,12 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = self.parts();
         let message = self.message();
-        let (balance_after_centimes, credit_limit_centimes) = self.credit_amounts();
+        let Figures {
+            balance_after_centimes,
+            credit_limit_centimes,
+            field,
+            outstanding_centimes,
+        } = self.figures();
         let mut res = (
             status,
             Json(Body {
@@ -198,6 +247,8 @@ impl IntoResponse for ApiError {
                     message,
                     balance_after_centimes,
                     credit_limit_centimes,
+                    field,
+                    outstanding_centimes,
                 },
             }),
         )

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>ACCOUNT STATEMENT</title>
+<style>
+@page { size: A4; margin: 12mm }
+body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", Arial, sans-serif }
+.doc { max-inline-size: 186mm; margin: 0 auto }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; border-block-end: 2px solid #000; padding-block-end: 3mm }
+.head h1 { font-size: 20px; margin: 0 0 1mm }
+.num { white-space: nowrap }
+.party { border: 1px solid #000; padding: 3mm; margin-block-start: 6mm }
+.party h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 2mm }
+.party .who { font-weight: 700 }
+.label { color: #333 }
+.lines { display: flex; margin-block-start: 6mm }
+.lines table { flex: 1 1 auto }
+table { border-collapse: collapse }
+th, td { border: 1px solid #000; padding: 1.6mm 2mm; text-align: start; vertical-align: top }
+th { background: #eee; font-weight: 700 }
+td.n, th.n { text-align: end; white-space: nowrap }
+tr.edge td { font-weight: 700; background: #f6f6f6 }
+.none { margin-block-start: 6mm; border: 1px dashed #000; padding: 3mm }
+.words { margin-block-start: 5mm; border: 1px solid #000; padding: 3mm }
+.cur { margin-inline-start: .4em }
+</style>
+</head>
+<body>
+<article class="doc">
+<header class="head">
+<div>
+<h1>ACCOUNT STATEMENT</h1>
+<div><span class="label">Period</span> <span class="num">01/09/2026 - 30/09/2026</span></div>
+</div>
+</header>
+<section class="party">
+<h2>Customer</h2>
+<div class="who">Entreprise Benali &#38; Fils</div>
+<div>12 rue Didouche Mourad, Alger</div>
+<div class="num">0770 11 22 33</div>
+<div><span class="label">RC</span> <span class="num">16/00-1234567 B 09</span></div>
+<div><span class="label">NIF</span> <span class="num">000916001234567</span></div>
+<div><span class="label">NIS</span> <span class="num">000916009876543</span></div>
+<div><span class="label">AI</span> <span class="num">16123456789</span></div>
+</section>
+<div class="lines">
+<table>
+<thead>
+<tr><th>Date</th><th>Movement</th><th>Document</th><th class="n">Debit</th><th class="n">Credit</th><th class="n">Balance</th></tr>
+</thead>
+<tbody>
+<tr class="edge"><td class="num">01/09/2026</td><td colspan="2">Opening balance</td><td class="n"></td><td class="n"></td><td class="n"><span class="amount amount-opening">1 500,00</span></td></tr>
+<tr><td class="num">05/09/2026</td><td>Sale</td><td class="num">FA-000042</td><td class="n"><span class="amount amount-debit">2 000,00</span></td><td class="n"></td><td class="n"><span class="amount amount-running">3 500,00</span></td></tr>
+<tr><td class="num">12/09/2026</td><td>Payment</td><td class="num"></td><td class="n"></td><td class="n"><span class="amount amount-credit">2 500,00</span></td><td class="n"><span class="amount amount-running">1 000,00</span></td></tr>
+<tr><td class="num">20/09/2026</td><td>Adjustment</td><td class="num"></td><td class="n"></td><td class="n"><span class="amount amount-credit">100,00</span></td><td class="n"><span class="amount amount-running">900,00</span></td></tr>
+<tr class="edge"><td class="num">30/09/2026</td><td colspan="2">Closing balance</td><td class="n"></td><td class="n"></td><td class="n"><span class="amount amount-closing">900,00</span><span class="cur">DZD</span></td></tr>
+</tbody>
+</table>
+</div>
+<p class="words">This statement is closed at the sum of <strong class="in-words">nine hundred dinars</strong></p>
+</article>
+</body>
+</html>
