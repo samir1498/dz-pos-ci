@@ -22,11 +22,11 @@ Run `just ctx show <slug>` for plan details.
 Samir reviews between steps; one step in flight at a time.
 
 1. [x] Stamp, TVA, rounding, facture mentions, numbering, IFU, words read from primary sources; all in `research/legal-fiscal/2026-09-08-fiscal-sources-and-findings.md` and the Source column of `docs/features.md` (R1, R2, R4, R5 done; R3, R6 partial)
-2. [ ] `Money` newtype and `pct` in `crates/core`, first fixtures, first proptest (money plan T1)
-3. [ ] TVA grouping per rate and global discount spread; fixtures shared with `design/shared/money.js` via vitest (T2, T5)
-4. [ ] Stamp duty per step 1 (T3, T8)
-5. [ ] Amount in words fr/ar/en with golden files (T4, R6)
-6. [ ] First migration (`shop_id`, products with a price model for both regimes, settings with the dated régime fiscal, one seeded owner user), `crates/api` with GET/POST /products, `packages/shared` with the ts-rs types, and the products screen reading it, shown on the laptop; the `webapp-testing` and `frontend-design` trial (R9) runs on that screen
+2. [x] `Money` newtype and `pct` in `crates/core`, first fixtures, first proptest (money plan T1)
+3. [x] TVA grouping per rate and global discount spread; fixtures shared with `design/shared/money.js` via vitest (T2, T5)
+4. [x] Stamp duty per step 1 (T3, T8)
+5. [x] Amount in words fr/ar/en with golden files (T4, R6)
+6. [x] First migration (`shop_id`, products with a price model for both regimes, settings with the dated régime fiscal, one seeded owner user), `crates/api` with GET/POST /products, `packages/shared` with the ts-rs types, and the products screen reading it, shown on the laptop; the `webapp-testing` and `frontend-design` trial (R9) runs on that screen
 
 ## From Anouar, 2026-09-08 (Discord), to lock after the steps
 
