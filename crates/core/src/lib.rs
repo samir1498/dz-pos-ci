@@ -2,6 +2,7 @@
 //! goes through `services`; nothing outside this crate touches diesel.
 pub mod db;
 pub mod error;
+pub mod lang;
 pub mod models;
 pub mod money;
 // Crate-internal on purpose: architecture.md says HTTP, Tauri and mobile

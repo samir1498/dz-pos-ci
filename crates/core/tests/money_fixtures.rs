@@ -2,6 +2,7 @@
 //! `docs/features.md`; the same files feed vitest against the mockup.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+use dzpos_core::money::format::{format_centimes, format_qty};
 use dzpos_core::money::{
     compute_totals, stamp, Bps, Line, Money, MoneyError, PaymentMode, Totals, TotalsOptions,
 };
@@ -311,5 +312,56 @@ fn money_no_float_serde() {
     for c in &f.rejects {
         let r: Result<Money, _> = serde_json::from_str(&c.json);
         assert!(r.is_err(), "{} must be rejected: {}", c.json, c.why);
+    }
+}
+
+#[derive(Deserialize)]
+struct AmountCase {
+    name: String,
+    centimes: i64,
+    expected: String,
+}
+
+#[derive(Deserialize)]
+struct QtyCase {
+    name: String,
+    milli: i64,
+    expected: String,
+}
+
+#[derive(Deserialize)]
+struct FormatFixture {
+    name: String,
+    cases: Vec<AmountCase>,
+    qty_cases: Vec<QtyCase>,
+}
+
+/// The printed ticket and the screen have to show a customer the same
+/// figure, and they are two implementations: this file and
+/// `packages/shared/src/money.test.ts` read the same cases so neither can
+/// drift on its own.
+#[test]
+fn format_centimes_matches_the_shared_formatter() {
+    let f: FormatFixture = serde_json::from_str(&fixture("format_centimes")).unwrap();
+    assert_eq!(f.name, "format_centimes");
+    assert!(f.cases.len() >= 10, "fixture lost its cases");
+    for c in &f.cases {
+        assert_eq!(
+            format_centimes(Money::centimes(c.centimes)),
+            c.expected,
+            "{}: {} centimes",
+            c.name,
+            c.centimes
+        );
+    }
+    assert!(!f.qty_cases.is_empty(), "fixture lost its quantity cases");
+    for c in &f.qty_cases {
+        assert_eq!(
+            format_qty(c.milli),
+            c.expected,
+            "{}: {} thousandths",
+            c.name,
+            c.milli
+        );
     }
 }

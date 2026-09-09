@@ -7,6 +7,7 @@ pub mod words;
 
 use serde::{Deserialize, Serialize};
 
+pub mod format;
 pub mod stamp;
 pub mod totals;
 
