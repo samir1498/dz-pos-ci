@@ -15,12 +15,13 @@ use dzpos_api::dto::{
     DatedRegimeDto, DebtEntryDto, DebtKindDto, DocumentKindDto, DocumentStatusDto, HealthDto,
     NewCustomerDto, NewPaymentDto, NewProductDto, NewSaleDto, NewSaleLineDto, PartyKindDto,
     PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto,
-    RegimeChangeDto, RegimeDto, RestoreDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
+    RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto, SaleDto, SaleLineDto, SaleTotalsDto,
+    SaleTvaDto,
     SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 38] = [
+const FILES: [&str; 39] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -43,6 +44,7 @@ const FILES: [&str; 38] = [
     "SaleLineDto.ts",
     "SaleTvaDto.ts",
     "SaleTotalsDto.ts",
+    "SaleBalanceDto.ts",
     "SaleDto.ts",
     "NewSaleLineDto.ts",
     "NewSaleDto.ts",
@@ -137,6 +139,7 @@ fn export_bindings() {
     SaleLineDto::export_all(&cfg).unwrap();
     SaleTvaDto::export_all(&cfg).unwrap();
     SaleTotalsDto::export_all(&cfg).unwrap();
+    SaleBalanceDto::export_all(&cfg).unwrap();
     SaleDto::export_all(&cfg).unwrap();
     NewSaleLineDto::export_all(&cfg).unwrap();
     NewSaleDto::export_all(&cfg).unwrap();

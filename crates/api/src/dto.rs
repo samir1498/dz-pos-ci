@@ -11,7 +11,9 @@
 use chrono::NaiveDate;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::category::Category;
-use dzpos_core::models::document::{Document, DocumentKind, DocumentLine, DocumentStatus};
+use dzpos_core::models::document::{
+    BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus,
+};
 use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::models::shop::{Shop, StoreBlock};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
@@ -554,6 +556,29 @@ pub struct SaleTotalsDto {
     pub net_to_pay_centimes: i64,
 }
 
+/// The debt as it stood when the document was issued (features.md §3): what
+/// the customer owed before it, what is still unpaid on this document, and
+/// what they owed once it had landed. `remaining_debt_centimes` is the one of
+/// the three that moves afterwards: a payment settles part of a document and
+/// the column says how much of it is left.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SaleBalanceDto.ts")]
+pub struct SaleBalanceDto {
+    pub old_balance_centimes: i64,
+    pub remaining_debt_centimes: i64,
+    pub total_debt_centimes: i64,
+}
+
+impl From<BalanceTriple> for SaleBalanceDto {
+    fn from(b: BalanceTriple) -> Self {
+        SaleBalanceDto {
+            old_balance_centimes: b.old_balance.as_centimes(),
+            remaining_debt_centimes: b.remaining_debt.as_centimes(),
+            total_debt_centimes: b.total_debt.as_centimes(),
+        }
+    }
+}
+
 /// A sale as the till reads it back: the document, its lines and its TVA
 /// recap in one answer, so the receipt view makes one call.
 #[derive(Debug, Clone, Serialize, TS)]
@@ -571,6 +596,8 @@ pub struct SaleDto {
     pub payment_mode: PaymentModeDto,
     pub seller: StoreDto,
     pub customer_id: Option<i32>,
+    /// Null on a document with no customer, which is every cash ticket.
+    pub balance: Option<SaleBalanceDto>,
     pub totals: SaleTotalsDto,
     pub tva: Vec<SaleTvaDto>,
     pub tendered_centimes: Option<i64>,
@@ -601,6 +628,7 @@ impl From<Document> for SaleDto {
                 phone: d.seller.phone,
             },
             customer_id: d.customer_id,
+            balance: d.balance.map(SaleBalanceDto::from),
             totals: SaleTotalsDto {
                 total_ht_centimes: d.totals.total_ht.as_centimes(),
                 discount_centimes: d.totals.discount.as_centimes(),

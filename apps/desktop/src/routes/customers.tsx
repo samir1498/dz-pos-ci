@@ -14,12 +14,21 @@ import { ApiError, formatCentimes, parseAmountToCentimes } from "@dzpos/shared";
 import type {
   CustomerDto,
   CustomerLedgerDto,
+  CustomerPaymentsDto,
   CustomerWriteDto,
   DebtKindDto,
   NewCustomerDto,
   PartyKindDto,
+  PaymentDto,
+  PaymentMethodDto,
 } from "@dzpos/shared";
-import { api, customerLedgerQueryKey, customersQueryKey } from "@/api";
+import {
+  api,
+  customerLedgerQueryKey,
+  customerPaymentsQueryKey,
+  customerStatementQueryKey,
+  customersQueryKey,
+} from "@/api";
 import { isKey, useTranslation, type Key } from "@/i18n";
 
 export const Route = createFileRoute("/customers")({ component: CustomersScreen });
@@ -29,6 +38,13 @@ const PARTY_KINDS: readonly PartyKindDto[] = ["company", "consumer"];
 const PARTY_KEY: Record<PartyKindDto, Key> = {
   company: "party_company",
   consumer: "party_consumer",
+};
+
+const PAYMENT_METHODS: readonly PaymentMethodDto[] = ["cash", "card"];
+
+const PAYMENT_METHOD_KEY: Record<PaymentMethodDto, Key> = {
+  cash: "payment_cash",
+  card: "payment_card",
 };
 
 const DEBT_KIND_KEY: Record<DebtKindDto, Key> = {
@@ -511,7 +527,319 @@ function CustomerLedger({ customer }: { customer: CustomerDto }) {
       ) : null}
       {ledger.isSuccess ? <LedgerTable ledger={ledger.data} /> : null}
 
+      <PaymentForm customer={customer} />
+      <PaymentsList customer={customer} />
+      <StatementPanel customer={customer} />
       <AdjustForm customer={customer} />
+    </section>
+  );
+}
+
+/**
+ * Money against the debt. The server settles the oldest documents first and
+ * refuses a payment above what the customer owes, so nothing here caps the
+ * figure or picks the documents: a screen that decided either would be a
+ * second answer to what the customer owes.
+ */
+function PaymentForm({ customer }: { customer: CustomerDto }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [serverError, setServerError] = useState<Key | null>(null);
+  /** What the customer actually owes, as the refused payment reported it.
+   *  "Too much" is useless without the amount that would not have been. */
+  const [outstanding, setOutstanding] = useState<number | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const pay = useMutation({
+    mutationFn: (input: {
+      amount_centimes: number;
+      payment_mode: PaymentMethodDto;
+      note: string | null;
+    }) => api.payCustomer(customer.id, input),
+    onSuccess: async (answer: CustomerPaymentsDto) => {
+      setServerError(null);
+      setOutstanding(null);
+      setSaved(true);
+      queryClient.setQueryData(customerPaymentsQueryKey(customer.id), answer);
+      // The movement is on the ledger too, and the balance on the list above
+      // came from the customers query.
+      await queryClient.invalidateQueries({ queryKey: customerLedgerQueryKey(customer.id) });
+      await queryClient.invalidateQueries({ queryKey: customersQueryKey });
+    },
+    onError: (error: unknown) => {
+      setSaved(false);
+      const above = error instanceof ApiError ? error.details?.outstanding_centimes : undefined;
+      setOutstanding(above ?? null);
+      setServerError(above === undefined ? errorKey(error) : "error_payment_above_debt");
+    },
+  });
+
+  const form = useForm({
+    defaultValues: { amount: "", mode: "cash", note: "" },
+    onSubmit: async ({ value }) => {
+      const centimes = parseAmountToCentimes(value.amount);
+      if (centimes === null || centimes <= 0) return;
+      if (!window.confirm(t("customers_pay_confirm"))) return;
+      const written = await pay
+        .mutateAsync({
+          amount_centimes: centimes,
+          payment_mode: toPaymentMethod(value.mode),
+          note: cleared(value.note),
+        })
+        .then(() => true)
+        .catch(() => false);
+      // A refused payment keeps what was typed: the error above says what is
+      // outstanding, and an emptied box means typing the figure again to find
+      // out what was wrong with it.
+      if (!written) return;
+      form.setFieldValue("amount", "");
+      form.setFieldValue("note", "");
+    },
+  });
+
+  return (
+    <form
+      noValidate
+      className="flex flex-col gap-3 rounded border p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void form.handleSubmit();
+      }}
+    >
+      <h3 className="font-semibold">{t("customers_pay")}</h3>
+      <p className="text-sm opacity-70">{t("customers_pay_hint")}</p>
+
+      <form.Field
+        name="amount"
+        validators={{
+          onSubmit: ({ value }) => {
+            const centimes = parseAmountToCentimes(value);
+            if (centimes === null) return "error_payment_amount_invalid";
+            return centimes <= 0 ? "error_payment_amount_zero" : undefined;
+          },
+        }}
+      >
+        {(field) => (
+          <AmountField
+            label={t("field_payment_amount")}
+            value={field.state.value}
+            onChange={(next) => {
+              setSaved(false);
+              field.handleChange(next);
+            }}
+            errors={field.state.meta.errors}
+          />
+        )}
+      </form.Field>
+
+      <form.Field name="mode">
+        {(field) => (
+          <fieldset className="flex flex-col gap-1">
+            {/* Informational on the movement: no stamp is computed from it.
+                The receipt a cash settlement is handed is the comptable's
+                question and is not answered here (features.md §2, R8). */}
+            <legend>{t("field_payment_mode")}</legend>
+            <div className="flex gap-4">
+              {PAYMENT_METHODS.map((mode) => (
+                <label key={mode} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="payment_mode"
+                    value={mode}
+                    checked={field.state.value === mode}
+                    onChange={() => field.handleChange(mode)}
+                  />
+                  <span>{t(PAYMENT_METHOD_KEY[mode])}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+      </form.Field>
+
+      <form.Field name="note">
+        {(field) => (
+          <label className="flex flex-col gap-1">
+            <span>{t("field_payment_note")}</span>
+            <input
+              className="rounded border px-2 py-1"
+              value={field.state.value}
+              onChange={(e) => field.handleChange(e.target.value)}
+            />
+          </label>
+        )}
+      </form.Field>
+
+      {serverError !== null ? (
+        <p role="alert" className="text-red-700">
+          {t(serverError)}
+          {outstanding === null ? null : (
+            <span className="ms-1 font-mono" dir="ltr">
+              {formatCentimes(outstanding)}
+            </span>
+          )}
+        </p>
+      ) : null}
+      {saved && serverError === null ? <p role="status">{t("customers_paid")}</p> : null}
+
+      <div>
+        <button type="submit" className="rounded border px-3 py-1.5" disabled={pay.isPending}>
+          {pay.isPending ? t("action_saving") : t("action_pay")}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** The payments, each with the documents the money landed on. The allocations
+ *  are shown open rather than behind a toggle: which facture a payment settled
+ *  is the question a customer asks at the counter. */
+function PaymentsList({ customer }: { customer: CustomerDto }) {
+  const { t } = useTranslation();
+  const payments = useQuery({
+    queryKey: customerPaymentsQueryKey(customer.id),
+    queryFn: () => api.customerPayments(customer.id),
+  });
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="font-semibold">{t("customers_payments")}</h3>
+      {payments.isPending ? <p>{t("customers_loading")}</p> : null}
+      {payments.isError ? (
+        <p role="alert" className="text-red-700">
+          {t(errorKey(payments.error))}
+        </p>
+      ) : null}
+      {payments.isSuccess && payments.data.payments.length === 0 ? (
+        <p>{t("customers_payments_empty")}</p>
+      ) : null}
+      {payments.isSuccess
+        ? payments.data.payments.map((payment) => (
+            <PaymentRow key={payment.ledger_id} payment={payment} />
+          ))
+        : null}
+    </section>
+  );
+}
+
+function PaymentRow({ payment }: { payment: PaymentDto }) {
+  const { t } = useTranslation();
+  return (
+    <article className="rounded border p-2" data-testid="customer-payment">
+      <div className="flex justify-between gap-3">
+        <span className="font-mono" dir="ltr">
+          {payment.created_at}
+        </span>
+        <span>
+          {payment.payment_mode === null ? "" : t(PAYMENT_METHOD_KEY[payment.payment_mode])}
+        </span>
+        <span className="font-mono" dir="ltr">
+          {formatCentimes(payment.amount_centimes)}
+        </span>
+      </div>
+      {payment.note === null ? null : <p className="text-sm opacity-70">{payment.note}</p>}
+      <p className="text-sm">{t("customers_payment_settled")}</p>
+      {payment.allocations.length === 0 ? (
+        <p className="text-sm opacity-70">{t("customers_payment_settled_none")}</p>
+      ) : (
+        <ul className="text-sm">
+          {payment.allocations.map((allocation) => (
+            <li key={allocation.document_id} className="flex justify-between gap-3">
+              <span>
+                {t("col_document")} <span className="font-mono">{allocation.document_id}</span>
+              </span>
+              <span className="font-mono" dir="ltr">
+                {formatCentimes(allocation.amount_centimes)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}
+
+/**
+ * The statement itself, not a screen that resembles it. The core renders the
+ * page from the ledger and it goes into an iframe as it came, the way the
+ * till shows a ticket: the shop is looking at what the printer will put on
+ * paper rather than at a second rendering of the same balances.
+ */
+function StatementPanel({ customer }: { customer: CustomerDto }) {
+  const { t, lang } = useTranslation();
+  const today = new Date().toISOString().slice(0, 10);
+  const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
+  const [to, setTo] = useState(today);
+  const [asked, setAsked] = useState<{ from: string; to: string } | null>(null);
+  const backwards = from > to;
+
+  const statement = useQuery({
+    queryKey: customerStatementQueryKey(customer.id, asked?.from ?? "", asked?.to ?? "", lang),
+    queryFn: () =>
+      api.customerStatement(customer.id, asked?.from ?? "", asked?.to ?? "", lang),
+    enabled: asked !== null,
+  });
+
+  return (
+    <section className="flex flex-col gap-2 rounded border p-3">
+      <h3 className="font-semibold">{t("customers_statement")}</h3>
+      <p className="text-sm opacity-70">{t("customers_statement_hint")}</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1">
+          <span>{t("field_statement_from")}</span>
+          <input
+            type="date"
+            dir="ltr"
+            className="rounded border px-2 py-1 font-mono"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span>{t("field_statement_to")}</span>
+          <input
+            type="date"
+            dir="ltr"
+            className="rounded border px-2 py-1 font-mono"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="rounded border px-3 py-1.5"
+          disabled={backwards}
+          onClick={() => setAsked(asked === null ? { from, to } : null)}
+        >
+          {asked === null ? t("action_statement") : t("action_statement_close")}
+        </button>
+      </div>
+      {/* Caught here as well as by the server: a range the wrong way round is
+          a typing mistake, and a call that can only be refused is a call not
+          worth making. */}
+      {backwards ? (
+        <p role="alert" className="text-red-700">
+          {t("error_statement_range_invalid")}
+        </p>
+      ) : null}
+      {statement.isPending && asked !== null ? <p>{t("customers_loading")}</p> : null}
+      {statement.isError ? (
+        <p role="alert" className="text-red-700">
+          {t(errorKey(statement.error))}
+        </p>
+      ) : null}
+      {asked !== null && statement.isSuccess ? (
+        <iframe
+          title={t("customers_statement_title")}
+          srcDoc={statement.data}
+          // An empty sandbox: the page carries no script and needs no origin,
+          // so it cannot reach this one even if a customer name ever slipped
+          // past the template's escaping.
+          sandbox=""
+          className="h-96 w-full border-0"
+          data-testid="customer-statement"
+        />
+      ) : null}
     </section>
   );
 }
@@ -747,4 +1075,11 @@ function whole(input: NewCustomerDto): CustomerWriteDto {
 function toPartyKind(value: string): PartyKindDto {
   const found = PARTY_KINDS.find((k) => k === value);
   return found ?? "company";
+}
+
+/** Cash unless the form says otherwise: the radio group has no third option,
+ *  and a payment mode is never guessed from an unknown string. */
+function toPaymentMethod(value: string): PaymentMethodDto {
+  const found = PAYMENT_METHODS.find((m) => m === value);
+  return found ?? "cash";
 }

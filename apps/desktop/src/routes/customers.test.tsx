@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { CustomerDto, CustomerLedgerDto } from "@dzpos/shared";
+import type { CustomerDto, CustomerLedgerDto, CustomerPaymentsDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
@@ -137,20 +137,57 @@ function mount(lang: Lang = "fr") {
   );
 }
 
+const noPayments: CustomerPaymentsDto = {
+  customer_id: 3,
+  balance_centimes: 150_000,
+  payments: [],
+};
+
+/** One payment of 1 000,00 spread over two factures, the older one settled
+ *  in full. What the server answers after the money has landed. */
+const paid: CustomerPaymentsDto = {
+  customer_id: 3,
+  balance_centimes: 50_000,
+  payments: [
+    {
+      ledger_id: 21,
+      customer_id: 3,
+      amount_centimes: 100_000,
+      payment_mode: "cash",
+      note: "acompte",
+      balance_after_centimes: 50_000,
+      allocations: [
+        { document_id: 8, amount_centimes: 60_000 },
+        { document_id: 9, amount_centimes: 40_000 },
+      ],
+      created_at: "2026-09-12 16:30:00",
+    },
+  ],
+};
+
 let fetchMock: ReturnType<typeof vi.fn>;
 let list: CustomerDto[];
 let rows: CustomerLedgerDto;
+let payments: CustomerPaymentsDto;
 let writeAnswer: (() => Response) | null;
 
 beforeEach(() => {
   list = [benali];
   rows = ledger;
+  payments = noPayments;
   writeAnswer = null;
   vi.spyOn(window, "confirm").mockReturnValue(true);
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "POST" || init?.method === "PUT") {
       if (writeAnswer !== null) return Promise.resolve(writeAnswer());
+      if (url.endsWith("/payments")) {
+        payments = paid;
+        list = list.map((c) =>
+          c.id === 3 ? { ...c, balance_centimes: paid.balance_centimes } : c,
+        );
+        return Promise.resolve(json(201, paid));
+      }
       if (url.endsWith("/adjustments")) {
         const body: unknown = JSON.parse(String(init.body));
         const amount =
@@ -181,6 +218,15 @@ beforeEach(() => {
       return Promise.resolve(json(init.method === "POST" ? 201 : 200, benali));
     }
     if (url.includes("/ledger")) return Promise.resolve(json(200, rows));
+    if (url.includes("/payments")) return Promise.resolve(json(200, payments));
+    if (url.includes("/statement")) {
+      return Promise.resolve(
+        new Response("<html><body>RELEVÉ</body></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    }
     if (url.includes("/customers")) {
       const q = new URL(url).searchParams.get("q");
       const found =
@@ -413,6 +459,97 @@ describe("the ledger", () => {
 
     expect(await screen.findByText(fr.error_amount_zero)).toBeInTheDocument();
     expect(() => sent("POST")).toThrow();
+  });
+});
+
+describe("payments", () => {
+  async function openTheFiche() {
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
+    );
+    await screen.findByRole("row", { name: /solde de départ/ });
+  }
+
+  test("a payment posts the amount, the mode and the note, and the allocations come back", async () => {
+    await openTheFiche();
+
+    await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "1000");
+    await userEvent.click(screen.getByRole("radio", { name: fr.payment_cash }));
+    await userEvent.type(screen.getByLabelText(fr.field_payment_note), "acompte");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_pay }));
+
+    await waitFor(() => expect(sent("POST").url).toMatch(/\/customers\/3\/payments$/));
+    expect(sent("POST").body).toEqual({
+      amount_centimes: 100_000,
+      payment_mode: "cash",
+      note: "acompte",
+    });
+    expect(window.confirm).toHaveBeenCalledWith(fr.customers_pay_confirm);
+
+    // The documents the money landed on are shown open: which facture a
+    // payment settled is what a customer asks at the counter.
+    const rows = await screen.findAllByTestId("customer-payment");
+    expect(within(rows[0]).getByText("600,00")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("400,00")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("1 000,00")).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent(fr.customers_paid);
+  });
+
+  test("a payment above the debt says so and names what is still owed", async () => {
+    await openTheFiche();
+    writeAnswer = () =>
+      json(422, {
+        error: {
+          code: "validation",
+          message: "a payment is never more than what the customer owes",
+          details: { field: "amount_centimes", outstanding_centimes: 150_000 },
+        },
+      });
+
+    await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "2000");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_pay }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(fr.error_payment_above_debt);
+    // "Too much" is useless without the amount that would not have been.
+    expect(alert).toHaveTextContent("1 500,00");
+    // A refused payment keeps the figure that was typed.
+    expect(screen.getByLabelText(fr.field_payment_amount)).toHaveValue("2000");
+  });
+
+  test("a payment of nothing is refused before it leaves the screen", async () => {
+    await openTheFiche();
+
+    await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "0");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_pay }));
+
+    expect(await screen.findByText(fr.error_payment_amount_zero)).toBeInTheDocument();
+    expect(() => sent("POST")).toThrow();
+  });
+
+  test("the statement is asked for over the range and shown as the page the core rendered", async () => {
+    await openTheFiche();
+
+    await userEvent.click(screen.getByRole("button", { name: fr.action_statement }));
+
+    const frame = await screen.findByTestId("customer-statement");
+    expect(frame).toHaveAttribute("sandbox", "");
+    expect(frame.getAttribute("srcdoc")).toContain("RELEVÉ");
+    const asked = fetched().find((url) => url.includes("/statement"));
+    expect(asked).toMatch(/\/customers\/3\/statement\?from=\d{4}-01-01&to=\d{4}-\d{2}-\d{2}&lang=fr$/);
+  });
+
+  test("a range that ends before it starts asks for nothing", async () => {
+    await openTheFiche();
+
+    const from = screen.getByLabelText(fr.field_statement_from);
+    await userEvent.clear(from);
+    await userEvent.type(from, "2027-12-31");
+
+    expect(await screen.findByText(fr.error_statement_range_invalid)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: fr.action_statement })).toBeDisabled();
+    expect(fetched().some((url) => url.includes("/statement"))).toBe(false);
   });
 });
 

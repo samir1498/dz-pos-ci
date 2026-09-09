@@ -50,6 +50,26 @@ export function customerLedgerQueryKey(id: number): readonly (string | number)[]
   return ["customer-ledger", id];
 }
 
+/** One customer's payments, with what each one settled. Its own key rather
+ * than a slice of the ledger's: the two screens read different shapes and a
+ * payment invalidates both. */
+export function customerPaymentsQueryKey(id: number): readonly (string | number)[] {
+  return ["customer-payments", id];
+}
+
+/** The rendered statement of one customer over a range of days. The days and
+ * the language are part of the key: the core renders the page, so the same
+ * customer over another month, or in Arabic, is a different document and must
+ * not be answered from the one already in the cache. */
+export function customerStatementQueryKey(
+  id: number,
+  from: string,
+  to: string,
+  lang: PrintLang,
+): readonly (string | number)[] {
+  return ["customer-statement", id, from, to, lang];
+}
+
 /** The rendered ticket of one stored sale. A factory rather than a literal
  * at the call site, so the id is always the second element and never a
  * template string. The language is part of the key: the core renders the

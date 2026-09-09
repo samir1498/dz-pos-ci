@@ -402,6 +402,7 @@ describe("backups", () => {
 });
 
 const sale: SaleDto = {
+  balance: null,
   id: 1,
   shop_id: 1,
   kind: "ticket",

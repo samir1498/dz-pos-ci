@@ -5,6 +5,7 @@
 // answers the wrong shape raises a translatable error instead of leaking a
 // half-typed object into the UI.
 
+import type { ApiErrorDetailsDto } from "./generated/ApiErrorDetailsDto";
 import type { ApiErrorDto } from "./generated/ApiErrorDto";
 import type { BackupDto } from "./generated/BackupDto";
 import type { BackupsDto } from "./generated/BackupsDto";
@@ -15,7 +16,12 @@ import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
 import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
 import type { DebtEntryDto } from "./generated/DebtEntryDto";
 import type { DebtKindDto } from "./generated/DebtKindDto";
+import type { CustomerPaymentsDto } from "./generated/CustomerPaymentsDto";
 import type { NewCustomerDto } from "./generated/NewCustomerDto";
+import type { NewPaymentDto } from "./generated/NewPaymentDto";
+import type { PaymentAllocationDto } from "./generated/PaymentAllocationDto";
+import type { PaymentDto } from "./generated/PaymentDto";
+import type { PaymentMethodDto } from "./generated/PaymentMethodDto";
 import type { PartyKindDto } from "./generated/PartyKindDto";
 import type { HealthDto } from "./generated/HealthDto";
 import type { DocumentKindDto } from "./generated/DocumentKindDto";
@@ -23,6 +29,7 @@ import type { DocumentStatusDto } from "./generated/DocumentStatusDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { PaymentModeDto } from "./generated/PaymentModeDto";
+import type { SaleBalanceDto } from "./generated/SaleBalanceDto";
 import type { SaleDto } from "./generated/SaleDto";
 import type { SaleLineDto } from "./generated/SaleLineDto";
 import type { SaleTotalsDto } from "./generated/SaleTotalsDto";
@@ -40,12 +47,17 @@ import type { UnitDto } from "./generated/UnitDto";
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
+  /** What the refusal says beyond its code, when it says anything: the field
+   *  it is about, and the figures a screen needs to make it useful. Undefined
+   *  on every error that has only a code to give. */
+  readonly details?: ApiErrorDetailsDto;
 
-  constructor(code: string, message: string, status: number) {
+  constructor(code: string, message: string, status: number, details?: ApiErrorDetailsDto) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -67,12 +79,33 @@ function isUnit(value: unknown): value is UnitDto {
   return typeof value === "string" && UNITS.some((u) => u === value);
 }
 
+/** The optional half of a refusal. A body whose `details` is the wrong shape
+ *  is read as no details at all rather than refused: the code and the message
+ *  are the contract, and the extras are what a screen may use if they are
+ *  there. */
+function isApiErrorDetails(value: unknown): value is ApiErrorDetailsDto {
+  if (!isRecord(value)) return false;
+  const field = value.field;
+  const outstanding = value.outstanding_centimes;
+  return (
+    (field === undefined || typeof field === "string") &&
+    (outstanding === undefined || isExactInteger(outstanding))
+  );
+}
+
 export function isApiErrorBody(value: unknown): value is ApiErrorDto {
   if (!isRecord(value)) return false;
   const { error } = value;
   return (
     isRecord(error) && typeof error.code === "string" && typeof error.message === "string"
   );
+}
+
+/** The details of a refusal, when the body carries usable ones. */
+function detailsOf(body: ApiErrorDto): ApiErrorDetailsDto | undefined {
+  const details: unknown = body.error.details;
+  if (details === undefined || details === null) return undefined;
+  return isApiErrorDetails(details) ? details : undefined;
 }
 
 export function isCategory(value: unknown): value is CategoryDto {
@@ -261,6 +294,18 @@ function isSaleTotals(value: unknown): value is SaleTotalsDto {
   );
 }
 
+/** The three amounts of the debt a document carries, or nothing at all: a
+ *  cash ticket sold to whoever walked in names no customer and has no balance
+ *  to print. */
+function isSaleBalance(value: unknown): value is SaleBalanceDto {
+  return (
+    isRecord(value) &&
+    isExactInteger(value.old_balance_centimes) &&
+    isExactInteger(value.remaining_debt_centimes) &&
+    isExactInteger(value.total_debt_centimes)
+  );
+}
+
 export function isSale(value: unknown): value is SaleDto {
   return (
     isRecord(value) &&
@@ -275,6 +320,7 @@ export function isSale(value: unknown): value is SaleDto {
     isPaymentMode(value.payment_mode) &&
     isStore(value.seller) &&
     isNullableNumber(value.customer_id) &&
+    (value.balance === null || isSaleBalance(value.balance)) &&
     isSaleTotals(value.totals) &&
     Array.isArray(value.tva) &&
     value.tva.every(isSaleTva) &&
@@ -352,6 +398,45 @@ export function isDebtEntry(value: unknown): value is DebtEntryDto {
   );
 }
 
+const PAYMENT_METHODS: readonly PaymentMethodDto[] = ["cash", "card"];
+
+function isPaymentMethod(value: unknown): value is PaymentMethodDto {
+  return typeof value === "string" && PAYMENT_METHODS.some((m) => m === value);
+}
+
+function isPaymentAllocation(value: unknown): value is PaymentAllocationDto {
+  return (
+    isRecord(value) &&
+    typeof value.document_id === "number" &&
+    isExactInteger(value.amount_centimes)
+  );
+}
+
+export function isPayment(value: unknown): value is PaymentDto {
+  return (
+    isRecord(value) &&
+    typeof value.ledger_id === "number" &&
+    typeof value.customer_id === "number" &&
+    isExactInteger(value.amount_centimes) &&
+    (value.payment_mode === null || isPaymentMethod(value.payment_mode)) &&
+    isNullableString(value.note) &&
+    isExactInteger(value.balance_after_centimes) &&
+    Array.isArray(value.allocations) &&
+    value.allocations.every(isPaymentAllocation) &&
+    typeof value.created_at === "string"
+  );
+}
+
+export function isCustomerPayments(value: unknown): value is CustomerPaymentsDto {
+  return (
+    isRecord(value) &&
+    typeof value.customer_id === "number" &&
+    isExactInteger(value.balance_centimes) &&
+    Array.isArray(value.payments) &&
+    value.payments.every(isPayment)
+  );
+}
+
 export function isCustomerLedger(value: unknown): value is CustomerLedgerDto {
   return (
     isRecord(value) &&
@@ -374,7 +459,7 @@ async function unwrap(res: Response): Promise<unknown> {
   }
   if (res.ok) return body;
   if (isApiErrorBody(body)) {
-    throw new ApiError(body.error.code, body.error.message, res.status);
+    throw new ApiError(body.error.code, body.error.message, res.status, detailsOf(body));
   }
   // The server always sends the shape above; anything else is the network
   // or a proxy, so the UI still gets a key it can translate.
@@ -399,7 +484,7 @@ async function unwrapText(res: Response): Promise<string> {
     body = null;
   }
   if (isApiErrorBody(body)) {
-    throw new ApiError(body.error.code, body.error.message, res.status);
+    throw new ApiError(body.error.code, body.error.message, res.status, detailsOf(body));
   }
   throw new ApiError("unreachable", `HTTP ${res.status}`, res.status);
 }
@@ -603,6 +688,42 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         body: JSON.stringify(input),
       });
       return narrow(body, isCustomerLedger, "customer ledger");
+    },
+
+    /** The customer's payments, newest first, each with the documents it
+     * settled. The balance in the envelope is the whole ledger's, not the
+     * newest payment's: a sale written after the last payment moved it. */
+    async customerPayments(id: number): Promise<CustomerPaymentsDto> {
+      return narrow(
+        await send(`/customers/${id}/payments`),
+        isCustomerPayments,
+        "customer payments",
+      );
+    },
+
+    /** Money against a debt. The server settles the oldest documents first
+     * and refuses a payment above what the customer owes; the answer is the
+     * whole list of payments again. */
+    async payCustomer(id: number, input: NewPaymentDto): Promise<CustomerPaymentsDto> {
+      const body = await send(`/customers/${id}/payments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isCustomerPayments, "customer payments");
+    },
+
+    /** The statement of account over a range of days, as the HTML page the
+     * core rendered. The UI prints these bytes and never builds a document of
+     * its own (features.md §4). The days are `YYYY-MM-DD`. */
+    async customerStatement(
+      id: number,
+      from: string,
+      to: string,
+      lang: PrintLang,
+    ): Promise<string> {
+      const query = new URLSearchParams({ from, to, lang });
+      return sendText(`/customers/${id}/statement?${query.toString()}`);
     },
 
     async createProduct(input: NewProductDto): Promise<ProductDto> {
