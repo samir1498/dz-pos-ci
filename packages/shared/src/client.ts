@@ -789,6 +789,15 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       return sendText(`/customers/${id}/statement?${query.toString()}`);
     },
 
+    /** The 80 mm debt slip, as the HTML page the core rendered: what the
+     * customer owes now and the newest movements behind it. No range, because
+     * the slip is about today rather than about a period, and the server's
+     * clock dates it. */
+    async customerDebtSlip(id: number, lang: PrintLang): Promise<string> {
+      const query = new URLSearchParams({ lang });
+      return sendText(`/customers/${id}/debt-slip?${query.toString()}`);
+    },
+
     async createProduct(input: NewProductDto): Promise<ProductDto> {
       const body = await send("/products", {
         method: "POST",

@@ -24,6 +24,8 @@ import type {
 } from "@dzpos/shared";
 import {
   api,
+  customerDebtSlipKeyPrefix,
+  customerDebtSlipQueryKey,
   customerLedgerQueryKey,
   customerPaymentsQueryKey,
   customerStatementQueryKey,
@@ -530,6 +532,7 @@ function CustomerLedger({ customer }: { customer: CustomerDto }) {
       <PaymentForm customer={customer} />
       <PaymentsList customer={customer} />
       <StatementPanel customer={customer} />
+      <DebtSlipPanel customer={customer} />
       <AdjustForm customer={customer} />
     </section>
   );
@@ -562,9 +565,11 @@ function PaymentForm({ customer }: { customer: CustomerDto }) {
       setSaved(true);
       queryClient.setQueryData(customerPaymentsQueryKey(customer.id), answer);
       // The movement is on the ledger too, and the balance on the list above
-      // came from the customers query.
+      // came from the customers query. The slip is a rendered page carrying
+      // the old balance, in whichever languages it has been asked for.
       await queryClient.invalidateQueries({ queryKey: customerLedgerQueryKey(customer.id) });
       await queryClient.invalidateQueries({ queryKey: customersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: customerDebtSlipKeyPrefix(customer.id) });
     },
     onError: (error: unknown) => {
       setSaved(false);
@@ -849,6 +854,60 @@ function StatementPanel({ customer }: { customer: CustomerDto }) {
   );
 }
 
+/**
+ * The debt slip itself, the way the statement panel above shows the
+ * statement: the core renders the 80 mm page and it goes into an iframe as it
+ * came, so the shop is looking at what the printer will put on paper.
+ *
+ * One button and no fields. The slip is about what the customer owes now, so
+ * there is no range to pick, and the newest ten movements are the paper's
+ * length rather than a choice the screen offers.
+ */
+function DebtSlipPanel({ customer }: { customer: CustomerDto }) {
+  const { t, lang } = useTranslation();
+  const [open, setOpen] = useState(false);
+
+  const slip = useQuery({
+    queryKey: customerDebtSlipQueryKey(customer.id, lang),
+    queryFn: () => api.customerDebtSlip(customer.id, lang),
+    enabled: open,
+  });
+
+  return (
+    <section className="flex flex-col gap-2 rounded border p-3">
+      <h3 className="font-semibold">{t("customers_debt_slip")}</h3>
+      <p className="text-sm opacity-70">{t("customers_debt_slip_hint")}</p>
+      <div>
+        <button
+          type="button"
+          className="rounded border px-3 py-1.5"
+          onClick={() => setOpen(!open)}
+          data-testid="customer-debt-slip-button"
+        >
+          {open ? t("action_debt_slip_close") : t("action_debt_slip")}
+        </button>
+      </div>
+      {slip.isPending && open ? <p>{t("customers_loading")}</p> : null}
+      {slip.isError ? (
+        <p role="alert" className="text-red-700">
+          {t(errorKey(slip.error))}
+        </p>
+      ) : null}
+      {open && slip.isSuccess ? (
+        <iframe
+          title={t("customers_debt_slip_title")}
+          srcDoc={slip.data}
+          // An empty sandbox, for the reason the statement's carries one: the
+          // page has no script and needs no origin.
+          sandbox=""
+          className="h-96 w-full border-0"
+          data-testid="customer-debt-slip"
+        />
+      ) : null}
+    </section>
+  );
+}
+
 function LedgerTable({ ledger }: { ledger: CustomerLedgerDto }) {
   const { t } = useTranslation();
   if (ledger.entries.length === 0) return <p>{t("customers_ledger_empty")}</p>;
@@ -912,8 +971,10 @@ function AdjustForm({ customer }: { customer: CustomerDto }) {
       setSaved(true);
       queryClient.setQueryData(customerLedgerQueryKey(customer.id), answer);
       // The balance on the list and on the fiche above it comes from the
-      // customers query, which the movement has just changed.
+      // customers query, which the movement has just changed, and so is the
+      // balance on any slip already rendered.
       await queryClient.invalidateQueries({ queryKey: customersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: customerDebtSlipKeyPrefix(customer.id) });
     },
     onError: (error: unknown) => {
       setSaved(false);

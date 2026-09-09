@@ -236,6 +236,14 @@ beforeEach(() => {
         }),
       );
     }
+    if (url.includes("/debt-slip")) {
+      return Promise.resolve(
+        new Response("<html><body>SITUATION</body></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    }
     if (url.includes("/customers")) {
       const q = new URL(url).searchParams.get("q");
       const found =
@@ -574,6 +582,21 @@ describe("payments", () => {
     expect(await screen.findByText(fr.error_statement_range_invalid)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: fr.action_statement })).toBeDisabled();
     expect(fetched().some((url) => url.includes("/statement"))).toBe(false);
+  });
+
+  test("the debt slip is asked for on the button and shown as the page the core rendered", async () => {
+    await openTheFiche();
+    // Nothing is fetched before the button: a slip nobody asked for is a
+    // render of a page nobody is going to print.
+    expect(fetched().some((url) => url.includes("/debt-slip"))).toBe(false);
+
+    await userEvent.click(screen.getByRole("button", { name: fr.action_debt_slip }));
+
+    const frame = await screen.findByTestId("customer-debt-slip");
+    expect(frame).toHaveAttribute("sandbox", "");
+    expect(frame.getAttribute("srcdoc")).toContain("SITUATION");
+    const asked = fetched().find((url) => url.includes("/debt-slip"));
+    expect(asked).toMatch(/\/customers\/3\/debt-slip\?lang=fr$/);
   });
 });
 

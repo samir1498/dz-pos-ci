@@ -70,6 +70,25 @@ export function customerStatementQueryKey(
   return ["customer-statement", id, from, to, lang];
 }
 
+/** The rendered debt slip of one customer. The language is part of the key
+ * for the reason the statement's is; the balance is not, because a slip asked
+ * for again after a payment is a new call and the payment invalidated this
+ * key along with the ledger's. */
+export function customerDebtSlipQueryKey(
+  id: number,
+  lang: PrintLang,
+): readonly (string | number)[] {
+  return [...customerDebtSlipKeyPrefix(id), lang];
+}
+
+/** Every language's slip for one customer, which is what a payment or a
+ * correction has just made stale: the shop may have printed the French one
+ * and the Arabic one, and both now say a balance the ledger no longer sums
+ * to. */
+export function customerDebtSlipKeyPrefix(id: number): readonly (string | number)[] {
+  return ["customer-debt-slip", id];
+}
+
 /** The rendered ticket of one stored sale. A factory rather than a literal
  * at the call site, so the id is always the second element and never a
  * template string. The language is part of the key: the core renders the
