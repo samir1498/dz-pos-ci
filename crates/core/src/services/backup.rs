@@ -176,7 +176,7 @@ pub fn is_due(newest: Option<NaiveDateTime>, now: NaiveDateTime) -> bool {
 /// double click on "back up now" must not destroy the copy it just made.
 pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, CoreError> {
     std::fs::create_dir_all(dir)?;
-    sweep_staging(dir)?;
+    sweep_staging(dir);
     let name = file_name(at);
     let path = dir.join(&name);
     if path.is_file() {
@@ -220,23 +220,36 @@ pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, 
 ///
 /// Safe to run at the top of `create` because copies are taken one at a
 /// time: they go through the one connection, which is behind one lock.
-fn sweep_staging(dir: &Path) -> Result<(), CoreError> {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e.into()),
+///
+/// Nothing here can fail the copy it precedes. Housekeeping that refuses to
+/// finish is not a reason to stop backing the shop up, so a folder that will
+/// not list, an entry that will not stat and a file that will not delete are
+/// all left for the next run.
+fn sweep_staging(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
     };
-    for entry in entries {
-        let entry = entry?;
+    for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         let is_ours = name
             .strip_suffix(STAGING_SUFFIX)
             .is_some_and(|stem| taken_at(stem).is_some());
-        if is_ours && entry.metadata()?.is_file() {
-            remove_if_present(&entry.path())?;
+        if !is_ours {
+            continue;
         }
+        // The entry itself, never what it points at. The check used to be
+        // `is_file()`, and a symlink is not a file, so one standing on a
+        // staging name survived every sweep however long it sat there. It is
+        // in the way of the copy that wants that name whatever it points at,
+        // and `remove_file` unlinks the link rather than its target.
+        //
+        // A folder is the one thing left alone: this module never writes
+        // one, so it belongs to whoever did.
+        if entry.path().symlink_metadata().is_ok_and(|m| m.is_dir()) {
+            continue;
+        }
+        let _ = std::fs::remove_file(entry.path());
     }
-    Ok(())
 }
 
 fn remove_if_present(path: &Path) -> Result<(), CoreError> {

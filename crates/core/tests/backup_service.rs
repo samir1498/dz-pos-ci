@@ -405,3 +405,31 @@ fn a_staging_file_a_crash_left_behind_is_swept_by_the_next_copy() {
     );
     assert_eq!(backup::list(&backups).unwrap().len(), 2);
 }
+
+/// A staging name that is a symlink pointing at nothing. The sweep asked
+/// `is_file()` of it, and a link is not a file, so it survived every sweep
+/// and went on standing on a name this module writes. `remove_file` unlinks
+/// the link and not what it points at, which is the thing that was in the
+/// way.
+///
+/// The copy still has to happen either way: housekeeping that will not
+/// finish is never a reason to stop backing the shop up, so nothing in the
+/// sweep can fail the copy it precedes any more.
+#[cfg(unix)]
+#[test]
+fn a_staging_name_that_is_a_dangling_link_does_not_stop_the_copy() {
+    let (dir, mut conn) = open_temp();
+    let backups = dir.path().join("backups");
+    std::fs::create_dir_all(&backups).unwrap();
+    let link = backups.join(format!("{}.tmp", backup::file_name(at(2, 3))));
+    std::os::unix::fs::symlink(backups.join("gone"), &link).unwrap();
+
+    let made = backup::create(&mut conn, &backups, at(3, 3)).unwrap();
+
+    assert!(made.path.is_file(), "the copy was not written");
+    assert!(
+        link.symlink_metadata().is_err(),
+        "the link is still standing on a staging name"
+    );
+    assert_eq!(backup::list(&backups).unwrap().len(), 1);
+}
