@@ -127,16 +127,29 @@ function narrow<T>(body: unknown, guard: (v: unknown) => v is T, what: string): 
 
 export type ApiClient = ReturnType<typeof createClient>;
 
-export function createClient(baseUrl: string, fetchImpl?: typeof fetch) {
+export interface ClientOptions {
+  /** The launch token the server was started with; sent as a bearer on
+   * every call. The desktop injects it, the browser preview reads
+   * VITE_API_TOKEN. Without it every route but /health answers 401. */
+  readonly token?: string;
+  /** A fetch to use instead of the global one (tests). */
+  readonly fetch?: typeof fetch;
+}
+
+export function createClient(baseUrl: string, options: ClientOptions | typeof fetch = {}) {
   const base = baseUrl.replace(/\/+$/, "");
+  const opts: ClientOptions = typeof options === "function" ? { fetch: options } : options;
   // Resolved on each call, not captured at module load: a test that stubs
   // globalThis.fetch after importing this module must still be seen.
-  const send0: typeof fetch = fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
+  const send0: typeof fetch = opts.fetch ?? ((input, init) => globalThis.fetch(input, init));
+  const token = opts.token;
 
   async function send(path: string, init?: RequestInit): Promise<unknown> {
+    const headers = new Headers(init?.headers);
+    if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, init);
+      res = await send0(`${base}${path}`, { ...init, headers });
     } catch (cause) {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }

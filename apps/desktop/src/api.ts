@@ -1,28 +1,39 @@
-// Where the UI finds the API. In the Tauri window the desktop process
-// injects the port it bound; in a browser (`pnpm desktop dev`) it is the
-// port `just api` uses. Same routes either way, so no screen knows which
-// mode it is in (architecture.md rule 1).
+// Where the UI finds the API and what it shows to be let in. In the Tauri
+// window the desktop process injects the port it bound and the launch
+// token it made; in a browser (`pnpm desktop dev`) both come from the
+// environment (`just api` writes the token to .dev/api-token and `just dev`
+// passes it). Same routes either way, so no screen knows which mode it is
+// in (architecture.md rule 1).
 
 import { createClient } from "@dzpos/shared";
 
 const FALLBACK = "http://127.0.0.1:4317";
 
-function injectedBaseUrl(): string | null {
+function injected(name: "__DZPOS_API_URL__" | "__DZPOS_API_TOKEN__"): string | null {
   const global: unknown = globalThis;
   if (typeof global !== "object" || global === null) return null;
-  if (!("__DZPOS_API_URL__" in global)) return null;
-  const value = global.__DZPOS_API_URL__;
+  if (!(name in global)) return null;
+  const value: unknown = Reflect.get(global, name);
   return typeof value === "string" && value !== "" ? value : null;
 }
 
 export function apiBaseUrl(): string {
-  const injected = injectedBaseUrl();
-  if (injected !== null) return injected;
+  const value = injected("__DZPOS_API_URL__");
+  if (value !== null) return value;
   const configured = import.meta.env.VITE_API_URL;
   return typeof configured === "string" && configured !== "" ? configured : FALLBACK;
 }
 
-export const api = createClient(apiBaseUrl());
+/** Undefined in a browser started without one; the API then answers 401
+ * and the screen shows the translated "unauthorized" error. */
+export function apiToken(): string | undefined {
+  const value = injected("__DZPOS_API_TOKEN__");
+  if (value !== null) return value;
+  const configured = import.meta.env.VITE_API_TOKEN;
+  return typeof configured === "string" && configured !== "" ? configured : undefined;
+}
+
+export const api = createClient(apiBaseUrl(), { token: apiToken() });
 
 export const productsQueryKey: readonly string[] = ["products"];
 export const categoriesQueryKey: readonly string[] = ["categories"];

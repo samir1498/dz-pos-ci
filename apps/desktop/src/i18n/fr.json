@@ -39,6 +39,7 @@
   "error_storage": "Erreur d'enregistrement.",
   "error_exhausted": "Plus de numéros disponibles dans cette série.",
   "error_bad_request": "Requête invalide.",
+  "error_unauthorized": "Cette fenêtre n'est pas autorisée à appeler la caisse. Relancez l'application.",
   "error_bad_response": "Réponse inattendue du serveur.",
   "error_unreachable": "Serveur injoignable.",
   "error_unknown": "Une erreur est survenue.",

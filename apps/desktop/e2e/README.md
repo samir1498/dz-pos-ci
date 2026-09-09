@@ -28,12 +28,15 @@ can stay up on their own ports while a suite runs.
 
 | Server | Port | Notes |
 | --- | --- | --- |
-| `dzpos-api` | 4319 | `--db e2e/.artifacts/e2e.db`, deleted before every run |
-| Vite | 5174 | started with `VITE_API_URL=http://127.0.0.1:4319` |
+| `dzpos-api` | 4319 | `--db e2e/.artifacts/e2e.db`, deleted before every run; `DZPOS_API_TOKEN` set to a token made for the run |
+| Vite | 5174 | started with `VITE_API_URL=http://127.0.0.1:4319` and the same token as `VITE_API_TOKEN` |
 
 The database is thrown away, so the first assertion is always the empty
-state. The API base URL reaches the app through `VITE_API_URL`, which
-`src/api.ts` already reads; no source file knows about the test.
+state. The API base URL reaches the app through `VITE_API_URL` and the
+launch token through `VITE_API_TOKEN`, both of which `src/api.ts` already
+reads; no source file knows about the test. The token is random per run,
+the way the desktop makes one per launch, so the suite also proves the
+browser is sending it.
 
 The same variable serves the SSH case: when the browser runs on the
 laptop and the API on the WSL box, start Vite with `VITE_API_URL` set to

@@ -39,6 +39,7 @@
   "error_storage": "تعذّر الحفظ.",
   "error_exhausted": "لم يتبقَّ أي رقم في هذه السلسلة.",
   "error_bad_request": "طلب غير صالح.",
+  "error_unauthorized": "هذه النافذة غير مخوّلة بالاتصال بالصندوق. أعد تشغيل التطبيق.",
   "error_bad_response": "رد غير متوقع من الخادم.",
   "error_unreachable": "الخادم غير متاح.",
   "error_unknown": "حدث خطأ ما.",

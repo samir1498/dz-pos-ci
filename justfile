@@ -53,14 +53,32 @@ gates: fmt clippy types-check test build
 # The API names the origins it answers (the dev Vite port and the Tauri
 # ones); a browser on another machine needs its origin passed here:
 # `just api 4317 .dev/dev.db http://100.111.55.62:5173`
+# The API refuses any call without its launch token; the one for this box
+# lives in .dev/api-token (made once, gitignored) and `just dev` hands the
+# same value to the browser UI.
 api port="4317" db=".dev/dev.db" origin="":
-    cargo run -p dzpos-api -- --db {{db}} --port {{port}} {{ if origin != "" { "--allow-origin " + origin } else { "" } }}
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _token
+    DZPOS_API_TOKEN="$(cat .dev/api-token)" cargo run -p dzpos-api -- --db {{db}} --port {{port}} {{ if origin != "" { "--allow-origin " + origin } else { "" } }}
 
 # web UI only, reachable from the laptop over Tailscale. Needs `just api`
 # started with the laptop's origin as its third argument, or the API
 # refuses the browser (CORS names its origins).
 dev:
-    pnpm desktop dev --host
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _token
+    VITE_API_TOKEN="$(cat .dev/api-token)" pnpm desktop dev --host
+
+_token:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p .dev
+    if [ ! -s .dev/api-token ]; then
+        head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > .dev/api-token
+        chmod 600 .dev/api-token
+    fi
 
 # native window; needs a display, so run on the laptop
 tauri:

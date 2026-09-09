@@ -11,7 +11,7 @@ use tauri::Manager;
 /// stops it.
 type ApiTask = Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>;
 
-/// v1 is one shop and one SQLite file. M7 pairs a second till; the value
+/// v1 is one shop and one SQLite file. M6 pairs a second till; the value
 /// stops being a constant then, not before.
 const SHOP_ID: i32 = 1;
 
@@ -33,6 +33,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::create_dir_all(parent)?;
     }
     let state = dzpos_api::AppState::open(&db_path, SHOP_ID)?;
+    // Fresh each launch and handed only to this process's own webview: the
+    // loopback port is open to every process on the machine, the token is
+    // what makes the API answer this window and nobody else
+    // (docs/architecture.md, "Transport and auth").
+    let token = dzpos_api::LaunchToken::generate().map_err(|e| format!("no randomness: {e}"))?;
 
     // The socket is bound before the window exists so the page can be told
     // its port in the first script it runs; port 0 lets the OS pick, which
@@ -60,28 +65,34 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = window.set_focus();
             }
         }))
-        .setup(move |app| {
-            let router = dzpos_api::router(state);
-            let task = tauri::async_runtime::spawn(async move {
-                if let Err(e) = axum::serve(listener, router).await {
-                    eprintln!("dz-pos API stopped: {e}");
+        .setup({
+            let token = token.clone();
+            move |app| {
+                let router = dzpos_api::router(state, &token);
+                let task = tauri::async_runtime::spawn(async move {
+                    if let Err(e) = axum::serve(listener, router).await {
+                        eprintln!("dz-pos API stopped: {e}");
+                    }
+                });
+                // A poisoned lock here would mean setup already panicked once.
+                if let Ok(mut slot) = started.lock() {
+                    *slot = Some(task);
                 }
-            });
-            // A poisoned lock here would mean setup already panicked once.
-            if let Ok(mut slot) = started.lock() {
-                *slot = Some(task);
+                app.manage(DbState { db_path });
+                app.manage(ApiPort(port));
+                Ok(())
             }
-            app.manage(DbState { db_path });
-            app.manage(ApiPort(port));
-            Ok(())
         })
         // The window comes from tauri.conf.json, so the script that tells
-        // the page its port is injected by a plugin rather than a window
-        // builder. It runs before any of the app's own scripts.
+        // the page its port and its token is injected by a plugin rather
+        // than a window builder. It runs before any of the app's own
+        // scripts. The token is hex, so it needs no escaping.
         .plugin(
             tauri::plugin::Builder::<tauri::Wry, ()>::new("dzpos-api-url")
                 .js_init_script(format!(
-                    "globalThis.__DZPOS_API_URL__ = \"http://127.0.0.1:{port}\";"
+                    "globalThis.__DZPOS_API_URL__ = \"http://127.0.0.1:{port}\";\
+                     globalThis.__DZPOS_API_TOKEN__ = \"{}\";",
+                    token.expose()
                 ))
                 .build(),
         )

@@ -9,10 +9,10 @@ the short form every task cites.
 | Layer | Choice | Version pinned in |
 |---|---|---|
 | Core | Rust, diesel + SQLite (bundled) | `crates/core/Cargo.toml` |
-| API | Rust HTTP server in `crates/api`, embedded in the desktop, standalone when hosted | not yet created |
+| API | Rust HTTP server in `crates/api` (axum), embedded in the desktop, standalone when hosted | `crates/api/Cargo.toml` |
 | Desktop | Tauri 2, React 19, Vite, Tailwind 4, TanStack Router/Query | `apps/desktop` |
 | Mobile | Expo / React Native | `apps/mobile`, not started |
-| Shared TS | `packages/shared`: API client, generated types, money formatting | not yet created |
+| Shared TS | `packages/shared`: API client, generated types, money formatting | `packages/shared/package.json` |
 
 Candidates checked on crates.io on 2026-09-07 and not yet chosen: axum
 0.8.9 and tokio 1.53.1 for the API; ts-rs 12.0.1 for generating the TS
@@ -51,14 +51,42 @@ tray, native print dialog, file pickers, auto-update. Two things follow:
 - The API crate is the product's only entry point, so its tests are the
   product's tests. UI tests check rendering, not business rules.
 
+## Transport and auth
+
+Who may talk to the core, over what, and how the core knows. Five links,
+each decided once here; a milestone that opens a link implements the row
+and changes nothing about the others. The core never terminates TLS
+itself and never learns a password: the desktop, the pairing flow and the
+hosting front door do that, and the core sees a token or a session.
+
+| Link | Transport | Who is calling | Where it is built |
+|---|---|---|---|
+| Desktop webview to its own core | plain HTTP on 127.0.0.1, port chosen at launch | the launch token: 32 random bytes the Tauri process makes at start, injected into its webview as `__DZPOS_API_TOKEN__` and required as `Authorization: Bearer` on every route but `/health`; CORS also lists the app's own origins | M1, `crates/api/src/token.rs` |
+| Browser preview and e2e to a standalone core | same, the token comes from `DZPOS_API_TOKEN` in the environment (never a flag: `ps` shows flags) and reaches Vite as `VITE_API_TOKEN` | same launch token | M1, `justfile`, `playwright.config.ts` |
+| Phone or second till to the serving desktop over the shop LAN | HTTP on the LAN address the owner enabled; TLS with a self-signed certificate whose fingerprint travels in the pairing QR is the candidate, plain HTTP on a trusted Wi-Fi the alternative; open until M6 starts | a device token: the QR carries a 60-second single-use pairing token, the phone trades it for a long-lived device token stored on the phone, revocable from settings; every request shows it the way the webview shows the launch token | M6 |
+| Desktop to the hosted core (cloud mode) | HTTPS, terminated at the host's front door, the core behind it on loopback exactly as on a desktop | an account session issued by the host's login; the core receives the shop it answers for and the user from a header the front door sets and a caller cannot | after M6, open decision 1 |
+| Phone to the hosted core | same as the desktop link; the phone never knows which mode it is in (rule 1) | same account session | after M6, open decision 1 |
+
+Roles (M4) sit inside every link, not beside it: the token or session says
+which device or account is asking, the user on the request says which
+person, and the permission list in `docs/features.md` §5 is checked in the
+service layer, so a request that skipped the screen still meets it. The
+middleware that checks the launch token is the request-identity slot; M4
+adds the user to it, it does not add a second gate.
+
+What is out of scope and stays so: the core does not encrypt the SQLite
+file (Data, below), does not rate-limit loopback, and does not defend the
+machine from software already running as the same user; a keylogger reads
+the token from the webview like it reads the PIN.
+
 ## Layout
 
 ```
 crates/core       models → repos (diesel) → services; migrations; errors
-crates/api        HTTP routes over services; auth; shop scoping   (next)
+crates/api        HTTP routes over services; launch token; shop scoping
 apps/desktop      React UI + src-tauri (starts the API, owns the window)
 apps/mobile       Expo app, same API client                        (later)
-packages/shared   TS: API client, types generated from Rust, money  (next)
+packages/shared   TS: API client, types generated from Rust, money
 docs/             this file, features.md, decisions as they land
 ```
 

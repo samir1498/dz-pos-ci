@@ -3,7 +3,7 @@
 //! code and never shows the message.
 
 use axum::extract::rejection::JsonRejection;
-use axum::http::StatusCode;
+use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use dzpos_core::error::CoreError;
@@ -24,6 +24,10 @@ pub enum ApiError {
     /// allow. The request never reached a service.
     #[error("{0}")]
     BadRequest(String),
+    /// No launch token, or the wrong one. The answer is the same for a
+    /// missing route so a stranger cannot map the API by its 404s.
+    #[error("this call did not show the launch token")]
+    Unauthorized,
     #[error("no such route")]
     NoRoute,
     #[error("this route does not take that method")]
@@ -65,6 +69,7 @@ impl ApiError {
             ApiError::Core(e) => (status_for(e), e.code()),
             ApiError::Request(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.code()),
             ApiError::BadRequest(_) => (StatusCode::UNPROCESSABLE_ENTITY, "bad_request"),
+            ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             ApiError::NoRoute => (StatusCode::NOT_FOUND, "not_found"),
             ApiError::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed"),
             ApiError::Unavailable => (StatusCode::INTERNAL_SERVER_ERROR, "storage"),
@@ -121,13 +126,19 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = self.parts();
         let message = self.message();
-        (
+        let mut res = (
             status,
             Json(Body {
                 error: Payload { code, message },
             }),
         )
-            .into_response()
+            .into_response();
+        if let ApiError::Unauthorized = self {
+            // RFC 7235: a 401 names the scheme it wants.
+            res.headers_mut()
+                .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+        }
+        res
     }
 }
 
