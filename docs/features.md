@@ -194,8 +194,10 @@ first release.**
   récapitulative (see Later); the `kind` stays in the model.
 - Golden-file test for every template × language against fixed fixtures.
   A template change is a reviewed golden diff. `ticket_80mm` is done:
-  `fixtures/print/ticket_80mm/{fr,en,ar}.html` under the réel and
-  `{fr,en,ar}-ifu.html` under the IFU, pinned by
+  one basket sold three ways, three languages each.
+  `fixtures/print/ticket_80mm/{fr,en,ar}.html` is réel and cash,
+  `{fr,en,ar}-ifu.html` is the IFU, and `{fr,en,ar}-card.html` is réel and
+  card, which has no stamp row and neither half of the change. Pinned by
   `crates/core/tests/print_ticket.rs`. `UPDATE_GOLDENS=1` rewrites them and
   fails the run on purpose, and every amount in a golden is parsed back out
   of the file against the document's stored totals, so a golden that drifts

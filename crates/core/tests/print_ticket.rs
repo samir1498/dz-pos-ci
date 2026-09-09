@@ -45,6 +45,48 @@ const GLOBAL_DISCOUNT: i64 = 2_000;
 /// A thousand dinars handed over in cash.
 const TENDERED: i64 = 100_000;
 
+/// The same basket, sold three ways. Each is a golden per language: the
+/// régime decides the TVA half of the paper and the payment mode decides
+/// the money half, and neither is a variation of the other.
+#[derive(Debug, Clone, Copy)]
+enum Case {
+    /// Réel, cash: the whole ticket, recap and stamp and change included.
+    Reel,
+    /// IFU, cash: no recap, no rate on a line, no "HT" on the total row.
+    Ifu,
+    /// Réel, card: the droit de timbre is cash only (Code du timbre 2026
+    /// art. 100-I), and a card takes no note and gives no coins back, so
+    /// three rows that are on every other ticket are absent from this one.
+    Card,
+}
+
+impl Case {
+    const ALL: [Case; 3] = [Case::Reel, Case::Ifu, Case::Card];
+
+    const fn regime(self) -> Regime {
+        match self {
+            Case::Reel | Case::Card => Regime::Reel,
+            Case::Ifu => Regime::Ifu,
+        }
+    }
+
+    const fn payment_mode(self) -> PaymentMode {
+        match self {
+            Case::Reel | Case::Ifu => PaymentMode::Cash,
+            Case::Card => PaymentMode::Card,
+        }
+    }
+
+    /// What the golden's name carries after the language.
+    const fn suffix(self) -> &'static str {
+        match self {
+            Case::Reel => "",
+            Case::Ifu => "-ifu",
+            Case::Card => "-card",
+        }
+    }
+}
+
 fn goldens_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/print/ticket_80mm")
 }
@@ -52,7 +94,8 @@ fn goldens_dir() -> PathBuf {
 /// The one document every golden renders. Its totals come from
 /// `compute_totals`, not from hand-typed numbers: a golden pins the
 /// template, and the money module is what pins the money.
-fn fixed_sale(regime: Regime) -> Document {
+fn fixed_sale(case: Case) -> Document {
+    let regime = case.regime();
     let money_lines: Vec<Line> = LINES
         .iter()
         .map(|(_, qty_milli, unit, line_discount, rate)| Line {
@@ -66,7 +109,9 @@ fn fixed_sale(regime: Regime) -> Document {
         &money_lines,
         &TotalsOptions {
             global_discount: Money::centimes(GLOBAL_DISCOUNT),
-            payment_mode: PaymentMode::Cash,
+            payment_mode: case.payment_mode(),
+            // On for the shop in every case: the stamp being absent from
+            // the card ticket has to be the rule doing it, not a setting.
             stamp_enabled: true,
             regime,
         },
@@ -103,7 +148,12 @@ fn fixed_sale(regime: Regime) -> Document {
         .unwrap()
         .and_hms_opt(14, 5, 0)
         .unwrap();
-    let tendered = Money::centimes(TENDERED);
+    // Cash is the only mode that tenders anything, so the other modes store
+    // neither half and the ticket shows neither row.
+    let tendered = match case.payment_mode() {
+        PaymentMode::Cash => Some(Money::centimes(TENDERED)),
+        PaymentMode::Card | PaymentMode::Credit => None,
+    };
 
     Document {
         id: 1,
@@ -114,7 +164,7 @@ fn fixed_sale(regime: Regime) -> Document {
         issued_at,
         user_id: OWNER,
         regime,
-        payment_mode: PaymentMode::Cash,
+        payment_mode: case.payment_mode(),
         // NIS and AI are left out on purpose: a ticket prints the seller
         // identifiers it has and no empty rows for the ones it has not
         // (features.md, party identifiers row).
@@ -128,8 +178,8 @@ fn fixed_sale(regime: Regime) -> Document {
             phone: Some("0555 12 34 56".to_owned()),
         },
         customer_id: None,
-        tendered: Some(tendered),
-        change: Some(tendered.checked_sub(totals.net_to_pay).unwrap()),
+        change: tendered.map(|t| t.checked_sub(totals.net_to_pay).unwrap()),
+        tendered,
         totals,
         status: DocumentStatus::Issued,
         lines,
@@ -137,19 +187,15 @@ fn fixed_sale(regime: Regime) -> Document {
     }
 }
 
-fn golden_name(lang: Lang, regime: Regime) -> String {
-    let suffix = match regime {
-        Regime::Reel => "",
-        Regime::Ifu => "-ifu",
-    };
-    format!("{}{suffix}.html", lang.tag())
+fn golden_name(lang: Lang, case: Case) -> String {
+    format!("{}{}.html", lang.tag(), case.suffix())
 }
 
 /// The golden as it stands on disk, or a rewritten one under
 /// `UPDATE_GOLDENS=1`. Rewriting is not a pass: `updated` says so and the
 /// test that called this fails at the end of the run.
-fn golden(lang: Lang, regime: Regime, rendered: &str, updated: &mut Vec<String>) -> String {
-    let name = golden_name(lang, regime);
+fn golden(lang: Lang, case: Case, rendered: &str, updated: &mut Vec<String>) -> String {
+    let name = golden_name(lang, case);
     let path = goldens_dir().join(&name);
     if std::env::var_os("UPDATE_GOLDENS").is_some() {
         std::fs::create_dir_all(goldens_dir()).unwrap();
@@ -191,6 +237,15 @@ fn one_amount(html: &str, marker: &str) -> String {
     found.into_iter().next().unwrap_or_default()
 }
 
+/// A row a ticket carries only sometimes: the stamp on a cash sale, the two
+/// halves of the change. Absent is an answer, so it comes back as `None`
+/// rather than as a zero nobody printed.
+fn optional_amount(html: &str, marker: &str) -> Option<i64> {
+    let found = amounts(html, marker);
+    assert!(found.len() <= 1, "more than one {marker} row: {found:?}");
+    found.first().map(|printed| centimes(printed))
+}
+
 /// "1 234,56" back to 123456 centimes. The golden's own digits, read by a
 /// parser that shares no code with the formatter that wrote them.
 fn centimes(printed: &str) -> i64 {
@@ -224,9 +279,11 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document) {
         -totals.discount.as_centimes(),
         "the discount row"
     );
+    // Nothing due prints no row: a stamp of 0,00 on a card sale would say
+    // the tax was charged and came to nothing.
     assert_eq!(
-        centimes(&one_amount(html, "stamp")),
-        totals.stamp.as_centimes(),
+        optional_amount(html, "stamp"),
+        (totals.stamp != Money::ZERO).then(|| totals.stamp.as_centimes()),
         "the stamp row"
     );
     assert_eq!(
@@ -273,29 +330,30 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document) {
     }
 
     assert_eq!(
-        doc.tendered.map(|m| m.as_centimes()),
-        Some(centimes(&one_amount(html, "tendered"))),
+        optional_amount(html, "tendered"),
+        doc.tendered.map(Money::as_centimes),
         "the tendered row"
     );
     assert_eq!(
-        doc.change.map(|m| m.as_centimes()),
-        Some(centimes(&one_amount(html, "change"))),
+        optional_amount(html, "change"),
+        doc.change.map(Money::as_centimes),
         "the change row"
     );
 }
 
-#[test]
-fn the_reel_ticket_is_its_golden_in_every_language() {
-    let doc = fixed_sale(Regime::Reel);
+/// One case against its three goldens: the render is the file, and the file
+/// says what the document stores.
+fn each_language_of(case: Case) {
+    let doc = fixed_sale(case);
     let mut updated = Vec::new();
     for lang in Lang::ALL {
         let rendered = render_ticket(&doc, lang).unwrap();
-        let expected = golden(lang, Regime::Reel, &rendered, &mut updated);
+        let expected = golden(lang, case, &rendered, &mut updated);
         assert_eq!(
             rendered,
             expected,
             "{} is not what the template renders",
-            golden_name(lang, Regime::Reel)
+            golden_name(lang, case)
         );
         the_golden_says_what_the_document_stores(&expected, &doc);
     }
@@ -303,21 +361,56 @@ fn the_reel_ticket_is_its_golden_in_every_language() {
 }
 
 #[test]
+fn the_reel_ticket_is_its_golden_in_every_language() {
+    each_language_of(Case::Reel);
+}
+
+#[test]
 fn the_ifu_ticket_is_its_golden_in_every_language() {
-    let doc = fixed_sale(Regime::Ifu);
-    let mut updated = Vec::new();
+    each_language_of(Case::Ifu);
+}
+
+#[test]
+fn the_card_ticket_is_its_golden_in_every_language() {
+    each_language_of(Case::Card);
+}
+
+/// A card sale is missing three rows every cash ticket has, and each is
+/// missing for its own reason: the droit de timbre is due on cash only
+/// (Code du timbre 2026 art. 100-I), and nothing is tendered or given back.
+/// The cash ticket is checked in the same test so a template that dropped
+/// all three for everyone could not pass this.
+#[test]
+fn a_card_ticket_carries_no_stamp_and_neither_half_of_the_change() {
+    let card = fixed_sale(Case::Card);
+    assert_eq!(card.totals.stamp, Money::ZERO, "the stamp is cash only");
+    assert_eq!(card.tendered, None);
+    assert_eq!(card.change, None);
+
     for lang in Lang::ALL {
-        let rendered = render_ticket(&doc, lang).unwrap();
-        let expected = golden(lang, Regime::Ifu, &rendered, &mut updated);
-        assert_eq!(
-            rendered,
-            expected,
-            "{} is not what the template renders",
-            golden_name(lang, Regime::Ifu)
-        );
-        the_golden_says_what_the_document_stores(&expected, &doc);
+        let html = render_ticket(&card, lang).unwrap();
+        for absent in ["stamp", "tendered", "change"] {
+            assert!(
+                amounts(&html, absent).is_empty(),
+                "the {lang:?} card ticket keeps a {absent} row"
+            );
+        }
+        assert!(!html.contains(text(Key::Stamp, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::Tendered, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::Change, lang)), "{lang:?}");
+        // It says how it was paid, and it is still a réel ticket.
+        assert!(html.contains(text(Key::Card, lang)), "{lang:?}");
+        assert_eq!(amounts(&html, "tva").len(), 3, "{lang:?}");
     }
-    refuse_a_silent_regeneration(&updated);
+
+    let cash = render_ticket(&fixed_sale(Case::Reel), Lang::Fr).unwrap();
+    for present in ["stamp", "tendered", "change"] {
+        assert_eq!(
+            amounts(&cash, present).len(),
+            1,
+            "the cash ticket lost its {present} row"
+        );
+    }
 }
 
 /// `regime_ifu_prints_no_tva`, read off the paper: the word is not on it,
@@ -326,7 +419,7 @@ fn the_ifu_ticket_is_its_golden_in_every_language() {
 /// rule and not a layout preference.
 #[test]
 fn an_ifu_ticket_names_no_tax_in_any_language() {
-    let doc = fixed_sale(Regime::Ifu);
+    let doc = fixed_sale(Case::Ifu);
     for lang in Lang::ALL {
         let html = render_ticket(&doc, lang).unwrap();
         for forbidden in ["TVA", "VAT", "ت.ق.م"] {
@@ -359,7 +452,7 @@ fn an_ifu_ticket_names_no_tax_in_any_language() {
 /// of the document and not a summary of the lines.
 #[test]
 fn a_reel_ticket_carries_one_tva_row_per_rate() {
-    let doc = fixed_sale(Regime::Reel);
+    let doc = fixed_sale(Case::Reel);
     assert_eq!(doc.totals.tva_by_rate.len(), 3, "0 %, 9 % and 19 %");
     for lang in Lang::ALL {
         let html = render_ticket(&doc, lang).unwrap();
@@ -369,7 +462,7 @@ fn a_reel_ticket_carries_one_tva_row_per_rate() {
 
 #[test]
 fn the_arabic_ticket_reads_right_to_left_and_says_it_is_unreviewed() {
-    let doc = fixed_sale(Regime::Reel);
+    let doc = fixed_sale(Case::Reel);
     let ar = render_ticket(&doc, Lang::Ar).unwrap();
     assert!(ar.contains("dir=\"rtl\""), "the Arabic ticket is not RTL");
     assert!(ar.contains("lang=\"ar\""));
@@ -391,18 +484,18 @@ fn the_arabic_ticket_reads_right_to_left_and_says_it_is_unreviewed() {
 /// ticket a comptable reads carries the same figures as the French one.
 #[test]
 fn the_digits_are_western_in_every_language() {
-    for regime in [Regime::Reel, Regime::Ifu] {
-        let doc = fixed_sale(regime);
+    for case in Case::ALL {
+        let doc = fixed_sale(case);
         for lang in Lang::ALL {
             let html = render_ticket(&doc, lang).unwrap();
             assert!(
                 !html.chars().any(|c| ('\u{0660}'..='\u{0669}').contains(&c)),
-                "{lang:?} {regime:?} carries Arabic-Indic digits"
+                "{lang:?} {case:?} carries Arabic-Indic digits"
             );
             assert_eq!(
                 centimes(&one_amount(&html, "net-to-pay")),
                 doc.totals.net_to_pay.as_centimes(),
-                "{lang:?} {regime:?}"
+                "{lang:?} {case:?}"
             );
         }
     }
@@ -415,7 +508,7 @@ fn the_digits_are_western_in_every_language() {
 /// customer a total whose parts do not add up, so the printer refuses.
 #[test]
 fn an_ifu_document_carrying_a_tva_recap_is_refused_not_quietly_stripped() {
-    let mut doc = fixed_sale(Regime::Ifu);
+    let mut doc = fixed_sale(Case::Ifu);
     doc.totals.tva_by_rate.push(TvaLine {
         rate: Bps::new(1900).unwrap(),
         base: Money::centimes(29_295),
@@ -433,9 +526,9 @@ fn an_ifu_document_carrying_a_tva_recap_is_refused_not_quietly_stripped() {
 /// of a basket of exempt goods; both still print.
 #[test]
 fn a_reel_document_prints_with_an_empty_recap_and_with_a_zero_rate_one() {
-    let mut empty = fixed_sale(Regime::Reel);
+    let mut empty = fixed_sale(Case::Reel);
     empty.totals.tva_by_rate.clear();
-    let mut exempt = fixed_sale(Regime::Reel);
+    let mut exempt = fixed_sale(Case::Reel);
     exempt.totals.tva_by_rate = vec![TvaLine {
         rate: Bps::ZERO,
         base: exempt.totals.subtotal_ht,
@@ -457,7 +550,7 @@ fn a_reel_document_prints_with_an_empty_recap_and_with_a_zero_rate_one() {
 /// counter's own `doc_ticket`.
 #[test]
 fn the_ticket_number_is_the_series_prefix_and_six_digits() {
-    let doc = fixed_sale(Regime::Reel);
+    let doc = fixed_sale(Case::Reel);
     for lang in Lang::ALL {
         assert!(
             render_ticket(&doc, lang).unwrap().contains("TK-000123"),
