@@ -1,17 +1,23 @@
 ---
 type: 'now'
-updated: '2026-09-08'
+updated: '2026-09-09'
 ---
 ## Active
 Roadmap `dz-pos-to-first-shop` (`just ctx roadmap show dz-pos-to-first-shop`
-from the repo root, full text `docs/roadmap.md`): M0 in flight, the ladder
-below is its steps. M1 to M6 are paused stub plans that receive tasks when
-their milestone starts.
+from the repo root, full text `docs/roadmap.md`): M0 closed on 2026-09-09
+with PR #14 merged (c3f6384, two review rounds, gates and CI green). M1 is
+active; its first task is planned with Samir step by step and lands in
+`plans/20260908-m1-sale-and-ticket-on-one-desktop.md`. M2 to M6 stay stub
+plans until their turn.
+
+Status site for Anouar: https://dinar-reports.pages.dev/ (progress reports
+and reference pages; generator in `~/.dz-night/report/` on the WSL box).
 
 Run `just status` from the repo root for the ladder and the plans.
 Run `just ctx show <slug>` for plan details.
 
 ## Done recently
+- 2026-09-09: PR #14 merged, M0 closed. Review of the branch found and fixed: a near-total discount printing a negative TVA base (share now capped at the group HT), the API panicking on i64::MIN, raw SQLite text reachable on the wire, the mockup writing the amount in words differently from the core. Coverage in CI scoped to the two crates with tests.
 
 ## Pending
 

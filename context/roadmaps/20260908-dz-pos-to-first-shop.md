@@ -9,8 +9,8 @@ tldr: 'Seven milestones from the money core to a phone in the shop; full text in
 priority: 90
 entries:
   - ref: 'money-module-centimes-tva-stamp-amount-in-words'
-    status: 'in-progress'
-    note: 'M0: Money newtype, TVA, stamp, words; the ladder in progress/now.md holds the steps'
+    status: 'done'
+    note: 'M0 closed 2026-09-09 with PR #14 merged (c3f6384)'
   - ref: 'legal-fiscal-and-tooling-research-for-dz-pos'
     status: 'in-progress'
     note: 'M0: R3, R6, R7, R8, R9 open; R8 and R6 gate M2, R3 gates M5'
@@ -18,8 +18,8 @@ entries:
     status: 'in-progress'
     note: 'M0: laptop clone, Sonar Rust check, CI clippy --all-targets, dz-review sections from pc-review'
   - ref: 'm1-sale-and-ticket-on-one-desktop'
-    status: 'next'
-    note: 'M1: starts when M0 closes'
+    status: 'in-progress'
+    note: 'M1 started 2026-09-09; first task planned with Samir step by step'
   - ref: 'm2-facture-customers-and-credit'
     status: 'planned'
     note: 'M2: blocked on a real printed facture, Arabic words review, accountant answers'

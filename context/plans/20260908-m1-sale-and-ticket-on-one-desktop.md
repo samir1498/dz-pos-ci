@@ -1,7 +1,7 @@
 ---
 title: 'M1 sale and ticket on one desktop'
 slug: 'm1-sale-and-ticket-on-one-desktop'
-status: 'paused'
+status: 'active'
 category: 'milestone'
 created: 20260908
 tldr: 'Products, till, cash sale, 80mm ticket on a real printer; stub until M0 closes'
@@ -25,4 +25,3 @@ RTL from the first screen, daily backup with restore.
 
 Fixtures: `regime_ifu_prints_no_tva`, `facture_requires_party_ids` (seller
 half). Also writes the facture-or-ticket rule into `docs/features.md` §3.
-

@@ -1,7 +1,7 @@
 ---
 title: 'Money module: centimes, TVA, stamp, amount in words'
 slug: 'money-module-centimes-tva-stamp-amount-in-words'
-status: 'active'
+status: 'done'
 category: 'core'
 created: 20260908
 tldr: 'Pure money module in crates/core, no DB: centimes, TVA per rate, stamp, words; one fixture set shared by Rust and the mockup JS'
@@ -34,6 +34,7 @@ acceptance:
   - 'cargo test and pnpm -r test both load fixtures/money/*.json and pass; a changed constant fails both'
 references:
   - 'docs/features.md#fiscal-rules-current-assumptions'
+completed_at: '2026-09-09'
 ---
 # Money module: centimes, TVA, stamp, amount in words
 
