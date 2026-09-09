@@ -42,6 +42,7 @@ pub mod customers;
 pub mod debt;
 pub mod documents;
 pub mod products;
+pub mod proforma;
 pub mod sales;
 pub mod settings;
 pub mod shops;
