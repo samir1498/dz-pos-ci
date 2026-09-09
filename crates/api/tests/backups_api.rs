@@ -384,3 +384,49 @@ async fn a_shop_file_that_cannot_be_reopened_leaves_the_server_refusing_every_qu
     assert_eq!(status, StatusCode::OK, "{listed}");
     assert_eq!(listed["backups"].as_array().unwrap().len(), 1);
 }
+
+/// The copy is in place and a sidecar of the file it replaced could not be
+/// removed. That old `-wal` belongs to a database that is gone, and SQLite
+/// would replay it into the file that took its name, so nothing may reopen
+/// the shop file until a person has looked at it.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_sidecar_left_behind_after_the_rename_stops_the_file_being_reopened() {
+    let h = harness();
+    call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
+    let (_, made) = call(&h.app, "POST", "/backups", None).await;
+    let name = made["name"].as_str().unwrap().to_string();
+    call(&h.app, "POST", "/products", Some(product("Huile Elio 5L"))).await;
+
+    // A name the removal cannot delete, standing where the old file's `-shm`
+    // sits. The connection already has its own handle open, so the shop file
+    // goes on working until the restore closes it.
+    let shm = h.dir.path().join("t.db-shm");
+    let _ = std::fs::remove_file(&shm);
+    std::fs::create_dir(&shm).unwrap();
+    std::fs::write(shm.join("in the way"), b"x").unwrap();
+
+    let (status, body) = call(&h.app, "POST", &format!("/backups/{name}/restore"), None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "storage");
+
+    // Nothing reopened it behind the caller.
+    let (status, body) = call(&h.app, "GET", "/products", None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "storage");
+
+    // The rename did happen, so what is on disk is the copy, whole and not
+    // written to since.
+    std::fs::remove_dir_all(&shm).unwrap();
+    let mut restored = dzpos_core::db::open(h.db()).unwrap();
+    let names: Vec<String> = dzpos_core::services::products::list(&mut restored, SHOP)
+        .unwrap()
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    assert_eq!(
+        names,
+        vec!["Semoule 10kg"],
+        "the copy is not what is on disk"
+    );
+}

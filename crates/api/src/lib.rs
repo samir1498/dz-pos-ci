@@ -113,21 +113,30 @@ impl AppState {
     ///    thirty, so pruning cannot reach it;
     /// 4. copy the chosen backup to `<db>.restoring.tmp`, in the same folder
     ///    so the rename below cannot cross a file system;
-    /// 5. close the live connection, which is what releases the file handle,
+    /// 5. `PRAGMA wal_checkpoint(TRUNCATE)` on the live connection, so its
+    ///    `-wal` is folded back into the file and emptied while the
+    ///    connection that owns it is still open;
+    /// 6. close the live connection, which is what releases the file handle,
     ///    leaving the slot under the lock empty;
-    /// 6. rename `<db>.restoring.tmp` over the shop file;
-    /// 7. delete the old file's `-wal` and `-shm` sidecars, after the rename
-    ///    and only if it happened: until then they are what the shop file
-    ///    still needs to be whole;
-    /// 8. reopen through `db::open`, which runs any migration the copy is
+    /// 7. rename `<db>.restoring.tmp` over the shop file;
+    /// 8. delete the old file's `-wal` and `-shm`, after the rename and only
+    ///    if it happened: until then they are what the shop file still needs
+    ///    to be whole;
+    /// 9. reopen through `db::open`, which runs any migration the copy is
     ///    behind on, and put that connection back into the slot.
     ///
-    /// A failure before step 5 leaves the shop file exactly as it was. A
-    /// failure at 6 leaves it as it was too, and step 8 puts the connection
-    /// back. If step 8 itself fails, the file on disk is whole but this
-    /// process has no connection to it: the slot stays empty and every route
-    /// that needs the shop file answers 500 until the app is restarted. That
-    /// is deliberate. The path is logged so the operator knows which file.
+    /// Three ways it can fail and three different answers:
+    ///
+    /// - anything up to step 6 leaves the shop file exactly as it was and
+    ///   the connection where it was;
+    /// - the rename at 7 failing leaves the shop file as it was, sidecars
+    ///   included, and it is reopened: the restore did not happen, and the
+    ///   till goes on working;
+    /// - a sidecar at 8, or the reopen at 9, failing leaves the slot empty
+    ///   on purpose. The copy is in place, and SQLite replays whatever
+    ///   `-wal` it finds beside a file it opens, so nothing here opens it
+    ///   again. Both file names are logged and the app has to be restarted,
+    ///   by which time step 5 has already made anything left over harmless.
     pub fn restore(&self, backup_path: &Path) -> Result<Restored, ApiError> {
         let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
@@ -145,16 +154,46 @@ impl AppState {
         remove_if_present(&staged).map_err(core_io)?;
         std::fs::copy(backup_path, &staged).map_err(core_io)?;
 
+        // The last thing done through the live connection: its `-wal` is
+        // folded back into the file and emptied while the connection that
+        // owns it is still open. After this, a sidecar that survives the
+        // swap describes nothing, which is what turns the failure below from
+        // data loss into a restart.
+        let live = guard.as_mut().ok_or(ApiError::Unavailable)?;
+        dzpos_core::db::checkpoint(live).map_err(|e| ApiError::from(CoreError::from(e)))?;
+
         // From here the shop file is being replaced. Closing the connection
         // is what releases the handle, and the slot stays empty until a
         // reopen fills it.
         drop(guard.take());
 
-        if let Err(e) = swap_in(&staged, db) {
+        if let Err(rename_failed) = std::fs::rename(&staged, db) {
             let _ = std::fs::remove_file(&staged);
             // The shop file was never renamed over, so it is the one that
-            // was always there; reopening it is the whole recovery.
-            *guard = Some(dzpos_core::db::open(db).map_err(CoreError::from)?);
+            // was always there, sidecars and all; reopening it is the whole
+            // recovery. A reopen that fails too is logged rather than
+            // returned: the caller asked about the restore, and the rename
+            // is the reason it did not happen.
+            match dzpos_core::db::open(db) {
+                Ok(conn) => *guard = Some(conn),
+                Err(e) => eprintln!(
+                    "dz-pos: the restore did not happen and {} could not be reopened either: {e}",
+                    db.display()
+                ),
+            }
+            return Err(core_io(rename_failed));
+        }
+
+        // The copy is in place. The sidecars beside it belong to the file it
+        // replaced, and SQLite replays a `-wal` into whatever file it finds
+        // under that name, so one that will not go means nothing may open
+        // this file again in this process.
+        if let Err((sidecar, e)) = clear_sidecars(db) {
+            eprintln!(
+                "dz-pos: {} holds the restored copy, but {} could not be removed, so it is not being reopened: {e}",
+                db.display(),
+                sidecar.display()
+            );
             return Err(ApiError::from(e));
         }
 
@@ -234,18 +273,14 @@ fn remove_if_present(path: &Path) -> Result<(), std::io::Error> {
     }
 }
 
-/// The rename first, the old file's sidecars after it, and only once it has
-/// happened. SQLite would replay a leftover `-wal` into whatever file it
-/// finds under that name, so they cannot stay across a swap; but they are
-/// also what the shop file still needs to be whole, and a rename that failed
-/// leaves that file in place to be reopened. Deleting them first threw away
-/// the last committed pages of a database that was never replaced. A rename
-/// inside one folder is atomic. There is no `-journal` to remove: the file
-/// is opened in WAL mode, so a rollback journal never exists beside it.
-fn swap_in(staged: &Path, db: &Path) -> Result<(), dzpos_core::error::CoreError> {
-    std::fs::rename(staged, db)?;
-    for sidecar in ["-wal", "-shm"] {
-        remove_if_present(&sibling(db, sidecar))?;
+/// Removes the `-wal` and `-shm` of the file that used to sit at `db`, and
+/// names the one that would not go, because that is the file a person has to
+/// deal with. There is no `-journal`: the shop file is opened in WAL mode, so
+/// a rollback journal never exists beside it.
+fn clear_sidecars(db: &Path) -> Result<(), (PathBuf, CoreError)> {
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = sibling(db, suffix);
+        remove_if_present(&sidecar).map_err(|e| (sidecar, CoreError::from(e)))?;
     }
     Ok(())
 }
@@ -394,50 +429,47 @@ mod origin_tests {
 }
 
 #[cfg(test)]
-mod swap_tests {
+mod sidecar_tests {
     // Tests may panic; the deny is for shipped code.
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-    use super::{sibling, swap_in};
+    use super::{clear_sidecars, sibling};
 
-    /// The sidecars are what the shop file still needs to be whole. A rename
-    /// that did not happen must not find them already deleted: the file
-    /// under that name is the one that was always there, and it is about to
-    /// be reopened.
     #[test]
-    fn a_rename_that_fails_leaves_the_old_files_sidecars_alone() {
+    fn the_sidecars_of_the_file_that_was_replaced_go_and_the_file_is_untouched() {
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("t.db");
-        // A name a rename cannot write over, so the swap fails after the
-        // point where the old order had already deleted the sidecars.
-        std::fs::create_dir(&db).unwrap();
-        std::fs::write(db.join("keep"), b"not empty").unwrap();
-        let wal = sibling(&db, "-wal");
-        let shm = sibling(&db, "-shm");
-        std::fs::write(&wal, b"wal").unwrap();
-        std::fs::write(&shm, b"shm").unwrap();
-        let staged = sibling(&db, ".restoring.tmp");
-        std::fs::write(&staged, b"the copy").unwrap();
+        std::fs::write(&db, b"the restored copy").unwrap();
+        std::fs::write(sibling(&db, "-wal"), b"wal").unwrap();
+        std::fs::write(sibling(&db, "-shm"), b"shm").unwrap();
 
-        assert!(swap_in(&staged, &db).is_err(), "the rename should not work");
-        assert!(wal.is_file(), "the shop file's -wal was deleted anyway");
-        assert!(shm.is_file(), "the shop file's -shm was deleted anyway");
+        clear_sidecars(&db).unwrap();
+        assert!(!sibling(&db, "-wal").exists());
+        assert!(!sibling(&db, "-shm").exists());
+        assert_eq!(std::fs::read(&db).unwrap(), b"the restored copy");
     }
 
     #[test]
-    fn a_rename_that_works_takes_the_sidecars_with_the_file_they_belonged_to() {
+    fn a_folder_with_no_sidecars_in_it_is_not_a_failure() {
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("t.db");
-        std::fs::write(&db, b"the old shop file").unwrap();
-        std::fs::write(sibling(&db, "-wal"), b"wal").unwrap();
-        std::fs::write(sibling(&db, "-shm"), b"shm").unwrap();
-        let staged = sibling(&db, ".restoring.tmp");
-        std::fs::write(&staged, b"the copy").unwrap();
+        std::fs::write(&db, b"the restored copy").unwrap();
+        clear_sidecars(&db).unwrap();
+    }
 
-        swap_in(&staged, &db).unwrap();
-        assert_eq!(std::fs::read(&db).unwrap(), b"the copy");
-        assert!(!sibling(&db, "-wal").exists());
-        assert!(!sibling(&db, "-shm").exists());
-        assert!(!staged.exists());
+    /// The name comes back because the caller has to log it: it is the file
+    /// someone will have to remove before the app will open the shop again.
+    #[cfg(unix)]
+    #[test]
+    fn one_that_will_not_go_is_named_back_to_the_caller() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("t.db");
+        std::fs::write(&db, b"the restored copy").unwrap();
+        let shm = sibling(&db, "-shm");
+        std::fs::create_dir(&shm).unwrap();
+        std::fs::write(shm.join("in the way"), b"x").unwrap();
+
+        let (named, _) = clear_sidecars(&db).unwrap_err();
+        assert_eq!(named, shm);
     }
 }

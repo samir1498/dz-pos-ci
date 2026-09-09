@@ -20,6 +20,19 @@ pub enum DbError {
     Migrate(String),
 }
 
+/// Folds the write-ahead log back into the main file and truncates it to
+/// nothing.
+///
+/// Called before the file is closed and replaced: a `-wal` holding committed
+/// pages belongs to the database it was written for, and SQLite replays
+/// whatever `-wal` it finds beside a file it opens. Emptying it first means
+/// the sidecars left over a swap describe nothing, whether or not they can
+/// be deleted afterwards.
+pub fn checkpoint(conn: &mut SqliteConnection) -> Result<(), DbError> {
+    conn.batch_execute("PRAGMA wal_checkpoint(TRUNCATE);")?;
+    Ok(())
+}
+
 /// Opens (creating if needed) the SQLite file and applies pending migrations.
 pub fn open(path: impl AsRef<Path>) -> Result<SqliteConnection, DbError> {
     let url = path.as_ref().to_string_lossy();
