@@ -1,13 +1,17 @@
 //! The till's routes. They translate: every rule lives in
 //! `dzpos_core::services::sales`.
 
-use axum::extract::rejection::{JsonRejection, PathRejection};
-use axum::extract::{Path, State};
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::response::Html;
 use axum::Json;
+use dzpos_core::lang::Lang;
+use dzpos_core::print::render_ticket;
 use dzpos_core::services::documents::DocumentKind;
 use dzpos_core::services::sales::NewSale;
 use dzpos_core::services::{documents, sales};
+use serde::Deserialize;
 
 use crate::dto::{NewSaleDto, SaleDto};
 use crate::error::ApiError;
@@ -33,6 +37,36 @@ pub async fn get_one(
     let shop = state.shop_id;
     let found = state.blocking(move |c| documents::get(c, shop, id)).await?;
     Ok(Json(SaleDto::from(found)))
+}
+
+/// The language the ticket prints in. Named by the caller on every call
+/// rather than read from a setting: the ruling in `docs/features.md` §4 is
+/// that a document prints in the language the till is being used in, and
+/// the till is the only place that knows which that is.
+#[derive(Deserialize)]
+pub struct TicketQuery {
+    lang: Lang,
+}
+
+/// The 80 mm ticket for a stored sale, as an HTML page.
+///
+/// The core renders it (features.md §4: the same bytes from the desktop and
+/// from a server with no screen), so this handler reads the document and
+/// hands the string over. A lang the app does not print, or none at all, is
+/// the caller's mistake and answers 422 in the envelope like every other
+/// unreadable request.
+pub async fn ticket(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    lang: Result<Query<TicketQuery>, QueryRejection>,
+) -> Result<Html<String>, ApiError> {
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let Query(TicketQuery { lang }) =
+        lang.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
+    let shop = state.shop_id;
+    let found = state.blocking(move |c| documents::get(c, shop, id)).await?;
+    Ok(Html(render_ticket(&found, lang)?))
 }
 
 pub async fn create(

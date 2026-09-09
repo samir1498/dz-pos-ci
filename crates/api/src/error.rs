@@ -107,9 +107,14 @@ const fn status_for(e: &CoreError) -> StatusCode {
         CoreError::Validation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
-        CoreError::Money(_) | CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) => {
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
+        // A template that will not render is the app's own bug: the
+        // template ships in the binary and the data comes from a row the
+        // core just read, so the caller has nothing to correct.
+        CoreError::Money(_)
+        | CoreError::Db(_)
+        | CoreError::Query(_)
+        | CoreError::Io(_)
+        | CoreError::Render(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 

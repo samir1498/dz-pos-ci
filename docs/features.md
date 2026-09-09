@@ -181,6 +181,7 @@ first release.**
 | Régime fiscal | shop-level, dated setting `ifu` or `réel`. IFU: single price per product, no TVA rate, no HT/TTC, no TVA line on any document; réel: the TVA rows above. Documents keep the regime they were issued under | `regime_ifu_prints_no_tva` | CIDTA 2026 art. 282 ter (8 M DA threshold), 282 sexies (rates); CTCA 2026 art. 2-12 (out of TVA scope), art. 64 (must not mention TVA) |
 | Droit de timbre | cash only (electronic exempt); nothing at 300 DA or less; tranches = ceil(amount / 100 DA); 1 DA per tranche up to 30 000 DA, 1,5 DA up to 100 000 DA, 2 DA above, the whole amount at its band's rate (no progressivity); minimum 5 DA; no cap. The base is `total_ttc`, the amount before the stamp itself: the text says "amount" and names no base, so this is an assumption to confirm with the comptable (R8). Open: half-dinar on odd tranches at 1,5. It is exact in centimes and only matters if the tax must be paid in whole dinars | `stamp_progressive_tranches` (replaces `stamp_cash_only_clamped`) | Code du timbre 2026 art. 100-I and 258 quinquies; DGI circular 14/MF/DGI/LF.2025 (examples 1–3) |
 | Amount in words | French, Arabic and English generators, dinars and centimes | `words_{fr,ar,en}_golden` | décret 05-468: total TTC "en chiffres et en lettres"; Arabic wording not yet sourced |
+| Printed wording | the words a document prints live in the core, three languages per key. The Arabic is unreviewed by a native speaker, exactly like `words_ar`, and the Arabic ticket golden says so in its own header comment | `fixtures/print/ticket_80mm/ar.html`, `ar-ifu.html` | none yet; R6 covers both this and the amount in words |
 | Party identifiers | `facture`: seller RC + NIS (+ NIF, AI as on every facture in circulation), buyer RC + NIS, or name + address when the buyer is a consumer; stamp and signature blocks; `ticket`: seller identity only | `facture_requires_party_ids` | décret 05-468 art. 3 and 4; NIF/AI from tax texts, article to cite (R3) |
 | Numbering | one uninterrupted chronological series per document kind; a cancelled document keeps its number and is marked "facture annulée"; numbers never reused | `numbering_gapless` | décret 05-468 art. 10 |
 
@@ -192,10 +193,35 @@ first release.**
   same bytes. `bon_de_livraison_a4` is parked with the facture
   récapitulative (see Later); the `kind` stays in the model.
 - Golden-file test for every template × language against fixed fixtures.
-  A template change is a reviewed golden diff.
+  A template change is a reviewed golden diff. `ticket_80mm` is done:
+  one basket sold three ways, three languages each.
+  `fixtures/print/ticket_80mm/{fr,en,ar}.html` is réel and cash,
+  `{fr,en,ar}-ifu.html` is the IFU, and `{fr,en,ar}-card.html` is réel and
+  card, which has no stamp row and neither half of the change. Pinned by
+  `crates/core/tests/print_ticket.rs`. `UPDATE_GOLDENS=1` rewrites them and
+  fails the run on purpose, and every amount in a golden is parsed back out
+  of the file against the document's stored totals, so a golden that drifts
+  from the money cannot be accepted by regenerating it.
+- The print language is the language the till is being used in, passed by
+  the caller on each call (`GET /sales/{id}/ticket?lang=fr|en|ar`). There is
+  no separate print-language setting in v1.
+- Numbers are Western digits in every language, comma decimal, thousands
+  grouped with a narrow no-break space (U+202F), and no currency word on a
+  line: `fixtures/money/format_centimes.json` pins the core's formatter and
+  the desktop's to each other. A document's printed number is
+  `{prefix}-{number:06}`, `TK-000123` for a ticket.
+- The words a document prints are the core's own dictionary
+  (`crates/core/src/print/strings.rs`), not the desktop's i18n JSON: a
+  server with no UI prints the same paper. The Arabic in it is unreviewed by
+  a native speaker, like `words_ar` (R6).
+- Under the IFU the ticket has no TVA recap, no rate on a line and no "HT"
+  on its total row: the document must not mention the tax at all
+  (`regime_ifu_prints_no_tva`), and "hors taxe" names one.
 - Thermal: ESC/POS over USB or Bluetooth from the desktop; from the phone
   via the desktop in LAN mode. "Any printer" means the OS print dialog for
   A4/A5 and raw ESC/POS for 80mm.
+- Later: a QR code on the ticket, the shop's logo, and a footer text the
+  owner sets. None of the three is in M1.
 
 ## 5. Users and roles (v1)
 

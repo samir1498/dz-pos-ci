@@ -5,6 +5,10 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    // money.test.ts reads fixtures/money/format_centimes.json, the file the
+    // Rust formatter is pinned by. Importing it is what keeps this package
+    // free of @types/node for one readFileSync.
+    "resolveJsonModule": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,

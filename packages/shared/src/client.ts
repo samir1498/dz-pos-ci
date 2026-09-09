@@ -300,6 +300,29 @@ async function unwrap(res: Response): Promise<unknown> {
   throw new ApiError("unreachable", `HTTP ${res.status}`, res.status);
 }
 
+/** The languages a document prints in. Not a generated DTO: the language
+ * is a query parameter and never crosses in a body, so there is no Rust
+ * struct to generate it from. `crates/core/src/lang.rs` is the other half
+ * and `dzpos_core::lang::Lang` refuses anything else with a 422. */
+export type PrintLang = "fr" | "en" | "ar";
+
+/** A body that is a page, not JSON. Only the error path is JSON, and it is
+ * the same envelope every other call answers with. */
+async function unwrapText(res: Response): Promise<string> {
+  const text = await res.text();
+  if (res.ok) return text;
+  let body: unknown = null;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    body = null;
+  }
+  if (isApiErrorBody(body)) {
+    throw new ApiError(body.error.code, body.error.message, res.status);
+  }
+  throw new ApiError("unreachable", `HTTP ${res.status}`, res.status);
+}
+
 function narrow<T>(body: unknown, guard: (v: unknown) => v is T, what: string): T {
   if (guard(body)) return body;
   throw new ApiError("bad_response", `the server sent an unexpected ${what}`, 0);
@@ -334,6 +357,19 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
     return unwrap(res);
+  }
+
+  /** The same call, for a route that answers a document instead of JSON. */
+  async function sendText(path: string, init?: RequestInit): Promise<string> {
+    const headers = new Headers(init?.headers);
+    if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
+    let res: Response;
+    try {
+      res = await send0(`${base}${path}`, { ...init, headers });
+    } catch {
+      throw new ApiError("unreachable", `cannot reach ${base}`, 0);
+    }
+    return unwrapText(res);
   }
 
   return {
@@ -420,6 +456,14 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
 
     async getSale(id: number): Promise<SaleDto> {
       return narrow(await send(`/sales/${id}`), isSale, "sale");
+    },
+
+    /** The 80 mm ticket for a sale, as the HTML page the core rendered.
+     * The UI prints these bytes and never builds a document of its own:
+     * the desktop and a server print the same paper (features.md §4). The
+     * language is the one the till is being used in. */
+    async getSaleTicket(id: number, lang: PrintLang): Promise<string> {
+      return sendText(`/sales/${id}/ticket?lang=${lang}`);
     },
 
     /** Newest first, tickets only in M1. */
