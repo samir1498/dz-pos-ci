@@ -15,7 +15,7 @@ pub const IN_STORE_BARCODE: &str = "in_store_barcode";
 /// transaction: the caller's row and this advance have to commit together.
 ///
 /// The row is created on first use, so a shop the migration never seeded
-/// (a second till paired in M7) starts at 1 rather than failing.
+/// (a second till paired in M6) starts at 1 rather than failing.
 pub fn take_next(
     conn: &mut SqliteConnection,
     shop_id: i32,

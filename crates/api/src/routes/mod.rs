@@ -3,6 +3,7 @@
 
 pub mod categories;
 pub mod products;
+pub mod settings;
 
 use axum::extract::State;
 use axum::Json;

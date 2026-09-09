@@ -7,8 +7,13 @@ export type { HealthDto } from "./generated/HealthDto";
 export type { NewProductDto } from "./generated/NewProductDto";
 export type { ProductDto } from "./generated/ProductDto";
 export type { UnitDto } from "./generated/UnitDto";
+export type { StoreDto } from "./generated/StoreDto";
+export type { RegimeDto } from "./generated/RegimeDto";
+export type { DatedRegimeDto } from "./generated/DatedRegimeDto";
+export type { SettingsDto } from "./generated/SettingsDto";
+export type { RegimeChangeDto } from "./generated/RegimeChangeDto";
 
-export { ApiError, createClient, isApiErrorBody, isCategory } from "./client";
+export { ApiError, createClient, isApiErrorBody, isCategory, isSettings, isStore } from "./client";
 export type { ClientOptions } from "./client";
 export type { ApiClient } from "./client";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";

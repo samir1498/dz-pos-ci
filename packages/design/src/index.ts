@@ -1,6 +1,6 @@
 // The package API. `primitives` is deliberately not re-exported: tier 1 is
-// reachable only at "@dzpos/design/primitives", which eslint's
-// no-restricted-imports bans in both apps.
+// reachable only at "@dzpos/design/primitives", a path the apps never
+// import. A convention for now; no lint rule enforces it yet.
 
 export { theme } from "./theme";
 export type { Theme } from "./theme";

@@ -2,6 +2,8 @@ import { describe, expect, test } from "vitest";
 import { ApiError, createClient, isApiErrorBody } from "./client";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { ProductDto } from "./generated/ProductDto";
+import type { SettingsDto } from "./generated/SettingsDto";
+import type { StoreDto } from "./generated/StoreDto";
 
 const product: ProductDto = {
   id: 1,
@@ -211,6 +213,83 @@ describe("createClient", () => {
       }),
     ).resolves.toEqual(product);
     expect(seen?.method).toBe("POST");
+  });
+});
+
+describe("settings", () => {
+  const store: StoreDto = {
+    name: "Superette El Baraka",
+    rc: "16/00-1234567 B 20",
+    nif: "000016001234567",
+    nis: null,
+    ai: null,
+    address: "12 rue Didouche Mourad, Alger",
+    phone: "0555 12 34 56",
+  };
+  const settings: SettingsDto = {
+    store,
+    regime: { regime: "reel", valid_from: "2026-01-01" },
+    regime_planned: null,
+  };
+
+  test("reads the settings page and keeps a planned change", async () => {
+    const planned: SettingsDto = {
+      ...settings,
+      regime_planned: { regime: "ifu", valid_from: "2027-01-01" },
+    };
+    const api = createClient("http://127.0.0.1:4317", stub(200, planned));
+    await expect(api.getSettings()).resolves.toEqual(planned);
+  });
+
+  test("a settings answer with a régime the app does not know is refused", async () => {
+    for (const bad of [
+      { ...settings, regime: { regime: "forfait", valid_from: "2026-01-01" } },
+      { ...settings, regime: { regime: "reel", valid_from: "2026-1-1" } },
+      { ...settings, regime_planned: { regime: "ifu" } },
+      { ...settings, store: { ...store, name: null } },
+      { ...settings, store: { ...store, rc: 12 } },
+    ]) {
+      const api = createClient("http://127.0.0.1:4317", stub(200, bad));
+      await expect(api.getSettings()).rejects.toMatchObject({ code: "bad_response" });
+    }
+  });
+
+  test("updating the store puts the whole block and returns it", async () => {
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(store), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.updateStore(store)).resolves.toEqual(store);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/settings/store");
+    expect(calls[0]?.init?.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(store);
+  });
+
+  test("a régime change posts the day and returns the whole page", async () => {
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(settings), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.changeRegime({ regime: "ifu", valid_from: "2027-01-01" })).resolves.toEqual(
+      settings,
+    );
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/settings/regime");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      regime: "ifu",
+      valid_from: "2027-01-01",
+    });
   });
 });
 

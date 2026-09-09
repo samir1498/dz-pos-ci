@@ -10,6 +10,11 @@ import type { CategoryDto } from "./generated/CategoryDto";
 import type { HealthDto } from "./generated/HealthDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { ProductDto } from "./generated/ProductDto";
+import type { RegimeChangeDto } from "./generated/RegimeChangeDto";
+import type { DatedRegimeDto } from "./generated/DatedRegimeDto";
+import type { RegimeDto } from "./generated/RegimeDto";
+import type { SettingsDto } from "./generated/SettingsDto";
+import type { StoreDto } from "./generated/StoreDto";
 import type { UnitDto } from "./generated/UnitDto";
 
 /** An error the server described. `code` is a translation key. */
@@ -101,6 +106,45 @@ function isProductList(value: unknown): value is ProductDto[] {
   return Array.isArray(value) && value.every(isProduct);
 }
 
+const REGIMES: readonly RegimeDto[] = ["ifu", "reel"];
+
+function isRegime(value: unknown): value is RegimeDto {
+  return typeof value === "string" && REGIMES.some((r) => r === value);
+}
+
+/** `YYYY-MM-DD`, the only shape the API writes a day in. */
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+function isDay(value: unknown): value is string {
+  return typeof value === "string" && DAY.test(value);
+}
+
+export function isStore(value: unknown): value is StoreDto {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    isNullableString(value.rc) &&
+    isNullableString(value.nif) &&
+    isNullableString(value.nis) &&
+    isNullableString(value.ai) &&
+    isNullableString(value.address) &&
+    isNullableString(value.phone)
+  );
+}
+
+function isDatedRegime(value: unknown): value is DatedRegimeDto {
+  return isRecord(value) && isRegime(value.regime) && isDay(value.valid_from);
+}
+
+export function isSettings(value: unknown): value is SettingsDto {
+  return (
+    isRecord(value) &&
+    isStore(value.store) &&
+    isDatedRegime(value.regime) &&
+    (value.regime_planned === null || isDatedRegime(value.regime_planned))
+  );
+}
+
 async function unwrap(res: Response): Promise<unknown> {
   const text = await res.text();
   let body: unknown = null;
@@ -178,6 +222,31 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         body: JSON.stringify(input),
       });
       return narrow(body, isProduct, "product");
+    },
+
+    async getSettings(): Promise<SettingsDto> {
+      return narrow(await send("/settings"), isSettings, "settings");
+    },
+
+    /** The whole store block; a null clears that field. */
+    async updateStore(input: StoreDto): Promise<StoreDto> {
+      const body = await send("/settings/store", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isStore, "store block");
+    },
+
+    /** Appends a dated régime change; the answer is the whole settings page
+     * again, since the change is current or planned depending on its day. */
+    async changeRegime(input: RegimeChangeDto): Promise<SettingsDto> {
+      const body = await send("/settings/regime", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isSettings, "settings");
     },
 
     async createProduct(input: NewProductDto): Promise<ProductDto> {

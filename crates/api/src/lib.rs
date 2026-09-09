@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::http::{header, HeaderValue, Method};
 use axum::middleware::from_fn_with_state;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::Router;
 use dzpos_core::db::Conn;
 use dzpos_core::error::CoreError;
@@ -134,6 +134,9 @@ pub fn router_with_origin(
             "/products/{id}",
             get(routes::products::get_one).put(routes::products::update),
         )
+        .route("/settings", get(routes::settings::read))
+        .route("/settings/store", put(routes::settings::update_store))
+        .route("/settings/regime", post(routes::settings::change_regime))
         .fallback(routes::not_found)
         .method_not_allowed_fallback(routes::method_not_allowed)
         .layer(from_fn_with_state(token.clone(), token::require));
@@ -153,15 +156,10 @@ pub fn router_with_origin(
         .with_state(state)
 }
 
-/// Binds loopback only. A till's database must never be reachable from the
-/// shop's wifi; LAN mode in M6 is a deliberate, separate decision.
-pub async fn serve(state: AppState, token: &LaunchToken, port: u16) -> std::io::Result<()> {
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
-    axum::serve(listener, router(state, token)).await
-}
-
-/// Binds loopback on `port` and reports the port actually bound, so a
-/// caller passing 0 can tell the UI where to look.
+/// Binds loopback only, on `port`, and reports the port actually bound so
+/// a caller passing 0 can tell the UI where to look. A till's database
+/// must never be reachable from the shop's wifi; LAN mode in M6 is a
+/// deliberate, separate decision.
 pub async fn bind(port: u16) -> std::io::Result<(tokio::net::TcpListener, u16)> {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     let bound = listener.local_addr()?.port();

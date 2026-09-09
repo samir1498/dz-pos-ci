@@ -3,3 +3,4 @@ pub mod categories;
 pub mod counters;
 pub mod products;
 pub mod settings;
+pub mod shops;

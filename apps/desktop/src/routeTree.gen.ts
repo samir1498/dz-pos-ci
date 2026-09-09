@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from "./routes/__root"
 import { Route as IndexRouteImport } from "./routes/index"
 import { Route as ProductsRouteImport } from "./routes/products"
+import { Route as SettingsRouteImport } from "./routes/settings"
 
 const IndexRoute = IndexRouteImport.update({
   id: "/",
@@ -22,31 +23,40 @@ const ProductsRoute = ProductsRouteImport.update({
   path: "/products",
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: "/settings",
+  path: "/settings",
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
   "/products": typeof ProductsRoute
+  "/settings": typeof SettingsRoute
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
   "/products": typeof ProductsRoute
+  "/settings": typeof SettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   "/": typeof IndexRoute
   "/products": typeof ProductsRoute
+  "/settings": typeof SettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: "/" | "/products"
+  fullPaths: "/" | "/products" | "/settings"
   fileRoutesByTo: FileRoutesByTo
-  to: "/" | "/products"
-  id: "__root__" | "/" | "/products"
+  to: "/" | "/products" | "/settings"
+  id: "__root__" | "/" | "/products" | "/settings"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ProductsRoute: typeof ProductsRoute
+  SettingsRoute: typeof SettingsRoute
 }
 
 declare module "@tanstack/react-router" {
@@ -65,12 +75,20 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof ProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/settings": {
+      id: "/settings"
+      path: "/settings"
+      fullPath: "/settings"
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ProductsRoute: ProductsRoute,
+  SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
