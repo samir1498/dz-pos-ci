@@ -668,6 +668,58 @@ fn a_database_at_the_first_migration_takes_the_second() {
     // what this migration runs on.
     assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);
     assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM users"), 1);
+
+    // And the upgraded file sells: the point of the migration is a till that
+    // keeps working, not a schema that merely applies.
+    use dzpos_core::models::product::{NewProduct, Unit};
+    use dzpos_core::money::{Bps, Money, PaymentMode};
+    use dzpos_core::services::sales::{NewSale, NewSaleLine};
+    use dzpos_core::services::{products, sales};
+    let product = products::create(
+        &mut conn,
+        1,
+        1,
+        NewProduct {
+            name: "Sucre".to_string(),
+            barcode: None,
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(500),
+            selling: Money::centimes(1_000),
+            wholesale: None,
+            qty_on_hand_milli: 5_000,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(1900).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap();
+    let sale = sales::issue(
+        &mut conn,
+        1,
+        1,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id: product.id,
+                qty_milli: 2_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(5_000)),
+            issued_at: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(sale.number, 1);
+    assert_eq!(sale.totals.total_ht, Money::centimes(2_000));
+    assert_eq!(
+        products::get(&mut conn, 1, product.id)
+            .unwrap()
+            .qty_on_hand_milli,
+        3_000
+    );
 }
 
 #[test]

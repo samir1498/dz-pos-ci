@@ -126,6 +126,32 @@ discount, TVA rate, line total HT.
 | `old_balance`, `remaining_debt`, `total_debt` | from the ledger at issue time |
 | `payment_mode` | cash, card, credit in v1; cheque and transfer are parked (the column admits them) |
 
+**Facture or ticket at the till.** Loi 04-02 du 23 juin 2004 art. 10, as
+rewritten whole by loi 10-06 du 15 août 2010 art. 3, decides it, and it
+decides it by who the buyer is, not by an amount. There is no threshold in
+the text.
+
+- A sale to a consumer is a `ticket`. « Les ventes de biens ou les
+  prestations de services faites au consommateur doivent faire l'objet d'un
+  ticket de caisse ou d'un bon justifiant la transaction. » That is the
+  till's default and it needs nothing from the customer.
+- A sale to an agent économique carrying on an activity listed in art. 2
+  (production, distribution, services, artisanat, pêche, agriculture) is a
+  `facture`, and the buyer is under a matching duty to ask for one.
+- Any buyer who asks turns the sale into a `facture`: « Toutefois, la
+  facture ou le document en tenant lieu doit être délivré si le client en
+  fait la demande » (art. 10 al. 3; décret 05-468 art. 2 repeats it from the
+  facture side).
+- The document is due « dès la réalisation de la vente », so the choice is
+  made at the till, before the sale is saved, and never by a later reprint.
+
+A till cannot tell a consumer from a professional on its own, so the
+operator decides: the sale screen carries a one-tap switch from ticket to
+facture that pulls in the buyer block. A facture to a consumer needs only
+« ses nom, prénom(s) et adresse » (décret 05-468 art. 3-2, last alinéa); a
+facture to a trader needs the party identifiers of the row below. M1 issues
+tickets only, since the buyer block arrives with customers in M2.
+
 Numbering: per kind, gapless, assigned at issue and never reused; a
 cancelled facture keeps its number and is marked "facture annulée"; an
 avoir is its own kind with its own series. A yearly reset of the series is
