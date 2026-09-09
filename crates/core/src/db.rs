@@ -20,17 +20,6 @@ pub enum DbError {
     Migrate(String),
 }
 
-/// A connection to a throwaway in-memory database, no migrations run.
-///
-/// The API holds one for the instant a restore has the shop file closed:
-/// dropping the live connection is what releases the file handle, and the
-/// slot it came out of has to hold some connection meanwhile. Nothing is
-/// ever queried through it. It lives here because this crate is the only one
-/// that names diesel (architecture.md, layout).
-pub fn open_placeholder() -> Result<SqliteConnection, DbError> {
-    Ok(SqliteConnection::establish(":memory:")?)
-}
-
 /// Opens (creating if needed) the SQLite file and applies pending migrations.
 pub fn open(path: impl AsRef<Path>) -> Result<SqliteConnection, DbError> {
     let url = path.as_ref().to_string_lossy();

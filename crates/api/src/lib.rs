@@ -35,7 +35,12 @@ pub const BACKUP_DIR_NAME: &str = "backups";
 /// connection alone cannot say which file it is open on once it is closed.
 #[derive(Clone)]
 pub struct AppState {
-    conn: Arc<Mutex<Conn>>,
+    /// `None` once the shop file has been closed and could not be reopened.
+    /// An empty slot refuses every caller, which is the point: a stand-in
+    /// connection would be a working, empty database, and the next backup
+    /// would copy that over a real copy and prune a good one to make room.
+    /// Nothing fills the slot again; the app has to be restarted.
+    conn: Arc<Mutex<Option<Conn>>>,
     db_path: Arc<PathBuf>,
     backup_dir: Arc<PathBuf>,
     pub shop_id: i32,
@@ -54,7 +59,7 @@ impl AppState {
     ) -> Result<Self, CoreError> {
         let conn = dzpos_core::db::open(db.as_ref())?;
         Ok(AppState {
-            conn: Arc::new(Mutex::new(conn)),
+            conn: Arc::new(Mutex::new(Some(conn))),
             db_path: Arc::new(db.as_ref().to_path_buf()),
             backup_dir: Arc::new(backup_dir.as_ref().to_path_buf()),
             shop_id,
@@ -89,21 +94,19 @@ impl AppState {
     ///    beside the shop file and never counted among the thirty;
     /// 4. copy the chosen backup to `<db>.restoring.tmp`, in the same folder
     ///    so the rename below cannot cross a file system;
-    /// 5. close the live connection (swapped for an in-memory one, which is
-    ///    what releases the file handle);
-    /// 6. delete the live file's `-wal` and `-shm` sidecars, which belong to
-    ///    the file that is about to go and would otherwise be replayed into
-    ///    the new one;
+    /// 5. close the live connection, which is what releases the file handle,
+    ///    leaving the slot under the lock empty;
+    /// 6. delete the live file's `-wal` and `-shm` sidecars;
     /// 7. rename `<db>.restoring.tmp` over the shop file;
     /// 8. reopen through `db::open`, which runs any migration the copy is
-    ///    behind on, and put that connection back under the lock.
+    ///    behind on, and put that connection back into the slot.
     ///
     /// A failure before step 5 leaves the shop file exactly as it was. A
-    /// failure after it reopens the path before returning, so the mutex
-    /// never holds the in-memory placeholder past this call. The one case
-    /// that cannot be undone here is step 8 itself failing: the file on disk
-    /// is whole, but this process has no connection to it and answers 500
-    /// until it is restarted. The path is logged for that reason.
+    /// failure at 6 leaves it as it was too, and step 8 puts the connection
+    /// back. If step 8 itself fails, the file on disk is whole but this
+    /// process has no connection to it: the slot stays empty and every route
+    /// that needs the shop file answers 500 until the app is restarted. That
+    /// is deliberate. The path is logged so the operator knows which file.
     pub fn restore(&self, backup_path: &Path) -> Result<Summary, ApiError> {
         let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
@@ -113,7 +116,8 @@ impl AppState {
         // millisecond so two restores in one second keep two safety copies.
         let stamp = crate::routes::backups::now().format("%Y%m%d-%H%M%S%3f");
         let safety = sibling(db, &format!(".before-restore-{stamp}.sqlite"));
-        backup::copy_to(&mut guard, &safety).map_err(ApiError::from)?;
+        let live = guard.as_mut().ok_or(ApiError::Unavailable)?;
+        backup::copy_to(live, &safety).map_err(ApiError::from)?;
 
         let staged = sibling(db, ".restoring.tmp");
         // A leftover from a run that died mid-restore would make the copy
@@ -121,37 +125,29 @@ impl AppState {
         remove_if_present(&staged).map_err(core_io)?;
         std::fs::copy(backup_path, &staged).map_err(core_io)?;
 
-        // From here the live file is being replaced. Everything that can
-        // still fail reopens the connection before it returns.
-        let placeholder = match dzpos_core::db::open_placeholder() {
-            Ok(conn) => conn,
-            Err(e) => {
-                let _ = std::fs::remove_file(&staged);
-                return Err(ApiError::from(CoreError::from(e)));
-            }
-        };
-        drop(std::mem::replace(&mut *guard, placeholder));
+        // From here the shop file is being replaced. Closing the connection
+        // is what releases the handle, and the slot stays empty until a
+        // reopen fills it.
+        drop(guard.take());
 
-        let swapped = swap_in(&staged, db);
-        // Whatever happened, the lock must come back holding a connection to
-        // the shop file: the restored one, or the one that was there.
-        let reopened = dzpos_core::db::open(db);
-        match (swapped, reopened) {
-            (Ok(()), Ok(conn)) => {
-                *guard = conn;
+        if let Err(e) = swap_in(&staged, db) {
+            let _ = std::fs::remove_file(&staged);
+            // The shop file was never renamed over, so it is the one that
+            // was always there; reopening it is the whole recovery.
+            *guard = Some(dzpos_core::db::open(db).map_err(CoreError::from)?);
+            return Err(ApiError::from(e));
+        }
+
+        match dzpos_core::db::open(db) {
+            Ok(conn) => {
+                *guard = Some(conn);
                 Ok(summary)
             }
-            (Err(e), Ok(conn)) => {
-                *guard = conn;
-                let _ = std::fs::remove_file(&staged);
-                Err(ApiError::from(e))
-            }
-            (_, Err(e)) => {
+            Err(e) => {
                 // The file on disk is whole (the restored copy, with the
-                // safety copy beside it); what failed is reopening it, so
-                // the lock is left holding the placeholder and every later
-                // request answers 500 until the app is restarted. Naming the
-                // file is what lets the operator act on that.
+                // safety copy beside it); what failed is reopening it. The
+                // slot stays empty on purpose, so nothing runs against a
+                // stand-in that would look like an empty shop.
                 eprintln!(
                     "dz-pos: the shop file at {} could not be reopened after the restore: {e}",
                     db.display()
@@ -168,7 +164,11 @@ impl AppState {
         f: impl FnOnce(&mut Conn) -> Result<T, CoreError>,
     ) -> Result<T, ApiError> {
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
-        f(&mut guard).map_err(ApiError::from)
+        // Empty means a restore closed the file and could not reopen it.
+        // Every caller is refused from here on, which is what keeps a backup
+        // or a query from running against nothing.
+        let conn = guard.as_mut().ok_or(ApiError::Unavailable)?;
+        f(conn).map_err(ApiError::from)
     }
 
     /// Same, off the async executor. diesel is synchronous, so a query that

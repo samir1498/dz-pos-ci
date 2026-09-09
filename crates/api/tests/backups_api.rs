@@ -45,6 +45,18 @@ impl Harness {
     }
 }
 
+/// Everything in the backup folder, sorted, so two readings compare.
+fn backup_files(h: &Harness) -> Vec<std::path::PathBuf> {
+    let dir = h.dir.path().join("backups");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+    let mut found: Vec<std::path::PathBuf> =
+        entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
+    found.sort();
+    found
+}
+
 fn harness() -> Harness {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
@@ -290,4 +302,60 @@ fn regex_lite_matches(name: &str) -> bool {
         && time.len() == 6
         && day.chars().all(|c| c.is_ascii_digit())
         && time.chars().all(|c| c.is_ascii_digit())
+}
+
+/// The shop file is swapped in but cannot be reopened. The connection slot
+/// is then empty, and an empty slot must refuse every caller: an in-memory
+/// stand-in would be a working, empty database, and the next backup would
+/// copy *that* over a real one and prune a good copy to make room.
+#[tokio::test]
+async fn a_shop_file_that_cannot_be_reopened_leaves_the_server_refusing_every_query() {
+    use diesel::prelude::*;
+
+    let h = harness();
+    call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
+    let (_, made) = call(&h.app, "POST", "/backups", None).await;
+    let name = made["name"].as_str().unwrap().to_string();
+    let copy_path = h.dir.path().join("backups").join(&name);
+
+    // A copy that passes every check `verify` makes and that `db::open`
+    // still cannot open: its migration bookkeeping is gone, so opening it
+    // replays the first migration onto tables that are already there.
+    let mut copy = dzpos_core::db::open(&copy_path).unwrap();
+    diesel::sql_query("DELETE FROM __diesel_schema_migrations")
+        .execute(&mut copy)
+        .unwrap();
+    drop(copy);
+
+    let (status, body) = call(&h.app, "POST", &format!("/backups/{name}/restore"), None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "storage");
+
+    let before: Vec<std::path::PathBuf> = backup_files(&h);
+    assert_eq!(before.len(), 1, "{before:?}");
+
+    // Every route that needs the shop file now refuses, and goes on
+    // refusing: nothing here reopens it behind the caller's back.
+    for _ in 0..2 {
+        let (status, body) = call(&h.app, "GET", "/products", None).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+        assert_eq!(body["error"]["code"], "storage");
+    }
+
+    // The one that would have done damage: a backup taken off an empty
+    // stand-in, with the prune that follows it evicting a real copy.
+    let (status, body) = call(&h.app, "POST", "/backups", None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "storage");
+    assert_eq!(
+        backup_files(&h),
+        before,
+        "a copy was written, or an older one pruned, off a shop file that is not open"
+    );
+
+    // Listing reads the folder, not the shop file, so the owner can still
+    // see what there is to restore from.
+    let (status, listed) = call(&h.app, "GET", "/backups", None).await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    assert_eq!(listed.as_array().unwrap().len(), 1);
 }
