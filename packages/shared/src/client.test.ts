@@ -565,6 +565,16 @@ describe("sales", () => {
     await expect(api.listSales()).resolves.toEqual([sale]);
   });
 
+  test("a sale with no printed number is refused rather than shown blank", async () => {
+    // The number the paper carries comes from the server, so a body without
+    // it would put an empty string where the cashier reads FA-000001 back to
+    // the customer. The guard stops it at the door.
+    const withoutNumber: Record<string, unknown> = { ...sale };
+    delete withoutNumber.printed_number;
+    const api = createClient("http://x", stub(200, withoutNumber));
+    await expect(api.getSale(1)).rejects.toMatchObject({ code: "bad_response" });
+  });
+
   test("a ticket comes back as the page the core rendered, not as JSON", async () => {
     const page = '<!doctype html>\n<html lang="ar" dir="rtl"><body>تذكرة</body></html>\n';
     const calls: string[] = [];

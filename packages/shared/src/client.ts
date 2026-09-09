@@ -341,6 +341,7 @@ export function isSale(value: unknown): value is SaleDto {
     isDocumentKind(value.kind) &&
     typeof value.series === "string" &&
     isExactInteger(value.number) &&
+    typeof value.printed_number === "string" &&
     typeof value.issued_at === "string" &&
     typeof value.user_id === "number" &&
     isRegime(value.regime) &&
