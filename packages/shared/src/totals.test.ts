@@ -58,6 +58,7 @@ interface FixtureErrorCase {
 interface RoundingFixture {
   pct_cases: { name: string; amount: number; rate_bps: number; expected: number }[];
   invalid_rate_cases: { name: string; rate_bps: number }[];
+  overflow_cases: { name: string; amount: number; rate_bps: number }[];
   totals_cases: FixtureTotalsCase[];
   totals_error_cases: FixtureErrorCase[];
 }
@@ -132,10 +133,24 @@ describe("pct: one rounding per rate group, half away from zero", () => {
     expect(rounding.totals_cases.length).toBeGreaterThanOrEqual(10);
   });
 
-  // overflow_cases are skipped: their amount is i64::MAX, past
-  // Number.MAX_SAFE_INTEGER, so JS cannot hold the input. Rust covers them.
   it.each(rounding.pct_cases)("$name", (c) => {
     expect(pct(c.amount, c.rate_bps)).toBe(c.expected);
+  });
+
+  // The Rust case is an i64 product that overflows i64. JS has no i64: the
+  // amount itself is already past Number.MAX_SAFE_INTEGER by the time
+  // JSON.parse is done with it, so the refusal comes one step earlier and
+  // carries the same variant.
+  it.each(rounding.overflow_cases)("refuses: $name", (c) => {
+    expect(() => pct(c.amount, c.rate_bps)).toThrowError(/Overflow/);
+  });
+
+  it("refuses a product it could not keep exact, and keeps the exact ones", () => {
+    // 10^13 x 19 % is 1,9 x 10^16, past 2^53: the product has to be BigInt
+    // or the last centimes are invented.
+    expect(pct(10_000_000_000_000, 1900)).toBe(1_900_000_000_000);
+    expect(pct(9_007_199_254_740_991, 1)).toBe(900_719_925_474);
+    expect(() => pct(Number.MAX_SAFE_INTEGER + 2, 1900)).toThrowError(/Overflow/);
   });
 
   it.each(rounding.invalid_rate_cases)("refuses a rate above one whole: $name", (c) => {

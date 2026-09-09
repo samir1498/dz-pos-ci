@@ -38,6 +38,7 @@ export const STAMP_MIN = 500;
 /** The refusals, named after the Rust `MoneyError` variants so a fixture
  * case reads the same in both runners. */
 export type MoneyErrorVariant =
+  | "Overflow"
   | "RateOutOfRange"
   | "NegativeQuantity"
   | "NegativeUnitPrice"
@@ -92,14 +93,36 @@ export interface Totals {
 }
 
 /**
+ * A whole number of centimes (or thousandths) as a BigInt. The Rust core
+ * works in i64 and answers `Overflow` when a value leaves it; JS has no
+ * i64, so the edge that matters here is `Number.MAX_SAFE_INTEGER`: past it
+ * a Number has already lost digits and no BigInt can get them back. Same
+ * variant, one step earlier.
+ */
+function exact(value: number): bigint {
+  if (!Number.isSafeInteger(value)) throw new MoneyError("Overflow");
+  return BigInt(value);
+}
+
+/** The other end: a product kept exact in BigInt is only an amount again if
+ * it fits back into a Number without rounding. */
+function safe(value: bigint): number {
+  if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < -BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new MoneyError("Overflow");
+  }
+  return Number(value);
+}
+
+/**
  * amount x rate, rounded once to the centime, half away from zero.
  * tva_rounding_once_per_rate
  */
 export function pct(amount: number, rateBps: number): number {
   if (rateBps < 0 || rateBps > BPS_PER_WHOLE) throw new MoneyError("RateOutOfRange");
-  const raw = amount * rateBps;
-  const sign = raw < 0 ? -1 : 1;
-  return sign * Math.floor((Math.abs(raw) + BPS_PER_WHOLE / 2) / BPS_PER_WHOLE);
+  const per = BigInt(BPS_PER_WHOLE);
+  const raw = exact(amount) * BigInt(rateBps);
+  const sign = raw < 0n ? -1n : 1n;
+  return safe(sign * ((raw * sign + per / 2n) / per));
 }
 
 /**
@@ -127,9 +150,9 @@ export function stamp(totalTtc: number, mode: PaymentModeDto): number {
  */
 export function lineTotal(unitPrice: number, qtyMilli: number): number {
   const per = BigInt(MILLI_PER_UNIT);
-  const raw = BigInt(unitPrice) * BigInt(qtyMilli);
+  const raw = exact(unitPrice) * exact(qtyMilli);
   const sign = raw < 0n ? -1n : 1n;
-  return Number(sign * ((raw * sign + per / 2n) / per));
+  return safe(sign * ((raw * sign + per / 2n) / per));
 }
 
 interface Group {
@@ -167,10 +190,10 @@ function spreadDiscount(groups: readonly Group[], totalHt: number, discount: num
   const shares = groups.map(() => 0);
   if (discount === 0 || groups.length === 0) return shares;
   // BigInt keeps discount x ht exact past Number.MAX_SAFE_INTEGER.
-  const total = BigInt(totalHt);
+  const total = exact(totalHt);
   let allocated = 0;
   groups.forEach((g, i) => {
-    shares[i] = Number((BigInt(discount) * BigInt(g.ht)) / total);
+    shares[i] = safe((exact(discount) * exact(g.ht)) / total);
     allocated += shares[i];
   });
   let remainder = discount - allocated;

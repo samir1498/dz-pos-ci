@@ -76,6 +76,7 @@ function errorKey(error: unknown): Key {
  * screen catches the ones a field can explain before this is reached; this
  * is the floor under them. */
 const MONEY_ERROR_KEY: Record<string, Key> = {
+  Overflow: "error_money",
   RateOutOfRange: "error_money",
   NegativeQuantity: "error_qty_invalid",
   NegativeUnitPrice: "error_money",
