@@ -319,7 +319,10 @@ first release.**
   créditeur" because the customer's total closes below zero;
   `{fr,en,ar}-proforma.html` is the same basket quoted, with a line saying
   it has no accounting value, is not a facture and creates no debt, and no
-  balance block at all; `{fr,en,ar}-annulee.html` is the credit facture
+  balance block at all; neither of the two says how it was paid, because an
+  avoir hands money back and a proforma settles nothing, and the avoir's
+  last totals row is the amount of the avoir where a facture reads "net à
+  payer"; `{fr,en,ar}-annulee.html` is the credit facture
   reprinted after cancellation, keeping its number and every amount, under a
   diagonal ANNULÉE mark with the day and the reason under the number. The
   test holds that the cancelled reprint and the live facture differ in the
