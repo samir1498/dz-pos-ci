@@ -120,14 +120,27 @@ test("opens a company fiche with an opening debt, adjusts it, and saves the cust
   });
   const storedLedger: {
     balance_centimes: number;
-    entries: { kind: string; credit_centimes: number; note: string | null }[];
+    entries: {
+      kind: string;
+      credit_centimes: number;
+      balance_after_centimes: number;
+      note: string | null;
+    }[];
   } = await rows.json();
   expect(storedLedger.balance_centimes).toBe(OPENING_CENTIMES + ADJUST_CENTIMES);
   expect(storedLedger.entries).toHaveLength(2);
+  // Newest first, each row carrying what was owed once it had landed. The
+  // column is the core's running balance, so this is where the two movements
+  // are checked against the figures the screen printed above.
   expect(storedLedger.entries[0]).toMatchObject({
     kind: "adjustment",
     credit_centimes: -ADJUST_CENTIMES,
+    balance_after_centimes: OPENING_CENTIMES + ADJUST_CENTIMES,
     note: "erreur de saisie",
+  });
+  expect(storedLedger.entries[1]).toMatchObject({
+    kind: "opening",
+    balance_after_centimes: OPENING_CENTIMES,
   });
 
   // The one committed screenshot of this screen is Arabic: it is where the
