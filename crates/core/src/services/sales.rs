@@ -11,7 +11,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::document::{Document, DocumentKind, NewDocument, NewDocumentLine, SellerBlock};
 use crate::models::stock::{Movement, MovementKind};
-use crate::money::{compute_totals, Line, Money, PaymentMode, TotalsOptions};
+use crate::money::{compute_totals, Line, Money, MoneyError, PaymentMode, TotalsOptions};
 use crate::services::{clock, documents, products, settings, shops, stock};
 
 /// Whether the droit de timbre applies at all. There is no shop setting for
@@ -97,8 +97,8 @@ pub fn issue(
             ));
         }
         // Every input compute_totals could refuse has been refused above with
-        // the field named, so a MoneyError out of here is a real overflow and
-        // the API answers 500 rather than blaming the caller.
+        // the field named, so what is left is a basket whose amounts do not
+        // fit. That is still the caller's arithmetic, so it is named too.
         let totals = compute_totals(
             &money_lines,
             &TotalsOptions {
@@ -107,7 +107,8 @@ pub fn issue(
                 stamp_enabled: STAMP_ENABLED,
                 regime,
             },
-        )?;
+        )
+        .map_err(too_large("lines"))?;
 
         let (tendered, change) = settle(new.payment_mode, new.tendered, totals.net_to_pay)?;
 
@@ -168,6 +169,21 @@ pub fn issue(
     })
 }
 
+/// Turns an amount that does not fit into a validation error on the field
+/// the caller sent. `CoreError::Money` is a 500, and 500 means the stored
+/// file is at fault; a quantity and a price the caller chose whose product
+/// is past i64 centimes is the caller's arithmetic, so it is a 422 with the
+/// field named. Every other MoneyError keeps its meaning.
+fn too_large(field: &'static str) -> impl Fn(MoneyError) -> CoreError {
+    move |e| match e {
+        MoneyError::Overflow => CoreError::validation(
+            field,
+            "this amount is past what the till can hold in centimes",
+        ),
+        other => CoreError::from(other),
+    }
+}
+
 /// A line with its product read and its price settled.
 struct PricedLine {
     product_id: i32,
@@ -215,7 +231,9 @@ fn price(
     // The rounded gross, the same one compute_totals works from: a discount
     // compared against the unrounded product would pass here and be refused
     // a centime later as a MoneyError, which the API reads as a 500.
-    let gross = unit_price.checked_mul_milli(line.qty_milli)?;
+    let gross = unit_price
+        .checked_mul_milli(line.qty_milli)
+        .map_err(too_large("qty_milli"))?;
     if line.line_discount > gross {
         return Err(CoreError::validation(
             "line_discount",
@@ -230,16 +248,26 @@ fn price(
         unit_price,
         line_discount: line.line_discount,
         rate_bps: product.rate_bps,
-        line_total: gross.checked_sub(line.line_discount)?,
+        line_total: gross
+            .checked_sub(line.line_discount)
+            .map_err(too_large("line_discount"))?,
         cost: product.cost,
     })
 }
 
+/// The basket's HT, read back to compare the global discount against it.
+/// A sum that does not fit is a basket the caller sent, so it is named as
+/// one rather than raised as a money fault.
 fn sum_line_totals(lines: &[Line]) -> Result<Money, CoreError> {
     let mut total = Money::ZERO;
     for line in lines {
-        let gross = line.unit_price.checked_mul_milli(line.qty_milli)?;
-        total = total.checked_add(gross.checked_sub(line.line_discount)?)?;
+        let gross = line
+            .unit_price
+            .checked_mul_milli(line.qty_milli)
+            .map_err(too_large("qty_milli"))?;
+        total = total
+            .checked_add(gross.checked_sub(line.line_discount)?)
+            .map_err(too_large("lines"))?;
     }
     Ok(total)
 }

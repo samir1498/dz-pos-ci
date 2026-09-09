@@ -428,6 +428,33 @@ fn a_discount_the_basket_cannot_carry_is_a_validation_error_not_a_money_fault() 
 }
 
 #[test]
+fn a_price_times_a_quantity_that_does_not_fit_names_the_field_it_came_from() {
+    // Both numbers are inside what the API's edge admits (2^53 - 1), so
+    // nothing before the service refuses them; their product is past i64
+    // centimes. That is arithmetic the caller asked for, not a stored-file
+    // fault, so the field is named and the code is validation, never money.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Sucre", 1_000, 1900, Unit::Kg);
+    let huge = NewSale {
+        lines: vec![NewSaleLine {
+            product_id: p,
+            qty_milli: (1 << 53) - 1,
+            unit_price: Some(Money::centimes((1 << 53) - 1)),
+            line_discount: Money::ZERO,
+        }],
+        global_discount: Money::ZERO,
+        payment_mode: PaymentMode::Cash,
+        tendered: Some(Money::centimes((1 << 53) - 1)),
+        issued_at: Some(at(9)),
+    };
+    match sales::issue(&mut conn, SHOP, OWNER, huge).unwrap_err() {
+        CoreError::Validation { field, .. } => assert_eq!(field, "qty_milli"),
+        other => panic!("expected a validation error, got {other:?}"),
+    }
+    assert_eq!(documents::list(&mut conn, SHOP, None).unwrap().len(), 0);
+}
+
+#[test]
 fn a_discount_spreads_over_the_rates_and_the_ticket_keeps_the_recap() {
     let (_dir, mut conn) = open_temp();
     let a = product(&mut conn, "Sucre", 10_000, 1900, Unit::Piece);

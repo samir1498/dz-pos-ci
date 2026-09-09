@@ -266,6 +266,35 @@ async fn cash_short_of_the_amount_to_pay_is_422_and_writes_nothing() {
 }
 
 #[tokio::test]
+async fn a_line_whose_price_times_its_quantity_overflows_is_422_not_500() {
+    // Both fields sit at the largest integer a JSON number carries, so the
+    // body is well formed and the DTO accepts it. Their product is past i64
+    // centimes. That is the caller's arithmetic, not a stored-file fault, so
+    // it answers 422 with the field named and never 500.
+    let (_dir, app) = app();
+    let p = product(&app, "Sucre", 1_000, 1900).await;
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{
+                "product_id": p,
+                "qty_milli": 9_007_199_254_740_991_i64,
+                "unit_price_centimes": 9_007_199_254_740_991_i64,
+            }],
+            "payment_mode": "cash",
+            "tendered_centimes": 9_007_199_254_740_991_i64,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(code(&body), "validation");
+    let (_, list) = call(&app, "GET", "/sales", None).await;
+    assert_eq!(list.as_array().unwrap().len(), 0);
+}
+
+#[tokio::test]
 async fn a_body_the_type_does_not_know_is_422_bad_request() {
     let (_dir, app) = app();
     let (status, body) = call(

@@ -833,7 +833,10 @@ fn a_shop_with_a_document_or_an_audit_entry_cannot_be_deleted() {
             .unwrap();
         diesel::sql_query(insert).execute(&mut conn).unwrap();
         let deleted = diesel::sql_query("DELETE FROM shops WHERE id = 2").execute(&mut conn);
-        assert!(deleted.is_err(), "a shop was deleted and took {what} with it");
+        assert!(
+            deleted.is_err(),
+            "a shop was deleted and took {what} with it"
+        );
         diesel::sql_query("DELETE FROM documents WHERE shop_id = 2")
             .execute(&mut conn)
             .unwrap();
