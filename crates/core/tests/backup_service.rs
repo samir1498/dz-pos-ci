@@ -13,6 +13,8 @@ use dzpos_core::money::Money;
 use dzpos_core::services::{backup, products};
 
 const SHOP: i32 = 1;
+/// The owner the first migration seeds; every product row carries a user.
+const OWNER: i32 = 1;
 const SEEDED_CATEGORY: i32 = 1;
 
 fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
@@ -47,8 +49,8 @@ fn at(day: u32, hour: u32) -> NaiveDateTime {
 #[test]
 fn the_copy_opens_and_holds_the_same_rows() {
     let (dir, mut conn) = open_temp();
-    products::create(&mut conn, SHOP, draft("Huile Elio 5L")).unwrap();
-    products::create(&mut conn, SHOP, draft("Semoule 10kg")).unwrap();
+    products::create(&mut conn, SHOP, OWNER, draft("Huile Elio 5L")).unwrap();
+    products::create(&mut conn, SHOP, OWNER, draft("Semoule 10kg")).unwrap();
     let backups = dir.path().join("backups");
 
     let made = backup::create(&mut conn, &backups, at(8, 9)).unwrap();
