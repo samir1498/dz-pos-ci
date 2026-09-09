@@ -19,7 +19,7 @@ entries:
     note: 'open: laptop clone, Sonar Rust check'
   - ref: 'm1-sale-and-ticket-on-one-desktop'
     status: 'in-progress'
-    note: 'M1 on m1/2026-09-09 as a loop since 2026-09-09; T0, T1 done, T2 in progress'
+    note: 'M1 on m1/2026-09-09 as a loop since 2026-09-09; T0 to T5, T7, T8 done; T6 blocked on Samir at the laptop with the printer; checkpoint PR pending'
   - ref: 'm2-facture-customers-and-credit'
     status: 'planned'
     note: 'M2: blocked on a real printed facture, Arabic words review, accountant answers'
