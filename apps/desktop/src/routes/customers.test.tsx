@@ -51,6 +51,24 @@ const noCredit: CustomerDto = {
   balance_centimes: 0,
 };
 
+/** Owing exactly the limit is not over it: the tag turns on the figure
+ *  above, and what shows here is the warning threshold below. */
+const atLimit: CustomerDto = {
+  ...benali,
+  id: 6,
+  name: "Farid Exact",
+  balance_centimes: 200_000,
+};
+
+/** No credit at all and something owed anyway. Two tags apply and the worse
+ *  one shows. */
+const owingWithNoCredit: CustomerDto = {
+  ...noCredit,
+  id: 7,
+  name: "Kamel Ardoise",
+  balance_centimes: 50_000,
+};
+
 const ledger: CustomerLedgerDto = {
   customer_id: 3,
   balance_centimes: 150_000,
@@ -196,6 +214,19 @@ describe("the list", () => {
 
     const cash = screen.getByRole("row", { name: /Ali Cash/ });
     expect(within(cash).getByText(fr.status_no_credit)).toBeInTheDocument();
+  });
+
+  test("the worse of two tags is the one that shows, and the limit itself is not over it", async () => {
+    list = [atLimit, owingWithNoCredit];
+    mount();
+
+    const exact = await screen.findByRole("row", { name: /Farid Exact/ });
+    expect(within(exact).getByText(fr.status_near_limit)).toBeInTheDocument();
+    expect(within(exact).queryByText(fr.status_over_limit)).not.toBeInTheDocument();
+
+    const ardoise = screen.getByRole("row", { name: /Kamel Ardoise/ });
+    expect(within(ardoise).getByText(fr.status_over_limit)).toBeInTheDocument();
+    expect(within(ardoise).queryByText(fr.status_no_credit)).not.toBeInTheDocument();
   });
 
   test("the search travels to the API and the list follows it", async () => {
