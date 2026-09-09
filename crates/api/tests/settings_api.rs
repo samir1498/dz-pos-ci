@@ -149,6 +149,38 @@ async fn a_missing_field_is_a_null_and_an_unknown_one_is_refused() {
     );
 }
 
+/// A validation refusal names the field it is about, and the name travels
+/// beside the code rather than only inside the sentence: the screen puts the
+/// message under the input the person is looking at, and reading a field name
+/// out of a sentence is how a screen ends up parsing prose.
+///
+/// Two different refusals from two different services, because one of them
+/// used to be the only error that said so on the wire and a fix that had
+/// stayed special to it would pass a test that asked only once.
+#[tokio::test]
+async fn a_validation_refusal_names_its_field_on_the_wire() {
+    let h = harness();
+    let mut blank = full_store();
+    blank["name"] = json!("   ");
+    let (status, body) = call(&h.app, "PUT", "/settings/store", Some(blank)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["error"]["code"], "validation");
+    assert_eq!(body["error"]["field"], "name", "{body}");
+
+    // The shop ships under the réel régime, so setting it again from today is
+    // the service's own refusal and not the edge's.
+    let (status, body) = call(
+        &h.app,
+        "POST",
+        "/settings/regime",
+        Some(json!({ "regime": "reel", "valid_from": "2026-01-01" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["error"]["code"], "validation");
+    assert_eq!(body["error"]["field"], "regime_fiscal", "{body}");
+}
+
 #[tokio::test]
 async fn a_blank_name_is_422_naming_the_field_and_changes_nothing() {
     let h = harness();

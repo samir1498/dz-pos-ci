@@ -72,10 +72,11 @@ struct Payload {
     balance_after_centimes: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     credit_limit_centimes: Option<i64>,
-    /// Which field of the request the refusal is about, when the refusal is
-    /// about one field and the screen has somewhere to put the message.
+    /// Which field of the request the refusal is about. Every validation
+    /// error names one, so the screen can put the message under the input
+    /// rather than reading the name out of the sentence.
     #[serde(skip_serializing_if = "Option::is_none")]
-    field: Option<&'static str>,
+    field: Option<String>,
     /// What the customer still owes, on a payment that asked for more.
     #[serde(skip_serializing_if = "Option::is_none")]
     outstanding_centimes: Option<i64>,
@@ -96,7 +97,7 @@ struct Payload {
 struct Figures {
     balance_after_centimes: Option<i64>,
     credit_limit_centimes: Option<i64>,
-    field: Option<&'static str>,
+    field: Option<String>,
     outstanding_centimes: Option<i64>,
     party_side: Option<&'static str>,
     missing_ids: Option<Vec<&'static str>>,
@@ -176,8 +177,18 @@ impl ApiError {
             | ApiError::Request(CoreError::PaymentAboveDebt {
                 outstanding_centimes,
             }) => Figures {
-                field: Some("amount_centimes"),
+                field: Some("amount_centimes".to_owned()),
                 outstanding_centimes: Some(*outstanding_centimes),
+                ..Figures::NONE
+            },
+            // Every validation error already names the field it is about;
+            // only the payment one used to say so on the wire, and a screen
+            // that wanted to put the message under the input had to read it
+            // out of the sentence. The name travels beside the code now, for
+            // all of them.
+            ApiError::Core(CoreError::Validation { field, .. })
+            | ApiError::Request(CoreError::Validation { field, .. }) => Figures {
+                field: Some(field.clone()),
                 ..Figures::NONE
             },
             ApiError::Core(CoreError::PartyIds { side, missing })
