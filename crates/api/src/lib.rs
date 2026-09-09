@@ -437,6 +437,17 @@ pub fn router_with_origin(
         .route("/backups", post(routes::backups::create))
         .route("/backups/{name}/restore", post(routes::backups::restore))
         .route("/categories", get(routes::categories::list))
+        .route("/customers", get(routes::customers::list))
+        .route("/customers", post(routes::customers::create))
+        .route(
+            "/customers/{id}",
+            get(routes::customers::get_one).put(routes::customers::update),
+        )
+        .route("/customers/{id}/ledger", get(routes::customers::ledger))
+        .route(
+            "/customers/{id}/adjustments",
+            post(routes::customers::adjust),
+        )
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
         .route(

@@ -10,14 +10,15 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto, DatedRegimeDto,
-    DocumentKindDto, DocumentStatusDto, HealthDto, NewProductDto, NewSaleDto, NewSaleLineDto,
-    PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SaleDto, SaleLineDto,
-    SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto, UnitDto,
+    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto,
+    CustomerDto, CustomerLedgerDto, CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto,
+    DocumentKindDto, DocumentStatusDto, HealthDto, NewCustomerDto, NewProductDto, NewSaleDto,
+    NewSaleLineDto, PartyKindDto, PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto,
+    RestoreDto, SaleDto, SaleLineDto, SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 24] = [
+const FILES: [&str; 32] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -42,6 +43,14 @@ const FILES: [&str; 24] = [
     "SaleDto.ts",
     "NewSaleLineDto.ts",
     "NewSaleDto.ts",
+    "PartyKindDto.ts",
+    "DebtKindDto.ts",
+    "CustomerDto.ts",
+    "CustomerWriteDto.ts",
+    "NewCustomerDto.ts",
+    "DebtEntryDto.ts",
+    "CustomerLedgerDto.ts",
+    "AdjustmentDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -123,6 +132,14 @@ fn export_bindings() {
     SaleDto::export_all(&cfg).unwrap();
     NewSaleLineDto::export_all(&cfg).unwrap();
     NewSaleDto::export_all(&cfg).unwrap();
+    PartyKindDto::export_all(&cfg).unwrap();
+    DebtKindDto::export_all(&cfg).unwrap();
+    CustomerDto::export_all(&cfg).unwrap();
+    CustomerWriteDto::export_all(&cfg).unwrap();
+    NewCustomerDto::export_all(&cfg).unwrap();
+    DebtEntryDto::export_all(&cfg).unwrap();
+    CustomerLedgerDto::export_all(&cfg).unwrap();
+    AdjustmentDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");
