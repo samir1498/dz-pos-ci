@@ -3,3 +3,4 @@ pub mod category;
 pub mod product;
 pub mod shop;
 pub mod sql_types;
+pub mod stock;

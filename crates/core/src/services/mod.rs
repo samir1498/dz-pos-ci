@@ -4,3 +4,4 @@ pub mod clock;
 pub mod products;
 pub mod settings;
 pub mod shops;
+pub mod stock;

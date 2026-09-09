@@ -6,10 +6,12 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::product::{NewProduct, Product, ProductRowWrite};
+use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Bps, Money};
 use crate::repos::categories as categories_repo;
 use crate::repos::counters;
 use crate::repos::products as repo;
+use crate::services::stock;
 
 /// GS1 prefix 2 is reserved for restricted circulation: codes a shop makes
 /// up for itself, which never collide with a manufacturer's barcode.
@@ -31,6 +33,7 @@ pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Product
 pub fn create(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    user_id: i32,
     new: NewProduct,
 ) -> Result<Product, CoreError> {
     // The category is checked inside the same transaction as the insert:
@@ -41,7 +44,29 @@ pub fn create(
         if write.barcode.is_none() {
             write.barcode = Some(next_free_in_store_barcode(conn, shop_id)?);
         }
-        repo::insert(conn, &write)
+        // The ledger owns the quantity (architecture.md, Data), so the row
+        // starts empty and an opening movement puts the stock in. Written
+        // into the column instead, the count was a number no movement
+        // explained and the nightly re-derivation would report it for ever.
+        let opening = write.qty_on_hand_milli;
+        write.qty_on_hand_milli = 0;
+        let made = repo::insert(conn, &write)?;
+        if opening == 0 {
+            return Ok(made);
+        }
+        stock::record(
+            conn,
+            shop_id,
+            &Movement {
+                product_id: made.id,
+                kind: MovementKind::Opening,
+                qty_milli: opening,
+                unit_cost: made.cost,
+                document_id: None,
+                user_id,
+            },
+        )?;
+        repo::get(conn, shop_id, made.id)
     })
 }
 

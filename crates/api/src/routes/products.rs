@@ -38,8 +38,9 @@ pub async fn create(
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = NewProduct::try_from(dto)?;
     let shop = state.shop_id;
+    let user = state.user_id;
     let made = state
-        .blocking(move |c| service::create(c, shop, new))
+        .blocking(move |c| service::create(c, shop, user, new))
         .await?;
     Ok((StatusCode::CREATED, Json(ProductDto::from(made))))
 }
