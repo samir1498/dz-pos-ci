@@ -347,3 +347,33 @@ fn a_name_beside_the_shop_file_is_read_back_only_when_it_is_a_safety_copy() {
         );
     }
 }
+
+#[test]
+fn a_staging_file_a_crash_left_behind_is_swept_by_the_next_copy() {
+    let (dir, mut conn) = open_temp();
+    let backups = dir.path().join("backups");
+    backup::create(&mut conn, &backups, at(1, 3)).unwrap();
+
+    // What a process killed mid `VACUUM INTO` leaves: a name nothing reads,
+    // holding up to a whole database. `list`, `prune` and `is_due` all
+    // ignore it, so without a sweep it sits there taking the space of a copy
+    // the folder is no longer allowed to keep.
+    let stale = backups.join(format!("{}.tmp", backup::file_name(at(2, 3))));
+    std::fs::write(&stale, vec![0_u8; 64 * 1024]).unwrap();
+    // Something that is not this app's staging file is not this app's to
+    // delete.
+    let stranger = backups.join("notes.tmp");
+    std::fs::write(&stranger, b"someone else's").unwrap();
+
+    backup::create(&mut conn, &backups, at(3, 3)).unwrap();
+
+    assert!(
+        !stale.exists(),
+        "the staging file a crash left is still there"
+    );
+    assert!(
+        stranger.is_file(),
+        "a file this app never wrote was deleted"
+    );
+    assert_eq!(backup::list(&backups).unwrap().len(), 2);
+}

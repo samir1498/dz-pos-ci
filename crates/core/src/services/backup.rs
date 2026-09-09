@@ -176,6 +176,7 @@ pub fn is_due(newest: Option<NaiveDateTime>, now: NaiveDateTime) -> bool {
 /// double click on "back up now" must not destroy the copy it just made.
 pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, CoreError> {
     std::fs::create_dir_all(dir)?;
+    sweep_staging(dir)?;
     let name = file_name(at);
     let path = dir.join(&name);
     if path.is_file() {
@@ -207,6 +208,35 @@ pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, 
         taken_at: at,
         bytes,
     })
+}
+
+/// Deletes every staging file left in `dir` by a copy that never finished.
+///
+/// A process killed mid `VACUUM INTO` leaves one holding up to a whole
+/// database, and nothing that reads this folder can see it: it is not in
+/// `list`, so `prune` never counts it and the thirty copies the shop is
+/// allowed to keep quietly become twenty nine plus a corpse. Only names this
+/// module writes are swept, so a `.tmp` someone else put here is left alone.
+///
+/// Safe to run at the top of `create` because copies are taken one at a
+/// time: they go through the one connection, which is behind one lock.
+fn sweep_staging(dir: &Path) -> Result<(), CoreError> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    for entry in entries {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let is_ours = name
+            .strip_suffix(STAGING_SUFFIX)
+            .is_some_and(|stem| taken_at(stem).is_some());
+        if is_ours && entry.metadata()?.is_file() {
+            remove_if_present(&entry.path())?;
+        }
+    }
+    Ok(())
 }
 
 fn remove_if_present(path: &Path) -> Result<(), CoreError> {
