@@ -394,7 +394,11 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document, lang: La
     let lines = amounts(html, "line");
     let unit_prices = amounts(html, "unit-price");
     assert_eq!(lines.len(), doc.lines.len(), "one total per sold line");
-    assert_eq!(unit_prices.len(), doc.lines.len(), "one unit price per line");
+    assert_eq!(
+        unit_prices.len(),
+        doc.lines.len(),
+        "one unit price per line"
+    );
     for ((printed, unit_price), line) in lines.iter().zip(&unit_prices).zip(&doc.lines) {
         assert_eq!(centimes(printed), line.line_total.as_centimes(), "a line");
         assert_eq!(
@@ -413,7 +417,11 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document, lang: La
         .filter(|l| l.line_discount != Money::ZERO)
         .collect();
     let printed = amounts(html, "line-discount");
-    assert_eq!(printed.len(), discounted.len(), "one row per discounted line");
+    assert_eq!(
+        printed.len(),
+        discounted.len(),
+        "one row per discounted line"
+    );
     for (printed, line) in printed.iter().zip(discounted) {
         assert_eq!(
             centimes(printed),
@@ -803,7 +811,9 @@ fn an_avoir_prints_the_number_of_the_facture_it_references() {
     // reference from another shop: each is a facture number this avoir
     // cannot print, and each is refused.
     assert_eq!(
-        render_facture(&avoir, Lang::Fr, Paper::A4).unwrap_err().code(),
+        render_facture(&avoir, Lang::Fr, Paper::A4)
+            .unwrap_err()
+            .code(),
         "print"
     );
     let mut other = fixed_facture(Case::Credit);

@@ -194,4 +194,3 @@ fn line(line: &DocumentLine, reel: bool) -> LineView {
         total: format_centimes(line.line_total),
     }
 }
-

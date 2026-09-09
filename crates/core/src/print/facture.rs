@@ -224,7 +224,9 @@ pub fn render_facture_with_reference(
 fn reference(doc: &Document, referenced: Option<&Document>) -> Result<Option<String>, CoreError> {
     match (doc.ref_document_id, referenced) {
         (None, _) => Ok(None),
-        (Some(id), Some(referenced)) if referenced.id == id && referenced.shop_id == doc.shop_id => {
+        (Some(id), Some(referenced))
+            if referenced.id == id && referenced.shop_id == doc.shop_id =>
+        {
             Ok(Some(number(referenced)))
         }
         (Some(_), Some(_)) => Err(CoreError::render(
@@ -275,10 +277,24 @@ fn view(
         // Under the IFU a price is one price: "HT" would name a tax the
         // document must not mention (CTCA 2026 art. 64), so the column
         // keeps the amounts and changes the word.
-        unit_price_label: text(if reel { Key::UnitPriceHt } else { Key::UnitPrice }, lang),
+        unit_price_label: text(
+            if reel {
+                Key::UnitPriceHt
+            } else {
+                Key::UnitPrice
+            },
+            lang,
+        ),
         rate_label: text(Key::Tva, lang),
         line_discount_label: text(Key::Discount, lang),
-        line_total_label: text(if reel { Key::LineTotalHt } else { Key::LineTotal }, lang),
+        line_total_label: text(
+            if reel {
+                Key::LineTotalHt
+            } else {
+                Key::LineTotal
+            },
+            lang,
+        ),
         show_rate: reel,
         // The column is there when a line uses it. A facture with no line
         // discount anywhere prints five columns, not six with a blank one.
