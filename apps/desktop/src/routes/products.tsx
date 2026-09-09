@@ -38,10 +38,44 @@ const RATES: readonly { bps: number; key: Key }[] = [
 
 const FALLBACK_RATE_BPS = 1900;
 
-/** "7 %" for 700 bps: the label of a rate the fixed list does not carry. */
-function rateLabel(bps: number): string {
+/**
+ * "7 %" for 700 bps, "7,50 %" for 750: the label of a rate the fixed list
+ * does not carry. Both the sign and the decimal separator come from i18n
+ * (`percent_sign`, `decimal_separator`) rather than a literal "%" and a
+ * hardcoded French comma, so a custom rate carries the Arabic percent
+ * sign on the Arabic screen ("٪", like the fixed ones, `rate_900` and
+ * friends), and, on every screen, the shop's own comma-decimal, the same
+ * one `formatCentimes` and `formatQty` already use regardless of the UI
+ * language.
+ *
+ * Ruling (coordinator review of T7, 2026-09-09): numbers follow the
+ * shop's own format, not the UI language. Amounts, quantities and rates
+ * all read comma-decimal in fr, en and ar today, so `decimal_separator`
+ * is "," in every dictionary; it stays a per-language key rather than a
+ * bare constant because it is the one place a locale that reads
+ * differently would land, without touching this function again.
+ */
+function rateLabel(bps: number, percentSign: string, decimalSeparator: string): string {
   const percent = bps / 100;
-  return `${Number.isInteger(percent) ? percent : percent.toFixed(2).replace(".", ",")} %`;
+  const numeral = Number.isInteger(percent)
+    ? String(percent)
+    : percent.toFixed(2).replace(".", decimalSeparator);
+  return `${numeral} ${percentSign}`;
+}
+
+/**
+ * The table's own rate cell used to call `rateLabel` for every row, fixed
+ * rates included, which always renders a Latin "%": on the Arabic screen
+ * the dropdown showed "9 ٪" (from `rate_900`) while the table showed
+ * "9 %" for the same product. This reuses the fixed word when the stored
+ * rate is one of `RATES`, and only falls back to the computed label for a
+ * category rate the fixed list does not carry.
+ */
+function rateCellLabel(bps: number, t: (key: Key) => string): string {
+  const fixed = RATES.find((r) => r.bps === bps);
+  return fixed !== undefined
+    ? t(fixed.key)
+    : rateLabel(bps, t("percent_sign"), t("decimal_separator"));
 }
 
 /**
@@ -61,10 +95,12 @@ function rateOptions(
   // A product edited later keeps showing the rate it was stored with, even
   // one no category offers any more.
   if (stored !== undefined) candidates.push(stored);
+  const percentSign = t("percent_sign");
+  const decimalSeparator = t("decimal_separator");
   const extra = [...new Set(candidates)]
     .filter((bps) => !known.has(bps))
     .sort((a, b) => b - a)
-    .map((bps) => ({ value: String(bps), label: rateLabel(bps) }));
+    .map((bps) => ({ value: String(bps), label: rateLabel(bps, percentSign, decimalSeparator) }));
   return [...fixed, ...extra];
 }
 
@@ -177,13 +213,25 @@ function ProductTable({
                 </span>
               )}
             </td>
-            <td className="py-1.5 pe-3 font-mono">{p.barcode ?? ""}</td>
+            {/* dir="ltr" on the four cells below: a barcode, a price, a
+                rate and a quantity are read left to right with Western
+                digits regardless of the screen's language (a decision,
+                features.md names no rule for it). Without it the Unicode
+                bidi algorithm is free to reorder the space and the sign
+                around the digits inside an RTL row. */}
+            <td className="py-1.5 pe-3 font-mono" dir="ltr">
+              {p.barcode ?? ""}
+            </td>
             <td className="py-1.5 pe-3">{t(UNIT_KEY[p.unit])}</td>
-            <td className="py-1.5 ps-3 text-end font-mono">
+            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
               {formatCentimes(p.selling_centimes)}
             </td>
-            <td className="py-1.5 ps-3 text-end font-mono">{rateLabel(p.rate_bps)}</td>
-            <td className="py-1.5 ps-3 text-end font-mono">{formatQty(p.qty_on_hand_milli)}</td>
+            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
+              {rateCellLabel(p.rate_bps, t)}
+            </td>
+            <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
+              {formatQty(p.qty_on_hand_milli)}
+            </td>
             <td className="py-1.5 ps-3 text-end">
               <button
                 type="button"
@@ -328,6 +376,7 @@ function ProductForm({
           <label className="flex flex-col gap-1">
             <span>{t("field_barcode")}</span>
             <input
+              dir="ltr"
               className="rounded border px-2 py-1 font-mono"
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
@@ -548,6 +597,7 @@ function AmountField({
     <label className="flex flex-col gap-1">
       <span>{label}</span>
       <input
+        dir="ltr"
         inputMode="decimal"
         className={
           readOnly

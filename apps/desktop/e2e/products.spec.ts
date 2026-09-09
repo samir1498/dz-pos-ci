@@ -1,38 +1,16 @@
 // The products screen driven through a real browser against a real API.
-// Expected strings come from src/i18n/fr.json (fr is the default language
-// in src/i18n/index.tsx), so a reworded message fails here instead of
-// silently passing a hardcoded sentence.
+// Expected strings come from the JSON dictionary of the Playwright project
+// running the test (fr, en or ar), so a reworded message fails here
+// instead of silently passing a hardcoded sentence, and the same test
+// proves the screen in all three languages.
 
 import { expect, test } from "@playwright/test";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { currentLang, t } from "./messages";
 
 // `new URL(".", ...)` is already this file's directory (apps/desktop/e2e).
 const here = fileURLToPath(new URL(".", import.meta.url));
-const frPath = path.join(here, "..", "src", "i18n", "fr.json");
-
-/** Reads fr.json without a type assertion: every value is checked. */
-function readMessages(): Record<string, string> {
-  const parsed: unknown = JSON.parse(readFileSync(frPath, "utf8"));
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error(`${frPath} is not a JSON object`);
-  }
-  const messages: Record<string, string> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value !== "string") throw new Error(`${frPath}: ${key} is not a string`);
-    messages[key] = value;
-  }
-  return messages;
-}
-
-const messages = readMessages();
-
-function t(key: string): string {
-  const value = messages[key];
-  if (value === undefined) throw new Error(`${frPath} has no key ${key}`);
-  return value;
-}
 
 const PRODUCT_NAME = "Semoule extra 5kg";
 // 250,50 DA typed in dinars becomes 25050 centimes; formatCentimes in
@@ -92,10 +70,18 @@ test("adds a product and saves the products screenshot", async ({ page }) => {
   await expect(page.getByText(t("products_empty"))).toBeHidden();
   expect(postedRates).toEqual([900]);
 
-  await page.screenshot({
-    path: path.join(here, "screenshots", "products.png"),
-    fullPage: true,
-  });
+  // Only fr and ar keep a committed screenshot: fr is the reference shot,
+  // ar is the one RTL screenshot the brief asks for. en adds nothing new
+  // to look at once those two exist.
+  const lang = currentLang();
+  if (lang === "fr") {
+    await page.screenshot({ path: path.join(here, "screenshots", "products.png"), fullPage: true });
+  } else if (lang === "ar") {
+    await page.screenshot({
+      path: path.join(here, "screenshots", "products-ar.png"),
+      fullPage: true,
+    });
+  }
 });
 
 test("edits a product in place and the row shows the stored values", async ({ page }) => {

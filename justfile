@@ -90,13 +90,28 @@ tauri:
 
 # ---- e2e (headless chromium; starts its own API and Vite) ----
 
-# the whole products suite against a throwaway database
+# the whole suite, once per UI language project (fr, en, ar; T7). Each
+# `playwright test` invocation starts its own API and Vite pair and its
+# webServer command deletes the db file first, so three invocations give
+# three empty databases; three projects in one invocation would share the
+# one database the first invocation starts, and the products suite's
+# first test needs an empty table. Run one language with
+# `pnpm desktop e2e --project ar`.
 e2e:
-    pnpm desktop e2e
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for project in fr en ar; do
+        echo "=== e2e: $project ==="
+        pnpm desktop e2e --project "$project"
+    done
 
-# only the test that writes apps/desktop/e2e/screenshots/products.png
+# only the tests that write a committed screenshot: fr (products.png) and
+# ar (products-ar.png, settings-ar.png); en keeps none.
 screenshot:
-    pnpm desktop e2e -g screenshot
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pnpm desktop e2e -g screenshot --project fr
+    pnpm desktop e2e -g screenshot --project ar
 
 # ---- worktrees (one per task when the M1 loop runs tasks in parallel) ----
 

@@ -82,14 +82,21 @@ export function SettingsScreen() {
   );
 }
 
-/** The seven fields of the seller block, sent whole; a blank one is null. */
-const STORE_FIELDS: readonly { name: keyof Omit<StoreDto, "name">; label: Key }[] = [
-  { name: "rc", label: "field_rc" },
-  { name: "nif", label: "field_nif" },
-  { name: "nis", label: "field_nis" },
-  { name: "ai", label: "field_ai" },
+/**
+ * The seven fields of the seller block, sent whole; a blank one is null.
+ * `ltr` marks the four that are fiscal identifiers or a phone number,
+ * read left to right with Western digits regardless of the screen's
+ * language, the same decision as the amounts and barcodes on the
+ * products screen. `address` is free text and stays with the page's own
+ * direction.
+ */
+const STORE_FIELDS: readonly { name: keyof Omit<StoreDto, "name">; label: Key; ltr?: true }[] = [
+  { name: "rc", label: "field_rc", ltr: true },
+  { name: "nif", label: "field_nif", ltr: true },
+  { name: "nis", label: "field_nis", ltr: true },
+  { name: "ai", label: "field_ai", ltr: true },
   { name: "address", label: "field_address" },
-  { name: "phone", label: "field_phone" },
+  { name: "phone", label: "field_phone", ltr: true },
 ];
 
 function StoreForm({
@@ -190,6 +197,7 @@ function StoreForm({
               <label className="flex flex-col gap-1">
                 <span>{t(spec.label)}</span>
                 <input
+                  dir={spec.ltr === true ? "ltr" : undefined}
                   className="rounded border px-2 py-1"
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
@@ -274,13 +282,15 @@ function RegimePanel({
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
         <dt>{t("regime_current_label")}</dt>
         <dd data-testid="regime-current">
-          {t(REGIME_KEY[current.regime])} · {t("regime_since")} {current.valid_from}
+          {t(REGIME_KEY[current.regime])} · {t("regime_since")}{" "}
+          <span dir="ltr">{current.valid_from}</span>
         </dd>
         {planned !== null ? (
           <>
             <dt>{t("regime_planned_label")}</dt>
             <dd data-testid="regime-planned">
-              {t(REGIME_KEY[planned.regime])} · {t("regime_from")} {planned.valid_from}
+              {t(REGIME_KEY[planned.regime])} · {t("regime_from")}{" "}
+              <span dir="ltr">{planned.valid_from}</span>
             </dd>
           </>
         ) : null}

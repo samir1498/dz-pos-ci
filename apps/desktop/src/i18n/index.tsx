@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import ar from "./ar.json";
 import en from "./en.json";
 import fr from "./fr.json";
@@ -57,6 +57,16 @@ export function I18nProvider({ children, lang: forced }: { children: ReactNode; 
     }),
     [lang],
   );
+  // The browser's own UI (date inputs, scrollbars, spellcheck) reads
+  // documentElement, not a div deep in the tree; __root.tsx setting `dir`
+  // on its layout div was not enough for that. The title follows too so a
+  // browser tab or window list shows the app's name, not whatever HTML
+  // shipped in index.html.
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = value.dir;
+    document.title = LANGS[lang].app_name;
+  }, [lang, value.dir]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
 

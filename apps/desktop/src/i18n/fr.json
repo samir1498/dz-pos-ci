@@ -1,5 +1,11 @@
 {
   "app_name": "dz-pos",
+  "lang_switcher_label": "Langue",
+  "lang_name_fr": "Français",
+  "lang_name_en": "English",
+  "lang_name_ar": "العربية",
+  "percent_sign": "%",
+  "decimal_separator": ",",
   "nav_products": "Produits",
   "products_title": "Produits",
   "products_empty": "Aucun produit pour le moment.",

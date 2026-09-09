@@ -35,6 +35,27 @@ const webPort = port("DZPOS_E2E_WEB_PORT", 5174);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const baseURL = `http://127.0.0.1:${webPort}`;
 
+// One project per UI language (T7). Each sets `dzpos-lang` in localStorage
+// through `storageState` before the app's first script runs, the way
+// I18nProvider reads it (src/i18n/index.tsx, `initialLang`), and a browser
+// `locale` matching it so the OS-level bits (date pickers, number input
+// spinners) agree with the page. All three share the one webServer pair
+// and its one SQLite file below, so `just e2e` runs one Playwright
+// invocation per project rather than passing all three here: three
+// projects sharing a single run would share the one database too, and the
+// products suite's first assertion needs an empty table, which only the
+// first project to touch it would still have.
+const LANGS = ["fr", "en", "ar"] as const;
+type LangCode = (typeof LANGS)[number];
+const LOCALE: Record<LangCode, string> = { fr: "fr-FR", en: "en-US", ar: "ar-DZ" };
+
+function storageStateFor(lang: LangCode) {
+  return {
+    cookies: [],
+    origins: [{ origin: baseURL, localStorage: [{ name: "dzpos-lang", value: lang }] }],
+  };
+}
+
 // The API refuses every call that does not show its launch token; the
 // desktop makes one per launch, this run makes one per suite and hands it
 // to both servers, the way the Tauri process hands it to its webview.
@@ -67,12 +88,15 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
 
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
+  projects: LANGS.map((lang) => ({
+    name: lang,
+    use: {
+      ...devices["Desktop Chrome"],
+      viewport: { width: 1280, height: 800 },
+      locale: LOCALE[lang],
+      storageState: storageStateFor(lang),
     },
-  ],
+  })),
 
   webServer: [
     {
