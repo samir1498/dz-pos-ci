@@ -142,6 +142,9 @@ pub fn router_with_origin(
             "/products/{id}",
             get(routes::products::get_one).put(routes::products::update),
         )
+        .route("/sales", get(routes::sales::list))
+        .route("/sales", post(routes::sales::create))
+        .route("/sales/{id}", get(routes::sales::get_one))
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))
