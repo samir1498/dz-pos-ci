@@ -114,6 +114,15 @@ const avoir: SaleDto = {
   lines: [{ ...facture.lines[0], id: 31, qty_milli: 1_000, ref_line_id: 11 }],
 };
 
+/** The row a cell sits in. `closest` answers null when nothing matches, and
+ *  a test that read through that null would fail on a property rather than on
+ *  the sentence it means to check. */
+function rowOf(cell: HTMLElement): HTMLElement {
+  const row = cell.closest("tr");
+  if (row === null) throw new Error("the cell sits in no row");
+  return row;
+}
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -198,9 +207,7 @@ describe("the document list", () => {
   test("lists a ticket and a facture with the columns a shop looks them up by", async () => {
     mount();
     await screen.findByText("FA-000004");
-    const row = screen.getByText("FA-000004").closest("tr");
-    expect(row).not.toBeNull();
-    const cells = within(row as HTMLElement);
+    const cells = within(rowOf(screen.getByText("FA-000004")));
     expect(cells.getByText("2026-09-09")).toBeTruthy();
     expect(cells.getByText(fr.documents_kind_facture)).toBeTruthy();
     expect(cells.getByText("Entreprise Benali")).toBeTruthy();
@@ -209,8 +216,8 @@ describe("the document list", () => {
 
     // The ticket is there too, and it names no buyer: it was sold to
     // whoever walked in.
-    const till = screen.getByText("TK-000012").closest("tr");
-    expect(within(till as HTMLElement).getByText(fr.documents_kind_ticket)).toBeTruthy();
+    const till = rowOf(screen.getByText("TK-000012"));
+    expect(within(till).getByText(fr.documents_kind_ticket)).toBeTruthy();
   });
 
   test("the kind filter narrows the call rather than the rendered list", async () => {
@@ -311,6 +318,34 @@ describe("the cancellation", () => {
     await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
     expect(screen.getByText(fr.documents_cancel_stock_only)).toBeTruthy();
     expect(screen.queryByText(fr.documents_cancel_with_avoir)).toBeNull();
+  });
+
+  test("the narrowed list is read again, not only the unfiltered one", async () => {
+    // The list is cached under the kind it asked for, so a cancel that
+    // refreshed only the "every kind" entry would leave a shop looking at
+    // FA-000004 still marked issued for as long as the filter is on.
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("FA-000004");
+    await user.click(screen.getByLabelText(fr.documents_kind_facture));
+    await waitFor(() => {
+      expect(screen.queryByText("TK-000012")).toBeNull();
+    });
+    const before = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes("kind=facture"),
+    ).length;
+
+    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
+    await user.type(screen.getByLabelText(fr.documents_reason), "commande annulée");
+    await user.click(screen.getByRole("button", { name: fr.documents_cancel_confirm }));
+
+    await waitFor(() => {
+      const after = fetchMock.mock.calls.filter((c) =>
+        String(c[0]).includes("kind=facture"),
+      ).length;
+      expect(after).toBeGreaterThan(before);
+    });
   });
 
   test("the reason travels and the answer's block is shown", async () => {

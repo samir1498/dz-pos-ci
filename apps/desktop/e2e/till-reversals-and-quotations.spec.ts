@@ -234,6 +234,17 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   // only way a balance goes below zero.
   expect(await balance(request, paidBuyer)).toBe(-100_000);
 
+  // And the fiche says so in words rather than with a minus sign: the shop
+  // holds this customer's 1 000,00, it is not owed to the shop.
+  await page.goto("/customers");
+  const creditRow = page.getByRole("row").filter({ hasText: PAID_BUYER });
+  await expect(creditRow.getByText(t("customers_credit"))).toBeVisible();
+  await creditRow.getByRole("button", { name: `${t("customers_edit")} ${PAID_BUYER}` }).click();
+  const fiche = page.getByRole("heading", { name: t("customers_ledger") }).locator("..");
+  const said = fiche.locator("p").first();
+  await expect(said).toContainText(t("customers_credit"));
+  await expect(said).toContainText("1 000,00");
+
   // ---- a proforma with a customer moves no stock.
   const stockBefore = await onHand(request, product);
   const quote = await request.post(`${apiUrl()}/sales`, {

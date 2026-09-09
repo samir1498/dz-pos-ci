@@ -220,6 +220,12 @@ balance leaves `total_debt` at -100,00, which is past no limit, not even a
 limit of zero. That is the same rule read from the other side, not an
 exception to it: what the block asks is what the customer will owe.
 
+A negative balance is named on the screens rather than shown as a minus:
+the customers list tags the row and the fiche labels the figure `crédit`,
+and the amount is always drawn positive. "Créance -1 000,00" is not a
+sentence said at a counter, and the sign alone is easy to miss on a line of
+figures.
+
 **Facture or ticket at the till.** Loi 04-02 du 23 juin 2004 art. 10, as
 rewritten whole by loi 10-06 du 15 août 2010 art. 3, decides it, and it
 decides it by who the buyer is, not by an amount. There is no threshold in
@@ -305,7 +311,7 @@ allowed until M4 brings roles, and the audit log carries who did it.
 
 **Proforma.** A quotation: made out to a named customer, priced the way the
 till prices a basket, numbered out of the proforma series, and moving
-nothing at all — no stock movement, no ledger row, a balance triple of three
+nothing at all: no stock movement, no ledger row, a balance triple of three
 zeros. It carries the droit de timbre the facture would carry, because a
 facture that comes to more than the customer was quoted is a quotation that
 was wrong. It requires a customer but not the party identifiers décret

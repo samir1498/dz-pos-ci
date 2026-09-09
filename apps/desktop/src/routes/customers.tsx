@@ -84,6 +84,24 @@ function errorKey(error: unknown): Key {
  * features.md §2 names the thresholds; which one wins when two apply is a
  * decision this screen takes.
  */
+/** What the fiche and the list call the stored balance and how big it reads.
+ *
+ * A customer's balance is one signed number: positive is what they owe, and
+ * an avoir past what was outstanding drives it below zero, at which point the
+ * shop is holding their money. "Créance -1 000,00" is not a sentence anyone
+ * says at a counter, so the sign is spent on the word instead of on the
+ * figure and the amount is always shown positive.
+ *
+ * features.md §3 (avoir) is where a negative balance comes from.
+ */
+export function balanceLabel(balance_centimes: number): Key {
+  return balance_centimes < 0 ? "customers_credit" : "customers_balance";
+}
+
+export function balanceShown(balance_centimes: number): string {
+  return formatCentimes(Math.abs(balance_centimes));
+}
+
 export function statusKey(customer: CustomerDto): Key {
   const { balance_centimes, credit_limit_centimes, warn_threshold_centimes } = customer;
   if (credit_limit_centimes !== null && balance_centimes > credit_limit_centimes) {
@@ -206,7 +224,12 @@ function CustomerTable({
               <span dir="ltr">{c.phone ?? ""}</span>
             </td>
             <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">{formatCentimes(c.balance_centimes)}</span>
+              <span dir="ltr">{balanceShown(c.balance_centimes)}</span>
+              {c.balance_centimes < 0 ? (
+                <span className="ms-1 rounded border px-1 font-sans text-sm">
+                  {t("customers_credit")}
+                </span>
+              ) : null}
             </td>
             <td className="py-1.5 ps-3 pe-3 text-end font-mono">
               <span dir="ltr">
@@ -513,9 +536,9 @@ function CustomerLedger({ customer }: { customer: CustomerDto }) {
     <section className="flex flex-col gap-3">
       <h2 className="font-semibold">{t("customers_ledger")}</h2>
       <p>
-        <span>{t("customers_balance")} </span>
+        <span>{t(balanceLabel(customer.balance_centimes))} </span>
         <span className="font-mono" dir="ltr">
-          {formatCentimes(customer.balance_centimes)}
+          {balanceShown(customer.balance_centimes)}
         </span>
       </p>
 

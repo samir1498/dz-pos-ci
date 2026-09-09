@@ -175,6 +175,7 @@
   "field_opening_debt_hint": "ما كان الزبون مدينًا به قبل البرنامج. لا يُعدَّل بعد ذلك: الخطأ يُصحَّح بتسوية.",
   "field_notes": "ملاحظات",
   "customers_balance": "الدين",
+  "customers_credit": "رصيد دائن",
   "customers_ledger": "الحركات",
   "customers_ledger_empty": "لا توجد حركات.",
   "customers_adjust": "تسوية الدين",

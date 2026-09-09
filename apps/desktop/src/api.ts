@@ -101,6 +101,15 @@ export function salesQueryKey(kind?: string): readonly (string | undefined)[] {
   return ["sales", kind];
 }
 
+/** Every list entry whatever its filter. A write that changes a document's
+ * status changes what each of them holds, and invalidating one filter's key
+ * leaves the others answering from a cache the write made wrong: react-query
+ * matches a filter key element by element, so `["sales", undefined]` misses
+ * `["sales", "facture"]` rather than covering it. */
+export function salesQueryPrefix(): readonly string[] {
+  return ["sales"];
+}
+
 /** Every avoir written against one facture. Its own key rather than a slice
  * of the document's: writing one changes both, and the detail panel reads
  * the two shapes separately. */

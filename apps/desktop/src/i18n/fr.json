@@ -175,6 +175,7 @@
   "field_opening_debt_hint": "Ce que le client devait déjà avant le logiciel. Elle ne se modifie plus ensuite : une erreur se corrige par un ajustement.",
   "field_notes": "Notes",
   "customers_balance": "Créance",
+  "customers_credit": "Crédit",
   "customers_ledger": "Mouvements",
   "customers_ledger_empty": "Aucun mouvement.",
   "customers_adjust": "Ajuster la créance",

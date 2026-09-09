@@ -30,6 +30,7 @@ import {
   saleFactureQueryKey,
   saleTicketQueryKey,
   salesQueryKey,
+  salesQueryPrefix,
 } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 
@@ -195,7 +196,7 @@ function DocumentDetail({ id, onClose }: { id: number; onClose: () => void }) {
 
       {doc.cancellation === null ? null : (
         <p role="status" className="text-red-700">
-          {t("documents_cancelled_on")} {day(doc.cancellation.cancelled_at)} —{" "}
+          {t("documents_cancelled_on")} {day(doc.cancellation.cancelled_at)} :{" "}
           {doc.cancellation.reason}
         </p>
       )}
@@ -281,7 +282,7 @@ function AvoirPanel({ facture }: { facture: SaleDto }) {
       setReason("");
       await queryClient.invalidateQueries({ queryKey: ["sale", facture.id] });
       await queryClient.invalidateQueries({ queryKey: saleAvoirsQueryKey(facture.id) });
-      await queryClient.invalidateQueries({ queryKey: salesQueryKey(undefined) });
+      await queryClient.invalidateQueries({ queryKey: salesQueryPrefix() });
     },
   });
 
@@ -304,7 +305,7 @@ function AvoirPanel({ facture }: { facture: SaleDto }) {
         <ul>
           {avoirs.data.map((a) => (
             <li key={a.id}>
-              {a.printed_number} — <span dir="ltr">{formatCentimes(a.totals.net_to_pay_centimes)}</span>
+              {a.printed_number}{" : "}<span dir="ltr">{formatCentimes(a.totals.net_to_pay_centimes)}</span>
             </li>
           ))}
         </ul>
@@ -405,7 +406,7 @@ function CancelPanel({ document }: { document: SaleDto }) {
       setOpen(false);
       setReason("");
       await queryClient.invalidateQueries({ queryKey: ["sale", document.id] });
-      await queryClient.invalidateQueries({ queryKey: salesQueryKey(undefined) });
+      await queryClient.invalidateQueries({ queryKey: salesQueryPrefix() });
     },
   });
   // Read off the document rather than off the balance: a facture on credit
