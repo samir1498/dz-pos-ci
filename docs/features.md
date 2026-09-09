@@ -141,7 +141,14 @@ moment somebody clears a field.
 The customers screen opens a company fiche with neither RC nor NIF: the
 identifiers are asked for when a facture is issued to it, not to open its
 record. It offers no delete (the ledger holds the fiche); a shop that has
-stopped dealing with somebody clears `active`. The list shows one tag per
+stopped dealing with somebody clears `active`. Closing a fiche that still
+carries something (a balance either way, or a document still asking to be
+paid) needs a reason, and the reason goes into the audit log beside the
+balance and the number of papers left open, because a shop that stops
+trading with a customer who owes it money has taken a decision. The fiche
+stays usable after it: payments, corrections, avoirs and cancellations all
+still land on a closed fiche, and only a new sale or a proforma is
+refused. The list shows one tag per
 customer, and when two apply the order is over the limit, then no credit at
 all (a zero limit), then the warning threshold. A negative balance is named
 rather than shown as a minus: the list tags the row and the fiche labels the

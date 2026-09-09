@@ -6,4 +6,10 @@ import type { PartyKindDto } from "./PartyKindDto";
  * The whole row travels every time, the way the store block does: a field
  * left out is a bug at the edge, and a null clears the column.
  */
-export type CustomerWriteDto = { name: string, party_kind: PartyKindDto, phone: string | null, address: string | null, rc: string | null, nif: string | null, nis: string | null, ai: string | null, credit_limit_centimes: number | null, warn_threshold_centimes: number | null, notes: string | null, active: boolean, };
+export type CustomerWriteDto = { name: string, party_kind: PartyKindDto, phone: string | null, address: string | null, rc: string | null, nif: string | null, nis: string | null, ai: string | null, credit_limit_centimes: number | null, warn_threshold_centimes: number | null, notes: string | null, active: boolean, 
+/**
+ * Why a fiche is being closed. Asked for only when the update closes one
+ * that still carries a balance either way or a document still asking to
+ * be paid, and ignored on every other update.
+ */
+close_reason: string | null, };

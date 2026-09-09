@@ -322,18 +322,33 @@ function CustomerForm({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<Key | null>(null);
+  // The server refuses a close over an open account without a reason
+  // (features.md §2). The screen asks for one whenever it can see the account
+  // is open, and this flag is for when it cannot: a fiche whose balance is
+  // nil can still have a document asking to be paid, and the refusal is what
+  // says so.
+  const [reasonRefused, setReasonRefused] = useState(false);
 
   const save = useMutation({
-    mutationFn: (input: NewCustomerDto) =>
+    mutationFn: ({
+      close_reason,
+      ...fiche
+    }: NewCustomerDto & { close_reason: string | null }) =>
+      // A blank fiche closes nothing, and `POST /customers` refuses a field
+      // it does not know, so the reason only travels on the update.
       initial === null
-        ? api.createCustomer(input)
-        : api.updateCustomer(initial.id, whole(input)),
+        ? api.createCustomer(fiche)
+        : api.updateCustomer(initial.id, whole({ ...fiche, close_reason })),
     onSuccess: async () => {
       setServerError(null);
+      setReasonRefused(false);
       await queryClient.invalidateQueries({ queryKey: customersQueryKey });
       onDone();
     },
-    onError: (error: unknown) => setServerError(errorKey(error)),
+    onError: (error: unknown) => {
+      setServerError(errorKey(error));
+      setReasonRefused(error instanceof ApiError && error.field === "reason");
+    },
   });
 
   const form = useForm({
@@ -353,6 +368,7 @@ function CustomerForm({
             openingDebt: "",
             notes: "",
             active: true,
+            closeReason: "",
           }
         : {
             name: initial.name,
@@ -374,6 +390,7 @@ function CustomerForm({
             openingDebt: "",
             notes: initial.notes ?? "",
             active: initial.active,
+            closeReason: "",
           },
     onSubmit: async ({ value }) => {
       // The rejection is swallowed on purpose: onError has already turned the
@@ -396,6 +413,7 @@ function CustomerForm({
           notes: cleared(value.notes),
           active: value.active,
           opening_debt_centimes: initial === null ? amount(value.openingDebt) : null,
+          close_reason: cleared(value.closeReason),
         })
         .catch(() => undefined);
     },
@@ -554,6 +572,40 @@ function CustomerForm({
           </label>
         )}
       </form.Field>
+
+      {/* Closing a fiche says the shop has stopped trading with that customer,
+          and doing it over an account that is still open is a decision rather
+          than a tidy-up: the reason goes in the audit log beside the balance
+          (features.md §2). The block appears when the balance says the account
+          is open, and when the server says so about a document the screen
+          cannot see. */}
+      <form.Subscribe selector={(state) => state.values.active}>
+        {(active) =>
+          initial !== null &&
+          initial.active &&
+          !active &&
+          (initial.balance_centimes !== 0 || reasonRefused) ? (
+            <form.Field name="closeReason">
+              {(field) => (
+                <label className="flex flex-col gap-1 rounded border border-amber-600 p-2">
+                  <span>{t("customers_close_reason")}</span>
+                  <span className="text-sm">
+                    {t("customers_close_reason_hint")}{" "}
+                    {t(balanceLabel(initial.balance_centimes))}{" "}
+                    {balanceShown(initial.balance_centimes)}
+                  </span>
+                  <input
+                    data-testid="customer-close-reason"
+                    className="rounded border px-2 py-1"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                </label>
+              )}
+            </form.Field>
+          ) : null
+        }
+      </form.Subscribe>
 
       {serverError !== null ? (
         <p role="alert" className="text-red-700">
@@ -1203,7 +1255,9 @@ function readable(text: string): boolean {
 
 /** The update takes the fiche without the opening debt: the create type
  *  carries it and the ledger is never edited. */
-function whole(input: NewCustomerDto): CustomerWriteDto {
+/** The update body: the whole fiche without the opening debt, which is a
+ *  create-only field, plus the reason a close over an open account needs. */
+function whole(input: NewCustomerDto & { close_reason: string | null }): CustomerWriteDto {
   const { opening_debt_centimes: _opening, ...fiche } = input;
   return fiche;
 }

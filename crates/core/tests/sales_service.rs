@@ -736,6 +736,8 @@ fn close(conn: &mut SqliteConnection, id: i32) {
             notes: open.notes,
             active: false,
         },
+        // Nothing on the account, so no reason is asked for.
+        None,
     )
     .unwrap();
 }
@@ -1581,6 +1583,7 @@ fn a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number() {
             notes: None,
             active: true,
         },
+        None,
     )
     .unwrap();
     let doc = issue_sale(

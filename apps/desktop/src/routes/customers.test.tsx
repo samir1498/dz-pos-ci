@@ -400,8 +400,68 @@ describe("the fiche", () => {
       warn_threshold_centimes: 150_000,
       notes: null,
       active: false,
+      // Nothing on this fiche's account, so no reason was asked for and none
+      // is sent: the field travels as a null the way every empty one does.
+      close_reason: null,
     });
     expect(sent("PUT").body).not.toHaveProperty("opening_debt_centimes");
+  });
+
+  // features.md §2: closing a fiche over an account that is still open is a
+  // decision, and the reason goes into the log beside the balance. The screen
+  // asks for it the moment the box comes off; the core is what refuses
+  // without it, so the rule is written once.
+  test("closing a fiche that still carries a balance asks why", async () => {
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
+    );
+    expect(screen.queryByTestId("customer-close-reason")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText(fr.field_customer_active));
+    const reason = await screen.findByTestId("customer-close-reason");
+    expect(screen.getByText(fr.customers_close_reason)).toBeInTheDocument();
+
+    await userEvent.type(reason, "dossier au contentieux");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_save }));
+
+    await waitFor(() => expect(sent("PUT").url).toMatch(/\/customers\/3$/));
+    expect(sent("PUT").body.active).toBe(false);
+    expect(sent("PUT").body.close_reason).toBe("dossier au contentieux");
+  });
+
+  test("closing a settled fiche asks nothing", async () => {
+    list = [noCredit];
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${fr.customers_edit} Ali Cash` }),
+    );
+    await userEvent.click(screen.getByLabelText(fr.field_customer_active));
+    expect(screen.queryByTestId("customer-close-reason")).not.toBeInTheDocument();
+  });
+
+  // A fiche whose balance nets to nothing can still have a facture asking to
+  // be paid, and the screen cannot see that document. The server's refusal
+  // names the field, and that is what opens the box.
+  test("a refusal naming the reason opens the box the screen could not know to open", async () => {
+    list = [noCredit];
+    writeAnswer = () =>
+      json(422, {
+        error: {
+          code: "validation",
+          message: "this customer still has an account open",
+          field: "reason",
+        },
+      });
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${fr.customers_edit} Ali Cash` }),
+    );
+    await userEvent.click(screen.getByLabelText(fr.field_customer_active));
+    expect(screen.queryByTestId("customer-close-reason")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: fr.action_save }));
+    expect(await screen.findByTestId("customer-close-reason")).toBeInTheDocument();
   });
 
   test("the opening debt is asked for once and never on an existing fiche", async () => {

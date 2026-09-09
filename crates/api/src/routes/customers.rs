@@ -95,12 +95,16 @@ pub async fn update(
 ) -> Result<Json<CustomerDto>, ApiError> {
     let id = path_id(id)?;
     let Json(dto) = body.map_err(ApiError::from)?;
+    // Lifted off the body before the fiche is built: it is a note about the
+    // decision, not a field of the customer, and nothing stores it but the
+    // audit row.
+    let close_reason = dto.close_reason.clone();
     let fields = NewCustomer::try_from(dto)?;
     let shop = state.shop_id;
     let user = state.user_id;
     let after = state
         .blocking(move |c| {
-            service::update(c, shop, user, id, fields)?;
+            service::update(c, shop, user, id, fields, close_reason)?;
             service::get_with_balance(c, shop, id)
         })
         .await?;

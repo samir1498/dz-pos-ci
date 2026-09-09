@@ -42,6 +42,15 @@ pub const ACTION_AVOIR: &str = "document.avoir";
 /// one (features.md §3).
 pub const ACTION_CANCEL: &str = "document.cancel";
 
+/// A fiche closed while it was still carrying something: a balance either
+/// way, or a document still asking to be paid. The entry carries the reason
+/// the caller had to give, the balance at the moment of the close and how
+/// many documents were still open, because a shop that stops trading with a
+/// customer who owes it money has taken a decision and the log is where it
+/// is written down. A close over an account that was already settled is an
+/// ordinary update and is logged as one.
+pub const ACTION_CLOSE_CUSTOMER: &str = "customer.close";
+
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.
 #[derive(Debug, Clone, PartialEq, Eq)]

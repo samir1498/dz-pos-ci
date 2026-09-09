@@ -1061,6 +1061,11 @@ pub struct CustomerWriteDto {
     pub warn_threshold_centimes: Option<i64>,
     pub notes: Option<String>,
     pub active: bool,
+    /// Why a fiche is being closed. Asked for only when the update closes one
+    /// that still carries a balance either way or a document still asking to
+    /// be paid, and ignored on every other update.
+    #[serde(default)]
+    pub close_reason: Option<String>,
 }
 
 /// A new fiche: the same fields, plus the debt the shop was already carrying
@@ -1127,6 +1132,8 @@ impl TryFrom<NewCustomerDto> for NewCustomer {
             warn_threshold_centimes: d.warn_threshold_centimes,
             notes: d.notes,
             active: d.active,
+            // A fiche being created closes nothing.
+            close_reason: None,
         })
     }
 }

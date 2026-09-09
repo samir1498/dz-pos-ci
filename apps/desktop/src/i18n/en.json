@@ -305,5 +305,7 @@
   "documents_cancel_nothing": "The document keeps its number. Nothing else moves: the goods have already come back on credit notes and the customer's account is settled.",
   "documents_print": "Printing",
   "till_kind_proforma": "Proforma",
-  "till_proforma_needs_customer": "A proforma is made out to a customer: pick one."
+  "till_proforma_needs_customer": "A proforma is made out to a customer: pick one.",
+  "customers_close_reason": "Reason for closing",
+  "customers_close_reason_hint": "This account is not settled; say why the fiche is being closed. The reason goes into the log with the balance."
 }

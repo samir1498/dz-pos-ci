@@ -305,5 +305,7 @@
   "documents_cancel_nothing": "تحتفظ الوثيقة برقمها. لا شيء آخر يتحرك: البضاعة عادت على إشعارات دائنة وحساب الزبون مسوًّى.",
   "documents_print": "الطباعة",
   "till_kind_proforma": "فاتورة أولية",
-  "till_proforma_needs_customer": "الفاتورة الأولية تحرَّر باسم زبون: اختر واحدا."
+  "till_proforma_needs_customer": "الفاتورة الأولية تحرَّر باسم زبون: اختر واحدا.",
+  "customers_close_reason": "سبب الإغلاق",
+  "customers_close_reason_hint": "هذا الحساب غير مسوّى؛ اذكر سبب إغلاق البطاقة. يُسجَّل السبب في السجل مع الرصيد."
 }

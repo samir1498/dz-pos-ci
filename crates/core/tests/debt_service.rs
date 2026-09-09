@@ -1896,7 +1896,17 @@ fn a_closed_fiche_still_takes_a_payment() {
     let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
     let mut closed = fiche("Entreprise Benali");
     closed.active = false;
-    customers::update(&mut conn, SHOP, OWNER, customer, closed).unwrap();
+    // Closed over an open account, which is the whole point of the fixture,
+    // so the reason the rule asks for travels with it.
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        closed,
+        Some("le client a fermé".to_string()),
+    )
+    .unwrap();
 
     let paid = debt::pay(
         &mut conn,
@@ -1929,7 +1939,17 @@ fn a_closed_fiche_still_takes_a_correction() {
     .unwrap();
     let mut closed = fiche("Entreprise Benali");
     closed.active = false;
-    customers::update(&mut conn, SHOP, OWNER, customer, closed).unwrap();
+    // Closed over an open account, which is the whole point of the fixture,
+    // so the reason the rule asks for travels with it.
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        closed,
+        Some("le client a fermé".to_string()),
+    )
+    .unwrap();
 
     let corrected = debt::adjust(
         &mut conn,
@@ -2016,4 +2036,73 @@ fn the_recent_movements_are_the_newest_ones_and_the_balance_counts_them_all() {
         slip.entries[1].document.is_none(),
         "a movement citing no document was given one"
     );
+}
+
+/// The third leg of the close rule (features.md §2): the paper the customer
+/// is holding. A balance of zero is not the whole answer, because a facture
+/// that still asks for its amount is still asking for it whatever the ledger
+/// nets out to. The fixture makes the two disagree on purpose: the credit
+/// sale's movement is cancelled out by a correction written straight into the
+/// ledger, which settles nothing, so the balance closes at zero with the
+/// facture still open.
+#[test]
+fn a_fiche_with_a_document_still_asking_to_be_paid_is_not_closed_without_a_reason() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    debt::append(
+        &mut conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id: customer,
+            document_id: None,
+            kind: DebtKind::Adjustment,
+            debit: Money::ZERO,
+            credit: Money::centimes(100_000),
+            user_id: OWNER,
+            note: Some("écriture de contrepartie".to_string()),
+        },
+    )
+    .unwrap();
+    assert_eq!(debt::balance(&mut conn, SHOP, customer).unwrap(), Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, document), Money::centimes(100_000));
+
+    let open = customers::get(&mut conn, SHOP, customer).unwrap();
+    let closed = NewCustomer {
+        name: open.name.clone(),
+        party_kind: open.party_kind,
+        phone: open.phone.clone(),
+        address: open.address.clone(),
+        rc: open.rc.clone(),
+        nif: open.nif.clone(),
+        nis: open.nis.clone(),
+        ai: open.ai.clone(),
+        credit_limit: open.credit_limit,
+        warn_threshold: open.warn_threshold,
+        notes: open.notes.clone(),
+        active: false,
+    };
+    let err = customers::update(&mut conn, SHOP, OWNER, customer, closed.clone(), None).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "reason"),
+        "{err:?}"
+    );
+
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        closed,
+        Some("le client a fermé".to_string()),
+    )
+    .unwrap();
+    let entry = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .find(|e| e.action == "customer.close")
+        .expect("the close is logged");
+    let after: serde_json::Value = serde_json::from_str(&entry.after.unwrap_or_default()).unwrap();
+    assert_eq!(after["balance_centimes"], 0);
+    assert_eq!(after["open_documents"], 1);
 }

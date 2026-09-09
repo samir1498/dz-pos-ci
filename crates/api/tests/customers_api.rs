@@ -94,6 +94,14 @@ fn draft(name: &str) -> Value {
     })
 }
 
+/// The same fields without the opening debt, which is a create-only field:
+/// what a PUT takes.
+fn write_body(name: &str) -> Value {
+    let mut body = draft(name);
+    body.as_object_mut().map(|o| o.remove("opening_debt_centimes"));
+    body
+}
+
 async fn create(app: &axum::Router, body: Value) -> Value {
     let (status, made) = call(app, "POST", "/customers", Some(body)).await;
     assert_eq!(status, StatusCode::CREATED, "{made}");
@@ -205,7 +213,8 @@ async fn an_update_carries_the_whole_row_and_a_null_clears_a_field() {
             "credit_limit_centimes": null,
             "warn_threshold_centimes": null,
             "notes": "passe le jeudi",
-            "active": false
+            "active": false,
+            "close_reason": "dossier au contentieux"
         })),
     )
     .await;
@@ -223,6 +232,61 @@ async fn an_update_carries_the_whole_row_and_a_null_clears_a_field() {
         after["balance_centimes"], 150_000,
         "the update touched the ledger: {after}"
     );
+}
+
+/// A fiche that still carries something is not closed by a checkbox: the
+/// refusal names the `reason` field, which is where the screen puts the
+/// message, and the fiche is still open afterwards.
+#[tokio::test]
+async fn closing_a_fiche_with_a_balance_without_a_reason_is_refused_on_the_field() {
+    let h = harness();
+    let mut with_debt = draft("Entreprise Benali");
+    with_debt["opening_debt_centimes"] = json!(150_000);
+    let made = create(&h.app, with_debt).await;
+    let id = id_of(&made);
+
+    let mut closing = write_body("Entreprise Benali");
+    closing["active"] = json!(false);
+    let (status, refused) = call(
+        &h.app,
+        "PUT",
+        &format!("/customers/{id}"),
+        Some(closing.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+    assert_eq!(refused["error"]["code"], "validation");
+    assert_eq!(
+        refused["error"]["field"], "reason",
+        "the screen has nowhere to put this message: {refused}"
+    );
+
+    let (_, still) = call(&h.app, "GET", &format!("/customers/{id}"), None).await;
+    assert_eq!(still["active"], true, "the refused close was written: {still}");
+
+    closing["close_reason"] = json!("dossier au contentieux");
+    let (status, closed) = call(&h.app, "PUT", &format!("/customers/{id}"), Some(closing)).await;
+    assert_eq!(status, StatusCode::OK, "{closed}");
+    assert_eq!(closed["active"], false);
+    assert_eq!(closed["balance_centimes"], 150_000, "the close moved money");
+}
+
+/// A fiche with nothing on it is closed the way any field is changed.
+#[tokio::test]
+async fn closing_a_settled_fiche_asks_for_nothing() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let mut closing = write_body("Entreprise Benali");
+    closing["active"] = json!(false);
+    let (status, closed) = call(
+        &h.app,
+        "PUT",
+        &format!("/customers/{}", id_of(&made)),
+        Some(closing),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{closed}");
+    assert_eq!(closed["active"], false);
 }
 
 /// The opening debt is not a field of the fiche, so the update type does not
@@ -705,11 +769,17 @@ async fn a_refusal_with_nothing_to_add_carries_no_figures_at_all() {
 
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{answer}");
     assert_eq!(answer["error"]["code"], "validation");
+    // The field it is about is on every validation refusal, so it is what
+    // this one carries and the whole of it. The figures below belong to the
+    // three refusals that have something to say beyond a code and a
+    // sentence, and none of them is this one.
+    assert_eq!(answer["error"]["field"], "amount");
     for extra in [
-        "field",
         "outstanding_centimes",
         "balance_after_centimes",
         "credit_limit_centimes",
+        "party_side",
+        "missing_ids",
     ] {
         assert!(
             answer["error"].get(extra).is_none(),

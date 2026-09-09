@@ -217,7 +217,7 @@ fn a_proforma_takes_no_amount_tendered_and_no_closed_fiche() {
 
     let mut closed_fiche = a_fiche("Entreprise Benali");
     closed_fiche.active = false;
-    customers::update(&mut conn, SHOP, OWNER, c, closed_fiche).unwrap();
+    customers::update(&mut conn, SHOP, OWNER, c, closed_fiche, None).unwrap();
     let closed = issue(&mut conn, quotation(Some(c), p, PaymentMode::Cash)).unwrap_err();
     assert!(
         matches!(closed, CoreError::Validation { ref field, .. } if field == "customer_id"),
