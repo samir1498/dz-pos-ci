@@ -197,13 +197,17 @@ export function TillScreen() {
     setCart((current) => current.map((l) => (l.product.id === id ? { ...l, qtyText } : l)));
   }
 
+  // The two buttons move a line by one whole unit. A step that lands at or
+  // below zero takes the line off, the way the × does: raising 0,5 kg to a
+  // full kilo would charge the customer for weight the scale never read.
   function step(id: number, by: number) {
     setCart((current) =>
-      current.map((l) => {
-        if (l.product.id !== id) return l;
+      current.flatMap((l) => {
+        if (l.product.id !== id) return [l];
         const milli = parseQtyToMilli(l.qtyText) ?? 0;
         const next = milli + by;
-        return { ...l, qtyText: formatQty(next < ONE_UNIT_MILLI ? ONE_UNIT_MILLI : next) };
+        if (next <= 0) return [];
+        return [{ ...l, qtyText: formatQty(next) }];
       }),
     );
   }

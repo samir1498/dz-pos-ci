@@ -324,6 +324,41 @@ describe("the quantity a line carries", () => {
     await user.click(screen.getByRole("button", { name: `Un de moins ${coffee.name}` }));
     expect(screen.getByLabelText(`Quantité ${coffee.name}`)).toHaveValue("1");
   });
+
+  test("a weighed line steps down by one kilo and keeps its grams", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(tomato));
+    const qty = screen.getByLabelText(`Quantité ${tomato.name}`);
+    await user.clear(qty);
+    await user.type(qty, "1,5");
+    await user.click(screen.getByRole("button", { name: `Un de moins ${tomato.name}` }));
+    expect(screen.getByLabelText(`Quantité ${tomato.name}`)).toHaveValue("0,5");
+  });
+
+  test("stepping a weighed line below zero takes the line off, it never rounds the scale up", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(tomato));
+    const qty = screen.getByLabelText(`Quantité ${tomato.name}`);
+    await user.clear(qty);
+    await user.type(qty, "0,5");
+    await user.click(screen.getByRole("button", { name: `Un de moins ${tomato.name}` }));
+    // Clamping up to one kilo would charge 100,00 DA the scale never said.
+    expect(screen.queryByLabelText(`Quantité ${tomato.name}`)).not.toBeInTheDocument();
+    expect(screen.getByText("Le panier est vide.")).toBeInTheDocument();
+  });
+
+  test("the minus button on a single unit takes the line off", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await user.click(screen.getByRole("button", { name: `Un de moins ${coffee.name}` }));
+    expect(screen.queryByLabelText(`Quantité ${coffee.name}`)).not.toBeInTheDocument();
+  });
 });
 
 describe("the discounts the screen refuses on its own", () => {
