@@ -6,6 +6,9 @@
 /** Basis points in one whole: 10 000 bps = 100 %. */
 export const BPS_PER_WHOLE = 10_000;
 
+/** Thousandths in one unit: a line sells 1,5 kg as 1500. */
+export const MILLI_PER_UNIT = 1_000;
+
 // ---- droit de timbre: stamp_progressive_tranches ----
 /** Nothing is due at or below 300,00 DA. */
 export const STAMP_FLOOR = 30_000;
@@ -54,16 +57,36 @@ export function stamp(totalTtc, mode) {
   return Math.max(tranches * rate, STAMP_MIN);
 }
 
+/** A line's gross amount: unitPrice × qtyMilli / 1000, rounded once to the
+ *  centime, half away from zero, before the line discount comes off. BigInt
+ *  keeps the product exact past Number.MAX_SAFE_INTEGER.
+ *  line_total_fractional_qty */
+export function lineTotal(unitPrice, qtyMilli) {
+  const per = BigInt(MILLI_PER_UNIT);
+  const raw = BigInt(unitPrice) * BigInt(qtyMilli);
+  const sign = raw < 0n ? -1n : 1n;
+  return Number((sign * ((raw * sign + per / 2n) / per)));
+}
+
+/** Thousandths of a unit as a label: 1500 is "1,5" and 2000 is "2". Display
+ *  only; no total is ever read off this. */
+export function qtyLabel(milli) {
+  const whole = Math.trunc(milli / MILLI_PER_UNIT);
+  const rest = Math.abs(milli % MILLI_PER_UNIT);
+  if (rest === 0) return String(whole);
+  return `${whole},${String(rest).padStart(3, "0").replace(/0+$/, "")}`;
+}
+
 /** HT per rate group, by rising rate, and the sum of the groups. */
 function groupByRate(lines) {
   const groups = [];
   let totalHt = 0;
   for (const l of lines) {
     const lineDiscount = l.lineDiscount || 0;
-    if (l.qty < 0) throw new MoneyError("NegativeQuantity");
+    if (l.qtyMilli < 0) throw new MoneyError("NegativeQuantity");
     if (l.unitPrice < 0) throw new MoneyError("NegativeUnitPrice");
     if (lineDiscount < 0) throw new MoneyError("NegativeDiscount");
-    const gross = l.qty * l.unitPrice;
+    const gross = lineTotal(l.unitPrice, l.qtyMilli);
     if (lineDiscount > gross) throw new MoneyError("LineDiscountAboveLine");
     const net = gross - lineDiscount;
     totalHt += net;
@@ -108,7 +131,7 @@ function spreadDiscount(groups, totalHt, discount) {
 
 /**
  * Every column of the totals table in docs/features.md §3.
- * lines: [{ qty, unitPrice, lineDiscount, rateBps }]
+ * lines: [{ qtyMilli, unitPrice, lineDiscount, rateBps }]
  * opts: { globalDiscount, paymentMode, stampEnabled, regime }
  */
 export function computeTotals(lines, opts) {

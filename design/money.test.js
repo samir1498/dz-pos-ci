@@ -3,7 +3,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { MoneyError, amountInWords, computeTotals, pct, stamp } from "./shared/money.js";
+import {
+  MoneyError,
+  amountInWords,
+  computeTotals,
+  lineTotal,
+  pct,
+  stamp,
+} from "./shared/money.js";
 
 function fixture(name) {
   const path = fileURLToPath(new URL(`../fixtures/money/${name}.json`, import.meta.url));
@@ -12,10 +19,12 @@ function fixture(name) {
 
 const rounding = fixture("tva_rounding_once_per_rate");
 const stampFixture = fixture("stamp_progressive_tranches");
+const fractional = fixture("line_total_fractional_qty");
 
-// The rate column of a line and of a TVA group is basis points, not percent.
+// The rate column of a line and of a TVA group is basis points, not percent,
+// and a quantity is thousandths of the unit.
 const toLine = (l) => ({
-  qty: l.qty,
+  qtyMilli: l.qty_milli,
   unitPrice: l.unit_price,
   lineDiscount: l.line_discount,
   rateBps: l.rate_bps,
@@ -44,26 +53,45 @@ describe("tva_rounding_once_per_rate", () => {
     expect(() => pct(10000, c.rate_bps)).toThrowError(/RateOutOfRange/);
   });
 
-  it.each(rounding.totals_cases)("totals: $name", (c) => {
-    const got = computeTotals(c.input.lines.map(toLine), toOpts(c.input.opts));
-    const e = c.expected;
-    expect(got.totalHt).toBe(e.total_ht);
-    expect(got.discount).toBe(e.discount);
-    expect(got.subtotalHt).toBe(e.subtotal_ht);
-    expect(got.tvaByRate).toEqual(
-      e.tva_by_rate.map((g) => ({ rateBps: g.rate_bps, base: g.base, amount: g.amount })),
-    );
-    expect(got.tva).toBe(e.tva);
-    expect(got.totalTtc).toBe(e.total_ttc);
-    expect(got.stamp).toBe(e.stamp);
-    expect(got.netToPay).toBe(e.net_to_pay);
-  });
+  it.each(rounding.totals_cases)("totals: $name", expectTotals);
+});
 
+function expectTotals(c) {
+  const got = computeTotals(c.input.lines.map(toLine), toOpts(c.input.opts));
+  const e = c.expected;
+  expect(got.discount).toBe(e.discount);
+  expect(got.subtotalHt).toBe(e.subtotal_ht);
+  expect(got.tvaByRate).toEqual(
+    e.tva_by_rate.map((g) => ({ rateBps: g.rate_bps, base: g.base, amount: g.amount })),
+  );
+  expect(got.tva).toBe(e.tva);
+  expect(got.totalTtc).toBe(e.total_ttc);
+  expect(got.stamp).toBe(e.stamp);
+  expect(got.netToPay).toBe(e.net_to_pay);
+}
+
+describe("tva_rounding_once_per_rate errors", () => {
   it.each(rounding.totals_error_cases)("refuses: $name", (c) => {
     expect(() => computeTotals(c.input.lines.map(toLine), toOpts(c.input.opts))).toThrowError(
       new RegExp(c.error),
     );
   });
+});
+
+// A quantity is thousandths of a unit, so the mockup weighs 1,5 kg the same
+// way the core does. line_overflow_cases are skipped: i64::MAX is past
+// Number.MAX_SAFE_INTEGER, so the JS side cannot hold that input.
+describe("line_total_fractional_qty", () => {
+  it("keeps its cases", () => {
+    expect(fractional.line_cases.length).toBeGreaterThanOrEqual(10);
+    expect(fractional.totals_cases.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it.each(fractional.line_cases)("line: $name", (c) => {
+    expect(lineTotal(c.unit_price, c.qty_milli)).toBe(c.expected);
+  });
+
+  it.each(fractional.totals_cases)("totals: $name", expectTotals);
 });
 
 describe("stamp_progressive_tranches", () => {

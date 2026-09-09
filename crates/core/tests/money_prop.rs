@@ -81,6 +81,45 @@ proptest! {
         prop_assert_eq!(d.checked_add(Money::centimes(b)).unwrap(), Money::centimes(a));
     }
 
+    /// A whole number of units is the plain product: the milli path must
+    /// not shift a price that has no fraction to round.
+    /// line_total_fractional_qty
+    #[test]
+    fn a_whole_quantity_is_the_plain_product(unit in 0i64..=1_000_000_000, units in 0i64..=1_000) {
+        let price = Money::centimes(unit);
+        let milli = price.checked_mul_milli(units.checked_mul(1_000).unwrap()).unwrap();
+        prop_assert_eq!(milli, price.checked_mul(units).unwrap());
+    }
+
+    /// Rounded, never re-scaled: the line total is within half a centime of
+    /// the exact value, whichever way it went.
+    /// line_total_fractional_qty
+    #[test]
+    fn a_line_total_is_within_half_a_centime_of_the_exact_value(
+        unit in 0i64..=1_000_000_000,
+        qty_milli in 0i64..=10_000_000,
+    ) {
+        let got = i128::from(
+            Money::centimes(unit).checked_mul_milli(qty_milli).unwrap().as_centimes(),
+        );
+        let exact = i128::from(unit) * i128::from(qty_milli);
+        let error = (got * 1_000 - exact).abs();
+        prop_assert!(error <= 500, "{unit} × {qty_milli} milli rounded to {got}");
+    }
+
+    /// More of the same thing never costs less.
+    /// line_total_fractional_qty
+    #[test]
+    fn a_line_total_rises_with_the_quantity(
+        unit in 0i64..=1_000_000_000,
+        a in 0i64..=10_000_000,
+        extra in 0i64..=10_000_000,
+    ) {
+        let price = Money::centimes(unit);
+        let b = a.checked_add(extra).unwrap();
+        prop_assert!(price.checked_mul_milli(a).unwrap() <= price.checked_mul_milli(b).unwrap());
+    }
+
     #[test]
     fn times_qty_matches_repeated_add(unit in -1_000_000i64..=1_000_000, qty in 0i64..=50) {
         let product = Money::centimes(unit).checked_mul(qty).unwrap();
@@ -94,19 +133,23 @@ proptest! {
 
 // ---- totals and the stamp ----
 
-/// A basket a shop can ring up: unit prices to a million dinars, small
-/// counts, a line discount never above its own line, rates from the real
-/// table plus 100 % to stress the arithmetic.
+/// A basket a shop can ring up: unit prices to a million dinars, quantities
+/// from a gram to twenty units, a line discount never above its own line,
+/// rates from the real table plus 100 % to stress the arithmetic.
 fn basket() -> impl Strategy<Value = Vec<Line>> {
     let line = (
-        0i64..=20,
+        0i64..=20_000,
         0i64..=100_000_000,
         prop::sample::select(vec![0u32, 900, 1900, 10_000]),
     )
-        .prop_flat_map(|(qty, unit, rate)| {
-            let gross = unit.saturating_mul(qty);
+        .prop_flat_map(|(qty_milli, unit, rate)| {
+            // The discount is bounded by the rounded gross, which is what
+            // compute_totals compares it against.
+            let gross = Money::centimes(unit)
+                .checked_mul_milli(qty_milli)
+                .map_or(0, Money::as_centimes);
             (0i64..=gross).prop_map(move |line_discount| Line {
-                qty,
+                qty_milli,
                 unit_price: Money::centimes(unit),
                 line_discount: Money::centimes(line_discount),
                 rate: Bps::new(rate).unwrap(),
@@ -369,7 +412,7 @@ proptest! {
 #[test]
 fn a_tva_base_is_never_negative_even_under_a_near_total_discount() {
     let line = |centimes: i64, bps: u32| Line {
-        qty: 1,
+        qty_milli: 1000,
         unit_price: Money::centimes(centimes),
         line_discount: Money::ZERO,
         rate: Bps::new(bps).unwrap(),

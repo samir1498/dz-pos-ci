@@ -1,7 +1,7 @@
 // Printed-document renderers: A4 facture and 80 mm ticket.
 // Pure function of (sale, lang) — same contract as crates/core::documents.
 import { STORE } from "./data.js";
-import { amountInWords, fmt } from "./money.js";
+import { amountInWords, fmt, lineTotal, qtyLabel } from "./money.js";
 import { t } from "./i18n.js";
 
 const esc = (s) =>
@@ -57,8 +57,8 @@ export function renderA4(sale, lang) {
       <tbody>${lines
         .map(
           (l) => `<tr><td>${esc(lang === "ar" ? l.product.ar : l.product.name)}</td>
-          <td class="n num">${l.qty}</td><td class="n num">${fmt(l.unitPrice, lang)}</td>
-          <td class="n num">${l.rateBps / 100}%</td><td class="n num">${fmt(l.qty * l.unitPrice - (l.lineDiscount || 0), lang)}</td></tr>`,
+          <td class="n num">${qtyLabel(l.qtyMilli)}</td><td class="n num">${fmt(l.unitPrice, lang)}</td>
+          <td class="n num">${l.rateBps / 100}%</td><td class="n num">${fmt(lineTotal(l.unitPrice, l.qtyMilli) - (l.lineDiscount || 0), lang)}</td></tr>`,
         )
         .join("")}</tbody>
     </table>
@@ -89,7 +89,7 @@ export function renderTicket(sale, lang) {
       ${lines
         .map(
           (l) => `<tr><td colspan="2">${esc(lang === "ar" ? l.product.ar : l.product.name)}</td></tr>
-        <tr><td class="num muted">${l.qty} × ${fmt(l.unitPrice, lang)}</td><td class="n num">${fmt(l.qty * l.unitPrice - (l.lineDiscount || 0), lang)}</td></tr>`,
+        <tr><td class="num muted">${qtyLabel(l.qtyMilli)} × ${fmt(l.unitPrice, lang)}</td><td class="n num">${fmt(lineTotal(l.unitPrice, l.qtyMilli) - (l.lineDiscount || 0), lang)}</td></tr>`,
         )
         .join("")}
     </table>

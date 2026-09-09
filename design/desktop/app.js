@@ -1,5 +1,5 @@
 import { t, lang, setLang, applyDir, LANGS, LANG_LABEL } from "../shared/i18n.js";
-import { computeTotals, fmt } from "../shared/money.js";
+import { MILLI_PER_UNIT, computeTotals, fmt, lineTotal, qtyLabel } from "../shared/money.js";
 import { STORE, PRODUCTS, CATEGORIES, CUSTOMERS, LEDGER, USERS, DASH, nextNumber } from "../shared/data.js";
 import { renderA4, renderTicket } from "../shared/doc.js";
 
@@ -15,7 +15,7 @@ const products = PRODUCTS.map((p) => ({ ...p }));
 const customers = CUSTOMERS.map((c) => ({ ...c }));
 const store = { ...STORE };
 const state = {
-  cart: [], // {product, qty, unitPrice, lineDiscount, rateBps}
+  cart: [], // {product, qtyMilli, unitPrice, lineDiscount, rateBps}
   customerId: null,
   globalDiscount: 0,
   search: "",
@@ -177,9 +177,9 @@ function till() {
                 .map(
                   (l, i) => `<div class="cline">
               <span class="cname">${esc(pname(l.product))}</span>
-              <span class="ctotal num">${fmt(l.qty * l.unitPrice - l.lineDiscount, lang())}</span>
+              <span class="ctotal num">${fmt(lineTotal(l.unitPrice, l.qtyMilli) - l.lineDiscount, lang())}</span>
               <span class="cmeta">
-                <span class="qty"><button data-dec="${i}">−</button><span class="num">${l.qty}</span><button data-inc="${i}">+</button></span>
+                <span class="qty"><button data-dec="${i}">−</button><span class="num">${qtyLabel(l.qtyMilli)}</span><button data-inc="${i}">+</button></span>
                 <span class="num">× ${fmt(l.unitPrice, lang())}</span>
                 <span class="tiny">${t("tva")} ${l.rateBps / 100}%</span>
               </span>
@@ -393,8 +393,15 @@ function addToCart(id) {
   const p = products.find((x) => x.id === id);
   if (!p || p.qty === 0) return;
   const line = state.cart.find((l) => l.product.id === id);
-  if (line) line.qty += 1;
-  else state.cart.push({ product: p, qty: 1, unitPrice: p.price, lineDiscount: 0, rateBps: p.tvaBps });
+  if (line) line.qtyMilli += MILLI_PER_UNIT;
+  else
+    state.cart.push({
+      product: p,
+      qtyMilli: MILLI_PER_UNIT,
+      unitPrice: p.price,
+      lineDiscount: 0,
+      rateBps: p.tvaBps,
+    });
 }
 
 function toast(msg) {
@@ -416,7 +423,7 @@ function confirmSale() {
     paymentMode: state.pay.mode,
     tendered: state.pay.mode === "cash" ? state.pay.tendered : 0,
   };
-  for (const l of sale.lines) l.product.qty -= l.qty;
+  for (const l of sale.lines) l.product.qty -= l.qtyMilli / MILLI_PER_UNIT;
   if (sale.paymentMode === "credit" && sale.customer) sale.customer.debt += tot.netToPay;
   state.lastSale = sale;
   state.docKind = sale.customer ? "facture" : "ticket";
@@ -435,9 +442,9 @@ app.addEventListener("click", (e) => {
   const d = el.dataset;
   if (d.lang) setLang(d.lang);
   else if (d.add) addToCart(Number(d.add));
-  else if (d.inc !== undefined) state.cart[d.inc].qty += 1;
+  else if (d.inc !== undefined) state.cart[d.inc].qtyMilli += MILLI_PER_UNIT;
   else if (d.dec !== undefined) {
-    state.cart[d.dec].qty -= 1;
+    state.cart[d.dec].qtyMilli -= MILLI_PER_UNIT;
     if (state.cart[d.dec].qty <= 0) state.cart.splice(d.dec, 1);
   } else if (d.del !== undefined) state.cart.splice(d.del, 1);
   else if (d.clear !== undefined) {
