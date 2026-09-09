@@ -19,9 +19,6 @@ tasks:
   - id: 'T8'
     desc: 'The customer debt slip on 80 mm (balance and last movements, goldens ×3), the combined dz-review Pass 2 over T3, T4, T6 and T7 (money, numbering, deletion), features.md §3 and §4 updated to what M2 shipped, the checkpoint PR that closes M2'
     status: 'pending'
-  - id: 'T9'
-    desc: 'avoir_a4 and proforma_a4 templates on the facture_a4 pattern (the paper dictionary grows through Key::ALL), goldens ×3 each with every amount parsed back, the annulée reprint of a facture as a golden set; after T5 and T6''s model, same wave as T6'
-    status: 'pending'
   - id: 'T1'
     desc: 'Migration: customers (identifiers, party_kind company|consumer, credit_limit_centimes null = no limit and 0 = no credit, warn_threshold_centimes null = no warning, opening debt as the first ledger row), append-only debt_ledger (opening, sale, payment, avoir, adjustment; one of debit/credit zero), debt_allocations; documents rebuilt outside diesel''s transaction (foreign_keys OFF, twelve-step copy with ids, foreign_key_check, ON) with customer_id FK RESTRICT, kind admitting quittance (variant with series and prefix, nothing issues it), ref_document_id FK, the buyer block with buyer_party_kind, the balance triple; models, repos, customers and debt services with audit; previous-version test keeps every child row and id; no yearly reset (R8)'
     status: 'done'
@@ -33,6 +30,9 @@ tasks:
     status: 'pending'
   - id: 'T7'
     desc: 'Payments (after T2 and T3): POST /customers/{id}/payments writes the payment row and its allocations in one transaction, settles oldest-first, a partial payment leaves the remainder on the oldest, a payment above the outstanding debt is refused, the sum of allocations on a document never exceeds its net_to_pay (checked in the transaction), audited; statement_a4 (opening balance, movements, closing balance for a date range) with Key::ALL grown, goldens ×3 and words on the total; the stamped receipt for a later cash settlement waits for the comptable (R8)'
+    status: 'pending'
+  - id: 'T9'
+    desc: 'The avoir and proforma cases of facture_a4 (T5 titles all three kinds in one template): the avoir''s reference line and its own lines, the proforma wording, the annulée reprint of a cancelled facture, goldens ×3 for each with every amount parsed back; split into a second template only if the avoir needs more than a title and a reference; after T5 and T6''s model, same wave as T6'
     status: 'pending'
 acceptance: []
 ---
