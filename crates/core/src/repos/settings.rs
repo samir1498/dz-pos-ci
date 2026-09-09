@@ -20,6 +20,9 @@ pub fn value_as_of(
         .filter(settings::shop_id.eq(shop_id))
         .filter(settings::key.eq(key.to_string()))
         .filter(settings::valid_from.le(at))
+        // seq is the table's rowid, so a reverse index scan happens to yield
+        // the same order without it; the ORDER BY makes the tie-break a
+        // guarantee of the query rather than of SQLite's scan direction.
         .order((settings::valid_from.desc(), settings::seq.desc()))
         .select(settings::value)
         .first(conn)

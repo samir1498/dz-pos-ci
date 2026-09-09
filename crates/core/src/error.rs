@@ -13,6 +13,12 @@ pub enum CoreError {
     NotFound { entity: &'static str, id: i32 },
     #[error("barcode {0} is already used in this shop")]
     DuplicateBarcode(String),
+    /// A number series the shop hands out (in-store barcodes, later the
+    /// document numbers) has no next value. Not a validation failure: the
+    /// user did nothing wrong, and the API answers 409 so the UI can say
+    /// the series is spent rather than "check your input".
+    #[error("the {series} series is exhausted")]
+    Exhausted { series: &'static str },
     #[error(transparent)]
     Money(#[from] MoneyError),
     #[error(transparent)]
@@ -28,6 +34,7 @@ impl CoreError {
             CoreError::Validation { .. } => "validation",
             CoreError::NotFound { .. } => "not_found",
             CoreError::DuplicateBarcode(_) => "duplicate_barcode",
+            CoreError::Exhausted { .. } => "exhausted",
             CoreError::Money(_) => "money",
             CoreError::Db(_) | CoreError::Query(_) => "storage",
         }

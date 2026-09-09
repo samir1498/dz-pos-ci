@@ -16,7 +16,11 @@ pub const IN_STORE_BARCODE: &str = "in_store_barcode";
 ///
 /// The row is created on first use, so a shop the migration never seeded
 /// (a second till paired in M7) starts at 1 rather than failing.
-pub fn take_next(conn: &mut SqliteConnection, shop_id: i32, name: &str) -> Result<i64, CoreError> {
+pub fn take_next(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    name: &'static str,
+) -> Result<i64, CoreError> {
     diesel::insert_or_ignore_into(counters::table)
         .values((
             counters::shop_id.eq(shop_id),
@@ -32,7 +36,7 @@ pub fn take_next(conn: &mut SqliteConnection, shop_id: i32, name: &str) -> Resul
         .first(conn)?;
     let after = taken
         .checked_add(1)
-        .ok_or_else(|| CoreError::validation(name, "this number series is exhausted"))?;
+        .ok_or(CoreError::Exhausted { series: name })?;
 
     diesel::update(
         counters::table

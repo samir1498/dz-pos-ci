@@ -174,6 +174,30 @@ fn each_shop_numbers_its_own_in_store_barcodes() {
 }
 
 #[test]
+fn a_spent_barcode_series_is_not_blamed_on_the_user() {
+    // The counter cannot advance past i64::MAX. That is the shop's series
+    // being exhausted, not bad input, so the code is "exhausted" (409 at
+    // the API), never "validation".
+    use diesel::prelude::*;
+
+    let (_dir, mut conn) = open_temp();
+    diesel::sql_query(format!(
+        "INSERT INTO counters (shop_id, name, next_value) VALUES (1, 'in_store_barcode', {}) \
+         ON CONFLICT (shop_id, name) DO UPDATE SET next_value = excluded.next_value",
+        i64::MAX
+    ))
+    .execute(&mut conn)
+    .unwrap();
+    let err = products::create(&mut conn, SHOP, draft("A")).unwrap_err();
+    assert_eq!(err.code(), "exhausted", "{err}");
+    assert_eq!(
+        products::list(&mut conn, SHOP).unwrap().len(),
+        0,
+        "a product landed without a number"
+    );
+}
+
+#[test]
 fn whitespace_only_barcode_counts_as_blank() {
     let (_dir, mut conn) = open_temp();
     let mut d = draft("A");

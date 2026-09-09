@@ -37,6 +37,7 @@
   "error_not_found": "غير موجود.",
   "error_money": "مبلغ أو نسبة غير صالحة.",
   "error_storage": "تعذّر الحفظ.",
+  "error_exhausted": "لم يتبقَّ أي رقم في هذه السلسلة.",
   "error_bad_request": "طلب غير صالح.",
   "error_bad_response": "رد غير متوقع من الخادم.",
   "error_unreachable": "الخادم غير متاح.",

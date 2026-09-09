@@ -146,10 +146,7 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
              qty_on_hand_milli, low_stock_at_milli, rate_bps",
             &["1", "'p'", "'piece'", "0", "0", "0", "0", "0", "1900"],
         ),
-        "categories" => (
-            "shop_id, name, default_rate_bps",
-            &["1", "'c'", "1900"],
-        ),
+        "categories" => ("shop_id, name, default_rate_bps", &["1", "'c'", "1900"]),
         "counters" => ("shop_id, name, next_value", &["1", "'probe'", "1"]),
         other => panic!("no insert template for {other}"),
     };
@@ -168,7 +165,12 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
     )
 }
 
-fn probe(conn: &mut SqliteConnection, table: &str, column: &str, literal: &str) -> QueryResult<usize> {
+fn probe(
+    conn: &mut SqliteConnection,
+    table: &str,
+    column: &str,
+    literal: &str,
+) -> QueryResult<usize> {
     diesel::sql_query(insert_with(table, column, literal)).execute(conn)
 }
 
@@ -254,7 +256,10 @@ fn a_lossless_real_is_stored_as_an_integer_by_strict_itself() {
         "SELECT COUNT(*) AS n FROM products \
          WHERE cost_centimes = 19 AND typeof(cost_centimes) = 'integer'",
     );
-    assert_eq!(integers, 2, "a lossless real or a numeric text was not coerced to integer");
+    assert_eq!(
+        integers, 2,
+        "a lossless real or a numeric text was not coerced to integer"
+    );
 }
 
 #[test]

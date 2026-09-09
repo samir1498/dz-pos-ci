@@ -37,6 +37,7 @@
   "error_not_found": "Not found.",
   "error_money": "Invalid amount or rate.",
   "error_storage": "Could not save.",
+  "error_exhausted": "No numbers left in this series.",
   "error_bad_request": "Invalid request.",
   "error_bad_response": "Unexpected answer from the server.",
   "error_unreachable": "Server unreachable.",
