@@ -86,7 +86,14 @@ impl From<JsonRejection> for ApiError {
 /// gives no structured form of it, so the text is where it has to come from.
 fn unknown_field(text: &str) -> Option<String> {
     let after = text.split_once("unknown field `")?.1;
-    let (name, _) = after.split_once('`')?;
+    // serde closes the name with "`, expected ..." (or "` at line" when
+    // there is nothing to expect), so the name runs up to that marker, not
+    // to the first backtick: a key like bo`gus is reported whole.
+    let end = after
+        .find("`, expected")
+        .or_else(|| after.find("` at line"))
+        .or_else(|| after.rfind('`'))?;
+    let name = &after[..end];
     if name.is_empty() || name.contains(char::is_whitespace) {
         return None;
     }
@@ -104,5 +111,30 @@ impl IntoResponse for ApiError {
             }),
         )
             .into_response()
+    }
+}
+
+#[cfg(test)]
+mod unknown_field_tests {
+    use super::unknown_field;
+
+    #[test]
+    fn the_whole_name_is_kept_even_with_a_backtick_inside() {
+        let text = "Failed to deserialize the JSON body into the target type: \
+                    unknown field `bo`gus`, expected one of `name`, `barcode` at line 1 column 12";
+        assert_eq!(unknown_field(text).as_deref(), Some("bo`gus"));
+    }
+
+    #[test]
+    fn a_plain_name_and_a_missing_marker_still_parse() {
+        assert_eq!(
+            unknown_field("unknown field `bogus`, expected `name`").as_deref(),
+            Some("bogus")
+        );
+        assert_eq!(
+            unknown_field("unknown field `bogus` at line 1").as_deref(),
+            Some("bogus")
+        );
+        assert_eq!(unknown_field("something else"), None);
     }
 }

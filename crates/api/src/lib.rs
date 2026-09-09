@@ -75,6 +75,34 @@ pub fn router(state: AppState) -> Router {
 /// Same routes, plus one more origin the operator names. The UI served from
 /// the WSL box and opened on the laptop is a real case and it is a decision,
 /// never a default.
+/// Turns the `--allow-origin` flag into a header value the CORS list will
+/// take. Checked before the server binds: tower-http panics on `*` inside
+/// `AllowOrigin::list`, and it did so after the listening line was printed,
+/// so a harness waiting on that line hung on a dead server. `null` would be
+/// echoed back to any sandboxed page. A trailing slash or a path never
+/// matches what a browser sends, so it is refused rather than silently
+/// never matching.
+pub fn origin_from_flag(flag: &str) -> Result<HeaderValue, String> {
+    let uri: axum::http::Uri = flag.parse().map_err(|_| format!("{flag}: not a URL"))?;
+    let scheme = uri.scheme_str().unwrap_or_default();
+    if !["http", "https", "tauri"].contains(&scheme) {
+        return Err(format!("{flag}: the scheme must be http, https or tauri"));
+    }
+    if uri.host().is_none_or(str::is_empty) {
+        return Err(format!("{flag}: no host"));
+    }
+    if uri
+        .path_and_query()
+        .is_some_and(|p| p.as_str() != "" && p.as_str() != "/")
+        || flag.ends_with('/')
+    {
+        return Err(format!(
+            "{flag}: an origin is scheme://host[:port], no path and no trailing slash"
+        ));
+    }
+    HeaderValue::from_str(flag).map_err(|_| format!("{flag}: not a valid header value"))
+}
+
 pub fn router_with_origin(state: AppState, extra: Option<HeaderValue>) -> Router {
     // TODO(M4): no auth. Nothing here identifies a caller yet, so the only
     // thing standing between a page and the shop's database is the origin
@@ -116,4 +144,36 @@ pub async fn bind(port: u16) -> std::io::Result<(tokio::net::TcpListener, u16)> 
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     let bound = listener.local_addr()?.port();
     Ok((listener, bound))
+}
+
+#[cfg(test)]
+mod origin_tests {
+    use super::origin_from_flag;
+
+    #[test]
+    fn a_plain_origin_is_accepted() {
+        for ok in [
+            "http://100.111.55.62:5173",
+            "http://localhost:5174",
+            "https://till.example",
+            "tauri://localhost",
+        ] {
+            assert!(origin_from_flag(ok).is_ok(), "{ok} was refused");
+        }
+    }
+
+    #[test]
+    fn a_wildcard_null_slash_path_or_space_is_refused_before_binding() {
+        for bad in [
+            "*",
+            "null",
+            "http://x:5173/",
+            "http://a b",
+            "http://x:5173/products",
+            "ftp://x",
+            "localhost:5173",
+        ] {
+            assert!(origin_from_flag(bad).is_err(), "{bad} was accepted");
+        }
+    }
 }

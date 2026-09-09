@@ -43,11 +43,14 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
             std::fs::create_dir_all(parent)?;
         }
     }
+    // Refused here, before anything binds, so a bad flag is one line on
+    // stderr and a non-zero exit rather than a panic behind a live port.
     let extra_origin = args
         .allow_origin
         .as_deref()
-        .map(axum::http::HeaderValue::from_str)
-        .transpose()?;
+        .map(dzpos_api::origin_from_flag)
+        .transpose()
+        .map_err(|why| format!("--allow-origin {why}"))?;
     let state = dzpos_api::AppState::open(&args.db, args.shop)?;
     let (listener, port) = dzpos_api::bind(args.port).await?;
     // The e2e harness waits on this line to know the port is live.
