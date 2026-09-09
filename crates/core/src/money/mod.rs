@@ -139,6 +139,11 @@ impl Money {
 }
 
 impl Bps {
+    /// No rate at all: an exempt line under the réel, and every line under
+    /// the IFU, where the price is a single price and the document mentions
+    /// no TVA (fixture `regime_ifu_prints_no_tva`).
+    pub const ZERO: Bps = Bps(0);
+
     /// A rate is at most one whole; 19 typed as 190 000 must not become
     /// 1 900 % TVA (fixture `tva_rounding_once_per_rate`, invalid rates).
     pub fn new(v: u32) -> Result<Self, MoneyError> {

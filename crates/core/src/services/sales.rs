@@ -11,7 +11,9 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::document::{Document, DocumentKind, NewDocument, NewDocumentLine, SellerBlock};
 use crate::models::stock::{Movement, MovementKind};
-use crate::money::{compute_totals, Line, Money, MoneyError, PaymentMode, TotalsOptions};
+use crate::money::{
+    compute_totals, Bps, Line, Money, MoneyError, PaymentMode, Regime, TotalsOptions,
+};
 use crate::services::{clock, documents, products, settings, shops, stock};
 
 /// Whether the droit de timbre applies at all. There is no shop setting for
@@ -77,7 +79,7 @@ pub fn issue(
 
         let mut priced = Vec::with_capacity(new.lines.len());
         for line in &new.lines {
-            priced.push(price(conn, shop_id, line)?);
+            priced.push(price(conn, shop_id, regime, line)?);
         }
 
         let money_lines: Vec<Line> = priced
@@ -200,6 +202,7 @@ struct PricedLine {
 fn price(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    regime: Regime,
     line: &NewSaleLine,
 ) -> Result<PricedLine, CoreError> {
     let product = products::get(conn, shop_id, line.product_id)?;
@@ -247,7 +250,14 @@ fn price(
         qty_milli: line.qty_milli,
         unit_price,
         line_discount: line.line_discount,
-        rate_bps: product.rate_bps,
+        // Under the IFU the price is a single price and the document mentions
+        // no TVA at all (fixture `regime_ifu_prints_no_tva`). The line stores
+        // no rate either, so the stored document says so on its own and a
+        // reprint never has to know the régime to hide one.
+        rate_bps: match regime {
+            Regime::Ifu => Bps::ZERO,
+            Regime::Reel => product.rate_bps,
+        },
         line_total: gross
             .checked_sub(line.line_discount)
             .map_err(too_large("line_discount"))?,

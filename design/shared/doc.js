@@ -41,6 +41,10 @@ export function renderA4(sale, lang) {
   const buyer = customer ?? { name: t("walk_in") };
   const oldBalance = customer?.debt ?? 0;
   const remaining = paymentMode === "credit" ? totals.netToPay : 0;
+  // The document says on its own whether it carries TVA: under the IFU every
+  // line is stored at rate 0 and the paper mentions no TVA at all
+  // (regime_ifu_prints_no_tva). The renderer never reads the régime.
+  const showTva = lines.some((l) => l.rateBps > 0);
   return `<article class="doc doc-a4" dir="${lang === "ar" ? "rtl" : "ltr"}">
     <header style="display:flex;justify-content:space-between;align-items:flex-start">
       <div><h1>${t("invoice").toUpperCase()}</h1>
@@ -53,12 +57,12 @@ export function renderA4(sale, lang) {
       ${partyBlock(t("buyer"), buyer)}
     </div>
     <table>
-      <thead><tr><th>${t("designation")}</th><th class="n">${t("qty")}</th><th class="n">${t("unit_price")}</th><th class="n">${t("tva")}</th><th class="n">${t("line_total")}</th></tr></thead>
+      <thead><tr><th>${t("designation")}</th><th class="n">${t("qty")}</th><th class="n">${t("unit_price")}</th>${showTva ? `<th class="n">${t("tva")}</th>` : ""}<th class="n">${t("line_total")}</th></tr></thead>
       <tbody>${lines
         .map(
           (l) => `<tr><td>${esc(lang === "ar" ? l.product.ar : l.product.name)}</td>
           <td class="n num">${qtyLabel(l.qtyMilli)}</td><td class="n num">${fmt(l.unitPrice, lang)}</td>
-          <td class="n num">${l.rateBps / 100}%</td><td class="n num">${fmt(lineTotal(l.unitPrice, l.qtyMilli) - (l.lineDiscount || 0), lang)}</td></tr>`,
+          ${showTva ? `<td class="n num">${l.rateBps / 100}%</td>` : ""}<td class="n num">${fmt(lineTotal(l.unitPrice, l.qtyMilli) - (l.lineDiscount || 0), lang)}</td></tr>`,
         )
         .join("")}</tbody>
     </table>

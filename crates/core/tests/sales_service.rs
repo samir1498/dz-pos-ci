@@ -546,6 +546,40 @@ fn the_document_keeps_the_regime_in_force_on_the_day_it_was_issued() {
 }
 
 #[test]
+fn an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime() {
+    // regime_ifu_prints_no_tva: under the IFU the price is a single price and
+    // the document mentions no TVA at all. If the line kept the product's
+    // 19 % the stored document would not say so, and the first renderer that
+    // printed a rate per line would put TVA on an IFU ticket.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Sucre", 10_000, 1900, Unit::Piece);
+    let reel = sales::issue(&mut conn, SHOP, OWNER, cash(vec![line(p, 1_000)], 20_000)).unwrap();
+    assert_eq!(reel.lines[0].rate_bps, Bps::new(1900).unwrap());
+
+    settings::set_regime(&mut conn, SHOP, OWNER, Regime::Ifu, at(10)).unwrap();
+    let mut later = cash(vec![line(p, 1_000)], 20_000);
+    later.issued_at = Some(at(11));
+    let ifu = sales::issue(&mut conn, SHOP, OWNER, later).unwrap();
+    // Read back, not the return value: what is on the paper is what is stored.
+    let read = documents::get(&mut conn, SHOP, ifu.id).unwrap();
+    assert_eq!(read.regime, Regime::Ifu);
+    for stored in &read.lines {
+        assert_eq!(
+            stored.rate_bps,
+            Bps::new(0).unwrap(),
+            "an IFU line kept a TVA rate"
+        );
+    }
+    assert!(read.totals.tva_by_rate.is_empty());
+    assert_eq!(read.totals.tva, Money::ZERO);
+    // The réel ticket issued before the change is untouched.
+    assert_eq!(
+        documents::get(&mut conn, SHOP, reel.id).unwrap().lines[0].rate_bps,
+        Bps::new(1900).unwrap()
+    );
+}
+
+#[test]
 fn the_seller_block_is_a_snapshot_a_later_rename_does_not_reach() {
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Sucre", 10_000, 1900, Unit::Piece);
