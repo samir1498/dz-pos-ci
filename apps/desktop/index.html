@@ -1,7 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr" dir="ltr">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Synchronous, blocking, and first in <head>, so it runs before the
+      // rest of the document parses and well before main.tsx (a deferred
+      // module script) can mount React. Without it, a return visitor who
+      // chose Arabic saw a flash of this LTR/fr fallback on every load:
+      // I18nProvider's effect (src/i18n/index.tsx) only sets these
+      // attributes once React has mounted, which is too late for first
+      // paint. Same guard as `initialLang` there: only fr/en/ar count.
+      (function () {
+        try {
+          var saved = window.localStorage.getItem("dzpos-lang");
+          var lang = saved === "en" || saved === "ar" ? saved : "fr";
+          document.documentElement.lang = lang;
+          document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+        } catch (e) {
+          // Storage blocked (private mode, some embeds): the fr/ltr
+          // already on <html> above stays.
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
