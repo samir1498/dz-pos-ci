@@ -3,11 +3,21 @@
 //! and, later, the phone are the same callers over the same routes
 //! (architecture.md rule 2 and its consequence).
 
+use std::sync::{Arc, Mutex};
+
 use tauri::Manager;
+
+/// The task serving the API, shared between `setup` and the run handler that
+/// stops it.
+type ApiTask = Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>;
 
 /// v1 is one shop and one SQLite file. M7 pairs a second till; the value
 /// stops being a constant then, not before.
 const SHOP_ID: i32 = 1;
+
+/// tauri.conf.json names no label for its one window, so it gets Tauri's
+/// default. The single-instance callback needs it by name.
+const MAIN_WINDOW: &str = "main";
 
 pub struct DbState {
     pub db_path: String,
@@ -29,14 +39,38 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // keeps two tills on one machine from fighting over 4317.
     let (listener, port) = tauri::async_runtime::block_on(dzpos_api::bind(0))?;
 
+    // Held so RunEvent::Exit can stop the server. The task owns the listener
+    // and the connection; leaving it running past the window would hold the
+    // port and the SQLite file open with nothing to answer for them. Two
+    // closures reach it, setup and the run handler, so it is shared.
+    let api_task: ApiTask = Arc::new(Mutex::new(None));
+    let started = Arc::clone(&api_task);
+
     tauri::Builder::default()
+        // First, per the plugin's own docs: it has to see the launch before
+        // anything else runs. A second dz-pos on one machine would open a
+        // second connection to the same file and bind a second port, so the
+        // second launch focuses the window that is already there.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+                // Best effort: a window that refuses to come forward is not
+                // a reason to fail the launch that is already running.
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .setup(move |app| {
             let router = dzpos_api::router(state);
-            tauri::async_runtime::spawn(async move {
+            let task = tauri::async_runtime::spawn(async move {
                 if let Err(e) = axum::serve(listener, router).await {
                     eprintln!("dz-pos API stopped: {e}");
                 }
             });
+            // A poisoned lock here would mean setup already panicked once.
+            if let Ok(mut slot) = started.lock() {
+                *slot = Some(task);
+            }
             app.manage(DbState { db_path });
             app.manage(ApiPort(port));
             Ok(())
@@ -51,7 +85,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 ))
                 .build(),
         )
-        .run(tauri::generate_context!())?;
+        .build(tauri::generate_context!())?
+        .run(move |_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                // The window is gone; nothing is left to serve. Aborting the
+                // task drops the listener and the connection with it.
+                if let Ok(mut slot) = api_task.lock() {
+                    if let Some(task) = slot.take() {
+                        task.abort();
+                    }
+                }
+            }
+        });
     Ok(())
 }
 
