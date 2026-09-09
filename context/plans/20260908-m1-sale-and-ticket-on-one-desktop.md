@@ -21,7 +21,7 @@ tasks:
     status: 'done'
   - id: 'T4'
     desc: 'Till screen: product search and barcode entry, lines, line and global discount, tendered and change, cash or card; e2e proves a sale reduces stock and the totals match the fixture; dz-review Pass 2 before merge; checkpoint PR to main'
-    status: 'pending'
+    status: 'done'
   - id: 'T5'
     desc: 'ticket_80mm template with golden files in fr, en and ar (Arabic disclosed as unreviewed like words_ar), rendered from the document; IFU ticket prints no TVA line (regime_ifu_prints_no_tva)'
     status: 'pending'
