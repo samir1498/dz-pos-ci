@@ -18,6 +18,10 @@ const artifactsDir = path.join(desktopDir, "e2e", ".artifacts");
 
 /** Deleted before every run, so the first screen is always the empty state. */
 const tempDb = path.join(artifactsDir, "e2e.db");
+/** The API puts its copies beside the database. Deleted with it: the backups
+ * spec starts from "no copy at all", and a folder left by the last run would
+ * make that first assertion pass or fail on history. */
+const tempBackups = path.join(artifactsDir, "backups");
 
 // Ports beside the dev ones (4317 API, 5173 Vite) so a running `just api`
 // / `just dev` pair does not collide with a test run. Two checkouts on one
@@ -105,7 +109,7 @@ export default defineConfig({
       // The API names its allowed origins (the dev Vite port and the Tauri
       // ones); the test Vite runs on another port, so it is passed in the
       // way the SSH case is: one extra origin on the command line.
-      command: `rm -f "${tempDb}" "${tempDb}-shm" "${tempDb}-wal" && cargo run -p dzpos-api -- --db "${tempDb}" --port ${apiPort} --allow-origin ${baseURL}`,
+      command: `rm -f "${tempDb}" "${tempDb}-shm" "${tempDb}-wal" "${tempDb}".before-restore-*.sqlite && rm -rf "${tempBackups}" && cargo run -p dzpos-api -- --db "${tempDb}" --port ${apiPort} --allow-origin ${baseURL}`,
       cwd: repoRoot,
       env: { ...cargoEnv, DZPOS_API_TOKEN: launchToken },
       url: `${apiUrl}/health`,
