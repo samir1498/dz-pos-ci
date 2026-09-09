@@ -18,7 +18,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'Document model in core with every kind but only ticket issued, gapless numbering per kind on take_next (no dedupe loop, so the counter test must pin the series), stock movements ledger, the sale service (lines, discounts, totals, stock out) and POST /sales; the facture-or-ticket rule written into features.md §3; the document row snapshots the seller block (seven shop fields) and the régime value with issued_at in the same transaction, since shops is replaced in place and a régime row can be back-dated (T2 review); the audit log covers settings and shops writes; dz-review Pass 2 before merge'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T4'
     desc: 'Till screen: product search and barcode entry, lines, line and global discount, tendered and change, cash or card; e2e proves a sale reduces stock and the totals match the fixture; dz-review Pass 2 before merge; checkpoint PR to main'
     status: 'pending'
@@ -33,7 +33,7 @@ tasks:
     status: 'done'
   - id: 'T8'
     desc: 'Daily backup of the SQLite file, keep 30, restore from settings, the backup test opens the copy; checkpoint PR to main closes M1 except T6'
-    status: 'pending'
+    status: 'in-progress'
 acceptance: []
 ---
 # M1: a sale and a ticket on one desktop
