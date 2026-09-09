@@ -18,6 +18,16 @@
 --
 -- Four added columns and no rebuild, so this migration runs inside the
 -- transaction diesel opens for it and opens none of its own.
+--
+-- What going down and back up costs. `down.sql` drops `ref_line_id`, so the
+-- avoir lines come back up naming no facture line: the amount a facture has
+-- already been credited for still reads correctly, because that is summed
+-- from the avoirs' own totals, but the quantity credited per line reads zero
+-- and every line of a part-credited facture offers its whole quantity again.
+-- The cap on the amount is what stops that being money, and re-crediting a
+-- line that has already come back is a stock count to correct rather than a
+-- figure to argue with. Said here rather than defended in code: a migration
+-- is reverted by hand, on purpose, by somebody who then has this file open.
 
 -- The moment on the shop's calendar, like `issued_at` beside it and never the
 -- column default's UTC: one hour a day the two would disagree about which day

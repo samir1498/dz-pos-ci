@@ -881,3 +881,73 @@ fn two_partials_that_finish_a_facture_reproduce_every_field_of_it() {
         assert_eq!(amount, row.amount.as_centimes(), "tva at {:?}", row.rate);
     }
 }
+
+/// The amended ruling (features.md §3): an avoir's excess over the facture it
+/// credits is not credit yet. It goes over the customer's other unpaid papers
+/// oldest first, the way a correction downwards does, and only what none of
+/// them can take is money the shop is holding.
+///
+/// The reason is what a customer would otherwise be told: that they hold a
+/// credit of 1 000,00 and owe 2 000,00 on a facture at the same time, two
+/// figures about one account that a shop then has to net out by hand.
+#[test]
+fn the_excess_of_an_avoir_fills_the_other_papers_before_it_becomes_credit() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let c = a_customer(&mut conn);
+
+    // The older facture, left open, and the newer one, paid off in full.
+    let older = a_facture(&mut conn, c, vec![line(p, 2_000)], PaymentMode::Credit, 10);
+    let paid = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 11);
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        c,
+        Money::centimes(500_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+    // Oldest first: the 2 000,00 filled the older facture and the 3 000,00
+    // left filled the newer one, so the account is square.
+    assert_eq!(debt::balance(&mut conn, SHOP, c).unwrap(), Money::ZERO);
+    assert_eq!(remaining(&mut conn, older.id), Money::ZERO);
+    assert_eq!(remaining(&mut conn, paid.id), Money::ZERO);
+
+    // A third facture, unpaid, for the excess to land on.
+    let open = a_facture(&mut conn, c, vec![line(p, 4_000)], PaymentMode::Credit, 13);
+    assert_eq!(remaining(&mut conn, open.id), Money::centimes(400_000));
+
+    // The whole of the paid facture comes back. It owes nothing, so all
+    // 3 000,00 of the avoir is excess.
+    avoir::issue(&mut conn, SHOP, OWNER, paid.id, None, None, Some(at(14))).unwrap();
+
+    assert_eq!(
+        remaining(&mut conn, open.id),
+        Money::centimes(100_000),
+        "the excess filled the open facture before becoming credit"
+    );
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, c).unwrap(),
+        Money::centimes(100_000)
+    );
+
+    // A second avoir, on the older facture, is bigger than what is left
+    // anywhere: 2 000,00 against 1 000,00 still open. The rest is credit.
+    avoir::issue(&mut conn, SHOP, OWNER, older.id, None, None, Some(at(15))).unwrap();
+    assert_eq!(remaining(&mut conn, open.id), Money::ZERO);
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, c).unwrap(),
+        Money::centimes(-100_000),
+        "what no paper could take is credit the shop is holding"
+    );
+}
+
+fn remaining(conn: &mut SqliteConnection, document_id: i32) -> Money {
+    documents::get(conn, SHOP, document_id)
+        .unwrap()
+        .balance
+        .map_or(Money::ZERO, |b| b.remaining_debt)
+}
