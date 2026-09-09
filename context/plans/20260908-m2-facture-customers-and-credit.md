@@ -24,7 +24,7 @@ tasks:
     status: 'pending'
   - id: 'T1'
     desc: 'Migration: customers (identifiers, party_kind company|consumer, credit_limit_centimes null = no limit and 0 = no credit, warn_threshold_centimes null = no warning, opening debt as the first ledger row), append-only debt_ledger (opening, sale, payment, avoir, adjustment; one of debit/credit zero), debt_allocations; documents rebuilt outside diesel''s transaction (foreign_keys OFF, twelve-step copy with ids, foreign_key_check, ON) with customer_id FK RESTRICT, kind admitting quittance (variant with series and prefix, nothing issues it), ref_document_id FK, the buyer block with buyer_party_kind, the balance triple; models, repos, customers and debt services with audit; previous-version test keeps every child row and id; no yearly reset (R8)'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T3'
     desc: 'Credit sale at the till (after T2''s customer routes): sales::issue takes customer_id, refuses credit without one, warns at the threshold and blocks when the balance after the sale exceeds the limit (0 = no credit; owner override audited until M4), writes document, stock movements and the debt row in one transaction, snapshots the balance triple (old_balance before, total_debt after, remaining_debt = this document''s unpaid part) and writes its definition into features.md §3; till gets the customer picker and the limit banner; a blocked credit sale burns no number; ticket_80mm gains a -credit golden ×3 with the balance amounts cross-checked; dz-review lenses before merge'
     status: 'pending'
