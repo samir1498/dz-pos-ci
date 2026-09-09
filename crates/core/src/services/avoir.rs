@@ -304,6 +304,26 @@ pub fn list_for(
     repo::avoirs_of(conn, shop_id, facture_id)
 }
 
+/// Whether any line of the facture still has something on it to credit.
+///
+/// What a cancellation asks before writing an avoir: a facture whose goods
+/// have all come back already is annulled without a second credit note, and
+/// calling `issue` to find that out would mean reading a refusal as an answer.
+pub fn anything_left(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    facture: &Document,
+) -> Result<bool, CoreError> {
+    let credited = credited_by_line(conn, shop_id, facture)?;
+    Ok(facture.lines.iter().any(|line| {
+        let taken = credited
+            .iter()
+            .find(|(id, _)| *id == line.id)
+            .map_or(0, |(_, qty)| *qty);
+        line.qty_milli.saturating_sub(taken) > 0
+    }))
+}
+
 /// What is still unpaid on a facture. A facture with no customer carries no
 /// triple at all, and nothing was ever owed on it.
 fn unpaid_on(facture: &Document) -> Money {

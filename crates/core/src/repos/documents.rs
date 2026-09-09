@@ -8,8 +8,8 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::document::{
-    assemble, Document, DocumentKind, DocumentLineRow, DocumentLineRowWrite, DocumentRow,
-    DocumentRowWrite, DocumentStatus, DocumentTvaRow, DocumentTvaRowWrite,
+    assemble, CancelWrite, Document, DocumentKind, DocumentLineRow, DocumentLineRowWrite,
+    DocumentRow, DocumentRowWrite, DocumentStatus, DocumentTvaRow, DocumentTvaRowWrite,
 };
 use crate::schema::{document_lines, document_tva, documents, products};
 
@@ -195,6 +195,26 @@ pub fn set_remaining_debt(
             .filter(documents::id.eq(document_id)),
     )
     .set(documents::remaining_debt_centimes.eq(Some(remaining_centimes)))
+    .execute(conn)?;
+    Ok(())
+}
+
+/// Marks one document annulée and writes the block that says when, by whom,
+/// why and with which avoir. The status and the four columns move in one
+/// statement, so the row can never say it was cancelled without saying by whom
+/// (`models::document::cancellation` refuses to read one that does).
+pub fn set_cancelled(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+    write: &CancelWrite,
+) -> Result<(), CoreError> {
+    diesel::update(
+        documents::table
+            .filter(documents::shop_id.eq(shop_id))
+            .filter(documents::id.eq(document_id)),
+    )
+    .set((documents::status.eq(DocumentStatus::Cancelled), write))
     .execute(conn)?;
     Ok(())
 }

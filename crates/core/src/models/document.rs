@@ -319,6 +319,17 @@ pub(crate) struct DocumentRowWrite {
     pub status: DocumentStatus,
 }
 
+/// The four columns a cancellation writes, together. `AsChangeset` rather than
+/// four `set` calls at the repo, so a cancellation cannot be written half way.
+#[derive(Debug, AsChangeset)]
+#[diesel(table_name = documents)]
+pub(crate) struct CancelWrite {
+    pub cancelled_at: NaiveDateTime,
+    pub cancelled_by: i32,
+    pub cancel_reason: String,
+    pub cancel_avoir_document_id: Option<i32>,
+}
+
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
 #[diesel(table_name = document_lines)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]

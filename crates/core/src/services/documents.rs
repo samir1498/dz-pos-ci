@@ -5,17 +5,20 @@
 //! in the decree, so the comptable answers question R8 before it becomes a
 //! setting; until then a series runs on across years.
 
+use chrono::NaiveDateTime;
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::document::{
-    payment_mode_stored, regime_stored, DocumentLineRowWrite, DocumentRowWrite, DocumentTvaRowWrite,
+    payment_mode_stored, regime_stored, CancelWrite, DocumentLineRowWrite, DocumentRowWrite,
+    DocumentTvaRowWrite,
 };
-use crate::money::Money;
+use crate::models::stock::{Movement, MovementKind};
+use crate::money::{Money, PaymentMode};
 use crate::repos::counters;
 use crate::repos::documents as repo;
-use crate::services::customers;
+use crate::services::{audit, avoir, clock, customers, optional_field, products, stock};
 
 pub use crate::models::document::{
     BalanceTriple, Cancellation, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
@@ -56,6 +59,176 @@ pub fn list(
     kind: Option<DocumentKind>,
 ) -> Result<Vec<Document>, CoreError> {
     repo::list(conn, shop_id, kind)
+}
+
+/// Annuls a document (features.md §3). It keeps its number and its row, so the
+/// series never gaps (décret 05-468 art. 10); what it stops doing is asking for
+/// its amount and holding the goods off the shelf.
+///
+/// How the money goes back depends on what the document did with it. A ticket
+/// or a cash facture took the money over the counter and owed nobody anything,
+/// so the goods come back on a return movement naming the document itself and
+/// nothing else is written. A facture that put money on a customer's account,
+/// whether it is still owed or has since been paid, is undone the way a
+/// facture is always undone: by a whole avoir, in this same transaction, which
+/// carries the goods and the money back together and leaves a numbered paper
+/// saying so. A facture whose goods have all come back on earlier avoirs is
+/// annulled with no second credit note at all: there is nothing left to carry.
+///
+/// An avoir and a proforma are refused. An avoir is the instrument that undoes
+/// a facture, and undoing it in turn would be a second reversal nobody can read
+/// against the first; a proforma is a quotation that moved nothing, so there is
+/// nothing to put back and no reason to spend a cancellation on it.
+///
+/// A document is cancelled once. The block a second cancellation would write
+/// over is who took the first one and why, which is the whole of what the log
+/// is keeping.
+///
+/// Cancelling a ticket that has already been printed stays allowed: until M4
+/// brings roles there is nobody to refuse it, and the audit entry carries the
+/// name of whoever took the decision.
+pub fn cancel(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    document_id: i32,
+    reason: String,
+    at: Option<NaiveDateTime>,
+) -> Result<Document, CoreError> {
+    let Some(reason) = optional_field("reason", Some(&reason))? else {
+        return Err(CoreError::validation(
+            "reason",
+            "a document is annulled for a stated reason",
+        ));
+    };
+    conn.transaction(|conn| {
+        let document = repo::get(conn, shop_id, document_id)?;
+        if document.status == DocumentStatus::Cancelled {
+            return Err(CoreError::validation(
+                "document_id",
+                "this document is already annulée",
+            ));
+        }
+        match document.kind {
+            DocumentKind::Avoir | DocumentKind::Proforma => {
+                return Err(CoreError::validation(
+                    "document_id",
+                    "an avoir and a proforma are not annulled",
+                ))
+            }
+            _ => {}
+        }
+        let at = at.unwrap_or_else(clock::now);
+
+        // A facture that put money on an account is undone by an avoir, which
+        // brings the goods and the money back in one numbered document. Every
+        // other document owed nobody anything, so only the goods move.
+        let avoir_document_id = if carries_money(&document) {
+            if avoir::anything_left(conn, shop_id, &document)? {
+                Some(
+                    avoir::issue(
+                        conn,
+                        shop_id,
+                        user_id,
+                        document_id,
+                        None,
+                        Some(reason.clone()),
+                        Some(at),
+                    )?
+                    .id,
+                )
+            } else {
+                None
+            }
+        } else {
+            return_the_goods(conn, shop_id, user_id, &document)?;
+            None
+        };
+
+        repo::set_cancelled(
+            conn,
+            shop_id,
+            document_id,
+            &CancelWrite {
+                cancelled_at: at,
+                cancelled_by: user_id,
+                cancel_reason: reason.clone(),
+                cancel_avoir_document_id: avoir_document_id,
+            },
+        )?;
+
+        audit::record(
+            conn,
+            shop_id,
+            user_id,
+            audit::Change {
+                action: audit::ACTION_CANCEL,
+                entity: "document",
+                entity_id: Some(document_id),
+                before: Some(
+                    serde_json::json!({
+                        "status": DocumentStatus::Issued.as_str(),
+                        "remaining_debt_centimes":
+                            document.balance.map(|b| b.remaining_debt.as_centimes()),
+                    })
+                    .to_string(),
+                ),
+                after: Some(
+                    serde_json::json!({
+                        "status": DocumentStatus::Cancelled.as_str(),
+                        "reason": reason,
+                        // Named rather than only counted: a reader asking why
+                        // a facture stopped asking for its amount is handed
+                        // the numbered paper that carried it back.
+                        "avoir_document_id": avoir_document_id,
+                    })
+                    .to_string(),
+                ),
+            },
+        )?;
+
+        repo::get(conn, shop_id, document_id)
+    })
+}
+
+/// Whether the document put money on a customer's account, and so has to be
+/// undone by an avoir rather than by the goods alone.
+///
+/// A credit sale is the plain case. A facture the customer has since paid is
+/// the other one: the ledger carries both the sale and the payment, and
+/// cancelling it has to leave the payment standing as credit the shop is
+/// holding rather than quietly cancel the money too.
+fn carries_money(document: &Document) -> bool {
+    document.customer_id.is_some() && document.payment_mode == PaymentMode::Credit
+}
+
+/// Puts the goods of a cancelled document back on the shelf, one movement per
+/// line, each naming the document that is no longer holding them.
+fn return_the_goods(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    document: &Document,
+) -> Result<(), CoreError> {
+    for line in &document.lines {
+        let Some(product_id) = line.product_id else {
+            continue;
+        };
+        let unit_cost = products::get(conn, shop_id, product_id)?.cost;
+        stock::record(
+            conn,
+            shop_id,
+            &Movement {
+                product_id,
+                kind: MovementKind::Return,
+                qty_milli: line.qty_milli,
+                unit_cost,
+                document_id: Some(document.id),
+                user_id,
+            },
+        )?;
+    }
+    Ok(())
 }
 
 /// Takes the next number of the kind's series and writes the document, its
