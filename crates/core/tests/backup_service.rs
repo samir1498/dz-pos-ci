@@ -71,7 +71,8 @@ fn the_copy_opens_and_holds_the_same_rows() {
 
     let summary = backup::verify(&made.path).unwrap();
     assert_eq!(summary.products, 2);
-    assert_eq!(summary.documents, None, "no documents table in M1 yet");
+    // The documents table exists since migration 2 and holds nothing here.
+    assert_eq!(summary.documents, Some(0));
 }
 
 #[test]
