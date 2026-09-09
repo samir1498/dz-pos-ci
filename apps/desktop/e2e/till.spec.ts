@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { APIRequestContext, Page } from "@playwright/test";
+import { formatCentimes } from "@dzpos/shared";
 import { apiHeaders, apiUrl } from "./api";
 import { currentLang, t } from "./messages";
 
@@ -100,8 +101,18 @@ function today(): string {
  * the IFU a ticket carries no TVA row at all. Stating the régime here rather
  * than depending on the order of two spec files is what keeps this test
  * about the till.
+ *
+ * It asks before it writes: the core refuses a régime the shop is already
+ * under on that day (services/settings.rs, so a comptable's "since" date is
+ * never moved to the day of a click). Posting blind works only when the
+ * settings suite has just switched the shop to the IFU, which is the very
+ * dependency this function exists to remove.
  */
 async function useReelRegime(request: APIRequestContext): Promise<void> {
+  const current = await request.get(`${apiUrl()}/settings`, { headers: apiHeaders() });
+  expect(current.ok()).toBe(true);
+  const settings: { regime: { regime: string } } = await current.json();
+  if (settings.regime.regime === "reel") return;
   const res = await request.post(`${apiUrl()}/settings/regime`, {
     headers: apiHeaders(),
     data: { regime: "reel", valid_from: today() },
@@ -218,6 +229,12 @@ test("sells two rates for cash, matches the fixture totals, reduces the stock an
   const receipt = page.getByRole("region", { name: t("till_receipt") });
   await expect(receipt.getByText(COFFEE)).toBeVisible();
   await expect(receipt.getByText(TOMATO)).toBeVisible();
+  // The amount too, not only the names: the panel is a read of the stored
+  // document, so its net to pay is the fixture's, formatted the way the
+  // shop reads money.
+  await expect(receipt.getByTestId("total-net-to-pay")).toHaveText(
+    formatCentimes(expected.net_to_pay),
+  );
 
   // Stock left by exactly what was sold, not by a rounded unit.
   expect(await stockOf(request, COFFEE_BARCODE)).toBe(COFFEE_STOCK_MILLI - COFFEE_SOLD_MILLI);
