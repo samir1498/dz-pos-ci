@@ -85,7 +85,7 @@ barrel. From `.claude/skills/mobile-design-system/SKILL.md`:
 
 The rule, quoted from the skill: "Never hardcode colors (or
 spacing/radius/font sizes) in components." And on tier 1, quoted from
-`primitives.ts`: "Do not reference these directly in components — consume
+`primitives.ts`: "Do not reference these directly in components, consume
 the semantic `theme` (design/theme.ts) instead."
 
 Components import one thing, `import { theme } from "@/design"`. The skill
@@ -128,7 +128,7 @@ groups `builtin, external, internal, parent, sibling, index`,
 block reviewable without thinking, and it survives a merge.
 
 **Never call the analytics SDK.** From `CLAUDE.md` under Analytics:
-"**Always use `useTrackEvent()` (`hooks/useEventTracking.ts`)** — never
+"**Always use `useTrackEvent()` (`hooks/useEventTracking.ts`)**, never
 call `posthog.capture` or `appsFlyer.logEvent` directly." One hook fans out
 to two sinks and applies the opt-out flag. The skill
 `.claude/skills/track-events/SKILL.md` repeats it as the first line. Worth
@@ -140,7 +140,7 @@ site will read it.
 one level above the project, under Hard Rules: "never copy a raw Figma
 pixel (e.g. `55`, `231`, `32`) into StyleSheet. Use `theme.spacing` /
 `theme.radius` tokens, `%`, `flex`, or `gap`. If a Figma value has no
-token, use the closest token or a percentage of the container — do not
+token, use the closest token or a percentage of the container, do not
 invent a one-off number." Worth keeping because it turns a judgement call
 into a lookup, and because it makes the design system's coverage gaps
 visible instead of absorbing them into one-off numbers.
@@ -165,14 +165,14 @@ Worth keeping because it is a real re-render bug with no visible symptom
 until a list gets long.
 
 **No native folders.** `AGENTS.md`: "DO NOT TOUCH `brainqraft-mobile/android/`
-— generated, not source." Anything native goes in `app.json` or `plugins/`.
+,  generated, not source." Anything native goes in `app.json` or `plugins/`.
 The dz-pos parallel is `src-tauri/gen` and anything Expo prebuild writes.
 
 ## Styling rules
 
 React Native `StyleSheet` or inline styles, fed by `theme`. The skill opens
 by ruling the alternatives out by name so a stale doc cannot revive them:
-"There is **no NativeWind, Tailwind, cva, or styled-components** — ignore
+"There is **no NativeWind, Tailwind, cva, or styled-components**, ignore
 any older docs that say otherwise."
 
 Colours, spacing, radius, border width, font size, line height and font
@@ -191,7 +191,7 @@ site rather than baked into the token:
 
 Line heights are 1:1 with font size in the token scale because that is what
 Figma says, and the skill says so plainly rather than fixing it quietly:
-"line-heights equal their font-size (ratio 1.0, tight) — faithful to
+"line-heights equal their font-size (ratio 1.0, tight), faithful to
 Figma. If body text feels cramped, that's why." Worth keeping the habit:
 when the token is inconvenient but correct, document the inconvenience.
 

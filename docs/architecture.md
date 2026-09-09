@@ -1,4 +1,4 @@
-# Architecture — how dz-pos is built
+# Architecture: how dz-pos is built
 
 Normative. The reasoning behind each rule is in the research repo
 (`architecture-notes.md` in the dz-pos competitor folder); this file is

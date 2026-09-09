@@ -1,4 +1,4 @@
-# Features — what dz-pos does
+# Features: what dz-pos does
 
 Normative. If a screen or a rule is not here, it is not in scope. The
 competitor teardown, the Algerian facture field list and the market notes
@@ -37,7 +37,7 @@ what blocks it; this list is the order in one glance.
 5. Users and roles.
 6. First release: installer, updater, signing, versioned migrations.
 7. LAN mode: one desktop serves, phones and second tills pair by QR.
-8. Cloud mode — only after Anouar decides (open decision 1).
+8. Cloud mode, only after Anouar decides (open decision 1).
 
 The sections below keep their original numbering; it names the area, not
 the order.
@@ -132,7 +132,7 @@ avoir is its own kind with its own series. A yearly reset of the series is
 common practice but not in the decree; confirm with the comptable (R8)
 before it becomes a setting.
 
-### Fiscal rules — current assumptions
+### Fiscal rules: current assumptions
 
 Each row names the fixture that pins it and the source that decides it.
 "assumption" means nobody has read the law for it yet; a source cites code,
@@ -171,7 +171,7 @@ Owner, manager, cashier. Login by PIN on the till, password elsewhere.
 Permissions: sell, give discount above X %, override credit block, see cost
 prices and margins, edit products, edit settings, see reports. Every
 document records the user. Audit log of sensitive actions (price change,
-discount override, delete, settings change) — an ISO-27001 control we get
+discount override, delete, settings change), an ISO-27001 control we get
 for nearly free by writing it now. An owner user exists from the first
 migration, so every document, ledger row and audit entry carries a user
 from the first sale (build-order step 2); PIN, roles and permissions

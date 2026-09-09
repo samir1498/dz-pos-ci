@@ -1,4 +1,4 @@
-# CLAUDE.md — dz-pos
+# CLAUDE.md for dz-pos
 
 Placeholder-named product. Read `README.md` first. Every rule lives in
 `context/` (the pc-ctx store) so the laptop clone and every session read

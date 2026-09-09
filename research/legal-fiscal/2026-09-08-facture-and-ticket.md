@@ -45,7 +45,7 @@ look truncated.
 
 Loi 10-06 art. 3 rewrote art. 10 whole. The text in force reads:
 
-> « Art. 10. — Toute vente de biens ou prestation de services effectuée
+> « Art. 10., Toute vente de biens ou prestation de services effectuée
 > entre les agents économiques exerçant les activités citées à l'article 2
 > ci-dessus doit faire l'objet d'une facture ou d'un document en tenant lieu.
 >
@@ -108,12 +108,12 @@ the document "dès la réalisation de la vente".
 
 ### The sanction
 
-> Art. 33. — Sans préjudice des sanctions prévues par la législation fiscale,
+> Art. 33., Sans préjudice des sanctions prévues par la législation fiscale,
 > toute infraction aux dispositions des articles 10, 11 et 13 de la présente
 > loi, est qualifiée de défaut de facturation et punie d'une amende égale à
 > 80% du montant qui aurait dû être facturé quelle que soit sa valeur.
 
-> Art. 34. — Est qualifiée de facture non conforme, toute infraction aux
+> Art. 34., Est qualifiée de facture non conforme, toute infraction aux
 > dispositions de l'article 12 de la présente loi et punie d'une amende de
 > dix mille dinars (10.000 DA) à cinquante mille dinars (50.000 DA), à
 > condition que la non conformité ne porte pas sur le nom ou la raison
@@ -142,7 +142,7 @@ d'identification statistique" for the seller and for the buyer. Loi n° 05-16
 du 31 décembre 2005 portant loi de finances pour 2006, art. 42, replaced that
 reference across the tax codes:
 
-> Art. 42. — La référence au numéro d'identification statistique (NIS)
+> Art. 42., La référence au numéro d'identification statistique (NIS)
 > contenue dans les divers codes fiscaux est remplacée par celle du numéro
 > d'identification fiscale (NIF). Les codes des impôts sont annotés en
 > conséquence.
@@ -238,7 +238,7 @@ Décret 16-66 defines the "document tenant lieu de facture" promised by art. 10
 alinéa 4 and names it *bon de transaction commerciale*. Its art. 3 fixes who
 must use it:
 
-> Art. 3. — Les catégories d'agents économiques prévues à l'article 1er
+> Art. 3., Les catégories d'agents économiques prévues à l'article 1er
 > ci-dessus, englobe les opérateurs intervenant dans les secteurs de
 > l'agriculture, de la pêche et de l'aquaculture ainsi que celui de
 > l'artisanat et des métiers.
@@ -272,16 +272,16 @@ It was signed 1 August 2013 and published nine months later in JO n° 30 of
 21 May 2014, p. 7. It defines the false facture and the facture de complaisance
 under art. 65 of loi 02-11 (LF 2003) and CIDTA art. 219 bis.
 
-> Art. 2. — La fausse facture, est la facture établie sans avoir procédé à
+> Art. 2., La fausse facture, est la facture établie sans avoir procédé à
 > aucune livraison ou prestation [...]
 
-> Art. 3. — Il est entendu par facture de complaisance, le fait de camoufler
+> Art. 3., Il est entendu par facture de complaisance, le fait de camoufler
 > ou de dissimuler sur une facture, l'identité ou l'adresse de ses fournisseurs
 > ou de ses clients, ou d'accepter sciemment l'utilisation d'une identité
 > fictive ou d'un prête-nom [...] La facture de complaisance correspond à un
 > achat, une vente ou une prestation de service réel.
 
-> Art. 4. — L'établissement de fausses factures ou de factures de complaisance
+> Art. 4., L'établissement de fausses factures ou de factures de complaisance
 > entraîne l'application d'une amende fiscale égale à 50% de leur valeur et ce,
 > conformément aux dispositions de l'article 65 de la loi n° 02-11 [...]
 >
