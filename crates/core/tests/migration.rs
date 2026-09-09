@@ -810,11 +810,20 @@ fn a_shop_with_a_document_or_an_audit_entry_cannot_be_deleted() {
     // them: décret 05-468 art. 10 wants an uninterrupted series, and a series
     // a DELETE can empty is not one. The second shop carries only the row
     // under test, so each FK is the reason its own delete fails.
+    //
+    // `is_err()` alone would stay green on a CHECK, a locked file or a typo in
+    // the DELETE, so the reason is asserted and the row is counted after: the
+    // point is not that the statement failed, it is that the ledger is still
+    // there. diesel maps the bundled SQLite's foreign key error to
+    // `DatabaseErrorKind::Unknown` rather than `ForeignKeyViolation`, so the
+    // engine's own sentence is what names the reason here.
+    use diesel::result::Error as DieselError;
     let (_dir, mut conn) = open_temp();
     seed_for_probes(&mut conn);
-    for (what, insert) in [
+    for (what, table, insert) in [
         (
             "a document",
+            "documents",
             "INSERT INTO documents (shop_id, kind, series, number, issued_at, user_id, \
              regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
              subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
@@ -824,6 +833,7 @@ fn a_shop_with_a_document_or_an_audit_entry_cannot_be_deleted() {
         ),
         (
             "an audit entry",
+            "audit_log",
             "INSERT INTO audit_log (shop_id, user_id, action, entity, entity_id) \
              VALUES (2, 1, 'update', 'product', 1)",
         ),
@@ -833,18 +843,37 @@ fn a_shop_with_a_document_or_an_audit_entry_cannot_be_deleted() {
             .unwrap();
         diesel::sql_query(insert).execute(&mut conn).unwrap();
         let deleted = diesel::sql_query("DELETE FROM shops WHERE id = 2").execute(&mut conn);
-        assert!(
-            deleted.is_err(),
-            "a shop was deleted and took {what} with it"
+        let err = deleted
+            .err()
+            .unwrap_or_else(|| panic!("a shop was deleted and took {what} with it"));
+        let reason = match &err {
+            DieselError::DatabaseError(_, info) => info.message().to_string(),
+            other => panic!("{what}: the delete failed outside the database: {other:?}"),
+        };
+        assert_eq!(
+            reason, "FOREIGN KEY constraint failed",
+            "{what}: the delete failed for something other than the foreign key"
         );
-        diesel::sql_query("DELETE FROM documents WHERE shop_id = 2")
-            .execute(&mut conn)
-            .unwrap();
-        diesel::sql_query("DELETE FROM audit_log WHERE shop_id = 2")
-            .execute(&mut conn)
-            .unwrap();
-        diesel::sql_query("DELETE FROM shops WHERE id = 2")
-            .execute(&mut conn)
-            .unwrap();
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!("SELECT COUNT(*) AS n FROM {table} WHERE shop_id = 2")
+            ),
+            1,
+            "{what} did not survive the refused delete"
+        );
+        assert_eq!(
+            count(&mut conn, "SELECT COUNT(*) AS n FROM shops WHERE id = 2"),
+            1,
+            "the shop row went even though the delete was refused"
+        );
+        for cleanup in [
+            "DELETE FROM stock_movements WHERE shop_id = 2",
+            "DELETE FROM documents WHERE shop_id = 2",
+            "DELETE FROM audit_log WHERE shop_id = 2",
+            "DELETE FROM shops WHERE id = 2",
+        ] {
+            diesel::sql_query(cleanup).execute(&mut conn).unwrap();
+        }
     }
 }
