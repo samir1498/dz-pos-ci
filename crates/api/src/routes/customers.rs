@@ -11,12 +11,13 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::Html;
 use axum::Json;
+use chrono::Utc;
 use dzpos_core::db::Conn;
 use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
 use dzpos_core::print::{render_statement, Paper};
 use dzpos_core::services::customers::NewCustomer;
-use dzpos_core::services::{clock, customers as service, debt};
+use dzpos_core::services::{customers as service, debt};
 use serde::Deserialize;
 
 use crate::dto::{
@@ -162,10 +163,15 @@ pub async fn pay(
     let shop = state.shop_id;
     // TODO(M4): the user comes from the request identity, not from the state.
     let user = state.user_id;
-    // The moment is the server's, like a document's `issued_at`: a till whose
-    // clock is wrong must not decide which side of a statement's date range a
-    // payment falls on.
-    let at = clock::now();
+    // The moment is the server's, not the till's: a machine whose clock is
+    // wrong must not decide which side of a statement's date range a payment
+    // falls on. UTC and not the shop's calendar, because every other row of
+    // `debt_ledger` is stamped by the column's own CURRENT_TIMESTAMP, which
+    // is UTC: a payment an hour ahead of the sale beside it would sort before
+    // rows written after it and the statement's running balance would read in
+    // the wrong order. The ledger reading UTC while a document's `issued_at`
+    // reads the shop's calendar is a disagreement older than this route.
+    let at = Utc::now().naive_utc();
     let written = state
         .blocking(move |c| {
             debt::pay(c, shop, user, id, amount, mode, note, at)?;

@@ -521,6 +521,20 @@ pub fn append(
     shop_id: i32,
     entry: NewDebtEntry,
 ) -> Result<DebtEntry, CoreError> {
+    append_at(conn, shop_id, entry, None)
+}
+
+/// The same movement, stamped with the moment it belongs to rather than with
+/// the moment it was written. `None` leaves the column's own default, which
+/// is what every caller ringing something up wants; a caller that knows when
+/// the money moved says so, and the statement's date range then reads the day
+/// the shop would say it was.
+pub fn append_at(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    entry: NewDebtEntry,
+    at: Option<NaiveDateTime>,
+) -> Result<DebtEntry, CoreError> {
     ensure_customer(conn, shop_id, entry.customer_id)?;
     // The document a movement cites is checked the same way the allocation's
     // is: a statement that names a document this shop never issued is worse
@@ -565,10 +579,9 @@ pub fn append(
             user_id: entry.user_id,
             note,
             // A movement that is not a payment was not handed over in
-            // anything, and it is stamped by the file's own clock. `pay`
-            // is the one writer that fills both in.
+            // anything. `pay` is the one writer that fills the mode in.
             payment_mode: None,
-            created_at: None,
+            created_at: at,
         },
     )
 }

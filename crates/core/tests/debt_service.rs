@@ -782,7 +782,10 @@ fn a_document_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64,
         },
     )
     .unwrap();
-    debt::append(
+    // Stamped with the day the document was issued, not the day the test
+    // runs: a fixture dated by the wall clock would drift in and out of the
+    // ranges the statement tests read, and pass or fail by the calendar.
+    debt::append_at(
         conn,
         SHOP,
         NewDebtEntry {
@@ -794,9 +797,32 @@ fn a_document_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64,
             user_id: OWNER,
             note: None,
         },
+        Some(issued_at),
     )
     .unwrap();
     doc.id
+}
+
+/// What the customer owed before the range, written as an opening balance on
+/// a day of its own. `customers::create` can carry an opening debt, but the
+/// row it writes is stamped now, and a statement test needs the movement to
+/// sit on a day it chose.
+fn an_opening_balance(conn: &mut SqliteConnection, customer_id: i32, centimes: i64, day: u32) {
+    debt::append_at(
+        conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id,
+            document_id: None,
+            kind: DebtKind::Opening,
+            debit: Money::centimes(centimes),
+            credit: Money::ZERO,
+            user_id: OWNER,
+            note: None,
+        },
+        Some(at(day)),
+    )
+    .unwrap();
 }
 
 fn at(day: u32) -> chrono::NaiveDateTime {
@@ -1207,18 +1233,11 @@ fn the_payments_of_a_customer_read_back_newest_first_with_what_each_one_settled(
 #[test]
 fn a_statement_opens_at_what_was_owed_before_the_range_and_closes_at_the_last_movement_in_it() {
     let (_dir, mut conn) = open_temp();
-    let customer = customers::create(
-        &mut conn,
-        SHOP,
-        OWNER,
-        fiche("Entreprise Benali"),
-        Some(Money::centimes(150_000)),
-    )
-    .unwrap()
-    .id;
-    // Three movements dated by hand: one before the range, one inside it and
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    // Four movements dated by hand: two before the range, one inside it and
     // one after. A range that took the wrong side of either day would read
     // the wrong opening or the wrong closing balance.
+    an_opening_balance(&mut conn, customer, 150_000, 1);
     let document = a_document_on_credit(&mut conn, customer, 200_000, 5);
     debt::pay(
         &mut conn,
@@ -1312,15 +1331,8 @@ fn a_range_that_ends_before_it_starts_is_refused() {
 #[test]
 fn a_range_with_nothing_in_it_closes_where_it_opened() {
     let (_dir, mut conn) = open_temp();
-    let customer = customers::create(
-        &mut conn,
-        SHOP,
-        OWNER,
-        fiche("Entreprise Benali"),
-        Some(Money::centimes(150_000)),
-    )
-    .unwrap()
-    .id;
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    an_opening_balance(&mut conn, customer, 150_000, 1);
 
     let range = debt::statement_between(
         &mut conn,

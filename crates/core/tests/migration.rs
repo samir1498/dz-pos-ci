@@ -52,6 +52,36 @@ fn open_at_migration(n: usize) -> (tempfile::TempDir, SqliteConnection) {
     (dir, conn)
 }
 
+/// A database carrying every migration up to but not including the one whose
+/// name contains `marker`, so that migration can be applied to a file that
+/// already holds a shop's data. Named rather than numbered because a
+/// migration written on another branch can land in between and shift every
+/// ordinal after it; the file this opens is the one this migration actually
+/// runs against.
+fn open_before_migration(marker: &str) -> (tempfile::TempDir, SqliteConnection) {
+    use diesel::connection::SimpleConnection;
+    use diesel::migration::Migration;
+    use diesel_migrations::MigrationHarness;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let mut conn = SqliteConnection::establish(&path.to_string_lossy()).unwrap();
+    conn.batch_execute("PRAGMA foreign_keys=ON;").unwrap();
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    let mut reached = false;
+    for migration in pending.iter() {
+        if Migration::<diesel::sqlite::Sqlite>::name(migration.as_ref())
+            .to_string()
+            .contains(marker)
+        {
+            reached = true;
+            break;
+        }
+        conn.run_migration(migration).unwrap();
+    }
+    assert!(reached, "no migration is named {marker}");
+    (dir, conn)
+}
+
 /// What `shops(id)` does to a row of `table` when the shop is deleted, as
 /// SQLite itself reports it.
 fn on_delete_from_shops(conn: &mut SqliteConnection, table: &str) -> String {
@@ -1200,14 +1230,14 @@ fn a_database_at_the_third_migration_takes_the_fourth() {
 }
 
 #[test]
-fn a_database_at_the_fourth_migration_takes_the_fifth() {
+fn a_database_without_the_payment_mode_column_takes_the_migration_that_adds_it() {
     // architecture.md, Data: a migration ships with a test that opens a
     // database built by the previous ones and applies it. This one adds one
     // nullable column to a table that already holds movements, so what has to
     // be proved is that the movements are still there, still say what they
     // said, and read as no payment mode at all rather than as a made-up one.
     use diesel_migrations::MigrationHarness;
-    let (_dir, mut conn) = open_at_migration(4);
+    let (_dir, mut conn) = open_before_migration("debt_payment_mode");
     assert_eq!(
         count(
             &mut conn,
@@ -1215,7 +1245,7 @@ fn a_database_at_the_fourth_migration_takes_the_fifth() {
              WHERE name = 'payment_mode'"
         ),
         0,
-        "migration 4 is not the version this test claims to start from"
+        "the file this starts from already carries the column"
     );
     diesel::sql_query(
         "INSERT INTO customers (id, shop_id, name, party_kind) VALUES (1, 1, 'Ahmed', 'consumer')",

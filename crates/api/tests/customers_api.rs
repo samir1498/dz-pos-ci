@@ -390,7 +390,7 @@ async fn another_shops_customer_is_not_found_on_every_route() {
         ("GET", format!("/customers/{id}/payments"), None),
         (
             "GET",
-            format!("/customers/{id}/statement?from=2026-01-01&to=2026-09-30&lang=fr"),
+            format!("/customers/{id}/statement?from=2026-01-01&to=2099-12-31&lang=fr"),
             None,
         ),
         (
@@ -435,7 +435,7 @@ async fn every_customer_route_needs_the_launch_token() {
         ("POST", "/customers/1/payments"),
         (
             "GET",
-            "/customers/1/statement?from=2026-01-01&to=2026-09-30&lang=fr",
+            "/customers/1/statement?from=2026-01-01&to=2099-12-31&lang=fr",
         ),
     ] {
         let req = Request::builder()
@@ -521,7 +521,10 @@ async fn an_amount_past_the_safe_integer_bound_is_422_naming_the_field() {
 // settlement half of the contract.
 
 /// A facture made out to `customer` for `net` centimes, unpaid, issued on the
-/// day given so the oldest-first order is a fact of the fixture.
+/// day of August 2026 given, so the oldest-first order is a fact of the
+/// fixture. August because the payment beside it is stamped by the server's
+/// own clock: a fixture dated after that clock would sit on the wrong side of
+/// the payment and the running balance of the statement would read backwards.
 fn a_facture_on_credit(path: &std::path::Path, customer_id: i32, net: i64, day: u32) -> i32 {
     use dzpos_core::money::{Money, PaymentMode, Regime, Totals};
     use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry};
@@ -531,7 +534,7 @@ fn a_facture_on_credit(path: &std::path::Path, customer_id: i32, net: i64, day: 
 
     let mut conn = dzpos_core::db::open(path).unwrap();
     let net = Money::centimes(net);
-    let issued_at = chrono::NaiveDate::from_ymd_opt(2026, 9, day)
+    let issued_at = chrono::NaiveDate::from_ymd_opt(2026, 8, day)
         .and_then(|d| d.and_hms_opt(10, 0, 0))
         .unwrap();
     let before = debt::balance(&mut conn, SHOP, customer_id).unwrap();
@@ -585,7 +588,10 @@ fn a_facture_on_credit(path: &std::path::Path, customer_id: i32, net: i64, day: 
         },
     )
     .unwrap();
-    debt::append(
+    // Stamped with the day the facture was issued rather than with the moment
+    // the test runs, so the day it lands on is the fixture's and not the
+    // calendar's.
+    debt::append_at(
         &mut conn,
         SHOP,
         NewDebtEntry {
@@ -597,6 +603,7 @@ fn a_facture_on_credit(path: &std::path::Path, customer_id: i32, net: i64, day: 
             user_id: 1,
             note: None,
         },
+        Some(issued_at),
     )
     .unwrap();
     doc.id
@@ -630,7 +637,7 @@ async fn a_payment_settles_the_oldest_facture_first_and_answers_the_new_balance(
 
     assert_eq!(status, StatusCode::CREATED, "{answer}");
     assert_eq!(answer["customer_id"], id);
-    assert_eq!(answer["balance_centimes"], 150_000);
+    assert_eq!(answer["balance_centimes"], 150_000, "{answer}");
     let payment = &answer["payments"][0];
     assert_eq!(payment["amount_centimes"], 150_000);
     assert_eq!(payment["payment_mode"], "cash");
@@ -801,10 +808,11 @@ async fn the_statement_prints_the_range_with_the_closing_balance_in_words() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{answer}");
 
-    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    // A range wide enough that the movement the route stamped with the
+    // server's own clock is inside it whatever day the test runs on.
     let (status, html) = page(
         &h.app,
-        &format!("/customers/{id}/statement?from=2026-01-01&to={today}&lang=fr"),
+        &format!("/customers/{id}/statement?from=2026-01-01&to=2099-12-31&lang=fr"),
     )
     .await;
 
