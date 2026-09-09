@@ -199,6 +199,13 @@ ledger when the document is issued and stored on it, so a reprint six
 months later prints the balance the customer was handed and never a sum of
 today's ledger. A document that names no customer stores none of the three.
 
+`remaining_debt` is the one of the three that moves after the document is
+issued, and it moves for both of the things that lower what a customer owes:
+a payment, and a correction downwards. Both settle the customer's documents
+oldest first, so Σ `remaining_debt` over a customer's issued documents is
+never more than the ledger balance, and a document never goes on asking for
+an amount the ledger says is no longer owed.
+
 Because the limit is tested on `total_debt` and not on the basket, a
 customer whose balance is negative may buy on credit up to what the shop
 already holds for them, whatever the limit says. A deposit or an avoir

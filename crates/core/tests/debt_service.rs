@@ -1590,3 +1590,168 @@ fn a_payment_never_reaches_the_documents_of_the_other_customer() {
         "the other customer's balance moved"
     );
 }
+
+#[test]
+fn a_correction_downwards_settles_the_oldest_documents_the_way_a_payment_does() {
+    // A discount agreed after the facture was printed, a returned bag of
+    // cement, a keying mistake: the correction lowers the debt, and the paper
+    // it lowers has to say so too. Otherwise the document keeps asking for
+    // 1 000,00 while the ledger says 700,00, and a payment of what is really
+    // owed is refused by the very documents it was meant to close.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-30_000),
+        Some("remise accordée après coup".to_string()),
+    )
+    .unwrap();
+
+    assert_eq!(
+        corrected
+            .allocations
+            .iter()
+            .map(|a| (a.document_id, a.amount.as_centimes()))
+            .collect::<Vec<(i32, i64)>>(),
+        [(document, 30_000)]
+    );
+    assert_eq!(remaining_debt(&mut conn, document), Money::centimes(70_000));
+
+    // And what is left on the paper is exactly what the customer can now pay
+    // off it, in one go and without a refusal.
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(70_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+    assert_eq!(paid.balance_after, Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, document), Money::ZERO);
+}
+
+#[test]
+fn a_correction_upwards_is_debt_that_no_document_carries() {
+    // Money owed that no paper asks for: it raises the balance and leaves
+    // every document exactly as it was. Nothing to settle means nothing to
+    // allocate, and a facture must never grow because a correction did.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(20_000),
+        None,
+    )
+    .unwrap();
+
+    assert!(corrected.allocations.is_empty());
+    assert_eq!(
+        remaining_debt(&mut conn, document),
+        Money::centimes(100_000)
+    );
+    assert_eq!(corrected.statement.balance, Money::centimes(120_000));
+}
+
+#[test]
+fn a_correction_downwards_is_audited_with_what_it_took_off_each_document() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let first = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let second = a_document_on_credit(&mut conn, customer, 200_000, 11);
+
+    debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-150_000),
+        None,
+    )
+    .unwrap();
+
+    let log = audit::list(&mut conn, SHOP).unwrap();
+    let entry = log
+        .iter()
+        .find(|e| e.action == "adjust_debt")
+        .expect("the correction left no audit entry");
+    let after: serde_json::Value =
+        serde_json::from_str(entry.after.as_deref().unwrap_or("null")).unwrap();
+    assert_eq!(
+        after["allocations"],
+        serde_json::json!([
+            { "document_id": first, "amount_centimes": 100_000 },
+            { "document_id": second, "amount_centimes": 50_000 },
+        ])
+    );
+}
+
+#[test]
+fn credit_taken_before_the_facture_existed_stays_on_the_ledger_and_not_on_the_paper() {
+    // Frozen from the property run in tests/debt_prop.rs, which found it
+    // while the invariant was written as "the papers never ask for more than
+    // the balance": correct 100,00 off an account that owes nothing, then
+    // sell 100,00 on credit. The customer owes nothing, and the facture still
+    // asks for its whole net, because that is what a facture is issued with
+    // (features.md §3) and there was nothing unpaid for the correction to
+    // settle when it landed.
+    //
+    // So the two figures part company by exactly the credit nobody could
+    // place. The document is not wrong and the ledger is not wrong; what a
+    // later payment can settle is what the ledger says, and that is nothing.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-100_000),
+        None,
+    )
+    .unwrap();
+    assert!(
+        corrected.allocations.is_empty(),
+        "there was no document to settle"
+    );
+
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, customer).unwrap(),
+        Money::ZERO
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, document),
+        Money::centimes(100_000)
+    );
+    // And nothing can be handed over against it, because nothing is owed.
+    let refused = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(1_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(refused, CoreError::PaymentAboveDebt { outstanding_centimes } if outstanding_centimes == 0),
+        "{refused:?}"
+    );
+}

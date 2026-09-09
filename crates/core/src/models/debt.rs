@@ -54,9 +54,11 @@ pub struct NewDebtEntry {
     pub note: Option<String>,
 }
 
-/// What one payment settled on one document. features.md §2: a payment
+/// What one movement settled on one document. features.md §2: a payment
 /// settles several documents oldest first, so a payment is one ledger row and
-/// the documents it covered are these.
+/// the documents it covered are these. `payment_ledger_id` is the column's
+/// name from the migration that created it and now names the settling
+/// movement, which is a payment or a correction downwards (features.md §3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DebtAllocation {
     pub id: i32,

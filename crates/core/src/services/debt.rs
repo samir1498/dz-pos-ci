@@ -215,13 +215,17 @@ pub fn statement_between(
     })
 }
 
-/// What an adjustment left behind: the movement, and the ledger as the same
-/// transaction read it once the movement had landed. The statement travels
-/// with the entry so that the balance the caller answers, the balance the
-/// audit records and the balance the ledger sums to are one figure read once.
+/// What an adjustment left behind: the movement, what it took off the
+/// customer's documents, and the ledger as the same transaction read it once
+/// the movement had landed. The statement travels with the entry so that the
+/// balance the caller answers, the balance the audit records and the balance
+/// the ledger sums to are one figure read once.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Adjusted {
     pub entry: DebtEntry,
+    /// Oldest document first, and empty on a correction that raises the debt:
+    /// money owed that no paper asks for settles nothing.
+    pub allocations: Vec<DebtAllocation>,
     pub statement: Statement,
 }
 
@@ -229,6 +233,12 @@ pub struct Adjusted {
 /// (features.md §2). A positive amount raises what the customer owes, a
 /// negative one lowers it; zero is refused, because a correction of nothing
 /// is an empty form somebody submitted.
+///
+/// A correction downwards settles the customer's documents oldest first,
+/// through the same allocation a payment goes through (features.md §3): the
+/// ledger is what a customer owes, so a document that is no longer owed in
+/// full must not go on asking for the whole of it. A correction upwards
+/// settles nothing: it is debt no paper carries, like an opening balance.
 ///
 /// The movement and its audit entry are one transaction: a change to what
 /// somebody owes with nobody's name on it is exactly what the log exists to
@@ -271,6 +281,14 @@ pub fn adjust(
                 note,
             },
         )?;
+        // A correction downwards is money off the papers, oldest first, the
+        // same way a payment is. Upwards it is debt no document carries, so
+        // there is nothing to place.
+        let allocations = if amount.is_negative() {
+            allocate_oldest_first(conn, shop_id, customer_id, entry.id, credit)?
+        } else {
+            Vec::new()
+        };
         // Read once, inside the transaction: what goes into the log below is
         // the same figure the caller is handed.
         let after = statement(conn, shop_id, customer_id)?;
@@ -291,6 +309,7 @@ pub fn adjust(
                         "amount_centimes": amount.as_centimes(),
                         "ledger_id": entry.id,
                         "note": entry.note,
+                        "allocations": allocated_json(&allocations),
                     })
                     .to_string(),
                 ),
@@ -298,6 +317,7 @@ pub fn adjust(
         )?;
         Ok(Adjusted {
             entry,
+            allocations,
             statement: after,
         })
     })
@@ -435,7 +455,8 @@ fn allocated_json(allocations: &[DebtAllocation]) -> serde_json::Value {
 }
 
 /// Spreads `amount` over the customer's unpaid documents, oldest first, and
-/// writes back what is left on each. Runs inside `pay`'s transaction.
+/// writes back what is left on each. Runs inside the transaction of whichever
+/// movement is settling paper: a payment, or a correction downwards.
 ///
 /// The money can run out before the documents do, and the documents can run
 /// out before the money does; both are ordinary. The second one is what
