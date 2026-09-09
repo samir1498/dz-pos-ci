@@ -33,7 +33,7 @@ tasks:
     status: 'done'
   - id: 'T9'
     desc: 'The avoir and proforma cases of facture_a4 (T5 titles all three kinds in one template): the avoir''s reference line and its own lines, the proforma wording, the annulée reprint of a cancelled facture, goldens ×3 for each with every amount parsed back; split into a second template only if the avoir needs more than a title and a reference; after T5 and T6''s model, same wave as T6'
-    status: 'in-progress'
+    status: 'done'
 acceptance: []
 ---
 # M2: facture, customers and credit
