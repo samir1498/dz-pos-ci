@@ -292,7 +292,6 @@ proptest! {
     fn ifu_carries_no_tva(lines in basket(), mode in any_mode()) {
         let t = compute_totals(&lines, &opts(Money::ZERO, mode, true, Regime::Ifu)).unwrap();
         prop_assert!(t.tva_by_rate.is_empty());
-        prop_assert_eq!(sum_bases(&t), Money::ZERO);
         prop_assert_eq!(t.tva, Money::ZERO);
         prop_assert_eq!(t.total_ttc, t.subtotal_ht);
         prop_assert_eq!(t.total_ttc.checked_add(t.stamp).unwrap(), t.net_to_pay);
@@ -343,5 +342,34 @@ proptest! {
         } else {
             prop_assert!(got >= Money::centimes(500), "{amount} owes {got:?}");
         }
+    }
+}
+
+/// Review of PR #14, finding 1: with "floor every share, leftover to the
+/// largest HT group" the largest group's share can exceed its own HT once
+/// the discount leaves fewer centimes than there are groups. The recap then
+/// prints a negative base. Ignored until the spread rule is decided
+/// (features.md, comptable Q7); Hamilton largest-remainder removes it.
+#[test]
+#[ignore = "spread rule decision pending: a near-total discount prints a negative TVA base"]
+fn a_tva_base_is_never_negative_even_under_a_near_total_discount() {
+    let line = |centimes: i64, bps: u32| Line {
+        qty: 1,
+        unit_price: Money::centimes(centimes),
+        line_discount: Money::ZERO,
+        rate: Bps::new(bps).unwrap(),
+    };
+    let lines = [line(1000, 0), line(2000, 900), line(3000, 1900)];
+    let t = compute_totals(
+        &lines,
+        &opts(Money::centimes(5999), PaymentMode::Cash, true, Regime::Reel),
+    )
+    .unwrap();
+    for row in &t.tva_by_rate {
+        assert!(
+            row.base >= Money::ZERO,
+            "negative base in {:?}",
+            t.tva_by_rate
+        );
     }
 }

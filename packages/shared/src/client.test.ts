@@ -69,6 +69,45 @@ describe("createClient", () => {
     }
   });
 
+  test("every amount and quantity field is guarded, not only the selling price", async () => {
+    const fields = [
+      "cost_centimes",
+      "selling_centimes",
+      "wholesale_centimes",
+      "qty_on_hand_milli",
+      "low_stock_at_milli",
+    ];
+    for (const field of fields) {
+      for (const bad of [2 ** 53, 9.5, "920"]) {
+        const broken = { ...product, [field]: bad };
+        const api = createClient("http://x", stub(200, [broken]));
+        await expect(api.listProducts(), `${field} = ${String(bad)}`).rejects.toMatchObject({
+          code: "bad_response",
+        });
+      }
+    }
+  });
+
+  test("a unit the app does not know is refused", async () => {
+    const api = createClient("http://x", stub(200, [{ ...product, unit: "carton" }]));
+    await expect(api.listProducts()).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  test("a category list is guarded the same way", async () => {
+    const category = { id: 1, shop_id: 1, name: "Alimentation", default_rate_bps: 1900 };
+    await expect(
+      createClient("http://x", stub(200, [category])).listCategories(),
+    ).resolves.toEqual([category]);
+    for (const broken of [
+      { id: 1, shop_id: 1, name: "Alimentation" },
+      { ...category, default_rate_bps: "19" },
+      { ...category, name: 3 },
+    ]) {
+      const api = createClient("http://x", stub(200, [broken]));
+      await expect(api.listCategories()).rejects.toMatchObject({ code: "bad_response" });
+    }
+  });
+
   test("a price that arrives as a string is refused", async () => {
     const broken = { ...product, selling_centimes: "920" };
     const api = createClient("http://x", stub(200, [broken]));

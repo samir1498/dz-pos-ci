@@ -475,3 +475,24 @@ async fn the_smallest_i64_is_refused_like_any_other_out_of_range_amount() {
         assert_eq!(answer["error"]["code"], "validation", "{field}: {answer}");
     }
 }
+
+#[tokio::test]
+async fn a_spent_barcode_series_is_a_conflict_on_the_wire() {
+    // The core says `exhausted` (products_service.rs); the API turns that
+    // into 409 with the same code, so the screen can name the series rather
+    // than blame the form.
+    use diesel::prelude::*;
+
+    let h = harness();
+    let mut conn = diesel::SqliteConnection::establish(h.path.to_str().unwrap()).unwrap();
+    diesel::sql_query(format!(
+        "INSERT INTO counters (shop_id, name, next_value) VALUES ({SHOP}, 'in_store_barcode', {}) \
+         ON CONFLICT (shop_id, name) DO UPDATE SET next_value = excluded.next_value",
+        i64::MAX
+    ))
+    .execute(&mut conn)
+    .unwrap();
+    let (status, answer) = call(&h.app, "POST", "/products", Some(draft())).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{answer}");
+    assert_eq!(answer["error"]["code"], "exhausted", "{answer}");
+}

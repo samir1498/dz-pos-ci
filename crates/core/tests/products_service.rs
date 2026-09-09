@@ -165,6 +165,23 @@ fn each_shop_numbers_its_own_in_store_barcodes() {
         Some("2000020000019"),
         "shop 2 did not start its own series at 1"
     );
+    // The barcode itself is not proof: `next_free_in_store_barcode` walks
+    // past taken numbers, so a rewound counter would still hand out 4. Read
+    // the counter row, which only a scoped UPDATE leaves alone.
+    let shop_one_next: i64 = {
+        use diesel::prelude::*;
+        use dzpos_core::schema::counters::dsl::*;
+        counters
+            .filter(shop_id.eq(SHOP))
+            .filter(name.eq("in_store_barcode"))
+            .select(next_value)
+            .first(&mut conn)
+            .unwrap()
+    };
+    assert_eq!(
+        shop_one_next, 4,
+        "shop 1's counter moved because of shop 2's product"
+    );
     let next = products::create(&mut conn, SHOP, draft("D")).unwrap();
     assert_eq!(
         next.barcode.as_deref(),

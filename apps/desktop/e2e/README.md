@@ -61,8 +61,10 @@ minutes. The API webServer has a ten minute start timeout for that.
 
 ## Two things the screen does not do yet
 
-- The add form has no TVA rate field. `rate_bps` is posted as `null`, so
-  the test fills name, selling price and stock only.
+- The table has no TVA column, so the rate the form posts is only checked
+  on the request body (`postedRates`), not on the row that comes back. A
+  server storing 19 % for a posted 9 % would keep the suite green until
+  the M1 products screen shows the rate.
 - An empty name is caught by the form's own validator before any request
   goes out, so the visible message is `error_name_required` from the UI.
   The API's `validation` code has no path to this form; the test counts

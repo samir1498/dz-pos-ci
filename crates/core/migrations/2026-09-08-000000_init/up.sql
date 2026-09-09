@@ -62,8 +62,8 @@ CREATE INDEX idx_users_shop ON users (shop_id);
 
 -- Numbers a shop hands out for itself, one series per name. A number is
 -- taken inside the transaction that writes the row using it, so it is never
--- derived from a rowid: a rolled back insert leaves the counter advanced
--- rather than pointing at a number that is already taken for ever.
+-- derived from a rowid. The advance and the row commit or roll back
+-- together (repos/counters.rs), so a failed insert never burns a number.
 CREATE TABLE counters (
     shop_id    INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
     name       TEXT NOT NULL,
