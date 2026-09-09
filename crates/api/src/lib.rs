@@ -458,6 +458,7 @@ pub fn router_with_origin(
         .route("/sales", post(routes::sales::create))
         .route("/sales/{id}", get(routes::sales::get_one))
         .route("/sales/{id}/ticket", get(routes::sales::ticket))
+        .route("/sales/{id}/facture", get(routes::sales::facture))
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))

@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::response::Html;
 use axum::Json;
 use dzpos_core::lang::Lang;
-use dzpos_core::print::render_ticket;
+use dzpos_core::print::{render_facture, render_ticket, Paper};
 use dzpos_core::services::documents::DocumentKind;
 use dzpos_core::services::sales::NewSale;
 use dzpos_core::services::{documents, sales};
@@ -17,9 +17,9 @@ use crate::dto::{NewSaleDto, SaleDto};
 use crate::error::ApiError;
 use crate::AppState;
 
-/// Newest first. M1 issues tickets only, so the list is the ticket series;
-/// the kind is named here rather than left open so a facture added in M2
-/// does not silently appear in the till's receipt view.
+/// Newest first, the ticket series only. The kind is named rather than left
+/// open on purpose: the till's receipt view is about the day's till roll,
+/// and a facture is filed and reprinted from the documents screen T9 adds.
 pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<SaleDto>>, ApiError> {
     let shop = state.shop_id;
     let found = state
@@ -67,6 +67,37 @@ pub async fn ticket(
     let shop = state.shop_id;
     let found = state.blocking(move |c| documents::get(c, shop, id)).await?;
     Ok(Html(render_ticket(&found, lang)?))
+}
+
+/// The language and the sheet, both named by the caller on every call. The
+/// sheet is not a setting either: the same facture goes on A4 in the office
+/// and on A5 at the counter, and the till is the only place that knows which
+/// the cashier reached for (features.md §4).
+#[derive(Deserialize)]
+pub struct FactureQuery {
+    lang: Lang,
+    paper: Paper,
+}
+
+/// The A4 or A5 facture for a stored sale, as an HTML page.
+///
+/// The id has to name a facture. A ticket is its own paper and its own
+/// series, so the kind is part of what is being asked for and a ticket's id
+/// answers 404 rather than a page titled FACTURE (services::documents).
+pub async fn facture(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    query: Result<Query<FactureQuery>, QueryRejection>,
+) -> Result<Html<String>, ApiError> {
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let Query(FactureQuery { lang, paper }) = query
+        .map_err(|_| ApiError::BadRequest("lang must be fr, en or ar and paper a4 or a5".into()))?;
+    let shop = state.shop_id;
+    let found = state
+        .blocking(move |c| documents::get_of_kind(c, shop, id, DocumentKind::Facture))
+        .await?;
+    Ok(Html(render_facture(&found, lang, paper)?))
 }
 
 pub async fn create(

@@ -26,6 +26,29 @@ pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Documen
     repo::get(conn, shop_id, id)
 }
 
+/// The document, only if it is of the kind the caller is asking for.
+///
+/// A route that prints one paper needs this rather than a kind check of its
+/// own: a ticket handed to the facture template would be a document titled
+/// FACTURE carrying a number out of the ticket series, and the honest answer
+/// to "print the facture 7" when 7 is a ticket is that there is no such
+/// facture. The entity name is the kind, so the 404 says which.
+pub fn get_of_kind(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    id: i32,
+    kind: DocumentKind,
+) -> Result<Document, CoreError> {
+    let found = repo::get(conn, shop_id, id)?;
+    if found.kind != kind {
+        return Err(CoreError::NotFound {
+            entity: kind.as_str(),
+            id,
+        });
+    }
+    Ok(found)
+}
+
 /// Newest first. `kind` of `None` lists every kind.
 pub fn list(
     conn: &mut SqliteConnection,

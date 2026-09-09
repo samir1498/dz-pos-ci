@@ -32,6 +32,7 @@ export type { SaleTvaDto } from "./generated/SaleTvaDto";
 export type { SaleTotalsDto } from "./generated/SaleTotalsDto";
 export type { SaleBalanceDto } from "./generated/SaleBalanceDto";
 export type { SaleWarningDto } from "./generated/SaleWarningDto";
+export type { SaleKindDto } from "./generated/SaleKindDto";
 export type { NewSaleDto } from "./generated/NewSaleDto";
 export type { NewSaleLineDto } from "./generated/NewSaleLineDto";
 
@@ -52,7 +53,7 @@ export {
 } from "./client";
 export type { ClientOptions } from "./client";
 export type { ApiClient } from "./client";
-export type { PrintLang } from "./client";
+export type { PrintLang, PrintPaper } from "./client";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";
 export {
   BPS_PER_WHOLE,

@@ -476,6 +476,7 @@ describe("sales", () => {
       tendered_centimes: 30_000,
       customer_id: null,
       override: false,
+      kind: "ticket",
     };
     const api = createClient("http://127.0.0.1:4317", fetchStub);
     await expect(api.createSale(basket)).resolves.toEqual(sale);
@@ -502,6 +503,7 @@ describe("sales", () => {
         tendered_centimes: null,
         customer_id: 3,
         override: false,
+        kind: "ticket",
       }),
     ).rejects.toMatchObject({ code: "bad_response" });
   });
@@ -528,6 +530,7 @@ describe("sales", () => {
         tendered_centimes: null,
         customer_id: 3,
         override: false,
+        kind: "ticket",
       }),
     ).rejects.toMatchObject({
       code: "credit_limit",
@@ -574,6 +577,62 @@ describe("sales", () => {
     const api = createClient("http://127.0.0.1:4317", { fetch: fetchStub, token: "t" });
     await expect(api.getSaleTicket(7, "ar")).resolves.toBe(page);
     expect(calls[0]).toBe("http://127.0.0.1:4317/sales/7/ticket?lang=ar");
+  });
+
+  test("the facture asks for the sheet as well as the language", async () => {
+    const page = '<!doctype html>\n<html lang="fr"><body>FACTURE</body></html>\n';
+    const calls: string[] = [];
+    const fetchStub: typeof fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(page, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", { fetch: fetchStub, token: "t" });
+    await expect(api.getSaleFacture(7, "fr", "a4")).resolves.toBe(page);
+    await expect(api.getSaleFacture(7, "ar", "a5")).resolves.toBe(page);
+    expect(calls).toEqual([
+      "http://127.0.0.1:4317/sales/7/facture?lang=fr&paper=a4",
+      "http://127.0.0.1:4317/sales/7/facture?lang=ar&paper=a5",
+    ]);
+  });
+
+  test("a facture the id does not name surfaces the code and never the HTML", async () => {
+    const api = createClient(
+      "http://127.0.0.1:4317",
+      stub(404, { error: { code: "not_found", message: "facture 7 does not exist in this shop" } }),
+    );
+    await expect(api.getSaleFacture(7, "fr", "a4")).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  test("a facture the party blocks refuse carries the side and the missing ids", async () => {
+    const api = createClient(
+      "http://127.0.0.1:4317",
+      stub(422, {
+        error: {
+          code: "party_ids",
+          message: "the buyer block of a facture is missing rc, nis",
+          party_side: "buyer",
+          missing_ids: ["rc", "nis"],
+        },
+      }),
+    );
+    await expect(
+      api.createSale({
+        lines: [{ product_id: 1, qty_milli: 1_000, unit_price_centimes: null, line_discount_centimes: 0 }],
+        global_discount_centimes: 0,
+        payment_mode: "cash",
+        tendered_centimes: 200_000,
+        customer_id: 4,
+        override: false,
+        kind: "facture",
+      }),
+    ).rejects.toMatchObject({
+      code: "party_ids",
+      partySide: "buyer",
+      missingIds: ["rc", "nis"],
+    });
   });
 
   test("a ticket the server refused surfaces the code and never the HTML", async () => {
@@ -624,6 +683,7 @@ describe("sales", () => {
         tendered_centimes: null,
         customer_id: null,
         override: false,
+        kind: "ticket",
       }),
     ).rejects.toMatchObject({ code: "validation", status: 422 });
   });

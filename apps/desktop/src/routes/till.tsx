@@ -398,6 +398,7 @@ export function TillScreen() {
       tendered_centimes: mode === "cash" ? (tendered ?? 0) : null,
       customer_id: customer?.id ?? null,
       override,
+      kind: "ticket",
     }),
     [cart, customer, globalDiscount, mode, read, tendered],
   );

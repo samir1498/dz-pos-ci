@@ -49,19 +49,31 @@ export class ApiError extends Error {
   readonly status: number;
   readonly balanceAfterCentimes?: number;
   readonly creditLimitCentimes?: number;
+  /** Only on `party_ids`: which half of the facture is short and of which
+   * identifiers. The server decides both; a screen shows them and works out
+   * neither (architecture.md rule 2). */
+  readonly partySide?: string;
+  readonly missingIds?: readonly string[];
 
   constructor(
     code: string,
     message: string,
     status: number,
-    credit?: { balanceAfterCentimes?: number; creditLimitCentimes?: number },
+    extra?: {
+      balanceAfterCentimes?: number;
+      creditLimitCentimes?: number;
+      partySide?: string;
+      missingIds?: readonly string[];
+    },
   ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
     this.status = status;
-    this.balanceAfterCentimes = credit?.balanceAfterCentimes;
-    this.creditLimitCentimes = credit?.creditLimitCentimes;
+    this.balanceAfterCentimes = extra?.balanceAfterCentimes;
+    this.creditLimitCentimes = extra?.creditLimitCentimes;
+    this.partySide = extra?.partySide;
+    this.missingIds = extra?.missingIds;
   }
 }
 
@@ -91,17 +103,22 @@ export function isApiErrorBody(value: unknown): value is ApiErrorDto {
     typeof error.code === "string" &&
     typeof error.message === "string" &&
     isOptionalExactInteger(error.balance_after_centimes) &&
-    isOptionalExactInteger(error.credit_limit_centimes)
+    isOptionalExactInteger(error.credit_limit_centimes) &&
+    (error.party_side === undefined || typeof error.party_side === "string") &&
+    (error.missing_ids === undefined ||
+      (Array.isArray(error.missing_ids) && error.missing_ids.every((v) => typeof v === "string")))
   );
 }
 
-/** The error the envelope described, with the two credit amounts when it
- * carried them. One place builds it, so both callers of `unwrap` read a
- * refusal the same way. */
+/** The error the envelope described, with the amounts and the party fields
+ * when it carried them. One place builds it, so both callers of `unwrap`
+ * read a refusal the same way. */
 function apiError(body: ApiErrorDto, status: number): ApiError {
   return new ApiError(body.error.code, body.error.message, status, {
     balanceAfterCentimes: body.error.balance_after_centimes,
     creditLimitCentimes: body.error.credit_limit_centimes,
+    partySide: body.error.party_side,
+    missingIds: body.error.missing_ids,
   });
 }
 
@@ -444,6 +461,11 @@ async function unwrap(res: Response): Promise<unknown> {
  * and `dzpos_core::lang::Lang` refuses anything else with a 422. */
 export type PrintLang = "fr" | "en" | "ar";
 
+/** The sheet a facture is laid out for. It changes the `@page size` of the
+ * page the core renders and nothing else, so an A5 facture is the same
+ * facture on a smaller sheet (features.md §4). */
+export type PrintPaper = "a4" | "a5";
+
 /** A body that is a page, not JSON. Only the error path is JSON, and it is
  * the same envelope every other call answers with. */
 async function unwrapText(res: Response): Promise<string> {
@@ -602,6 +624,14 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
      * language is the one the till is being used in. */
     async getSaleTicket(id: number, lang: PrintLang): Promise<string> {
       return sendText(`/sales/${id}/ticket?lang=${lang}`);
+    },
+
+    /** The A4 or A5 facture for a sale, as the HTML page the core rendered.
+     * The same contract as the ticket, plus the sheet: the UI prints these
+     * bytes and never lays a document out itself. The id has to name a
+     * facture; a ticket's id is a 404, because a ticket is its own paper. */
+    async getSaleFacture(id: number, lang: PrintLang, paper: PrintPaper): Promise<string> {
+      return sendText(`/sales/${id}/facture?lang=${lang}&paper=${paper}`);
     },
 
     /** Newest first, tickets only in M1. */
