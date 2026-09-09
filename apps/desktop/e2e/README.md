@@ -97,7 +97,13 @@ second language on; use the looped `just e2e` or a single `--project`.
 
 ## Files
 
-- `products.spec.ts`: three tests on the products screen;
+- `first-paint.spec.ts`: one test that `lang` and `dir` are correct on
+  `documentElement` before React mounts, reading the DOM directly instead
+  of through an auto-retrying matcher. `backups.spec.ts`: one test that a
+  copy taken before a product is added loses that product when it is
+  restored; it runs first (files run in name order, one worker, one
+  database) and leaves the shop empty, the state `products.spec.ts` starts
+  from. `products.spec.ts`: three tests on the products screen;
   `settings.spec.ts`: two on the settings screen (store block, dated
   régime); `till.spec.ts`: one whole cash sale, from `/` landing on the
   till to the stock the sale moved. `messages.ts` is the shared loader they

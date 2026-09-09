@@ -27,7 +27,8 @@ apps/desktop     Tauri 2 + React 19 + Vite; Rust side in src-tauri/; e2e/
 apps/mobile      Expo / React Native, placeholder, not started
 packages/shared  TS: API client, types generated from crates/api, money display
 packages/design  TS: design tokens in three tiers
-fixtures/        money fixtures read by cargo test and vitest alike
+fixtures/        money fixtures read by cargo test and vitest alike;
+                 print/ticket_80mm/ goldens read by cargo test alone
 docs/            features.md and architecture.md, the spec every task cites;
                  roadmap.md, the milestones to a first shop
 ```

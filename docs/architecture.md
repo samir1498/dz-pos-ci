@@ -17,8 +17,11 @@ the short form every task cites.
 
 In use and pinned in their Cargo.toml: axum and tokio for the API, ts-rs
 for the TS types, proptest for property tests. Checked on crates.io on
-2026-09-07 and not yet chosen: insta 1.48.0 for golden files; mdns-sd
-0.21.2 for LAN discovery. Pin the version when a crate is first used; this
+2026-09-07 and not yet chosen: mdns-sd 0.21.2 for LAN discovery. T5 needed
+golden files before that insta decision was made and hand-rolled them
+instead (`crates/core/tests/print_ticket.rs`, `UPDATE_GOLDENS=1`); insta
+stays unpinned unless a later template makes the hand-rolled version
+outgrow itself. Pin the version when a crate is first used; this
 table does not decide.
 
 ## The six rules
@@ -103,8 +106,9 @@ Dependency direction is one way: `api → core`, `desktop → api`,
 - **services**: business rules (stock ledger, totals, TVA, stamp, numbering,
   debt). Take a connection, return domain results. This is where the tests
   concentrate.
-- **documents**: invoice rendering to HTML from a snapshot. Pure function
-  of (document, template, language); golden-file tested.
+- **print** (`crates/core/src/print/`): document rendering to HTML from a
+  stored snapshot, one module per template (`ticket.rs` for `ticket_80mm`).
+  Pure function of (document, template, language); golden-file tested.
 
 ## Error policy
 
@@ -175,7 +179,7 @@ Raised in the 2026-09-08 handoff, still open, each settled before
 |---|---|---|
 | Services, ledgers, numbering | `cargo test`, integration tests against a temp SQLite | every push, Linux + Windows |
 | TVA, stamp, rounding, amount in words | property tests (proptest) + fixed fixtures named in features.md | same |
-| Invoice templates | golden files (insta), every template × language | same |
+| Invoice templates | golden files (hand-rolled, `UPDATE_GOLDENS=1` regenerates and fails the run on purpose; insta still not pulled in), every template × language | same |
 | API routes | request tests against an in-process server and temp DB | same |
 | Coverage | `cargo llvm-cov` → lcov artifact; Sonar ingestion once Rust support on the team server is verified | Linux job |
 | React components | vitest + Testing Library, jsdom | every push |

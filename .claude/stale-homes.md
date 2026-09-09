@@ -14,6 +14,9 @@
 | Branch shape | `context/processes/20260908-git-and-planning.md` | `dz-pr` skill |
 | The boss site URL | `context/progress/now.md`, `CLAUDE.md` | memory file |
 | Skills list | `.claude/skills/` directory | `CLAUDE.md` index line |
+| Core module layers | `crates/core/src/lib.rs` mod list | `docs/architecture.md` § Layers inside core |
+| Golden-file tooling | `crates/core/tests/print_ticket.rs` (`goldens_dir`, `golden`, `UPDATE_GOLDENS`) | `docs/architecture.md` Testing matrix, `docs/features.md` §4 |
+| e2e spec list | `apps/desktop/e2e/*.spec.ts` | `apps/desktop/e2e/README.md` § Files |
 
 ## Routing
 
