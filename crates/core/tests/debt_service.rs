@@ -1174,7 +1174,13 @@ fn a_payment_leaves_an_audit_entry_carrying_the_balance_on_both_sides() {
     assert_eq!(after["amount_centimes"], 40_000);
     assert_eq!(after["payment_mode"], "cash");
     assert_eq!(after["ledger_id"], paid.entry.id);
-    assert_eq!(after["allocated_document_ids"][0], document);
+    // What the money settled, document by document, and not only which
+    // documents it touched: a log that says a facture was settled without
+    // saying by how much cannot be read against the facture.
+    assert_eq!(
+        after["allocations"],
+        serde_json::json!([{ "document_id": document, "amount_centimes": 40_000 }])
+    );
 }
 
 #[test]

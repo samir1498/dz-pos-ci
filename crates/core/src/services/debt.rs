@@ -403,10 +403,7 @@ pub fn pay(
                         "amount_centimes": amount.as_centimes(),
                         "payment_mode": mode.as_str(),
                         "ledger_id": entry.id,
-                        "allocated_document_ids": allocations
-                            .iter()
-                            .map(|a| a.document_id)
-                            .collect::<Vec<i32>>(),
+                        "allocations": allocated_json(&allocations),
                     })
                     .to_string(),
                 ),
@@ -418,6 +415,23 @@ pub fn pay(
             balance_after: after,
         })
     })
+}
+
+/// What the movement settled, document by document, as the log records it.
+/// The amounts and not only the ids: a log saying a facture was settled
+/// without saying by how much cannot be read against the facture.
+fn allocated_json(allocations: &[DebtAllocation]) -> serde_json::Value {
+    serde_json::Value::Array(
+        allocations
+            .iter()
+            .map(|a| {
+                serde_json::json!({
+                    "document_id": a.document_id,
+                    "amount_centimes": a.amount.as_centimes(),
+                })
+            })
+            .collect(),
+    )
 }
 
 /// Spreads `amount` over the customer's unpaid documents, oldest first, and
