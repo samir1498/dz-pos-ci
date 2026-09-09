@@ -69,6 +69,15 @@ const owingWithNoCredit: CustomerDto = {
   balance_centimes: 50_000,
 };
 
+/** A fiche the shop has stopped selling to. Money can still be collected on
+ *  it and mistakes still corrected, which is what the screen has to say. */
+const closed: CustomerDto = {
+  ...benali,
+  id: 8,
+  name: "Nadir Fermé",
+  active: false,
+};
+
 const ledger: CustomerLedgerDto = {
   customer_id: 3,
   balance_centimes: 150_000,
@@ -470,6 +479,20 @@ describe("payments", () => {
     );
     await screen.findByRole("row", { name: /solde de départ/ });
   }
+
+  test("a closed fiche still takes a payment, and says why the form is there", async () => {
+    list = [closed];
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${fr.customers_edit} Nadir Fermé` }),
+    );
+
+    // The form stays: a shop closes a fiche to stop selling, not to stop
+    // collecting, and the note next to it says so.
+    expect(await screen.findByLabelText(fr.field_payment_amount)).toBeInTheDocument();
+    expect(screen.getByText(fr.customers_closed_still_collects)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: fr.action_take_payment })).toBeEnabled();
+  });
 
   test("a payment posts the amount, the mode and the note, and the allocations come back", async () => {
     await openTheFiche();

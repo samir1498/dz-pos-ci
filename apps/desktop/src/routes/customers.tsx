@@ -608,6 +608,11 @@ function PaymentForm({ customer }: { customer: CustomerDto }) {
     >
       <h3 className="font-semibold">{t("customers_pay")}</h3>
       <p className="text-sm opacity-70">{t("customers_pay_hint")}</p>
+      {/* A closed fiche keeps this form: the shop stopped selling to this
+          customer, not collecting from them (core, services::debt). */}
+      {customer.active ? null : (
+        <p className="text-sm opacity-70">{t("customers_closed_still_collects")}</p>
+      )}
 
       <form.Field
         name="amount"

@@ -234,6 +234,10 @@ pub struct Adjusted {
 /// negative one lowers it; zero is refused, because a correction of nothing
 /// is an empty form somebody submitted.
 ///
+/// A closed fiche still takes one: a shop closes a fiche to stop selling to
+/// somebody, not to stop correcting what they owe. The sale is what a closed
+/// fiche refuses (`services::sales`).
+///
 /// A correction downwards settles the customer's documents oldest first,
 /// through the same allocation a payment goes through (features.md §3): the
 /// ledger is what a customer owes, so a document that is no longer owed in
@@ -348,6 +352,10 @@ pub struct Payment {
 /// opens one is an avoir (T6): a payment allowed to overshoot would open one
 /// silently, with no document behind it and nothing on the statement saying
 /// where it came from.
+///
+/// A closed fiche still takes one: a shop closes a fiche to stop selling to
+/// somebody, not to stop collecting from them, and a customer who owed money
+/// on the day their fiche was closed still walks in with it.
 ///
 /// The documents are settled oldest first, each one taken to what is left on
 /// it and no further (features.md §2). What a payment cannot place on a

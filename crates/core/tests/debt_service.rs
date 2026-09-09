@@ -1755,3 +1755,62 @@ fn credit_taken_before_the_facture_existed_stays_on_the_ledger_and_not_on_the_pa
         "{refused:?}"
     );
 }
+
+#[test]
+fn a_closed_fiche_still_takes_a_payment() {
+    // A shop closes a fiche to stop selling to somebody, not to stop
+    // collecting from them: a customer who owes 1 000,00 on the day their
+    // fiche is closed still walks in with the money. The sale is what a
+    // closed fiche refuses (services::sales), never the settlement.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let mut closed = fiche("Entreprise Benali");
+    closed.active = false;
+    customers::update(&mut conn, SHOP, OWNER, customer, closed).unwrap();
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(100_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(paid.balance_after, Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, document), Money::ZERO);
+}
+
+#[test]
+fn a_closed_fiche_still_takes_a_correction() {
+    // Same rule from the other side: a keying mistake on a fiche that has
+    // since been closed is still a mistake, and the only way to correct a
+    // ledger is to write a movement.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    debt::append(
+        &mut conn,
+        SHOP,
+        movement(customer, DebtKind::Opening, 150_000, 0),
+    )
+    .unwrap();
+    let mut closed = fiche("Entreprise Benali");
+    closed.active = false;
+    customers::update(&mut conn, SHOP, OWNER, customer, closed).unwrap();
+
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-50_000),
+        Some("erreur de saisie".to_string()),
+    )
+    .unwrap();
+
+    assert_eq!(corrected.statement.balance, Money::centimes(100_000));
+}

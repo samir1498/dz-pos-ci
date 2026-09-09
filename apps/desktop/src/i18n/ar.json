@@ -199,6 +199,7 @@
   "customers_payments_empty": "لا توجد دفعات.",
   "customers_pay": "تسجيل دفعة",
   "customers_pay_hint": "تُسدَّد الوثائق الأقدم أولًا. لا يمكن أن تتجاوز الدفعة الدين.",
+  "customers_closed_still_collects": "بطاقة مغلقة: يبقى التحصيل والتصحيح ممكنين، أما البيع فلا.",
   "customers_pay_confirm": "هل تسجل هذه الدفعة؟ ستظهر في كشف حساب الزبون وتبقى فيه.",
   "customers_paid": "تم تسجيل الدفعة",
   "field_payment_amount": "المبلغ المستلم (دج)",

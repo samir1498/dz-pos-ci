@@ -199,6 +199,7 @@
   "customers_payments_empty": "Aucun paiement.",
   "customers_pay": "Encaisser un paiement",
   "customers_pay_hint": "Le paiement solde les documents les plus anciens en premier. Il ne peut pas dépasser la créance.",
+  "customers_closed_still_collects": "Fiche fermée : on encaisse et on corrige, on ne vend plus.",
   "customers_pay_confirm": "Encaisser ce paiement ? Il s'ajoute au relevé du client et reste visible.",
   "customers_paid": "Paiement enregistré",
   "field_payment_amount": "Montant reçu (DA)",
