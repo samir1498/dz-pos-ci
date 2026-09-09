@@ -9,10 +9,10 @@ priority: 60
 tasks:
   - id: 'T0'
     desc: 'Transport and auth for the five links (loopback, phone or second till over LAN, desktop to cloud, phone to cloud, roles over HTTP) written in docs/architecture.md; loopback gets a per-launch bearer token injected by Tauri, required on every route but /health, passed by just api and the e2e; a request without it gets 401 in the envelope'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T1'
     desc: 'Products CRUD complete: PUT /products/{id} on the core update (deactivate as a field), edit drawer with every spec field, rate column in the table so the e2e sees the stored rate; checkpoint PR to main'
-    status: 'pending'
+    status: 'in-progress'
   - id: 'T2'
     desc: 'Settings screen: store block (name, RC, NIF, NIS, AI, address, phone) and the dated régime fiscal control, read and written through the API; the seller block a ticket prints comes from here'
     status: 'pending'

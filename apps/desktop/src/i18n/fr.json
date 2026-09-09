@@ -46,5 +46,13 @@
   "error_name_required": "Le nom est obligatoire.",
   "error_price_invalid": "Montant invalide.",
   "error_cost_invalid": "Prix d'achat invalide.",
-  "error_stock_invalid": "Quantité invalide."
+  "error_stock_invalid": "Quantité invalide.",
+  "products_edit": "Modifier",
+  "products_inactive": "Inactif",
+  "field_wholesale": "Prix de gros",
+  "field_low_stock": "Alerte stock bas à",
+  "field_active": "En vente",
+  "error_wholesale_invalid": "Prix de gros invalide.",
+  "error_low_stock_invalid": "Seuil invalide.",
+  "category_none": "Sans catégorie"
 }

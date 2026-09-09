@@ -46,11 +46,27 @@ function isInit(value: unknown): value is RequestInit {
 
 /** The init of the POST the form made, if it made one. */
 function postInit(): RequestInit | undefined {
+  return initOf("POST");
+}
+
+function initOf(method: string): RequestInit | undefined {
   for (const call of fetchMock.mock.calls) {
     const init: unknown = call[1];
-    if (isInit(init) && init.method === "POST") return init;
+    if (isInit(init) && init.method === method) return init;
   }
   return undefined;
+}
+
+/** The URL and JSON body of the PUT the edit form made. */
+function putRequest(): { url: string; body: Record<string, unknown> } {
+  for (const call of fetchMock.mock.calls) {
+    const init: unknown = call[1];
+    if (isInit(init) && init.method === "PUT") {
+      if (typeof init.body !== "string") throw new Error("the edit posted no JSON body");
+      return { url: String(call[0]), body: JSON.parse(init.body) };
+    }
+  }
+  throw new Error("the form never put");
 }
 
 function posted(): boolean {
@@ -84,13 +100,38 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let rows: ProductDto[];
 let categories: CategoryDto[];
 let createAnswer: (() => Response) | null;
+let updateAnswer: (() => Response) | null;
 
 beforeEach(() => {
   rows = [];
   categories = [general];
   createAnswer = null;
+  updateAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
+    if (init?.method === "PUT") {
+      if (updateAnswer !== null) return Promise.resolve(updateAnswer());
+      const id = Number(url.slice(url.lastIndexOf("/") + 1));
+      const sent: Record<string, unknown> = JSON.parse(String(init.body));
+      const before = rows.find((r) => r.id === id);
+      if (before === undefined) {
+        return Promise.resolve(json(404, { error: { code: "not_found", message: "no" } }));
+      }
+      const after: ProductDto = {
+        ...before,
+        name: typeof sent.name === "string" ? sent.name : before.name,
+        selling_centimes:
+          typeof sent.selling_centimes === "number" ? sent.selling_centimes : before.selling_centimes,
+        wholesale_centimes:
+          typeof sent.wholesale_centimes === "number" ? sent.wholesale_centimes : null,
+        low_stock_at_milli:
+          typeof sent.low_stock_at_milli === "number" ? sent.low_stock_at_milli : 0,
+        rate_bps: typeof sent.rate_bps === "number" ? sent.rate_bps : before.rate_bps,
+        active: sent.active === true,
+      };
+      rows = rows.map((r) => (r.id === id ? after : r));
+      return Promise.resolve(json(200, after));
+    }
     if (init?.method === "POST") {
       if (createAnswer !== null) return Promise.resolve(createAnswer());
       const sent: Record<string, unknown> = JSON.parse(String(init.body));
@@ -352,5 +393,164 @@ describe("the add form", () => {
 
     expect(await screen.findByText("Le nom est obligatoire.")).toBeInTheDocument();
     expect(posted()).toBe(false);
+  });
+});
+
+describe("the table", () => {
+  test("shows the stored rate and marks a product that is not for sale", async () => {
+    rows = [product, { ...product, id: 2, name: "Ancien", rate_bps: 900, active: false }];
+    mount();
+    const first = (await screen.findByText("Huile Elio 5L")).closest("tr");
+    const second = screen.getByText("Ancien").closest("tr");
+    if (first === null || second === null) throw new Error("no rows");
+    expect(within(first).getByText("19 %")).toBeInTheDocument();
+    expect(within(first).queryByText("Inactif")).not.toBeInTheDocument();
+    expect(within(second).getByText("9 %")).toBeInTheDocument();
+    expect(within(second).getByText("Inactif")).toBeInTheDocument();
+  });
+});
+
+describe("the edit form", () => {
+  async function openTheEdit(user: ReturnType<typeof userEvent.setup>) {
+    rows = [{ ...product, wholesale_centimes: 850, low_stock_at_milli: 10_000 }];
+    mount();
+    await screen.findByText("Huile Elio 5L");
+    await user.click(screen.getByRole("button", { name: "Modifier Huile Elio 5L" }));
+    await screen.findByLabelText("Catégorie");
+  }
+
+  test("opens with every field of the product filled in", async () => {
+    const user = userEvent.setup();
+    await openTheEdit(user);
+    expect(screen.getByLabelText("Nom")).toHaveValue("Huile Elio 5L");
+    // The barcode label carries its hint too, so an exact match never finds it.
+    expect(screen.getByLabelText(/^Code-barres/)).toHaveValue("2000010000017");
+    expect(screen.getByLabelText("Prix de vente")).toHaveValue("9,20");
+    expect(screen.getByLabelText("Prix d'achat")).toHaveValue("8,20");
+    expect(screen.getByLabelText("Prix de gros")).toHaveValue("8,50");
+    expect(screen.getByLabelText("Quantité en stock")).toHaveValue("24");
+    expect(screen.getByLabelText("Alerte stock bas à")).toHaveValue("10");
+    expect(screen.getByRole("combobox", { name: "TVA" })).toHaveValue("1900");
+    expect(screen.getByRole("combobox", { name: "Unité de mesure" })).toHaveValue("piece");
+    expect(screen.getByLabelText("En vente")).toBeChecked();
+  });
+
+  test("puts the whole product to its own path and shows the new values", async () => {
+    const user = userEvent.setup();
+    await openTheEdit(user);
+    const price = screen.getByLabelText("Prix de vente");
+    await user.clear(price);
+    await user.type(price, "9,90");
+    await user.selectOptions(screen.getByRole("combobox", { name: "TVA" }), "900");
+    await user.click(screen.getByLabelText("En vente"));
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() => expect(initOf("PUT")).toBeDefined());
+    const { url, body } = putRequest();
+    expect(url.endsWith("/products/1")).toBe(true);
+    expect(body).toEqual({
+      name: "Huile Elio 5L",
+      barcode: "2000010000017",
+      category_id: 1,
+      unit: "piece",
+      cost_centimes: 820,
+      selling_centimes: 990,
+      wholesale_centimes: 850,
+      qty_on_hand_milli: 24_000,
+      low_stock_at_milli: 10_000,
+      rate_bps: 900,
+      active: false,
+    });
+    expect(posted()).toBe(false);
+
+    const row = (await screen.findByText("Huile Elio 5L")).closest("tr");
+    if (row === null) throw new Error("no row");
+    await waitFor(() => expect(within(row).getByText("9,90")).toBeInTheDocument());
+    expect(within(row).getByText("9 %")).toBeInTheDocument();
+    expect(within(row).getByText("Inactif")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Enregistrer" })).not.toBeInTheDocument();
+  });
+
+  test("can take the product out of its category, and says nothing about renumbering", async () => {
+    const user = userEvent.setup();
+    await openTheEdit(user);
+    expect(screen.queryByText("Laisser vide pour numéroter automatiquement")).toBeNull();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Catégorie" }), "");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(initOf("PUT")).toBeDefined());
+    expect(putRequest().body.category_id).toBeNull();
+  });
+
+  test("shows the stock but does not let the fiche change it", async () => {
+    const user = userEvent.setup();
+    await openTheEdit(user);
+    const stock = screen.getByLabelText("Quantité en stock");
+    expect(stock).toHaveValue("24");
+    expect(stock).toHaveAttribute("readonly");
+    await user.type(stock, "9");
+    expect(stock).toHaveValue("24");
+  });
+
+  test("shows the API's refusal on the form and keeps it open", async () => {
+    const user = userEvent.setup();
+    updateAnswer = () =>
+      json(409, { error: { code: "duplicate_barcode", message: "already used" } });
+    await openTheEdit(user);
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    expect(await screen.findByText("Ce code-barres est déjà utilisé.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enregistrer" })).toBeInTheDocument();
+  });
+
+  test("refuses a wholesale price that is not a number", async () => {
+    const user = userEvent.setup();
+    await openTheEdit(user);
+    const wholesale = screen.getByLabelText("Prix de gros");
+    await user.clear(wholesale);
+    await user.type(wholesale, "abc");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    expect(await screen.findByText("Prix de gros invalide.")).toBeInTheDocument();
+    expect(initOf("PUT")).toBeUndefined();
+  });
+});
+
+describe("the add form, every spec field", () => {
+  test("offers no category as a choice and posts null for it", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openTheForm(user);
+    await user.type(screen.getByLabelText("Nom"), "Divers");
+    await user.type(screen.getByLabelText("Prix de vente"), "5");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Catégorie" }), "");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(sentBody().category_id).toBeNull();
+    expect(sentBody().rate_bps).toBe(1900);
+  });
+
+  test("posts the wholesale price and the low stock threshold when typed", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openTheForm(user);
+    await user.type(screen.getByLabelText("Nom"), "Farine 25kg");
+    await user.type(screen.getByLabelText("Prix de vente"), "3200");
+    await user.type(screen.getByLabelText("Prix de gros"), "3050,50");
+    await user.type(screen.getByLabelText("Alerte stock bas à"), "5");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(sentBody().wholesale_centimes).toBe(305_050);
+    expect(sentBody().low_stock_at_milli).toBe(5_000);
+    expect(sentBody().active).toBe(true);
+  });
+
+  test("a blank wholesale price is null, not zero", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openTheForm(user);
+    await user.type(screen.getByLabelText("Nom"), "Farine 25kg");
+    await user.type(screen.getByLabelText("Prix de vente"), "3200");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(sentBody().wholesale_centimes).toBeNull();
+    expect(sentBody().low_stock_at_milli).toBe(0);
   });
 });

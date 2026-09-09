@@ -542,3 +542,96 @@ fn units_round_trip_through_the_database() {
         assert_eq!(products::get(&mut conn, SHOP, made.id).unwrap().unit, unit);
     }
 }
+
+#[test]
+fn an_update_sending_the_products_own_barcode_back_is_not_a_duplicate() {
+    // The screen sends every field back, the barcode included; the row's
+    // own number must not collide with itself.
+    let (_dir, mut conn) = open_temp();
+    let mut a = draft("A");
+    a.barcode = Some("6130000000011".to_string());
+    let a = products::create(&mut conn, SHOP, a).unwrap();
+    let mut same = draft("A renamed");
+    same.barcode = a.barcode.clone();
+    let after = products::update(&mut conn, SHOP, a.id, same).unwrap();
+    assert_eq!(after.name, "A renamed");
+    assert_eq!(after.barcode, a.barcode);
+}
+
+#[test]
+fn an_update_changes_every_field_the_spec_names_and_can_deactivate() {
+    let (_dir, mut conn) = open_temp();
+    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    let edited = NewProduct {
+        name: "A+".to_string(),
+        barcode: None,
+        category_id: Some(SEEDED_CATEGORY),
+        unit: Unit::Kg,
+        cost: Money::centimes(1_000),
+        selling: Money::centimes(1_500),
+        wholesale: Some(Money::centimes(1_200)),
+        qty_on_hand_milli: 24_000,
+        low_stock_at_milli: 500,
+        rate_bps: Some(Bps::new(900).unwrap()),
+        active: false,
+    };
+    let after = products::update(&mut conn, SHOP, made.id, edited).unwrap();
+    assert_eq!(after.id, made.id);
+    assert_eq!(after.name, "A+");
+    assert_eq!(
+        after.barcode, made.barcode,
+        "a blank barcode keeps the number"
+    );
+    assert_eq!(after.category_id, Some(SEEDED_CATEGORY));
+    assert_eq!(after.unit, Unit::Kg);
+    assert_eq!(after.cost, Money::centimes(1_000));
+    assert_eq!(after.selling, Money::centimes(1_500));
+    assert_eq!(after.wholesale, Some(Money::centimes(1_200)));
+    assert_eq!(after.low_stock_at_milli, 500);
+    assert_eq!(after.rate_bps, Bps::new(900).unwrap());
+    assert!(!after.active);
+    // Deactivated, it is still listed: the shop decides what to show.
+    assert_eq!(products::list(&mut conn, SHOP).unwrap().len(), 1);
+
+    // A value set once can be cleared again: the changeset writes NULL for
+    // a None, it does not skip the column.
+    let mut cleared = draft("A+");
+    cleared.wholesale = None;
+    cleared.category_id = None;
+    cleared.rate_bps = Some(Bps::new(0).unwrap());
+    let after = products::update(&mut conn, SHOP, made.id, cleared).unwrap();
+    assert_eq!(after.wholesale, None);
+    assert_eq!(after.category_id, None);
+}
+
+#[test]
+fn an_update_never_touches_the_quantity_on_hand() {
+    // features.md §1: quantity on hand is derived from the stock ledger and
+    // cached on the product. An edit of the fiche carries the field on the
+    // wire (one shape for add and edit) but the service keeps the stored
+    // quantity; a sale landing between the read and the save is not undone
+    // by a price change. Adjustments come with the ledger (M1 T3).
+    let (_dir, mut conn) = open_temp();
+    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    assert_eq!(
+        made.qty_on_hand_milli, 24_000,
+        "create sets the opening stock"
+    );
+    let mut d = draft("A");
+    d.qty_on_hand_milli = 1_000;
+    let after = products::update(&mut conn, SHOP, made.id, d).unwrap();
+    assert_eq!(after.qty_on_hand_milli, 24_000);
+}
+
+#[test]
+fn an_update_of_a_missing_product_is_not_found_with_its_id() {
+    let (_dir, mut conn) = open_temp();
+    let made = products::create(&mut conn, SHOP, draft("A")).unwrap();
+    match products::update(&mut conn, SHOP, made.id + 100, draft("X")) {
+        Err(CoreError::NotFound { entity, id }) => {
+            assert_eq!(entity, "product");
+            assert_eq!(id, made.id + 100);
+        }
+        other => panic!("expected a product NotFound, got {other:?}"),
+    }
+}

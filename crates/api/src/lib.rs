@@ -130,7 +130,10 @@ pub fn router_with_origin(
         .route("/categories", get(routes::categories::list))
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
-        .route("/products/{id}", get(routes::products::get_one))
+        .route(
+            "/products/{id}",
+            get(routes::products::get_one).put(routes::products::update),
+        )
         .fallback(routes::not_found)
         .method_not_allowed_fallback(routes::method_not_allowed)
         .layer(from_fn_with_state(token.clone(), token::require));
@@ -144,7 +147,7 @@ pub fn router_with_origin(
         .layer(
             CorsLayer::new()
                 .allow_origin(AllowOrigin::list(origins))
-                .allow_methods([Method::GET, Method::POST])
+                .allow_methods([Method::GET, Method::POST, Method::PUT])
                 .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]),
         )
         .with_state(state)

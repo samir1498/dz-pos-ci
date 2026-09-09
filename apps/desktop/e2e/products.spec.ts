@@ -42,6 +42,25 @@ const PRICE_INPUT = "250,50";
 const PRICE_RENDERED = "250,50";
 const STOCK_INPUT = "12";
 const STOCK_RENDERED = "12";
+const EDITED_NAME = "Lait Candia 1L";
+const EDITED_PRICE_INPUT = "199,99";
+const EDITED_PRICE_RENDERED = "199,99";
+
+import type { Page } from "@playwright/test";
+
+/** Adds a product through the form at 9 %, the way the first test does. */
+async function addProduct(page: Page, name: string) {
+  await page.getByRole("button", { name: t("products_add") }).click();
+  await page.getByLabel(t("field_name"), { exact: true }).fill(name);
+  await page.getByLabel(t("field_price"), { exact: true }).fill(PRICE_INPUT);
+  await page.getByLabel(t("field_stock"), { exact: true }).fill(STOCK_INPUT);
+  // By role, not by label: a <label> wrapping a <select> has the option
+  // texts in its own text, so an exact label match never resolves.
+  await page
+    .getByRole("combobox", { name: t("field_rate"), exact: true })
+    .selectOption({ label: t("rate_900") });
+  await page.getByRole("button", { name: t("action_save") }).click();
+}
 
 test("adds a product and saves the products screenshot", async ({ page }) => {
   // The rate is chosen by hand (9 %) rather than inherited from the
@@ -62,28 +81,69 @@ test("adds a product and saves the products screenshot", async ({ page }) => {
   await expect(page.getByRole("heading", { name: t("products_title") })).toBeVisible();
   await expect(page.getByText(t("products_empty"))).toBeVisible();
 
-  await page.getByRole("button", { name: t("products_add") }).click();
-
-  await page.getByLabel(t("field_name"), { exact: true }).fill(PRODUCT_NAME);
-  await page.getByLabel(t("field_price"), { exact: true }).fill(PRICE_INPUT);
-  await page.getByLabel(t("field_stock"), { exact: true }).fill(STOCK_INPUT);
-  // By role, not by label: a <label> wrapping a <select> has the option
-  // texts in its own text, so an exact label match never resolves.
-  await page
-    .getByRole("combobox", { name: t("field_rate"), exact: true })
-    .selectOption({ label: t("rate_900") });
-  await page.getByRole("button", { name: t("action_save") }).click();
+  await addProduct(page, PRODUCT_NAME);
 
   const row = page.getByRole("row").filter({ hasText: PRODUCT_NAME });
   await expect(row).toBeVisible();
   await expect(row.getByRole("cell", { name: PRICE_RENDERED, exact: true })).toBeVisible();
   await expect(row.getByRole("cell", { name: STOCK_RENDERED, exact: true })).toBeVisible();
+  // The rate on the row comes from the API's answer, not from the form.
+  await expect(row.getByRole("cell", { name: t("rate_900"), exact: true })).toBeVisible();
   await expect(page.getByText(t("products_empty"))).toBeHidden();
   expect(postedRates).toEqual([900]);
 
   await page.screenshot({
     path: path.join(here, "screenshots", "products.png"),
     fullPage: true,
+  });
+});
+
+test("edits a product in place and the row shows the stored values", async ({ page }) => {
+  // Adds its own product so the test stands alone under --grep. The PUT
+  // body is captured to prove the whole product was sent, the rate the
+  // shop chose included, and the row is read back from the API after.
+  const putBodies: unknown[] = [];
+  await page.route("**/products/*", async (route) => {
+    if (route.request().method() === "PUT") putBodies.push(route.request().postDataJSON());
+    await route.continue();
+  });
+
+  await page.goto("/products");
+  await addProduct(page, EDITED_NAME);
+  const row = page.getByRole("row").filter({ hasText: EDITED_NAME });
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: `${t("products_edit")} ${EDITED_NAME}` }).click();
+
+  const price = page.getByLabel(t("field_price"), { exact: true });
+  await expect(price).toHaveValue(PRICE_RENDERED);
+  await price.fill(EDITED_PRICE_INPUT);
+  await page.getByLabel(t("field_wholesale"), { exact: true }).fill("180");
+  await page.getByLabel(t("field_low_stock"), { exact: true }).fill("3");
+  await page
+    .getByRole("combobox", { name: t("field_rate"), exact: true })
+    .selectOption({ label: t("rate_1900") });
+  await page.getByRole("button", { name: t("action_save") }).click();
+
+  await expect(page.getByRole("button", { name: t("action_save") })).toBeHidden();
+  await expect(
+    row.getByRole("cell", { name: EDITED_PRICE_RENDERED, exact: true }),
+  ).toBeVisible();
+  await expect(row.getByRole("cell", { name: t("rate_1900"), exact: true })).toBeVisible();
+  expect(putBodies).toHaveLength(1);
+  // Every field of the product, the ones left alone included; the barcode
+  // is the number the server gave it, sent back as it came.
+  expect(putBodies[0]).toEqual({
+    name: EDITED_NAME,
+    barcode: expect.any(String),
+    category_id: 1,
+    unit: "piece",
+    cost_centimes: 0,
+    selling_centimes: 19_999,
+    wholesale_centimes: 18_000,
+    qty_on_hand_milli: 12_000,
+    low_stock_at_milli: 3_000,
+    rate_bps: 1900,
+    active: true,
   });
 });
 

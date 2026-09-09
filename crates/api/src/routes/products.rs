@@ -43,3 +43,22 @@ pub async fn create(
         .await?;
     Ok((StatusCode::CREATED, Json(ProductDto::from(made))))
 }
+
+/// The whole product again, not a patch: the screen sends every field it
+/// shows, so a field left out is a bug at the edge, not a value to keep.
+/// `barcode` null keeps the number the product has (core, `update`).
+pub async fn update(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    body: Result<Json<NewProductDto>, JsonRejection>,
+) -> Result<Json<ProductDto>, ApiError> {
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let new = NewProduct::try_from(dto)?;
+    let shop = state.shop_id;
+    let after = state
+        .blocking(move |c| service::update(c, shop, id, new))
+        .await?;
+    Ok(Json(ProductDto::from(after)))
+}
