@@ -95,8 +95,9 @@ struct TicketView {
 
 /// The 80 mm ticket for `doc`, in `lang`, as one standalone HTML page.
 ///
-/// Pinned byte for byte by `fixtures/print/ticket_80mm/`, six files: three
-/// languages under the réel and the same three under the IFU.
+/// Pinned byte for byte by `fixtures/print/ticket_80mm/`, nine files: three
+/// languages under the réel paid in cash, the same three under the IFU, and
+/// the same three under the réel paid by card.
 pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, CoreError> {
     // `regime_ifu_prints_no_tva` is a rule about the document, not a layout
     // the template applies on the way past. A stored IFU document that
