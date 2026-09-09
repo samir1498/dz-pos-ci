@@ -233,18 +233,17 @@ fn a_backup_is_due_when_there_is_none_or_the_newest_is_a_day_old() {
 
 #[test]
 fn a_copy_that_cannot_be_finished_leaves_no_name_the_list_would_trust() {
-    use std::os::unix::fs::PermissionsExt;
-
     let (dir, mut conn) = open_temp();
     let backups = dir.path().join("backups");
-    // One good copy first, so the failures below have something to leave
+    // One good copy first, so the failure below has something to leave
     // alone.
     backup::create(&mut conn, &backups, at(1, 3)).unwrap();
 
-    // The name the next copy wants is taken by something that is not a file.
-    // A half-written copy under a name the list trusts is the thing to
-    // avoid: `list` would report it as the newest, `is_due` would be false
-    // for a day, and a restore would be offered a file that is not one.
+    // The name the next copy wants is taken by something that is not a file,
+    // which no rename can write over on any system and as any user. A
+    // half-written copy under a name the list trusts is the thing to avoid:
+    // `list` would report it as the newest, `is_due` would be false for a
+    // day, and a restore would be offered a file that is not one.
     let taken = backups.join(backup::file_name(at(2, 3)));
     std::fs::create_dir(&taken).unwrap();
     assert!(backup::create(&mut conn, &backups, at(2, 3)).is_err());
@@ -255,16 +254,45 @@ fn a_copy_that_cannot_be_finished_leaves_no_name_the_list_would_trust() {
     );
     std::fs::remove_dir(&taken).unwrap();
 
-    // A folder that cannot be written to at all.
-    std::fs::set_permissions(&backups, std::fs::Permissions::from_mode(0o555)).unwrap();
-    let refused = backup::create(&mut conn, &backups, at(3, 3));
-    std::fs::set_permissions(&backups, std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert!(refused.is_err(), "an unwritable folder answered ok");
-
     let left: Vec<String> = std::fs::read_dir(&backups)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
+    assert_eq!(
+        left,
+        vec![backup::file_name(at(1, 3))],
+        "a failed copy left something behind"
+    );
+}
+
+/// The other way a copy fails: the folder itself will not take a write. Unix
+/// only, since it turns on the permission bits, and skipped when the process
+/// can write through them anyway, which is what root does: the assertion
+/// below would pass without proving anything.
+#[cfg(unix)]
+#[test]
+fn a_folder_that_cannot_be_written_to_is_an_error_and_not_a_copy() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let (dir, mut conn) = open_temp();
+    let backups = dir.path().join("backups");
+    backup::create(&mut conn, &backups, at(1, 3)).unwrap();
+
+    std::fs::set_permissions(&backups, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // The bits are set; whether they bind this user is another question.
+    let bits_bind = std::fs::write(backups.join("probe"), b"x").is_err();
+    let refused = backup::create(&mut conn, &backups, at(3, 3));
+    let left: Vec<String> = std::fs::read_dir(&backups)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    std::fs::set_permissions(&backups, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    if !bits_bind {
+        // Running as root: nothing was refused and nothing is proved.
+        return;
+    }
+    assert!(refused.is_err(), "an unwritable folder answered ok");
     assert_eq!(
         left,
         vec![backup::file_name(at(1, 3))],
