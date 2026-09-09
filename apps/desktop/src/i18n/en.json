@@ -294,7 +294,8 @@
   "documents_cancel_action": "Discard",
   "documents_cancel_confirm": "Confirm the cancellation",
   "documents_cancel_stock_only": "The document keeps its number and the goods go back into stock.",
-  "documents_cancel_with_avoir": "The document keeps its number, the goods go back into stock and a credit note is issued for what the customer owed.",
+  "documents_cancel_with_avoir": "The document keeps its number, the goods go back into stock and {amount} DA come off the customer's account.",
+  "documents_cancel_nothing": "The document keeps its number. Nothing else moves: the goods have already come back on credit notes and the customer's account is settled.",
   "documents_print": "Printing",
   "till_kind_proforma": "Proforma",
   "till_proforma_needs_customer": "A proforma is made out to a customer: pick one."

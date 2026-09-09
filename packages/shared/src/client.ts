@@ -32,6 +32,7 @@ import type { SaleWarningDto } from "./generated/SaleWarningDto";
 import type { SaleDto } from "./generated/SaleDto";
 import type { SaleKindDto } from "./generated/SaleKindDto";
 import type { SaleLineDto } from "./generated/SaleLineDto";
+import type { SaleCancelEffectDto } from "./generated/SaleCancelEffectDto";
 import type { SaleCancellationDto } from "./generated/SaleCancellationDto";
 import type { NewAvoirDto } from "./generated/NewAvoirDto";
 import type { CancelDocumentDto } from "./generated/CancelDocumentDto";
@@ -332,6 +333,24 @@ function isSaleCancellation(value: unknown): value is SaleCancellationDto | null
   );
 }
 
+/** What cancelling this document would do, or nothing at all when the answer
+ *  was a list rather than a read of one document. Checked shape by shape,
+ *  because the amount belongs to exactly one of them: a screen that read an
+ *  amount off `stock_back` would be showing a figure the server never sent. */
+function isSaleCancelEffect(value: unknown): value is SaleCancelEffectDto | null {
+  if (value === null) return true;
+  if (!isRecord(value)) return false;
+  switch (value.effect) {
+    case "nothing_to_reverse":
+    case "stock_back":
+      return true;
+    case "stock_back_and_avoir":
+      return isExactInteger(value.amount_centimes);
+    default:
+      return false;
+  }
+}
+
 function isSaleTva(value: unknown): value is SaleTvaDto {
   return (
     isRecord(value) &&
@@ -394,6 +413,7 @@ export function isSale(value: unknown): value is SaleDto {
     isNullableExactInteger(value.change_centimes) &&
     isDocumentStatus(value.status) &&
     isSaleCancellation(value.cancellation) &&
+    isSaleCancelEffect(value.cancel_effect) &&
     Array.isArray(value.lines) &&
     value.lines.every(isSaleLine) &&
     isNullableSaleWarning(value.warning)

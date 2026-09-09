@@ -294,7 +294,8 @@
   "documents_cancel_action": "Abandonner",
   "documents_cancel_confirm": "Confirmer l'annulation",
   "documents_cancel_stock_only": "Le document garde son numéro et la marchandise revient en stock.",
-  "documents_cancel_with_avoir": "Le document garde son numéro, la marchandise revient en stock et un avoir est émis pour la dette du client.",
+  "documents_cancel_with_avoir": "Le document garde son numéro, la marchandise revient en stock et {amount} DA sont retirés du compte du client.",
+  "documents_cancel_nothing": "Le document garde son numéro. Rien d'autre ne bouge : la marchandise est déjà revenue sur des avoirs et le compte du client est à jour.",
   "documents_print": "Impression",
   "till_kind_proforma": "Proforma",
   "till_proforma_needs_customer": "Une proforma est établie au nom d'un client : choisissez-en un."

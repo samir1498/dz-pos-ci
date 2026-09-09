@@ -294,7 +294,8 @@
   "documents_cancel_action": "تراجع",
   "documents_cancel_confirm": "تأكيد الإلغاء",
   "documents_cancel_stock_only": "تحتفظ الوثيقة برقمها وتعود البضاعة إلى المخزون.",
-  "documents_cancel_with_avoir": "تحتفظ الوثيقة برقمها، وتعود البضاعة إلى المخزون، ويحرَّر إشعار دائن بما على الزبون.",
+  "documents_cancel_with_avoir": "تحتفظ الوثيقة برقمها، وتعود البضاعة إلى المخزون، ويُخصم {amount} دج من حساب الزبون.",
+  "documents_cancel_nothing": "تحتفظ الوثيقة برقمها. لا شيء آخر يتحرك: البضاعة عادت على إشعارات دائنة وحساب الزبون مسوًّى.",
   "documents_print": "الطباعة",
   "till_kind_proforma": "فاتورة أولية",
   "till_proforma_needs_customer": "الفاتورة الأولية تحرَّر باسم زبون: اختر واحدا."

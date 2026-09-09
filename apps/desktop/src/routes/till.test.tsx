@@ -123,6 +123,7 @@ const sale: SaleDto = {
   change_centimes: 20_800,
   status: "issued",
   cancellation: null,
+  cancel_effect: null,
   lines: [
     {
       id: 1,

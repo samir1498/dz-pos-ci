@@ -21,6 +21,7 @@ import type {
   AvoirLineDto,
   DocumentKindDto,
   PrintPaper,
+  SaleCancelEffectDto,
   SaleDto,
   SaleKindDto,
 } from "@dzpos/shared";
@@ -395,6 +396,23 @@ function AvoirPanel({ facture }: { facture: SaleDto }) {
  *  different thing when the document put money on a customer's account: the
  *  goods come back either way, and a facture carrying debt is undone by an
  *  avoir the core writes with it (features.md §3). */
+/** The sentence for one effect. The amount is put into the sentence rather
+ *  than after it, because the three languages do not agree on where in the
+ *  line a figure belongs: Arabic reads it mid-sentence. */
+function says(t: (k: Key) => string, effect: SaleCancelEffectDto): string {
+  switch (effect.effect) {
+    case "nothing_to_reverse":
+      return t("documents_cancel_nothing");
+    case "stock_back":
+      return t("documents_cancel_stock_only");
+    case "stock_back_and_avoir":
+      return t("documents_cancel_with_avoir").replace(
+        "{amount}",
+        formatCentimes(effect.amount_centimes),
+      );
+  }
+}
+
 function CancelPanel({ document }: { document: SaleDto }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -409,10 +427,14 @@ function CancelPanel({ document }: { document: SaleDto }) {
       await queryClient.invalidateQueries({ queryKey: salesQueryPrefix() });
     },
   });
-  // Read off the document rather than off the balance: a facture on credit
-  // that has since been paid still has to be undone through an avoir, and
-  // its remaining debt is zero.
-  const carriesDebt = document.customer_id !== null && document.payment_mode === "credit";
+  // The server's own answer, never re-derived here. A facture whose goods have
+  // all come back on earlier credit notes carries debt, was sold on credit and
+  // names a customer, and cancelling it does nothing at all: every field this
+  // screen could read says the opposite of what will happen.
+  //
+  // Absent while the document is still loading, which is the one case with
+  // nothing to say yet.
+  const effect = document.cancel_effect;
 
   return (
     <section aria-label={t("documents_cancel")} className="flex flex-col gap-2 rounded border p-3">
@@ -425,9 +447,7 @@ function CancelPanel({ document }: { document: SaleDto }) {
             cancel.mutate();
           }}
         >
-          <p role="status">
-            {t(carriesDebt ? "documents_cancel_with_avoir" : "documents_cancel_stock_only")}
-          </p>
+          <p role="status">{effect === null ? t("products_loading") : says(t, effect)}</p>
           <label className="flex flex-col gap-1">
             {t("documents_reason")}
             <input

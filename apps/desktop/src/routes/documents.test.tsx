@@ -58,6 +58,7 @@ const facture: SaleDto = {
   change_centimes: null,
   status: "issued",
   cancellation: null,
+  cancel_effect: null,
   lines: [
     {
       id: 11,
@@ -130,6 +131,10 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+/** What the server says cancelling each document would do. The screen shows
+ *  the server's answer and never re-derives it. */
+let effect: (id: number) => unknown;
+
 let list: SaleDto[];
 let avoirs: SaleDto[];
 let posted: { url: string; body: unknown }[];
@@ -137,6 +142,10 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   list = [facture, ticket];
+  effect = (id) =>
+    id === ticket.id
+      ? { effect: "stock_back" }
+      : { effect: "stock_back_and_avoir", amount_centimes: 300_000 };
   avoirs = [];
   posted = [];
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
@@ -173,7 +182,9 @@ beforeEach(() => {
     if (byId !== null) {
       const id = Number(byId[1]);
       const found = [...list, avoir].find((d) => d.id === id);
-      return Promise.resolve(json(200, found ?? facture));
+      // A read of one document carries what cancelling it would do; the list
+      // does not, which is why the panel reads the document again.
+      return Promise.resolve(json(200, { ...(found ?? facture), cancel_effect: effect(id) }));
     }
     if (url.includes("/sales")) {
       const kind = new URL(url).searchParams.get("kind");
@@ -300,14 +311,29 @@ describe("the avoir", () => {
 });
 
 describe("the cancellation", () => {
-  test("the confirm names the avoir when the document carries debt", async () => {
+  test("the confirm names the amount coming off the account, from the server's answer", async () => {
     const user = userEvent.setup();
     mount();
     await screen.findByText("FA-000004");
     await user.click(screen.getByRole("button", { name: "FA-000004" }));
     await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
-    expect(screen.getByText(fr.documents_cancel_with_avoir)).toBeTruthy();
+    expect(
+      screen.getByText(fr.documents_cancel_with_avoir.replace("{amount}", "3 000,00")),
+    ).toBeTruthy();
     expect(screen.queryByText(fr.documents_cancel_stock_only)).toBeNull();
+  });
+
+  test("a facture already credited in full says that nothing will move", async () => {
+    // Every field the screen could re-derive this from says otherwise: it
+    // carries debt, it was sold on credit and it names a customer.
+    effect = () => ({ effect: "nothing_to_reverse" });
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("FA-000004");
+    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
+    const said = screen.getByRole("status");
+    expect(said.textContent).toBe(fr.documents_cancel_nothing);
   });
 
   test("a cash ticket owed nobody anything, so the confirm is the stock alone", async () => {

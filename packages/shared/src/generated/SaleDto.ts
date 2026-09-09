@@ -4,6 +4,7 @@ import type { DocumentStatusDto } from "./DocumentStatusDto";
 import type { PaymentModeDto } from "./PaymentModeDto";
 import type { RegimeDto } from "./RegimeDto";
 import type { SaleBalanceDto } from "./SaleBalanceDto";
+import type { SaleCancelEffectDto } from "./SaleCancelEffectDto";
 import type { SaleCancellationDto } from "./SaleCancellationDto";
 import type { SaleLineDto } from "./SaleLineDto";
 import type { SaleTotalsDto } from "./SaleTotalsDto";
@@ -48,6 +49,13 @@ balance: SaleBalanceDto | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, t
  * whom, why, and the avoir that carried the money back when one did.
  */
 cancellation: SaleCancellationDto | null, lines: Array<SaleLineDto>, 
+/**
+ * What cancelling this document would do, so a screen can say it before
+ * it asks. Null on a list and on the answer to a sale: it is a question
+ * about one stored document and it costs a read of that document's credit
+ * notes, so only a read of one document carries it.
+ */
+cancel_effect: SaleCancelEffectDto | null, 
 /**
  * What the till should say while still handing over the ticket, null
  * when there is nothing to say. A read of a stored document carries

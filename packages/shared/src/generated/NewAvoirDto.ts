@@ -2,8 +2,13 @@
 import type { AvoirLineDto } from "./AvoirLineDto";
 
 /**
- * What is coming back on a credit note. `lines` unset is the whole of what
+ * What is coming back on a credit note. `lines` of null is the whole of what
  * is left on the facture, which is what the "avoir the lot" button sends and
  * what a cancellation uses.
+ *
+ * Which is why a field this type does not know is refused rather than
+ * dropped: `line` for `lines` would otherwise read as the whole facture
+ * coming back, and a shop asking for one unit of three would have credited
+ * all three without being told.
  */
 export type NewAvoirDto = { lines: Array<AvoirLineDto> | null, reason: string | null, };

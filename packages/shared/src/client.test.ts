@@ -441,6 +441,7 @@ const sale: SaleDto = {
   change_centimes: 3_820,
   status: "issued",
   cancellation: null,
+  cancel_effect: null,
   lines: [
     {
       id: 1,
@@ -606,6 +607,31 @@ describe("sales", () => {
     delete withoutNumber.printed_number;
     const api = createClient("http://x", stub(200, withoutNumber));
     await expect(api.getSale(1)).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  test("the cancel effect is taken shape by shape and its amount is not read off the others", async () => {
+    // The amount belongs to one of the three shapes. A guard that only looked
+    // for the word would let an amount through on `stock_back`, and the
+    // confirm would show a figure the server never sent.
+    for (const effect of [
+      { effect: "nothing_to_reverse" },
+      { effect: "stock_back" },
+      { effect: "stock_back_and_avoir", amount_centimes: 300_000 },
+    ]) {
+      const api = createClient("http://x", stub(200, { ...sale, cancel_effect: effect }));
+      await expect(api.getSale(1)).resolves.toMatchObject({ cancel_effect: effect });
+    }
+
+    for (const bad of [
+      // The one that carries an amount, without it.
+      { effect: "stock_back_and_avoir" },
+      { effect: "stock_back_and_avoir", amount_centimes: 1.5 },
+      // A word nothing matches on.
+      { effect: "avoir" },
+    ]) {
+      const api = createClient("http://x", stub(200, { ...sale, cancel_effect: bad }));
+      await expect(api.getSale(1)).rejects.toMatchObject({ code: "bad_response" });
+    }
   });
 
   test("a ticket comes back as the page the core rendered, not as JSON", async () => {

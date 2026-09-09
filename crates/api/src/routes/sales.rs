@@ -54,8 +54,20 @@ pub async fn get_one(
     let Path(id) =
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
     let shop = state.shop_id;
-    let found = state.blocking(move |c| documents::get(c, shop, id)).await?;
-    Ok(Json(SaleDto::from(found)))
+    // The document and what cancelling it would do, in one call on the pool:
+    // the screen showing the document is the screen that asks, and the two
+    // reads have to be answers about the same file.
+    let (found, effect) = state
+        .blocking(move |c| {
+            let found = documents::get(c, shop, id)?;
+            let effect = documents::cancel_effect(c, shop, id)?;
+            Ok((found, effect))
+        })
+        .await?;
+    Ok(Json(SaleDto {
+        cancel_effect: Some(effect.into()),
+        ..SaleDto::from(found)
+    }))
 }
 
 /// The language the ticket prints in. Named by the caller on every call

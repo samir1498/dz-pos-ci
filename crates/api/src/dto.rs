@@ -19,6 +19,7 @@ use dzpos_core::services::avoir::AvoirLine;
 use dzpos_core::services::backup::Backup;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
 use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
+use dzpos_core::services::documents::CancelEffect;
 use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, SaleKind, Warning};
 use dzpos_core::services::settings::DatedRegime;
 use serde::{Deserialize, Serialize};
@@ -651,11 +652,51 @@ pub struct SaleDto {
     /// whom, why, and the avoir that carried the money back when one did.
     pub cancellation: Option<SaleCancellationDto>,
     pub lines: Vec<SaleLineDto>,
+    /// What cancelling this document would do, so a screen can say it before
+    /// it asks. Null on a list and on the answer to a sale: it is a question
+    /// about one stored document and it costs a read of that document's credit
+    /// notes, so only a read of one document carries it.
+    pub cancel_effect: Option<SaleCancelEffectDto>,
     /// What the till should say while still handing over the ticket, null
     /// when there is nothing to say. A read of a stored document carries
     /// none: a warning is about the moment the sale was rung up, not about
     /// the paper.
     pub warning: Option<SaleWarningDto>,
+}
+
+/// What cancelling a document would do. A union rather than a word and a
+/// nullable amount, so the amount cannot go missing on the one shape that has
+/// one, and so the day a fourth effect exists the screens matching on these
+/// three stop compiling.
+///
+/// The screen must not work this out from the document's own fields. A
+/// facture whose goods have all come back on earlier credit notes carries
+/// debt, was sold on credit and names a customer, and cancelling it does
+/// nothing at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "SaleCancelEffectDto.ts")]
+#[serde(tag = "effect", rename_all = "snake_case")]
+pub enum SaleCancelEffectDto {
+    /// Annulled and nothing moves: every line has already come back.
+    NothingToReverse,
+    /// The goods go back on the shelf. Nobody was owed anything.
+    StockBack,
+    /// The goods go back and this much comes off the customer's account. On a
+    /// facture that is a numbered avoir; on a ticket it is a ledger row alone,
+    /// because an avoir is written against a facture.
+    StockBackAndAvoir { amount_centimes: i64 },
+}
+
+impl From<CancelEffect> for SaleCancelEffectDto {
+    fn from(e: CancelEffect) -> Self {
+        match e {
+            CancelEffect::NothingToReverse => SaleCancelEffectDto::NothingToReverse,
+            CancelEffect::StockBack => SaleCancelEffectDto::StockBack,
+            CancelEffect::StockBackAndAvoir { amount } => SaleCancelEffectDto::StockBackAndAvoir {
+                amount_centimes: amount.as_centimes(),
+            },
+        }
+    }
 }
 
 /// What the till should say about a sale that went through anyway. A union
@@ -727,6 +768,7 @@ impl From<Document> for SaleDto {
                 avoir_document_id: c.avoir_document_id,
             }),
             lines: d.lines.into_iter().map(Into::into).collect(),
+            cancel_effect: None,
             warning: None,
         }
     }

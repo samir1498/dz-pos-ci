@@ -1208,3 +1208,74 @@ async fn a_stray_field_is_refused_on_every_avoir_and_cancel_body() {
     assert_eq!(status, StatusCode::OK, "{avoirs}");
     assert_eq!(avoirs.as_array().map(Vec::len), Some(0), "{avoirs}");
 }
+
+/// What a cancellation would do, answered by the core on a read of one
+/// document. The screen cannot work it out from the fields beside it: a
+/// facture credited in full still carries debt, was still sold on credit and
+/// still names a customer, and cancelling it does nothing at all.
+#[tokio::test]
+async fn a_read_of_one_document_says_what_cancelling_it_would_do() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+
+    // A cash ticket: the goods and nothing else.
+    let (status, ticket) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 200_000,
+            "kind": "ticket"
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{ticket}");
+    let ticket_id = ticket["id"].as_i64().unwrap();
+    let (_, read) = call(&app, "GET", &format!("/sales/{ticket_id}"), None).await;
+    assert_eq!(read["cancel_effect"]["effect"], "stock_back", "{read}");
+
+    // A facture on credit: the goods and a credit note of the whole of it.
+    let facture = a_credit_facture(&app, p, 3_000).await;
+    let facture_id = facture["id"].as_i64().unwrap();
+    let (_, read) = call(&app, "GET", &format!("/sales/{facture_id}"), None).await;
+    assert_eq!(read["cancel_effect"]["effect"], "stock_back_and_avoir");
+    assert_eq!(read["cancel_effect"]["amount_centimes"], 300_000);
+
+    // Credited in part: the figure follows what is left.
+    let line_id = facture["lines"][0]["id"].as_i64().unwrap();
+    let (status, made) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/avoir"),
+        Some(json!({
+            "lines": [{ "document_line_id": line_id, "qty_milli": 1_000 }],
+            "reason": null
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+    let (_, read) = call(&app, "GET", &format!("/sales/{facture_id}"), None).await;
+    assert_eq!(read["cancel_effect"]["amount_centimes"], 200_000);
+
+    // Credited in full: nothing left to undo.
+    let (status, rest) = call(
+        &app,
+        "POST",
+        &format!("/sales/{facture_id}/avoir"),
+        Some(json!({ "lines": null, "reason": null })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{rest}");
+    let (_, read) = call(&app, "GET", &format!("/sales/{facture_id}"), None).await;
+    assert_eq!(
+        read["cancel_effect"]["effect"], "nothing_to_reverse",
+        "{read}"
+    );
+
+    // The list does not carry it: it is a question about one document and it
+    // costs a read of that document's credit notes.
+    let (_, listed) = call(&app, "GET", "/sales", None).await;
+    assert!(listed[0]["cancel_effect"].is_null(), "{listed}");
+}
