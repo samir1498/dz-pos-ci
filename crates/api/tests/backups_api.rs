@@ -460,7 +460,6 @@ async fn a_sidecar_left_behind_after_the_rename_stops_the_file_being_reopened() 
 #[tokio::test]
 async fn a_restore_stops_before_the_rename_when_the_log_cannot_be_folded_back() {
     use diesel::connection::SimpleConnection;
-    use diesel::prelude::*;
 
     let h = harness();
     call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
