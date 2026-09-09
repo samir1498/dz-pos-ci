@@ -285,7 +285,11 @@ first release.**
   three kinds that share a facture's blocks: it titles itself facture,
   avoir or proforma, and A5 is a `Paper` argument that changes the `@page`
   size line and nothing else, so there is no separate `facture_a5`,
-  `proforma_a4` or `avoir_a4` file to keep in step.
+  `proforma_a4` or `avoir_a4` file to keep in step. The question was asked
+  again when the avoir landed and the answer held: what an avoir does not
+  share with a facture is a title, the line naming the facture it corrects,
+  a words line saying avoir, and the stamp row it never carries, against a
+  second copy of the parties, the lines, the totals and the signatures.
   `bon_de_livraison_a4` is parked with the facture récapitulative (see
   Later); the `kind` stays in the model.
 - Golden-file test for every template × language against fixed fixtures.
@@ -307,6 +311,24 @@ first release.**
   of every recap row and of every line, the balance triple, the escaping of
   a product name that carries markup, and the words line against
   `amount_in_words` of the stored net.
+- The other three faces of `facture_a4`, same file and same mechanics:
+  `{fr,en,ar}-avoir.html` is a partial avoir of two lines against the credit
+  facture, naming it in a line of its own ("Avoir sur facture FA-000042 du
+  09/09/2026", the referenced facture's day and not the avoir's), with no
+  stamp row, its own words line and a balance block that says "solde
+  créditeur" because the customer's total closes below zero;
+  `{fr,en,ar}-proforma.html` is the same basket quoted, with a line saying
+  it has no accounting value, is not a facture and creates no debt, and no
+  balance block at all; `{fr,en,ar}-annulee.html` is the credit facture
+  reprinted after cancellation, keeping its number and every amount, under a
+  diagonal ANNULÉE mark with the day and the reason under the number. The
+  test holds that the cancelled reprint and the live facture differ in the
+  heading, the mark and the cancellation line only, that an avoir carrying a
+  droit de timbre and a proforma carrying a debt are refused rather than
+  quietly stripped, and that A5 differs from A4 in the `@page` line on every
+  one of the six cases. What the row does not carry (the referenced
+  facture's number and day, the cancellation's day and reason) is handed to
+  the renderer beside the document.
 - The print language is the language the till is being used in, passed by
   the caller on each call (`GET /sales/{id}/ticket?lang=fr|en|ar`). There is
   no separate print-language setting in v1.
