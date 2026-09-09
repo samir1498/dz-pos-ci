@@ -1474,3 +1474,113 @@ fn a_cancelled_document_takes_none_of_a_payment() {
         Money::centimes(150_000)
     );
 }
+
+#[test]
+fn the_oldest_document_is_the_one_issued_first_and_not_the_one_written_first() {
+    // The two orders are made to disagree: the newer facture is written into
+    // the file first and carries the lower id. Oldest-first means the day the
+    // paper was issued, which is what a customer means by "my oldest
+    // invoice", so a settlement sorted by id would fill the wrong one.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let newer = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    let older = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    assert!(
+        newer < older,
+        "the fixture no longer inverts the two orders"
+    );
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(100_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(
+        paid.allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [older]
+    );
+    assert_eq!(remaining_debt(&mut conn, older), Money::ZERO);
+    assert_eq!(remaining_debt(&mut conn, newer), Money::centimes(200_000));
+}
+
+#[test]
+fn two_documents_in_the_same_second_are_filled_in_the_order_they_were_written() {
+    // `issued_at` is whole seconds, so two factures rung up in the same
+    // second carry the same one. The id breaks the tie: settling oldest first
+    // has to mean one order, and the answer cannot depend on whichever order
+    // SQLite felt like returning.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let first = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let second = a_document_on_credit(&mut conn, customer, 200_000, 10);
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(150_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(
+        paid.allocations
+            .iter()
+            .map(|a| (a.document_id, a.amount.as_centimes()))
+            .collect::<Vec<(i32, i64)>>(),
+        [(first, 100_000), (second, 50_000)]
+    );
+}
+
+#[test]
+fn a_payment_never_reaches_the_documents_of_the_other_customer() {
+    // Two fiches of the same shop. Money handed over by one settles that
+    // one's paper and nothing else: the other customer's oldest facture is
+    // older than anything here and would be filled first by a query that
+    // forgot whose debt it was reading.
+    let (_dir, mut conn) = open_temp();
+    let payer = a_customer(&mut conn, "Entreprise Benali");
+    let other = a_customer(&mut conn, "Entreprise Amrani");
+    let theirs = a_document_on_credit(&mut conn, other, 100_000, 5);
+    let mine = a_document_on_credit(&mut conn, payer, 200_000, 10);
+
+    let paid = debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        payer,
+        Money::centimes(150_000),
+        PaymentMethod::Cash,
+        None,
+        at(12),
+    )
+    .unwrap();
+
+    assert_eq!(
+        paid.allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [mine]
+    );
+    assert_eq!(remaining_debt(&mut conn, theirs), Money::centimes(100_000));
+    assert_eq!(remaining_debt(&mut conn, mine), Money::centimes(50_000));
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, other).unwrap(),
+        Money::centimes(100_000),
+        "the other customer's balance moved"
+    );
+}
