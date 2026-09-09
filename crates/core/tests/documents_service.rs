@@ -306,14 +306,16 @@ fn the_list_is_newest_first_and_filters_by_kind() {
 #[test]
 fn two_documents_in_the_same_second_show_the_higher_id_first() {
     // issued_at is whole seconds and a busy till issues two tickets inside
-    // one, so the till expects the later sale first. The rows go in with the
-    // higher id first, so insertion order and the order under test disagree.
+    // one, so the till expects the later sale first. The ids are written by
+    // hand, the higher one first, so the order under test is the reverse of
+    // rowid order and a query that fell back to the file's own order would
+    // hand back 10 before 20.
     //
     // This pins what the screen shows, not the `id DESC` clause that
     // promises it: with the clause removed the query still passes, because
     // idx_documents_shop_issued is scanned backwards and equal issued_at
     // values come out by falling rowid anyway. Drop that index as well and
-    // the sort falls back to insertion order and this goes red.
+    // the sort falls back to rowid order and this goes red.
     let (_dir, mut conn) = open_temp();
     for (id, number) in [(20, 1), (10, 2)] {
         diesel::sql_query(format!(
