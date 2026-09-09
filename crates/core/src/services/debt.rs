@@ -539,13 +539,24 @@ pub fn settle_document(
     if amount == Money::ZERO {
         return Ok(None);
     }
-    let remaining = documents_repo::get(conn, shop_id, document_id)?
-        .balance
-        .map_or(Money::ZERO, |b| b.remaining_debt);
+    let document = documents_repo::get(conn, shop_id, document_id)?;
+    let remaining = document.balance.map_or(Money::ZERO, |b| b.remaining_debt);
     if amount > remaining {
         return Err(CoreError::validation(
             "amount",
             "a document cannot be settled for more than it is still asking for",
+        ));
+    }
+    // The same guard `settle_oldest_first` carries, for the same reason: an
+    // allocation written straight into the table moves no column, so the
+    // remaining figure above would read a document that has already been
+    // settled in full as still asking for everything. Σ of what is on it is
+    // the only thing that sees such a row.
+    let already = allocated_on(conn, shop_id, document_id)?;
+    if already.checked_add(amount)? > document.totals.net_to_pay {
+        return Err(CoreError::validation(
+            "amount_centimes",
+            "a document cannot be settled for more than it asked for",
         ));
     }
     let written = allocate(

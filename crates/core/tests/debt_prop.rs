@@ -13,11 +13,13 @@
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
-use dzpos_core::money::{Money, PaymentMode, Regime, Totals};
+use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals};
+use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
 use dzpos_core::services::documents::{
-    self, BalanceTriple, DocumentKind, NewDocument, PartyBlock, SellerBlock,
+    self, BalanceTriple, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, PartyBlock,
+    SellerBlock,
 };
 use proptest::prelude::*;
 
@@ -36,6 +38,9 @@ enum Step {
     /// Money handed over. Refused when it is more than the customer owes,
     /// which is one of the things worth generating.
     Pay(i64),
+    /// A credit note against the newest facture that still stands. `true` is
+    /// the whole of what is left on it, `false` is one of its four units.
+    Avoir(bool),
 }
 
 fn steps() -> impl Strategy<Value = Vec<Step>> {
@@ -44,6 +49,7 @@ fn steps() -> impl Strategy<Value = Vec<Step>> {
         amount.clone().prop_map(Step::Sell),
         (amount.clone(), any::<bool>()).prop_map(|(a, up)| Step::Correct(if up { a } else { -a })),
         amount.prop_map(Step::Pay),
+        any::<bool>().prop_map(Step::Avoir),
     ];
     prop::collection::vec(step, 1..=12)
 }
@@ -91,6 +97,21 @@ proptest! {
                             prop_assert_eq!(before, after, "a refused payment moved the balance");
                         }
                         Err(other) => prop_assert!(false, "step {}: {:?}", n, other),
+                    }
+                }
+                Step::Avoir(whole) => {
+                    day += 1;
+                    let before = debt::balance(&mut conn, SHOP, customer).unwrap();
+                    match an_avoir(&mut conn, customer, whole, day) {
+                        // No facture standing with anything left on it, or one
+                        // whose whole value has already come back: the credit
+                        // note has nothing to be written against.
+                        None | Some(Ok(_)) => {}
+                        Some(Err(CoreError::Validation { .. })) => {
+                            let after = debt::balance(&mut conn, SHOP, customer).unwrap();
+                            prop_assert_eq!(before, after, "a refused avoir moved the balance");
+                        }
+                        Some(Err(other)) => prop_assert!(false, "step {}: {:?}", n, other),
                     }
                 }
             }
@@ -144,6 +165,20 @@ fn check(conn: &mut SqliteConnection, customer: i32, n: usize) -> Result<(), Tes
             n,
             document_id,
             remaining
+        );
+        // Σ of what has been placed on a document never passes what it asked
+        // for. It follows from the equality below while the equality holds,
+        // and it is stated on its own because it is the thing the guards in
+        // `settle_document` and `settle_oldest_first` defend: a row written
+        // into `debt_allocations` moves no column, so a file can hold a
+        // document settled twice over whose remaining figure still adds up.
+        prop_assert!(
+            placed <= net_to_pay,
+            "step {}: document {} carries allocations of {} against a net of {}",
+            n,
+            document_id,
+            placed,
+            net_to_pay
         );
         prop_assert_eq!(
             placed + remaining,
@@ -202,9 +237,14 @@ fn issued_documents(conn: &mut SqliteConnection, customer: i32) -> Vec<(i32, i64
         #[diesel(sql_type = diesel::sql_types::BigInt)]
         net_to_pay_centimes: i64,
     }
+    // Not the avoirs. A credit note's stored triple is its own effect on the
+    // account, and its middle figure is the negative of its net rather than
+    // something the customer is being asked for (features.md §3). It is the
+    // papers that ask for money that this invariant is about.
     diesel::sql_query(format!(
         "SELECT id, remaining_debt_centimes, net_to_pay_centimes FROM documents \
-         WHERE shop_id = {SHOP} AND customer_id = {customer} AND status = 'issued'"
+         WHERE shop_id = {SHOP} AND customer_id = {customer} AND status = 'issued' \
+         AND kind != 'avoir'"
     ))
     .load::<Row>(conn)
     .unwrap()
@@ -299,7 +339,21 @@ fn a_facture_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, 
             },
             tendered: None,
             change: None,
-            lines: Vec::new(),
+            // Four units of one nameless article, because an avoir credits
+            // lines and a facture with none of them cannot be credited at all.
+            // A quarter of the net apiece, which every amount the generator
+            // makes divides into exactly.
+            lines: vec![NewDocumentLine {
+                product_id: None,
+                name: "Article".to_string(),
+                barcode: None,
+                qty_milli: 4_000,
+                unit_price: Money::centimes(net.as_centimes() / 4),
+                line_discount: Money::ZERO,
+                rate_bps: Bps::ZERO,
+                line_total: net,
+                ref_line_id: None,
+            }],
         },
     )
     .unwrap();
@@ -320,4 +374,36 @@ fn a_facture_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, 
     .unwrap();
     debt::settle_from_credit(conn, SHOP, customer_id, doc.id, consumed).unwrap();
     doc.id
+}
+
+/// A credit note against the newest facture of the customer that still stands.
+/// `None` when there is no such facture, which is a step the generator is free
+/// to produce and which is not a failure.
+///
+/// A refusal is an answer here: a facture whose value has already come back in
+/// full refuses the next avoir, and what the invariant cares about is that the
+/// refusal left the file alone.
+fn an_avoir(
+    conn: &mut SqliteConnection,
+    customer_id: i32,
+    whole: bool,
+    day: u32,
+) -> Option<Result<i32, CoreError>> {
+    let issued_at = chrono::NaiveDate::from_ymd_opt(2026, 9, day)
+        .and_then(|d| d.and_hms_opt(11, 0, 0))
+        .unwrap();
+    let facture = documents::list(conn, SHOP, Some(DocumentKind::Facture))
+        .unwrap()
+        .into_iter()
+        .rfind(|d| d.customer_id == Some(customer_id) && d.status == DocumentStatus::Issued)?;
+    let line = facture.lines.first()?;
+    let lines = if whole {
+        None
+    } else {
+        Some(vec![AvoirLine {
+            document_line_id: line.id,
+            qty_milli: 1_000,
+        }])
+    };
+    Some(avoir::issue(conn, SHOP, OWNER, facture.id, lines, None, Some(issued_at)).map(|a| a.id))
 }
