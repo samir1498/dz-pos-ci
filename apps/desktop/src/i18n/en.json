@@ -141,5 +141,6 @@
   "error_discount_invalid": "Invalid discount.",
   "error_discount_above_line": "The discount is above the line.",
   "error_discount_above_total": "The discount is above the basket.",
-  "error_tendered_short": "The cash given is below the amount due."
+  "error_tendered_short": "The cash given is below the amount due.",
+  "error_print": "The ticket could not be prepared for printing."
 }

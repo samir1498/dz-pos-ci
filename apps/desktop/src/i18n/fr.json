@@ -141,5 +141,6 @@
   "error_discount_invalid": "Remise invalide.",
   "error_discount_above_line": "La remise dépasse la ligne.",
   "error_discount_above_total": "La remise dépasse le panier.",
-  "error_tendered_short": "Le montant reçu est inférieur au net à payer."
+  "error_tendered_short": "Le montant reçu est inférieur au net à payer.",
+  "error_print": "Le ticket n'a pas pu être préparé pour l'impression."
 }
