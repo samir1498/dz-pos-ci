@@ -72,10 +72,11 @@ fn full_store() -> Value {
     })
 }
 
-/// Today as the route sees it (UTC calendar day), so a date one day ahead
-/// is planned and one day back is current whatever the clock says.
+/// Today as the route sees it: Algeria's calendar, UTC+1 with no daylight
+/// saving. A day ahead is then planned and a day back current whatever
+/// the box's own clock says.
 fn today() -> chrono::NaiveDate {
-    chrono::Utc::now().date_naive()
+    (chrono::Utc::now() + chrono::Duration::hours(1)).date_naive()
 }
 
 fn day(d: chrono::NaiveDate) -> String {
@@ -289,4 +290,23 @@ async fn the_settings_routes_need_the_token_and_refuse_other_methods() {
         assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED, "{method} {uri}");
         assert_eq!(body["error"]["code"], "method_not_allowed");
     }
+}
+
+#[tokio::test]
+async fn a_change_to_the_regime_in_force_on_that_day_is_refused_and_moves_nothing() {
+    let h = harness();
+    let (status, body) = call(
+        &h.app,
+        "POST",
+        "/settings/regime",
+        Some(json!({ "regime": "reel", "valid_from": day(today()) })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["error"]["code"], "validation");
+    let (_, all) = call(&h.app, "GET", "/settings", None).await;
+    assert_eq!(
+        all["regime"]["valid_from"], "2026-01-01",
+        "the since date did not move"
+    );
 }

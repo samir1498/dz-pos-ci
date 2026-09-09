@@ -214,23 +214,18 @@ pub struct ApiErrorPayloadDto {
 }
 
 /// The seller block a ticket prints (features.md §3). Sent whole on every
-/// write: a field left out is a bug at the edge, a null clears the column.
+/// write: an identifier left out or sent null is cleared, a name is
+/// required, and a field the type does not know is refused.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export_to = "StoreDto.ts")]
 #[serde(deny_unknown_fields)]
 pub struct StoreDto {
     pub name: String,
-    #[serde(default)]
     pub rc: Option<String>,
-    #[serde(default)]
     pub nif: Option<String>,
-    #[serde(default)]
     pub nis: Option<String>,
-    #[serde(default)]
     pub ai: Option<String>,
-    #[serde(default)]
     pub address: Option<String>,
-    #[serde(default)]
     pub phone: Option<String>,
 }
 

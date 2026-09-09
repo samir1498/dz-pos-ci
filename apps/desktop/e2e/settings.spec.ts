@@ -37,10 +37,10 @@ const RC = "16/00-1234567 B 20";
 const NIF = "000016001234567";
 const PHONE = "0555 12 34 56";
 
-/** A day as the API writes it, `YYYY-MM-DD`, on the UTC calendar the
- * server reads "today" from. */
+/** A day as the API writes it, `YYYY-MM-DD`, on the calendar the server
+ * reads "today" from: Algeria's, UTC+1 with no daylight saving. */
 function day(offsetDays: number): string {
-  const d = new Date();
+  const d = new Date(Date.now() + 3600_000);
   d.setUTCDate(d.getUTCDate() + offsetDays);
   return d.toISOString().slice(0, 10);
 }

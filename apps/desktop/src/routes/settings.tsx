@@ -46,8 +46,9 @@ function todayAsDay(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-function toRegime(value: string): RegimeDto {
-  return REGIMES.find((r) => r === value) ?? "reel";
+/** A fiscal value is never guessed: an unknown option blocks the submit. */
+function toRegime(value: string): RegimeDto | undefined {
+  return REGIMES.find((r) => r === value);
 }
 
 export function SettingsScreen() {
@@ -246,8 +247,13 @@ function RegimePanel({
   const form = useForm({
     defaultValues: { regime: String(current.regime), validFrom: todayAsDay() },
     onSubmit: async ({ value }) => {
+      const regime = toRegime(value.regime);
+      if (regime === undefined) {
+        setServerError("error_validation");
+        return;
+      }
       await change
-        .mutateAsync({ regime: toRegime(value.regime), valid_from: value.validFrom })
+        .mutateAsync({ regime, valid_from: value.validFrom })
         .catch(() => undefined);
     },
   });
@@ -328,15 +334,23 @@ function RegimePanel({
         </p>
       ) : null}
 
-      <div>
-        <button
-          type="submit"
-          className="rounded border px-3 py-1.5"
-          disabled={change.isPending}
-        >
-          {change.isPending ? t("action_saving") : t("action_apply")}
-        </button>
-      </div>
+      <form.Subscribe selector={(state) => state.values.regime}>
+        {(regime) => (
+          <div>
+            <button
+              type="submit"
+              className="rounded border px-3 py-1.5 disabled:opacity-50"
+              // Applying the régime already in force would only move its
+              // "since" date to today (the API refuses it too). With a
+              // change planned ahead, re-applying the current régime is
+              // how that plan is cancelled, so the button stays live.
+              disabled={change.isPending || (regime === current.regime && planned === null)}
+            >
+              {change.isPending ? t("action_saving") : t("action_apply")}
+            </button>
+          </div>
+        )}
+      </form.Subscribe>
     </form>
   );
 }

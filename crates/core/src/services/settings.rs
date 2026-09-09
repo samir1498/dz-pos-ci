@@ -92,6 +92,18 @@ pub fn set_regime(
     regime: Regime,
     valid_from: NaiveDateTime,
 ) -> Result<(), CoreError> {
+    // The shop is already under that régime on that day: nothing to
+    // record. Accepting it would move the "since" date a comptable reads
+    // to the day of the click. Before the first row there is no régime to
+    // compare with, so a first entry is always accepted.
+    if repo::value_as_of(conn, shop_id, REGIME_FISCAL, valid_from)?.as_deref()
+        == Some(stored(regime))
+    {
+        return Err(CoreError::validation(
+            REGIME_FISCAL,
+            "the shop is already under that régime on that day",
+        ));
+    }
     repo::append(conn, shop_id, REGIME_FISCAL, stored(regime), valid_from)
 }
 

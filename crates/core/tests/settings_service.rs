@@ -7,6 +7,7 @@
 
 use chrono::NaiveDate;
 use diesel::sqlite::SqliteConnection;
+use dzpos_core::error::CoreError;
 use dzpos_core::money::Regime;
 use dzpos_core::services::settings;
 
@@ -171,5 +172,41 @@ fn the_dated_reads_are_scoped_by_shop() {
     assert_eq!(
         settings::regime_planned(&mut conn, 2, at(2026, 3, 15)).unwrap(),
         None
+    );
+}
+
+#[test]
+fn a_change_to_the_regime_already_in_force_on_that_day_is_refused() {
+    // Seeded: reel from 2026-01-01. "Réel from today" would only move the
+    // since date; the row is refused and the series is untouched.
+    let (_dir, mut conn) = open_temp();
+    let err = settings::set_regime(&mut conn, SHOP, Regime::Reel, at(2026, 9, 9)).unwrap_err();
+    assert!(matches!(&err, CoreError::Validation { field, .. } if field == "regime_fiscal"));
+    let current = settings::regime_current(&mut conn, SHOP, at(2026, 9, 9)).unwrap();
+    assert_eq!(
+        current.valid_from,
+        at(2026, 1, 1),
+        "the since date did not move"
+    );
+
+    // Cancelling a planned change is a change: ifu planned for 2027, then
+    // reel from the same day is what is in force there, so it is refused
+    // only once the planned row is the one in force. Reel dated 2027-01-01
+    // is compared with the planned ifu row, and lands.
+    settings::set_regime(&mut conn, SHOP, Regime::Ifu, at(2027, 1, 1)).unwrap();
+    settings::set_regime(&mut conn, SHOP, Regime::Reel, at(2027, 1, 1)).unwrap();
+    assert_eq!(
+        settings::regime_current(&mut conn, SHOP, at(2027, 1, 1))
+            .unwrap()
+            .regime,
+        Regime::Reel
+    );
+    // Before the first row there is nothing to compare with.
+    settings::set_regime(&mut conn, SHOP, Regime::Reel, at(2025, 6, 1)).unwrap();
+    assert_eq!(
+        settings::regime_current(&mut conn, SHOP, at(2025, 7, 1))
+            .unwrap()
+            .valid_from,
+        at(2025, 6, 1)
     );
 }

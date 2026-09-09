@@ -240,6 +240,7 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
     await user.clear(within(regimeForm).getByLabelText(fr.field_valid_from));
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     expect(await within(regimeForm).findByRole("alert")).toHaveTextContent(fr.error_day_invalid);
@@ -252,7 +253,29 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     expect(await within(regimeForm).findByRole("alert")).toHaveTextContent(fr.error_validation);
+  });
+
+  test("apply is off while the régime chosen is the one in force, on again once it differs", async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByLabelText(fr.field_name);
+    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const apply = within(regimeForm).getByRole("button", { name: fr.action_apply });
+    expect(apply).toBeDisabled();
+    await user.click(apply);
+    expect(countOf("POST")).toBe(0);
+    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    expect(apply).toBeEnabled();
+  });
+
+  test("with a change planned, re-applying the régime in force stays possible: it cancels the plan", async () => {
+    current = { ...seeded, regime_planned: { regime: "ifu", valid_from: "2099-01-01" } };
+    mount();
+    await screen.findByTestId("regime-planned");
+    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    expect(within(regimeForm).getByRole("button", { name: fr.action_apply })).toBeEnabled();
   });
 });
