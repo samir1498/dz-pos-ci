@@ -8,7 +8,15 @@
 import type { ApiErrorDto } from "./generated/ApiErrorDto";
 import type { BackupDto } from "./generated/BackupDto";
 import type { BackupsDto } from "./generated/BackupsDto";
+import type { AdjustmentDto } from "./generated/AdjustmentDto";
 import type { CategoryDto } from "./generated/CategoryDto";
+import type { CustomerDto } from "./generated/CustomerDto";
+import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
+import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
+import type { DebtEntryDto } from "./generated/DebtEntryDto";
+import type { DebtKindDto } from "./generated/DebtKindDto";
+import type { NewCustomerDto } from "./generated/NewCustomerDto";
+import type { PartyKindDto } from "./generated/PartyKindDto";
 import type { HealthDto } from "./generated/HealthDto";
 import type { DocumentKindDto } from "./generated/DocumentKindDto";
 import type { DocumentStatusDto } from "./generated/DocumentStatusDto";
@@ -282,6 +290,78 @@ function isSaleList(value: unknown): value is SaleDto[] {
   return Array.isArray(value) && value.every(isSale);
 }
 
+const PARTY_KINDS: readonly PartyKindDto[] = ["company", "consumer"];
+
+function isPartyKind(value: unknown): value is PartyKindDto {
+  return typeof value === "string" && PARTY_KINDS.some((k) => k === value);
+}
+
+const DEBT_KINDS: readonly DebtKindDto[] = [
+  "opening",
+  "sale",
+  "payment",
+  "avoir",
+  "adjustment",
+];
+
+function isDebtKind(value: unknown): value is DebtKindDto {
+  return typeof value === "string" && DEBT_KINDS.some((k) => k === value);
+}
+
+/** A fiche, with the balance the core summed. Every amount is checked as an
+ *  exact integer: a debt JSON.parse had to round is refused rather than
+ *  shown to a shop. */
+export function isCustomer(value: unknown): value is CustomerDto {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.shop_id === "number" &&
+    typeof value.name === "string" &&
+    isPartyKind(value.party_kind) &&
+    isNullableString(value.phone) &&
+    isNullableString(value.address) &&
+    isNullableString(value.rc) &&
+    isNullableString(value.nif) &&
+    isNullableString(value.nis) &&
+    isNullableString(value.ai) &&
+    isNullableExactInteger(value.credit_limit_centimes) &&
+    isNullableExactInteger(value.warn_threshold_centimes) &&
+    isNullableString(value.notes) &&
+    typeof value.active === "boolean" &&
+    isExactInteger(value.balance_centimes)
+  );
+}
+
+function isCustomerList(value: unknown): value is CustomerDto[] {
+  return Array.isArray(value) && value.every(isCustomer);
+}
+
+export function isDebtEntry(value: unknown): value is DebtEntryDto {
+  return (
+    isRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.customer_id === "number" &&
+    isNullableNumber(value.document_id) &&
+    isDebtKind(value.kind) &&
+    isExactInteger(value.debit_centimes) &&
+    isExactInteger(value.credit_centimes) &&
+    isExactInteger(value.balance_after_centimes) &&
+    typeof value.user_id === "number" &&
+    isNullableString(value.note) &&
+    typeof value.created_at === "string"
+  );
+}
+
+export function isCustomerLedger(value: unknown): value is CustomerLedgerDto {
+  return (
+    isRecord(value) &&
+    typeof value.customer_id === "number" &&
+    isExactInteger(value.balance_centimes) &&
+    Array.isArray(value.entries) &&
+    value.entries.every(isDebtEntry)
+  );
+}
+
 async function unwrap(res: Response): Promise<unknown> {
   const text = await res.text();
   let body: unknown = null;
@@ -470,6 +550,59 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     /** Newest first, tickets only in M1. */
     async listSales(): Promise<SaleDto[]> {
       return narrow(await send("/sales"), isSaleList, "sale list");
+    },
+
+    /** The shop's customers, the active ones first. `search` is a piece of a
+     * name or a phone number; blank asks for the whole list, which is what an
+     * emptied search box means. */
+    async listCustomers(search?: string): Promise<CustomerDto[]> {
+      const trimmed = search === undefined ? "" : search.trim();
+      const query = trimmed === "" ? "" : `?q=${encodeURIComponent(trimmed).replace(/%20/g, "+")}`;
+      return narrow(await send(`/customers${query}`), isCustomerList, "customer list");
+    },
+
+    async getCustomer(id: number): Promise<CustomerDto> {
+      return narrow(await send(`/customers/${id}`), isCustomer, "customer");
+    },
+
+    /** Opens a fiche, and with it the opening debt when the shop is carrying
+     * one over. The opening debt is only on the create: a wrong one is
+     * corrected by an adjustment, never by editing the fiche. */
+    async createCustomer(input: NewCustomerDto): Promise<CustomerDto> {
+      const body = await send("/customers", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isCustomer, "customer");
+    },
+
+    /** The whole fiche; a null clears that field. */
+    async updateCustomer(id: number, input: CustomerWriteDto): Promise<CustomerDto> {
+      const body = await send(`/customers/${id}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isCustomer, "customer");
+    },
+
+    /** The movements newest first, each with the balance as of itself, and
+     * the balance they sum to. Both are the core's; nothing here adds a
+     * column up. */
+    async customerLedger(id: number): Promise<CustomerLedgerDto> {
+      return narrow(await send(`/customers/${id}/ledger`), isCustomerLedger, "customer ledger");
+    },
+
+    /** Corrects a balance by writing a movement: positive raises the debt,
+     * negative lowers it. The answer is the whole ledger again. */
+    async adjustCustomerDebt(id: number, input: AdjustmentDto): Promise<CustomerLedgerDto> {
+      const body = await send(`/customers/${id}/adjustments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, isCustomerLedger, "customer ledger");
     },
 
     async createProduct(input: NewProductDto): Promise<ProductDto> {
