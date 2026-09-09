@@ -63,7 +63,16 @@ function storageStateFor(lang: LangCode) {
 // The API refuses every call that does not show its launch token; the
 // desktop makes one per launch, this run makes one per suite and hands it
 // to both servers, the way the Tauri process hands it to its webview.
-const launchToken = randomBytes(32).toString("hex");
+//
+// It goes through the environment rather than staying a module constant
+// because a worker re-imports this file in its own process: a bare
+// `randomBytes` here would give each worker a different token from the one
+// the API was started with, and a spec that seeds a row through `request`
+// would be refused. The runner is the first to load this file, so it is the
+// one that mints the token; every worker it spawns inherits the variable and
+// takes that branch. `e2e/api.ts` reads the same variable.
+const launchToken = process.env.DZPOS_E2E_TOKEN ?? randomBytes(32).toString("hex");
+process.env.DZPOS_E2E_TOKEN = launchToken;
 
 const home = process.env.HOME ?? "";
 const cargoEnv = {
