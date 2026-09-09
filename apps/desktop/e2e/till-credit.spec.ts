@@ -182,7 +182,7 @@ test("sells on credit, warns at the threshold, is refused past the limit, overri
     (res) => res.url().endsWith("/sales") && res.request().method() === "POST",
   );
   await addAndPayOnCredit(page, SMALL);
-  expect((await refused).status()).toBe(409);
+  expect((await refused).status()).toBe(422);
 
   const over = BIG_PRICE + SMALL_PRICE;
   await expect(page.getByTestId("till-balance-after")).toHaveText(formatCentimes(over));

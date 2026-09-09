@@ -863,7 +863,7 @@ describe("on credit", () => {
   test("the refusal shows both amounts and the override resends the same basket", async () => {
     const user = userEvent.setup();
     saleAnswer = () =>
-      json(409, {
+      json(422, {
         error: {
           code: "credit_limit",
           message: "past the limit",

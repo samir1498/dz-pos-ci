@@ -460,7 +460,7 @@ async fn a_credit_sale_answers_the_balance_triple_and_the_ledger_carries_the_doc
 }
 
 #[tokio::test]
-async fn a_sale_past_the_credit_limit_is_409_carrying_both_amounts_and_the_override_takes_it() {
+async fn a_sale_past_the_credit_limit_is_422_carrying_both_amounts_and_the_override_takes_it() {
     let (_dir, app) = app();
     let p = product(&app, "Ciment", 100_000, 0).await;
     let c = customer(&app, "Entreprise Amrani", Some(50_000), None).await;
@@ -470,7 +470,7 @@ async fn a_sale_past_the_credit_limit_is_409_carrying_both_amounts_and_the_overr
         "customer_id": c,
     });
     let (status, refused) = call(&app, "POST", "/sales", Some(body.clone())).await;
-    assert_eq!(status, StatusCode::CONFLICT, "{refused}");
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
     assert_eq!(code(&refused), "credit_limit");
     // The two amounts the till has to show. They are on the envelope because
     // a screen may not re-derive what a customer owes (architecture.md rule 2).

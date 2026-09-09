@@ -495,7 +495,7 @@ describe("sales", () => {
             credit_limit_centimes: 500_000,
           },
         }),
-        { status: 409, headers: { "content-type": "application/json" } },
+        { status: 422, headers: { "content-type": "application/json" } },
       );
     const api = createClient("http://127.0.0.1:4317", refusal);
     await expect(
@@ -509,7 +509,7 @@ describe("sales", () => {
       }),
     ).rejects.toMatchObject({
       code: "credit_limit",
-      status: 409,
+      status: 422,
       balanceAfterCentimes: 550_000,
       creditLimitCentimes: 500_000,
     });

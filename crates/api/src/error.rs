@@ -133,15 +133,16 @@ impl ApiError {
 /// and the caller has nothing to correct: 500, not 422.
 const fn status_for(e: &CoreError) -> StatusCode {
     match e {
-        CoreError::Validation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+        // A credit refusal is the request itself the server will not carry
+        // out: the basket is well formed and the caller can act on it, by
+        // paying another way or by resending with `override`. The two
+        // amounts in the payload are what the till renders, so it sits with
+        // the 422s and not with the conflicts.
+        CoreError::Validation { .. } | CoreError::CreditLimit { .. } => {
+            StatusCode::UNPROCESSABLE_ENTITY
+        }
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
-        // A credit refusal is a conflict with what the customer already
-        // owes, not a field the caller wrote wrong: the same basket is
-        // accepted the moment the customer pays something off, so it sits
-        // with `Exhausted` rather than with the 422s.
-        CoreError::DuplicateBarcode(_)
-        | CoreError::Exhausted { .. }
-        | CoreError::CreditLimit { .. } => StatusCode::CONFLICT,
+        CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
         // A template that will not render is the app's own bug: the
         // template ships in the binary and the data comes from a row the
         // core just read, so the caller has nothing to correct.
