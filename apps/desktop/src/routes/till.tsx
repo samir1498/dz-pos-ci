@@ -706,7 +706,12 @@ function Confirmation({
       <strong>{t("till_paid")}</strong>
       <p className="flex items-center justify-between gap-2">
         <span>{t("till_ticket")}</span>
-        <span className="font-mono" dir="ltr">{`${sale.series} ${sale.number}`}</span>
+        {/* The number only. `series` is the code the core keys documents by
+            ("doc_ticket", models/sql_types.rs), not a word in any of the
+            three languages, and the label beside it already says ticket. */}
+        <span className="font-mono" dir="ltr">
+          {sale.number}
+        </span>
       </p>
       <p className="flex items-center justify-between gap-2">
         <span>{t("total_net_to_pay")}</span>

@@ -207,8 +207,10 @@ test("sells two rates for cash, matches the fixture totals, reduces the stock an
   // What the cashier is shown is the document, so the number is the one the
   // server assigned and the cart is empty behind it.
   const done = page.getByRole("status");
-  await expect(done).toContainText(sale.series);
   await expect(done).toContainText(String(sale.number));
+  // The series is the core's document code ("doc_ticket"), untranslatable
+  // and not for a cashier to read.
+  await expect(done).not.toContainText(sale.series);
   await expect(page.getByText(t("till_cart_empty"))).toBeVisible();
 
   // The print stub reads the stored document back rather than the screen.

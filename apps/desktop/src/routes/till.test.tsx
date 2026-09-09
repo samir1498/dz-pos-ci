@@ -72,7 +72,9 @@ const sale: SaleDto = {
   id: 7,
   shop_id: 1,
   kind: "ticket",
-  series: "T-2026",
+  // What the API actually stores: a document kind code, not a pretty
+  // series a cashier could read (crates/core/src/models/sql_types.rs).
+  series: "doc_ticket",
   number: 12,
   issued_at: "2026-09-09 10:00:00",
   user_id: 1,
@@ -480,8 +482,10 @@ describe("paying", () => {
     await user.click(screen.getByRole("button", { name: "Encaisser" }));
 
     const done = await screen.findByRole("status");
-    expect(done).toHaveTextContent("T-2026");
     expect(done).toHaveTextContent("12");
+    // The series is a code the API keys documents by, so it stays off a
+    // screen where every other word is translated.
+    expect(done).not.toHaveTextContent("doc_ticket");
     expect(done).toHaveTextContent("1 292,00");
     expect(done).toHaveTextContent("208,00");
     expect(screen.getByText("Le panier est vide.")).toBeInTheDocument();
