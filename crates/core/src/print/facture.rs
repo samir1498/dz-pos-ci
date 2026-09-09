@@ -143,6 +143,9 @@ struct FactureView {
     number: String,
     issued_at: String,
     reference: Option<ReferenceView>,
+    /// What a proforma says about itself. Every other face of this template
+    /// is a document that counts, and says nothing.
+    notice: Option<&'static str>,
     seller: PartyView,
     buyer: PartyView,
     designation_label: &'static str,
@@ -263,6 +266,15 @@ pub fn render_facture_with(
             "an avoir carries a droit de timbre and has no printable form",
         ));
     }
+    // A proforma moves no stock and creates no debt (T6), and the triple it
+    // stores is three zeroes. One that carries a debt contradicts the rule
+    // that wrote it: printing the block would say a quote moved a ledger and
+    // dropping it would hide that the stored row says otherwise.
+    if doc.kind == DocumentKind::Proforma && doc.balance.is_some_and(carries_a_debt) {
+        return Err(CoreError::render(
+            "a proforma carries a debt and has no printable form",
+        ));
+    }
     // Only an avoir is written against another document. Printing "avoir sur
     // facture" over a facture or a proforma would label the page as
     // something it is not, and there is no other wording for a reference.
@@ -349,6 +361,7 @@ fn view(
         number: number(doc),
         issued_at: doc.issued_at.format(DATE_FORMAT).to_string(),
         reference,
+        notice: (doc.kind == DocumentKind::Proforma).then(|| text(Key::ProformaNotice, lang)),
         seller: seller_view(&doc.seller, lang),
         buyer: buyer_view(buyer, lang),
         designation_label: text(Key::Designation, lang),
@@ -409,7 +422,13 @@ fn view(
         net_to_pay: format_centimes(totals.net_to_pay),
         in_words_label: text(in_words_key(doc.kind), lang),
         in_words,
-        balance: doc.balance.map(|b| balance_view(b, lang)),
+        // A proforma settles nothing and shows no ledger: it stores a triple
+        // of zeroes (T6) and printing it would be a debt of nothing said
+        // three times under a heading that says "solde".
+        balance: match doc.kind {
+            DocumentKind::Proforma => None,
+            _ => doc.balance.map(|b| balance_view(b, lang)),
+        },
         payment_mode_label: text(Key::PaymentMode, lang),
         payment_mode: text(payment_mode_key(doc.payment_mode), lang),
         cachet_label: text(Key::Cachet, lang),
@@ -432,6 +451,15 @@ const fn title(doc: &Document, lang: Lang) -> &'static str {
     text(key, lang)
 }
 
+/// Whether a stored triple says anything at all. Three zeroes is what a
+/// document that touched no ledger carries, and it is not a debt of nothing:
+/// it is the ledger saying it was never asked.
+const fn carries_a_debt(balance: BalanceTriple) -> bool {
+    !(balance.old_balance.as_centimes() == 0
+        && balance.remaining_debt.as_centimes() == 0
+        && balance.total_debt.as_centimes() == 0)
+}
+
 /// The opening of the words line, which names the paper it closes. Décret
 /// 05-468 art. 3 asks the total to be written out; the sentence around it
 /// says which document was closed at that sum, and an avoir saying "la
@@ -440,6 +468,7 @@ const fn title(doc: &Document, lang: Lang) -> &'static str {
 const fn in_words_key(kind: DocumentKind) -> Key {
     match kind {
         DocumentKind::Avoir => Key::AvoirInWords,
+        DocumentKind::Proforma => Key::ProformaInWords,
         _ => Key::InWords,
     }
 }

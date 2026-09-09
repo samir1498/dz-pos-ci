@@ -754,6 +754,11 @@ fn the_avoir_is_its_golden_in_every_language() {
     each_language_of(Case::Avoir);
 }
 
+#[test]
+fn the_proforma_is_its_golden_in_every_language() {
+    each_language_of(Case::Proforma);
+}
+
 /// A5 is the same facture on a smaller sheet. One line of the page changes,
 /// the one the OS print dialog reads, and the words, the amounts and the
 /// blocks are the same bytes: two layouts kept in step by hand would drift
@@ -1389,5 +1394,88 @@ fn a_document_that_is_not_an_avoir_may_not_reference_a_facture() {
         let err =
             render_facture_with_reference(&doc, Some(&facture), Lang::Fr, Paper::A4).unwrap_err();
         assert_eq!(err.code(), "print", "{kind:?}: {err:?}");
+    }
+}
+
+/// A proforma is a quote on facture paper. It burns its own number, moves
+/// no stock and creates no debt (T6), and the page has to say so: a
+/// customer handed one must not file it as a facture, and a comptable
+/// reading it must not book it. So it carries a wording of its own, and no
+/// balance block at all.
+#[test]
+fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
+    let fixture = Fixture::of(Case::Proforma);
+    // The document stores a triple, all three of it zero, which is what T6
+    // writes for a proforma. The page dropping the block is the rule doing
+    // it and not the fixture having nothing to print.
+    let triple = fixture
+        .doc
+        .balance
+        .expect("the proforma fixture stores no triple");
+    assert_eq!(triple.old_balance, Money::ZERO);
+    assert_eq!(triple.remaining_debt, Money::ZERO);
+    assert_eq!(triple.total_debt, Money::ZERO);
+
+    for lang in Lang::ALL {
+        let html = fixture.render(lang, Paper::A4);
+        assert!(html.contains(text(Key::ProformaNotice, lang)), "{lang:?}");
+        assert!(html.contains(text(Key::Proforma, lang)), "{lang:?}");
+        assert!(html.contains("PF-000005"), "{lang:?}");
+        for absent in ["old-balance", "this-document", "total-debt"] {
+            assert!(
+                amounts(&html, absent).is_empty(),
+                "the {lang:?} proforma carries a {absent} row"
+            );
+        }
+        assert!(!html.contains(text(Key::Balance, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::TotalDebt, lang)), "{lang:?}");
+
+        // The credit facture, the same basket, prints all three: the block
+        // is gone for the proforma and not gone for everyone.
+        let facture = Fixture::of(Case::Credit).render(lang, Paper::A4);
+        assert_eq!(amounts(&facture, "total-debt").len(), 1, "{lang:?}");
+        assert!(
+            !facture.contains(text(Key::ProformaNotice, lang)),
+            "{lang:?}"
+        );
+    }
+}
+
+/// A proforma creates no debt, so a stored one carrying a triple that is not
+/// three zeroes contradicts the rule that wrote it. Dropping the block would
+/// hide the contradiction and printing it would say a quote moved a debt, so
+/// the page is refused the way an IFU document carrying a TVA recap is.
+#[test]
+fn a_proforma_carrying_a_debt_is_refused_not_quietly_stripped() {
+    let mut doc = fixed_facture(Case::Proforma);
+    doc.balance = Some(BalanceTriple {
+        old_balance: Money::centimes(150_000),
+        remaining_debt: doc.totals.net_to_pay,
+        total_debt: Money::centimes(150_000)
+            .checked_add(doc.totals.net_to_pay)
+            .unwrap(),
+    });
+    for lang in Lang::ALL {
+        let err = render_facture(&doc, lang, Paper::A4).unwrap_err();
+        assert_eq!(err.code(), "print", "{lang:?}: {err:?}");
+    }
+}
+
+/// The words line names the paper it closes here too: a proforma that said
+/// "la présente facture" would be the one wording on the page contradicting
+/// the notice above it.
+#[test]
+fn a_proforma_closes_itself_in_its_own_words() {
+    let fixture = Fixture::of(Case::Proforma);
+    for lang in Lang::ALL {
+        let html = fixture.render(lang, Paper::A4);
+        assert!(html.contains(text(Key::ProformaInWords, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::InWords, lang)), "{lang:?}");
+        assert!(!html.contains(text(Key::AvoirInWords, lang)), "{lang:?}");
+        assert_eq!(
+            in_words(&html),
+            amount_in_words(fixture.doc.totals.net_to_pay, lang).unwrap(),
+            "{lang:?}"
+        );
     }
 }

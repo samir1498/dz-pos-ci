@@ -54,6 +54,10 @@ pub enum Key {
     FactureCancelled,
     Avoir,
     Proforma,
+    /// What a proforma says about itself, in a line of its own: it is a
+    /// quote and not a facture, it books nothing and it owes nothing (T6).
+    /// A customer handed one must not file it as a facture.
+    ProformaNotice,
     /// The opening of the line naming the facture an avoir is written
     /// against, one of the mentions décret 05-468 art. 3 asks an avoir to
     /// carry. It is the start of a sentence and not a column label:
@@ -84,6 +88,7 @@ pub enum Key {
     /// call themselves a facture on their last line.
     InWords,
     AvoirInWords,
+    ProformaInWords,
     Balance,
     OldBalance,
     ThisDocument,
@@ -140,7 +145,7 @@ pub enum Key {
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 58] = [
+    pub const ALL: [Key; 60] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -160,6 +165,7 @@ impl Key {
         Key::FactureCancelled,
         Key::Avoir,
         Key::Proforma,
+        Key::ProformaNotice,
         Key::AvoirOnFacture,
         Key::IssuedOn,
         Key::Seller,
@@ -176,6 +182,7 @@ impl Key {
         Key::TotalTtc,
         Key::InWords,
         Key::AvoirInWords,
+        Key::ProformaInWords,
         Key::Balance,
         Key::OldBalance,
         Key::ThisDocument,
@@ -285,6 +292,16 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::Proforma, Lang::En) => "PRO FORMA INVOICE",
         (Key::Proforma, Lang::Ar) => "فاتورة أولية",
 
+        (Key::ProformaNotice, Lang::Fr) => {
+            "Proforma, sans valeur comptable\u{202f}: ce document n\u{2019}est pas une facture et ne crée aucune dette."
+        }
+        (Key::ProformaNotice, Lang::En) => {
+            "Pro forma, of no accounting value: this document is not an invoice and creates no debt."
+        }
+        (Key::ProformaNotice, Lang::Ar) => {
+            "فاتورة أولية، بدون قيمة محاسبية: هذه الوثيقة ليست فاتورة ولا تنشئ أي دين."
+        }
+
         (Key::AvoirOnFacture, Lang::Fr) => "Avoir sur facture",
         (Key::AvoirOnFacture, Lang::En) => "Credit note against invoice",
         (Key::AvoirOnFacture, Lang::Ar) => "إشعار دائن على الفاتورة",
@@ -354,6 +371,10 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::AvoirInWords, Lang::Fr) => "Arrêté le présent avoir à la somme de",
         (Key::AvoirInWords, Lang::En) => "This credit note is closed at the sum of",
         (Key::AvoirInWords, Lang::Ar) => "أوقف هذا الإشعار الدائن بمبلغ",
+
+        (Key::ProformaInWords, Lang::Fr) => "Arrêtée la présente proforma à la somme de",
+        (Key::ProformaInWords, Lang::En) => "This pro forma invoice is closed at the sum of",
+        (Key::ProformaInWords, Lang::Ar) => "أوقفت هذه الفاتورة الأولية بمبلغ",
 
         (Key::Balance, Lang::Fr) => "Solde",
         (Key::Balance, Lang::En) => "Balance",
