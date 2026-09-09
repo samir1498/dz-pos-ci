@@ -569,6 +569,29 @@ fn reference_line(html: &str) -> String {
     rest[..end].to_owned()
 }
 
+/// The diagonal mark of a cancelled reprint, as the file carries it: the
+/// contents of its own `div`, so a test reads the word where the mark is
+/// drawn and not anywhere on a page whose heading already says "annulée".
+fn mark_block(html: &str) -> Option<String> {
+    let opening = "<div class=\"annulee\">";
+    let rest = html.split_once(opening)?.1;
+    let end = rest.find("</div>").expect("the mark block never closes");
+    Some(rest[..end].to_owned())
+}
+
+/// The stylesheet rule that draws the mark across the page. Read out of the
+/// same file, because the mark is a rule and a `div` together: either one
+/// without the other is a word sitting in the corner of a facture.
+fn mark_rule(html: &str) -> String {
+    let opening = ".annulee span {";
+    let rest = html
+        .split_once(opening)
+        .unwrap_or_else(|| panic!("the page carries no rule for the mark"))
+        .1;
+    let end = rest.find('}').expect("the mark rule never closes");
+    rest[..end].to_owned()
+}
+
 /// Everything from the lines table to the end of the words line: the whole
 /// of the money on this page in one string, so two renders can be compared
 /// for it without the comparison naming each amount and forgetting one.
@@ -1588,6 +1611,14 @@ fn a_cancelled_reprint_differs_from_the_live_facture_in_the_cancellation_only() 
             .copied()
             .collect();
         assert!(!added.is_empty(), "{lang:?}: nothing says it was cancelled");
+        // One of them is the mark. The word alone is not enough: it is a
+        // substring of the cancelled heading in all three languages, so a
+        // page that had lost the mark and kept the heading would satisfy
+        // every other check in this test.
+        assert!(
+            added.iter().any(|line| line.contains("class=\"annulee\"")),
+            "{lang:?}: the reprint carries no mark across its face"
+        );
         for line in &added {
             assert!(
                 line.contains("class=\"annulee\"")
@@ -1640,7 +1671,13 @@ fn a_cancelled_facture_carries_the_mark_even_with_no_cancellation_read_with_it()
     let doc = fixed_facture(Case::Cancelled);
     for lang in Lang::ALL {
         let html = render_facture(&doc, lang, Paper::A4).unwrap();
-        assert!(html.contains(text(Key::CancelledMark, lang)), "{lang:?}");
+        // In the mark's own block, not merely somewhere on a page whose
+        // heading is "FACTURE ANNULÉE" and carries the word already.
+        let mark = mark_block(&html).unwrap_or_else(|| panic!("{lang:?}: no mark block"));
+        assert!(mark.contains(text(Key::CancelledMark, lang)), "{lang:?}");
+        // And drawn across the page rather than printed in a corner: the
+        // rotation is what a reader sees from the other side of a counter.
+        assert!(mark_rule(&html).contains("rotate("), "{lang:?}");
         assert!(html.contains(text(Key::FactureCancelled, lang)), "{lang:?}");
         assert!(!html.contains(text(Key::CancelledOn, lang)), "{lang:?}");
         assert!(!html.contains(text(Key::CancelReason, lang)), "{lang:?}");
