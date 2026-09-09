@@ -611,9 +611,13 @@ describe("in Arabic", () => {
 });
 
 describe("in English", () => {
-  test("a fractional category rate uses the English decimal separator, not a French comma", async () => {
-    // rateLabel hardcoded `.toFixed(2).replace(".", ",")`, so a rate
-    // outside the fixed list read "7,50 %" on the English screen too.
+  test("a fractional category rate uses the shop's comma, not an English period", async () => {
+    // Ruling (coordinator review of T7, 2026-09-09): numbers follow the
+    // shop's own format, not the UI language. formatCentimes and
+    // formatQty already read comma-decimal in every language
+    // ("9,20", "24,5"); rateLabel's fallback for a rate the fixed list
+    // does not carry has to match, so English reads "7,50 %" here too,
+    // not "7.50 %".
     categories = [{ ...general, default_rate_bps: 750 }];
     rows = [{ ...product, rate_bps: 750 }];
     mount("en");
@@ -622,6 +626,6 @@ describe("in English", () => {
     expect(
       within(row).getByText(`7${en.decimal_separator}50 ${en.percent_sign}`),
     ).toBeInTheDocument();
-    expect(within(row).queryByText("7,50 %")).not.toBeInTheDocument();
+    expect(within(row).queryByText("7.50 %")).not.toBeInTheDocument();
   });
 });

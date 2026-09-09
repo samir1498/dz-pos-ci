@@ -8,6 +8,14 @@
 // through an auto-retrying matcher, so a script that only fixes the
 // attributes later (once React mounts) does not get papered over by a
 // wait.
+//
+// The fr project cannot fail this test on its own: <html lang="fr"
+// dir="ltr"> in index.html is already the right answer for fr with no
+// script running at all, so a broken or removed inline script would
+// still read correctly there. en (lang mismatches the static "fr") and
+// ar (dir mismatches the static "ltr") are the two that actually
+// exercise the script; fr stays only as the one case that must not
+// regress once it does.
 
 import { expect, test } from "@playwright/test";
 import { currentLang } from "./messages";

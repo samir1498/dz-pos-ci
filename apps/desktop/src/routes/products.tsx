@@ -39,12 +39,21 @@ const RATES: readonly { bps: number; key: Key }[] = [
 const FALLBACK_RATE_BPS = 1900;
 
 /**
- * "7 %" for 700 bps, "7.50 %" for 750 (English): the label of a rate the
- * fixed list does not carry. Both the sign and the decimal separator come
- * from i18n (`percent_sign`, `decimal_separator`) rather than a literal
- * "%" and a hardcoded French comma, so a custom rate reads right in every
- * language: "٪" on the Arabic screen like the fixed ones (`rate_900` and
- * friends), and "7.50", not "7,50", on the English one.
+ * "7 %" for 700 bps, "7,50 %" for 750: the label of a rate the fixed list
+ * does not carry. Both the sign and the decimal separator come from i18n
+ * (`percent_sign`, `decimal_separator`) rather than a literal "%" and a
+ * hardcoded French comma, so a custom rate carries the Arabic percent
+ * sign on the Arabic screen ("٪", like the fixed ones, `rate_900` and
+ * friends), and, on every screen, the shop's own comma-decimal, the same
+ * one `formatCentimes` and `formatQty` already use regardless of the UI
+ * language.
+ *
+ * Ruling (coordinator review of T7, 2026-09-09): numbers follow the
+ * shop's own format, not the UI language. Amounts, quantities and rates
+ * all read comma-decimal in fr, en and ar today, so `decimal_separator`
+ * is "," in every dictionary; it stays a per-language key rather than a
+ * bare constant because it is the one place a locale that reads
+ * differently would land, without touching this function again.
  */
 function rateLabel(bps: number, percentSign: string, decimalSeparator: string): string {
   const percent = bps / 100;
