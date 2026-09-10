@@ -35,9 +35,11 @@ const TOMATO_SOLD_MILLI = 1_500;
 /** 1 500,00 DA handed over for a 1 292,00 DA basket. */
 const TENDERED = "1500";
 
-/** The product of the pad and F9 test: one piece at 300,00 DA, five on hand. */
+/** The product of the pad and F9 test: one piece at 300,00 DA, five on hand.
+ * Its code is its own: the suite runs against one database per language, and
+ * the credit spec already sells 6130009000035 to a customer. */
 const SOAP = "Savon e2e";
-const SOAP_BARCODE = "6130009000035";
+const SOAP_BARCODE = "6130009000066";
 const SOAP_STOCK_MILLI = 5_000;
 
 interface TotalsCase {

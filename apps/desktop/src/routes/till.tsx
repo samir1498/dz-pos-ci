@@ -437,7 +437,11 @@ export function TillScreen() {
   }
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[1fr_28rem]">
+    // The cart's table carries a name, a stepper, a discount box, a total and
+    // the way to take the line off, and every one of them has to be reachable
+    // without scrolling a panel sideways: 34rem is what those five need at
+    // the counter's smallest window, and the grid takes the rest.
+    <section className="grid gap-4 lg:grid-cols-[1fr_34rem]">
       <div className="flex min-w-0 flex-col gap-3">
         <PageHeader
           title={t("till_title")}

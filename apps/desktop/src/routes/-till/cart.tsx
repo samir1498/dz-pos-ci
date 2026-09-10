@@ -135,12 +135,17 @@ export function Cart({
       id: "product",
       header: t("col_product"),
       cell: (row) => (
-        <div className="flex flex-col gap-0.5">
+        // The kit's cells hold one line and do not wrap, which is right for a
+        // figure and wrong for a product name: a long one would push the
+        // discount box and the total off the panel. This cell is the one that
+        // gives, and the rate is not repeated here because the totals under
+        // the lines already group by it.
+        <div className="flex flex-col gap-0.5 whitespace-normal">
           <span className="font-medium">{row.line.product.name}</span>
-          <span className="text-xs text-muted-foreground">
-            <Money centimes={row.line.product.selling_centimes} className="font-normal" />
-            {` · ${t("total_tva")} ${rateCellLabel(row.line.product.rate_bps, t)}`}
-          </span>
+          <Money
+            centimes={row.line.product.selling_centimes}
+            className="text-xs font-normal text-muted-foreground"
+          />
           {row.read.problem !== null ? (
             <span role="alert" className="text-sm text-fg-danger">
               {t(row.read.problem)}
@@ -154,11 +159,12 @@ export function Cart({
       header: t("field_qty"),
       numeric: true,
       cell: (row) => (
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end gap-0.5">
           <Button
             type="button"
             variant="ghost"
             size="icon"
+            className="size-8 shrink-0"
             aria-label={`${t("till_qty_decrease")} ${row.line.product.name}`}
             onClick={() => onStep(row.line.product.id, -ONE_UNIT_MILLI)}
           >
@@ -167,7 +173,7 @@ export function Cart({
           <Input
             dir="ltr"
             inputMode="decimal"
-            className="w-16 text-end font-numeric tabular-nums"
+            className="w-14 px-2 text-end font-numeric tabular-nums"
             aria-label={`${t("field_qty")} ${row.line.product.name}`}
             value={row.line.qtyText}
             onChange={(event) => onQty(row.line.product.id, event.target.value)}
@@ -176,6 +182,7 @@ export function Cart({
             type="button"
             variant="ghost"
             size="icon"
+            className="size-8 shrink-0"
             aria-label={`${t("till_qty_increase")} ${row.line.product.name}`}
             onClick={() => onStep(row.line.product.id, ONE_UNIT_MILLI)}
           >
@@ -190,7 +197,7 @@ export function Cart({
       money: true,
       cell: (row) => (
         <MoneyInput
-          className="w-24"
+          className="w-20 px-2"
           aria-label={`${t("field_line_discount")} ${row.line.product.name}`}
           value={row.line.discount}
           onChange={(centimes) => onLineDiscount(row.line.product.id, centimes)}
@@ -210,6 +217,11 @@ export function Cart({
     <>
       <DataTable
         data-testid="cart"
+        // The panel is narrow and five cells have to fit in it side by side,
+        // the last of them a box a cashier types in. One step down in text
+        // size is what buys that room, and it is the whole table rather than
+        // a cell here and there, so the lines still read as one block.
+        className="text-sm"
         columns={columns}
         rows={rows}
         rowKey={(row) => row.line.product.id}
