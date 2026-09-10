@@ -33,8 +33,9 @@ rewrite, a Claude Design project already seeded; Astro landing later). D1
 to D3 are merged: by 19:15 every screen sits on the kit (the bare-element
 allowlist is down to the theme switch and a fields helper), the dashboard
 with its thirty-day chart is on the milestone and in the sidebar, and the
-boss site has a gallery of every e2e screenshot (screens/). Left on M3: the
-closing sweep and the checkpoint PR to main; D4 (the Claude Design bundle
+boss site has a gallery of every e2e screenshot (screens/). The closing sweep is
+merged (docs, comments, the whole-milestone review and its two import
+fixes) and the checkpoint PR to main is open, CI running; D4 (the Claude Design bundle
 lags the repo) and D5 (the Astro landing) are later.
 The brand pages are on the boss site under /design/. 2026-09-10 midday: the
 WSL disk reached 125 GB from per-worktree cargo targets and the box crashed
