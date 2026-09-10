@@ -299,8 +299,8 @@ function Qty({ milli }: { milli: number }) {
 }
 
 /** The deliveries, newest first, each with its own number. A bon de
- *  réception is kept and listed like the paper it stands for; M3 does not
- *  print one. */
+ *  réception is kept and listed like the paper it stands for; it is not
+ *  printed. */
 function ReceiptsList({
   detail,
   nameOf,

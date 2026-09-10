@@ -13,9 +13,9 @@ import { day, exactInteger } from "./common";
 import { paymentMethodSchema } from "./customer";
 import type { Assert, Matches } from "./drift";
 
-/** T3 writes the `purchase` and `return` rows; the whole union crosses from
- *  the first version, because a screen that met an unknown kind could only
- *  refuse the whole answer. */
+/** The receipt service writes the `purchase` and `return` rows; the whole
+ *  union crosses from the first version, because a screen that met an
+ *  unknown kind could only refuse the whole answer. */
 export const supplierDebtKindSchema = z.enum([
   "opening",
   "purchase",

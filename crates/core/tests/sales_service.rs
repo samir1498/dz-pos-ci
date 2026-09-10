@@ -565,7 +565,7 @@ fn the_unit_price_can_be_overridden_at_the_till() {
 
 #[test]
 fn the_document_keeps_the_regime_in_force_on_the_day_it_was_issued() {
-    // A régime row can be dated into the past (T2 review). A ticket issued
+    // A régime row can be dated into the past. A ticket issued
     // before the change keeps réel even after the shop moves to the IFU.
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Sucre", 10_000, 1900, Unit::Piece);
@@ -1072,8 +1072,9 @@ fn a_customer_in_credit_may_buy_on_credit_up_to_their_deposit() {
     let p2 = product(&mut conn, "Sac 200", 20_000, 0, Unit::Piece);
     let p4 = product(&mut conn, "Sac 400", 40_000, 0, Unit::Piece);
     let c = customer(&mut conn, "Entreprise Amrani", Some(0), None);
-    // Written straight onto the ledger: an avoir is T6's, and what this test
-    // is about is the sign of the balance, not how it got there.
+    // Written straight onto the ledger rather than through the avoir
+    // service: what this test is about is the sign of the balance, not how
+    // it got there.
     diesel::sql_query(
         "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
          credit_centimes, user_id) VALUES (1, ?, 'avoir', 0, 30000, 1)",

@@ -105,9 +105,9 @@ fn a_document(
     .id
 }
 
-/// A supplier and one payment to them. Written by hand: T2 owns the supplier
-/// service, and what this file needs is the row on `supplier_ledger` the cash
-/// position reads.
+/// A supplier and one payment to them. Written by hand: the supplier payment
+/// service owns that, and what this file needs is the row on
+/// `supplier_ledger` the cash position reads.
 fn a_supplier(conn: &mut SqliteConnection, shop_id: i32, id: i32) {
     diesel::sql_query(format!(
         "INSERT INTO suppliers (id, shop_id, name) VALUES ({id}, {shop_id}, 'Fournisseur {id}')"

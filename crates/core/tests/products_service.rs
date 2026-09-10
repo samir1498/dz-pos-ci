@@ -613,7 +613,8 @@ fn an_update_never_touches_the_quantity_on_hand() {
     // cached on the product. An edit of the fiche carries the field on the
     // wire (one shape for add and edit) but the service keeps the stored
     // quantity; a sale landing between the read and the save is not undone
-    // by a price change. Adjustments come with the ledger (M1 T3).
+    // by a price change. Adjustments come through a stock movement, not
+    // through this edit.
     let (_dir, mut conn) = open_temp();
     let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
     assert_eq!(

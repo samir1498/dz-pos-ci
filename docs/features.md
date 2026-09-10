@@ -270,6 +270,16 @@ it, because it is not being reordered. The top lists are the month's and not
 the day's, ranked on quantity and on margin, and their quantity is net of
 what came back.
 
+**The thirty-day series.** A second read answers the shop's last thirty days
+ending on the day asked for, each day of the window on its own row and none
+skipped, so a chart with a gap in it does not read as a day the shop was
+closed. The same rows are folded into weeks, cut back from the end of the
+window rather than off the calendar, so the last bucket is a whole week and
+the odd days sit at the far end where nobody reads them closely; a thirty day
+window is four weeks and two days. The dashboard screen charts sales, margin
+and expenses from it and a toggle switches the chart between the daily rows
+and the weekly ones.
+
 The cash position is derived on every read and stored nowhere. It is what
 moved into and out of the drawer. Over a day or a month on the shop's
 calendar, cash in is what the tickets and factures still standing and paid
@@ -716,10 +726,12 @@ first release.**
   `barcode_label` ships: a 58 × 40 mm shelf label carrying the product's
   name, its selling price with the currency, its EAN-13 in bars and the
   same thirteen digits printed under them, plus an A4 sheet variant that
-  lays a grid of those labels out for a selection of products. The bars are
-  drawn from the code the fiche stores, so a code that is not a valid
-  EAN-13 (a supplier reference, a short internal number) is a refusal and
-  never a label with the picture left off: digits with no bars scan as
+  lays a grid of those labels out for a selection of products, eighteen to
+  the sheet (three across and six down), and a selection is capped at two
+  hundred products, which the route refuses past rather than truncating. The
+  bars are drawn from the code the fiche stores, so a code that is not a
+  valid EAN-13 (a supplier reference, a short internal number) is a refusal
+  and never a label with the picture left off: digits with no bars scan as
   nothing on a shelf, and bars encoding another number are worse. One
   product the encoder refuses refuses the whole sheet, because a page
   missing one label looks complete. `bon_de_livraison_a4` stays parked with
@@ -849,6 +861,52 @@ show one instruction.
 Same core binary hosted, one SQLite file per shop, account login. Not
 started until decision 1. Nothing built before it may assume it does not exist:
 every query is scoped by `shop_id`, every client talks HTTP.
+
+## 8. Desktop kit and dev tooling (v1)
+
+Numbered 8 rather than inserted after Printing: every section above is cited
+by number from dozens of files, migrations included, and a renumbering would
+have to touch all of them in one sweep or leave the citations wrong. What
+belongs here has no home in the sections above; the rest of what M3 shipped
+already has one and is cited beside it: stock in and reports in §1
+(Supplier, Purchase, Expense, Dashboard, Excel), the yearly reset of every
+document series in §3 (Numbering), and the barcode label in §4 (Printing).
+
+**Themes.** Four: Comptoir (light, the default), Registre (dark ink),
+Observe (cool grey, emerald brand) and its dark twin Observe-dark. A shop
+picks one from the settings screen or leaves it on "follow the system",
+which is `null` on the wire and in the shop file and picks between Comptoir
+and Registre by the machine's own light or dark preference; Observe and its
+dark twin are reached only by hand. The choice is written to the shop file
+(`PUT /settings/theme`) and not to the browser, so a second machine opens
+the shop on the same theme. The switch is `data-theme` on the document root
+and nothing else: no screen branches on which theme is on, a component wears
+`bg-background` and `text-muted-foreground` and reads whichever block of CSS
+variables the attribute selects. `docs/architecture.md` (Design) and
+`context/processes/20260908-frontend-conventions.md` have the token layers
+and the grep tests that hold the rule.
+
+**Language.** French, English and Arabic (RTL) on every screen, switched
+from a control in the app shell and independent of the theme: the choice is
+per browser, kept in local storage on the machine rather than in the shop
+file, and it is not the same choice as the print language, which a caller
+passes per document (§4, Printing). Arabic flips direction on the document
+root, and Radix, which defaults to left to right whatever the document
+says, is told the direction explicitly so an Arabic select takes the arrow
+keys the right way.
+
+**The dev-only seeder.** `just seed` fills `.dev/dev.db` with a catalogue,
+twelve customers, five suppliers and thirty days of trading to develop
+against; `just seed-clean` deletes the file so the next `just api` opens an
+empty shop. It is a separate crate (`dzpos-seed`) that neither the API nor
+the desktop depends on, so no release build and no bundle can produce it; it
+refuses to run without `DZPOS_DEV=1`, refuses a file that is not directly
+inside a `.dev/` directory, and refuses a file whose settings carry a real
+shop's own name and identifiers unless `--force` says otherwise, which lifts
+that refusal and nothing else. `just seed` and `just seed-clean` take no
+path at all, so no argument typed at either can point them at a real
+database. `docs/architecture.md` (Local development) has the three places
+the rule is enforced.
 
 ## Later, agreed
 

@@ -1441,8 +1441,8 @@ fn the_first_and_the_last_moment_of_a_range_are_inside_it() {
 fn a_cancelled_document_takes_none_of_a_payment() {
     // A cancelled facture is not a debt any more: whatever is left on its
     // `remaining_debt` column, money handed over settles the paper that still
-    // stands. The ledger row the cancellation writes is what moves the
-    // balance (T6); this only refuses to fill the cancelled sheet.
+    // stands. The ledger row the cancellation's avoir writes is what moves
+    // the balance; this only refuses to fill the cancelled sheet.
     let (_dir, mut conn) = open_temp();
     let customer = a_customer(&mut conn, "Entreprise Benali");
     let cancelled = a_document_on_credit(&mut conn, customer, 100_000, 10);

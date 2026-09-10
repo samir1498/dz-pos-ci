@@ -217,6 +217,20 @@ literal. `apps/desktop/src/tokens.test.ts` fails the gates on `bg-[`,
 the `@fontsource` packages and imported in `styles.css`; nothing is fetched
 over the network, and a test asserts it.
 
+**The desktop kit.** `apps/desktop/src/components/ui/` is shadcn/ui,
+installed through its own CLI onto the tokens above and never through
+`shadcn init`, which rewrites `styles.css`; `apps/desktop/src/components/`
+holds what is built on top of it (`AppShell`, `PageHeader`, `DataTable`,
+`Money`, `ThemeSwitcher` and the rest). `apps/desktop/eslint.config.js`
+carries one rule for it: no bare `<input>`, `<button>`, `<select>`,
+`<textarea>` or `<table>` in JSX outside `components/ui/` and the kit page,
+because a bare element wears the browser's own colour and height and looks
+like nothing in a diff. A screen written before the kit is named in
+`apps/desktop/src/lint/allowlist.json` rather than exempted silently, and a
+test fails on an entry whose file has nothing left to fix. See
+`context/processes/20260908-frontend-conventions.md` for the folder shape,
+the kit's two folders and what the CLI gets wrong on the way in.
+
 ## Data
 
 - SQLite everywhere. One file per shop, also when hosted. WAL mode,
@@ -238,6 +252,14 @@ over the network, and a test asserts it.
   table-level CHECK to a table that exists, so the migration rebuilds
   `documents` the way migration 2 did, keeping every id: the lines, the TVA
   recap, the movements, the ledger and the avoirs all name them.
+- `documents` gains `series_year INTEGER NOT NULL DEFAULT 0`
+  (`2026-09-10-000009_series_year`), an additive `ADD COLUMN` and not a
+  rebuild, backfilled from `issued_at` on the shop's calendar and never from
+  `created_at`, which is UTC. The existing `UNIQUE (shop_id, series, number)`
+  still holds because the series string already carries the year
+  (`doc_facture:2026`); `series_year` is what lets `number_of(kind, year,
+  number)` print the right year on a prior year's facture without parsing
+  the series string back apart.
 - The supply side is its own set of tables (migration
   `2026-09-10-000008`) and the customer side is untouched: `suppliers`
   holds the fiche, `supplier_ledger` and `supplier_allocations` mirror

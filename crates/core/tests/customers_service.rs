@@ -127,7 +127,7 @@ fn a_negative_opening_debt_is_refused_and_no_fiche_is_left_behind() {
 #[test]
 fn an_update_replaces_the_fiche_and_never_touches_the_ledger() {
     // features.md §2: the ledger is append-only, so a wrong opening debt is
-    // corrected by an `adjustment` movement (T2), never by editing the fiche.
+    // corrected by an `adjustment` movement, never by editing the fiche.
     let (_dir, mut conn) = open_temp();
     let made = customers::create(
         &mut conn,

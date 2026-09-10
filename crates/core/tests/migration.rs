@@ -2727,7 +2727,7 @@ fn a_product_with_a_movement_cannot_be_deleted() {
     // The ledger is the truth about what left the shelf (features.md §1) and a
     // document line keeps its own snapshot of the product, so a delete that
     // took the movements with it would leave the sold lines standing and the
-    // stock they came out of gone. M3 archives a product instead.
+    // stock they came out of gone. The product is archived instead.
     let (_dir, mut conn) = open_temp();
     seed_for_probes(&mut conn);
     diesel::sql_query(insert_with("stock_movements", "kind", "'sale'"))
@@ -3658,9 +3658,9 @@ fn a_database_with_a_shops_m2_history_takes_the_suppliers_and_purchases_tables()
     diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Autre magasin')")
         .execute(&mut conn)
         .unwrap();
-    // The M2 rows a shop actually carries: a product, a customer, a facture
-    // on credit, the sale movement of the ledger, a payment against it and
-    // what that payment settled.
+    // The customer-and-credit rows a shop actually carries: a product, a
+    // customer, a facture on credit, the sale movement of the ledger, a
+    // payment against it and what that payment settled.
     diesel::sql_query(
         "INSERT INTO products (id, shop_id, name, unit, cost_centimes, selling_centimes, \
          qty_on_hand_milli, low_stock_at_milli, rate_bps) \

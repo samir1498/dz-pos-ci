@@ -219,16 +219,20 @@ screenshot: claim
 
 # ---- worktrees (one per task when the milestone loop runs tasks in parallel) ----
 
-# a checkout of <branch> under .claude/worktrees/<name> with its own
-# node_modules; cargo builds into the one shared folder (see the top of
-# this file), so nothing here is a target/.
+# a checkout of <branch> under the repository root's .claude/worktrees/<name>
+# with its own node_modules; cargo builds into the one shared folder (see the
+# top of this file), so nothing here is a target/. The root is found the same
+# way CARGO_TARGET_DIR is, from --git-common-dir, so running this from inside
+# a worktree adds the new worktree beside the others rather than nesting one
+# worktree inside another (it nested on 2026-09-10, run from a worktree).
 # The e2e ports are per worktree: pass DZPOS_E2E_API_PORT and
 # DZPOS_E2E_WEB_PORT when running `just e2e` there (4319/5174 are the main
 # checkout's).
 worktree name branch:
     #!/usr/bin/env bash
     set -euo pipefail
-    dir=".claude/worktrees/{{name}}"
+    root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+    dir="$root/.claude/worktrees/{{name}}"
     if [ -e "$dir" ]; then echo "$dir exists" >&2; exit 1; fi
     git worktree add -b "{{branch}}" "$dir" HEAD
     (cd "$dir" && pnpm install --frozen-lockfile --silent)
@@ -239,10 +243,13 @@ worktree name branch:
 # touch it and the whole tree gets left behind as an orphan (that is how t5
 # survived with 268K of build output and no entry in `git worktree list`).
 # A worktree's target/ was 36 GB on 2026-09-10 - see `just disk`.
+# The root is found the same way `worktree` above finds it, so this removes
+# the right tree whether run from the main checkout or from a worktree.
 worktree-rm name:
     #!/usr/bin/env bash
     set -euo pipefail
-    dir=".claude/worktrees/{{name}}"
+    root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+    dir="$root/.claude/worktrees/{{name}}"
     [ -d "$dir/target" ] && rm -rf "$dir/target"
     git worktree remove "$dir"
     git worktree prune

@@ -49,7 +49,7 @@ pub const ACTION_AVOIR: &str = "document.avoir";
 pub const ACTION_CANCEL: &str = "document.cancel";
 
 /// Money out that is not stock (features.md §1, Expense). An expense is
-/// never edited and never deleted in M3, so `create` is the whole of its
+/// never edited and never deleted, so `create` is the whole of its
 /// life and this row is the only trace of who spent what on which day. The
 /// entry carries the category's key rather than its id, because the log is
 /// read by a person and an id is a number they would have to look up.
