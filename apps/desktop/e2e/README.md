@@ -7,18 +7,18 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes the seven committed screenshots
+just screenshot                   # writes the eight committed screenshots
 pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes only `products.png`; the other six say "... screenshot in Arabic"
+writes only `products.png`; the other seven say "... screenshot in Arabic"
 in their titles, so they match the grep in both runs but write a file only
 when `currentLang()` is `ar`, and the fr run of them does nothing
-observable. Under ar all six write: `products-ar.png`, `settings-ar.png`,
-`till-ar.png`, `customers-ar.png`, `till-credit-ar.png` and
-`documents-avoir-ar.png`.
+observable. Under ar all seven write: `products-ar.png`, `settings-ar.png`,
+`till-ar.png`, `customers-ar.png`, `till-credit-ar.png`,
+`documents-avoir-ar.png` and `expenses-ar.png`.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
@@ -105,6 +105,9 @@ second language on; use the looped `just e2e` or a single `--project`.
   loses that product when it is restored, leaving the shop empty;
   `customers.spec.ts`, a company fiche opened with an opening debt and then
   corrected, plus a search by a piece of the name;
+  `expenses.spec.ts`, two expenses filed in two categories, the month's
+  total and the cash position of that month read back off the API, and an
+  empty month answering zeros;
   `first-paint.spec.ts`, that `lang` and `dir` are right on
   `documentElement` before React mounts, read off the DOM rather than
   through an auto-retrying matcher;
@@ -126,9 +129,10 @@ second language on; use the looped `just e2e` or a single `--project`.
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
   rows finds the API port and the run's launch token.
-- The seven committed screenshots, 1280x800, full page: `products.png`
+- The eight committed screenshots, 1280x800, full page: `products.png`
   (fr) and, in ar, `products-ar.png`, `settings-ar.png`, `till-ar.png`,
-  `customers-ar.png`, `till-credit-ar.png` and `documents-avoir-ar.png`.
+  `customers-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png` and
+  `expenses-ar.png`.
   `en` keeps none; the two languages above are enough to show the layout
   and the RTL mirror.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
@@ -164,6 +168,19 @@ here. These are all of them.
 | `customer-debt-slip` | `customers.tsx` | The debt slip iframe. |
 | `customer-debt-slip-button` | `customers.tsx` | The button that opens it, beside a second button with a translated label. |
 | `customer-close-reason` | `customers.tsx` | Absent until a fiche with an account behind it is being closed, so a test counts it. |
+| `expenses-month` | `expenses.tsx` | The month picker; its rendered text is the browser's own, in the browser's locale. |
+| `expenses-total` | `expenses.tsx` | An amount, so its text is a number in three locales. |
+| `expense-row` | `expenses.tsx` | One expense; the amounts inside it are numbers in three locales. |
+| `expense-category` | `expenses.tsx` | A `<select>` inside a wrapping `<label>` takes the option texts into its own accessible name, so a label query matches nothing. |
+| `expense-amount` | `expenses.tsx` | An amount field, translated label, and `col_amount` reads the same word. |
+| `expense-date` | `expenses.tsx` | A date field, and `col_date` reads the same word. |
+| `expense-note` | `expenses.tsx` | A note field, and `col_note` reads the same word. |
+| `cash-position` | `expenses.tsx` | The figures panel; every figure inside it is a number in three locales. |
+| `cash-in-total` | `expenses.tsx` | An amount, and both sides carry a row labelled "total". |
+| `cash-out-expenses` | `expenses.tsx` | An amount, and the same word labels the screen itself. |
+| `cash-out-total` | `expenses.tsx` | The other row labelled "total". |
+| `cash-net` | `expenses.tsx` | An amount, and the one figure that goes below zero. |
+| `card-in-total` | `expenses.tsx` | An amount, translated label. |
 | `backup-row` | `BackupsPanel.tsx` | One copy in the list; its text is a filename and a date. |
 | `backups-newest` | `BackupsPanel.tsx` | The one the restore button acts on. |
 | `safety-copy-row` | `BackupsPanel.tsx` | The copy a restore takes of what it is about to replace. |

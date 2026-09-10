@@ -299,16 +299,19 @@ function ExpenseTable({
           <caption className="sr-only">{t("expenses_title")}</caption>
           <thead>
             <tr>
-              <th scope="col" className="pb-2 text-start">
+              {/* The same logical padding as the cells under them, so the
+                  four headings keep the gaps the rows have in either
+                  direction rather than running into each other. */}
+              <th scope="col" className="pb-2 pe-3 text-start">
                 {t("col_date")}
               </th>
-              <th scope="col" className="pb-2 text-start">
+              <th scope="col" className="pb-2 pe-3 text-start">
                 {t("col_category")}
               </th>
-              <th scope="col" className="pb-2 text-end">
+              <th scope="col" className="pb-2 ps-3 text-end">
                 {t("col_amount")}
               </th>
-              <th scope="col" className="pb-2 text-start">
+              <th scope="col" className="pb-2 ps-3 text-start">
                 {t("col_note")}
               </th>
             </tr>
@@ -316,8 +319,15 @@ function ExpenseTable({
           <tbody>
             {month.expenses.map((e) => (
               <tr key={e.id} className="border-t" data-testid="expense-row">
-                <td className="py-1.5 pe-3 font-mono" dir="ltr">
-                  {e.expense_date}
+                {/* The cell keeps the page's direction so the column starts
+                    where the heading does; only the digits are LTR, in a span
+                    of their own. `dir="ltr"` on the cell would left-align it
+                    inside an RTL row and push the date against the column
+                    beside it. */}
+                <td className="py-1.5 pe-3">
+                  <span className="font-mono" dir="ltr">
+                    {e.expense_date}
+                  </span>
                 </td>
                 <td className="py-1.5 pe-3">{label(e.category_id)}</td>
                 <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
@@ -425,6 +435,7 @@ function ExpenseForm({
           <label className="flex flex-col gap-1">
             <span>{t("field_expense_category")}</span>
             <select
+              data-testid="expense-category"
               className="rounded border px-2 py-1"
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
