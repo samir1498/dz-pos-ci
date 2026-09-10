@@ -178,6 +178,45 @@ stale. Money crosses the wire as an integer number of centimes in a
 `number` (safe below 2^53, which is 90 trillion dinars) and is formatted
 only in `packages/shared`.
 
+## Design
+
+One source of colour, four themes, no branch in TypeScript.
+
+`packages/design` holds the tokens in three tiers: raw ramps
+(`primitives.ts`), the roles that point at them (`semantic.ts`), and the
+assembly TypeScript imports (`theme.ts`). The role layer carries a theme
+axis: Comptoir (light, stone paper, teal selection, ink sidebar, brass on
+the one action that moves money), Registre (dark, ink green surfaces, paper
+text), Observe (cool grey, emerald brand, rounder) and its dark twin. A
+theme owns colour, shadow and radius; space, font size and the control
+heights are off the axis, because a theme changes what the app is made of
+and never how much room it takes.
+
+`apps/desktop/src/theme.css` is generated from that layer and checked in:
+the token blocks (`:root` for Comptoir, one `[data-theme="<name>"]` block
+per other theme), the shadcn/ui variable set pointing at our roles, and the
+Tailwind v4 `@theme` map. `just theme` regenerates it and a vitest in
+`packages/design` fails the gates on a stale file, the shape `just
+types-check` has for the generated DTOs. The kit is shadcn/ui, so shadcn's
+names (`--background`, `--primary`, `--sidebar-accent`) are the emitted API
+while our roles stay the source; `--money` and `--font-numeric` are ours,
+because shadcn has no slot for a brass accent that means "this moves money"
+or for a figure font.
+
+The switch is one attribute. `data-theme` on `<html>`, written by
+`src/lib/theme.tsx`, and nothing else: no component branches on the theme,
+and `src/theme.test.ts` greps the source and fails the gates on a theme name
+or a `data-theme` outside the provider, the switcher and their test. The
+choice lives in the shop file (`preferences` table, `PUT /settings/theme`)
+so a second machine in the same shop opens on it; `null` means follow the
+operating system, which picks between Comptoir and Registre.
+
+Colour reaches a component as a utility class from that map and never as a
+literal. `apps/desktop/src/tokens.test.ts` fails the gates on `bg-[`,
+`text-[` or a hex outside the generated file. Fonts are vendored through
+the `@fontsource` packages and imported in `styles.css`; nothing is fetched
+over the network, and a test asserts it.
+
 ## Data
 
 - SQLite everywhere. One file per shop, also when hosted. WAL mode,

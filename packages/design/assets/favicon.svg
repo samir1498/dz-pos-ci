@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="24" height="24" role="img" aria-label="Dinar POS">
+  <!-- The 24 px variant: the milled edge is gone and the stroke is thicker,
+       because at that size the ring closes up and the bowl fills in. -->
+  <circle cx="50" cy="50" r="48" fill="#b8862b"/>
+  <path d="M40 26 A 26 26 0 0 1 40 74" fill="none" stroke="#14211c" stroke-width="14" stroke-linecap="round"/>
+  <path d="M40 74 L 28 74" fill="none" stroke="#14211c" stroke-width="14" stroke-linecap="round"/>
+</svg>

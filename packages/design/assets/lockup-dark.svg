@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" width="320" height="72" role="img" aria-label="Dinar POS">
+  <!-- The same lockup on ink, the Registre ground. The coin keeps its brass;
+       only the word changes to paper. -->
+  <rect width="320" height="72" fill="#14211c"/>
+  <g transform="translate(12 8) scale(0.56)">
+    <circle cx="50" cy="50" r="46" fill="#b8862b"/>
+    <circle cx="50" cy="50" r="40" fill="none" stroke="#14211c" stroke-width="3"/>
+    <path d="M40 28 A 24 24 0 0 1 40 72" fill="none" stroke="#14211c" stroke-width="11" stroke-linecap="round"/>
+    <path d="M40 72 L 30 72" fill="none" stroke="#14211c" stroke-width="11" stroke-linecap="round"/>
+  </g>
+  <text x="80" y="47" font-family="IBM Plex Sans, system-ui, sans-serif" font-size="32" font-weight="700" fill="#f4f1e8">Dinar <tspan font-weight="600" fill="#b8862b">POS</tspan></text>
+</svg>

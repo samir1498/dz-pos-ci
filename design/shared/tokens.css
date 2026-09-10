@@ -1,10 +1,16 @@
 /* dz-pos design tokens, three tiers, mirrored in packages/design
    (primitives.ts, semantic.ts, theme.ts); css.test.ts there fails when
    this file and the package disagree on a variable.
-   Tier 1 primitives: never used by components. Tier 2 semantic: the API. */
+   Tier 1 primitives: never used by components. Tier 2 semantic: the API.
+
+   Four themes share one set of names. `:root` is Comptoir (light: stone
+   paper, teal selection, ink sidebar, brass on the one action that moves
+   money). Each `[data-theme="<name>"]` block redeclares every themed role:
+   Registre (dark ink ledger), Observe (cool grey, emerald brand, rounder)
+   and its dark twin. A component reads the role, never the theme. */
 
 :root {
-  /* ---- Tier 1: primitives ---- */
+  /* Tier 1: primitives. No component reads these. */
   --p-stone-0: #ffffff;
   --p-stone-50: #f8f7f4;
   --p-stone-100: #f1efea;
@@ -16,7 +22,6 @@
   --p-stone-700: #443f38;
   --p-stone-800: #2b2823;
   --p-stone-900: #1a1815;
-
   --p-teal-50: #eaf6f3;
   --p-teal-100: #cfeae2;
   --p-teal-300: #7fc7b3;
@@ -24,27 +29,73 @@
   --p-teal-600: #17715b;
   --p-teal-700: #125a49;
   --p-teal-800: #0e463a;
-
   --p-red-50: #fdeeed;
   --p-red-100: #f9d6d3;
+  --p-red-300: #e8867e;
   --p-red-500: #c9403a;
   --p-red-600: #a8332e;
   --p-red-700: #862a26;
-
+  --p-red-900: #4a1f1c;
   --p-amber-50: #fdf5e6;
   --p-amber-100: #f9e6bf;
+  --p-amber-300: #e9c05f;
   --p-amber-500: #c98a1a;
   --p-amber-700: #8a5e0f;
-
+  --p-amber-900: #4a3610;
   --p-blue-50: #eaf1fb;
+  --p-blue-300: #8db3ea;
   --p-blue-500: #2f6fcf;
   --p-blue-700: #1f4c90;
+  --p-blue-900: #16305c;
+  --p-ink-50: #c8d2cc;
+  --p-ink-100: #9fb0a8;
+  --p-ink-200: #7a877f;
+  --p-ink-300: #4a5a53;
+  --p-ink-400: #3a4b44;
+  --p-ink-500: #2c4038;
+  --p-ink-600: #23392f;
+  --p-ink-700: #1b2c25;
+  --p-ink-800: #14211c;
+  --p-brass-300: #e9d9b0;
+  --p-brass-400: #d4a548;
+  --p-brass-500: #b8862b;
+  --p-brass-700: #8f6820;
+  --p-paper-50: #f4f1e8;
+  --p-paper-100: #d9d2c0;
+  --p-paper-200: #b9b3a2;
+  --p-slate-50: #f8fafc;
+  --p-slate-100: #f1f5f9;
+  --p-slate-200: #e2e8f0;
+  --p-slate-300: #cbd5e1;
+  --p-slate-400: #94a3b8;
+  --p-slate-600: #475569;
+  --p-slate-900: #0f172a;
+  --p-night-300: #7b8b83;
+  --p-night-500: #2b3a32;
+  --p-night-600: #1f2b25;
+  --p-night-700: #17211c;
+  --p-night-800: #0e1713;
+  --p-night-900: #09090b;
+  --p-emerald-50: #ecfdf5;
+  --p-emerald-400: #34d399;
+  --p-emerald-500: #10b981;
+  --p-emerald-600: #059669;
+  --p-emerald-950: #04150d;
+  --p-rose-50: #fef2f2;
+  --p-rose-400: #f87171;
+  --p-rose-600: #dc2626;
+  --p-gold-50: #fffbeb;
+  --p-gold-400: #fbbf24;
+  --p-gold-600: #d97706;
 
-  /* ---- Tier 2: semantic ---- */
+  /* Tier 2: semantic. This is the API. */
   --color-primary: var(--p-teal-600);
   --color-primary-hover: var(--p-teal-700);
   --color-primary-soft: var(--p-teal-50);
   --color-on-primary: var(--p-stone-0);
+  --color-money: var(--p-brass-500);
+  --color-money-hover: var(--p-brass-700);
+  --color-on-money: var(--p-ink-800);
   --color-danger: var(--p-red-600);
   --color-danger-soft: var(--p-red-50);
   --color-warn: var(--p-amber-500);
@@ -52,28 +103,29 @@
   --color-info: var(--p-blue-500);
   --color-info-soft: var(--p-blue-50);
   --color-success: var(--p-teal-500);
-
   --surface-bg: var(--p-stone-50);
   --surface-card: var(--p-stone-0);
   --surface-raised: var(--p-stone-100);
   --surface-hover: var(--p-stone-100);
   --surface-selected: var(--p-teal-50);
   --surface-scrim: rgb(26 24 21 / 0.45);
-  --surface-inverse: var(--p-stone-800);
-
+  --surface-inverse: var(--p-ink-800);
+  --surface-sidebar: var(--p-ink-800);
+  --surface-sidebar-active: var(--p-ink-600);
   --text-primary: var(--p-stone-900);
   --text-secondary: var(--p-stone-600);
   --text-tertiary: var(--p-stone-400);
   --text-disabled: var(--p-stone-300);
-  --text-on-inverse: var(--p-stone-50);
+  --text-on-inverse: var(--p-paper-50);
+  --text-on-sidebar: var(--p-paper-50);
+  --text-on-sidebar-muted: var(--p-ink-50);
   --text-danger: var(--p-red-600);
   --text-success: var(--p-teal-600);
-
   --border-default: var(--p-stone-200);
   --border-strong: var(--p-stone-300);
   --border-focus: var(--p-teal-500);
   --border-danger: var(--p-red-500);
-
+  --border-sidebar: var(--p-ink-500);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -83,20 +135,16 @@
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
-
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-full: 999px;
-
   --shadow-sm: 0 1px 2px rgb(26 24 21 / 0.06);
   --shadow-md: 0 4px 12px rgb(26 24 21 / 0.08);
   --shadow-lg: 0 12px 32px rgb(26 24 21 / 0.14);
-
   --font-sans: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --font-numeric: "IBM Plex Sans", system-ui, sans-serif;
-
+  --font-numeric: "JetBrains Mono", ui-monospace, monospace;
   --text-xs: 12px;
   --text-sm: 13px;
   --text-md: 15px;
@@ -104,10 +152,150 @@
   --text-xl: 20px;
   --text-2xl: 26px;
   --text-3xl: 34px;
-
   --touch-min: 44px;
   --control-h: 40px;
   --control-h-lg: 52px;
+}
+
+[data-theme="registre"] {
+  --color-primary: var(--p-teal-300);
+  --color-primary-hover: var(--p-teal-100);
+  --color-primary-soft: var(--p-teal-800);
+  --color-on-primary: var(--p-ink-800);
+  --color-money: var(--p-brass-500);
+  --color-money-hover: var(--p-brass-300);
+  --color-on-money: var(--p-ink-800);
+  --color-danger: var(--p-red-300);
+  --color-danger-soft: var(--p-red-900);
+  --color-warn: var(--p-amber-300);
+  --color-warn-soft: var(--p-amber-900);
+  --color-info: var(--p-blue-300);
+  --color-info-soft: var(--p-blue-900);
+  --color-success: var(--p-teal-300);
+  --surface-bg: var(--p-ink-800);
+  --surface-card: var(--p-ink-700);
+  --surface-raised: var(--p-ink-600);
+  --surface-hover: var(--p-ink-600);
+  --surface-selected: var(--p-teal-800);
+  --surface-scrim: rgb(0 0 0 / 0.6);
+  --surface-inverse: var(--p-paper-50);
+  --surface-sidebar: var(--p-ink-800);
+  --surface-sidebar-active: var(--p-ink-600);
+  --text-primary: var(--p-paper-50);
+  --text-secondary: var(--p-paper-100);
+  --text-tertiary: var(--p-paper-200);
+  --text-disabled: var(--p-ink-200);
+  --text-on-inverse: var(--p-ink-800);
+  --text-on-sidebar: var(--p-paper-50);
+  --text-on-sidebar-muted: var(--p-ink-100);
+  --text-danger: var(--p-red-300);
+  --text-success: var(--p-teal-300);
+  --border-default: var(--p-ink-500);
+  --border-strong: var(--p-ink-400);
+  --border-focus: var(--p-teal-300);
+  --border-danger: var(--p-red-300);
+  --border-sidebar: var(--p-ink-500);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.6);
+}
+
+[data-theme="observe"] {
+  --color-primary: var(--p-emerald-600);
+  --color-primary-hover: var(--p-emerald-400);
+  --color-primary-soft: var(--p-emerald-50);
+  --color-on-primary: var(--p-stone-0);
+  --color-money: var(--p-brass-500);
+  --color-money-hover: var(--p-brass-700);
+  --color-on-money: var(--p-ink-800);
+  --color-danger: var(--p-rose-600);
+  --color-danger-soft: var(--p-rose-50);
+  --color-warn: var(--p-gold-600);
+  --color-warn-soft: var(--p-gold-50);
+  --color-info: var(--p-blue-500);
+  --color-info-soft: var(--p-blue-50);
+  --color-success: var(--p-emerald-500);
+  --surface-bg: var(--p-slate-50);
+  --surface-card: var(--p-stone-0);
+  --surface-raised: var(--p-slate-100);
+  --surface-hover: var(--p-slate-100);
+  --surface-selected: var(--p-emerald-50);
+  --surface-scrim: rgb(15 23 42 / 0.45);
+  --surface-inverse: var(--p-slate-900);
+  --surface-sidebar: var(--p-stone-0);
+  --surface-sidebar-active: var(--p-slate-100);
+  --text-primary: var(--p-slate-900);
+  --text-secondary: var(--p-slate-600);
+  --text-tertiary: var(--p-slate-400);
+  --text-disabled: var(--p-slate-300);
+  --text-on-inverse: var(--p-slate-50);
+  --text-on-sidebar: var(--p-slate-900);
+  --text-on-sidebar-muted: var(--p-slate-600);
+  --text-danger: var(--p-rose-600);
+  --text-success: var(--p-emerald-600);
+  --border-default: var(--p-slate-200);
+  --border-strong: var(--p-slate-300);
+  --border-focus: var(--p-emerald-600);
+  --border-danger: var(--p-rose-600);
+  --border-sidebar: var(--p-slate-200);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 12px 32px rgb(15 23 42 / 0.14);
+}
+
+[data-theme="observe-dark"] {
+  --color-primary: var(--p-emerald-500);
+  --color-primary-hover: var(--p-emerald-400);
+  --color-primary-soft: rgb(16 185 129 / 0.12);
+  --color-on-primary: var(--p-emerald-950);
+  --color-money: var(--p-brass-400);
+  --color-money-hover: var(--p-brass-300);
+  --color-on-money: var(--p-ink-800);
+  --color-danger: var(--p-rose-400);
+  --color-danger-soft: rgb(248 113 113 / 0.12);
+  --color-warn: var(--p-gold-400);
+  --color-warn-soft: rgb(251 191 36 / 0.12);
+  --color-info: var(--p-blue-300);
+  --color-info-soft: var(--p-blue-900);
+  --color-success: var(--p-emerald-500);
+  --surface-bg: var(--p-night-900);
+  --surface-card: var(--p-night-800);
+  --surface-raised: var(--p-night-700);
+  --surface-hover: var(--p-night-700);
+  --surface-selected: rgb(16 185 129 / 0.12);
+  --surface-scrim: rgb(0 0 0 / 0.6);
+  --surface-inverse: var(--p-slate-50);
+  --surface-sidebar: var(--p-night-800);
+  --surface-sidebar-active: var(--p-night-700);
+  --text-primary: var(--p-slate-100);
+  --text-secondary: var(--p-slate-300);
+  --text-tertiary: var(--p-night-300);
+  --text-disabled: var(--p-night-300);
+  --text-on-inverse: var(--p-night-900);
+  --text-on-sidebar: var(--p-slate-100);
+  --text-on-sidebar-muted: var(--p-slate-400);
+  --text-danger: var(--p-rose-400);
+  --text-success: var(--p-emerald-500);
+  --border-default: var(--p-night-600);
+  --border-strong: var(--p-night-500);
+  --border-focus: var(--p-emerald-500);
+  --border-danger: var(--p-rose-400);
+  --border-sidebar: var(--p-night-600);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 0 rgb(255 255 255 / 0.03);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.6);
 }
 
 [dir="rtl"] {

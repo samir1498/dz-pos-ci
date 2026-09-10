@@ -25,6 +25,8 @@ export type { StoreDto } from "./generated/StoreDto";
 export type { RegimeDto } from "./generated/RegimeDto";
 export type { DatedRegimeDto } from "./generated/DatedRegimeDto";
 export type { SettingsDto } from "./generated/SettingsDto";
+export type { ThemeDto } from "./generated/ThemeDto";
+export type { ThemeChoiceDto } from "./generated/ThemeChoiceDto";
 export type { RegimeChangeDto } from "./generated/RegimeChangeDto";
 export type { BackupDto } from "./generated/BackupDto";
 export type { BackupsDto } from "./generated/BackupsDto";

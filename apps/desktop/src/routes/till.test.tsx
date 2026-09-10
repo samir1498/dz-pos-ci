@@ -84,6 +84,7 @@ const settings: SettingsDto = {
   store: { name: "Mon magasin", rc: null, nif: null, nis: null, ai: null, address: null, phone: null },
   regime: { regime: "reel", valid_from: "2026-01-01" },
   regime_planned: null,
+  theme: null,
 };
 
 /** What the API answers for the fixture basket, so the confirmation shows

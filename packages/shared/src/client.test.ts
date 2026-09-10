@@ -245,6 +245,7 @@ describe("settings", () => {
     store,
     regime: { regime: "reel", valid_from: "2026-01-01" },
     regime_planned: null,
+    theme: null,
   };
 
   test("reads the settings page and keeps a planned change", async () => {
@@ -284,6 +285,43 @@ describe("settings", () => {
     expect(calls[0]?.url).toBe("http://127.0.0.1:4317/settings/store");
     expect(calls[0]?.init?.method).toBe("PUT");
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(store);
+  });
+
+  test("choosing a theme puts it and returns the whole page", async () => {
+    const chosen: SettingsDto = { ...settings, theme: "observe-dark" };
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(chosen), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.setTheme("observe-dark")).resolves.toEqual(chosen);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/settings/theme");
+    expect(calls[0]?.init?.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ theme: "observe-dark" });
+  });
+
+  /** null is a choice: it puts the shop back on the machine's preference. */
+  test("clearing the theme sends null rather than leaving the field out", async () => {
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(settings), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.setTheme(null)).resolves.toEqual(settings);
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ theme: null });
+  });
+
+  test("a settings answer naming a theme the app has no block for is refused", async () => {
+    const api = createClient("http://127.0.0.1:4317", stub(200, { ...settings, theme: "midnight" }));
+    await expect(api.getSettings()).rejects.toMatchObject({ code: "bad_response" });
   });
 
   test("a régime change posts the day and returns the whole page", async () => {

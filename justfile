@@ -87,6 +87,12 @@ types-check: claim
 types: claim
     DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --test export_bindings
 
+# regenerate apps/desktop/src/theme.css from the token source. The check
+# that a stale file fails the gates is a vitest in packages/design, so it
+# rides along in `just test`; this is the `just types` beside it.
+theme:
+    pnpm --filter @dzpos/design gen:theme
+
 # everything a PR needs, in order; stops at the first failure
 gates: fmt clippy types-check test build
 
@@ -146,7 +152,7 @@ e2e: claim
     done
 
 # only the tests that write a committed screenshot: fr (products.png) and
-# ar (the ten *-ar.png the e2e README lists); en keeps none.
+# ar (the twelve *-ar.png the e2e README lists); en keeps none.
 screenshot: claim
     #!/usr/bin/env bash
     set -euo pipefail

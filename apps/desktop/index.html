@@ -21,11 +21,38 @@
           // already on <html> above stays.
         }
       })();
+      // Same trick for the theme, and the same reason: ThemeProvider only
+      // knows the shop's choice once the API has answered, which is long
+      // after first paint, so a shop on Registre saw a white flash on every
+      // load. The provider mirrors the resolved name here on its way past.
+      // With nothing stored (a fresh machine) the machine's own preference
+      // picks between the two OS themes, which is what the provider does too.
+      (function () {
+        var names = ["comptoir", "registre", "observe", "observe-dark"];
+        var theme = null;
+        try {
+          theme = window.localStorage.getItem("dzpos-theme");
+        } catch (e) {
+          // storage blocked; fall through to the media query
+        }
+        if (names.indexOf(theme) === -1) {
+          theme =
+            window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "registre"
+              : "comptoir";
+        }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- No font link. The three families come in as packages (the
+         @fontsource ones) and are imported at the top of src/styles.css, so
+         the woff2 files ship in the bundle: a shop counter has no internet,
+         and a face fetched from a CDN would look right on the machine that
+         built it and fall back to system-ui on the one that matters. -->
+    <!-- The 24 px variant of the mark, straight out of the design package
+         rather than copied into a public/ folder, so there is one drawing.
+         Vite rewrites this path at build time. -->
+    <link rel="icon" type="image/svg+xml" href="../../packages/design/assets/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>dz-pos</title>
   </head>

@@ -45,6 +45,7 @@ import type { RestoreDto } from "./generated/RestoreDto";
 import type { SaleDto } from "./generated/SaleDto";
 import type { SaleKindDto } from "./generated/SaleKindDto";
 import type { SettingsDto } from "./generated/SettingsDto";
+import type { ThemeDto } from "./generated/ThemeDto";
 import type { StoreDto } from "./generated/StoreDto";
 import type { CloseSupplierDto } from "./generated/CloseSupplierDto";
 import type { LastStockRecountDto } from "./generated/LastStockRecountDto";
@@ -412,6 +413,18 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
+      });
+      return narrow(body, settingsSchema, "settings");
+    },
+
+    /** Records the shop's theme, or `null` to follow the machine. The answer
+     * is the whole settings page, the way a régime change answers, so the
+     * screen reads one shape back instead of patching its own copy. */
+    async setTheme(theme: ThemeDto | null): Promise<SettingsDto> {
+      const body = await send("/settings/theme", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ theme }),
       });
       return narrow(body, settingsSchema, "settings");
     },

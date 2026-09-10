@@ -46,6 +46,7 @@ pub mod documents;
 pub mod expenses;
 pub mod export;
 pub mod import;
+pub mod preferences;
 pub mod products;
 pub mod proforma;
 pub mod purchases;

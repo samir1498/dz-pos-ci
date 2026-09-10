@@ -26,6 +26,7 @@ use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, 
 use dzpos_core::services::documents::CancelEffect;
 use dzpos_core::services::expenses::{Expense, ExpenseCategory, NewExpense};
 use dzpos_core::services::import::{Applied, DryRun, Outcome, RowReport};
+use dzpos_core::services::preferences::Theme;
 use dzpos_core::services::purchases::{
     NewLine, NewPurchase, Paid, Purchase, PurchaseLine, PurchaseStatus, PurchaseView, ReceiveLine,
 };
@@ -365,6 +366,52 @@ impl From<DatedRegime> for DatedRegimeDto {
     }
 }
 
+/// The four themes the design package emits a `[data-theme]` block for.
+/// Serialised as the same string the CSS attribute carries, so the value in
+/// the shop file, the value on the wire and the value on `<html>` are one
+/// spelling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "ThemeDto.ts")]
+#[serde(rename_all = "kebab-case")]
+pub enum ThemeDto {
+    Comptoir,
+    Registre,
+    Observe,
+    ObserveDark,
+}
+
+impl From<Theme> for ThemeDto {
+    fn from(t: Theme) -> Self {
+        match t {
+            Theme::Comptoir => ThemeDto::Comptoir,
+            Theme::Registre => ThemeDto::Registre,
+            Theme::Observe => ThemeDto::Observe,
+            Theme::ObserveDark => ThemeDto::ObserveDark,
+        }
+    }
+}
+
+impl From<ThemeDto> for Theme {
+    fn from(t: ThemeDto) -> Self {
+        match t {
+            ThemeDto::Comptoir => Theme::Comptoir,
+            ThemeDto::Registre => Theme::Registre,
+            ThemeDto::Observe => Theme::Observe,
+            ThemeDto::ObserveDark => Theme::ObserveDark,
+        }
+    }
+}
+
+/// The theme the shop chose. `null` is not a missing answer: it is the shop
+/// saying "follow the machine", and the app then reads the operating system's
+/// light or dark preference.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "ThemeChoiceDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct ThemeChoiceDto {
+    pub theme: Option<ThemeDto>,
+}
+
 /// What the settings screen reads: the store block, the régime in force
 /// and, when the owner has dated a change ahead, the one coming.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -373,6 +420,8 @@ pub struct SettingsDto {
     pub store: StoreDto,
     pub regime: DatedRegimeDto,
     pub regime_planned: Option<DatedRegimeDto>,
+    /// `null` when the shop has never chosen one.
+    pub theme: Option<ThemeDto>,
 }
 
 /// A régime change: the régime and the day it applies from. Appended to

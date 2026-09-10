@@ -25,11 +25,11 @@ use dzpos_api::dto::{
     SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto, SaleWarningDto, SettingsDto,
     StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto, SupplierDebtKindDto,
     SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto,
-    TakingsDto, TopProductDto, UnitDto,
+    TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 87] = [
+const FILES: [&str; 89] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -41,6 +41,8 @@ const FILES: [&str; 87] = [
     "StoreDto.ts",
     "RegimeDto.ts",
     "DatedRegimeDto.ts",
+    "ThemeDto.ts",
+    "ThemeChoiceDto.ts",
     "SettingsDto.ts",
     "RegimeChangeDto.ts",
     "BackupDto.ts",
@@ -185,6 +187,8 @@ fn export_bindings() {
     StoreDto::export_all(&cfg).unwrap();
     RegimeDto::export_all(&cfg).unwrap();
     DatedRegimeDto::export_all(&cfg).unwrap();
+    ThemeDto::export_all(&cfg).unwrap();
+    ThemeChoiceDto::export_all(&cfg).unwrap();
     SettingsDto::export_all(&cfg).unwrap();
     RegimeChangeDto::export_all(&cfg).unwrap();
     BackupDto::export_all(&cfg).unwrap();

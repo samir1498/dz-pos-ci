@@ -43,6 +43,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    preferences (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        key -> Text,
+        value -> Text,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     settings (seq) {
         seq -> Integer,
         shop_id -> Integer,
@@ -385,6 +395,7 @@ diesel::table! {
 diesel::joinable!(categories -> shops (shop_id));
 diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
+diesel::joinable!(preferences -> shops (shop_id));
 diesel::joinable!(settings -> shops (shop_id));
 diesel::joinable!(users -> shops (shop_id));
 diesel::joinable!(documents -> shops (shop_id));
@@ -453,6 +464,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     purchase_receipt_lines,
     purchase_receipts,
     purchases,
+    preferences,
     settings,
     shops,
     stock_movements,
