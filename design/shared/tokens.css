@@ -91,12 +91,15 @@
   --surface-selected: var(--p-teal-50);
   --surface-scrim: rgb(26 24 21 / 0.45);
   --surface-inverse: var(--p-ink-800);
+  --surface-sidebar: var(--p-ink-800);
+  --surface-sidebar-active: var(--p-ink-600);
 
   --text-primary: var(--p-stone-900);
   --text-secondary: var(--p-stone-600);
   --text-tertiary: var(--p-stone-400);
   --text-disabled: var(--p-stone-300);
   --text-on-inverse: var(--p-paper-50);
+  --text-on-sidebar: var(--p-paper-50);
   --text-danger: var(--p-red-600);
   --text-success: var(--p-teal-600);
 
@@ -104,6 +107,7 @@
   --border-strong: var(--p-stone-300);
   --border-focus: var(--p-teal-500);
   --border-danger: var(--p-red-500);
+  --border-sidebar: var(--p-ink-500);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -167,12 +171,15 @@
   --surface-selected: var(--p-teal-800);
   --surface-scrim: rgb(0 0 0 / 0.6);
   --surface-inverse: var(--p-paper-50);
+  --surface-sidebar: var(--p-ink-800);
+  --surface-sidebar-active: var(--p-ink-600);
 
   --text-primary: var(--p-paper-50);
   --text-secondary: var(--p-paper-100);
   --text-tertiary: var(--p-paper-200);
   --text-disabled: var(--p-ink-200);
   --text-on-inverse: var(--p-ink-800);
+  --text-on-sidebar: var(--p-paper-50);
   --text-danger: var(--p-red-300);
   --text-success: var(--p-teal-300);
 
@@ -180,6 +187,7 @@
   --border-strong: var(--p-ink-400);
   --border-focus: var(--p-teal-300);
   --border-danger: var(--p-red-300);
+  --border-sidebar: var(--p-ink-500);
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);

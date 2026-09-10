@@ -1,129 +1,166 @@
-// The one stylesheet the desktop loads: the vendored faces, the token
-// custom properties for both themes, and the Tailwind v4 `@theme` map that
-// turns those tokens into utility classes.
+// The one stylesheet the desktop loads on top of Tailwind: the token custom
+// properties for both themes, the shadcn/ui variable set mapped onto them,
+// and the Tailwind v4 `@theme` blocks that turn the pair into utilities.
 //
-// Generated, never edited: `pnpm --filter @dzpos/design gen:theme` writes
-// apps/desktop/src/theme.css and `themeCss.test.ts` fails the gates when the
-// checked-in file and this source disagree, the way `just types-check` does
-// for the generated DTOs.
+// Generated, never edited: `just theme` writes apps/desktop/src/theme.css and
+// `themeCss.test.ts` fails the gates when the checked-in file and this source
+// disagree, the way `just types-check` does for the generated DTOs.
 //
-// Why a map rather than the raw token names. Tailwind v4 reads two of its
-// namespaces off names this package already uses for something else:
-// `--color-*` is the colour namespace (so `--color-primary` lines up by
-// itself) but `--text-*` is the *font size* namespace, and the tokens have
-// both `--text-primary` (a colour) and `--text-md` (a size) under it. Left
-// alone, `text-primary` would compile to `font-size: <a colour>`. So the
-// colour roles that do not already sit in `--color-*` are aliased into it,
-// and only the sizes keep `--text-*`.
+// Three things worth knowing before editing it.
+//
+// 1. The kit is shadcn/ui, so the emitted API is shadcn's names
+//    (`--background`, `--primary`, `--sidebar-accent`). Our own roles stay
+//    the source: `--background` is `var(--surface-bg)`, and the file a
+//    designer edits is semantic.ts, not this one. A component installed by
+//    the shadcn CLI in D3 then wears the Comptoir and Registre palettes
+//    without a patch.
+//
+// 2. The shadcn block is emitted once, not once per theme, because every
+//    name in it is an indirection: `[data-theme="registre"]` redefines
+//    `--surface-bg` and `--background` follows on its own. That works only
+//    while `data-theme` sits on the same element as `:root`, so it goes on
+//    `<html>` and never on a wrapper div.
+//
+// 3. Tailwind reads `--color-*` as its colour namespace and `--text-*` as
+//    its *font size* namespace, and our tokens use `--text-` for both a
+//    colour (`--text-primary`) and a size (`--text-md`). Only the sizes go
+//    into `@theme`. Names that already match a Tailwind key go through
+//    `@theme reference`, which emits no variable of its own and so cannot
+//    declare one pointing at itself; the shadcn names go through
+//    `@theme inline`, which carries the value into the utility.
 
-import manifest from "../assets/fonts/manifest.json" with { type: "json" };
 import { toCss } from "./css";
-import { borderColor, color, fontFamily, fontSize, radius, shadow, surface, textColor } from "./semantic";
+import { fontFamily, fontSize, radius, shadow } from "./semantic";
 
 /** Where the generated file lands, from the repository root. */
 export const THEME_CSS_PATH = "apps/desktop/src/theme.css";
 
-/** From that file's own directory to the vendored woff2 files. */
-const FONT_DIR = "../../../packages/design/assets/fonts";
-
-interface FontFace {
-  readonly file: string;
-  readonly family: string;
-  /** `400`, or `100 700` for a variable face. */
-  readonly weight: string;
-  readonly unicodeRange: string;
-}
+/**
+ * shadcn/ui's variable set, each pointing at the role that decides it. The
+ * order follows shadcn's own so the block reads like the one its docs show.
+ * `--money` and `--font-numeric` are ours: shadcn has no slot for a brass
+ * accent that means "this action moves money", nor for a figure font.
+ */
+const SHADCN: readonly (readonly [string, string])[] = [
+  ["--background", "--surface-bg"],
+  ["--foreground", "--text-primary"],
+  ["--card", "--surface-card"],
+  ["--card-foreground", "--text-primary"],
+  ["--popover", "--surface-card"],
+  ["--popover-foreground", "--text-primary"],
+  ["--primary", "--color-primary"],
+  ["--primary-foreground", "--color-on-primary"],
+  ["--secondary", "--surface-raised"],
+  ["--secondary-foreground", "--text-primary"],
+  ["--muted", "--surface-raised"],
+  ["--muted-foreground", "--text-secondary"],
+  ["--accent", "--surface-selected"],
+  ["--accent-foreground", "--text-primary"],
+  ["--destructive", "--color-danger"],
+  // The same pair as the primary button: white on Comptoir's red 600, ink on
+  // Registre's red 300. One role already says which way round the theme is.
+  ["--destructive-foreground", "--color-on-primary"],
+  ["--border", "--border-default"],
+  ["--input", "--border-strong"],
+  ["--ring", "--border-focus"],
+  ["--radius", "--radius-md"],
+  ["--sidebar", "--surface-sidebar"],
+  ["--sidebar-foreground", "--text-on-sidebar"],
+  ["--sidebar-primary", "--color-primary"],
+  ["--sidebar-primary-foreground", "--color-on-primary"],
+  ["--sidebar-accent", "--surface-sidebar-active"],
+  ["--sidebar-accent-foreground", "--text-on-sidebar"],
+  ["--sidebar-border", "--border-sidebar"],
+  ["--sidebar-ring", "--border-focus"],
+  ["--money", "--color-money"],
+  ["--money-foreground", "--color-on-money"],
+];
 
 /**
- * Aliases from a token name to the Tailwind colour key. A pair whose two
- * halves are equal is an identity: the token already sits in Tailwind's
- * namespace and only has to be declared, not redefined.
+ * Tailwind keys whose name this file already declares as a variable. They go
+ * in `@theme reference`, so Tailwind builds `font-numeric` and `text-md`
+ * without emitting a `--font-numeric: var(--font-numeric)` of its own.
+ *
+ * `--radius-*` is here rather than shadcn's `calc(var(--radius) - 4px)`
+ * ladder: our scale is a designed scale, not four offsets from one number.
  */
-const SURFACE_KEYS: Readonly<Record<string, string>> = {
-  bg: "bg",
-  card: "card",
-  raised: "raised",
-  hover: "hover",
-  selected: "selected",
-  scrim: "scrim",
-  inverse: "inverse",
-};
+const REFERENCE_GROUPS: readonly (readonly [string, readonly string[]])[] = [
+  ["--font-", Object.keys(fontFamily)],
+  ["--text-", Object.keys(fontSize)],
+  ["--radius-", Object.keys(radius)],
+  ["--shadow-", Object.keys(shadow)],
+];
 
-/** `fg` rather than `primary`: `--color-primary` is the teal button. */
-const TEXT_KEYS: Readonly<Record<string, string>> = {
-  primary: "fg",
-  secondary: "muted",
-  tertiary: "faint",
-  disabled: "fg-disabled",
-  "on-inverse": "on-inverse",
-  danger: "fg-danger",
-  success: "fg-success",
-};
-
-const BORDER_KEYS: Readonly<Record<string, string>> = {
-  default: "line",
-  strong: "line-strong",
-  focus: "focus",
-  danger: "line-danger",
-};
-
-const alias = (map: Readonly<Record<string, string>>, key: string): string => {
-  const found = map[key];
-  if (found === undefined) {
-    throw new Error(`no Tailwind name for ${key}; add it to themeCss.ts`);
-  }
-  return found;
-};
+/**
+ * The roles shadcn has no name for, kept under their own. `bg-warn`,
+ * `text-fg-danger` and `bg-primary-soft` are how a screen reaches them.
+ */
+const EXTRA_UTILITIES: readonly (readonly [string, string])[] = [
+  ["--color-primary-hover", "--color-primary-hover"],
+  ["--color-primary-soft", "--color-primary-soft"],
+  ["--color-money-hover", "--color-money-hover"],
+  ["--color-danger-soft", "--color-danger-soft"],
+  ["--color-warn", "--color-warn"],
+  ["--color-warn-soft", "--color-warn-soft"],
+  ["--color-info", "--color-info"],
+  ["--color-info-soft", "--color-info-soft"],
+  ["--color-success", "--color-success"],
+  ["--color-hover", "--surface-hover"],
+  ["--color-scrim", "--surface-scrim"],
+  ["--color-inverse", "--surface-inverse"],
+  ["--color-on-inverse", "--text-on-inverse"],
+  ["--color-faint", "--text-tertiary"],
+  ["--color-fg-disabled", "--text-disabled"],
+  ["--color-fg-danger", "--text-danger"],
+  ["--color-fg-success", "--text-success"],
+  ["--color-line-strong", "--border-strong"],
+  ["--color-line-danger", "--border-danger"],
+];
 
 const line = (name: string, value: string): string => `  ${name}: ${value};`;
 
-/**
- * Keys whose token name already equals the Tailwind key. These go in a
- * `@theme reference` block: Tailwind builds the utilities and emits no
- * variable of its own, so `--color-primary: var(--color-primary)` never
- * becomes a declaration referring to itself.
- */
-const referenceLines = (): string[] => [
-  ...Object.keys(color).map((k) => line(`--color-${k}`, `var(--color-${k})`)),
-  ...Object.keys(fontFamily).map((k) => line(`--font-${k}`, `var(--font-${k})`)),
-  ...Object.keys(fontSize).map((k) => line(`--text-${k}`, `var(--text-${k})`)),
-  ...Object.keys(radius).map((k) => line(`--radius-${k}`, `var(--radius-${k})`)),
-  ...Object.keys(shadow).map((k) => line(`--shadow-${k}`, `var(--shadow-${k})`)),
-];
+const shadcnLines = (): string[] => SHADCN.map(([name, role]) => line(name, `var(${role})`));
+
+const referenceLines = (): string[] =>
+  REFERENCE_GROUPS.flatMap(([prefix, keys]) =>
+    keys.map((key) => line(`${prefix}${key}`, `var(${prefix}${key})`)),
+  ).concat(EXTRA_UTILITIES.filter(isIdentity).map(([name]) => line(name, `var(${name})`)));
+
+/** Every shadcn name becomes a Tailwind colour key, except the two lengths. */
+const NOT_A_COLOUR: ReadonlySet<string> = new Set(["--radius"]);
 
 /**
- * Keys that had to be renamed. These go in a `@theme inline` block, so the
- * utility carries the token variable itself (`background-color:
- * var(--surface-card)`) and no `--color-card` has to exist at runtime.
+ * An extra whose key already equals the variable it points at is a reference,
+ * not an alias: put it in `@theme inline` and Tailwind emits
+ * `--color-warn: var(--color-warn)` into its own layer, a declaration that
+ * refers to itself. The unlayered token block still wins the cascade, so it
+ * renders, but it is a cycle waiting for the day the layering moves.
  */
+const isIdentity = ([name, role]: readonly [string, string]): boolean => name === role;
+
 const inlineLines = (): string[] => [
-  ...Object.keys(surface).map((k) => line(`--color-${alias(SURFACE_KEYS, k)}`, `var(--surface-${k})`)),
-  ...Object.keys(textColor).map((k) => line(`--color-${alias(TEXT_KEYS, k)}`, `var(--text-${k})`)),
-  ...Object.keys(borderColor).map((k) => line(`--color-${alias(BORDER_KEYS, k)}`, `var(--border-${k})`)),
+  ...SHADCN.filter(([name]) => !NOT_A_COLOUR.has(name)).map(([name]) =>
+    line(`--color-${name.slice(2)}`, `var(${name})`),
+  ),
+  ...EXTRA_UTILITIES.filter((entry) => !isIdentity(entry)).map(([name, role]) =>
+    line(name, `var(${role})`),
+  ),
 ];
 
-const fontFaceBlock = (face: FontFace): string =>
-  [
-    "@font-face {",
-    `  font-family: "${face.family}";`,
-    "  font-style: normal;",
-    `  font-weight: ${face.weight};`,
-    "  font-display: swap;",
-    `  src: url("${FONT_DIR}/${face.file}") format("woff2");`,
-    `  unicode-range: ${face.unicodeRange};`,
-    "}",
-  ].join("\n");
+const HEADER = `/* Generated from packages/design/src by \`just theme\`. Do not edit:
+   packages/design/src/themeCss.test.ts fails the gates when this file and the
+   token source disagree, the way just types-check does for the DTOs.
 
-export const fontFaces = (): readonly FontFace[] => manifest;
+   Four parts: our tokens for Comptoir and Registre, the shadcn/ui variable
+   set pointing at them, the Tailwind v4 theme map, and the document itself.
 
-const HEADER = `/* Generated from packages/design/src by \`pnpm --filter @dzpos/design gen:theme\`.
-   Do not edit: packages/design/src/themeCss.test.ts fails the gates when this
-   file and the token source disagree, the way just types-check does for the
-   generated DTOs.
+   The shadcn block is written once. Every name in it is an indirection, so
+   [data-theme="registre"] redefining --surface-bg is enough for --background
+   to follow. That holds only while data-theme is on the same element as
+   :root, which is why the app sets it on <html>.
 
-   Three parts: the vendored faces (no font is fetched over the network, the
-   shop counter has none), the token custom properties for Comptoir and
-   Registre, and the Tailwind v4 theme map. */`;
+   The faces are not here: apps/desktop/src/styles.css imports them from the
+   @fontsource packages, and nothing is fetched over the network. */`;
 
 /**
  * The three declarations a themed app cannot start without. Everything else
@@ -133,23 +170,21 @@ const HEADER = `/* Generated from packages/design/src by \`pnpm --filter @dzpos/
 const BASE = `/* ---- Base. The document, not a component. ---- */
 html {
   font-family: var(--font-sans);
-  background: var(--surface-bg);
-  color: var(--text-primary);
+  background: var(--background);
+  color: var(--foreground);
 }`;
 
 export const toThemeCss = (): string =>
   [
     HEADER,
     "",
-    "/* ---- Faces. Vendored under packages/design/assets/fonts. ---- */",
-    ...fontFaces().map(fontFaceBlock),
-    "",
     "/* ---- Tokens. The source is packages/design/src/semantic.ts. ---- */",
     toCss().trimEnd(),
     "",
-    `/* ---- Tailwind v4. \`reference\` declares the keys whose variable this
-   file already carries; \`inline\` carries the value into the utility for the
-   roles Tailwind's namespaces have no room for under their token name. ---- */`,
+    "/* ---- shadcn/ui, on our roles. ---- */",
+    `:root {\n${shadcnLines().join("\n")}\n}`,
+    "",
+    "/* ---- Tailwind v4. ---- */",
     `@theme reference {\n${referenceLines().join("\n")}\n}`,
     "",
     `@theme inline {\n${inlineLines().join("\n")}\n}`,

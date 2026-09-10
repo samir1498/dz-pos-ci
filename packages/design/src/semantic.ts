@@ -77,6 +77,11 @@ export const surface = {
   // Registre's face (the approved blend page), and the two themes then
   // share one chrome colour instead of two near-blacks.
   inverse: ref("ink", 800),
+  // The chrome. Ink in both themes: the sidebar is the one surface the two
+  // themes agree on, which is what lets a shop switch theme without the
+  // shape of the app moving.
+  sidebar: ref("ink", 800),
+  "sidebar-active": ref("ink", 600),
 } satisfies TokenGroup;
 
 export const textColor = {
@@ -85,6 +90,7 @@ export const textColor = {
   tertiary: ref("stone", 400),
   disabled: ref("stone", 300),
   "on-inverse": ref("paper", 50),
+  "on-sidebar": ref("paper", 50),
   danger: ref("red", 600),
   success: ref("teal", 600),
 } satisfies TokenGroup;
@@ -94,6 +100,7 @@ export const borderColor = {
   strong: ref("stone", 300),
   focus: ref("teal", 500),
   danger: ref("red", 500),
+  sidebar: ref("ink", 500),
 } satisfies TokenGroup;
 
 export const space = {
@@ -194,6 +201,10 @@ export const registreSurface = {
   selected: ref("teal", 800),
   scrim: literal("rgb(0 0 0 / 0.6)"),
   inverse: ref("paper", 50),
+  // The same ink as Comptoir. On this theme it matches the page behind it,
+  // so the sidebar is told apart by its border rather than by its colour.
+  sidebar: ref("ink", 800),
+  "sidebar-active": ref("ink", 600),
 } satisfies TokenGroup;
 
 export const registreText = {
@@ -202,6 +213,7 @@ export const registreText = {
   tertiary: ref("paper", 200),
   disabled: ref("ink", 200),
   "on-inverse": ref("ink", 800),
+  "on-sidebar": ref("paper", 50),
   danger: ref("red", 300),
   success: ref("teal", 300),
 } satisfies TokenGroup;
@@ -211,6 +223,7 @@ export const registreBorder = {
   strong: ref("ink", 400),
   focus: ref("teal", 300),
   danger: ref("red", 300),
+  sidebar: ref("ink", 500),
 } satisfies TokenGroup;
 
 /**

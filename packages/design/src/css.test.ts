@@ -120,6 +120,7 @@ const TEXT_COLOUR_ROLES: ReadonlySet<string> = new Set([
   "--text-tertiary",
   "--text-disabled",
   "--text-on-inverse",
+  "--text-on-sidebar",
   "--text-danger",
   "--text-success",
 ]);
@@ -185,6 +186,13 @@ describe("registre contrast", () => {
 
   it.each(["--text-tertiary", "--text-disabled"])("%s reads at 3:1", (role) => {
     expect(contrast(hex(role), bg())).toBeGreaterThanOrEqual(3);
+  });
+
+  /** The sidebar is ink in both themes, so its own text is checked on it. */
+  it("puts readable text on the sidebar", () => {
+    expect(
+      contrast(hex("--text-on-sidebar"), hex("--surface-sidebar")),
+    ).toBeGreaterThanOrEqual(4.5);
   });
 
   it("puts readable text on the primary and money buttons", () => {
