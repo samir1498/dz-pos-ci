@@ -8,6 +8,7 @@ pub mod debt;
 pub mod documents;
 pub mod expenses;
 pub mod jobs;
+pub mod preferences;
 pub mod products;
 pub mod purchases;
 pub mod settings;

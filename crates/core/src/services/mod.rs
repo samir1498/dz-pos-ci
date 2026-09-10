@@ -43,6 +43,7 @@ pub mod customers;
 pub mod debt;
 pub mod documents;
 pub mod expenses;
+pub mod preferences;
 pub mod products;
 pub mod proforma;
 pub mod sales;

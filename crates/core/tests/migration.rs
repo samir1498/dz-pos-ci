@@ -3803,3 +3803,83 @@ fn a_database_with_a_shops_m2_history_takes_the_suppliers_and_purchases_tables()
         "a purchase with a receipt was deleted"
     );
 }
+
+/// The preferences table lands on a file that already holds a shop, and it
+/// takes one row per (shop, key) rather than a series: writing the theme twice
+/// leaves one row, which is the whole difference between this table and
+/// `settings` beside it.
+#[test]
+fn a_database_without_preferences_takes_the_migration_that_adds_them() {
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_before_migration("preferences");
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master \
+             WHERE type = 'table' AND name = 'preferences'"
+        ),
+        0,
+        "the file this starts from already carries preferences"
+    );
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    diesel::sql_query(
+        "INSERT INTO preferences (shop_id, key, value) VALUES (1, 'theme', 'registre')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    // The upsert the repo does, spelled here so the UNIQUE is what proves it:
+    // a second theme for the same shop replaces the first, it does not stack.
+    diesel::sql_query(
+        "INSERT INTO preferences (shop_id, key, value) VALUES (1, 'theme', 'observe') \
+         ON CONFLICT (shop_id, key) DO UPDATE SET value = excluded.value",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM preferences WHERE shop_id = 1 AND key = 'theme'"
+        ),
+        1,
+        "the second theme was appended instead of replacing the first"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM preferences \
+             WHERE shop_id = 1 AND key = 'theme' AND value = 'observe'"
+        ),
+        1,
+        "the row does not hold the theme written last"
+    );
+
+    // Scoped by shop like every other table (rule 3): a second shop's theme is
+    // its own row, not a conflict with the first.
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième')")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO preferences (shop_id, key, value) VALUES (2, 'theme', 'comptoir')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        count(&mut conn, "SELECT COUNT(*) AS n FROM preferences"),
+        2,
+        "two shops did not get one theme each"
+    );
+
+    // The shop goes and its preferences go with it.
+    diesel::sql_query("DELETE FROM shops WHERE id = 2")
+        .execute(&mut conn)
+        .unwrap();
+    assert_eq!(
+        count(&mut conn, "SELECT COUNT(*) AS n FROM preferences WHERE shop_id = 2"),
+        0,
+        "a deleted shop left its preferences behind"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
