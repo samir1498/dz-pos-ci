@@ -12,14 +12,28 @@
 // leaves, the way the settings spec hands the régime back.
 
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentLang, t } from "./messages";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
-/** The four names the design package emits a `[data-theme]` block for. */
+/**
+ * The four names the design package emits a `[data-theme]` block for, spelled
+ * out so the `LABEL` record below is typed by them rather than by `string`.
+ * The first test asserts the list against index.html's anti-flash script, and
+ * `src/theme.test.ts` asserts that script against the package, so the three
+ * copies are chained and none can drift on its own.
+ */
 const THEMES = ["comptoir", "registre", "observe", "observe-dark"] as const;
+
+/** The anti-flash script's own copy of the list, read out of the document. */
+const namesInHtml = (): string[] => {
+  const html = readFileSync(path.join(here, "..", "index.html"), "utf8");
+  const match = /var names = \[([^\]]*)\];/.exec(html);
+  return [...(match?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((hit) => hit[1]);
+};
 
 /** The label the switcher shows for each, from the running project's JSON. */
 const LABEL: Record<(typeof THEMES)[number], string> = {
@@ -39,6 +53,10 @@ const themeOf = (page: import("@playwright/test").Page) =>
  */
 const pageBackground = (page: import("@playwright/test").Page) =>
   page.evaluate(() => window.getComputedStyle(document.documentElement).backgroundColor);
+
+test("the list here is the one the anti-flash script paints with", () => {
+  expect(namesInHtml()).toEqual([...THEMES]);
+});
 
 test("each theme is kept in the shop file and survives a reload", async ({ page }) => {
   const puts: unknown[] = [];

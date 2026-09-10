@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 
-import { THEMES } from "@dzpos/design";
+import { OS_THEME, THEMES } from "@dzpos/design";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -83,5 +83,45 @@ describe("the theme is an attribute, not a branch", () => {
     for (const name of THEMES.slice(1)) {
       expect(css).toContain(`[data-theme="${name}"]`);
     }
+  });
+});
+
+/**
+ * The one place outside the provider and the switcher that has to name the
+ * themes, and it cannot import them: index.html's anti-flash script runs
+ * before any module is fetched, so it carries its own copy of the list and
+ * its own copy of the OS fallback. A third theme was added to the package on
+ * 2026-09-10 and this script kept two names for an afternoon, which is
+ * exactly the failure a hand-copied list produces: nothing breaks, the fresh
+ * machine just lands on the wrong theme and the provider corrects it a second
+ * later, so the flash the script exists to remove comes back and no test
+ * says so.
+ *
+ * So the copy stays (it must) and is checked against the source here.
+ * `apps/desktop/e2e/theme.spec.ts` asserts its own list against the same
+ * file, which chains the three together.
+ */
+describe("the anti-flash script in index.html", () => {
+  const html = readFileSync(join(process.cwd(), "index.html"), "utf8");
+
+  it("lists exactly the themes the design package declares", () => {
+    const match = /var names = \[([^\]]*)\];/.exec(html);
+    expect(match).not.toBeNull();
+    const names = [...(match?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((hit) => hit[1]);
+    expect(names).toEqual([...THEMES]);
+  });
+
+  /**
+   * The ternary the script falls back on when nothing is stored. Read as a
+   * pair rather than a single name: swapping the two arms would leave a dark
+   * machine on the light theme and still match a one-sided assertion.
+   */
+  it("falls back to the same two OS themes as the provider", () => {
+    const match = /\.matches\s*\?\s*"([^"]+)"\s*:\s*"([^"]+)";/.exec(html);
+    expect(match).not.toBeNull();
+    expect({ dark: match?.[1], light: match?.[2] }).toEqual({
+      dark: OS_THEME.dark,
+      light: OS_THEME.light,
+    });
   });
 });
