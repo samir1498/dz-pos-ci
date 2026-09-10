@@ -165,8 +165,9 @@ test("settles two credit sales oldest first, refuses more than is owed, and prin
   page,
   request,
 }) => {
-  // Confirmed rather than dismissed: the payment asks first, and a browser
-  // answers "no" to a dialog nobody handles.
+  // Left in place though the payment no longer asks through the browser: the
+  // handler costs nothing and a browser answers "no" to any native dialog
+  // nobody is listening for.
   page.on("dialog", (dialog) => void dialog.accept());
   const name = customerName();
   const customerId = await aCustomerOnCredit(request, name);
@@ -178,17 +179,21 @@ test("settles two credit sales oldest first, refuses more than is owed, and prin
   await page.goto("/customers");
   const row = page.getByRole("row").filter({ hasText: name });
   await expect(row).toBeVisible();
-  await row.getByRole("button", { name: `${t("customers_edit")} ${name}` }).click();
-  await expect(page.getByRole("heading", { name: t("customers_pay") })).toBeVisible();
+  // The row's name opens that customer's own page, and the money is typed
+  // into a dialog there: the dialog is the confirmation, so the brass button
+  // inside it is the last step rather than the first of two.
+  await row.getByRole("link", { name }).click();
+  await page.getByRole("button", { name: t("customers_pay"), exact: true }).click();
+  await expect(page.getByTestId("customer-pay-dialog")).toBeVisible();
 
   await page.getByLabel(t("field_payment_amount"), { exact: true }).fill(PAYMENT_INPUT);
-  await page.getByRole("radio", { name: t("payment_cash"), exact: true }).check();
+  await page.getByRole("radio", { name: t("payment_cash"), exact: true }).click();
   await page.getByLabel(t("field_payment_note"), { exact: true }).fill("acompte e2e");
   await page.getByRole("button", { name: t("action_take_payment"), exact: true }).click();
   await expect(page.getByText(t("customers_paid"))).toBeVisible();
 
   // The screen and the shop file agree on the balance.
-  await expect(row.getByRole("cell", { name: BALANCE_RENDERED, exact: true })).toBeVisible();
+  await expect(page.getByTestId("customer-balance")).toContainText(BALANCE_RENDERED);
   const stored = await customerByName(request, name);
   expect(stored.balance_centimes).toBe(BALANCE_AFTER);
 
@@ -222,6 +227,7 @@ test("settles two credit sales oldest first, refuses more than is owed, and prin
 
   // A payment above what is left is refused, and the refusal names what is
   // still owed rather than saying only "too much".
+  await page.getByRole("button", { name: t("customers_pay"), exact: true }).click();
   await page.getByLabel(t("field_payment_amount"), { exact: true }).fill(TOO_MUCH_INPUT);
   await page.getByRole("button", { name: t("action_take_payment"), exact: true }).click();
   const refusal = page.getByRole("alert").filter({ hasText: t("error_payment_above_debt") });
@@ -229,6 +235,10 @@ test("settles two credit sales oldest first, refuses more than is owed, and prin
   await expect(refusal).toContainText(BALANCE_RENDERED);
   const afterRefusal = await customerByName(request, name);
   expect(afterRefusal.balance_centimes).toBe(BALANCE_AFTER);
+  // The refusal keeps the dialog open, and the papers below it are on the
+  // page it covers.
+  await page.getByRole("button", { name: t("action_cancel"), exact: true }).click();
+  await expect(page.getByTestId("customer-pay-dialog")).toBeHidden();
 
   // The statement is the page the core rendered, and it closes on the same
   // figure.

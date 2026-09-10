@@ -7,21 +7,23 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes seventeen of the eighteen screenshots
+just screenshot                   # writes nineteen of the twenty screenshots
 pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes `products.png` and the kit's four; the other twelve say
-"... screenshot(s) in Arabic"
+writes `products.png`, `customers.png` and the kit's four; the other twelve
+say "... screenshot(s) in Arabic"
 in their titles, so they match the grep in both runs but write a file only
 when `currentLang()` is `ar`, and the fr run of them does nothing
 observable. Under ar all twelve write: `products-ar.png`, `settings-ar.png`,
 `till-ar.png`, `customers-ar.png`, `suppliers-ar.png`, `purchases-ar.png`,
 `expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
 `stock-recount-ar.png`, and the theme pair `theme-comptoir-ar.png` and
-`theme-observe-ar.png`.
+`theme-observe-ar.png`. The customers test writes two of them: the list and,
+before it walks back to it, `customer-account-ar.png`, the page one row's
+name opens.
 
 The kit's four (`kit-comptoir.png`, `kit-registre.png`, `kit-observe.png`,
 `kit-observe-dark.png`) are the exception to that pattern: they are written
@@ -120,8 +122,9 @@ second language on; use the looped `just e2e` or a single `--project`.
   state the next one starts from):
   `backups.spec.ts`, one test that a copy taken before a product is added
   loses that product when it is restored, leaving the shop empty;
-  `customers.spec.ts`, a company fiche opened with an opening debt and then
-  corrected, plus a search by a piece of the name;
+  `customers.spec.ts`, a company fiche opened with an opening debt in the
+  panel over the list, corrected on the customer's own account page, and read
+  back on the row after the walk back, plus a search by a piece of the name;
   `expenses.spec.ts`, two expenses filed in two categories, the month's
   total and the cash position of that month read back off the API, and an
   empty month answering zeros;
@@ -171,11 +174,12 @@ second language on; use the looped `just e2e` or a single `--project`.
   overlay opened. It runs before the settings and theme specs, so it hands
   the shop back to "follow the machine" before it leaves. It writes the four
   kit screenshots under fr.
-- The eighteen committed screenshots, 1280x800, full page: `products.png`
-  and the kit's four (`kit-comptoir.png`, `kit-registre.png`,
+- The twenty committed screenshots, 1280x800, full page: `products.png`,
+  `customers.png` and the kit's four (`kit-comptoir.png`, `kit-registre.png`,
   `kit-observe.png`, `kit-observe-dark.png`) in fr; in ar,
   `products-ar.png`, `settings-ar.png`, `till-ar.png`,
-  `customers-ar.png`, `suppliers-ar.png`, `purchases-ar.png`,
+  `customers-ar.png`, `customer-account-ar.png`, `suppliers-ar.png`,
+  `purchases-ar.png`,
   `expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
   `stock-recount-ar.png`, `theme-comptoir-ar.png` and
   `theme-observe-ar.png`, plus `product-label-ar.png`, which only a full run
@@ -212,11 +216,14 @@ here. These are all of them.
 | `till-party-ids` | `till.tsx` | The buyer identifiers block; absent until a customer is picked. |
 | `till-party-ids-missing` | `till.tsx` | Absent until an identifier a facture needs is missing. |
 | `documents-sheet` | `documents.tsx` | The iframe holding the page the core rendered; an iframe has no accessible text. |
-| `customer-payment` | `customers.tsx` | One payment row; the amounts inside it are numbers in three locales. |
-| `customer-statement` | `customers.tsx` | The statement iframe; same reason as the sheet above. |
-| `customer-debt-slip` | `customers.tsx` | The debt slip iframe. |
-| `customer-debt-slip-button` | `customers.tsx` | The button that opens it, beside a second button with a translated label. |
-| `customer-close-reason` | `customers.tsx` | Absent until a fiche with an account behind it is being closed, so a test counts it. |
+| `customer-fiche` | `-customers/fiche.tsx` | The panel the form opens in; a test waits for it before it types into a field the list also has. |
+| `customer-close-reason` | `-customers/fiche.tsx` | Absent until a fiche with an account behind it is being closed, so a test counts it. |
+| `customer-balance` | `customers_.$id.tsx` | The card carrying what is owed; the same figure appears again in the ledger below it. |
+| `customer-payment` | `customers_.$id.tsx` | One payment row; the amounts inside it are numbers in three locales. |
+| `customer-pay-dialog` | `customers_.$id.tsx` | The dialog the payment is typed into, waited on before the amount field. |
+| `customer-statement` | `customers_.$id.tsx` | The statement iframe; same reason as the sheet above. |
+| `customer-debt-slip` | `customers_.$id.tsx` | The debt slip iframe. |
+| `customer-debt-slip-button` | `customers_.$id.tsx` | The button that opens it, beside a second button with a translated label. |
 | `purchase-status` | `purchases_.$id.tsx` | The state the order is in; its word and a column header of the lines table read the same in English ("Received"). |
 | `expenses-month` | `expenses.tsx` | The month picker; its rendered text is the browser's own, in the browser's locale. |
 | `expenses-total` | `expenses.tsx` | An amount, so its text is a number in three locales. |

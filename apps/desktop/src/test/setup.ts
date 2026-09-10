@@ -5,6 +5,17 @@ import "@testing-library/jest-dom/vitest";
 // would otherwise bury its own output under the same warning.
 window.scrollTo = () => {};
 
+// jsdom implements no ResizeObserver, and the kit's overlays (the sheet the
+// fiche panels open in, the dialogs) reach for one the moment they mount. It
+// observes nothing here: a test asserts on the markup an overlay produced,
+// never on a size jsdom does not lay out anyway.
+class NoResizeObserver implements ResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+globalThis.ResizeObserver = NoResizeObserver;
+
 // jsdom implements no matchMedia. The theme provider guards for its absence
 // (a webview with the API off falls to the light theme), but a test that wants
 // to drive the machine preference needs one to spy on, so a stub that answers

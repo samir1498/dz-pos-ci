@@ -242,9 +242,10 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   await page.goto("/customers");
   const creditRow = page.getByRole("row").filter({ hasText: PAID_BUYER });
   await expect(creditRow.getByText(t("customers_credit"))).toBeVisible();
-  await creditRow.getByRole("button", { name: `${t("customers_edit")} ${PAID_BUYER}` }).click();
-  const fiche = page.getByRole("heading", { name: t("customers_ledger") }).locator("..");
-  const said = fiche.locator("p").first();
+  // The row's name opens that customer's own page, where the figure is a
+  // card with the word above it.
+  await creditRow.getByRole("link", { name: PAID_BUYER }).click();
+  const said = page.getByTestId("customer-balance");
   await expect(said).toContainText(t("customers_credit"));
   await expect(said).toContainText("1 000,00");
 

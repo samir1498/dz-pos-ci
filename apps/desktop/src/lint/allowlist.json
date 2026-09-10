@@ -29,10 +29,6 @@
       "screen": "products"
     },
     {
-      "file": "src/routes/customers.tsx",
-      "screen": "customers"
-    },
-    {
       "file": "src/components/ExportImportPanel.tsx",
       "screen": "products, the export and import panel"
     },
