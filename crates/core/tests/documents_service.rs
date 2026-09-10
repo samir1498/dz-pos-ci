@@ -847,3 +847,62 @@ fn a_document_written_against_another_shops_document_is_refused_and_burns_no_num
     let next = documents::issue(&mut conn, SHOP, next_avoir).unwrap();
     assert_eq!(next.number, 1, "the refused avoir burned a number");
 }
+
+#[test]
+fn an_avoir_line_credits_a_line_of_the_document_its_avoir_is_written_against() {
+    // What lets `avoir::Remaining` read one facture's credited quantities off
+    // the avoirs written against that facture alone: a line that credits
+    // another names a line of the document its own document refers to, and
+    // nothing else can be written. Without this a line of facture A could be
+    // credited on an avoir written against facture B, and A's remaining
+    // quantities would have to be summed across every avoir in the shop.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let a = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Facture, Some(p), at(9, 10)),
+    )
+    .unwrap();
+    let b = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Facture, Some(p), at(9, 11)),
+    )
+    .unwrap();
+
+    // An avoir written against B, crediting a line of A.
+    let mut stolen = draft(DocumentKind::Avoir, Some(p), at(9, 12));
+    stolen.ref_document_id = Some(b.id);
+    stolen.lines[0].ref_line_id = Some(a.lines[0].id);
+    let err = documents::issue(&mut conn, SHOP, stolen).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::NotFound {
+                entity: "document_line",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+
+    // And a credited line on a document written against nothing at all is
+    // refused on the field the caller sent, because there is no document for
+    // the line to belong to. On a ticket, since an avoir carrying no
+    // reference is refused by the table itself (migration 7).
+    let mut loose = draft(DocumentKind::Ticket, Some(p), at(9, 12));
+    loose.lines[0].ref_line_id = Some(b.lines[0].id);
+    let err = documents::issue(&mut conn, SHOP, loose).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "ref_line_id"),
+        "{err:?}"
+    );
+
+    // The line of B on an avoir written against B is the one that stands.
+    let mut proper = draft(DocumentKind::Avoir, Some(p), at(9, 12));
+    proper.ref_document_id = Some(b.id);
+    proper.lines[0].ref_line_id = Some(b.lines[0].id);
+    let avoir = documents::issue(&mut conn, SHOP, proper).unwrap();
+    assert_eq!(avoir.lines[0].ref_line_id, Some(b.lines[0].id));
+}
