@@ -46,11 +46,30 @@
 -- Four added or rewritten values and no rebuilt table, so this migration runs
 -- inside the transaction diesel opens for it and opens none of its own.
 --
--- What going down and back up costs: `down.sql` puts the series strings and
--- the counter names back the way it found them and drops the column, so a file
--- that goes down and comes back up reads its years off `issued_at` again. What
--- it cannot put back is a shop that issued documents in two years under the
--- old scheme, because the old scheme could not have told them apart.
+-- What going down costs. `down.sql` puts the series strings and the counter
+-- names back the way it found them and drops the column, and a file this
+-- migration converted goes down and comes back up unchanged: the years it
+-- reads off `issued_at` the second time are the ones it read the first.
+--
+-- What it cannot do is come down over a January. Once a series has restarted,
+-- the file holds two counters (`doc_ticket:2026` and `doc_ticket:2027`) that
+-- the down would fold onto the one name `doc_ticket`, and two documents both
+-- numbered 1 whose series strings it would fold to the same string. The first
+-- collides with `counters`' PRIMARY KEY (shop_id, name) and the second with
+-- `documents`' UNIQUE (shop_id, series, number), so the revert fails loudly
+-- and writes nothing rather than losing one of the two. That is the honest
+-- outcome: the old scheme has no way to hold two years, and a migration is
+-- reverted by hand, on purpose, by somebody who then has this file open.
+--
+-- Where the CHECK goes. The series string and `series_year` are one fact
+-- stored twice and nothing at this level stops them drifting: a table-level
+-- CHECK cannot be added to a table SQLite has already created, so
+-- `repos::documents::insert` refuses a row whose series does not end in its
+-- year. The next migration that rebuilds `documents` (the way migration 7
+-- rebuilt it) should carry
+--   CHECK (series = kind_series_stem || ':' || series_year)
+-- spelled against whatever the stem column is by then, and the guard in the
+-- repo becomes the belt beside that brace.
 
 -- 1. The year, on every document. Zero on a row nothing has backfilled yet,
 -- which after the UPDATE below is no row at all; the DEFAULT is there for the

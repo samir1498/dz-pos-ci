@@ -609,7 +609,7 @@ function Confirmation({
       <strong>{t(facture ? "till_paid_facture" : "till_paid")}</strong>
       <p className="flex items-center justify-between gap-2">
         <span>{t(facture ? "till_facture" : "till_ticket")}</span>
-        {/* `printed_number` and not the integer beside it: FA-000001 is what
+        {/* `printed_number` and not the integer beside it: FA-2026-000001 is what
             the paper says and what a customer quotes back, and the core
             spells it once (print::number) so the screen cannot spell it
             differently. `series` is a column value and no word at all. */}

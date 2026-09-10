@@ -69,7 +69,7 @@ pub enum Key {
     /// The opening of the line naming the facture an avoir is written
     /// against, one of the mentions décret 05-468 art. 3 asks an avoir to
     /// carry. It is the start of a sentence and not a column label:
-    /// "Avoir sur facture FA-000042 du 09/09/2026".
+    /// "Avoir sur facture FA-2026-000042 du 09/09/2026".
     AvoirOnFacture,
     /// What joins a document to its date in that sentence.
     IssuedOn,
