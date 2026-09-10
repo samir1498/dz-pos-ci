@@ -52,9 +52,11 @@ describe("the schema drift check", () => {
     expect(storeSchema.safeParse(store).success).toBe(true);
   });
 
-  test("a schema short of a field refuses the block at runtime as well", () => {
-    // The compile-time half is above; this is the same schema seen from the
-    // other side, so the file fails loudly if `short` is ever made whole.
+  test("the wide schema refuses the API's block, the short one takes it and drops the rest", () => {
+    // Why neither direction can be left to a runtime check. A schema short of
+    // a field still parses the block, keeping only the fields it names; a
+    // schema with a field the block has not is the only one of the two that
+    // refuses anything. `satisfies` and `Covers` above are what catch both.
     expect(short.safeParse(store).success).toBe(true);
     expect(wide.safeParse(store).success).toBe(false);
   });
