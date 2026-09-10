@@ -1,18 +1,21 @@
 ---
 type: 'now'
-updated: '2026-09-09'
+updated: '2026-09-10'
 ---
 ## Active
 Roadmap `dz-pos-to-first-shop` (`just ctx roadmap show dz-pos-to-first-shop`
-from the repo root, full text `docs/roadmap.md`): M0 closed on 2026-09-09
-with PR #14 merged (c3f6384, two review rounds, gates and CI green). M1 is
-active and runs as a loop (Samir, 2026-09-09 13:36): tasks T0 to T8 in
-`plans/20260908-m1-sale-and-ticket-on-one-desktop.md`, run in sequence on
-`m1/2026-09-09`, gates and a review before every merge, checkpoint PRs to
-main at T1, T4 and T8 that Samir merges. T6 needs Samir at the laptop with
-the printer. The ledger on the WSL box (`~/.dz-night/ledger.md`) holds the
-ticks. M2 to M6 stay stub
-plans until their turn.
+from the repo root, full text `docs/roadmap.md`). M0 closed on 2026-09-09
+(PR #14). M1 merged to main on 2026-09-09 (PR #15) except T6, the real
+printer, which waits for Samir at the laptop. M2 (customers, credit,
+facture at the till, credit notes, cancellation, proforma, payments,
+statement, debt slip) merged to main on 2026-09-10 at 03:36 (PR #19,
+79732ca): nine tasks run as a loop on `m2/2026-09-09`, each with three
+review lenses and a fix round, then a combined review of the whole diff.
+Two follow-ups sit on the M2 plan for Samir: T10 (the avoir's Remaining
+table refactor) and T11 (the client validator build-vs-buy and the till
+screen split). The loop pages hold the lessons and what the next sweep
+picks up. M3 is next once Samir says so. The ledger on the WSL box
+(`~/.dz-night/ledger.md`) holds the ticks.
 
 Status site for Anouar: https://dinar-reports.pages.dev/ (progress reports
 and reference pages; generator in `~/.dz-night/report/` on the WSL box).
@@ -21,6 +24,7 @@ Run `just status` from the repo root for the ladder and the plans.
 Run `just ctx show <slug>` for plan details.
 
 ## Done recently
+- 2026-09-10: M2 merged to main (PR #19, 79732ca). Rulings taken during the build are in docs/features.md §2 to §4; the open questions for the comptable are on the status site's M2 checkpoint page; the M4 plan carries the permissions M2 leaves open (override, correction, cancel, avoir, closing a fiche).
 - 2026-09-09: M1 T3 (documents, gapless numbering, stock ledger, audit log, POST /sales; 8985d9d), T7 (three languages, RTL; 33ad612), T8 (daily backup, restore in place; dcf6f99), T4 (till screen as home; 415ade3) and T5 (80 mm ticket rendered by the core, nine goldens; 9cc9410) merged into `m1/2026-09-09` by the loop, each after dz-review lenses and a fix round. Docs sweep merged (d03ab61); code sweep on `m1/sweep-code` in flight. Checkpoint PR waits for `/dz-pr m1/2026-09-09`. T6 blocked on the printer.
 - 2026-09-09: M1 T2 merged into `m1/2026-09-09` (settings screen: store block, dated régime on the shop's UTC+1 calendar; the review moved the seller snapshot and back-dating into T3). Stale-info sweep of the repo: context fixed on main, docs on `m1/stale-docs`; the generic `stale-check` skill is user-level, `.claude/stale-homes.md` holds where each fact lives.
 - 2026-09-09: M1 T0 (launch token on every API route, transport-and-auth section in architecture.md) and T1 (products CRUD with edit, PUT /products/{id}) merged into `m1/2026-09-09`; checkpoint PR to main waits for `/dz-pr m1/2026-09-09`.
