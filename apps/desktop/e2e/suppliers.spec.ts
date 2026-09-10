@@ -4,8 +4,14 @@
 // message fails here instead of silently passing a hardcoded sentence.
 //
 // What the run proves end to end: a fiche opened with an opening debt writes
-// one ledger movement, a payment taken on the screen settles part of it, and
-// the balance the screen shows is the one `GET /suppliers/{id}` answers.
+// one ledger movement, a payment taken on the statement settles part of it,
+// and the balance the two pages show is the one `GET /suppliers/{id}`
+// answers.
+//
+// The fiche is a panel and the payment is a dialog, and Radix puts
+// `aria-hidden` on the page behind either one. A role query then finds the
+// overlay and nothing else, so every assertion about the list or the ledger
+// here is made once the overlay that wrote it has gone.
 
 import { expect, test } from "@playwright/test";
 import path from "node:path";
@@ -53,20 +59,23 @@ test("opens a supplier with an opening debt, pays part of it, and saves the supp
   request,
 }) => {
   const name = supplierName();
-  // Confirmed rather than dismissed: the payment asks first, and a browser
-  // answers "no" to a dialog nobody handles.
-  page.on("dialog", (dialog) => void dialog.accept());
 
   await page.goto("/suppliers");
   await expect(page.getByRole("main").getByRole("heading", { name: t("suppliers_title") })).toBeVisible();
 
-  await page.getByRole("button", { name: t("suppliers_add") }).click();
+  // From the page header: an empty list offers the same button in its middle,
+  // and which of the two is clicked depends on whether an earlier project
+  // left a supplier behind.
+  await page.getByTestId("page-header").getByRole("button", { name: t("suppliers_add") }).click();
   await page.getByLabel(t("field_name"), { exact: true }).fill(name);
   await page.getByLabel(t("field_phone"), { exact: true }).fill("0770 11 22 33");
   await page.getByLabel(t("field_rc"), { exact: true }).fill("16/00-7654321 B 22");
   await page.getByLabel(t("field_supplier_opening_debt"), { exact: true }).fill(OPENING_INPUT);
   await page.getByRole("button", { name: t("action_save") }).click();
 
+  // The panel closes itself once the fiche is written, which is what puts the
+  // list back within reach of a role query.
+  await expect(page.getByTestId("supplier-sheet")).toBeHidden();
   const row = page.getByRole("row").filter({ hasText: name });
   await expect(row).toBeVisible();
 
@@ -89,19 +98,42 @@ test("opens a supplier with an opening debt, pays part of it, and saves the supp
     balance_after_centimes: OPENING_CENTIMES,
   });
 
-  await row.getByRole("button", { name: `${t("suppliers_edit")} ${name}` }).click();
+  // The name is the way from the list to the statement.
+  await row.getByRole("link", { name }).click();
   await expect(page.getByRole("heading", { name: t("suppliers_ledger") })).toBeVisible();
+
+  await page.getByTestId("supplier-pay-open").click();
   await page.getByLabel(t("field_payment_amount"), { exact: true }).fill(PAYMENT_INPUT);
   await page.getByLabel(t("field_payment_note"), { exact: true }).fill("acompte");
   await page.getByRole("button", { name: t("action_pay_supplier"), exact: true }).click();
 
-  // The new movement and the balance it left behind, on the screen.
+  // The new movement and the balance it left behind, on the statement.
   await expect(page.getByText(t("suppliers_paid"))).toBeVisible();
   const paid = page.getByRole("row").filter({ hasText: t("debt_payment") });
   await expect(paid.getByRole("cell", { name: BALANCE_RENDERED, exact: true })).toBeVisible();
-  await expect(row.getByRole("cell", { name: BALANCE_RENDERED, exact: true })).toBeVisible();
 
-  // And in the shop file: the balance the screen shows is the one the API
+  // The one committed screenshot of this screen is Arabic: it is where the
+  // mirrored tables and the left-to-right amount cells are worth looking at.
+  if (currentLang() === "ar") {
+    await page.screenshot({
+      path: path.join(here, "screenshots", "supplier-statement-ar.png"),
+      fullPage: true,
+    });
+  }
+
+  // And on the list, which reads the same balance from the same query.
+  await page.getByRole("link", { name: t("action_back_to_suppliers") }).click();
+  const back = page.getByRole("row").filter({ hasText: name });
+  await expect(back.getByRole("cell", { name: BALANCE_RENDERED, exact: true })).toBeVisible();
+
+  if (currentLang() === "ar") {
+    await page.screenshot({
+      path: path.join(here, "screenshots", "suppliers-ar.png"),
+      fullPage: true,
+    });
+  }
+
+  // And in the shop file: the balance the screens show is the one the API
   // answers, not a figure the browser worked out.
   const after = await request.get(`${apiUrl()}/suppliers/${created.id}`, {
     headers: apiHeaders(),
@@ -136,21 +168,12 @@ test("opens a supplier with an opening debt, pays part of it, and saves the supp
     note: "acompte",
   });
   // An opening balance carries no order, so the money settled no paper: what
-  // a payment settles is a purchase, and T3 is what writes one.
+  // a payment settles is a purchase, and the purchases screen writes one.
   expect(storedLedger.entries[0].allocations).toEqual([]);
   expect(storedLedger.entries[1]).toMatchObject({
     kind: "opening",
     balance_after_centimes: OPENING_CENTIMES,
   });
-
-  // The one committed screenshot of this screen is Arabic: it is where the
-  // mirrored table and the left-to-right amount cells are worth looking at.
-  if (currentLang() === "ar") {
-    await page.screenshot({
-      path: path.join(here, "screenshots", "suppliers-ar.png"),
-      fullPage: true,
-    });
-  }
 });
 
 test("closes a fiche that still owes, with the reason the server asks for", async ({
@@ -184,9 +207,42 @@ test("closes a fiche that still owes, with the reason the server asks for", asyn
   await page.getByTestId("supplier-close-reason").fill("le fournisseur a fermé");
   await page.getByRole("button", { name: t("action_close_supplier"), exact: true }).click();
 
+  await expect(page.getByTestId("supplier-sheet")).toBeHidden();
   await expect(row.getByText(t("suppliers_inactive"))).toBeVisible();
   const closed = await supplierByName(request, name);
   expect(closed.active).toBe(false);
   // Closing settles nothing: the shop still owes what it owed.
   expect(closed.balance_centimes).toBe(100_000);
+});
+
+test("the panel gives the list back when it is dismissed", async ({ page, request }) => {
+  // Its own fiche rather than one an earlier test left: what is being checked
+  // is the overlay, and a test that depended on the order of the file would
+  // fail for a reason that has nothing to do with it.
+  const name = `Meziane ${currentLang()}`;
+  const res = await request.post(`${apiUrl()}/suppliers`, {
+    headers: apiHeaders(),
+    data: {
+      name,
+      phone: null,
+      address: null,
+      rc: null,
+      nif: null,
+      nis: null,
+      ai: null,
+      notes: null,
+      active: true,
+      opening_debt_centimes: null,
+    },
+  });
+  expect(res.status()).toBe(201);
+
+  await page.goto("/suppliers");
+  const row = page.getByRole("row").filter({ hasText: name });
+  await row.getByRole("button", { name: `${t("suppliers_edit")} ${name}` }).click();
+  await expect(page.getByTestId("supplier-sheet")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("supplier-sheet")).toBeHidden();
+  await expect(row).toBeVisible();
 });

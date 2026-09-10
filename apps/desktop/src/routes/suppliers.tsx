@@ -2,17 +2,25 @@
 // and the movements behind that figure. Everything it shows comes from the
 // API over HTTP and the balance is the core's, never added up here.
 //
-// Nothing on this screen deletes a supplier: the ledger and the orders hold
-// the fiche, so a shop that has stopped buying from somebody closes it, which
-// is the close block below and not a checkbox on the form. Closing over an
-// account that is still open asks for a reason, which the server records
-// beside the balance.
+// Two pages, and the same fiche on both. `/suppliers` is the list: a search,
+// a table of names and balances, and a panel that slides in with one
+// supplier's fiche on it. `/suppliers/{id}` is the statement: the balance,
+// the movements behind it, and the two dialogs that write one. A row's name
+// is the way from the first to the second, and the panel opens from either,
+// so the fiche cannot read one way on the list and another on the statement.
+//
+// Nothing here deletes a supplier: the ledger and the orders hold the fiche,
+// so a shop that has stopped buying from somebody closes it, which is the
+// close block at the foot of the panel and not a checkbox on the form.
+// Closing over an account that is still open asks for a reason, which the
+// server records beside the balance.
 
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
+import { ArrowLeft, FilePlus2, Scale, SquarePen, Truck, Wallet } from "lucide-react";
 import { useState } from "react";
-import { ApiError, formatCentimes, parseAmountToCentimes } from "@dzpos/shared";
+import { ApiError } from "@dzpos/shared";
 import type {
   NewSupplierDto,
   PaymentMethodDto,
@@ -28,16 +36,37 @@ import {
   supplierQueryKey,
   suppliersQueryKey,
 } from "@/api";
-import { useTranslation, type Key } from "@/i18n";
+import { DataTable, type Column } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
+import { FormField } from "@/components/FormField";
+import { Icon } from "@/components/Icon";
+import { Money } from "@/components/Money";
+import { MoneyInput } from "@/components/MoneyInput";
+import { PageHeader } from "@/components/PageHeader";
+import { StatusPill } from "@/components/StatusPill";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  AmountField,
-  FieldError,
-  amount,
-  cleared,
-  errorKey,
-  readable,
-  shownPositive,
-} from "@/lib/fields";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { useTranslation, type Key } from "@/i18n";
+import { cleared, errorKey } from "@/lib/fields";
 
 export const Route = createFileRoute("/suppliers")({ component: SuppliersScreen });
 
@@ -67,11 +96,24 @@ export function supplierBalanceLabel(balance_centimes: number): Key {
   return balance_centimes < 0 ? "suppliers_advance" : "suppliers_balance";
 }
 
+/** An amount is drawn positive whatever its sign; the word beside it carries
+ *  the direction, because "Dette -1 000,00" is not a sentence anyone says at
+ *  a counter. */
+function positive(centimes: number): number {
+  return Math.abs(centimes);
+}
+
+/** What a balance is, in the kit's words. Nil is settled; anything else is
+ *  an account still running, in either direction. */
+function balanceStatus(centimes: number): "paid" | "open" {
+  return centimes === 0 ? "paid" : "open";
+}
+
 export function SuppliersScreen() {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   // One panel, two jobs: "new" is the blank fiche, a supplier is that
-  // supplier's own, with the ledger under it.
+  // supplier's own.
   const [open, setOpen] = useState<"new" | SupplierDto | null>(null);
   const suppliers = useQuery({
     queryKey: [...suppliersQueryKey, search.trim()],
@@ -85,159 +127,241 @@ export function SuppliersScreen() {
       ? open
       : (suppliers.data?.find((s) => s.id === open.id) ?? open);
 
-  return (
-    <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t("suppliers_title")}</h1>
-        <button
-          type="button"
-          className="rounded border px-3 py-1.5"
-          onClick={() => setOpen((current) => (current === null ? "new" : null))}
+  const columns: readonly Column<SupplierDto>[] = [
+    {
+      id: "name",
+      header: t("col_name"),
+      cell: (s) => (
+        <Link
+          to="/suppliers/$id"
+          params={{ id: String(s.id) }}
+          className="font-medium underline-offset-4 hover:underline"
         >
-          {open !== null ? t("action_cancel") : t("suppliers_add")}
-        </button>
-      </header>
-
-      <label className="flex flex-col gap-1">
-        <span>{t("suppliers_search")}</span>
-        <input
-          type="search"
-          className="rounded border px-2 py-1"
-          placeholder={t("suppliers_search_hint")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </label>
-
-      {opened === "new" ? (
-        <SupplierForm key="new" initial={null} onDone={() => setOpen(null)} />
-      ) : null}
-      {opened !== null && opened !== "new" ? (
-        <div className="flex flex-col gap-4 rounded border p-4">
-          <SupplierForm key={opened.id} initial={opened} onDone={() => setOpen(null)} />
-          <SupplierLedgerPanel supplier={opened} />
+          {s.name}
+        </Link>
+      ),
+    },
+    {
+      id: "phone",
+      header: t("col_phone"),
+      // dir="ltr" on the number itself, not on the cell: a phone is read left
+      // to right with Western digits whatever the screen's language, and
+      // without it the bidi algorithm is free to reorder the groups.
+      cell: (s) => (
+        <span dir="ltr" className="font-numeric tabular-nums">
+          {s.phone ?? ""}
+        </span>
+      ),
+    },
+    {
+      id: "owed",
+      header: t("col_owed"),
+      money: true,
+      cell: (s) => <Money centimes={positive(s.balance_centimes)} />,
+    },
+    {
+      id: "state",
+      header: t("col_status"),
+      cell: (s) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusPill status={balanceStatus(s.balance_centimes)} />
+          {s.balance_centimes < 0 ? (
+            <Badge variant="secondary">{t("suppliers_advance")}</Badge>
+          ) : null}
+          {s.active ? null : <Badge variant="outline">{t("suppliers_inactive")}</Badge>}
         </div>
-      ) : null}
+      ),
+    },
+  ];
 
-      {suppliers.isPending ? <p>{t("suppliers_loading")}</p> : null}
+  const addButton = (
+    <Button onClick={() => setOpen("new")}>
+      <Icon as={FilePlus2} size={18} />
+      {t("suppliers_add")}
+    </Button>
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader title={t("suppliers_title")} actions={addButton} />
+
+      <FormField label={t("suppliers_search")} className="max-w-sm">
+        {(parts) => (
+          <Input
+            {...parts}
+            type="search"
+            data-testid="suppliers-search"
+            placeholder={t("suppliers_search_hint")}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        )}
+      </FormField>
+
+      {suppliers.isPending ? (
+        <p className="text-sm text-muted-foreground">{t("suppliers_loading")}</p>
+      ) : null}
       {suppliers.isError ? (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-sm text-fg-danger">
           {t(errorKey(suppliers.error))}
         </p>
       ) : null}
       {suppliers.isSuccess ? (
-        <SupplierTable rows={suppliers.data} onEdit={(row) => setOpen(row)} />
+        <DataTable
+          data-testid="suppliers-table"
+          caption={t("suppliers_title")}
+          columns={columns}
+          rows={suppliers.data}
+          rowKey={(s) => s.id}
+          empty={
+            <EmptyState
+              icon={Truck}
+              title={t("suppliers_empty")}
+              description={t("suppliers_empty_hint")}
+              action={addButton}
+            />
+          }
+          actions={(s) => (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`${t("suppliers_edit")} ${s.name}`}
+              onClick={() => setOpen(s)}
+            >
+              <Icon as={SquarePen} size={18} />
+            </Button>
+          )}
+        />
       ) : null}
-    </section>
+
+      <SupplierSheet
+        supplier={opened === "new" ? null : opened}
+        open={opened !== null}
+        onOpenChange={(next) => {
+          if (!next) setOpen(null);
+        }}
+      />
+    </div>
   );
 }
 
 /**
- * One fiche on a page of its own, which is what `/suppliers/$id` opens. A
- * purchase screen (T3) has a supplier id and no fiche, and a link that
- * dropped the operator on the list with a search box to retype would be the
- * shop doing the app's work.
+ * One supplier's statement, which is what `/suppliers/{id}` opens. A purchase
+ * screen has a supplier id and no fiche, and a link that dropped the operator
+ * on the list with a search box to retype would be the shop doing the app's
+ * work.
  *
- * The same two components the panel uses, so a fiche reads the same whichever
- * way it was opened.
+ * The balance, the movements behind it, and the two dialogs that write one.
+ * The fiche itself is the same panel the list opens, so the two ways in
+ * cannot drift apart.
  */
 export function SupplierFiche({ id }: { id: number }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const [sheetOpen, setSheetOpen] = useState(false);
   const supplier = useQuery({
     queryKey: supplierQueryKey(id),
     queryFn: () => api.getSupplier(id),
   });
-  const back = () => void navigate({ to: "/suppliers" });
 
   return (
-    <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t("suppliers_title")}</h1>
-        <Link to="/suppliers" className="underline">
-          {t("action_back_to_suppliers")}
-        </Link>
-      </header>
-
-      {supplier.isPending ? <p>{t("suppliers_loading")}</p> : null}
+    <div className="flex flex-col gap-4">
+      {supplier.isPending ? (
+        <p className="text-sm text-muted-foreground">{t("suppliers_loading")}</p>
+      ) : null}
       {supplier.isError ? (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-sm text-fg-danger">
           {t(errorKey(supplier.error))}
         </p>
       ) : null}
       {supplier.isSuccess ? (
-        <div className="flex flex-col gap-4 rounded border p-4">
-          <SupplierForm key={supplier.data.id} initial={supplier.data} onDone={back} />
-          <SupplierLedgerPanel supplier={supplier.data} />
-        </div>
+        <>
+          <PageHeader
+            title={supplier.data.name}
+            actions={
+              <>
+                <Button variant="ghost" asChild>
+                  <Link to="/suppliers">
+                    <Icon as={ArrowLeft} size={18} flip />
+                    {t("action_back_to_suppliers")}
+                  </Link>
+                </Button>
+                <Button variant="outline" onClick={() => setSheetOpen(true)}>
+                  <Icon as={SquarePen} size={18} />
+                  {t("suppliers_edit")}
+                </Button>
+              </>
+            }
+          />
+          <SupplierStatement supplier={supplier.data} />
+          <SupplierSheet
+            supplier={supplier.data}
+            open={sheetOpen}
+            onOpenChange={setSheetOpen}
+          />
+        </>
       ) : null}
-    </section>
+    </div>
   );
 }
 
-function SupplierTable({
-  rows,
-  onEdit,
+/** The fiche in a panel: the form, and under a rule the block that stops or
+ *  resumes the buying. It slides in from the side the page is not read from,
+ *  which `AppShell` computes the same way for the sidebar. */
+function SupplierSheet({
+  supplier,
+  open,
+  onOpenChange,
 }: {
-  rows: SupplierDto[];
-  onEdit: (row: SupplierDto) => void;
+  /** `null` is a blank fiche. */
+  supplier: SupplierDto | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const { t } = useTranslation();
-  if (rows.length === 0) return <p>{t("suppliers_empty")}</p>;
+  const { t, dir } = useTranslation();
   return (
-    <table className="w-full text-start">
-      <caption className="sr-only">{t("suppliers_title")}</caption>
-      <thead>
-        <tr>
-          <th scope="col" className="text-start pb-2 pe-3">{t("col_name")}</th>
-          <th scope="col" className="text-start pb-2 pe-3">{t("col_phone")}</th>
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_owed")}</th>
-          <th scope="col" className="pb-2">
-            <span className="sr-only">{t("suppliers_edit")}</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((s) => (
-          <tr key={s.id} className={s.active ? "border-t" : "border-t opacity-60"}>
-            <td className="py-1.5 pe-3">
-              {s.name}
-              {s.active ? null : (
-                <span className="ms-2 rounded border px-1 text-xs uppercase">
-                  {t("suppliers_inactive")}
-                </span>
-              )}
-            </td>
-            {/* dir="ltr" on the number itself, not on the cell: a phone and
-                an amount are read left to right with Western digits whatever
-                the screen's language, and without it the bidi algorithm is
-                free to reorder the sign and the groups inside an RTL row. */}
-            <td className="py-1.5 pe-3 font-mono">
-              <span dir="ltr">{s.phone ?? ""}</span>
-            </td>
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">{shownPositive(s.balance_centimes)}</span>
-              {s.balance_centimes < 0 ? (
-                <span className="ms-1 rounded border px-1 font-sans text-sm">
-                  {t("suppliers_advance")}
-                </span>
-              ) : null}
-            </td>
-            <td className="py-1.5 ps-3 text-end">
-              <button
-                type="button"
-                className="rounded border px-2 py-0.5 text-sm"
-                aria-label={`${t("suppliers_edit")} ${s.name}`}
-                onClick={() => onEdit(s)}
-              >
-                {t("suppliers_edit")}
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      {/* The side is physical on purpose: the panel's edge, its border and
+          the half it slides in from have to agree, so the caller picks it
+          from the page direction. */}
+      <SheetContent
+        side={dir === "rtl" ? "left" : "right"}
+        data-testid="supplier-sheet"
+        className="w-full gap-0 overflow-y-auto sm:max-w-lg"
+      >
+        <SheetHeader>
+          <SheetTitle>{supplier === null ? t("suppliers_new") : supplier.name}</SheetTitle>
+          <SheetDescription>{t("suppliers_fiche_hint")}</SheetDescription>
+        </SheetHeader>
+        <div className="flex flex-col gap-4 px-4 pb-6">
+          <SupplierForm
+            key={supplier === null ? "new" : supplier.id}
+            initial={supplier}
+            onDone={() => onOpenChange(false)}
+          />
+          {supplier === null ? null : (
+            <>
+              <Separator />
+              <CloseBlock supplier={supplier} onDone={() => onOpenChange(false)} />
+            </>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
+}
+
+/** What the fiche form holds while it is being filled. The opening debt is
+ *  centimes or nothing at all; no float is made on the way through. */
+interface FicheValues {
+  name: string;
+  phone: string;
+  address: string;
+  rc: string;
+  nif: string;
+  nis: string;
+  ai: string;
+  openingDebt: number | null;
+  notes: string;
 }
 
 /**
@@ -245,10 +369,6 @@ function SupplierTable({
  * the same request shape either way. The opening debt is the one difference,
  * and it is only on the blank one: it is a ledger movement, not a column, so
  * an edit that could set it would be a correction nobody could see.
- *
- * There is no active checkbox. Closing a fiche is a decision the server asks
- * a reason for, so it is the block under the form and not a box beside a
- * phone number; reopening one is the button that stands in its place.
  */
 function SupplierForm({
   initial,
@@ -269,6 +389,9 @@ function SupplierForm({
     onSuccess: async () => {
       setServerError(null);
       await queryClient.invalidateQueries({ queryKey: suppliersQueryKey });
+      if (initial !== null) {
+        await queryClient.invalidateQueries({ queryKey: supplierQueryKey(initial.id) });
+      }
       onDone();
     },
     onError: (error: unknown) => {
@@ -283,21 +406,24 @@ function SupplierForm({
     },
   });
 
+  const blank: FicheValues = {
+    name: "",
+    phone: "",
+    address: "",
+    rc: "",
+    nif: "",
+    nis: "",
+    ai: "",
+    openingDebt: null,
+    notes: "",
+  };
+
   const form = useForm({
     defaultValues:
       initial === null
-        ? {
-            name: "",
-            phone: "",
-            address: "",
-            rc: "",
-            nif: "",
-            nis: "",
-            ai: "",
-            openingDebt: "",
-            notes: "",
-          }
+        ? blank
         : {
+            ...blank,
             name: initial.name,
             phone: initial.phone ?? "",
             address: initial.address ?? "",
@@ -305,7 +431,6 @@ function SupplierForm({
             nif: initial.nif ?? "",
             nis: initial.nis ?? "",
             ai: initial.ai ?? "",
-            openingDebt: "",
             notes: initial.notes ?? "",
           },
     onSubmit: async ({ value }) => {
@@ -324,7 +449,7 @@ function SupplierForm({
           // A fiche keeps the state it is in: the close block below is what
           // changes it.
           active: initial === null ? true : initial.active,
-          opening_debt_centimes: initial === null ? amount(value.openingDebt) : null,
+          opening_debt_centimes: initial === null ? value.openingDebt : null,
         })
         .catch(() => undefined);
     },
@@ -334,108 +459,104 @@ function SupplierForm({
   const optionalText = (
     name: "phone" | "address" | "rc" | "nif" | "nis" | "ai" | "notes",
     label: string,
-    mono = false,
+    ltr = false,
   ) => (
     <form.Field name={name}>
       {(field) => (
-        <label className="flex flex-col gap-1">
-          <span>{label}</span>
-          <input
-            dir={mono ? "ltr" : undefined}
-            className={mono ? "rounded border px-2 py-1 font-mono" : "rounded border px-2 py-1"}
-            value={field.state.value}
-            onChange={(e) => field.handleChange(e.target.value)}
-          />
-        </label>
+        <FormField label={label}>
+          {(parts) => (
+            <Input
+              {...parts}
+              dir={ltr ? "ltr" : undefined}
+              className={ltr ? "font-numeric tabular-nums" : undefined}
+              value={field.state.value}
+              onChange={(e) => field.handleChange(e.target.value)}
+            />
+          )}
+        </FormField>
       )}
     </form.Field>
   );
 
   return (
-    <div className="flex flex-col gap-3">
-      <form
-        noValidate
-        className="flex flex-col gap-3 rounded border p-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void form.handleSubmit();
+    <form
+      noValidate
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void form.handleSubmit();
+      }}
+    >
+      <form.Field
+        name="name"
+        validators={{
+          onSubmit: ({ value }) => {
+            const name = value.trim();
+            if (name === "") return "error_name_required";
+            // The bound the core stores under (`MAX_FIELD_CHARS`), held here
+            // so a paste gone wrong is said in the field's own words rather
+            // than making the round trip.
+            return name.length > 200 ? "error_name_too_long" : undefined;
+          },
         }}
       >
-        <h2 className="font-semibold">{initial === null ? t("suppliers_new") : initial.name}</h2>
-
-        <form.Field
-          name="name"
-          validators={{
-            onSubmit: ({ value }) => {
-              const name = value.trim();
-              if (name === "") return "error_name_required";
-              // The bound the core stores under (`MAX_FIELD_CHARS`), held
-              // here so a paste gone wrong is said in the field's own words
-              // rather than making the round trip.
-              return name.length > 200 ? "error_name_too_long" : undefined;
-            },
-          }}
-        >
-          {(field) => (
-            <label className="flex flex-col gap-1">
-              <span>{t("field_name")}</span>
-              <input
-                className="rounded border px-2 py-1"
+        {(field) => (
+          <FormField label={t("field_name")} error={messageOf(field.state.meta.errors, t)}>
+            {(parts) => (
+              <Input
+                {...parts}
                 value={field.state.value}
                 onChange={(e) => field.handleChange(e.target.value)}
                 onBlur={field.handleBlur}
               />
-              <FieldError messages={field.state.meta.errors} />
-            </label>
+            )}
+          </FormField>
+        )}
+      </form.Field>
+
+      {optionalText("phone", t("field_phone"), true)}
+      {optionalText("address", t("field_address"))}
+      {optionalText("rc", t("field_rc"), true)}
+      {optionalText("nif", t("field_nif"), true)}
+      {optionalText("nis", t("field_nis"), true)}
+      {optionalText("ai", t("field_ai"), true)}
+
+      {initial === null ? (
+        <form.Field name="openingDebt">
+          {(field) => (
+            <FormField
+              label={t("field_supplier_opening_debt")}
+              hint={t("field_supplier_opening_debt_hint")}
+            >
+              {(parts) => (
+                <MoneyInput
+                  {...parts}
+                  value={field.state.value}
+                  onChange={field.handleChange}
+                />
+              )}
+            </FormField>
           )}
         </form.Field>
+      ) : null}
 
-        {optionalText("phone", t("field_phone"), true)}
-        {optionalText("address", t("field_address"))}
-        {optionalText("rc", t("field_rc"), true)}
-        {optionalText("nif", t("field_nif"), true)}
-        {optionalText("nis", t("field_nis"), true)}
-        {optionalText("ai", t("field_ai"), true)}
+      {optionalText("notes", t("field_notes"))}
 
-        {initial === null ? (
-          <form.Field
-            name="openingDebt"
-            validators={{
-              onSubmit: ({ value }) => (readable(value) ? undefined : "error_opening_debt_invalid"),
-            }}
-          >
-            {(field) => (
-              <AmountField
-                label={t("field_supplier_opening_debt")}
-                hint={t("field_supplier_opening_debt_hint")}
-                value={field.state.value}
-                onChange={field.handleChange}
-                errors={field.state.meta.errors}
-              />
-            )}
-          </form.Field>
-        ) : null}
+      {serverError !== null ? (
+        <p role="alert" className="text-sm text-fg-danger">
+          {t(serverError)}
+        </p>
+      ) : null}
 
-        {optionalText("notes", t("field_notes"))}
-
-        {serverError !== null ? (
-          <p role="alert" className="text-red-700">
-            {t(serverError)}
-          </p>
-        ) : null}
-
-        <div className="flex gap-2">
-          <button type="submit" className="rounded border px-3 py-1.5" disabled={save.isPending}>
-            {save.isPending ? t("action_saving") : t("action_save")}
-          </button>
-          <button type="button" className="rounded border px-3 py-1.5" onClick={onDone}>
-            {t("action_cancel")}
-          </button>
-        </div>
-      </form>
-
-      {initial === null ? null : <CloseBlock supplier={initial} />}
-    </div>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={save.isPending}>
+          {save.isPending ? t("action_saving") : t("action_save")}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onDone}>
+          {t("action_cancel")}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -445,7 +566,7 @@ function SupplierForm({
  * only it can see that an order is still unpaid at a nil balance; the refusal
  * names the `reason` field, so the box stays and the message goes with it.
  */
-function CloseBlock({ supplier }: { supplier: SupplierDto }) {
+function CloseBlock({ supplier, onDone }: { supplier: SupplierDto; onDone: () => void }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [reason, setReason] = useState("");
@@ -474,6 +595,10 @@ function CloseBlock({ supplier }: { supplier: SupplierDto }) {
       setReason("");
       await queryClient.invalidateQueries({ queryKey: suppliersQueryKey });
       await queryClient.invalidateQueries({ queryKey: supplierQueryKey(supplier.id) });
+      // The panel steps out of the way: what changed is on the list and on
+      // the statement behind it, and a panel left open over them hides the
+      // answer to the thing that was just done.
+      onDone();
     },
     onError: (error: unknown) => {
       setReasonRefused(error instanceof ApiError && error.field === "reason");
@@ -483,23 +608,23 @@ function CloseBlock({ supplier }: { supplier: SupplierDto }) {
 
   if (!supplier.active) {
     return (
-      <section className="flex flex-col gap-2 rounded border p-3">
-        <h3 className="font-semibold">{t("suppliers_closed")}</h3>
-        <p className="text-sm opacity-70">{t("suppliers_closed_still_pays")}</p>
+      <section className="flex flex-col gap-2">
+        <h3 className="text-md font-semibold">{t("suppliers_closed")}</h3>
+        <p className="text-sm text-muted-foreground">{t("suppliers_closed_still_pays")}</p>
         {serverError !== null ? (
-          <p role="alert" className="text-red-700">
+          <p role="alert" className="text-sm text-fg-danger">
             {t(serverError)}
           </p>
         ) : null}
         <div>
-          <button
+          <Button
             type="button"
-            className="rounded border px-3 py-1.5"
+            variant="outline"
             disabled={change.isPending}
             onClick={() => void change.mutateAsync({ close: false }).catch(() => undefined)}
           >
             {t("action_reopen_supplier")}
-          </button>
+          </Button>
         </div>
       </section>
     );
@@ -508,47 +633,48 @@ function CloseBlock({ supplier }: { supplier: SupplierDto }) {
   const asksForReason = supplier.balance_centimes !== 0 || reasonRefused;
 
   return (
-    <section className="flex flex-col gap-2 rounded border border-amber-600 p-3">
-      <h3 className="font-semibold">{t("suppliers_close")}</h3>
-      <p className="text-sm opacity-70">{t("suppliers_close_hint")}</p>
+    <section className="flex flex-col gap-2 rounded-lg border border-warn bg-warn-soft p-3">
+      <h3 className="text-md font-semibold">{t("suppliers_close")}</h3>
+      <p className="text-sm text-muted-foreground">{t("suppliers_close_hint")}</p>
       {asksForReason ? (
-        <label className="flex flex-col gap-1">
-          <span>{t("suppliers_close_reason")}</span>
-          <span className="text-sm">
-            {t(supplierBalanceLabel(supplier.balance_centimes))}{" "}
-            <span className="font-mono" dir="ltr">
-              {shownPositive(supplier.balance_centimes)}
-            </span>
-          </span>
-          <input
-            data-testid="supplier-close-reason"
-            className="rounded border px-2 py-1"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </label>
+        <>
+          <p className="flex items-center gap-2 text-sm">
+            <span>{t(supplierBalanceLabel(supplier.balance_centimes))}</span>
+            <Money centimes={positive(supplier.balance_centimes)} />
+          </p>
+          <FormField label={t("suppliers_close_reason")}>
+            {(parts) => (
+              <Input
+                {...parts}
+                data-testid="supplier-close-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            )}
+          </FormField>
+        </>
       ) : null}
       {serverError !== null ? (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-sm text-fg-danger">
           {t(serverError)}
         </p>
       ) : null}
       <div>
-        <button
+        <Button
           type="button"
-          className="rounded border px-3 py-1.5"
+          variant="destructive"
           disabled={change.isPending}
           onClick={() => void change.mutateAsync({ close: true }).catch(() => undefined)}
         >
           {t("action_close_supplier")}
-        </button>
+        </Button>
       </div>
     </section>
   );
 }
 
-/** The movements, and the two forms that write one. */
-function SupplierLedgerPanel({ supplier }: { supplier: SupplierDto }) {
+/** The balance, the movements behind it, and the two dialogs that write one. */
+function SupplierStatement({ supplier }: { supplier: SupplierDto }) {
   const { t } = useTranslation();
   const ledger = useQuery({
     queryKey: supplierLedgerQueryKey(supplier.id),
@@ -556,26 +682,151 @@ function SupplierLedgerPanel({ supplier }: { supplier: SupplierDto }) {
   });
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="font-semibold">{t("suppliers_ledger")}</h2>
-      <p>
-        <span>{t(supplierBalanceLabel(supplier.balance_centimes))} </span>
-        <span className="font-mono" dir="ltr">
-          {shownPositive(supplier.balance_centimes)}
-        </span>
-      </p>
+    <section className="flex flex-col gap-4">
+      <Card data-testid="supplier-balance">
+        <CardHeader>
+          <CardDescription>{t(supplierBalanceLabel(supplier.balance_centimes))}</CardDescription>
+          <CardTitle>
+            <Money centimes={positive(supplier.balance_centimes)} className="text-2xl" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2">
+          <StatusPill status={balanceStatus(supplier.balance_centimes)} />
+          {supplier.active ? null : (
+            <Badge variant="outline">{t("suppliers_inactive")}</Badge>
+          )}
+          <div className="ms-auto flex flex-wrap gap-2">
+            <PayDialog supplier={supplier} />
+            <AdjustDialog supplier={supplier} />
+          </div>
+        </CardContent>
+      </Card>
 
-      {ledger.isPending ? <p>{t("suppliers_loading")}</p> : null}
+      <h3 className="text-md font-semibold">{t("suppliers_ledger")}</h3>
+      {ledger.isPending ? (
+        <p className="text-sm text-muted-foreground">{t("suppliers_loading")}</p>
+      ) : null}
       {ledger.isError ? (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-sm text-fg-danger">
           {t(errorKey(ledger.error))}
         </p>
       ) : null}
       {ledger.isSuccess ? <LedgerTable ledger={ledger.data} /> : null}
-
-      <PaymentForm supplier={supplier} />
-      <AdjustForm supplier={supplier} />
     </section>
+  );
+}
+
+function LedgerTable({ ledger }: { ledger: SupplierLedgerDto }) {
+  const { t } = useTranslation();
+  const columns: readonly Column<SupplierEntryDto>[] = [
+    {
+      id: "date",
+      header: t("col_date"),
+      cell: (entry) => (
+        <span dir="ltr" className="font-numeric tabular-nums">
+          {entry.created_at}
+        </span>
+      ),
+    },
+    {
+      id: "kind",
+      header: t("col_kind"),
+      cell: (entry) => (
+        <div className="flex flex-col gap-1">
+          <span>{t(SUPPLIER_KIND_KEY[entry.kind])}</span>
+          <Settled entry={entry} />
+        </div>
+      ),
+    },
+    {
+      id: "debit",
+      header: t("col_debit"),
+      money: true,
+      cell: (entry) =>
+        entry.debit_centimes === 0 ? null : <Money centimes={entry.debit_centimes} />,
+    },
+    {
+      id: "credit",
+      header: t("col_credit"),
+      money: true,
+      cell: (entry) =>
+        entry.credit_centimes === 0 ? null : <Money centimes={entry.credit_centimes} />,
+    },
+    {
+      // The running balance is the core's (services::supplier_debt): a column
+      // added up here would be a second answer to what the shop owes.
+      id: "balance",
+      header: t("col_balance"),
+      money: true,
+      cell: (entry) => <Money centimes={entry.balance_after_centimes} />,
+    },
+    { id: "note", header: t("col_note"), cell: (entry) => entry.note ?? "" },
+  ];
+
+  return (
+    <DataTable
+      data-testid="supplier-ledger"
+      caption={t("suppliers_ledger")}
+      columns={columns}
+      rows={ledger.entries}
+      rowKey={(entry) => entry.id}
+      empty={<EmptyState icon={Scale} title={t("suppliers_ledger_empty")} />}
+    />
+  );
+}
+
+/** Which orders a payment went to, under the kind it went as. Shown open
+ *  rather than behind a toggle: which order the money settled is the question
+ *  asked of a payment, and the server decided it. */
+function Settled({ entry }: { entry: SupplierEntryDto }) {
+  const { t } = useTranslation();
+  if (entry.allocations.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-0.5 text-sm text-muted-foreground" data-testid="supplier-allocations">
+      {entry.allocations.map((allocation) => (
+        <li key={allocation.purchase_id} className="flex items-center gap-1.5">
+          <span>{t("col_purchase")}</span>
+          <span dir="ltr" className="font-numeric tabular-nums">
+            {allocation.purchase_id}
+          </span>
+          <Money centimes={allocation.amount_centimes} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The two modes a payment can be in. There is no third, so this is two
+ *  buttons rather than a list that has to be opened to be read; the pressed
+ *  one is the mode the payment goes out as. */
+function ModePicker({
+  value,
+  onChange,
+}: {
+  value: PaymentMethodDto;
+  onChange: (mode: PaymentMethodDto) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <fieldset className="flex flex-col gap-1.5 text-start">
+      {/* A legend rather than a `Label`: a label points at one control and
+          this names a pair of them. The kit's label styling is what it wears
+          so it does not read as a different kind of field. */}
+      <legend className="text-sm leading-none font-medium">{t("field_payment_mode")}</legend>
+      <div className="flex flex-wrap gap-2">
+        {PAYMENT_METHODS.map((mode) => (
+          <Button
+            key={mode}
+            type="button"
+            variant={value === mode ? "default" : "outline"}
+            aria-pressed={value === mode}
+            onClick={() => onChange(mode)}
+          >
+            {t(PAYMENT_METHOD_KEY[mode])}
+          </Button>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 
@@ -584,10 +835,19 @@ function SupplierLedgerPanel({ supplier }: { supplier: SupplierDto }) {
  * refuses a payment above what the shop owes, so nothing here caps the figure
  * or picks the orders: a screen that decided either would be a second answer
  * to what the shop owes.
+ *
+ * The dialog is the confirmation. A browser `confirm()` over a panel that
+ * already says what is about to happen is the same question asked twice, in a
+ * box the app cannot translate or theme.
  */
-function PaymentForm({ supplier }: { supplier: SupplierDto }) {
+function PayDialog({ supplier }: { supplier: SupplierDto }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState<number | null>(null);
+  const [mode, setMode] = useState<PaymentMethodDto>("cash");
+  const [note, setNote] = useState("");
+  const [fieldError, setFieldError] = useState<Key | null>(null);
   const [serverError, setServerError] = useState<Key | null>(null);
   /** What the shop actually owes, as the refused payment reported it. "Too
    *  much" is useless without the amount that would not have been. */
@@ -604,10 +864,14 @@ function PaymentForm({ supplier }: { supplier: SupplierDto }) {
       setServerError(null);
       setOutstanding(null);
       setSaved(true);
+      setAmount(null);
+      setNote("");
+      setOpen(false);
       queryClient.setQueryData(supplierLedgerQueryKey(supplier.id), answer);
-      // The balance on the list above and on the fiche came from the
-      // suppliers query, which the movement has just changed.
+      // The balance on the list and on the card came from the suppliers
+      // query, which the movement has just changed.
       await queryClient.invalidateQueries({ queryKey: suppliersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: supplierQueryKey(supplier.id) });
     },
     onError: (error: unknown) => {
       setSaved(false);
@@ -617,195 +881,92 @@ function PaymentForm({ supplier }: { supplier: SupplierDto }) {
     },
   });
 
-  const form = useForm({
-    defaultValues: { amount: "", mode: "cash", note: "" },
-    onSubmit: async ({ value }) => {
-      const centimes = parseAmountToCentimes(value.amount);
-      if (centimes === null || centimes <= 0) return;
-      if (!window.confirm(t("suppliers_pay_confirm"))) return;
-      const written = await pay
-        .mutateAsync({
-          amount_centimes: centimes,
-          payment_mode: toPaymentMethod(value.mode),
-          note: cleared(value.note),
-        })
-        .then(() => true)
-        .catch(() => false);
-      // A refused payment keeps what was typed: the error above says what is
-      // outstanding, and an emptied box means typing the figure again to find
-      // out what was wrong with it.
-      if (!written) return;
-      form.setFieldValue("amount", "");
-      form.setFieldValue("note", "");
-    },
-  });
+  const submit = () => {
+    if (amount === null) {
+      setFieldError("error_payment_amount_invalid");
+      return;
+    }
+    if (amount <= 0) {
+      setFieldError("error_payment_amount_zero");
+      return;
+    }
+    setFieldError(null);
+    // A refused payment keeps what was typed and the dialog stays open: the
+    // message says what is outstanding, and an emptied box means typing the
+    // figure again to find out what was wrong with it.
+    void pay
+      .mutateAsync({ amount_centimes: amount, payment_mode: mode, note: cleared(note) })
+      .catch(() => undefined);
+  };
 
   return (
-    <form
-      noValidate
-      className="flex flex-col gap-3 rounded border p-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void form.handleSubmit();
-      }}
-    >
-      <h3 className="font-semibold">{t("suppliers_pay")}</h3>
-      <p className="text-sm opacity-70">{t("suppliers_pay_hint")}</p>
-
-      <form.Field
-        name="amount"
-        validators={{
-          onSubmit: ({ value }) => {
-            const centimes = parseAmountToCentimes(value);
-            if (centimes === null) return "error_payment_amount_invalid";
-            return centimes <= 0 ? "error_payment_amount_zero" : undefined;
-          },
-        }}
-      >
-        {(field) => (
-          <AmountField
-            label={t("field_payment_amount")}
-            value={field.state.value}
-            onChange={(next) => {
-              setSaved(false);
-              field.handleChange(next);
-            }}
-            errors={field.state.meta.errors}
-          />
-        )}
-      </form.Field>
-
-      <form.Field name="mode">
-        {(field) => (
-          <fieldset className="flex flex-col gap-1">
-            <legend>{t("field_payment_mode")}</legend>
-            <div className="flex gap-4">
-              {PAYMENT_METHODS.map((mode) => (
-                <label key={mode} className="flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="supplier_payment_mode"
-                    value={mode}
-                    checked={field.state.value === mode}
-                    onChange={() => field.handleChange(mode)}
-                  />
-                  <span>{t(PAYMENT_METHOD_KEY[mode])}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        )}
-      </form.Field>
-
-      <form.Field name="note">
-        {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_payment_note")}</span>
-            <input
-              className="rounded border px-2 py-1"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-            />
-          </label>
-        )}
-      </form.Field>
-
-      {serverError !== null ? (
-        <p role="alert" className="text-red-700">
-          {t(serverError)}
-          {outstanding === null ? null : (
-            <span className="ms-1 font-mono" dir="ltr">
-              {formatCentimes(outstanding)}
-            </span>
-          )}
+    <>
+      {saved ? (
+        <p role="status" className="text-sm text-fg-success">
+          {t("suppliers_paid")}
         </p>
       ) : null}
-      {saved && serverError === null ? <p role="status">{t("suppliers_paid")}</p> : null}
-
-      <div>
-        <button type="submit" className="rounded border px-3 py-1.5" disabled={pay.isPending}>
-          {pay.isPending ? t("action_saving") : t("action_pay_supplier")}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function LedgerTable({ ledger }: { ledger: SupplierLedgerDto }) {
-  const { t } = useTranslation();
-  if (ledger.entries.length === 0) return <p>{t("suppliers_ledger_empty")}</p>;
-  return (
-    <table className="w-full text-start">
-      <caption className="sr-only">{t("suppliers_ledger")}</caption>
-      <thead>
-        <tr>
-          <th scope="col" className="text-start pb-2 pe-3">{t("col_date")}</th>
-          <th scope="col" className="text-start pb-2 pe-3">{t("col_kind")}</th>
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_debit")}</th>
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_credit")}</th>
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_balance")}</th>
-          <th scope="col" className="text-start pb-2 ps-3">{t("col_note")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {ledger.entries.map((entry) => (
-          <tr key={entry.id} className="border-t">
-            <td className="py-1.5 pe-3 font-mono">
-              <span dir="ltr">{entry.created_at}</span>
-            </td>
-            <td className="py-1.5 pe-3">
-              {t(SUPPLIER_KIND_KEY[entry.kind])}
-              <Settled entry={entry} />
-            </td>
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">
-                {entry.debit_centimes === 0 ? "" : formatCentimes(entry.debit_centimes)}
-              </span>
-            </td>
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">
-                {entry.credit_centimes === 0 ? "" : formatCentimes(entry.credit_centimes)}
-              </span>
-            </td>
-            {/* The running balance is the core's (services::supplier_debt): a
-                column added up here would be a second answer to what the shop
-                owes. */}
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">{formatCentimes(entry.balance_after_centimes)}</span>
-            </td>
-            <td className="py-1.5 ps-3">{entry.note ?? ""}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-/** Which orders a payment went to, under the kind it went as. Shown open
- *  rather than behind a toggle: which order the money settled is the question
- *  asked of a payment, and the server decided it. */
-function Settled({ entry }: { entry: SupplierEntryDto }) {
-  const { t } = useTranslation();
-  if (entry.allocations.length === 0) return null;
-  return (
-    <ul className="text-sm opacity-70" data-testid="supplier-allocations">
-      {entry.allocations.map((allocation) => (
-        <li key={allocation.purchase_id}>
-          {t("col_purchase")} <span className="font-mono">{allocation.purchase_id}</span>{" "}
-          <span className="font-mono" dir="ltr">
-            {formatCentimes(allocation.amount_centimes)}
-          </span>
-        </li>
-      ))}
-    </ul>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" data-testid="supplier-pay-open">
+            <Icon as={Wallet} size={18} />
+            {t("suppliers_pay")}
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("suppliers_pay")}</DialogTitle>
+            <DialogDescription>{t("suppliers_pay_hint")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <FormField
+              label={t("field_payment_amount")}
+              error={fieldError === null ? undefined : t(fieldError)}
+            >
+              {(parts) => (
+                <MoneyInput
+                  {...parts}
+                  value={amount}
+                  onChange={(next) => {
+                    setSaved(false);
+                    setAmount(next);
+                  }}
+                />
+              )}
+            </FormField>
+            <ModePicker value={mode} onChange={setMode} />
+            <FormField label={t("field_payment_note")}>
+              {(parts) => (
+                <Input {...parts} value={note} onChange={(e) => setNote(e.target.value)} />
+              )}
+            </FormField>
+            {serverError !== null ? (
+              <p role="alert" className="flex flex-wrap items-center gap-1 text-sm text-fg-danger">
+                <span>{t(serverError)}</span>
+                {outstanding === null ? null : <Money centimes={outstanding} />}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={submit} disabled={pay.isPending}>
+              {pay.isPending ? t("action_saving") : t("action_pay_supplier")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
 /** A correction, written as a movement. It lands in the account the shop
  *  reads back to the supplier and nothing removes it afterwards. */
-function AdjustForm({ supplier }: { supplier: SupplierDto }) {
+function AdjustDialog({ supplier }: { supplier: SupplierDto }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState<number | null>(null);
+  const [note, setNote] = useState("");
+  const [fieldError, setFieldError] = useState<Key | null>(null);
   const [serverError, setServerError] = useState<Key | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -815,8 +976,12 @@ function AdjustForm({ supplier }: { supplier: SupplierDto }) {
     onSuccess: async (answer: SupplierLedgerDto) => {
       setServerError(null);
       setSaved(true);
+      setAmount(null);
+      setNote("");
+      setOpen(false);
       queryClient.setQueryData(supplierLedgerQueryKey(supplier.id), answer);
       await queryClient.invalidateQueries({ queryKey: suppliersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: supplierQueryKey(supplier.id) });
     },
     onError: (error: unknown) => {
       setSaved(false);
@@ -824,84 +989,92 @@ function AdjustForm({ supplier }: { supplier: SupplierDto }) {
     },
   });
 
-  const form = useForm({
-    defaultValues: { amount: "", note: "" },
-    onSubmit: async ({ value }) => {
-      const centimes = parseAmountToCentimes(value.amount);
-      if (centimes === null || centimes === 0) return;
-      if (!window.confirm(t("suppliers_adjust_confirm"))) return;
-      const written = await adjust
-        .mutateAsync({ amount_centimes: centimes, note: cleared(value.note) })
-        .then(() => true)
-        .catch(() => false);
-      if (!written) return;
-      form.setFieldValue("amount", "");
-      form.setFieldValue("note", "");
-    },
-  });
+  const submit = () => {
+    if (amount === null) {
+      setFieldError("error_amount_invalid");
+      return;
+    }
+    if (amount === 0) {
+      setFieldError("error_amount_zero");
+      return;
+    }
+    setFieldError(null);
+    void adjust
+      .mutateAsync({ amount_centimes: amount, note: cleared(note) })
+      .catch(() => undefined);
+  };
 
   return (
-    <form
-      noValidate
-      className="flex flex-col gap-3 rounded border p-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void form.handleSubmit();
-      }}
-    >
-      <h3 className="font-semibold">{t("suppliers_adjust")}</h3>
-      <p className="text-sm opacity-70">{t("suppliers_adjust_hint")}</p>
-
-      <form.Field
-        name="amount"
-        validators={{
-          onSubmit: ({ value }) => {
-            const centimes = parseAmountToCentimes(value);
-            if (centimes === null) return "error_amount_invalid";
-            return centimes === 0 ? "error_amount_zero" : undefined;
-          },
-        }}
-      >
-        {(field) => (
-          <AmountField
-            label={t("field_adjust_amount")}
-            value={field.state.value}
-            onChange={(next) => {
-              setSaved(false);
-              field.handleChange(next);
-            }}
-            errors={field.state.meta.errors}
-          />
-        )}
-      </form.Field>
-
-      <form.Field name="note">
-        {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_adjust_note")}</span>
-            <input
-              className="rounded border px-2 py-1"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-            />
-          </label>
-        )}
-      </form.Field>
-
-      {serverError !== null ? (
-        <p role="alert" className="text-red-700">
-          {t(serverError)}
+    <>
+      {saved ? (
+        <p role="status" className="text-sm text-fg-success">
+          {t("suppliers_adjusted")}
         </p>
       ) : null}
-      {saved && serverError === null ? <p role="status">{t("suppliers_adjusted")}</p> : null}
-
-      <div>
-        <button type="submit" className="rounded border px-3 py-1.5" disabled={adjust.isPending}>
-          {adjust.isPending ? t("action_saving") : t("action_adjust")}
-        </button>
-      </div>
-    </form>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" data-testid="supplier-adjust-open">
+            <Icon as={Scale} size={18} />
+            {t("suppliers_adjust")}
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("suppliers_adjust")}</DialogTitle>
+            <DialogDescription>{t("suppliers_adjust_hint")}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <FormField
+              label={t("field_adjust_amount")}
+              error={fieldError === null ? undefined : t(fieldError)}
+            >
+              {(parts) => (
+                <MoneyInput
+                  {...parts}
+                  value={amount}
+                  onChange={(next) => {
+                    setSaved(false);
+                    setAmount(next);
+                  }}
+                />
+              )}
+            </FormField>
+            <FormField label={t("field_adjust_note")}>
+              {(parts) => (
+                <Input {...parts} value={note} onChange={(e) => setNote(e.target.value)} />
+              )}
+            </FormField>
+            {serverError !== null ? (
+              <p role="alert" className="text-sm text-fg-danger">
+                {t(serverError)}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" onClick={submit} disabled={adjust.isPending}>
+              {adjust.isPending ? t("action_saving") : t("action_adjust")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
+}
+
+/** A field validator returns a translation key, never a sentence. */
+function messageOf(messages: unknown[], t: (key: Key) => string): string | undefined {
+  const key = messages.find((m): m is string => typeof m === "string");
+  if (key === undefined) return undefined;
+  return isSupplierErrorKey(key) ? t(key) : t("error_unknown");
+}
+
+/** The keys this screen's own validators hand back. Spelled out rather than
+ *  cast, so a key the dictionaries do not carry fails the parity test rather
+ *  than printing itself on a fiche. */
+const OWN_ERRORS: readonly Key[] = ["error_name_required", "error_name_too_long"];
+
+function isSupplierErrorKey(value: string): value is Key {
+  return OWN_ERRORS.some((key) => key === value);
 }
 
 /** The update body: the whole fiche without the opening debt, which is a
@@ -910,11 +1083,4 @@ function AdjustForm({ supplier }: { supplier: SupplierDto }) {
 function whole(input: NewSupplierDto): SupplierWriteDto {
   const { opening_debt_centimes: _opening, ...fiche } = input;
   return { ...fiche, close_reason: null };
-}
-
-/** Cash unless the form says otherwise: the radio group has no third option,
- *  and a payment mode is never guessed from an unknown string. */
-function toPaymentMethod(value: string): PaymentMethodDto {
-  const found = PAYMENT_METHODS.find((m) => m === value);
-  return found ?? "cash";
 }
