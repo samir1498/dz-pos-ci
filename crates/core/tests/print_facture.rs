@@ -17,9 +17,9 @@
 //!
 //! The little parser below is the ticket test's, copied rather than shared:
 //! two golden suites that check each other's files through one helper can
-//! both be made green by editing the helper once. T9 added the avoir, the
-//! proforma and the cancelled reprint to this file and left the two suites
-//! apart for the same reason.
+//! both be made green by editing the helper once. The avoir, the proforma
+//! and the cancelled reprint were added to this file and left the two
+//! suites apart for the same reason.
 
 use std::path::PathBuf;
 
@@ -60,9 +60,9 @@ const LINES: [(&str, i64, i64, i64, u32); 3] = [
 
 /// The two lines the avoir takes back, a part of the basket and not all of
 /// it: one of the two bottles and half of the flour. A partial avoir is
-/// what T6 allows, and an avoir printing the facture's own totals is the
-/// mistake these goldens have to be able to catch, so its lines and its
-/// amounts are none of the facture's.
+/// what the avoir rule allows, and an avoir printing the facture's own
+/// totals is the mistake these goldens have to be able to catch, so its
+/// lines and its amounts are none of the facture's.
 ///
 /// The first name carries the markup the facture's does: a reprint of an
 /// avoir escapes a product name or it does not, and the avoir goldens say
@@ -345,7 +345,7 @@ fn fixed_facture(case: Case) -> Document {
                 total_debt: old_balance.checked_add(this).unwrap(),
             })
         }
-        // A proforma creates no debt at all (T6), and the triple it stores
+        // A proforma creates no debt at all, and the triple it stores
         // says so in three zeroes. The page drops the block rather than
         // print a debt of nothing three times.
         Case::Proforma => Some(BalanceTriple {
@@ -415,8 +415,9 @@ fn at(when: (i32, u32, u32, u32, u32)) -> chrono::NaiveDateTime {
 /// The document a case renders and everything the page needs beside it: the
 /// facture an avoir names, and the day and the reason a cancelled facture
 /// was cancelled. Neither is on the document's own row (the reference is an
-/// id there and a number on paper; the cancellation columns are T6's), so
-/// the fixture hands them over the way a caller will.
+/// id there and a number on paper; the cancellation columns belong to the
+/// document's own cancellation), so the fixture hands them over the way a
+/// caller will.
 struct Fixture {
     doc: Document,
     referenced: Option<Document>,
@@ -1164,7 +1165,7 @@ fn a_cancelled_facture_is_printed_under_the_cancelled_heading() {
         assert!(html.contains(text(Key::FactureCancelled, lang)), "{lang:?}");
         assert!(html.contains("FA-2026-000042"), "{lang:?}");
     }
-    // Nothing cancels an avoir or a proforma in M2 and the wording for it
+    // Nothing cancels an avoir or a proforma and the wording for it
     // is not written, so the printer refuses rather than invent one.
     for kind in [DocumentKind::Avoir, DocumentKind::Proforma] {
         doc.kind = kind;
@@ -1440,7 +1441,7 @@ fn an_avoir_prints_the_year_of_the_facture_it_credits_and_not_its_own() {
 }
 
 /// An avoir hands the lines back and asks for nothing, so it carries no
-/// droit de timbre (T6: the stamp is zero on an avoir) and its totals block
+/// droit de timbre (the stamp is zero on an avoir) and its totals block
 /// has no stamp row. A stored avoir that carries one contradicts the rule
 /// that wrote it, and the honest answer is the one the IFU recap gets:
 /// refuse, rather than drop a row and hand over a total whose parts do not
@@ -1599,15 +1600,15 @@ fn a_document_that_is_not_an_avoir_may_not_reference_a_facture() {
 }
 
 /// A proforma is a quote on facture paper. It burns its own number, moves
-/// no stock and creates no debt (T6), and the page has to say so: a
+/// no stock and creates no debt, and the page has to say so: a
 /// customer handed one must not file it as a facture, and a comptable
 /// reading it must not book it. So it carries a wording of its own, and no
 /// balance block at all.
 #[test]
 fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
     let fixture = Fixture::of(Case::Proforma);
-    // The document stores a triple, all three of it zero, which is what T6
-    // writes for a proforma. The page dropping the block is the rule doing
+    // The document stores a triple, all three of it zero, which is what the
+    // proforma rule writes. The page dropping the block is the rule doing
     // it and not the fixture having nothing to print.
     let triple = fixture
         .doc

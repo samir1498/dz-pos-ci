@@ -14,9 +14,9 @@
 //! there is no column to write and no column that can disagree with the sum.
 //!
 //! `append` runs in whatever transaction the caller opened and does not open
-//! one of its own: T3's receipt writes the stock, the line and the ledger row
-//! together or writes none of them. `pay` and `adjust` open one, because the
-//! movement and its audit entry are one change.
+//! one of its own: the receipt service writes the stock, the line and the
+//! ledger row together or writes none of them. `pay` and `adjust` open one,
+//! because the movement and its audit entry are one change.
 
 use std::collections::HashMap;
 
@@ -541,8 +541,8 @@ pub fn credit_held(balance: Money) -> Result<Money, CoreError> {
 /// that order has just been given.
 ///
 /// This is the supply side of `debt::settle_from_credit`, and the reason it
-/// exists is the same: credit is consumed at issue (M2 ruling, features.md
-/// §3). An advance the shop paid, or a correction past what was owed, is
+/// exists is the same: credit is consumed at issue (features.md §3).
+/// An advance the shop paid, or a correction past what was owed, is
 /// money the supplier is already holding, and an order written afterwards has
 /// to be settled out of it. Without this the order goes on asking for its
 /// whole value while the shop owes less than that, a payment of what is
@@ -783,9 +783,10 @@ fn ensure_purchase(
     Ok(())
 }
 
-/// That the shop still buys from this supplier. **T3's receipt path asks this
-/// before it writes anything**, the way a sale asks the same of a customer's
-/// fiche (`services::sales`): closing says the shop has stopped buying, and
+/// That the shop still buys from this supplier. **The receipt service asks
+/// this before it writes anything**, the way a sale asks the same of a
+/// customer's fiche (`services::sales`): closing says the shop has stopped
+/// buying, and
 /// goods arriving on a closed fiche are either a mistake or a fiche somebody
 /// has to reopen on purpose.
 ///

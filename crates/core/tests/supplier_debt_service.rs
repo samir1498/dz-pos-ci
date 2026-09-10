@@ -498,7 +498,7 @@ fn a_movement_raises_the_debt_or_lowers_it_and_never_both_or_neither() {
 #[test]
 fn credit_the_shop_holds_reaches_the_next_order_and_the_fiche_then_closes() {
     // The customer side settles a document out of credit the customer already
-    // holds at the moment the document is issued (M2 ruling, features.md §3).
+    // holds at the moment the document is issued (features.md §3).
     // Without the same on this side, credit left by a correction never reaches
     // an order written after it: the order would go on asking for its whole
     // value while the shop owed less than that, and a payment of what is owed
@@ -516,8 +516,8 @@ fn credit_the_shop_holds_reaches_the_next_order_and_the_fiche_then_closes() {
 
     let older = a_purchase_row(&mut conn, supplier, "2026-09-01");
     a_purchase_ledger_row(&mut conn, supplier, older, 50_000);
-    // Nothing is held yet, so this places nothing: the call is what T3's
-    // receipt path makes after every `purchase` row, held or not.
+    // Nothing is held yet, so this places nothing: the call is what the
+    // receipt service makes after every `purchase` row, held or not.
     assert!(
         supplier_debt::place_credit_on(&mut conn, SHOP, older, Money::centimes(50_000))
             .unwrap()
@@ -648,8 +648,9 @@ fn a_closed_fiche_still_takes_a_correction() {
 
 #[test]
 fn a_closed_fiche_is_what_a_purchase_is_refused_on() {
-    // What a closed fiche does refuse is more goods. T3's receipt path asks
-    // this before it writes a `purchase` row, the way a sale asks the same of
+    // What a closed fiche does refuse is more goods. The receipt service
+    // asks this before it writes a `purchase` row, the way a sale asks the
+    // same of
     // a customer's fiche.
     let (_dir, mut conn) = open_temp();
     let supplier = a_supplier(&mut conn, "Sarl Amrani");
@@ -668,7 +669,7 @@ fn a_closed_fiche_is_what_a_purchase_is_refused_on() {
 
 #[test]
 fn every_row_a_service_writes_is_stamped_by_the_shop_clock() {
-    // The cash position (T4) filters `created_at` on the shop's day, and the
+    // The cash position filters `created_at` on the shop's day, and the
     // column's own default is CURRENT_TIMESTAMP, which is UTC: one hour a day
     // the two disagree about which day the money moved. Every writer here
     // hands the column a value rather than leaving it to the file.

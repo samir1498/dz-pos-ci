@@ -48,7 +48,8 @@ use crate::services::clock::{Month, Period};
 use crate::services::expenses;
 
 /// How many products a top list names. Ten is what fits beside the rest of
-/// the screen; a shop wanting the whole catalogue exports it (T7).
+/// the screen; a shop wanting the whole catalogue exports it through the
+/// Excel export.
 const TOP: usize = 10;
 
 /// How many days one bucket of the week series holds.

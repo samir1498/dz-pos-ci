@@ -1203,8 +1203,9 @@ fn an_order_paid_in_full_before_the_goods_is_settled_by_the_last_delivery() {
 #[test]
 fn a_delivery_worth_nothing_finishes_the_line_without_a_row_of_nothing() {
     // A thousandth of a unit at a centime is worth nothing at all, and the
-    // ledger has no row for a movement of nothing (M2's rule: it would sit in
-    // every statement for ever). The delivery still finishes the line and
+    // ledger has no row for a movement of nothing (a row of nothing would
+    // sit in every statement for ever). The delivery still finishes the line
+    // and
     // still moves the stock, and the service still asks for the credit the
     // shop is holding to be placed, which is why that call sits outside the
     // branch that writes the row.

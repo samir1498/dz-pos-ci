@@ -78,8 +78,8 @@ async fn call(
 }
 
 /// A company fiche as the screen posts it. Neither RC nor NIF is filled in:
-/// the identifiers are required when a facture is issued to a company (T4),
-/// not to open its fiche.
+/// the identifiers are required when a facture is issued to a company, not
+/// to open its fiche.
 fn draft(name: &str) -> Value {
     json!({
         "name": name,

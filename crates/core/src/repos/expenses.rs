@@ -33,7 +33,7 @@ pub fn categories(
 }
 
 /// Nothing ships a caller for this yet: a shop cannot add a category of its
-/// own in M3 (the seven seeded keys are the list, and the desktop holds their
+/// own today (the seven seeded keys are the list, and the desktop holds their
 /// labels in the three languages by key), and the table allows one so a later
 /// screen adds a row rather than a migration. The round trip is tested here
 /// so the query is known good the day that screen exists.
@@ -57,7 +57,7 @@ pub fn insert(conn: &mut SqliteConnection, write: &ExpenseRowWrite) -> Result<Ex
     Ok(Expense::from(row))
 }
 
-/// One expense on its own. No screen opens one in M3: an expense is never
+/// One expense on its own. No screen opens one today: an expense is never
 /// edited and never deleted, so the list is the whole of what is read. Kept
 /// because the tests below read a row back the way a later detail panel
 /// would.

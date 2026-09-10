@@ -2,7 +2,7 @@
 //! water, salaries, transport, maintenance and whatever else the shop pays
 //! for out of the drawer.
 //!
-//! An expense is written once and never edited or deleted in M3. The amount
+//! An expense is written once and never edited or deleted. The amount
 //! stays above zero, so a wrong one is not corrected by a negative twin: the
 //! table carries no cancellation block (migration 000008), so until one
 //! exists a mistake is a row a comptable reads and asks about.

@@ -561,8 +561,8 @@ fn a_customer_who_owes_nothing_yet_gets_a_slip_that_says_so() {
 
 #[test]
 fn a_balance_the_shop_owes_prints_the_amount_and_says_whose_way_it_goes() {
-    // The shop holding money for a customer is what an avoir leaves behind
-    // (T6). The words carry no sign, so the page has to say the direction in
+    // The shop holding money for a customer is what an avoir leaves behind.
+    // The words carry no sign, so the page has to say the direction in
     // words of its own or it reads as the opposite of what it means.
     let slip = RecentStatement {
         balance: Money::centimes(-20_000),

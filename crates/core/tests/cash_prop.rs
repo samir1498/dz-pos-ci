@@ -387,8 +387,9 @@ fn a_supplier(conn: &mut SqliteConnection, shop_id: i32, id: i32) {
     .unwrap();
 }
 
-/// A payment to a supplier, written by hand: T2 owns that service, and what
-/// this file needs is the row on `supplier_ledger` the cash position reads.
+/// A payment to a supplier, written by hand: the supplier payment service
+/// owns that, and what this file needs is the row on `supplier_ledger` the
+/// cash position reads.
 fn pay_supplier(
     conn: &mut SqliteConnection,
     shop_id: i32,
