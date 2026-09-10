@@ -84,6 +84,18 @@ pub enum CoreError {
         side: PartySide,
         missing: Vec<&'static str>,
     },
+    /// A ledger row handed to a repo with no moment on it. The column's
+    /// default is SQLite's CURRENT_TIMESTAMP, which is UTC, while every
+    /// period this app answers for is a stretch of days on the shop's
+    /// calendar (UTC+1): a payment taken at 00:30 in Algiers would be stored
+    /// on the day before and fall out of the day the shop counted its
+    /// drawer. The caller stamps it from `services::clock`.
+    ///
+    /// Its own variant and not a `Validation`: no field a caller sent is
+    /// wrong, and nobody using the app can correct it. It is a mistake in
+    /// this crate, so the API answers 500 and the code is the storage one.
+    #[error("a row of {entity} is stamped from the shop clock, never left to the file's default")]
+    Unstamped { entity: &'static str },
     #[error(transparent)]
     Money(#[from] MoneyError),
     #[error(transparent)]
@@ -115,7 +127,10 @@ impl CoreError {
             CoreError::CreditLimit { .. } => "credit_limit",
             CoreError::PartyIds { .. } => "party_ids",
             CoreError::Money(_) => "money",
-            CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) => "storage",
+            CoreError::Db(_)
+            | CoreError::Query(_)
+            | CoreError::Io(_)
+            | CoreError::Unstamped { .. } => "storage",
             CoreError::Render(_) => "print",
         }
     }

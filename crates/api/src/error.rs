@@ -226,10 +226,14 @@ const fn status_for(e: &CoreError) -> StatusCode {
         // A template that will not render is the app's own bug: the
         // template ships in the binary and the data comes from a row the
         // core just read, so the caller has nothing to correct.
+        // A row handed over without a moment on it is the same kind of
+        // thing: the caller sent nothing wrong and cannot correct it, so it
+        // is this crate's bug and never the shop's.
         CoreError::Money(_)
         | CoreError::Db(_)
         | CoreError::Query(_)
         | CoreError::Io(_)
+        | CoreError::Unstamped { .. }
         | CoreError::Render(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
