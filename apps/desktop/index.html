@@ -21,6 +21,28 @@
           // already on <html> above stays.
         }
       })();
+      // Same trick for the theme, and the same reason: ThemeProvider only
+      // knows the shop's choice once the API has answered, which is long
+      // after first paint, so a shop on Registre saw a white flash on every
+      // load. The provider mirrors the resolved name here on its way past.
+      // With nothing stored (a fresh machine) the machine's own preference
+      // picks between the two OS themes, which is what the provider does too.
+      (function () {
+        var names = ["comptoir", "registre", "observe", "observe-dark"];
+        var theme = null;
+        try {
+          theme = window.localStorage.getItem("dzpos-theme");
+        } catch (e) {
+          // storage blocked; fall through to the media query
+        }
+        if (names.indexOf(theme) === -1) {
+          theme =
+            window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "registre"
+              : "comptoir";
+        }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
     </script>
     <!-- No font link. The three families are vendored under
          packages/design/assets/fonts and declared in the generated

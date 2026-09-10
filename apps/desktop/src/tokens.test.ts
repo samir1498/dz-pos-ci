@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
  * arbitrary-value syntax (`bg-[#14211c]`, `text-[13px]`) and a bare hex both
  * walk straight past the design package, and neither shows up as a failure:
  * the screen renders, it just renders a colour the other theme never heard
- * of, so `data-theme="registre"` leaves it light on an ink surface.
+ * of, so the dark themes leave it light on an ink surface.
  *
  * No lint rule reads intent, but these three shapes are mechanical, so they
  * are a test rather than a convention. `theme.css` is generated from the

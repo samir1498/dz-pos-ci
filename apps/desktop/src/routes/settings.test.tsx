@@ -10,6 +10,7 @@ import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/sh
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
+import { ThemeProvider } from "@/lib/theme";
 import { SettingsScreen } from "./settings";
 
 const store: StoreDto = {
@@ -31,6 +32,7 @@ const seeded: SettingsDto = {
   store,
   regime: { regime: "reel", valid_from: "2026-01-01" },
   regime_planned: null,
+  theme: null,
 };
 
 function json(status: number, body: unknown): Response {
@@ -70,7 +72,12 @@ function mount(lang: Lang = "fr") {
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        <SettingsScreen />
+        {/* The screen carries the theme panel, whose control reads the
+            provider. It shares this screen's settings query key, so the two
+            are one fetch and the call counts below are unchanged. */}
+        <ThemeProvider>
+          <SettingsScreen />
+        </ThemeProvider>
       </QueryClientProvider>
     </I18nProvider>,
   );

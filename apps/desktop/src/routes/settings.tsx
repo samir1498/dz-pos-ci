@@ -10,6 +10,7 @@ import { ApiError } from "@dzpos/shared";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
 import { api, settingsQueryKey } from "@/api";
 import { BackupsPanel } from "@/components/BackupsPanel";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { StockRecountPanel } from "@/components/StockRecountPanel";
 import { useShopToday } from "@/lib/clock";
 import { isKey, useTranslation, type Key } from "@/i18n";
@@ -97,6 +98,7 @@ export function SettingsScreen() {
               today={clock.today}
             />
           )}
+          <ThemePanel />
           <BackupsPanel />
           <StockRecountPanel />
         </>
@@ -387,6 +389,26 @@ function RegimePanel({
         )}
       </form.Subscribe>
     </form>
+  );
+}
+
+/**
+ * The theme, beside the store block rather than in a preferences screen of
+ * its own: there is one settings page and this is a setting. The control is
+ * the same component the topbar carries, so the two cannot drift.
+ */
+function ThemePanel() {
+  const { t } = useTranslation();
+  return (
+    <section aria-labelledby="settings-theme" className="flex flex-col gap-3 rounded border p-4">
+      <h2 id="settings-theme" className="font-semibold">
+        {t("settings_theme")}
+      </h2>
+      <p className="text-sm opacity-80">{t("settings_theme_hint")}</p>
+      <div>
+        <ThemeSwitcher />
+      </div>
+    </section>
   );
 }
 

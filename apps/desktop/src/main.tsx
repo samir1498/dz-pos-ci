@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nProvider } from "@/i18n";
+import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "./routeTree.gen";
 import "./styles.css";
 
@@ -24,7 +25,11 @@ ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <I18nProvider>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        {/* Inside the query client: the theme lives on the settings page and
+            is read with the query the settings screen already makes. */}
+        <ThemeProvider>
+          <RouterProvider router={router} />
+        </ThemeProvider>
       </QueryClientProvider>
     </I18nProvider>
   </React.StrictMode>,
