@@ -8,16 +8,57 @@
 //
 // Nothing here edits or deletes a row. An expense is written once
 // (features.md §1), so the list is a list and there is no pencil on it.
+//
+// On the kit: the list is `DataTable`, the entry form is a `Sheet` of
+// `FormField`s, every amount is `Money` and the one amount typed in is
+// `MoneyInput`, so no float is made anywhere on the way through. The
+// category is a chip rather than a `StatusPill`: a pill is one of the five
+// states a row can be in, and a category is not a state.
 
-import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { ApiError, parseAmountToCentimes } from "@dzpos/shared";
+import type {
+  CashPositionDto,
+  ExpenseCategoryDto,
+  ExpenseDto,
+  ExpensesDto,
+} from "@dzpos/shared";
+import { Plus, Receipt } from "lucide-react";
 import { useState } from "react";
-import { ApiError, formatCentimes, parseAmountToCentimes } from "@dzpos/shared";
-import type { CashPositionDto, ExpenseCategoryDto, ExpensesDto } from "@dzpos/shared";
+
+import { DataTable, type Column } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
+import { FormField } from "@/components/FormField";
+import { Icon } from "@/components/Icon";
+import { Money } from "@/components/Money";
+import { MoneyInput } from "@/components/MoneyInput";
+import { PageHeader } from "@/components/PageHeader";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api, cashQueryKey, expenseCategoriesQueryKey, expensesQueryKey } from "@/api";
 import { isKey, useTranslation, type Key } from "@/i18n";
 import { useShopToday } from "@/lib/clock";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/expenses")({ component: ExpensesScreen });
 
@@ -60,6 +101,16 @@ function monthOf(day: string): string {
   return day.slice(0, 7);
 }
 
+/** The refusal, in the screen's own words, wherever one has to be shown. */
+function Refusal({ error }: { error: unknown }) {
+  const { t } = useTranslation();
+  return (
+    <p role="alert" className="text-sm text-fg-danger">
+      {t(errorKey(error))}
+    </p>
+  );
+}
+
 export function ExpensesScreen() {
   const { t } = useTranslation();
   const today = useShopToday();
@@ -71,21 +122,21 @@ export function ExpensesScreen() {
   if (today.error !== null) {
     return (
       <section className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">{t("expenses_title")}</h1>
-        <p role="alert" className="text-red-700">
-          {t(errorKey(today.error))}
-        </p>
-        <button type="button" className="self-start rounded border px-3 py-1.5" onClick={today.retry}>
+        <PageHeader title={t("expenses_title")} />
+        <Refusal error={today.error} />
+        <Button variant="outline" className="self-start" onClick={today.retry}>
           {t("action_retry")}
-        </button>
+        </Button>
       </section>
     );
   }
   if (chosen === null || today.today === undefined) {
     return (
       <section className="flex flex-col gap-4">
-        <h1 className="text-xl font-semibold">{t("expenses_title")}</h1>
-        <p>{t("expenses_loading")}</p>
+        <PageHeader title={t("expenses_title")} />
+        <p className="sr-only">{t("expenses_loading")}</p>
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-64 w-full" />
       </section>
     );
   }
@@ -101,7 +152,7 @@ function Month({
   today: string;
   onMonth: (month: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, dir } = useTranslation();
   const [adding, setAdding] = useState(false);
   const expenses = useQuery({
     queryKey: expensesQueryKey(month),
@@ -117,65 +168,104 @@ function Month({
   });
 
   return (
-    <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t("expenses_title")}</h1>
-        <label className="flex items-center gap-2">
-          <span>{t("expenses_month")}</span>
-          <input
-            type="month"
-            dir="ltr"
-            data-testid="expenses-month"
-            className="rounded border px-2 py-1 font-mono"
-            value={month}
-            onChange={(e) => onMonth(e.target.value)}
-          />
-        </label>
-        <button
-          type="button"
-          className="rounded border px-3 py-1.5"
-          onClick={() => setAdding((open) => !open)}
-        >
-          {adding ? t("action_cancel") : t("expenses_add")}
-        </button>
-      </header>
+    <section className="flex flex-col gap-6">
+      <PageHeader
+        title={t("expenses_title")}
+        actions={
+          <>
+            <FormField label={t("expenses_month")} className="flex-row items-center gap-2">
+              {(parts) => (
+                <Input
+                  {...parts}
+                  type="month"
+                  dir="ltr"
+                  data-testid="expenses-month"
+                  className="w-44 font-numeric tabular-nums"
+                  value={month}
+                  onChange={(event) => onMonth(event.target.value)}
+                />
+              )}
+            </FormField>
+            <Button data-testid="expenses-add" onClick={() => setAdding(true)}>
+              <Icon as={Plus} size={18} />
+              {t("expenses_add")}
+            </Button>
+          </>
+        }
+      />
 
-      {adding && categories.isSuccess ? (
-        <ExpenseForm
-          categories={categories.data}
-          month={month}
-          today={today}
-          onDone={() => setAdding(false)}
-        />
-      ) : null}
-      {adding && categories.isPending ? <p>{t("expenses_loading")}</p> : null}
-      {adding && categories.isError ? (
-        <p role="alert" className="text-red-700">
-          {t(errorKey(categories.error))}
-        </p>
-      ) : null}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <TotalCard month={expenses.data} pending={expenses.isPending} />
+        <div className="lg:col-span-2">
+          {cash.isPending ? <Skeleton className="h-56 w-full" /> : null}
+          {cash.isError ? <Refusal error={cash.error} /> : null}
+          {cash.isSuccess ? <CashPanel position={cash.data} /> : null}
+        </div>
+      </div>
 
-      {cash.isPending ? <p>{t("cash_loading")}</p> : null}
-      {cash.isError ? (
-        <p role="alert" className="text-red-700">
-          {t(errorKey(cash.error))}
-        </p>
-      ) : null}
-      {cash.isSuccess ? <CashPanel position={cash.data} /> : null}
-
-      {expenses.isPending ? <p>{t("expenses_loading")}</p> : null}
-      {expenses.isError ? (
-        <p role="alert" className="text-red-700">
-          {t(errorKey(expenses.error))}
-        </p>
-      ) : null}
+      {expenses.isPending ? <Skeleton className="h-64 w-full" /> : null}
+      {expenses.isError ? <Refusal error={expenses.error} /> : null}
       {expenses.isSuccess ? (
         <ExpenseTable
           month={expenses.data}
           categories={categories.isSuccess ? categories.data : []}
+          onAdd={() => setAdding(true)}
         />
       ) : null}
+
+      <Sheet open={adding} onOpenChange={setAdding}>
+        {/* The side is physical on purpose: the panel's edge, its border and
+            the half it slides in from have to agree, so the caller picks it
+            from the page direction the way AppShell does. */}
+        <SheetContent side={dir === "rtl" ? "left" : "right"} data-testid="expense-sheet">
+          <SheetHeader>
+            <SheetTitle>{t("expenses_add")}</SheetTitle>
+            <SheetDescription>{t("expenses_form_hint")}</SheetDescription>
+          </SheetHeader>
+          {categories.isPending ? (
+            <div className="flex flex-col gap-3 px-4">
+              <p className="sr-only">{t("expenses_loading")}</p>
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : null}
+          {categories.isError ? (
+            <div className="px-4">
+              <Refusal error={categories.error} />
+            </div>
+          ) : null}
+          {categories.isSuccess ? (
+            <ExpenseForm
+              categories={categories.data}
+              month={month}
+              today={today}
+              onDone={() => setAdding(false)}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </section>
+  );
+}
+
+/** The month's total, the one figure the screen is opened for. It is the
+ *  server's sum and nothing here adds anything up. */
+function TotalCard({ month, pending }: { month: ExpensesDto | undefined; pending: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>{t("expenses_total")}</CardDescription>
+        <CardTitle>
+          {month !== undefined ? (
+            <Money centimes={month.total_centimes} data-testid="expenses-total" className="text-2xl" />
+          ) : pending ? (
+            <Skeleton className="h-8 w-32" />
+          ) : null}
+        </CardTitle>
+      </CardHeader>
+    </Card>
   );
 }
 
@@ -187,72 +277,81 @@ function Month({
 function CashPanel({ position }: { position: CashPositionDto }) {
   const { t } = useTranslation();
   return (
-    <div data-testid="cash-position" className="flex flex-col gap-2 rounded border p-4">
-      <h2 className="font-semibold">{t("cash_title")}</h2>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm uppercase">{t("cash_in")}</h3>
-          <Figure label={t("cash_sales")} centimes={position.cash_in.sales_centimes} />
-          {/* Inside the line above, not beside it: the drawer took the stamp
-              with the rest, and this says how much of what it took is tax
-              the shop is holding for the state. */}
-          <Figure
-            label={t("cash_stamp")}
-            centimes={position.cash_in.stamp_centimes}
-            testId="cash-in-stamp"
-          />
-          <Figure
-            label={t("cash_customer_payments")}
-            centimes={position.cash_in.customer_payments_centimes}
-          />
-          <Figure
-            label={t("cash_total")}
-            centimes={position.cash_in.total_centimes}
-            testId="cash-in-total"
-            strong
-          />
+    <Card data-testid="cash-position" className="h-full">
+      <CardHeader>
+        <CardTitle>{t("cash_title")}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              {t("cash_in")}
+            </h3>
+            <Figure label={t("cash_sales")} centimes={position.cash_in.sales_centimes} />
+            {/* Inside the line above, not beside it: the drawer took the stamp
+                with the rest, and this says how much of what it took is tax
+                the shop is holding for the state. */}
+            <Figure
+              label={t("cash_stamp")}
+              centimes={position.cash_in.stamp_centimes}
+              testId="cash-in-stamp"
+            />
+            <Figure
+              label={t("cash_customer_payments")}
+              centimes={position.cash_in.customer_payments_centimes}
+            />
+            <Figure
+              label={t("cash_total")}
+              centimes={position.cash_in.total_centimes}
+              testId="cash-in-total"
+              strong
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              {t("cash_out")}
+            </h3>
+            <Figure
+              label={t("cash_supplier_payments")}
+              centimes={position.cash_out.supplier_payments_centimes}
+            />
+            <Figure
+              label={t("cash_expenses")}
+              centimes={position.cash_out.expenses_centimes}
+              testId="cash-out-expenses"
+            />
+            <Figure
+              label={t("cash_refunds")}
+              centimes={position.cash_out.refunds_centimes}
+              hint={t("cash_refunds_hint")}
+            />
+            <Figure
+              label={t("cash_total")}
+              centimes={position.cash_out.total_centimes}
+              testId="cash-out-total"
+              strong
+            />
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm uppercase">{t("cash_out")}</h3>
-          <Figure
-            label={t("cash_supplier_payments")}
-            centimes={position.cash_out.supplier_payments_centimes}
-          />
-          <Figure
-            label={t("cash_expenses")}
-            centimes={position.cash_out.expenses_centimes}
-            testId="cash-out-expenses"
-          />
-          <Figure
-            label={t("cash_refunds")}
-            centimes={position.cash_out.refunds_centimes}
-            hint={t("cash_refunds_hint")}
-          />
-          <Figure
-            label={t("cash_total")}
-            centimes={position.cash_out.total_centimes}
-            testId="cash-out-total"
-            strong
-          />
-        </div>
-      </div>
-      <Figure
-        label={t("cash_net")}
-        centimes={position.cash_centimes}
-        testId="cash-net"
-        strong
-      />
-      <Figure
-        label={t("cash_card_in")}
-        centimes={position.card_in.total_centimes}
-        testId="card-in-total"
-      />
-    </div>
+        <Separator />
+        <Figure
+          label={t("cash_net")}
+          centimes={position.cash_centimes}
+          testId="cash-net"
+          strong
+        />
+        <Figure
+          label={t("cash_card_in")}
+          centimes={position.card_in.total_centimes}
+          testId="card-in-total"
+        />
+      </CardContent>
+    </Card>
   );
 }
 
-/** One labelled amount. `dir="ltr"` on the figure: an amount is read left to
- *  right with Western digits whatever the screen's language. */
+/** One labelled amount. The figure is `Money`, which carries the figure face
+ *  and the `dir="ltr"` an amount needs on the Arabic screen too. */
 function Figure({
   label,
   centimes,
@@ -267,11 +366,11 @@ function Figure({
   strong?: boolean;
 }) {
   return (
-    <p className={strong ? "flex justify-between gap-4 font-semibold" : "flex justify-between gap-4"}>
-      <span title={hint}>{label}</span>
-      <span className="font-mono" dir="ltr" data-testid={testId}>
-        {formatCentimes(centimes)}
+    <p className={cn("flex items-baseline justify-between gap-4 text-sm", strong && "font-semibold")}>
+      <span className={strong ? "text-foreground" : "text-muted-foreground"} title={hint}>
+        {label}
       </span>
+      <Money centimes={centimes} data-testid={testId} />
     </p>
   );
 }
@@ -279,9 +378,11 @@ function Figure({
 function ExpenseTable({
   month,
   categories,
+  onAdd,
 }: {
   month: ExpensesDto;
   categories: readonly ExpenseCategoryDto[];
+  onAdd: () => void;
 }) {
   const { t } = useTranslation();
   const label = (id: number): string => {
@@ -292,69 +393,79 @@ function ExpenseTable({
     // its own key is closer to the truth than a blank cell.
     return key === undefined ? found.key : t(key);
   };
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="flex justify-between gap-4 font-semibold">
-        <span>{t("expenses_total")}</span>
-        <span className="font-mono" dir="ltr" data-testid="expenses-total">
-          {formatCentimes(month.total_centimes)}
+
+  const columns: readonly Column<ExpenseDto>[] = [
+    {
+      id: "date",
+      header: t("col_date"),
+      // The cell keeps the page's direction so the column starts where the
+      // heading does; only the digits are LTR, in a span of their own.
+      cell: (expense) => (
+        <span dir="ltr" className="font-numeric tabular-nums">
+          {expense.expense_date}
         </span>
-      </p>
-      {month.expenses.length === 0 ? (
-        <p>{t("expenses_empty")}</p>
-      ) : (
-        <table className="w-full text-start">
-          <caption className="sr-only">{t("expenses_title")}</caption>
-          <thead>
-            <tr>
-              {/* The same logical padding as the cells under them, so the
-                  four headings keep the gaps the rows have in either
-                  direction rather than running into each other. */}
-              <th scope="col" className="pb-2 pe-3 text-start">
-                {t("col_date")}
-              </th>
-              <th scope="col" className="pb-2 pe-3 text-start">
-                {t("col_category")}
-              </th>
-              <th scope="col" className="pb-2 ps-3 text-end">
-                {t("col_amount")}
-              </th>
-              <th scope="col" className="pb-2 ps-3 text-start">
-                {t("col_note")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {month.expenses.map((e) => (
-              <tr key={e.id} className="border-t" data-testid="expense-row">
-                {/* The cell keeps the page's direction so the column starts
-                    where the heading does; only the digits are LTR, in a span
-                    of their own. `dir="ltr"` on the cell would left-align it
-                    inside an RTL row and push the date against the column
-                    beside it. */}
-                <td className="py-1.5 pe-3">
-                  <span className="font-mono" dir="ltr">
-                    {e.expense_date}
-                  </span>
-                </td>
-                <td className="py-1.5 pe-3">{label(e.category_id)}</td>
-                <td className="py-1.5 ps-3 text-end font-mono" dir="ltr">
-                  {formatCentimes(e.amount_centimes)}
-                </td>
-                <td className="py-1.5 ps-3">{e.note ?? ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
+      ),
+    },
+    {
+      id: "category",
+      header: t("col_category"),
+      cell: (expense) => <Badge variant="secondary">{label(expense.category_id)}</Badge>,
+    },
+    {
+      id: "amount",
+      header: t("col_amount"),
+      money: true,
+      cell: (expense) => <Money centimes={expense.amount_centimes} />,
+    },
+    {
+      id: "note",
+      header: t("col_note"),
+      cell: (expense) => expense.note ?? "",
+    },
+  ];
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={month.expenses}
+      rowKey={(expense) => expense.id}
+      caption={t("expenses_title")}
+      data-testid="expenses-table"
+      empty={
+        <EmptyState
+          icon={Receipt}
+          title={t("expenses_empty")}
+          description={t("expenses_empty_hint")}
+          action={
+            <Button onClick={onAdd}>
+              <Icon as={Plus} size={18} />
+              {t("expenses_add")}
+            </Button>
+          }
+        />
+      }
+    />
   );
+}
+
+/** What the entry sheet holds while it is being filled in. The amount is
+ *  integer centimes from the first keystroke; there is no string and no
+ *  float stage on the way to the server. */
+interface Draft {
+  category: string;
+  amount: number | null;
+  date: string;
+  note: string;
 }
 
 /**
  * The add form. The day starts on the shop's clock, the categories are the
  * seeded ones and a retired category is not offered: the server refuses it,
  * and a form that offered it would be asking for a refusal.
+ *
+ * The amount lives in the form as integer centimes, never as a string and
+ * never as a float: `MoneyInput` reads the typed text and hands back the
+ * integer, and that integer is what is posted.
  */
 function ExpenseForm({
   categories,
@@ -397,25 +508,29 @@ function ExpenseForm({
     onError: (error: unknown) => setServerError(errorKey(error)),
   });
 
+  // Spelled out rather than inferred from the literal below: the amount is
+  // `number | null` and an inferred `null` would make the field's setter
+  // refuse every integer `MoneyInput` hands it.
+  const draft: Draft = {
+    category: first === undefined ? "" : String(first.id),
+    amount: null,
+    // The shop's day when it is inside the month being looked at, and the
+    // first of that month otherwise: a form opened on last month's list
+    // should not default to filing the row outside it.
+    date: monthOf(today) === month ? today : `${month}-01`,
+    note: "",
+  };
+
   const form = useForm({
-    defaultValues: {
-      category: first === undefined ? "" : String(first.id),
-      amount: "",
-      // The shop's day when it is inside the month being looked at, and the
-      // first of that month otherwise: a form opened on last month's list
-      // should not default to filing the row outside it.
-      date: monthOf(today) === month ? today : `${month}-01`,
-      note: "",
-    },
+    defaultValues: draft,
     onSubmit: async ({ value }) => {
-      const amount = parseAmountToCentimes(value.amount);
-      if (amount === null) return;
+      if (value.amount === null) return;
       // The rejection is swallowed on purpose: onError has already turned the
       // server's code into a translated message on the form.
       await save
         .mutateAsync({
           category_id: Number(value.category),
-          amount_centimes: amount,
+          amount_centimes: value.amount,
           expense_date: value.date,
           note: value.note.trim() === "" ? null : value.note.trim(),
         })
@@ -426,9 +541,10 @@ function ExpenseForm({
   return (
     <form
       noValidate
-      className="flex flex-col gap-3 rounded border p-4"
-      onSubmit={(e) => {
-        e.preventDefault();
+      data-testid="expense-form"
+      className="flex flex-col gap-4 overflow-y-auto px-4 pb-4"
+      onSubmit={(event) => {
+        event.preventDefault();
         void form.handleSubmit();
       }}
     >
@@ -440,25 +556,35 @@ function ExpenseForm({
         }}
       >
         {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_expense_category")}</span>
-            <select
-              data-testid="expense-category"
-              className="rounded border px-2 py-1"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-            >
-              {live.map((c) => {
-                const key = CATEGORY_KEY[c.key];
-                return (
-                  <option key={c.id} value={String(c.id)}>
-                    {key === undefined ? c.key : t(key)}
-                  </option>
-                );
-              })}
-            </select>
-            <FieldError messages={field.state.meta.errors} />
-          </label>
+          <FormField
+            label={t("field_expense_category")}
+            required
+            error={message(t, field.state.meta.errors)}
+          >
+            {(parts) => (
+              <Select value={field.state.value} onValueChange={field.handleChange}>
+                <SelectTrigger
+                  id={parts.id}
+                  aria-invalid={parts["aria-invalid"]}
+                  aria-describedby={parts["aria-describedby"]}
+                  data-testid="expense-category"
+                  className="w-full"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {live.map((category) => {
+                    const key = CATEGORY_KEY[category.key];
+                    return (
+                      <SelectItem key={category.id} value={String(category.id)}>
+                        {key === undefined ? category.key : t(key)}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            )}
+          </FormField>
         )}
       </form.Field>
 
@@ -466,30 +592,30 @@ function ExpenseForm({
         name="amount"
         validators={{
           onSubmit: ({ value }) => {
-            const centimes = parseAmountToCentimes(value);
-            if (centimes === null) return "error_expense_amount_invalid";
+            if (value === null) return "error_expense_amount_invalid";
             // Refused here as well as by the core: a form that let a zero
             // through would show the server's refusal for something it could
             // have said itself.
-            if (centimes <= 0) return "error_expense_amount_zero";
+            if (value <= 0) return "error_expense_amount_zero";
             return undefined;
           },
         }}
       >
         {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_expense_amount")}</span>
-            <input
-              dir="ltr"
-              inputMode="decimal"
-              data-testid="expense-amount"
-              className="rounded border px-2 py-1 text-end font-mono"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-              onBlur={field.handleBlur}
-            />
-            <FieldError messages={field.state.meta.errors} />
-          </label>
+          <FormField
+            label={t("field_expense_amount")}
+            required
+            error={message(t, field.state.meta.errors)}
+          >
+            {(parts) => (
+              <MoneyInput
+                {...parts}
+                data-testid="expense-amount"
+                value={field.state.value}
+                onChange={field.handleChange}
+              />
+            )}
+          </FormField>
         )}
       </form.Field>
 
@@ -501,65 +627,63 @@ function ExpenseForm({
         }}
       >
         {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_expense_date")}</span>
-            <input
-              type="date"
-              dir="ltr"
-              data-testid="expense-date"
-              className="rounded border px-2 py-1 font-mono"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-            />
-            <FieldError messages={field.state.meta.errors} />
-          </label>
+          <FormField
+            label={t("field_expense_date")}
+            required
+            error={message(t, field.state.meta.errors)}
+          >
+            {(parts) => (
+              <Input
+                {...parts}
+                type="date"
+                dir="ltr"
+                data-testid="expense-date"
+                className="font-numeric tabular-nums"
+                value={field.state.value}
+                onChange={(event) => field.handleChange(event.target.value)}
+              />
+            )}
+          </FormField>
         )}
       </form.Field>
 
       <form.Field name="note">
         {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_expense_note")}</span>
-            <input
-              className="rounded border px-2 py-1"
-              data-testid="expense-note"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-            />
-          </label>
+          <FormField label={t("field_expense_note")} hint={t("expenses_note_hint")}>
+            {(parts) => (
+              <Input
+                {...parts}
+                data-testid="expense-note"
+                value={field.state.value}
+                onChange={(event) => field.handleChange(event.target.value)}
+              />
+            )}
+          </FormField>
         )}
       </form.Field>
 
       {serverError === null ? null : (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-sm text-fg-danger">
           {t(serverError)}
         </p>
       )}
 
       <div className="flex gap-2">
-        <button
-          type="submit"
-          className="rounded border px-3 py-1.5"
-          disabled={save.isPending}
-        >
+        <Button type="submit" disabled={save.isPending}>
           {save.isPending ? t("action_saving") : t("action_save")}
-        </button>
-        <button type="button" className="rounded border px-3 py-1.5" onClick={onDone}>
+        </Button>
+        <Button type="button" variant="ghost" onClick={onDone}>
           {t("action_cancel")}
-        </button>
+        </Button>
       </div>
     </form>
   );
 }
 
-/** Field validators return translation keys, never sentences. */
-function FieldError({ messages }: { messages: unknown[] }) {
-  const { t } = useTranslation();
-  const key = messages.find((m): m is string => typeof m === "string");
-  if (key === undefined) return null;
-  return (
-    <span role="alert" className="text-sm text-red-700">
-      {t(isKey(key) ? key : "error_unknown")}
-    </span>
-  );
+/** Field validators return translation keys, never sentences, so the message
+ *  a field shows is looked up here rather than carried through the form. */
+function message(translate: (key: Key) => string, errors: unknown[]): string | undefined {
+  const key = errors.find((error): error is string => typeof error === "string");
+  if (key === undefined) return undefined;
+  return translate(isKey(key) ? key : "error_unknown");
 }
