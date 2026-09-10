@@ -193,6 +193,31 @@ only in `packages/shared`.
   table-level CHECK to a table that exists, so the migration rebuilds
   `documents` the way migration 2 did, keeping every id: the lines, the TVA
   recap, the movements, the ledger and the avoirs all name them.
+- The supply side is its own set of tables (migration
+  `2026-09-10-000008`) and the customer side is untouched: `suppliers`
+  holds the fiche, `supplier_ledger` and `supplier_allocations` mirror
+  `debt_ledger` and `debt_allocations` row for row and CHECK for CHECK,
+  with `purchase` where a customer has a sale and `return` where a
+  customer has an avoir. The alternative, one `parties` table with a role
+  and one party-keyed ledger, was rejected in the plan lens: every M2
+  query, index, CHECK and screen is customer-keyed and a supplier never
+  buys at the till.
+- `purchases` and `purchase_lines` hold what was ordered, with each line's
+  landed unit cost fixed when the purchase is saved; `purchase_receipts`
+  and `purchase_receipt_lines` hold what actually arrived, one row per
+  delivery, tied to the order by a composite key so a receipt can only name
+  a line of its own purchase and names it once; each line counts what
+  arrived against what was ordered and what went back against what
+  arrived. A purchase is never a row of `documents` and neither is a bon
+  de réception: that table's NOT NULL régime, its payment mode and its
+  customer key have no honest value for something the shop buys, and its
+  series are the numbering the tax code hands out for what the shop
+  sells. A receipt takes its own number from the counters table under
+  `reception:<year>`.
+- `expense_categories` carries an i18n key per shop and not a label, seeded
+  with the seven the spec names; `expenses` points at one. `jobs` holds the
+  day a once-a-day job last ran, per shop, so a restart does not run it
+  twice.
 - The audit log's action and entity names were rewritten onto one scheme in
   the facture-and-credit milestone (`sale.credit_override` became
   `document.issue_override`, and every row about a document now says
