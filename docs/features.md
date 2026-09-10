@@ -144,8 +144,9 @@ hand is derived from this ledger and cached on the product.
 
 A recount re-derives that cache and reports what it found. It runs once per
 shop day from the daily job, after the backup, so a correction the owner
-disagrees with is inside that day's copy; the settings screen asks for one
-at any time. The ledger is the truth, so a cache the movements do not
+disagrees with is recoverable from the previous copy; the recount is not
+held back when that copy fails, and the settings screen asks for one at any
+time. The ledger is the truth, so a cache the movements do not
 explain is written back to the ledger's sum rather than left for someone to
 fix, and each correction is one audit row `stock.drift` naming the product,
 the cached quantity, the ledger quantity and the difference. Those rows are

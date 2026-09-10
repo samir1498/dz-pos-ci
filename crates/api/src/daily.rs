@@ -6,10 +6,11 @@
 //! wrong in a way a test could not reach.
 //!
 //! The recount runs after the copy, so a repair the owner disagrees with is
-//! recoverable from that day's backup. It is not gated on the copy having
-//! worked: a backup folder the shop's antivirus has locked would otherwise
-//! leave the cached quantities wrong for as long as the lock lasts, and
-//! yesterday's copy is still there to go back to.
+//! recoverable from the previous copy: on an ordinary day that is the one
+//! just written, and on a day the copy failed it is the last one that
+//! worked. Which is why the recount is not gated on the copy having worked:
+//! a backup folder the shop's antivirus has locked would otherwise leave the
+//! cached quantities wrong for as long as the lock lasts.
 //!
 //! The loop wakes more often than once a day on purpose. A shop PC is turned
 //! off at night: a task that slept a flat 24 hours would only ever fire while
@@ -29,13 +30,25 @@ use crate::AppState;
 /// How often the loop asks whether a copy is due. Not how often one is made.
 pub const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 
-/// Runs forever: one check now, then one every [`CHECK_EVERY`].
+/// Runs forever: one round of the chores now, then one every
+/// [`CHECK_EVERY`].
 pub async fn run(state: AppState) {
     loop {
-        tick(&state).await;
-        recount(&state).await;
+        once(&state).await;
         tokio::time::sleep(CHECK_EVERY).await;
     }
+}
+
+/// One round of the chores: the copy, then the recount. Returns what each of
+/// them did, which is what lets a test read the order and the independence
+/// off the loop itself rather than off two calls a test made in that order.
+///
+/// The recount is deliberately not gated on the copy: see the note at the top
+/// of this file.
+pub async fn once(state: &AppState) -> (Option<Backup>, Option<Report>) {
+    let copy = tick(state).await;
+    let counted = recount(state).await;
+    (copy, counted)
 }
 
 /// The nightly stock recount, once per shop day. The whole rule is
@@ -112,8 +125,30 @@ mod tests {
     // Tests may panic; the deny is for shipped code.
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-    use super::{recount, tick};
+    use super::{once, recount, tick};
     use crate::AppState;
+
+    #[tokio::test]
+    async fn a_copy_that_could_not_be_written_still_lets_the_recount_run() {
+        // The backup folder is a regular file here, so both reading it and
+        // writing into it fail the way a folder the shop's antivirus has
+        // locked does. The cached quantities must not be left wrong for as
+        // long as that lasts: the recount is a chore of its own and the
+        // previous copy is still there to go back to.
+        let dir = tempfile::tempdir().unwrap();
+        let blocked = dir.path().join("backups");
+        std::fs::write(&blocked, b"not a folder").unwrap();
+        let state = AppState::open_with_backup_dir(dir.path().join("t.db"), 1, &blocked).unwrap();
+
+        let (copy, counted) = once(&state).await;
+        assert!(copy.is_none(), "a file was somehow written into a file");
+        let counted = counted.expect("the failed copy took the recount down with it");
+        assert!(counted.drifts.is_empty(), "a fresh file drifted");
+        assert!(
+            once(&state).await.1.is_none(),
+            "the same day was recounted twice"
+        );
+    }
 
     #[tokio::test]
     async fn the_first_tick_writes_a_copy_and_the_next_one_does_not() {
