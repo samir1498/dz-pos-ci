@@ -45,7 +45,17 @@ export default defineConfig({
     // the same thing the splitting above was turned off for: the bundle is
     // read off the disk beside the binary. Raised rather than silenced, so it
     // still says something when the bundle grows by half again.
-    chunkSizeWarningLimit: 750,
+    // Raised from 750 to 1000 when the shadcn kit landed (D3): the bundle
+    // went to about 875 kB minified, 255 kB gzipped, and the components and
+    // their Radix primitives are the growth. Raised, not removed, for the
+    // same reason as before: it should say something again the next time the
+    // bundle grows by half.
+    // Raised again from 1000 to 1400 when the dashboard's chart landed:
+    // recharts and its d3 scales are about 410 kB minified, 120 kB gzipped,
+    // and they are read off the disk beside the binary like the rest of it.
+    // The chart is one screen's, so this is the place a split would pay for
+    // itself if the desktop ever loaded over a network.
+    chunkSizeWarningLimit: 1400,
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },

@@ -44,9 +44,77 @@ export const settingsQueryKey: readonly string[] = ["settings"];
  * one changes on its own at midnight. */
 export const clockQueryKey: readonly string[] = ["clock"];
 export const backupsQueryKey: readonly string[] = ["backups"];
+/** The last stock recount: the day it ran and what it corrected. Its own key
+ * rather than a slice of the products': a recount changes the quantities the
+ * product list carries, so running one invalidates both. */
+export const stockRecountQueryKey: readonly string[] = ["stock-recount"];
+/** The seeded expense categories. One list for the shop, so it has its own
+ * key and nothing invalidates it: no screen writes one in this version. */
+export const expenseCategoriesQueryKey: readonly string[] = ["expense-categories"];
+
+/** One month of expenses with its total. The month is part of the key: two
+ * months are two answers, and a row filed into one must not be read out of
+ * the cache of the other. */
+export function expensesQueryKey(month: string): readonly string[] {
+  return ["expenses", month];
+}
+
+/** The cash position over a day or a month. The range is part of the key for
+ * the reason the month's is, and the two shapes are told apart by which word
+ * is in the key rather than by the value alone: a day and a month can never
+ * be the same string, but a reader of the key should not have to know that. */
+export function cashQueryKey(period: { day: string } | { month: string }): readonly string[] {
+  return "day" in period ? ["cash", "day", period.day] : ["cash", "month", period.month];
+}
+/** The whole dashboard for one day and the month it falls in. The day is in
+ * the key: the screen asks about the shop's today, and a window left open
+ * over midnight must read the new day's answer rather than yesterday's out
+ * of the cache. */
+export function dashboardQueryKey(day: string): readonly string[] {
+  return ["dashboard", day];
+}
+
+/** The chart behind it. Its own key rather than a slice of the dashboard's,
+ * because it is a second call over a second window: the two are refetched
+ * together only because the screen asks for both. */
+export function dashboardSeriesQueryKey(day: string, days: number): readonly (string | number)[] {
+  return ["dashboard", "series", day, days];
+}
+
 /** The customer list. The search text is appended by the screen, so an
  * invalidation of this key refreshes every search that is in the cache. */
 export const customersQueryKey: readonly string[] = ["customers"];
+
+/** The supplier list. The search text is appended by the screen, so an
+ * invalidation of this key refreshes every search that is in the cache. */
+export const suppliersQueryKey: readonly string[] = ["suppliers"];
+
+/** The order list. The two filters are appended by the screen, so an
+ * invalidation of this key refreshes every filter that is in the cache: a
+ * delivery moves an order from one state to another, and the list narrowed
+ * to the state it left must not go on showing it. */
+export const purchasesQueryKey: readonly string[] = ["purchases"];
+
+/** One order with its lines and its deliveries. Its own key rather than a
+ * slice of the list's: the list answers a row per order and this answers the
+ * whole thing, and a delivery makes both stale. */
+export function purchaseQueryKey(id: number): readonly (string | number)[] {
+  return ["purchase", id];
+}
+
+/** One supplier's fiche, read on its own by the route that opens a fiche by
+ * id. Under the list's key on purpose: a payment or a correction invalidates
+ * `suppliersQueryKey` and this refetches with it, so the balance the page
+ * shows and the balance the list shows are never two answers. */
+export function supplierQueryKey(id: number): readonly (string | number)[] {
+  return [...suppliersQueryKey, id];
+}
+
+/** One supplier's movements. A factory rather than a literal at the call
+ * site, so the id is always the second element and never a template string. */
+export function supplierLedgerQueryKey(id: number): readonly (string | number)[] {
+  return ["supplier-ledger", id];
+}
 
 /** One customer's fiche, read on its own by the route that opens a fiche by
  * id. Under the list's key on purpose: a payment or a correction invalidates

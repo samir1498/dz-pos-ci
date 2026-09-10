@@ -17,13 +17,13 @@
 //!
 //! The little parser below is the ticket test's, copied rather than shared:
 //! two golden suites that check each other's files through one helper can
-//! both be made green by editing the helper once. T9 added the avoir, the
-//! proforma and the cancelled reprint to this file and left the two suites
-//! apart for the same reason.
+//! both be made green by editing the helper once. The avoir, the proforma
+//! and the cancelled reprint were added to this file and left the two
+//! suites apart for the same reason.
 
 use std::path::PathBuf;
 
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use dzpos_core::lang::Lang;
 use dzpos_core::money::words::amount_in_words;
 use dzpos_core::money::{
@@ -60,9 +60,9 @@ const LINES: [(&str, i64, i64, i64, u32); 3] = [
 
 /// The two lines the avoir takes back, a part of the basket and not all of
 /// it: one of the two bottles and half of the flour. A partial avoir is
-/// what T6 allows, and an avoir printing the facture's own totals is the
-/// mistake these goldens have to be able to catch, so its lines and its
-/// amounts are none of the facture's.
+/// what the avoir rule allows, and an avoir printing the facture's own
+/// totals is the mistake these goldens have to be able to catch, so its
+/// lines and its amounts are none of the facture's.
 ///
 /// The first name carries the markup the facture's does: a reprint of an
 /// avoir escapes a product name or it does not, and the avoir goldens say
@@ -345,7 +345,7 @@ fn fixed_facture(case: Case) -> Document {
                 total_debt: old_balance.checked_add(this).unwrap(),
             })
         }
-        // A proforma creates no debt at all (T6), and the triple it stores
+        // A proforma creates no debt at all, and the triple it stores
         // says so in three zeroes. The page drops the block rather than
         // print a debt of nothing three times.
         Case::Proforma => Some(BalanceTriple {
@@ -370,7 +370,8 @@ fn fixed_facture(case: Case) -> Document {
         id: if matches!(case, Case::Avoir) { 2 } else { 1 },
         shop_id: SHOP,
         kind: case.kind(),
-        series: case.kind().series().to_owned(),
+        series: case.kind().series_of_year(issued_at.year()),
+        series_year: issued_at.year(),
         number: case.number(),
         issued_at,
         user_id: OWNER,
@@ -414,8 +415,9 @@ fn at(when: (i32, u32, u32, u32, u32)) -> chrono::NaiveDateTime {
 /// The document a case renders and everything the page needs beside it: the
 /// facture an avoir names, and the day and the reason a cancelled facture
 /// was cancelled. Neither is on the document's own row (the reference is an
-/// id there and a number on paper; the cancellation columns are T6's), so
-/// the fixture hands them over the way a caller will.
+/// id there and a number on paper; the cancellation columns belong to the
+/// document's own cancellation), so the fixture hands them over the way a
+/// caller will.
 struct Fixture {
     doc: Document,
     referenced: Option<Document>,
@@ -1145,7 +1147,7 @@ fn a_kind_this_template_has_no_title_for_is_refused() {
         };
         assert!(html.contains(text(title, Lang::Fr)), "{kind:?}");
         assert!(
-            html.contains(&format!("{}-000042", kind.number_prefix())),
+            html.contains(&format!("{}-2026-000042", kind.number_prefix())),
             "{kind:?} lost its printed number"
         );
     }
@@ -1161,9 +1163,9 @@ fn a_cancelled_facture_is_printed_under_the_cancelled_heading() {
     for lang in Lang::ALL {
         let html = render_facture(&doc, lang, Paper::A4).unwrap();
         assert!(html.contains(text(Key::FactureCancelled, lang)), "{lang:?}");
-        assert!(html.contains("FA-000042"), "{lang:?}");
+        assert!(html.contains("FA-2026-000042"), "{lang:?}");
     }
-    // Nothing cancels an avoir or a proforma in M2 and the wording for it
+    // Nothing cancels an avoir or a proforma and the wording for it
     // is not written, so the printer refuses rather than invent one.
     for kind in [DocumentKind::Avoir, DocumentKind::Proforma] {
         doc.kind = kind;
@@ -1223,8 +1225,8 @@ fn an_avoir_prints_the_number_of_the_facture_it_references() {
 
     for lang in Lang::ALL {
         let html = render_facture_with_reference(&avoir, Some(&facture), lang, Paper::A4).unwrap();
-        assert!(html.contains("AV-000003"), "{lang:?}");
-        assert!(html.contains("FA-000042"), "{lang:?}");
+        assert!(html.contains("AV-2026-000003"), "{lang:?}");
+        assert!(html.contains("FA-2026-000042"), "{lang:?}");
         assert!(html.contains(text(Key::AvoirOnFacture, lang)), "{lang:?}");
     }
 
@@ -1377,7 +1379,7 @@ fn the_words_are_the_net_to_pay_and_not_the_total_ttc() {
 }
 
 /// The avoir says which facture it is written against and when that facture
-/// was issued: "Avoir sur facture FA-000042 du 09/09/2026". The day is the
+/// was issued: "Avoir sur facture FA-2026-000042 du 09/09/2026". The day is the
 /// referenced facture's and not the avoir's own, which is three days later
 /// in the fixture, so a line built from the wrong document is red rather
 /// than plausible.
@@ -1391,7 +1393,7 @@ fn the_avoir_names_the_facture_it_is_written_against_and_the_day_of_it() {
             line.contains(text(Key::AvoirOnFacture, lang)),
             "{lang:?}: {line}"
         );
-        assert!(line.contains("FA-000042"), "{lang:?}: {line}");
+        assert!(line.contains("FA-2026-000042"), "{lang:?}: {line}");
         assert!(line.contains(text(Key::IssuedOn, lang)), "{lang:?}: {line}");
         assert!(line.contains("09/09/2026"), "{lang:?}: {line}");
         assert!(
@@ -1401,12 +1403,45 @@ fn the_avoir_names_the_facture_it_is_written_against_and_the_day_of_it() {
         // The avoir's own date is on the page all the same, under its own
         // number, where every document carries it.
         assert!(html.contains("12/09/2026"), "{lang:?}");
-        assert!(html.contains("AV-000003"), "{lang:?}");
+        assert!(html.contains("AV-2026-000003"), "{lang:?}");
+    }
+}
+
+/// A shop that credits a December facture in January prints two years on one
+/// page: the avoir's own on its number and the facture's on the reference
+/// line. The number a customer quotes belongs to the paper it names
+/// (features.md §4, Numbering), so a reference spelled with the year the
+/// reprint is happening in would send them looking for a facture that does
+/// not exist.
+#[test]
+fn an_avoir_prints_the_year_of_the_facture_it_credits_and_not_its_own() {
+    let mut facture = fixed_facture(Case::Credit);
+    facture.series_year = 2025;
+    facture.series = DocumentKind::Facture.series_of_year(2025);
+    facture.issued_at = NaiveDate::from_ymd_opt(2025, 12, 31)
+        .unwrap()
+        .and_hms_opt(23, 30, 0)
+        .unwrap();
+    let avoir = fixed_facture(Case::Avoir);
+    assert_eq!(
+        avoir.series_year, 2026,
+        "the avoir is the one of the new year"
+    );
+
+    for lang in Lang::ALL {
+        let html = render_facture_with_reference(&avoir, Some(&facture), lang, Paper::A4).unwrap();
+        let line = reference_line(&html);
+        assert!(
+            line.contains("FA-2025-000042"),
+            "{lang:?} credited a facture of the wrong year: {line}"
+        );
+        assert!(!line.contains("FA-2026-000042"), "{lang:?}: {line}");
+        assert!(html.contains("AV-2026-000003"), "{lang:?}");
     }
 }
 
 /// An avoir hands the lines back and asks for nothing, so it carries no
-/// droit de timbre (T6: the stamp is zero on an avoir) and its totals block
+/// droit de timbre (the stamp is zero on an avoir) and its totals block
 /// has no stamp row. A stored avoir that carries one contradicts the rule
 /// that wrote it, and the honest answer is the one the IFU recap gets:
 /// refuse, rather than drop a row and hand over a total whose parts do not
@@ -1565,15 +1600,15 @@ fn a_document_that_is_not_an_avoir_may_not_reference_a_facture() {
 }
 
 /// A proforma is a quote on facture paper. It burns its own number, moves
-/// no stock and creates no debt (T6), and the page has to say so: a
+/// no stock and creates no debt, and the page has to say so: a
 /// customer handed one must not file it as a facture, and a comptable
 /// reading it must not book it. So it carries a wording of its own, and no
 /// balance block at all.
 #[test]
 fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
     let fixture = Fixture::of(Case::Proforma);
-    // The document stores a triple, all three of it zero, which is what T6
-    // writes for a proforma. The page dropping the block is the rule doing
+    // The document stores a triple, all three of it zero, which is what the
+    // proforma rule writes. The page dropping the block is the rule doing
     // it and not the fixture having nothing to print.
     let triple = fixture
         .doc
@@ -1587,7 +1622,7 @@ fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
         let html = fixture.render(lang, Paper::A4);
         assert!(html.contains(text(Key::ProformaNotice, lang)), "{lang:?}");
         assert_eq!(heading(&html), text(Key::Proforma, lang), "{lang:?}");
-        assert!(html.contains("PF-000005"), "{lang:?}");
+        assert!(html.contains("PF-2026-000005"), "{lang:?}");
         for absent in ["old-balance", "this-document", "total-debt"] {
             assert!(
                 amounts(&html, absent).is_empty(),
@@ -1810,7 +1845,7 @@ fn a_cancelled_reprint_differs_from_the_live_facture_in_the_cancellation_only() 
         assert!(after.contains(text(Key::CancelledOn, lang)), "{lang:?}");
         assert!(after.contains("12/09/2026"), "{lang:?}");
         assert!(after.contains(text(Key::CancelReason, lang)), "{lang:?}");
-        assert!(after.contains("FA-000042"), "{lang:?}");
+        assert!(after.contains("FA-2026-000042"), "{lang:?}");
         // A reason typed by the shop is printed and never run, like a
         // product name.
         assert!(

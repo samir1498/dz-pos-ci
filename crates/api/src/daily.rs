@@ -1,8 +1,16 @@
-//! The daily backup (features.md §1: an automatic daily copy of the SQLite
-//! file). The decision of whether one is due is
-//! `dzpos_core::services::backup::is_due`, a pure function of the newest
-//! copy and the clock; this module is only the loop around it and the
-//! logging, so nothing here can be wrong in a way a test could not reach.
+//! The daily chores (features.md §1): the automatic copy of the SQLite file,
+//! and the stock recount that proves the cached quantity on hand still
+//! matches the ledger. Both decisions of whether one is due are pure
+//! functions in the core (`backup::is_due` and `stock::is_due`); this module
+//! is only the loop around them and the logging, so nothing here can be
+//! wrong in a way a test could not reach.
+//!
+//! The recount runs after the copy, so a repair the owner disagrees with is
+//! recoverable from the previous copy: on an ordinary day that is the one
+//! just written, and on a day the copy failed it is the last one that
+//! worked. Which is why the recount is not gated on the copy having worked:
+//! a backup folder the shop's antivirus has locked would otherwise leave the
+//! cached quantities wrong for as long as the lock lasts.
 //!
 //! The loop wakes more often than once a day on purpose. A shop PC is turned
 //! off at night: a task that slept a flat 24 hours would only ever fire while
@@ -14,6 +22,7 @@
 use std::time::Duration;
 
 use dzpos_core::services::backup::{self, Backup};
+use dzpos_core::services::stock::{self, Report};
 
 use crate::routes::backups::now;
 use crate::AppState;
@@ -21,11 +30,59 @@ use crate::AppState;
 /// How often the loop asks whether a copy is due. Not how often one is made.
 pub const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 
-/// Runs forever: one check now, then one every [`CHECK_EVERY`].
+/// Runs forever: one round of the chores now, then one every
+/// [`CHECK_EVERY`].
 pub async fn run(state: AppState) {
     loop {
-        tick(&state).await;
+        once(&state).await;
         tokio::time::sleep(CHECK_EVERY).await;
+    }
+}
+
+/// One round of the chores: the copy, then the recount. Returns what each of
+/// them did, which is what lets a test read the order and the independence
+/// off the loop itself rather than off two calls a test made in that order.
+///
+/// The recount is deliberately not gated on the copy: see the note at the top
+/// of this file.
+pub async fn once(state: &AppState) -> (Option<Backup>, Option<Report>) {
+    let copy = tick(state).await;
+    let counted = recount(state).await;
+    (copy, counted)
+}
+
+/// The nightly stock recount, once per shop day. The whole rule is
+/// `stock::recount_if_due`: it reads the marker and does the work under one
+/// transaction, so a relaunch at 23:59 and the check a minute later are one
+/// run on the day each of them falls in.
+///
+/// `None` means the shop was already counted today, or that the attempt
+/// failed. A failure is logged and dropped for the reason a failed copy is:
+/// the cached quantity is a convenience the ledger can rebuild, and nothing
+/// here may take the till down.
+pub async fn recount(state: &AppState) -> Option<Report> {
+    let shop = state.shop_id;
+    // TODO(M4): the user the repair is recorded under comes from the
+    // request identity once there are users to have one.
+    let user = state.user_id;
+    match state
+        .blocking(move |c| stock::recount_if_due(c, shop, user))
+        .await
+    {
+        Ok(Some(report)) => {
+            println!(
+                "dz-pos: stock recount for {}: {} products checked, {} corrected",
+                report.day,
+                report.checked,
+                report.drifts.len()
+            );
+            Some(report)
+        }
+        Ok(None) => None,
+        Err(e) => {
+            eprintln!("dz-pos: the daily stock recount failed: {e}");
+            None
+        }
     }
 }
 
@@ -68,8 +125,30 @@ mod tests {
     // Tests may panic; the deny is for shipped code.
     #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-    use super::tick;
+    use super::{once, recount, tick};
     use crate::AppState;
+
+    #[tokio::test]
+    async fn a_copy_that_could_not_be_written_still_lets_the_recount_run() {
+        // The backup folder is a regular file here, so both reading it and
+        // writing into it fail the way a folder the shop's antivirus has
+        // locked does. The cached quantities must not be left wrong for as
+        // long as that lasts: the recount is a chore of its own and the
+        // previous copy is still there to go back to.
+        let dir = tempfile::tempdir().unwrap();
+        let blocked = dir.path().join("backups");
+        std::fs::write(&blocked, b"not a folder").unwrap();
+        let state = AppState::open_with_backup_dir(dir.path().join("t.db"), 1, &blocked).unwrap();
+
+        let (copy, counted) = once(&state).await;
+        assert!(copy.is_none(), "a file was somehow written into a file");
+        let counted = counted.expect("the failed copy took the recount down with it");
+        assert!(counted.drifts.is_empty(), "a fresh file drifted");
+        assert!(
+            once(&state).await.1.is_none(),
+            "the same day was recounted twice"
+        );
+    }
 
     #[tokio::test]
     async fn the_first_tick_writes_a_copy_and_the_next_one_does_not() {
@@ -85,5 +164,21 @@ mod tests {
         );
         let listed = dzpos_core::services::backup::list(state.backup_dir()).unwrap();
         assert_eq!(listed.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn the_first_check_recounts_the_shop_and_the_next_one_the_same_day_does_not() {
+        // The once-a-day rule as the loop meets it. The decision itself is
+        // `stock::is_due`, tested on its own in the core; what this proves is
+        // that the loop asks and does not run twice on one day.
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::open(dir.path().join("t.db"), 1).unwrap();
+
+        let first = recount(&state).await.expect("the shop was never recounted");
+        assert!(first.drifts.is_empty(), "a fresh file drifted");
+        assert!(
+            recount(&state).await.is_none(),
+            "the same day was recounted twice"
+        );
     }
 }

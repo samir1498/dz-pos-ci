@@ -1,0 +1,24 @@
+# The development seeder, and nothing else.
+#
+# Its own package on purpose. It is not a binary of `dzpos-api`, so no build
+# of the API and no bundle of the desktop can produce it: neither package
+# depends on this one, which is the structural half of "dev only". The other
+# two halves are the guards in `main.rs` and the argumentless `just` recipes.
+[package]
+name = "dzpos-seed"
+version.workspace = true
+edition.workspace = true
+# Never published, and never installed beside the app.
+publish = false
+
+[[bin]]
+name = "dzpos-seed"
+path = "src/main.rs"
+
+[dependencies]
+dzpos-core = { path = "../core" }
+clap = { version = "4.6.6", features = ["derive"] }
+chrono = { workspace = true }
+
+[lints]
+workspace = true

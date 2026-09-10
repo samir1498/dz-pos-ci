@@ -20,6 +20,7 @@ use diesel::{RunQueryDsl, SqliteConnection};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
 use dzpos_core::services::shops;
+use dzpos_core::services::suppliers::{self, NewSupplier};
 
 /// The seeded shop and the user who owns it, both written by the first
 /// migration. Every test file declares them again for its own direct calls;
@@ -153,6 +154,117 @@ pub fn a_payment_row(conn: &mut SqliteConnection, customer_id: i32, credit_centi
     .unwrap();
     diesel::sql_query("SELECT last_insert_rowid() AS id")
         .get_result::<Id>(conn)
+        .unwrap()
+        .id
+}
+
+/// The id SQLite has just handed out. Every seeder below reads it the same
+/// way, so no test has to guess at an autoincrement.
+fn last_id(conn: &mut SqliteConnection) -> i32 {
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = Integer)]
+        id: i32,
+    }
+    diesel::sql_query("SELECT last_insert_rowid() AS id")
+        .get_result::<Id>(conn)
+        .unwrap()
+        .id
+}
+
+/// One order placed with a supplier, written straight into the file.
+///
+/// `services::purchases` is what saves a purchase, and a test about the
+/// ledger writes the paper itself rather than going through it: the order is
+/// a fixture here, not the thing under test. `repos` is crate-internal
+/// (architecture.md), so this is SQL beside the test rather than a repo call,
+/// the same reason `a_payment_row` above is.
+///
+/// `day` is the day on the shop's calendar the order was placed on, and it
+/// is what settles which purchase a payment fills first.
+pub fn a_purchase_row(conn: &mut SqliteConnection, supplier_id: i32, day: &str) -> i32 {
+    diesel::sql_query(
+        "INSERT INTO purchases (shop_id, supplier_id, purchase_date, status, user_id) \
+         VALUES (?, ?, ?, 'received', ?)",
+    )
+    .bind::<Integer, _>(SHOP)
+    .bind::<Integer, _>(supplier_id)
+    .bind::<diesel::sql_types::Text, _>(day)
+    .bind::<Integer, _>(OWNER)
+    .execute(conn)
+    .unwrap();
+    last_id(conn)
+}
+
+/// The debit a receipt writes for the value that arrived. Written here for
+/// the same reason the purchase above is: what a payment settles is a
+/// purchase carrying value on the ledger, and the receipt that would put it
+/// there is not what these tests are about.
+pub fn a_purchase_ledger_row(
+    conn: &mut SqliteConnection,
+    supplier_id: i32,
+    purchase_id: i32,
+    debit_centimes: i64,
+) -> i32 {
+    diesel::sql_query(
+        "INSERT INTO supplier_ledger (shop_id, supplier_id, purchase_id, kind, \
+         debit_centimes, credit_centimes, user_id, created_at) \
+         VALUES (?, ?, ?, 'purchase', ?, 0, ?, ?)",
+    )
+    .bind::<Integer, _>(SHOP)
+    .bind::<Integer, _>(supplier_id)
+    .bind::<Integer, _>(purchase_id)
+    .bind::<BigInt, _>(debit_centimes)
+    .bind::<Integer, _>(OWNER)
+    .bind::<Timestamp, _>(dzpos_core::services::clock::now())
+    .execute(conn)
+    .unwrap();
+    last_id(conn)
+}
+
+/// A payment to a supplier that settled nothing, written straight into the
+/// ledger. `supplier_debt::pay` always places what it can on a purchase, so
+/// the one state it cannot produce is money paid while a purchase is still
+/// open, which is exactly the state the close rule has to be tested against.
+pub fn a_supplier_payment_row(
+    conn: &mut SqliteConnection,
+    supplier_id: i32,
+    credit_centimes: i64,
+) -> i32 {
+    diesel::sql_query(
+        "INSERT INTO supplier_ledger (shop_id, supplier_id, kind, debit_centimes, \
+         credit_centimes, user_id, payment_mode, created_at) \
+         VALUES (?, ?, 'payment', 0, ?, ?, 'cash', ?)",
+    )
+    .bind::<Integer, _>(SHOP)
+    .bind::<Integer, _>(supplier_id)
+    .bind::<BigInt, _>(credit_centimes)
+    .bind::<Integer, _>(OWNER)
+    .bind::<Timestamp, _>(dzpos_core::services::clock::now())
+    .execute(conn)
+    .unwrap();
+    last_id(conn)
+}
+
+/// A supplier fiche with nothing optional filled in: what a test that only
+/// needs somebody to owe money to asks for.
+pub fn a_supplier_fiche(name: &str) -> NewSupplier {
+    NewSupplier {
+        name: name.to_string(),
+        phone: None,
+        address: None,
+        rc: None,
+        nif: None,
+        nis: None,
+        ai: None,
+        notes: None,
+        active: true,
+    }
+}
+
+/// `a_supplier_fiche`, written, and its id.
+pub fn a_supplier(conn: &mut SqliteConnection, name: &str) -> i32 {
+    suppliers::create(conn, SHOP, OWNER, a_supplier_fiche(name), None)
         .unwrap()
         .id
 }

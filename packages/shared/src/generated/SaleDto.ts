@@ -19,7 +19,7 @@ import type { StoreDto } from "./StoreDto";
 export type SaleDto = { id: number, shop_id: number, kind: DocumentKindDto, series: string, number: number, 
 /**
  * The number as it is printed and as a customer quotes it back,
- * `FA-000001`. Built by the core beside the templates that print it
+ * `FA-2026-000001`. Built by the core beside the templates that print it
  * (`print::number`), so a screen naming a document and the paper in the
  * customer's hand cannot spell it two ways.
  */

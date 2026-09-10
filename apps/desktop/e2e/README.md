@@ -7,18 +7,43 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes the seven committed screenshots
+just screenshot                   # writes twenty-two of the twenty-three screenshots
 pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes only `products.png`; the other six say "... screenshot in Arabic"
+writes `products.png`, `customers.png`, `dashboard.png` and the kit's four; the other fourteen
+say "... screenshot(s) in Arabic"
 in their titles, so they match the grep in both runs but write a file only
 when `currentLang()` is `ar`, and the fr run of them does nothing
-observable. Under ar all six write: `products-ar.png`, `settings-ar.png`,
-`till-ar.png`, `customers-ar.png`, `till-credit-ar.png` and
-`documents-avoir-ar.png`.
+observable. Under ar all fifteen write: `products-ar.png`,
+`dashboard-ar.png`, `settings-ar.png`,
+`till-ar.png`, `customers-ar.png`, `suppliers-ar.png`, `supplier-statement-ar.png`, `purchases-ar.png`,
+`expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
+`stock-recount-ar.png`, and the theme pair `theme-comptoir-ar.png` and
+`theme-observe-ar.png`. The customers test writes two of them: the list and,
+before it walks back to it, `customer-account-ar.png`, the page one row's
+name opens; the suppliers test does the same with `supplier-statement-ar.png`.
+
+`products.spec.ts` and `zzz-dashboard.spec.ts` are the two that write under
+both languages, so their titles carry no "in Arabic": the products screen is
+the reference shot of a list, and the dashboard is the one screen whose whole
+point is a picture.
+
+The kit's four (`kit-comptoir.png`, `kit-registre.png`, `kit-observe.png`,
+`kit-observe-dark.png`) are the exception to that pattern: they are written
+under fr and skipped in the other two projects, because the page they
+photograph is the component kit rather than a screen and its point is the
+four themes, not the three languages. One picture per theme, from
+`kit.spec.ts`, of the `/kit` page, which exists in a dev build only.
+
+`product-label-ar.png` is the sixteenth Arabic one and the recipe cannot take it: its
+test needs the import test above it in the same file to have run, and
+`-g screenshot` picks tests, not files, so under the grep the product it
+photographs does not exist. It is written by a full `just e2e --project ar`
+instead. That is also why its picture carries the products every other spec
+left behind, and why retaking it means running the whole suite.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
@@ -103,16 +128,33 @@ second language on; use the looped `just e2e` or a single `--project`.
   state the next one starts from):
   `backups.spec.ts`, one test that a copy taken before a product is added
   loses that product when it is restored, leaving the shop empty;
-  `customers.spec.ts`, a company fiche opened with an opening debt and then
-  corrected, plus a search by a piece of the name;
+  `customers.spec.ts`, a company fiche opened with an opening debt in the
+  panel over the list, corrected on the customer's own account page, and read
+  back on the row after the walk back, plus a search by a piece of the name;
+  `expenses.spec.ts`, two expenses filed in two categories, the month's
+  total and the cash position of that month read back off the API, and an
+  empty month answering zeros;
   `first-paint.spec.ts`, that `lang` and `dir` are right on
   `documentElement` before React mounts, read off the DOM rather than
   through an auto-retrying matcher;
   `products.spec.ts`, three tests on the products screen;
+  `purchases.spec.ts`, an order of two products with extra costs received in
+  two deliveries and then partly returned, and a cancellation refused once
+  goods have arrived;
   `settings.spec.ts`, the store block and the dated régime, and it hands
   the shop back under the réel before it leaves;
   `settlement.spec.ts`, two credit sales settled oldest first, a payment
   above the debt refused, and the statement printed;
+  `stock-recount.spec.ts`, a product opened with stock and sold from, then
+  the recount run from the settings panel finding nothing to correct;
+  `suppliers.spec.ts`, a supplier fiche opened with an opening debt, money
+  paid against it and the movements it leaves;
+  `theme.spec.ts`, each of the four themes chosen, kept in the shop file and
+  still there after a reload, with the painted background read off the
+  document element rather than only the attribute; it hands the shop back to
+  "follow the machine" before it leaves, the way the settings spec hands the
+  régime back, because it runs before the till specs and their screenshots
+  are taken in the light theme;
   `till.spec.ts`, one whole cash sale from `/` landing on the till to the
   stock it moved;
   `till-credit.spec.ts`, a credit sale warned at the threshold, refused
@@ -121,14 +163,44 @@ second language on; use the looped `just e2e` or a single `--project`.
   alone, and a facture paid in cash carrying its TVA recap and its droit de
   timbre;
   `till-reversals-and-quotations.spec.ts`, a partial avoir, a whole
-  cancellation, the credit it leaves and a proforma.
+  cancellation, the credit it leaves and a proforma;
+  `zz-exports-and-labels.spec.ts`, the four workbooks read back as real
+  spreadsheets, the product template downloaded, the committed fixture
+  checked and applied, and the label of the product it created shown in the
+  sandboxed frame. Named to run last among the `zz` files: it creates a
+  product out of a file, and every spec that starts from an empty catalogue
+  has to have run first;
+  `zzz-dashboard.spec.ts`, a shop seeded with a catalogue, a day of trading,
+  both debts, an order still open and a month of expenses, read back through
+  `GET /dashboard` and `GET /dashboard/series` and compared figure by figure
+  with what the screen paints. Named to run after everything: it fills the
+  shop, and the specs above it start from an empty catalogue and an empty
+  month. It seeds everything it reads rather than living off what they left,
+  because `just screenshot` runs it alone against a database that was just
+  deleted.
 - `messages.ts` is the shared loader for `src/i18n/{fr,en,ar}.json`, keyed
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
   rows finds the API port and the run's launch token.
-- The seven committed screenshots, 1280x800, full page: `products.png`
-  (fr) and, in ar, `products-ar.png`, `settings-ar.png`, `till-ar.png`,
-  `customers-ar.png`, `till-credit-ar.png` and `documents-avoir-ar.png`.
+- `kit.spec.ts` drives the shell and the component kit: the sidebar reaching
+  every screen with the topbar naming it, the sidebar's side read off its
+  geometry rather than its class list, a narrow window folding it into a
+  sheet, the theme switch in the topbar, and the `/kit` page with each
+  overlay opened. It runs before the settings and theme specs, so it hands
+  the shop back to "follow the machine" before it leaves. It writes the four
+  kit screenshots under fr.
+- The twenty-three committed screenshots, 1280x800, full page: `products.png`,
+  `customers.png`, `dashboard.png` and the kit's four (`kit-comptoir.png`,
+  `kit-registre.png`, `kit-observe.png`, `kit-observe-dark.png`) in fr; in ar,
+  `products-ar.png`, `dashboard-ar.png`, `settings-ar.png`, `till-ar.png`,
+  `customers-ar.png`, `customer-account-ar.png`, `suppliers-ar.png`,
+  `supplier-statement-ar.png`, `purchases-ar.png`,
+  `expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
+  `stock-recount-ar.png`, `theme-comptoir-ar.png` and
+  `theme-observe-ar.png`, plus `product-label-ar.png`, which only a full run
+  writes. The theme pair is the settings screen in the light theme and in
+  Observe, which is what a theme is for: the same screen, two palettes, one
+  stylesheet.
   `en` keeps none; the two languages above are enough to show the layout
   and the RTL mirror.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
@@ -148,6 +220,8 @@ here. These are all of them.
 | `tiles` | `till.tsx` | The cart's −, + and ✕ buttons carry the product name too, so a name query without this scope matches four things. |
 | `cart` | `till.tsx` | The mirror image of the above, for a query that means the lines rather than the grid. |
 | `till-change` | `till.tsx` | An amount, so its text is a number in three locales. |
+| `keypad` | `Keypad.tsx` | The pad's keys are digits, which read the same in every language and appear again in the amounts around them. |
+| `till-totals` | `-till/cart.tsx` | The totals block; a few named amounts rather than a table, so there is no role and name to ask for. |
 | `total-net-to-pay` | `till.tsx` | The one totals row a test reads by value; the label beside it is translated. |
 | `till-customer-balance` | `till.tsx` | An amount, and the same figure appears on the fiche panel beside it. |
 | `till-credit-limit` | `till.tsx` | An amount, translated label. |
@@ -159,14 +233,86 @@ here. These are all of them.
 | `till-party-ids` | `till.tsx` | The buyer identifiers block; absent until a customer is picked. |
 | `till-party-ids-missing` | `till.tsx` | Absent until an identifier a facture needs is missing. |
 | `documents-sheet` | `documents.tsx` | The iframe holding the page the core rendered; an iframe has no accessible text. |
-| `customer-payment` | `customers.tsx` | One payment row; the amounts inside it are numbers in three locales. |
-| `customer-statement` | `customers.tsx` | The statement iframe; same reason as the sheet above. |
-| `customer-debt-slip` | `customers.tsx` | The debt slip iframe. |
-| `customer-debt-slip-button` | `customers.tsx` | The button that opens it, beside a second button with a translated label. |
-| `customer-close-reason` | `customers.tsx` | Absent until a fiche with an account behind it is being closed, so a test counts it. |
-| `backup-row` | `BackupsPanel.tsx` | One copy in the list; its text is a filename and a date. |
-| `backups-newest` | `BackupsPanel.tsx` | The one the restore button acts on. |
-| `safety-copy-row` | `BackupsPanel.tsx` | The copy a restore takes of what it is about to replace. |
+| `customer-fiche` | `-customers/fiche.tsx` | The panel the form opens in; a test waits for it before it types into a field the list also has. |
+| `customer-close-reason` | `-customers/fiche.tsx` | Absent until a fiche with an account behind it is being closed, so a test counts it. |
+| `customer-balance` | `customers_.$id.tsx` | The card carrying what is owed; the same figure appears again in the ledger below it. |
+| `customer-payment` | `customers_.$id.tsx` | One payment row; the amounts inside it are numbers in three locales. |
+| `customer-pay-dialog` | `customers_.$id.tsx` | The dialog the payment is typed into, waited on before the amount field. |
+| `customer-statement` | `customers_.$id.tsx` | The statement iframe; same reason as the sheet above. |
+| `customer-debt-slip` | `customers_.$id.tsx` | The debt slip iframe. |
+| `customer-debt-slip-button` | `customers_.$id.tsx` | The button that opens it, beside a second button with a translated label. |
+| `purchase-status` | `purchases_.$id.tsx` | The state the order is in; its word and a column header of the lines table read the same in English ("Received"). |
+| `expenses-month` | `expenses.tsx` | The month picker; its rendered text is the browser's own, in the browser's locale. |
+| `expenses-total` | `expenses.tsx` | An amount, so its text is a number in three locales. |
+| `expenses-add` | `expenses.tsx` | Opens the entry panel. The empty state offers a second button with the same words, so the name is ambiguous and the id is not. |
+| `expenses-table` | `expenses.tsx` | The month's list, or the empty state in its place. The rows are the second `rowgroup` inside it; `DataTable` has no id of its own per row. |
+| `expense-sheet` | `expenses.tsx` | The entry panel. |
+| `expense-form` | `expenses.tsx` | The form inside the panel; a flow waits on it to disappear to know the row was filed. |
+| `expense-category` | `expenses.tsx` | The category trigger. It opens a listbox rather than a native select, so the option is clicked by its own word once the trigger is open. |
+| `expense-amount` | `expenses.tsx` | An amount field, translated label, and `col_amount` reads the same word. |
+| `expense-date` | `expenses.tsx` | A date field, and `col_date` reads the same word. |
+| `expense-note` | `expenses.tsx` | A note field, and `col_note` reads the same word. |
+| `cash-position` | `expenses.tsx` | The figures panel; every figure inside it is a number in three locales. |
+| `cash-in-total` | `expenses.tsx` | An amount, and both sides carry a row labelled "total". |
+| `cash-out-expenses` | `expenses.tsx` | An amount, and the same word labels the screen itself. |
+| `cash-out-total` | `expenses.tsx` | The other row labelled "total". |
+| `cash-net` | `expenses.tsx` | An amount, and the one figure that goes below zero. |
+| `card-in-total` | `expenses.tsx` | An amount, translated label. |
+| `page-header` | `PageHeader.tsx` | The screen's own header block, so a count can be read without matching the same figure inside the list. |
+| `products-search` | `products.tsx` | The search box; its label and its hint are translated and the hint repeats the barcode column's word. |
+| `products-clear-filters` | `products.tsx` | Absent until a filter is set, so a test counts it, and it says the same words as the empty screen's own button. |
+| `print-selected-labels` | `products.tsx` | Its label changes to the closing one once the sheet is open, so a name query matches only half the time. |
+| `print-label` | `products.tsx` | Absent on a product being typed, so a test counts it; the sheet's button beside it reads almost the same. |
+| `product-label` | `LabelPanel.tsx` | The iframe holding the page the core rendered; an iframe has no accessible text. |
+| `import-table` | `ExportImportPanel.tsx` | The dry-run report, so its rows can be counted apart from the products list on the same screen. |
+| `backups-table` | `BackupsPanel.tsx` | The list of copies. Its rows are read by role (the body is the second rowgroup); the table itself needs an id because the panel draws a second one under it. |
+| `safety-copies-table` | `BackupsPanel.tsx` | The copies a restore took of what it replaced, same columns as the list above, so only the table tells them apart. |
+| `backups-newest` | `BackupsPanel.tsx` | The date of the most recent copy, or the translated sentence for a shop that has none. |
+| `backup-restore-dialog` | `BackupsPanel.tsx` | The second ask before a restore. The spec finds it by role; the id is there for a screenshot to point at. |
+| `theme-switcher` | `ThemeSwitcher.tsx` | The select is rendered twice (topbar and settings panel) with the same translated label, so a label query matches two things. |
+| `stock-recount-day` | `StockRecountPanel.tsx` | A day, or the translated sentence for a shop that has never recounted. |
+| `stock-recount-checked` | `StockRecountPanel.tsx` | Absent until a run answers, so a test counts it; its text is a bare number. |
+| `stock-recount-clean` | `StockRecountPanel.tsx` | Absent until a run has happened, and the sentence it holds is translated. |
+| `stock-drift-table` | `StockRecountPanel.tsx` | The corrections the last run made. Absent when nothing was out, so a test counts it; its rows are read by role. |
+| `stock-drift-difference` | `StockRecountPanel.tsx` | The signed quantity, beside two other quantities on the same row. |
+| `shell-topbar` | `AppShell.tsx` | The bar itself, so a test can ask whether a switch is inside it rather than merely on the page. |
+| `shell-title` | `AppShell.tsx` | The page's `h1`. Its text is the sidebar item's, so a role query by name would be circular. |
+| `shell-day` | `AppShell.tsx` | The shop's day; absent until the server has answered, so a test counts it. |
+| `shell-shop` | `AppShell.tsx` | The shop's name at the foot of the sidebar, where the user will stand. |
+| `sidebar-trigger` | `sidebar.tsx` | The button that opens the sheet on a narrow window; its only text is off-screen and translated. |
+| `nav-<screen>` | `AppShell.tsx` | One per sidebar item (`nav-till`, `nav-products`, …). The link's text is translated and repeats the topbar's. |
+| `language-switcher` | `LanguageSwitcher.tsx` | The segmented control as a group; its three buttons name languages, not the group. |
+| `figure-<name>` | `dashboard.tsx` | One figure card (`figure-sales`, `figure-margin`, `figure-expenses`, `figure-cash`, `figure-customer-debt`, `figure-supplier-debt`, `figure-open-purchases`). Every card is built out of the same words, so a text query matches four of them. |
+| `figure-<name>-today` | `dashboard.tsx` | The day's amount on a card; an amount, so its text is a number in three locales. |
+| `figure-<name>-month` | `dashboard.tsx` | The month's amount on the same card, which is the same shape of number a row above. |
+| `figure-sales-count` | `dashboard.tsx` | The month's count of papers, a bare number beside two amounts. |
+| `figure-<name>-total` | `dashboard.tsx` | What is owed, on the two debt cards. |
+| `figure-<name>-parties` | `dashboard.tsx` | How many accounts are behind that debt; a bare number. |
+| `dashboard-chart` | `dashboard.tsx` | The chart's box. It is an SVG recharts drew, with no accessible name of its own. Its `data-buckets` is how a test tells the day view from the week view: recharts draws a rectangle only for a bar with a height, so counting the bars counts the days the shop sold on rather than the days the chart covers. |
+| `dashboard-chart-card` | `dashboard.tsx` | The card around it, so the legend can be looked for inside the chart rather than anywhere on the page. |
+| `chart-grain-days` | `dashboard.tsx` | The day/week switch; both tabs are one translated word. |
+| `chart-grain-weeks` | `dashboard.tsx` | As above. |
+| `dashboard-low-stock` | `dashboard.tsx` | The low-stock card; its title is the same words as the pill inside it. |
+| `low-stock-pill` | `dashboard.tsx` | One row's pill, for the same reason: `pill_low` and `dashboard_low_stock` read alike. |
+| `dashboard-top-quantity` | `dashboard.tsx` | The busiest-products card; the two top tens carry the same columns and often the same products. |
+| `dashboard-top-margin` | `dashboard.tsx` | The other one. |
+| `kit-page` | `KitPage.tsx` | The dev-only kit page's root, waited on before the screenshots. |
+| `kit-table` | `KitPage.tsx` | The kit's example table, so the money column can be measured without matching the empty one below it. |
+| `kit-dialog-trigger` | `KitPage.tsx` | The four overlay triggers sit in one row with translated-looking French labels; ids keep the spec off their text. |
+| `kit-sheet-trigger` | `KitPage.tsx` | As above. |
+| `kit-menu-trigger` | `KitPage.tsx` | As above. |
+| `kit-tooltip-trigger` | `KitPage.tsx` | As above. |
+| `kit-toast-trigger` | `KitPage.tsx` | As above. |
+
+## Headings are queried inside `main`
+
+The shell's topbar carries the page's `h1` and its text is the sidebar item's
+name, which in six cases is the same word as the screen's own heading
+("Produits", "Paramètres", "Clients", "Dépenses", "Documents",
+"Fournisseurs"). Playwright's role queries match by substring, so an
+unscoped `getByRole("heading", { name: t("products_title") })` finds two and
+fails on the ambiguity rather than on anything being wrong. Those queries go
+through `page.getByRole("main")`, which is the screen and not the frame.
 
 ## What the suite checks and where
 

@@ -35,9 +35,9 @@ const facture: SaleDto = {
   id: 7,
   shop_id: 1,
   kind: "facture",
-  series: "doc_facture",
+  series: "doc_facture:2026",
   number: 4,
-  printed_number: "FA-000004",
+  printed_number: "FA-2026-000004",
   issued_at: "2026-09-09 10:00:00",
   user_id: 1,
   regime: "reel",
@@ -90,9 +90,9 @@ const ticket: SaleDto = {
   ...facture,
   id: 8,
   kind: "ticket",
-  series: "doc_ticket",
+  series: "doc_ticket:2026",
   number: 12,
-  printed_number: "TK-000012",
+  printed_number: "TK-2026-000012",
   issued_at: "2026-09-08 16:30:00",
   payment_mode: "cash",
   customer_id: null,
@@ -109,9 +109,9 @@ const avoir: SaleDto = {
   ...facture,
   id: 9,
   kind: "avoir",
-  series: "doc_avoir",
+  series: "doc_avoir:2026",
   number: 1,
-  printed_number: "AV-000001",
+  printed_number: "AV-2026-000001",
   ref_document_id: 7,
   balance: {
     old_balance_centimes: 300_000,
@@ -244,39 +244,39 @@ function mount(lang: Lang = "fr") {
 describe("the document list", () => {
   test("lists a ticket and a facture with the columns a shop looks them up by", async () => {
     mount();
-    await screen.findByText("FA-000004");
-    const cells = within(rowOf(screen.getByText("FA-000004")));
+    await screen.findByText("FA-2026-000004");
+    const cells = within(rowOf(screen.getByText("FA-2026-000004")));
     expect(cells.getByText("2026-09-09")).toBeTruthy();
     expect(cells.getByText(fr.documents_kind_facture)).toBeTruthy();
     expect(cells.getByText("Entreprise Benali")).toBeTruthy();
     expect(cells.getByText("3 000,00")).toBeTruthy();
-    expect(cells.getByText(fr.documents_issued)).toBeTruthy();
+    expect(cells.getByText(fr.pill_issued)).toBeTruthy();
 
     // The ticket is there too, and it names no buyer: it was sold to
     // whoever walked in.
-    const till = rowOf(screen.getByText("TK-000012"));
+    const till = rowOf(screen.getByText("TK-2026-000012"));
     expect(within(till).getByText(fr.documents_kind_ticket)).toBeTruthy();
   });
 
   test("the buyer's name is a link to their fiche, and a ticket's blank cell is not", async () => {
     mount();
-    await screen.findByText("FA-000004");
+    await screen.findByText("FA-2026-000004");
     // Where a shop goes next from a document is what the customer still
     // owes, so the name is the way there rather than a second search.
     const link = screen.getByRole("link", { name: "Entreprise Benali" });
     expect(link.getAttribute("href")).toBe("/customers/3");
     // The ticket names nobody, so there is nothing to open.
-    const till = rowOf(screen.getByText("TK-000012"));
+    const till = rowOf(screen.getByText("TK-2026-000012"));
     expect(within(till).queryByRole("link")).toBeNull();
   });
 
   test("the kind filter narrows the call rather than the rendered list", async () => {
     const user = userEvent.setup();
     mount();
-    await screen.findByText("FA-000004");
-    await user.click(screen.getByLabelText(fr.documents_kind_facture));
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("tab", { name: fr.documents_kind_facture }));
     await waitFor(() => {
-      expect(screen.queryByText("TK-000012")).toBeNull();
+      expect(screen.queryByText("TK-2026-000012")).toBeNull();
     });
     // The narrowing is the server's: the screen asked for one kind.
     const asked = fetchMock.mock.calls.map((c) => String(c[0]));
@@ -285,8 +285,19 @@ describe("the document list", () => {
 
   test("the list reads in Arabic through the same keys", async () => {
     mount("ar");
-    await screen.findByText("FA-000004");
+    await screen.findByText("FA-2026-000004");
     expect(screen.getByText(ar.documents_title)).toBeTruthy();
+  });
+
+  test("a shop with no documents yet gets the empty state, not an empty table", async () => {
+    // The first morning is the correct state, not a fault: a table with a
+    // head and no body reads as a screen that failed to load.
+    list = [];
+    mount();
+    const empty = await screen.findByTestId("documents-empty");
+    expect(within(empty).getByText(fr.documents_empty)).toBeTruthy();
+    expect(within(empty).getByText(fr.documents_empty_hint)).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 });
 
@@ -294,8 +305,8 @@ describe("the avoir", () => {
   test("the JSON carries the lines and the quantities typed into them", async () => {
     const user = userEvent.setup();
     mount();
-    await screen.findByText("FA-000004");
-    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
     await user.click(await screen.findByRole("button", { name: fr.documents_avoir_new }));
 
     // Two of the three units back.
@@ -318,8 +329,8 @@ describe("the avoir", () => {
   test("the whole button sends no lines at all, which is what asks for the rest", async () => {
     const user = userEvent.setup();
     mount();
-    await screen.findByText("FA-000004");
-    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
     await user.click(await screen.findByRole("button", { name: fr.documents_avoir_new }));
     await user.click(screen.getByRole("button", { name: fr.documents_avoir_whole }));
 
@@ -336,10 +347,10 @@ describe("the avoir", () => {
     avoirs = [avoir];
     const user = userEvent.setup();
     mount();
-    await screen.findByText("FA-000004");
-    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
     // The avoir already written is listed under the facture.
-    const listed = await screen.findByText(/AV-000001/);
+    const listed = await screen.findByText(/AV-2026-000001/);
     expect(listed).toBeTruthy();
 
     // And one of the three units having come back, the form offers two.
@@ -353,8 +364,8 @@ describe("the cancellation", () => {
   test("the confirm names the amount coming off the account, from the server's answer", async () => {
     const user = userEvent.setup();
     mount();
-    await screen.findByText("FA-000004");
-    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
     await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
     expect(
       screen.getByText(fr.documents_cancel_with_avoir.replace("{amount}", "3 000,00")),
@@ -368,8 +379,8 @@ describe("the cancellation", () => {
     effect = () => ({ effect: "nothing_to_reverse" });
     const user = userEvent.setup();
     mount();
-    await screen.findByText("FA-000004");
-    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
     await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
     const said = screen.getByRole("status");
     expect(said.textContent).toBe(fr.documents_cancel_nothing);
@@ -378,8 +389,8 @@ describe("the cancellation", () => {
   test("a cash ticket owed nobody anything, so the confirm is the stock alone", async () => {
     const user = userEvent.setup();
     mount();
-    await screen.findByText("TK-000012");
-    await user.click(screen.getByRole("button", { name: "TK-000012" }));
+    await screen.findByText("TK-2026-000012");
+    await user.click(screen.getByRole("button", { name: "TK-2026-000012" }));
     await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
     expect(screen.getByText(fr.documents_cancel_stock_only)).toBeTruthy();
     expect(screen.queryByText(fr.documents_cancel_with_avoir)).toBeNull();
@@ -388,19 +399,19 @@ describe("the cancellation", () => {
   test("the narrowed list is read again, not only the unfiltered one", async () => {
     // The list is cached under the kind it asked for, so a cancel that
     // refreshed only the "every kind" entry would leave a shop looking at
-    // FA-000004 still marked issued for as long as the filter is on.
+    // FA-2026-000004 still marked issued for as long as the filter is on.
     const user = userEvent.setup();
     mount();
-    await screen.findByText("FA-000004");
-    await user.click(screen.getByLabelText(fr.documents_kind_facture));
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("tab", { name: fr.documents_kind_facture }));
     await waitFor(() => {
-      expect(screen.queryByText("TK-000012")).toBeNull();
+      expect(screen.queryByText("TK-2026-000012")).toBeNull();
     });
     const before = fetchMock.mock.calls.filter((c) =>
       String(c[0]).includes("kind=facture"),
     ).length;
 
-    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
     await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
     await user.type(screen.getByLabelText(fr.documents_reason), "commande annulée");
     await user.click(screen.getByRole("button", { name: fr.documents_cancel_confirm }));
@@ -419,8 +430,8 @@ describe("the cancellation", () => {
     // exists in that form, and the shop would print it.
     const user = userEvent.setup();
     mount();
-    await screen.findByText("FA-000004");
-    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
     await screen.findByTestId("documents-sheet");
     const before = fetchMock.mock.calls.filter((c) =>
       String(c[0]).includes("/facture?"),
@@ -439,11 +450,30 @@ describe("the cancellation", () => {
     });
   });
 
+  test("escape closes the dialog and annuls nothing", async () => {
+    // The cancellation moved into a dialog with this rewrite, so the way out
+    // of it without confirming is a path of its own: a form that used to be
+    // abandoned with a button can now also be abandoned with the key every
+    // dialog answers to, and neither may post.
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
+    await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
+    await screen.findByRole("button", { name: fr.documents_cancel_confirm });
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: fr.documents_cancel_confirm })).toBeNull();
+    });
+    expect(posted.some((p) => p.url.includes("/cancel"))).toBe(false);
+  });
+
   test("the reason travels and the answer's block is shown", async () => {
     const user = userEvent.setup();
     mount();
-    await screen.findByText("FA-000004");
-    await user.click(screen.getByRole("button", { name: "FA-000004" }));
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
     await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
     await user.type(screen.getByLabelText(fr.documents_reason), "commande annulée");
     await user.click(screen.getByRole("button", { name: fr.documents_cancel_confirm }));

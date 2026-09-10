@@ -11,6 +11,7 @@ pub mod token;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderValue, Method};
 use axum::middleware::from_fn_with_state;
 use axum::routing::{get, post, put};
@@ -436,6 +437,7 @@ pub fn router_with_origin(
         .route("/backups", get(routes::backups::list))
         .route("/backups", post(routes::backups::create))
         .route("/backups/{name}/restore", post(routes::backups::restore))
+        .route("/cash", get(routes::expenses::cash))
         .route("/categories", get(routes::categories::list))
         .route("/clock", get(routes::clock))
         .route("/customers", get(routes::customers::list))
@@ -459,11 +461,43 @@ pub fn router_with_origin(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),
         )
+        .route("/dashboard", get(routes::dashboard::read))
+        .route("/dashboard/series", get(routes::dashboard::series))
+        .route("/expense-categories", get(routes::expenses::categories))
+        .route("/expenses", get(routes::expenses::list))
+        .route("/expenses", post(routes::expenses::create))
+        .route("/export/products", get(routes::export::products))
+        .route("/export/sales", get(routes::export::sales))
+        .route("/export/customers", get(routes::export::customers))
+        .route("/export/suppliers", get(routes::export::suppliers))
+        .route("/import/products/template", get(routes::import::template))
+        .route(
+            "/import/products/dry-run",
+            post(routes::import::dry_run)
+                .layer(DefaultBodyLimit::max(routes::import::IMPORT_BODY_LIMIT)),
+        )
+        .route(
+            "/import/products",
+            post(routes::import::apply)
+                .layer(DefaultBodyLimit::max(routes::import::IMPORT_BODY_LIMIT)),
+        )
+        .route("/labels/sheet", post(routes::products::label_sheet))
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
+        .route("/products/{id}/label", get(routes::products::label))
         .route(
             "/products/{id}",
             get(routes::products::get_one).put(routes::products::update),
+        )
+        .route("/purchases", get(routes::purchases::list))
+        .route("/purchases", post(routes::purchases::create))
+        .route("/purchases/{id}", get(routes::purchases::get_one))
+        .route("/purchases/{id}/receipts", post(routes::purchases::receive))
+        .route("/purchases/{id}/returns", post(routes::purchases::returns))
+        .route("/purchases/{id}/cancel", post(routes::purchases::cancel))
+        .route(
+            "/purchases/{id}/close-short",
+            post(routes::purchases::close_short),
         )
         .route("/sales", get(routes::sales::list))
         .route("/sales", post(routes::sales::create))
@@ -476,6 +510,28 @@ pub fn router_with_origin(
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))
+        .route("/settings/theme", put(routes::settings::set_theme))
+        .route(
+            "/stock/recount",
+            get(routes::stock::last).post(routes::stock::recount),
+        )
+        .route("/suppliers", get(routes::suppliers::list))
+        .route("/suppliers", post(routes::suppliers::create))
+        .route(
+            "/suppliers/{id}",
+            get(routes::suppliers::get_one).put(routes::suppliers::update),
+        )
+        .route("/suppliers/{id}/close", post(routes::suppliers::close))
+        .route("/suppliers/{id}/ledger", get(routes::suppliers::ledger))
+        .route("/suppliers/{id}/payments", post(routes::suppliers::pay))
+        .route(
+            "/suppliers/{id}/adjustments",
+            post(routes::suppliers::adjust),
+        )
+        .route(
+            "/suppliers/{id}/statement",
+            get(routes::suppliers::statement),
+        )
         .fallback(routes::not_found)
         .method_not_allowed_fallback(routes::method_not_allowed)
         .layer(from_fn_with_state(token.clone(), token::require));
@@ -490,7 +546,12 @@ pub fn router_with_origin(
             CorsLayer::new()
                 .allow_origin(AllowOrigin::list(origins))
                 .allow_methods([Method::GET, Method::POST, Method::PUT])
-                .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]),
+                .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
+                // A browser hands a page only the few headers it is told to.
+                // Without this the desktop can read the workbook's bytes and
+                // not the name the server gave it, and every export would be
+                // saved as whatever the anchor invented.
+                .expose_headers([header::CONTENT_DISPOSITION]),
         )
         .with_state(state)
 }

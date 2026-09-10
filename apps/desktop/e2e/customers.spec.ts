@@ -4,9 +4,13 @@
 // message fails here instead of silently passing a hardcoded sentence.
 //
 // What the run proves end to end: a company fiche opened with an opening
-// debt writes one ledger movement, an adjustment written on the screen lands
-// in the stored ledger, and the balance the screen shows is the one
-// `GET /customers/{id}` answers.
+// debt writes one ledger movement, an adjustment written on the customer's
+// account page lands in the stored ledger, and the balance the list shows
+// afterwards is the one `GET /customers/{id}` answers.
+//
+// The screen is two pages since the kit landed, and the run walks both: the
+// list, the fiche panel that opens over it, then the account page a row's
+// name links to, then back to the list.
 
 import { expect, test } from "@playwright/test";
 import path from "node:path";
@@ -59,11 +63,15 @@ test("opens a company fiche with an opening debt, adjusts it, and saves the cust
   page.on("dialog", (dialog) => void dialog.accept());
 
   await page.goto("/customers");
-  await expect(page.getByRole("heading", { name: t("customers_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("customers_title") })).toBeVisible();
 
   await page.getByRole("button", { name: t("customers_add") }).click();
+  // The fiche is a panel now, and the kit has no radio group: the party kind
+  // is a row of buttons wearing `role="radio"`, which is clicked rather than
+  // checked.
+  await expect(page.getByTestId("customer-fiche")).toBeVisible();
   await page.getByLabel(t("field_name"), { exact: true }).fill(name);
-  await page.getByRole("radio", { name: t("party_company"), exact: true }).check();
+  await page.getByRole("radio", { name: t("party_company"), exact: true }).click();
   await page.getByLabel(t("field_phone"), { exact: true }).fill("0770 11 22 33");
   await page.getByLabel(t("field_credit_limit"), { exact: true }).fill("2000");
   await page.getByLabel(t("field_warn_threshold"), { exact: true }).fill("1000");
@@ -95,7 +103,9 @@ test("opens a company fiche with an opening debt, adjusts it, and saves the cust
     balance_after_centimes: OPENING_CENTIMES,
   });
 
-  await row.getByRole("button", { name: `${t("customers_edit")} ${name}` }).click();
+  // The row's name is the way in to the customer's own page, where the
+  // movements are.
+  await row.getByRole("link", { name }).click();
   await expect(page.getByRole("heading", { name: t("customers_ledger") })).toBeVisible();
   await page.getByLabel(t("field_adjust_amount"), { exact: true }).fill(ADJUST_INPUT);
   await page.getByLabel(t("field_adjust_note"), { exact: true }).fill("erreur de saisie");
@@ -105,7 +115,20 @@ test("opens a company fiche with an opening debt, adjusts it, and saves the cust
   await expect(page.getByText(t("customers_adjusted"))).toBeVisible();
   const adjusted = page.getByRole("row").filter({ hasText: t("debt_adjustment") });
   await expect(adjusted.getByRole("cell", { name: BALANCE_RENDERED, exact: true })).toBeVisible();
-  await expect(row.getByRole("cell", { name: BALANCE_RENDERED, exact: true })).toBeVisible();
+
+  // The account page in Arabic is where the mirrored ledger and the
+  // left-to-right amount cells are worth looking at.
+  if (currentLang() === "ar") {
+    await page.screenshot({
+      path: path.join(here, "screenshots", "customer-account-ar.png"),
+      fullPage: true,
+    });
+  }
+
+  // And back on the list, the same figure on the row.
+  await page.getByRole("link", { name: t("action_back_to_customers") }).click();
+  const listed = page.getByRole("row").filter({ hasText: name });
+  await expect(listed.getByRole("cell", { name: BALANCE_RENDERED, exact: true })).toBeVisible();
 
   // And in the shop file: the balance the screen shows is the one the API
   // answers, not a figure the browser worked out.
@@ -143,13 +166,10 @@ test("opens a company fiche with an opening debt, adjusts it, and saves the cust
     balance_after_centimes: OPENING_CENTIMES,
   });
 
-  // The one committed screenshot of this screen is Arabic: it is where the
-  // mirrored table and the left-to-right amount cells are worth looking at.
-  if (currentLang() === "ar") {
-    await page.screenshot({
-      path: path.join(here, "screenshots", "customers-ar.png"),
-      fullPage: true,
-    });
+  // The list itself, in the two languages the committed shots cover.
+  if (currentLang() === "fr" || currentLang() === "ar") {
+    const shot = currentLang() === "ar" ? "customers-ar.png" : "customers.png";
+    await page.screenshot({ path: path.join(here, "screenshots", shot), fullPage: true });
   }
 });
 

@@ -38,22 +38,39 @@ pub enum CoreError {
     NotFound { entity: &'static str, id: i32 },
     #[error("barcode {0} is already used in this shop")]
     DuplicateBarcode(String),
-    /// A payment for more than the customer owes. Its own variant rather than
-    /// a `Validation`, because the only useful thing to say back is a figure
-    /// the caller never sent: what is outstanding right now. The code stays
-    /// `validation`, so a screen that already translates it says the same
-    /// sentence and reads the amount out of the payload.
+    /// A value another row of this shop already holds, where the file says
+    /// only one may. Not a `Validation`: what the caller sent is well formed
+    /// and what refuses it is a row that is already there, so the screen has
+    /// a different sentence to say and a different thing to offer. The field
+    /// travels so the message lands under the input.
     ///
-    /// Money that came in above a debt is an avoir's business, never a
-    /// credit balance a payment quietly opened.
-    #[error("a payment is never more than what the customer owes")]
+    /// `DuplicateBarcode` predates this and keeps its own code: a barcode is
+    /// answered by offering to generate one, which is not what any other
+    /// clash offers.
+    #[error("{field} is already used in this shop: {message}")]
+    Conflict { field: String, message: String },
+    /// A payment for more than is owed, on either ledger. Its own variant
+    /// rather than a `Validation`, because the only useful thing to say back
+    /// is a figure the caller never sent: what is outstanding right now. The
+    /// code stays `validation`, so a screen that already translates it says
+    /// the same sentence and reads the amount out of the payload.
+    ///
+    /// The party is not named, because both sides raise it: money over what a
+    /// customer owes is an avoir's business and never a credit balance a
+    /// payment quietly opened, and money over what the shop owes a supplier
+    /// is an advance somebody writes on purpose.
+    #[error("a payment is never more than what is owed")]
     PaymentAboveDebt { outstanding_centimes: i64 },
-    /// A number series the shop hands out (in-store barcodes, later the
-    /// document numbers) has no next value. Not a validation failure: the
-    /// user did nothing wrong, and the API answers 409 so the UI can say
-    /// the series is spent rather than "check your input".
+    /// A number series the shop hands out (in-store barcodes, the document
+    /// numbers) has no next value. Not a validation failure: the user did
+    /// nothing wrong, and the API answers 409 so the UI can say the series is
+    /// spent rather than "check your input".
+    ///
+    /// Owned rather than `&'static str`: a document series is named for the
+    /// year it counts in (`doc_facture:2026`, features.md §4) and the year is
+    /// read at run time.
     #[error("the {series} series is exhausted")]
-    Exhausted { series: &'static str },
+    Exhausted { series: String },
     /// A credit sale the customer's limit will not carry (features.md §1).
     /// Not a validation failure: every field the caller sent is well formed,
     /// and what refuses the sale is what the customer already owes. The two
@@ -80,6 +97,40 @@ pub enum CoreError {
         side: PartySide,
         missing: Vec<&'static str>,
     },
+    /// A ledger row handed to a repo with no moment on it. The column's
+    /// default is SQLite's CURRENT_TIMESTAMP, which is UTC, while every
+    /// period this app answers for is a stretch of days on the shop's
+    /// calendar (UTC+1): a payment taken at 00:30 in Algiers would be stored
+    /// on the day before and fall out of the day the shop counted its
+    /// drawer. The caller stamps it from `services::clock`.
+    ///
+    /// Its own variant and not a `Validation`: no field a caller sent is
+    /// wrong, and nobody using the app can correct it. It is a mistake in
+    /// this crate, so the API answers 500 and the code is the storage one.
+    #[error("a row of {entity} is stamped from the shop clock, never left to the file's default")]
+    Unstamped { entity: &'static str },
+    /// A reversal has no cost to write back, because the stock ledger cannot
+    /// say what the goods cost when they left. Two shapes, both of them a
+    /// file that disagrees with itself: a sold line with no movement at all,
+    /// and one product's sale movements on one document carrying two
+    /// different costs.
+    ///
+    /// Neither can arise from anything a caller sent: `unit_cost_centimes`
+    /// is NOT NULL from the first documents migration, a sale is the only
+    /// writer of a `sale` movement, and it reads the fiche once for the whole
+    /// basket. So it is this crate's bug or a row somebody wrote by hand, and
+    /// it is refused rather than papered over with the fiche's cost today:
+    /// guessing here is how a month's margin moves with a purchase, which is
+    /// the whole thing the ledger cost exists to prevent.
+    ///
+    /// Its own variant and not a `Validation`, for the reason `Unstamped` is:
+    /// the API answers 500 and the code is the storage one.
+    #[error("the stock ledger cannot price the reversal of product {product_id} on document {document_id}: {reason}")]
+    UnpricedReversal {
+        document_id: i32,
+        product_id: i32,
+        reason: &'static str,
+    },
     #[error(transparent)]
     Money(#[from] MoneyError),
     #[error(transparent)]
@@ -98,6 +149,16 @@ pub enum CoreError {
     /// stays fixed, like the file one.
     #[error("the document could not be rendered for printing")]
     Render(#[from] askama::Error),
+    /// A workbook this app was writing could not be finished. Like `Render`,
+    /// the data and the layout are both the app's own, so this is a bug here
+    /// and never something a caller can correct; the message is fixed and the
+    /// writer's own text stays on the source chain for the server's log.
+    ///
+    /// Reading a workbook is not this: a file a shop uploaded is input, and a
+    /// file that is not a workbook at all comes back as a `Validation` the
+    /// import screen can put under the file picker.
+    #[error("the workbook could not be written")]
+    Workbook(#[from] rust_xlsxwriter::XlsxError),
 }
 
 impl CoreError {
@@ -107,12 +168,18 @@ impl CoreError {
             CoreError::Validation { .. } | CoreError::PaymentAboveDebt { .. } => "validation",
             CoreError::NotFound { .. } => "not_found",
             CoreError::DuplicateBarcode(_) => "duplicate_barcode",
+            CoreError::Conflict { .. } => "conflict",
             CoreError::Exhausted { .. } => "exhausted",
             CoreError::CreditLimit { .. } => "credit_limit",
             CoreError::PartyIds { .. } => "party_ids",
             CoreError::Money(_) => "money",
-            CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) => "storage",
+            CoreError::Db(_)
+            | CoreError::Query(_)
+            | CoreError::Io(_)
+            | CoreError::Unstamped { .. }
+            | CoreError::UnpricedReversal { .. } => "storage",
             CoreError::Render(_) => "print",
+            CoreError::Workbook(_) => "workbook",
         }
     }
 
@@ -125,6 +192,13 @@ impl CoreError {
 
     pub fn validation(field: &str, message: &str) -> Self {
         CoreError::Validation {
+            field: field.to_string(),
+            message: message.to_string(),
+        }
+    }
+
+    pub fn conflict(field: &str, message: &str) -> Self {
+        CoreError::Conflict {
             field: field.to_string(),
             message: message.to_string(),
         }

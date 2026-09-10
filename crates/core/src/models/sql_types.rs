@@ -166,9 +166,53 @@ text_enum! {
     }
 }
 
+text_enum! {
+    /// Why what the shop owes a supplier moved. The mirror of `DebtKind`, and
+    /// it differs by exactly what the two sides do differently: `Purchase`
+    /// where a customer has a sale, and `Return` where a customer has an
+    /// avoir. A `Sale` here would be a supplier buying at the till.
+    ///
+    /// `Purchase` is written when goods arrive and not when the order is
+    /// saved (plan lens, 2026-09-10), so a purchase closed short owes nothing
+    /// for what never came.
+    SupplierDebtKind {
+        Opening => "opening",
+        Purchase => "purchase",
+        Payment => "payment",
+        Return => "return",
+        Adjustment => "adjustment",
+    }
+}
+
+text_enum! {
+    /// Where a purchase has got to. `Ordered` until something arrives,
+    /// `PartiallyReceived` and `Received` as it does, `Cancelled` when
+    /// nothing ever did, `ClosedShort` when the rest never will and the shop
+    /// has stopped waiting for it.
+    PurchaseStatus {
+        Ordered => "ordered",
+        PartiallyReceived => "partially_received",
+        Received => "received",
+        Cancelled => "cancelled",
+        ClosedShort => "closed_short",
+    }
+}
+
 impl DocumentKind {
-    /// The counter series this kind takes its numbers from. One series per
-    /// kind, uninterrupted (décret 05-468 art. 10).
+    /// The counter series this kind takes its numbers from in a given year,
+    /// `doc_facture:2026`. One series per kind and per year: the series
+    /// restart at 1 each year (features.md §4, Numbering), and a counter key
+    /// that did not carry the year would hand January the number December
+    /// stopped at.
+    ///
+    /// The year is the shop clock's at issue, never the machine's, so the
+    /// caller reads it off the document's `issued_at` and not off `Utc::now`.
+    pub fn series_of_year(self, year: i32) -> String {
+        format!("{}:{year}", self.series())
+    }
+
+    /// The stem of the same key, without a year. One per kind, and on its own
+    /// it is not what a number is taken from: `series_of_year` is.
     pub const fn series(self) -> &'static str {
         match self {
             DocumentKind::Ticket => "doc_ticket",
@@ -183,9 +227,9 @@ impl DocumentKind {
 
     /// The printed form of the same series. `series` above is the counter's
     /// name and a column value; this is what a customer reads back over the
-    /// phone, and a printed number is `{prefix}-{number:06}`: `TK-000123`.
-    /// The two live side by side so a kind can never have one without the
-    /// other.
+    /// phone, and a printed number is `{prefix}-{year}-{number:06}`:
+    /// `TK-2026-000123`. The two live side by side so a kind can never have
+    /// one without the other.
     pub const fn number_prefix(self) -> &'static str {
         match self {
             DocumentKind::Ticket => "TK",

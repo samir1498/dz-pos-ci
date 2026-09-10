@@ -11,17 +11,25 @@
 
 use dzpos_api::dto::{
     AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AvoirLineDto, BackupDto, BackupsDto,
-    CancelDocumentDto, CategoryDto, ClockDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto,
-    CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto, DocumentKindDto,
-    DocumentStatusDto, HealthDto, NewAvoirDto, NewCustomerDto, NewPaymentDto, NewProductDto,
-    NewSaleDto, NewSaleLineDto, PartyKindDto, PaymentAllocationDto, PaymentDto, PaymentMethodDto,
-    PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto,
-    SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto,
-    SaleTvaDto, SaleWarningDto, SettingsDto, StoreDto, UnitDto,
+    CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CloseOrderDto, CloseSupplierDto,
+    CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DashboardDto,
+    DashboardFiguresDto, DashboardSeriesDto, DashboardSeriesPointDto, DatedRegimeDto, DebtEntryDto,
+    DebtKindDto, DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto,
+    HealthDto, ImportAppliedDto, ImportDryRunDto, ImportOutcomeDto, ImportRowDto, LabelSheetDto,
+    LastStockRecountDto, LowStockDto, NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto,
+    NewProductDto, NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto, NewSaleLineDto,
+    NewSupplierDto, OutgoingsDto, OwedDto, PaidNowDto, PartyKindDto, PaymentAllocationDto,
+    PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto, PurchaseDetailDto, PurchaseDto,
+    PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto, PurchaseStatusDto, ReceiveLineDto,
+    RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto, SaleCancelEffectDto,
+    SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
+    SaleWarningDto, SettingsDto, StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto,
+    SupplierDebtKindDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto,
+    SupplierWriteDto, TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 46] = [
+const FILES: [&str; 91] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -33,6 +41,8 @@ const FILES: [&str; 46] = [
     "StoreDto.ts",
     "RegimeDto.ts",
     "DatedRegimeDto.ts",
+    "ThemeDto.ts",
+    "ThemeChoiceDto.ts",
     "SettingsDto.ts",
     "RegimeChangeDto.ts",
     "BackupDto.ts",
@@ -68,6 +78,49 @@ const FILES: [&str; 46] = [
     "PaymentDto.ts",
     "CustomerPaymentsDto.ts",
     "NewPaymentDto.ts",
+    "SupplierDebtKindDto.ts",
+    "SupplierDto.ts",
+    "SupplierWriteDto.ts",
+    "NewSupplierDto.ts",
+    "CloseSupplierDto.ts",
+    "SupplierAllocationDto.ts",
+    "SupplierEntryDto.ts",
+    "SupplierLedgerDto.ts",
+    "SupplierStatementDto.ts",
+    "PurchaseStatusDto.ts",
+    "PurchaseDto.ts",
+    "PurchaseLineDto.ts",
+    "PurchaseReceiptLineDto.ts",
+    "PurchaseReceiptDto.ts",
+    "PurchaseDetailDto.ts",
+    "NewPurchaseLineDto.ts",
+    "PaidNowDto.ts",
+    "NewPurchaseDto.ts",
+    "ReceiveLineDto.ts",
+    "NewReceiptDto.ts",
+    "CloseOrderDto.ts",
+    "ExpenseCategoryDto.ts",
+    "ExpenseDto.ts",
+    "ExpensesDto.ts",
+    "NewExpenseDto.ts",
+    "TakingsDto.ts",
+    "OutgoingsDto.ts",
+    "CashPositionDto.ts",
+    "DashboardFiguresDto.ts",
+    "LowStockDto.ts",
+    "TopProductDto.ts",
+    "OwedDto.ts",
+    "DashboardDto.ts",
+    "DashboardSeriesPointDto.ts",
+    "DashboardSeriesDto.ts",
+    "StockDriftDto.ts",
+    "StockRecountDto.ts",
+    "LastStockRecountDto.ts",
+    "ImportOutcomeDto.ts",
+    "ImportRowDto.ts",
+    "ImportDryRunDto.ts",
+    "ImportAppliedDto.ts",
+    "LabelSheetDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -136,6 +189,8 @@ fn export_bindings() {
     StoreDto::export_all(&cfg).unwrap();
     RegimeDto::export_all(&cfg).unwrap();
     DatedRegimeDto::export_all(&cfg).unwrap();
+    ThemeDto::export_all(&cfg).unwrap();
+    ThemeChoiceDto::export_all(&cfg).unwrap();
     SettingsDto::export_all(&cfg).unwrap();
     RegimeChangeDto::export_all(&cfg).unwrap();
     BackupDto::export_all(&cfg).unwrap();
@@ -171,6 +226,49 @@ fn export_bindings() {
     PaymentDto::export_all(&cfg).unwrap();
     CustomerPaymentsDto::export_all(&cfg).unwrap();
     NewPaymentDto::export_all(&cfg).unwrap();
+    SupplierDebtKindDto::export_all(&cfg).unwrap();
+    SupplierDto::export_all(&cfg).unwrap();
+    SupplierWriteDto::export_all(&cfg).unwrap();
+    NewSupplierDto::export_all(&cfg).unwrap();
+    CloseSupplierDto::export_all(&cfg).unwrap();
+    SupplierAllocationDto::export_all(&cfg).unwrap();
+    SupplierEntryDto::export_all(&cfg).unwrap();
+    SupplierLedgerDto::export_all(&cfg).unwrap();
+    SupplierStatementDto::export_all(&cfg).unwrap();
+    PurchaseStatusDto::export_all(&cfg).unwrap();
+    PurchaseDto::export_all(&cfg).unwrap();
+    PurchaseLineDto::export_all(&cfg).unwrap();
+    PurchaseReceiptLineDto::export_all(&cfg).unwrap();
+    PurchaseReceiptDto::export_all(&cfg).unwrap();
+    PurchaseDetailDto::export_all(&cfg).unwrap();
+    NewPurchaseLineDto::export_all(&cfg).unwrap();
+    PaidNowDto::export_all(&cfg).unwrap();
+    NewPurchaseDto::export_all(&cfg).unwrap();
+    ReceiveLineDto::export_all(&cfg).unwrap();
+    NewReceiptDto::export_all(&cfg).unwrap();
+    CloseOrderDto::export_all(&cfg).unwrap();
+    ExpenseCategoryDto::export_all(&cfg).unwrap();
+    ExpenseDto::export_all(&cfg).unwrap();
+    ExpensesDto::export_all(&cfg).unwrap();
+    NewExpenseDto::export_all(&cfg).unwrap();
+    TakingsDto::export_all(&cfg).unwrap();
+    OutgoingsDto::export_all(&cfg).unwrap();
+    CashPositionDto::export_all(&cfg).unwrap();
+    StockDriftDto::export_all(&cfg).unwrap();
+    StockRecountDto::export_all(&cfg).unwrap();
+    LastStockRecountDto::export_all(&cfg).unwrap();
+    ImportOutcomeDto::export_all(&cfg).unwrap();
+    ImportRowDto::export_all(&cfg).unwrap();
+    ImportDryRunDto::export_all(&cfg).unwrap();
+    ImportAppliedDto::export_all(&cfg).unwrap();
+    LabelSheetDto::export_all(&cfg).unwrap();
+    DashboardFiguresDto::export_all(&cfg).unwrap();
+    LowStockDto::export_all(&cfg).unwrap();
+    TopProductDto::export_all(&cfg).unwrap();
+    OwedDto::export_all(&cfg).unwrap();
+    DashboardDto::export_all(&cfg).unwrap();
+    DashboardSeriesPointDto::export_all(&cfg).unwrap();
+    DashboardSeriesDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

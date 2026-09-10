@@ -1,11 +1,14 @@
 //! Documents and their numbering (features.md §3). One uninterrupted series
-//! per kind, assigned at issue, never reused (décret 05-468 art. 10).
+//! per kind and per year, assigned at issue, never reused (décret 05-468
+//! art. 10).
 //!
-//! There is no yearly reset of a series. It is common practice and it is not
-//! in the decree, so the comptable answers question R8 before it becomes a
-//! setting; until then a series runs on across years.
+//! A series restarts at 1 each year and the number carries the year
+//! (`FA-2026-000001`): the common practice in Algeria, decided by Samir on
+//! 2026-09-10 and not a rule of the decree, which asks only that the series be
+//! uninterrupted. The comptable (R8) confirms the practice, not the choice.
+//! There is no setting to turn the reset off.
 
-use chrono::NaiveDateTime;
+use chrono::{Datelike, NaiveDateTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
@@ -19,7 +22,7 @@ use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Money, PaymentMode};
 use crate::repos::counters;
 use crate::repos::documents as repo;
-use crate::services::{audit, avoir, clock, customers, debt, optional_field, products, stock};
+use crate::services::{audit, avoir, clock, customers, debt, optional_field, stock};
 
 pub use crate::models::document::{
     BalanceTriple, Cancellation, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
@@ -338,11 +341,26 @@ fn return_the_goods(
     user_id: i32,
     document: &Document,
 ) -> Result<(), CoreError> {
+    // What the goods cost when they left on this document. They go back at
+    // that cost and never at the fiche's cost today, for the same reason the
+    // avoir does it: a delivery between the sale and the cancellation moves
+    // the fiche, and a reversal that followed it would move the month's
+    // margin with every purchase.
+    let sold_at = stock::sale_costs(conn, shop_id, document.id)?;
     for line in &document.lines {
         let Some(product_id) = line.product_id else {
             continue;
         };
-        let unit_cost = products::get(conn, shop_id, product_id)?.cost;
+        // The fiche's cost is not a fallback, for the reason `avoir::issue`
+        // says: a sold line without a movement is a file that disagrees with
+        // itself, and today's cost would move a margin already earned.
+        let Some(unit_cost) = sold_at.get(&product_id).copied() else {
+            return Err(CoreError::UnpricedReversal {
+                document_id: document.id,
+                product_id,
+                reason: "the line it puts back has no sale movement",
+            });
+        };
         stock::record(
             conn,
             shop_id,
@@ -393,15 +411,22 @@ pub fn issue(
                 });
             }
         }
-        let series = new.kind.series();
-        let number = counters::take_next(conn, shop_id, series)?;
+        // The year the document is issued in, off its own `issued_at`, which
+        // the callers read from the shop clock (UTC+1, no daylight saving).
+        // Never `Utc::now().year()`: for one hour a night the two disagree,
+        // and on 31 December that hour decides which year's series a document
+        // belongs to.
+        let series_year = new.issued_at.year();
+        let series = new.kind.series_of_year(series_year);
+        let number = counters::take_next(conn, shop_id, series.clone())?;
         let totals = &new.totals;
         let id = repo::insert(
             conn,
             &DocumentRowWrite {
                 shop_id,
                 kind: new.kind,
-                series: series.to_string(),
+                series,
+                series_year,
                 number,
                 issued_at: new.issued_at,
                 user_id: new.user_id,

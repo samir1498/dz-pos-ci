@@ -3,7 +3,8 @@
 Seven milestones, in order. Each one names what Anouar can demo when it
 closes, what goes in, the fiscal fixtures it leans on (rows in
 `features.md`), and what blocks it. No dates: a milestone closes when its
-demo runs on a real machine and Samir has reviewed every PR in it. Steps
+demo runs on a real machine and every PR in it went through the review
+lenses and merged green. Steps
 inside the current milestone live in `context/progress/now.md`; this page
 never copies them.
 
@@ -35,7 +36,7 @@ Fixtures: `money_no_float`, `tva_rounding_once_per_rate`,
 Blocks: nothing. The half-dinar case at the 1,5 DA band stays an open
 fixture until the accountant answers (R8).
 
-## M1. A sale and a ticket on one desktop (in flight)
+## M1. A sale and a ticket on one desktop (closed 2026-09-09; the printer run waits for Samir at the laptop)
 
 Demo: Anouar sells three products at the till, cash or card on a payment
 terminal (TPE), and an 80 mm ticket comes out of a real thermal printer.
@@ -65,7 +66,7 @@ in the mockup today and its legal source (loi 04-02 art. 10 as amended in
 2010) is unread; the article gets read, then the rule is written into
 `features.md` §3, before the till codes it.
 
-## M2. Facture, customers and credit
+## M2. Facture, customers and credit (closed 2026-09-10)
 
 Demo: a company customer buys on credit and gets a numbered A4 facture with
 the amount in words; pays part of it a week later; the statement shows the
@@ -94,7 +95,7 @@ stamped receipt, and on which amount is the stamp computed, the facture's
 `total_ttc` or the sum paid. Depending on the answer, a receipt kind
 (quittance) joins the document model here.
 
-## M3. Stock in, expenses, reports
+## M3. Stock in, expenses, reports (in flight)
 
 Demo: a purchase from a supplier lands stock and supplier debt; the
 dashboard shows today's sales, gross margin, cash position, low stock and
@@ -187,4 +188,4 @@ once released, each with a previous-version test. Money, roles and anything
 that deletes data get the real-thing run and the `dz-review` pass before
 merge, in M1 as much as in M4. A review before every merge into the
 milestone branch; checkpoint PRs to `main` at the tasks the plan marks,
-which Samir merges.
+which the session opens and merges once CI is green (since 2026-09-09).

@@ -1,9 +1,7 @@
 //! The only place documents touch diesel. Every query is scoped by `shop_id`
 //! (rule 3).
 
-use diesel::dsl::sql;
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Nullable};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
@@ -13,7 +11,30 @@ use crate::models::document::{
 };
 use crate::schema::{document_lines, document_tva, documents, products};
 
+/// Whether the series string ends in the year the row says it counts in:
+/// `doc_ticket:2026` against 2026. The year has to be the whole last segment,
+/// so `doc_ticket:12026` is not a 2026 series and neither is the yearless
+/// `doc_ticket` the scheme before this one wrote.
+fn series_names_its_year(series: &str, year: i32) -> bool {
+    series
+        .strip_suffix(&year.to_string())
+        .is_some_and(|stem| stem.ends_with(':'))
+}
+
 pub fn insert(conn: &mut SqliteConnection, write: &DocumentRowWrite) -> Result<i32, CoreError> {
+    // The series string and the year are one fact stored twice: the counter
+    // takes the next number by the string and every printed number is spelled
+    // out of the column (features.md §4, Numbering). A row where the two
+    // disagree hands one number out under two spellings, and no later reader
+    // can tell which half is right. Refused here rather than by a CHECK
+    // because a table-level CHECK cannot be added to an existing SQLite
+    // table; `up.sql` says where it goes when `documents` is next rebuilt.
+    if !series_names_its_year(&write.series, write.series_year) {
+        return Err(CoreError::validation(
+            "series",
+            "the series does not name the year the document says it was numbered in",
+        ));
+    }
     let id: i32 = diesel::insert_into(documents::table)
         .values(write)
         .returning(documents::id)
@@ -75,39 +96,6 @@ pub fn line_belongs_to_document(
         .first(conn)
         .optional()?;
     Ok(found.is_some())
-}
-
-/// How much of each of the named facture lines earlier avoirs have already
-/// credited, by line id. A line no avoir has touched is not a key, which the
-/// caller reads as nothing credited.
-///
-/// One grouped query rather than one per line: a facture has as many lines as
-/// the basket had, and the avoir screen asks this for all of them at once.
-/// An avoir cannot itself be cancelled, so there is no status to filter on;
-/// the shop is filtered on the way every query here is (rule 3).
-pub fn credited_by_line(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    line_ids: &[i32],
-) -> Result<Vec<(i32, i64)>, CoreError> {
-    if line_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let rows: Vec<(Option<i32>, Option<i64>)> = document_lines::table
-        .inner_join(documents::table.on(documents::id.eq(document_lines::document_id)))
-        .filter(document_lines::shop_id.eq(shop_id))
-        .filter(document_lines::ref_line_id.eq_any(line_ids))
-        .filter(documents::kind.eq(DocumentKind::Avoir))
-        .group_by(document_lines::ref_line_id)
-        .select((
-            document_lines::ref_line_id,
-            sql::<Nullable<BigInt>>("SUM(document_lines.qty_milli)"),
-        ))
-        .load(conn)?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|(line_id, qty)| Some((line_id?, qty.unwrap_or(0))))
-        .collect())
 }
 
 /// Every avoir written against one document, oldest first: the order they were
@@ -219,21 +207,27 @@ pub fn set_cancelled(
     Ok(())
 }
 
-/// The kind and the number of the documents named, for the shop asking. A
-/// statement prints a document number beside the movement that cites it, and
-/// reading each document whole for two columns would be one query per line.
+/// The kind, the series year and the number of the documents named, for the
+/// shop asking: the three a printed number is spelled out of. A statement
+/// prints a document number beside the movement that cites it, and reading
+/// each document whole for three columns would be one query per line.
 pub fn kinds_and_numbers(
     conn: &mut SqliteConnection,
     shop_id: i32,
     ids: &[i32],
-) -> Result<Vec<(i32, DocumentKind, i64)>, CoreError> {
+) -> Result<Vec<(i32, DocumentKind, i32, i64)>, CoreError> {
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let rows: Vec<(i32, DocumentKind, i64)> = documents::table
+    let rows: Vec<(i32, DocumentKind, i32, i64)> = documents::table
         .filter(documents::shop_id.eq(shop_id))
         .filter(documents::id.eq_any(ids))
-        .select((documents::id, documents::kind, documents::number))
+        .select((
+            documents::id,
+            documents::kind,
+            documents::series_year,
+            documents::number,
+        ))
         .load(conn)?;
     Ok(rows)
 }
@@ -275,6 +269,51 @@ pub fn list(
         .collect()
 }
 
+/// Every kind, oldest first, over a stretch of days on the shop's calendar.
+/// Both ends are inclusive and either may be absent, which is how a shop
+/// asking for its whole history reaches this.
+///
+/// Oldest first rather than newest first: this is what the Excel export
+/// reads, and a workbook of sales is read down the page in the order the
+/// shop sold them. `issued_at` is already the shop's own calendar
+/// (`services::clock`), so a day is a day here and needs no conversion.
+pub fn list_in_range(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    from: Option<chrono::NaiveDate>,
+    to: Option<chrono::NaiveDate>,
+) -> Result<Vec<Document>, CoreError> {
+    let mut query = documents::table
+        .filter(documents::shop_id.eq(shop_id))
+        .into_boxed();
+    if let Some(from) = from.and_then(|d| d.and_hms_opt(0, 0, 0)) {
+        query = query.filter(documents::issued_at.ge(from));
+    }
+    // Half-open at the top: everything before midnight opening the day
+    // after, rather than everything up to and including 23:59:59.
+    //
+    // 23:59:59 is a second, not the end of a day. A timestamp carrying a
+    // fraction of it sorts above the bound, so a sale rung up at 23:59:59.4
+    // fell out of a range that names the day it was issued on, and the
+    // comptable reading that month got a file with the last sale missing
+    // and nothing on the page to say so. `succ_opt` is the day after, and
+    // it fails only past the end of the calendar, where a `to` no shop
+    // typed leaves the range open at the top rather than empty.
+    if let Some(after) = to
+        .and_then(|d| d.succ_opt())
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+    {
+        query = query.filter(documents::issued_at.lt(after));
+    }
+    let rows: Vec<DocumentRow> = query
+        .order((documents::issued_at.asc(), documents::id.asc()))
+        .select(DocumentRow::as_select())
+        .load(conn)?;
+    rows.into_iter()
+        .map(|row| with_children(conn, shop_id, row))
+        .collect()
+}
+
 fn with_children(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -293,4 +332,99 @@ fn with_children(
         .select(DocumentTvaRow::as_select())
         .load(conn)?;
     assemble(row, lines, tva)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
+mod tests {
+    use super::{insert, series_names_its_year};
+    use crate::models::document::{DocumentKind, DocumentRowWrite, DocumentStatus};
+    use chrono::NaiveDate;
+    use diesel::prelude::*;
+    use diesel::sqlite::SqliteConnection;
+
+    #[test]
+    fn a_series_names_its_year_only_when_the_year_is_the_whole_last_segment() {
+        assert!(series_names_its_year("doc_ticket:2026", 2026));
+        assert!(!series_names_its_year("doc_ticket:2026", 2025));
+        // The stem alone: the key of the scheme before the year existed.
+        assert!(!series_names_its_year("doc_ticket", 2026));
+        // Ends with the digits and is not the year. A suffix match on its own
+        // would take both of these.
+        assert!(!series_names_its_year("doc_ticket:12026", 2026));
+        assert!(!series_names_its_year("doc_ticket2026", 2026));
+    }
+
+    fn a_ticket(series: &str, series_year: i32) -> DocumentRowWrite {
+        DocumentRowWrite {
+            shop_id: 1,
+            kind: DocumentKind::Ticket,
+            series: series.to_string(),
+            series_year,
+            number: 1,
+            issued_at: NaiveDate::from_ymd_opt(2026, 9, 9)
+                .unwrap()
+                .and_hms_opt(10, 0, 0)
+                .unwrap(),
+            user_id: 1,
+            regime: "reel",
+            payment_mode: "cash",
+            seller_name: "Mon magasin".to_string(),
+            seller_rc: None,
+            seller_nif: None,
+            seller_nis: None,
+            seller_ai: None,
+            seller_address: None,
+            seller_phone: None,
+            customer_id: None,
+            buyer_name: None,
+            buyer_party_kind: None,
+            buyer_rc: None,
+            buyer_nif: None,
+            buyer_nis: None,
+            buyer_ai: None,
+            buyer_address: None,
+            ref_document_id: None,
+            old_balance_centimes: None,
+            remaining_debt_centimes: None,
+            total_debt_centimes: None,
+            total_ht_centimes: 10_000,
+            discount_centimes: 0,
+            subtotal_ht_centimes: 10_000,
+            tva_centimes: 1_900,
+            total_ttc_centimes: 11_900,
+            stamp_centimes: 0,
+            net_to_pay_centimes: 11_900,
+            tendered_centimes: None,
+            change_centimes: None,
+            status: DocumentStatus::Issued,
+        }
+    }
+
+    fn open() -> (tempfile::TempDir, SqliteConnection) {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = crate::db::open(dir.path().join("t.db")).unwrap();
+        (dir, conn)
+    }
+
+    #[test]
+    fn a_row_whose_series_and_year_disagree_is_refused_rather_than_stored() {
+        let (_dir, mut conn) = open();
+        let err = insert(&mut conn, &a_ticket("doc_ticket:2026", 2025)).unwrap_err();
+        assert_eq!(err.code(), "validation", "{err:?}");
+        assert_eq!(
+            super::documents::table
+                .count()
+                .get_result::<i64>(&mut conn)
+                .unwrap(),
+            0,
+            "the refused row was written anyway"
+        );
+    }
+
+    #[test]
+    fn a_row_whose_series_names_its_year_goes_in() {
+        let (_dir, mut conn) = open();
+        assert!(insert(&mut conn, &a_ticket("doc_ticket:2026", 2026)).is_ok());
+    }
 }

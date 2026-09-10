@@ -88,16 +88,44 @@ you started and stop them when done; use a pid file or `fuser -k
 <port>/tcp`, never `pkill -f` in a chained command (it matches the shell
 running it).
 
+`just seed` fills `.dev/dev.db` with a catalogue, twelve customers, five
+suppliers and thirty days of trading, so a screen has something to show; it
+is deterministic, so every machine reads the same figures, and repeatable,
+because it deletes the file and fills a fresh one. `just seed-clean` deletes
+it and stops there, so the next `just api` opens an empty shop. Neither
+recipe takes a path, and both refuse a file the dev API is holding open, so
+stop `just api` first. The seeder is dev only and enforced as such in three
+places; `docs/architecture.md` (Local development) says where.
+
 ## After the 125 GB day: one build folder, one build, one session
 
 Decided with Samir on 2026-09-10 after the VHDX reached 125 GB and the host
 disk hit zero five times in an hour.
 
-- Every cargo command in this repo runs with
-  `CARGO_TARGET_DIR=/home/samir/dz-pos/.cargo-target` (set in the loop
-  briefs and in the session's own gate runs). One shared build folder for
-  every worktree: ten worktrees cost one build's disk, and cargo's lock on
-  the folder makes it one build at a time, which is also the memory rule.
+- Every cargo command in this repo runs through `just`, which exports the
+  one shared build folder (`.cargo-target` next to the main checkout's
+  `.git`, found through `git rev-parse --git-common-dir`, so the laptop
+  clone gets its own without an env var) and four build jobs (one cargo run at a time is the memory rule; several builds at once is what starved the box, not one build on four cores). One shared
+  build folder for every worktree: ten worktrees cost one build's disk,
+  and cargo's lock on the folder makes it one build at a time, which is
+  also the memory rule.
+- The shared folder has one catch (found the same afternoon): cargo names
+  an artifact of our own crates the same in every worktree and decides
+  freshness by mtime, so after a build in worktree A, a bare `cargo` in
+  worktree B whose sources are older reuses A's `dzpos-core` without a
+  word (clippy in B failed on a type only A's branch had). `just claim`
+  keeps `.owner` in the shared folder; when the checkout changes it
+  touches that checkout's crate sources, so the three members rebuild and
+  the dependencies (identical everywhere) stay cached. Every cargo recipe
+  in the justfile depends on it; a bare `cargo` in a worktree comes after
+  `just claim`. The compile-and-run recipes (`just clippy`, `just test`,
+  `just types`, `just types-check`) also hold `flock` on the folder for
+  the whole run, because cargo's own lock only covers compilation: while
+  one worktree's `cargo test` ran its binaries, another worktree's build
+  replaced the rlib its doc-tests were about to link. One cargo
+  invocation at a time across every checkout; the second waits. A gate
+  run that overlapped another worktree's build is not a gate run: rerun
+  it through `just`.
 - A worktree is torn down with `just worktree-rm` the moment its branch
   merges. Moving a worktree to a new task to keep its warm cache (what the
   loop did all morning) is what kept four `target/` folders alive.

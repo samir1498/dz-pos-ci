@@ -13,8 +13,11 @@
 import { expect, test } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { formatCentimes, stamp } from "@dzpos/shared";
-import { apiHeaders, apiUrl } from "./api";
+import { apiHeaders, apiUrl, printedNumber, seriesOf } from "./api";
 import { t } from "./messages";
+
+
+
 
 const CUSTOMER = "Entreprise Facture e2e";
 const CUSTOMER_RC = "16/00-7654321 B 22";
@@ -181,11 +184,13 @@ async function lastTicketNumber(request: APIRequestContext): Promise<number> {
   return tickets.reduce((high, one) => Math.max(high, one.number), 0);
 }
 
+/** The search box narrows the list the server answers with, and the answer
+ * itself is what commits the choice: the picker is the box and its answers
+ * now, not a select. */
 async function pick(page: Page, name: string): Promise<void> {
   await page.getByLabel(t("till_customer_search"), { exact: true }).fill(name);
-  const select = page.getByLabel(t("till_customer"), { exact: true });
-  await expect(select.getByRole("option", { name })).toBeAttached();
-  await select.selectOption({ label: name });
+  const list = page.getByRole("group", { name: t("till_customer") });
+  await list.getByRole("button", { name }).click();
 }
 
 async function addOne(page: Page, name: string): Promise<void> {
@@ -228,16 +233,16 @@ test("rings a facture up on credit, prints it, and leaves the ticket series wher
   expect(response.status()).toBe(201);
   const sale: Sale = await response.json();
   expect(sale.kind).toBe("facture");
-  expect(sale.series).toBe("doc_facture");
+  expect(sale.series).toMatch(seriesOf("doc_facture"));
   expect(sale.number).toBe(1);
-  expect(sale.printed_number).toBe("FA-000001");
+  expect(sale.printed_number).toMatch(printedNumber("FA", 1));
   expect(sale.totals.net_to_pay_centimes).toBe(BEAM_PRICE);
 
   // The stored document says the same when it is read back: the kind is a
   // column, not something the create answered once.
   const stored = await readSale(request, sale.id);
   expect(stored.kind).toBe("facture");
-  expect(stored.series).toBe("doc_facture");
+  expect(stored.series).toMatch(seriesOf("doc_facture"));
   expect(stored.number).toBe(1);
 
   // And it is on the list of what the till has issued, so a cashier can
@@ -250,7 +255,9 @@ test("rings a facture up on credit, prints it, and leaves the ticket series wher
   // The confirmation names the paper and the number as the paper spells it.
   const done = page.getByRole("status");
   await expect(done).toContainText(t("till_paid_facture"));
-  await expect(done.getByTestId("till-document-number")).toHaveText("FA-000001");
+  await expect(done.getByTestId("till-document-number")).toHaveText(
+    printedNumber("FA", 1),
+  );
 
   // The page in the panel is the facture the core rendered: the buyer's own
   // identifiers are on it, and so is the net, formatted the core's way.
@@ -275,7 +282,7 @@ test("rings a facture up on credit, prints it, and leaves the ticket series wher
   await page.getByRole("button", { name: t("action_pay"), exact: true }).click();
   const ticket: Sale = await (await second).json();
   expect(ticket.kind).toBe("ticket");
-  expect(ticket.series).toBe("doc_ticket");
+  expect(ticket.series).toMatch(seriesOf("doc_ticket"));
   expect(ticket.number).toBe(ticketsBefore + 1);
 
   // And the facture kept its own number through all of it.

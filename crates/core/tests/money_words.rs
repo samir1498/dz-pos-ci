@@ -148,8 +148,9 @@ fn the_top_of_the_range_is_written_and_past_it_is_an_error() {
 
 // ------- Test-only inverse: French and English words back to centimes -------
 //
-// Task T6 wants the round trip proved, so the test reads the words back
-// and compares. These parsers walk the words and apply the multiplier
+// The amount-in-words rule wants the round trip proved, so the test reads
+// the words back and compares. These parsers walk the words and apply the
+// multiplier
 // rules of the language; they do not reuse the generator's split into
 // groups of three, so a generator that drops a scale word or an
 // agreement is caught rather than mirrored. `check_golden` runs them on
@@ -387,8 +388,9 @@ fn any_shop_amount() -> impl Strategy<Value = i64> {
 }
 
 proptest! {
-    /// T6: the words read back to the amount they were written from.
-    /// French and English only; Arabic is excluded, see the note above
+    /// The amount-in-words round trip: the words read back to the amount
+    /// they were written from. French and English only; Arabic is excluded,
+    /// see the note above
     /// the parsers.
     #[test]
     fn fr_and_en_words_read_back_to_the_amount(c in any_shop_amount()) {

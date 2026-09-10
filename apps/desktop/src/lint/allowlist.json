@@ -1,0 +1,20 @@
+{
+  "note": "Read by eslint.config.js and by allowlist.test.ts. See src/lint/README.md.",
+  "elements": [
+    "input",
+    "button",
+    "select",
+    "textarea",
+    "table"
+  ],
+  "screens": [
+    {
+      "file": "src/components/ThemeSwitcher.tsx",
+      "screen": "the topbar's theme switch"
+    },
+    {
+      "file": "src/lib/fields.tsx",
+      "screen": "the shared money field the forms use"
+    }
+  ]
+}

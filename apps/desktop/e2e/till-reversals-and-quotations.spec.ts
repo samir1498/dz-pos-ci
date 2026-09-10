@@ -12,7 +12,7 @@
 // two fiches and the shop's own block before it has anything to credit, and
 // three earlier suites need what it would have written first: products.spec
 // wants a table nobody has touched, settings.spec wants the store block as
-// the migration seeded it, and till-facture.spec wants FA-000001 to be its
+// the migration seeded it, and till-facture.spec wants the first facture of the year to be its
 // own. That is the same reason settlement.spec and till-credit.spec sit
 // where they do.
 
@@ -20,8 +20,11 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { apiHeaders, apiUrl } from "./api";
+import { apiHeaders, apiUrl, printedNumber, seriesOf } from "./api";
 import { currentLang, t } from "./messages";
+
+
+
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -187,7 +190,7 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   expect(avoirRes.status()).toBe(201);
   const avoir: Sale = await avoirRes.json();
   expect(avoir.kind).toBe("avoir");
-  expect(avoir.series).toBe("doc_avoir");
+  expect(avoir.series).toMatch(seriesOf("doc_avoir"));
   expect(avoir.ref_document_id).toBe(facture.id);
   expect(avoir.totals.net_to_pay_centimes).toBe(50_000);
 
@@ -239,9 +242,10 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   await page.goto("/customers");
   const creditRow = page.getByRole("row").filter({ hasText: PAID_BUYER });
   await expect(creditRow.getByText(t("customers_credit"))).toBeVisible();
-  await creditRow.getByRole("button", { name: `${t("customers_edit")} ${PAID_BUYER}` }).click();
-  const fiche = page.getByRole("heading", { name: t("customers_ledger") }).locator("..");
-  const said = fiche.locator("p").first();
+  // The row's name opens that customer's own page, where the figure is a
+  // card with the word above it.
+  await creditRow.getByRole("link", { name: PAID_BUYER }).click();
+  const said = page.getByTestId("customer-balance");
   await expect(said).toContainText(t("customers_credit"));
   await expect(said).toContainText("1 000,00");
 
@@ -259,13 +263,13 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   expect(quote.status()).toBe(201);
   const proforma: Sale = await quote.json();
   expect(proforma.kind).toBe("proforma");
-  expect(proforma.series).toBe("doc_proforma");
+  expect(proforma.series).toMatch(seriesOf("doc_proforma"));
   expect(await onHand(request, product)).toBe(stockBefore);
   expect(await balance(request, buyer)).toBe(beforeSecond);
 
   // ---- and the documents screen finds every one of them.
   await page.goto("/documents");
-  await expect(page.getByRole("heading", { name: t("documents_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("documents_title") })).toBeVisible();
   await expect(page.getByRole("button", { name: facture.printed_number })).toBeVisible();
   await expect(page.getByRole("button", { name: avoir.printed_number })).toBeVisible();
   await expect(page.getByRole("button", { name: proforma.printed_number })).toBeVisible();
@@ -274,7 +278,7 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   const cancelledRow = page
     .getByRole("row")
     .filter({ has: page.getByRole("button", { name: cancelled.printed_number }) });
-  await expect(cancelledRow.getByText(t("documents_cancelled"))).toBeVisible();
+  await expect(cancelledRow.getByText(t("pill_cancelled"))).toBeVisible();
 
   // A row opens the document, with its lines and the sheet the core
   // rendered beside them.

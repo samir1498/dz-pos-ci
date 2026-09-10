@@ -9,6 +9,7 @@ import type { CategoryDto, ProductDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import ar from "@/i18n/ar.json";
 import en from "@/i18n/en.json";
+import fr from "@/i18n/fr.json";
 import { ProductsScreen } from "./products";
 
 const product: ProductDto = {
@@ -34,6 +35,11 @@ const alimentaire: CategoryDto = {
   name: "Alimentaire",
   default_rate_bps: 900,
 };
+
+/** A printed page: the core renders it, so the screen only ever shows it. */
+function html(body: string): Response {
+  return new Response(body, { status: 200, headers: { "content-type": "text/html" } });
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -103,14 +109,29 @@ let rows: ProductDto[];
 let categories: CategoryDto[];
 let createAnswer: (() => Response) | null;
 let updateAnswer: (() => Response) | null;
+let labelAnswer: (() => Response) | null;
 
 beforeEach(() => {
   rows = [];
   categories = [general];
   createAnswer = null;
   updateAnswer = null;
+  labelAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
+    if (init?.method === "POST" && url.includes("/labels/sheet")) {
+      if (labelAnswer !== null) return Promise.resolve(labelAnswer());
+      const ids: unknown = JSON.parse(String(init.body));
+      const named =
+        typeof ids === "object" && ids !== null && Array.isArray(Reflect.get(ids, "ids"))
+          ? Reflect.get(ids, "ids")
+          : [];
+      return Promise.resolve(html(`<html><body>SHEET ${String(named)}</body></html>`));
+    }
+    if (url.includes("/label?lang=")) {
+      if (labelAnswer !== null) return Promise.resolve(labelAnswer());
+      return Promise.resolve(html(`<html><body>LABEL ${url.split("/products/")[1] ?? ""}</body></html>`));
+    }
     if (init?.method === "PUT") {
       if (updateAnswer !== null) return Promise.resolve(updateAnswer());
       const id = Number(url.slice(url.lastIndexOf("/") + 1));
@@ -158,6 +179,21 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/**
+ * The kit's select is Radix's: a button and a popover, not a `<select>`, so
+ * it is opened and an option inside it is clicked. The option is named by
+ * what it says, which is what a shop reads, rather than by the value behind
+ * it; the value is asserted on the request instead.
+ */
+async function choose(
+  user: ReturnType<typeof userEvent.setup>,
+  field: string | RegExp,
+  option: string | RegExp,
+) {
+  await user.click(screen.getByRole("combobox", { name: field }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 async function openTheForm(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByText("Aucun produit pour le moment.");
   await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
@@ -197,8 +233,8 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Sucre Cristal 1kg");
-    await user.type(screen.getByLabelText("Prix de vente"), "1,10");
+    await user.type(screen.getByLabelText(/^Nom/), "Sucre Cristal 1kg");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "1,10");
     await user.type(screen.getByLabelText("Quantité en stock"), "60");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
@@ -220,9 +256,9 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Farine");
-    await user.type(screen.getByLabelText("Prix de vente"), "10");
-    await user.selectOptions(screen.getByLabelText("Catégorie"), "2");
+    await user.type(screen.getByLabelText(/^Nom/), "Farine");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "10");
+    await choose(user, "Catégorie", "Alimentaire");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     await waitFor(() => expect(posted()).toBe(true));
@@ -235,9 +271,9 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Farine");
-    await user.type(screen.getByLabelText("Prix de vente"), "10");
-    await user.selectOptions(screen.getByLabelText("TVA"), "900");
+    await user.type(screen.getByLabelText(/^Nom/), "Farine");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "10");
+    await choose(user, "TVA", fr.rate_900);
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     await waitFor(() => expect(posted()).toBe(true));
@@ -252,12 +288,16 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    const rate = screen.getByLabelText("TVA");
-    expect(rate).toHaveValue("700");
-    expect(screen.getByRole("option", { name: "7 %" })).toBeInTheDocument();
+    // The kit's select shows the label it chose rather than carrying a value
+    // attribute, so what is read here is what the shop reads.
+    const rate = screen.getByRole("combobox", { name: "TVA" });
+    expect(rate).toHaveTextContent("7 %");
+    await user.click(rate);
+    expect(await screen.findByRole("option", { name: "7 %" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
 
-    await user.type(screen.getByLabelText("Nom"), "Farine");
-    await user.type(screen.getByLabelText("Prix de vente"), "10");
+    await user.type(screen.getByLabelText(/^Nom/), "Farine");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "10");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     await waitFor(() => expect(posted()).toBe(true));
@@ -270,9 +310,9 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Farine");
-    await user.type(screen.getByLabelText("Prix de vente"), "10");
-    await user.selectOptions(screen.getByLabelText("Catégorie"), "2");
+    await user.type(screen.getByLabelText(/^Nom/), "Farine");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "10");
+    await choose(user, "Catégorie", "Alimentaire");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     await waitFor(() => expect(posted()).toBe(true));
@@ -293,7 +333,7 @@ describe("the add form", () => {
     await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Erreur d'enregistrement.");
-    expect(screen.queryByLabelText("Nom")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Nom/)).not.toBeInTheDocument();
     expect(posted()).toBe(false);
   });
 
@@ -303,8 +343,8 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Sans catégorie");
-    await user.type(screen.getByLabelText("Prix de vente"), "10");
+    await user.type(screen.getByLabelText(/^Nom/), "Sans catégorie");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "10");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     await waitFor(() => expect(posted()).toBe(true));
@@ -312,20 +352,45 @@ describe("the add form", () => {
     expect(sentBody().rate_bps).toBe(1900);
   });
 
-  test("refuses a cost that is not a number instead of storing zero", async () => {
-    // parseAmountToCentimes(value.cost) ?? 0 turned "12 DA" into a cost of
-    // nothing and saved it, so the shop's margin was quietly wrong.
+  test("a cost typed with its unit is read as the amount, not as nothing", async () => {
+    // `parseAmountToCentimes(value.cost) ?? 0` turned "12 DA" into a cost of
+    // nothing and saved it, so the shop's margin was quietly wrong. The field
+    // is MoneyInput now and it keeps the last amount it understood, so the
+    // twelve dinars survive the "DA" and the box says so before the save:
+    // when the field is left it shows the canonical spelling of what it read.
     const user = userEvent.setup();
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Sucre Cristal 1kg");
-    await user.type(screen.getByLabelText("Prix de vente"), "1,10");
-    await user.type(screen.getByLabelText("Prix d'achat"), "12 DA");
-    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await user.type(screen.getByLabelText(/^Nom/), "Sucre Cristal 1kg");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "1,10");
+    const cost = screen.getByLabelText("Prix d'achat");
+    await user.type(cost, "12 DA");
+    await user.tab();
 
-    expect(await screen.findByText("Prix d'achat invalide.")).toBeInTheDocument();
-    expect(posted()).toBe(false);
+    expect(cost).toHaveValue("12,00");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(sentBody().cost_centimes).toBe(1_200);
+  });
+
+  test("a cost with no number in it at all is put back blank rather than guessed", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openTheForm(user);
+
+    await user.type(screen.getByLabelText(/^Nom/), "Sucre Cristal 1kg");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "1,10");
+    const cost = screen.getByLabelText("Prix d'achat");
+    await user.type(cost, "abc");
+    await user.tab();
+
+    // Nothing was understood, so nothing is kept: the field goes back to
+    // blank in front of the shop, and blank is the zero the form allows.
+    expect(cost).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(sentBody().cost_centimes).toBe(0);
   });
 
   test("refuses a stock that is not a number instead of storing zero", async () => {
@@ -333,8 +398,8 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Sucre Cristal 1kg");
-    await user.type(screen.getByLabelText("Prix de vente"), "1,10");
+    await user.type(screen.getByLabelText(/^Nom/), "Sucre Cristal 1kg");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "1,10");
     await user.type(screen.getByLabelText("Quantité en stock"), "60 kg");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
@@ -347,8 +412,8 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Sucre Cristal 1kg");
-    await user.type(screen.getByLabelText("Prix de vente"), "1,10");
+    await user.type(screen.getByLabelText(/^Nom/), "Sucre Cristal 1kg");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "1,10");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     await waitFor(() => expect(posted()).toBe(true));
@@ -363,8 +428,8 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Doublon");
-    await user.type(screen.getByLabelText("Prix de vente"), "10");
+    await user.type(screen.getByLabelText(/^Nom/), "Doublon");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "10");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     expect(await screen.findByText("Ce code-barres est déjà utilisé.")).toBeInTheDocument();
@@ -379,8 +444,8 @@ describe("the add form", () => {
     mount();
     await openTheForm(user);
 
-    await user.type(screen.getByLabelText("Nom"), "Taux impossible");
-    await user.type(screen.getByLabelText("Prix de vente"), "10");
+    await user.type(screen.getByLabelText(/^Nom/), "Taux impossible");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "10");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     expect(await screen.findByText("Montant ou taux invalide.")).toBeInTheDocument();
@@ -424,26 +489,28 @@ describe("the edit form", () => {
   test("opens with every field of the product filled in", async () => {
     const user = userEvent.setup();
     await openTheEdit(user);
-    expect(screen.getByLabelText("Nom")).toHaveValue("Huile Elio 5L");
+    expect(screen.getByLabelText(/^Nom/)).toHaveValue("Huile Elio 5L");
     // The barcode label carries its hint too, so an exact match never finds it.
     expect(screen.getByLabelText(/^Code-barres/)).toHaveValue("2000010000017");
-    expect(screen.getByLabelText("Prix de vente")).toHaveValue("9,20");
+    expect(screen.getByLabelText(/^Prix de vente/)).toHaveValue("9,20");
     expect(screen.getByLabelText("Prix d'achat")).toHaveValue("8,20");
     expect(screen.getByLabelText("Prix de gros")).toHaveValue("8,50");
     expect(screen.getByLabelText("Quantité en stock")).toHaveValue("24");
     expect(screen.getByLabelText("Alerte stock bas à")).toHaveValue("10");
-    expect(screen.getByRole("combobox", { name: "TVA" })).toHaveValue("1900");
-    expect(screen.getByRole("combobox", { name: "Unité de mesure" })).toHaveValue("piece");
+    expect(screen.getByRole("combobox", { name: "TVA" })).toHaveTextContent(fr.rate_1900);
+    expect(screen.getByRole("combobox", { name: "Unité de mesure" })).toHaveTextContent(
+      fr.unit_piece,
+    );
     expect(screen.getByLabelText("En vente")).toBeChecked();
   });
 
   test("puts the whole product to its own path and shows the new values", async () => {
     const user = userEvent.setup();
     await openTheEdit(user);
-    const price = screen.getByLabelText("Prix de vente");
+    const price = screen.getByLabelText(/^Prix de vente/);
     await user.clear(price);
     await user.type(price, "9,90");
-    await user.selectOptions(screen.getByRole("combobox", { name: "TVA" }), "900");
+    await choose(user, "TVA", fr.rate_900);
     await user.click(screen.getByLabelText("En vente"));
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
@@ -477,7 +544,7 @@ describe("the edit form", () => {
     const user = userEvent.setup();
     await openTheEdit(user);
     expect(screen.queryByText("Laisser vide pour numéroter automatiquement")).toBeNull();
-    await user.selectOptions(screen.getByRole("combobox", { name: "Catégorie" }), "");
+    await choose(user, "Catégorie", fr.category_none);
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
     await waitFor(() => expect(initOf("PUT")).toBeDefined());
     expect(putRequest().body.category_id).toBeNull();
@@ -503,15 +570,21 @@ describe("the edit form", () => {
     expect(screen.getByRole("button", { name: "Enregistrer" })).toBeInTheDocument();
   });
 
-  test("refuses a wholesale price that is not a number", async () => {
+  test("an unreadable amount cannot overwrite the one already stored", async () => {
+    // The important half of the old refusal: a fiche carrying 8,50 must not
+    // come back as null or as zero because someone typed over it badly. The
+    // amount box puts the stored amount back when the field is left, so the
+    // request still carries what the shop had.
     const user = userEvent.setup();
     await openTheEdit(user);
     const wholesale = screen.getByLabelText("Prix de gros");
-    await user.clear(wholesale);
     await user.type(wholesale, "abc");
+    await user.tab();
+    expect(wholesale).toHaveValue("8,50");
+
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
-    expect(await screen.findByText("Prix de gros invalide.")).toBeInTheDocument();
-    expect(initOf("PUT")).toBeUndefined();
+    await waitFor(() => expect(initOf("PUT")).toBeDefined());
+    expect(putRequest().body.wholesale_centimes).toBe(850);
   });
 });
 
@@ -520,9 +593,9 @@ describe("the add form, every spec field", () => {
     const user = userEvent.setup();
     mount();
     await openTheForm(user);
-    await user.type(screen.getByLabelText("Nom"), "Divers");
-    await user.type(screen.getByLabelText("Prix de vente"), "5");
-    await user.selectOptions(screen.getByRole("combobox", { name: "Catégorie" }), "");
+    await user.type(screen.getByLabelText(/^Nom/), "Divers");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "5");
+    await choose(user, "Catégorie", fr.category_none);
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
     await waitFor(() => expect(posted()).toBe(true));
     expect(sentBody().category_id).toBeNull();
@@ -533,8 +606,8 @@ describe("the add form, every spec field", () => {
     const user = userEvent.setup();
     mount();
     await openTheForm(user);
-    await user.type(screen.getByLabelText("Nom"), "Farine 25kg");
-    await user.type(screen.getByLabelText("Prix de vente"), "3200");
+    await user.type(screen.getByLabelText(/^Nom/), "Farine 25kg");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "3200");
     await user.type(screen.getByLabelText("Prix de gros"), "3050,50");
     await user.type(screen.getByLabelText("Alerte stock bas à"), "5");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
@@ -548,8 +621,8 @@ describe("the add form, every spec field", () => {
     const user = userEvent.setup();
     mount();
     await openTheForm(user);
-    await user.type(screen.getByLabelText("Nom"), "Farine 25kg");
-    await user.type(screen.getByLabelText("Prix de vente"), "3200");
+    await user.type(screen.getByLabelText(/^Nom/), "Farine 25kg");
+    await user.type(screen.getByLabelText(/^Prix de vente/), "3200");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
     await waitFor(() => expect(posted()).toBe(true));
     expect(sentBody().wholesale_centimes).toBeNull();
@@ -600,13 +673,13 @@ describe("in Arabic", () => {
     mount("ar");
     const row = (await screen.findByText("Huile Elio 5L")).closest("tr");
     if (row === null) throw new Error("no row");
-    const cells = within(row).getAllByRole("cell");
-    // name, barcode, unit, price, rate, stock, edit: barcode (1), price
-    // (3), rate (4) and stock (5) are the ones read left to right.
-    expect(cells[1]).toHaveAttribute("dir", "ltr");
-    expect(cells[3]).toHaveAttribute("dir", "ltr");
-    expect(cells[4]).toHaveAttribute("dir", "ltr");
-    expect(cells[5]).toHaveAttribute("dir", "ltr");
+    // The table is DataTable now and a screen does not style its cells, so
+    // the direction sits on what is inside them. Same four: a barcode, a
+    // price, a rate and a quantity are read left to right in Arabic too.
+    expect(within(row).getByTestId("cell-barcode")).toHaveAttribute("dir", "ltr");
+    expect(within(row).getByTestId("cell-price")).toHaveAttribute("dir", "ltr");
+    expect(within(row).getByTestId("cell-rate")).toHaveAttribute("dir", "ltr");
+    expect(within(row).getByTestId("cell-stock")).toHaveAttribute("dir", "ltr");
   });
 });
 
@@ -627,5 +700,201 @@ describe("in English", () => {
       within(row).getByText(`7${en.decimal_separator}50 ${en.percent_sign}`),
     ).toBeInTheDocument();
     expect(within(row).queryByText("7.50 %")).not.toBeInTheDocument();
+  });
+});
+
+describe("the labels", () => {
+  test("the drawer prints the stored product's label and nothing before it is stored", async () => {
+    rows = [product];
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("Huile Elio 5L");
+
+    // The add form has no product to print: a label is a picture of a
+    // barcode and a product being typed has neither an id nor one.
+    await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
+    await screen.findByLabelText("Catégorie");
+    expect(screen.queryByTestId("print-label")).toBeNull();
+    // Two buttons read "Annuler" while the add form is open: the header's,
+    // which closes it, and the form's own.
+    await user.click(screen.getAllByRole("button", { name: "Annuler" })[0] ?? document.body);
+
+    await user.click(screen.getByRole("button", { name: /Huile Elio 5L/ }));
+    await screen.findByLabelText("Catégorie");
+    await user.click(screen.getByTestId("print-label"));
+
+    const frame = await screen.findByTestId("product-label");
+    expect(frame.getAttribute("srcdoc")).toContain("LABEL 1");
+    expect(frame).toHaveAttribute("sandbox", "");
+    const asked = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(asked.some((url) => url.includes("/products/1/label?lang=fr"))).toBe(true);
+  });
+
+  test("a product with no barcode at all and one whose code is not an EAN-13 read differently", async () => {
+    rows = [product];
+    labelAnswer = () =>
+      json(422, {
+        error: { code: "validation", field: "barcode_digits", message: "not thirteen digits" },
+      });
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("Huile Elio 5L");
+    await user.click(screen.getByRole("button", { name: /Huile Elio 5L/ }));
+    await screen.findByLabelText("Catégorie");
+    await user.click(screen.getByTestId("print-label"));
+
+    // A fiche that visibly carries a supplier reference must not be told
+    // it has no barcode: the shop would go looking at a filled field.
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_label_not_ean13);
+    expect(screen.queryByTestId("product-label")).toBeNull();
+  });
+
+  test("an empty barcode column says so, and the two refusals are not one message", async () => {
+    rows = [product];
+    labelAnswer = () =>
+      json(422, { error: { code: "validation", field: "barcode", message: "none at all" } });
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("Huile Elio 5L");
+    await user.click(screen.getByRole("button", { name: /Huile Elio 5L/ }));
+    await screen.findByLabelText("Catégorie");
+    await user.click(screen.getByTestId("print-label"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_label_no_barcode);
+    expect(fr.error_label_no_barcode).not.toBe(fr.error_label_not_ean13);
+  });
+
+  test("the sheet is the ticked rows, and nothing is offered while none is ticked", async () => {
+    const second: ProductDto = { ...product, id: 2, name: "Semoule 5 kg", barcode: "2000010000024" };
+    rows = [product, second];
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("Semoule 5 kg");
+    expect(screen.getByTestId("print-selected-labels")).toBeDisabled();
+
+    await user.click(screen.getByRole("checkbox", { name: /Huile Elio 5L/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Semoule 5 kg/ }));
+    await user.click(screen.getByTestId("print-selected-labels"));
+
+    const frame = await screen.findByTestId("product-label");
+    expect(frame.getAttribute("srcdoc")).toContain("SHEET 1,2");
+    const posted = fetchMock.mock.calls.find((call) => String(call[0]).includes("/labels/sheet"));
+    expect(posted).toBeDefined();
+    const init: unknown = posted?.[1];
+    const body: unknown = isInit(init) ? JSON.parse(String(init.body)) : null;
+    expect(body).toEqual({ ids: [1, 2] });
+  });
+});
+
+/**
+ * The filter bar. A shop with nine hundred products does not scroll: it
+ * searches, narrows to a shelf, or asks what is running out. All three are
+ * applied here rather than asked of the server, so what is tested is the
+ * narrowing and the two different empty states it can leave behind.
+ */
+describe("the filters", () => {
+  const semoule: ProductDto = {
+    ...product,
+    id: 2,
+    name: "Semoule 5 kg",
+    barcode: "2000010000024",
+    category_id: 2,
+    qty_on_hand_milli: 2_000,
+    low_stock_at_milli: 5_000,
+  };
+  const divers: ProductDto = {
+    ...product,
+    id: 3,
+    name: "Sachets",
+    barcode: null,
+    category_id: null,
+  };
+
+  async function withAll(user: ReturnType<typeof userEvent.setup>) {
+    rows = [product, semoule, divers];
+    categories = [general, alimentaire];
+    mount();
+    await screen.findByText("Semoule 5 kg");
+    return user;
+  }
+
+  test("the search reads the name", async () => {
+    const user = userEvent.setup();
+    await withAll(user);
+    await user.type(screen.getByTestId("products-search"), "semo");
+    expect(screen.getByText("Semoule 5 kg")).toBeInTheDocument();
+    expect(screen.queryByText("Huile Elio 5L")).not.toBeInTheDocument();
+  });
+
+  test("the search reads the barcode too, because that is what is on the box", async () => {
+    const user = userEvent.setup();
+    await withAll(user);
+    await user.type(screen.getByTestId("products-search"), "2000010000017");
+    expect(screen.getByText("Huile Elio 5L")).toBeInTheDocument();
+    expect(screen.queryByText("Semoule 5 kg")).not.toBeInTheDocument();
+  });
+
+  test("a catalogue typed in capitals still answers a search typed in small letters", async () => {
+    const user = userEvent.setup();
+    rows = [{ ...product, name: "HUILE ELIO 5L" }];
+    mount();
+    await screen.findByText("HUILE ELIO 5L");
+    await user.type(screen.getByTestId("products-search"), "huile");
+    expect(screen.getByText("HUILE ELIO 5L")).toBeInTheDocument();
+  });
+
+  test("the category narrows to one shelf", async () => {
+    const user = userEvent.setup();
+    await withAll(user);
+    await choose(user, "Filtrer par catégorie", "Alimentaire");
+    expect(screen.getByText("Semoule 5 kg")).toBeInTheDocument();
+    expect(screen.queryByText("Huile Elio 5L")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sachets")).not.toBeInTheDocument();
+  });
+
+  test("no category at all is a choice of its own, not the absence of one", async () => {
+    const user = userEvent.setup();
+    await withAll(user);
+    await choose(user, "Filtrer par catégorie", fr.category_none);
+    expect(screen.getByText("Sachets")).toBeInTheDocument();
+    expect(screen.queryByText("Semoule 5 kg")).not.toBeInTheDocument();
+  });
+
+  test("the low stock filter is the product's own threshold", async () => {
+    const user = userEvent.setup();
+    await withAll(user);
+    await user.click(screen.getByTestId("products-filter-low"));
+    expect(screen.getByText("Semoule 5 kg")).toBeInTheDocument();
+    expect(screen.queryByText("Huile Elio 5L")).not.toBeInTheDocument();
+  });
+
+  test("a filter that matches nothing is not the same empty screen as a shop with no products", async () => {
+    const user = userEvent.setup();
+    await withAll(user);
+    await user.type(screen.getByTestId("products-search"), "zzzz");
+    expect(screen.getByText(fr.products_no_match)).toBeInTheDocument();
+    expect(screen.queryByText(fr.products_empty)).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("products-clear-filters"));
+    expect(screen.getByText("Semoule 5 kg")).toBeInTheDocument();
+    expect(screen.getByTestId("products-search")).toHaveValue("");
+  });
+
+  test("the count in the header follows the filter", async () => {
+    const user = userEvent.setup();
+    await withAll(user);
+    expect(screen.getByTestId("page-header")).toHaveTextContent(`3 ${fr.products_count}`);
+    await user.type(screen.getByTestId("products-search"), "semo");
+    expect(screen.getByTestId("page-header")).toHaveTextContent(`1 ${fr.products_count_one}`);
+  });
+
+  test("a row at or under its threshold wears the low pill", async () => {
+    rows = [product, semoule];
+    mount();
+    const low = (await screen.findByText("Semoule 5 kg")).closest("tr");
+    const fine = screen.getByText("Huile Elio 5L").closest("tr");
+    if (low === null || fine === null) throw new Error("no rows");
+    expect(within(low).getByTestId("cell-low")).toHaveTextContent(fr.pill_low);
+    expect(within(fine).queryByTestId("cell-low")).toBeNull();
   });
 });

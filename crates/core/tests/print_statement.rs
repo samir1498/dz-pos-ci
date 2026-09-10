@@ -111,6 +111,7 @@ fn movement(
 fn facture(number: i64) -> Option<DocumentRef> {
     Some(DocumentRef {
         kind: DocumentKind::Facture,
+        year: 2026,
         number,
     })
 }
@@ -324,7 +325,12 @@ fn the_golden_says_what_the_statement_holds(html: &str, statement: &RangedStatem
     // quotes.
     for line in &statement.entries {
         if let Some(document) = line.document {
-            let printed = format!("{}-{:06}", document.kind.number_prefix(), document.number);
+            let printed = format!(
+                "{}-{}-{:06}",
+                document.kind.number_prefix(),
+                document.year,
+                document.number
+            );
             assert!(
                 html.contains(&printed),
                 "the row citing {printed} does not print its number"
@@ -389,8 +395,8 @@ fn a_range_with_no_movement_says_so_and_still_carries_both_balances() {
 
 #[test]
 fn a_closing_balance_the_shop_owes_prints_the_amount_and_says_whose_way_it_goes() {
-    // The shop holding money for a customer is what an avoir leaves behind
-    // (T6). The words carry no sign, so the page has to say the direction in
+    // The shop holding money for a customer is what an avoir leaves behind.
+    // The words carry no sign, so the page has to say the direction in
     // words of its own or it reads as the opposite of what it means.
     let statement = RangedStatement {
         from: day(1),

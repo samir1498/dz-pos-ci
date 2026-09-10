@@ -16,6 +16,10 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+mod common;
+
+use common::printed;
+
 const SHOP: i32 = 1;
 const TOKEN: &str = "test-launch-token";
 const HTML: &str = "text/html; charset=utf-8";
@@ -473,7 +477,7 @@ async fn an_avoir_prints_on_the_facture_sheet_and_names_the_facture_it_credits()
         body.contains(&facture_number),
         "the avoir does not name the facture it credits: {facture_number}"
     );
-    assert!(body.contains("AV-000001"), "the avoir's own number");
+    assert!(body.contains(&printed("AV", 1)), "the avoir's own number");
 }
 
 #[tokio::test]
@@ -563,5 +567,8 @@ async fn a_proforma_prints_on_the_same_sheet_under_its_own_number() {
         call_text(&app, &format!("/sales/{id}/facture?lang=fr&paper=a4"), true).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(content_type.as_deref(), Some(HTML));
-    assert!(body.contains("PF-000001"), "the proforma's own number");
+    assert!(
+        body.contains(&printed("PF", 1)),
+        "the proforma's own number"
+    );
 }

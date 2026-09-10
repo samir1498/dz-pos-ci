@@ -38,20 +38,45 @@ Cargo workspace at the root, pnpm workspace over `apps/*`, `packages/*`
 and `design`.
 `.npmrc` sets `node-linker=hoisted` for Metro.
 
+## Screens
+
+`apps/desktop/src/routes`: dashboard, till (the app's launch screen),
+products, customers, documents, suppliers, purchases, expenses, settings.
+`/kit` is a tenth route, every kit component in every state on one page,
+built only in a dev build (`routes/kit.tsx` throws `notFound()` otherwise)
+and the page a reviewer compares against the mockups.
+
 ## Commands
 
 The `justfile` at the root is the list; `just` alone prints it.
 
 ```
-just gates        # fmt, clippy, generated types check, tests, builds; what a PR needs
+just gates        # fmt, lint, clippy, generated types check, tests, builds; what a PR needs
+just claim        # claim the shared build folder for this checkout before a bare `cargo`
+just lint         # the desktop's one eslint rule: no bare input, button, select or table
 just e2e          # Playwright against a fresh API and database, fr then en then ar
 just api          # the API on 4317 with a dev database and a fresh launch token
+just seed         # fill .dev/dev.db with a month of trading to develop against
+just seed-clean   # delete .dev/dev.db so the next `just api` opens an empty shop
 just dev          # the web UI on 5173, reads the token just api wrote
 just tauri        # the native window; needs a display
 just types        # rewrite packages/shared/src/generated from the Rust DTOs
 just screenshot   # retake only the committed screenshots under e2e/screenshots
 just status       # where we are: the ladder and the active plans
 ```
+
+`just seed` writes the same file on every machine, and writes it fresh each
+run: it deletes `.dev/dev.db` and fills a new one. Cleaning up is the whole
+file and never a row, because the ledgers are append only and the document
+series are gapless. Both recipes are development only and take no path;
+`docs/architecture.md` (Local development) says where that is enforced and
+why it is enforced in three places.
+
+Every `cargo` command builds into one folder shared by every worktree and
+the laptop clone (`CARGO_TARGET_DIR`, next to the main checkout's `.git`),
+never a `target/` of its own; `just claim` (which every recipe above that
+touches cargo runs first) points that folder at this checkout before a
+bare `cargo` command reuses another checkout's build by mistake.
 
 Every API route but `/health` needs the launch token, so `just api` runs
 first and `just dev` after it. From another machine, pass the browser's
@@ -81,7 +106,9 @@ From the architecture notes; the reasons are there.
 
 ## Quality gates
 
-`just gates`: `cargo fmt --check`, `cargo clippy --all-targets -D
+`just gates`: `cargo fmt --check`, the desktop's eslint (`just lint`,
+the rule against a bare input, button, select or table outside the
+component kit), `cargo clippy --all-targets -D
 warnings`, the generated TypeScript types diffed against the Rust DTOs,
 `cargo test`, `pnpm -r test`, `pnpm -r build`. CI runs the same on Linux
 and Windows, plus coverage with `cargo llvm-cov`. `just e2e` runs before a

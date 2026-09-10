@@ -13,12 +13,28 @@ import {
   fontSize,
   layout,
   radius,
+  observeBorder,
+  observeColor,
+  observeDarkBorder,
+  observeDarkColor,
+  observeDarkShadow,
+  observeDarkSurface,
+  observeDarkText,
+  observeRadius,
+  observeShadow,
+  observeSurface,
+  observeText,
+  registreBorder,
+  registreColor,
+  registreShadow,
+  registreSurface,
+  registreText,
   shadow,
   space,
   surface,
   textColor,
 } from "./semantic";
-import type { PxGroup, Token, TokenGroup, TokenPx } from "./semantic";
+import type { PxGroup, ThemeName, Token, TokenGroup, TokenPx } from "./semantic";
 
 const stringValue = (token: Token): string => {
   switch (token.kind) {
@@ -72,3 +88,49 @@ export const theme = {
 };
 
 export type Theme = typeof theme;
+
+/**
+ * The four themes resolved. The desktop never reads this: it switches with
+ * the `data-theme` attribute and the cascade does the work. React Native has
+ * no cascade, so mobile picks the object and re-renders. `theme` above stays
+ * Comptoir so an existing import keeps meaning what it meant.
+ *
+ * Every theme's groups carry the same keys as Comptoir's (the parity test in
+ * css.test.ts is what holds that), which is why this typechecks as a `Theme`
+ * without a cast.
+ */
+export const themes: Readonly<Record<ThemeName, Theme>> = {
+  comptoir: theme,
+  registre: {
+    ...theme,
+    colors: {
+      ...resolveStrings(registreColor),
+      surface: resolveStrings(registreSurface),
+      text: resolveStrings(registreText),
+      border: resolveStrings(registreBorder),
+    },
+    shadow: resolveStrings(registreShadow),
+  },
+  observe: {
+    ...theme,
+    colors: {
+      ...resolveStrings(observeColor),
+      surface: resolveStrings(observeSurface),
+      text: resolveStrings(observeText),
+      border: resolveStrings(observeBorder),
+    },
+    shadow: resolveStrings(observeShadow),
+    radius: resolveLengths(observeRadius),
+  },
+  "observe-dark": {
+    ...theme,
+    colors: {
+      ...resolveStrings(observeDarkColor),
+      surface: resolveStrings(observeDarkSurface),
+      text: resolveStrings(observeDarkText),
+      border: resolveStrings(observeDarkBorder),
+    },
+    shadow: resolveStrings(observeDarkShadow),
+    radius: resolveLengths(observeRadius),
+  },
+};

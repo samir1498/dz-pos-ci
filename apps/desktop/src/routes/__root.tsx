@@ -1,44 +1,29 @@
-import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
+// The router's outermost route. It sets the page direction and hands the
+// screen to the shell; the sidebar, the topbar and everything in them live in
+// components/AppShell.tsx, because the shell is a component the kit page can
+// render too and this file is routing.
+//
+// The screens inside are untouched by this. None of them knows it is in a
+// shell, which is what let the shell land before the screens were rewritten
+// on the kit.
+
+import { createRootRoute, Outlet } from "@tanstack/react-router";
+
+import { AppShell } from "@/components/AppShell";
 import { useTranslation } from "@/i18n";
-import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 
 export const Route = createRootRoute({ component: RootLayout });
 
 function RootLayout() {
-  const { t, dir } = useTranslation();
+  const { dir } = useTranslation();
   return (
+    // The provider already writes `dir` on the document element; this repeats
+    // it on the tree so a component reading its own inherited direction (and
+    // a test rendering a screen without the document) agrees with the page.
     <div dir={dir} className="min-h-screen">
-      <header className="flex items-center gap-4 border-b p-4">
-        <span className="font-semibold">{t("app_name")}</span>
-        <nav className="flex gap-4">
-          {/* The till comes first: it is the home and the screen the shop
-              spends its day on. */}
-          <Link to="/till" className="underline">
-            {t("nav_till")}
-          </Link>
-          <Link to="/customers" className="underline">
-            {t("nav_customers")}
-          </Link>
-          <Link to="/products" className="underline">
-            {t("nav_products")}
-          </Link>
-          {/* After the three screens a shop works in: a document is found
-              again here, not made here. */}
-          <Link to="/documents" className="underline">
-            {t("nav_documents")}
-          </Link>
-          <Link to="/settings" className="underline">
-            {t("nav_settings")}
-          </Link>
-        </nav>
-        {/* ms-auto (logical, not ml-auto): sits at the end of the row in
-            either direction, so it lands opposite the brand in fr/en and
-            ar alike without a second rule. */}
-        <LanguageSwitcher className="ms-auto" />
-      </header>
-      <main className="p-4">
+      <AppShell>
         <Outlet />
-      </main>
+      </AppShell>
     </div>
   );
 }

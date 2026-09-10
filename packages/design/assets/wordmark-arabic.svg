@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" width="200" height="48" role="img" aria-label="دينار بوس" direction="rtl">
+  <!-- Same cap height, same weight and the same brass on the second word as
+       the Latin one, so the two lockups share a silhouette. Live text for
+       the reason wordmark-latin.svg gives. -->
+  <text x="200" y="35" text-anchor="end" font-family="IBM Plex Sans Arabic, system-ui, sans-serif" font-size="36" font-weight="700" fill="#1a1815">دينار <tspan font-weight="600" fill="#b8862b">بوس</tspan></text>
+</svg>

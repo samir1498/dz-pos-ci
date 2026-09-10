@@ -14,14 +14,29 @@ use dzpos_core::models::category::Category;
 use dzpos_core::models::document::{Document, DocumentKind, DocumentLine, DocumentStatus};
 use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::models::shop::{Shop, StoreBlock};
+use dzpos_core::models::stock::Drift;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
 use dzpos_core::services::avoir::AvoirLine;
 use dzpos_core::services::backup::Backup;
+use dzpos_core::services::cash::{CashPosition, Outgoings, Takings};
+use dzpos_core::services::clock::Month;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
+use dzpos_core::services::dashboard::{
+    Dashboard, Figures, LowStock, Owed, Series, SeriesPoint, TopProduct,
+};
 use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
 use dzpos_core::services::documents::CancelEffect;
+use dzpos_core::services::expenses::{Expense, ExpenseCategory, NewExpense};
+use dzpos_core::services::import::{Applied, DryRun, Outcome, RowReport};
+use dzpos_core::services::preferences::Theme;
+use dzpos_core::services::purchases::{
+    NewLine, NewPurchase, Paid, Purchase, PurchaseLine, PurchaseStatus, PurchaseView, ReceiveLine,
+};
 use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, SaleKind, Warning};
 use dzpos_core::services::settings::DatedRegime;
+use dzpos_core::services::stock::{LastRecount, Report};
+use dzpos_core::services::supplier_debt::{SupplierAllocation, SupplierDebtKind};
+use dzpos_core::services::suppliers::{NewSupplier, SupplierWithBalance};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -353,6 +368,52 @@ impl From<DatedRegime> for DatedRegimeDto {
     }
 }
 
+/// The four themes the design package emits a `[data-theme]` block for.
+/// Serialised as the same string the CSS attribute carries, so the value in
+/// the shop file, the value on the wire and the value on `<html>` are one
+/// spelling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "ThemeDto.ts")]
+#[serde(rename_all = "kebab-case")]
+pub enum ThemeDto {
+    Comptoir,
+    Registre,
+    Observe,
+    ObserveDark,
+}
+
+impl From<Theme> for ThemeDto {
+    fn from(t: Theme) -> Self {
+        match t {
+            Theme::Comptoir => ThemeDto::Comptoir,
+            Theme::Registre => ThemeDto::Registre,
+            Theme::Observe => ThemeDto::Observe,
+            Theme::ObserveDark => ThemeDto::ObserveDark,
+        }
+    }
+}
+
+impl From<ThemeDto> for Theme {
+    fn from(t: ThemeDto) -> Self {
+        match t {
+            ThemeDto::Comptoir => Theme::Comptoir,
+            ThemeDto::Registre => Theme::Registre,
+            ThemeDto::Observe => Theme::Observe,
+            ThemeDto::ObserveDark => Theme::ObserveDark,
+        }
+    }
+}
+
+/// The theme the shop chose. `null` is not a missing answer: it is the shop
+/// saying "follow the machine", and the app then reads the operating system's
+/// light or dark preference.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "ThemeChoiceDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct ThemeChoiceDto {
+    pub theme: Option<ThemeDto>,
+}
+
 /// What the settings screen reads: the store block, the régime in force
 /// and, when the owner has dated a change ahead, the one coming.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -361,6 +422,8 @@ pub struct SettingsDto {
     pub store: StoreDto,
     pub regime: DatedRegimeDto,
     pub regime_planned: Option<DatedRegimeDto>,
+    /// `null` when the shop has never chosen one.
+    pub theme: Option<ThemeDto>,
 }
 
 /// A régime change: the régime and the day it applies from. Appended to
@@ -633,7 +696,7 @@ pub struct SaleDto {
     pub series: String,
     pub number: i64,
     /// The number as it is printed and as a customer quotes it back,
-    /// `FA-000001`. Built by the core beside the templates that print it
+    /// `FA-2026-000001`. Built by the core beside the templates that print it
     /// (`print::number`), so a screen naming a document and the paper in the
     /// customer's hand cannot spell it two ways.
     pub printed_number: String,
@@ -1368,4 +1431,1150 @@ impl NewPaymentDto {
             self.amount_centimes,
         )?))
     }
+}
+
+/// Why the supplier debt moved (features.md §1). The whole union crosses from
+/// the first version, the way the customer side's does: the receipt path
+/// writes the `purchase` and `return` rows, and a screen that met an unknown kind could
+/// only refuse the whole answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "SupplierDebtKindDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum SupplierDebtKindDto {
+    Opening,
+    Purchase,
+    Payment,
+    Return,
+    Adjustment,
+}
+
+impl From<SupplierDebtKind> for SupplierDebtKindDto {
+    fn from(k: SupplierDebtKind) -> Self {
+        match k {
+            SupplierDebtKind::Opening => SupplierDebtKindDto::Opening,
+            SupplierDebtKind::Purchase => SupplierDebtKindDto::Purchase,
+            SupplierDebtKind::Payment => SupplierDebtKindDto::Payment,
+            SupplierDebtKind::Return => SupplierDebtKindDto::Return,
+            SupplierDebtKind::Adjustment => SupplierDebtKindDto::Adjustment,
+        }
+    }
+}
+
+/// The fiche as a screen reads it, with what the shop owes the supplier. The
+/// balance is the ledger's sum computed in the core, never a stored column,
+/// and it travels with the fiche so the list does not make a call per row.
+///
+/// There is no credit limit and no `party_kind`: those are what a shop grants
+/// a buyer, and nothing it hands a supplier is a document it issues.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SupplierDto.ts")]
+pub struct SupplierDto {
+    pub id: i32,
+    pub shop_id: i32,
+    pub name: String,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    pub notes: Option<String>,
+    pub active: bool,
+    /// Below zero is the supplier owing the shop after an advance or a return
+    /// past what was due.
+    pub balance_centimes: i64,
+}
+
+impl From<SupplierWithBalance> for SupplierDto {
+    fn from(s: SupplierWithBalance) -> Self {
+        let balance = s.balance.as_centimes();
+        let s = s.supplier;
+        SupplierDto {
+            id: s.id,
+            shop_id: s.shop_id,
+            name: s.name,
+            phone: s.phone,
+            address: s.address,
+            rc: s.rc,
+            nif: s.nif,
+            nis: s.nis,
+            ai: s.ai,
+            notes: s.notes,
+            active: s.active,
+            balance_centimes: balance,
+        }
+    }
+}
+
+/// The fields a supplier fiche is written with, on a create and on an update
+/// alike. The whole row travels every time: a field left out is a bug at the
+/// edge, and a null clears the column.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "SupplierWriteDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct SupplierWriteDto {
+    pub name: String,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    pub notes: Option<String>,
+    pub active: bool,
+    /// Why a fiche is being closed. Asked for only when the update closes one
+    /// whose account is still open, and ignored on every other update. The
+    /// close route sends the same reason under its own field.
+    #[serde(default)]
+    pub close_reason: Option<String>,
+}
+
+/// A new fiche: the same fields, plus the debt the shop was already carrying
+/// to this supplier before it had the app. The opening debt is only on the
+/// create because it is a ledger movement, not a column.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewSupplierDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewSupplierDto {
+    pub name: String,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    pub notes: Option<String>,
+    #[serde(default = "yes")]
+    pub active: bool,
+    #[serde(default)]
+    pub opening_debt_centimes: Option<i64>,
+}
+
+/// Why the shop has stopped buying from this supplier. Its own body rather
+/// than a field of the fiche: closing is one decision and the route says so.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "CloseSupplierDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct CloseSupplierDto {
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+impl From<SupplierWriteDto> for NewSupplier {
+    fn from(d: SupplierWriteDto) -> Self {
+        NewSupplier {
+            name: d.name,
+            phone: d.phone,
+            address: d.address,
+            rc: d.rc,
+            nif: d.nif,
+            nis: d.nis,
+            ai: d.ai,
+            notes: d.notes,
+            active: d.active,
+        }
+    }
+}
+
+impl From<NewSupplierDto> for NewSupplier {
+    fn from(d: NewSupplierDto) -> Self {
+        NewSupplier::from(SupplierWriteDto {
+            name: d.name,
+            phone: d.phone,
+            address: d.address,
+            rc: d.rc,
+            nif: d.nif,
+            nis: d.nis,
+            ai: d.ai,
+            notes: d.notes,
+            active: d.active,
+            // A fiche being created closes nothing.
+            close_reason: None,
+        })
+    }
+}
+
+/// What one payment placed on one order. A payment is one movement and the
+/// orders it settled are these, oldest first.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SupplierAllocationDto.ts")]
+pub struct SupplierAllocationDto {
+    pub purchase_id: i32,
+    pub amount_centimes: i64,
+}
+
+impl From<SupplierAllocation> for SupplierAllocationDto {
+    fn from(a: SupplierAllocation) -> Self {
+        SupplierAllocationDto {
+            purchase_id: a.purchase_id,
+            amount_centimes: a.amount.as_centimes(),
+        }
+    }
+}
+
+/// One movement of the supplier ledger, with the balance it left behind and,
+/// on a payment, the orders it settled. The allocations travel with the row
+/// so a fiche showing a payment never asks a second time what the money went
+/// to; every other kind carries an empty list.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SupplierEntryDto.ts")]
+pub struct SupplierEntryDto {
+    pub id: i32,
+    pub supplier_id: i32,
+    /// The order the movement came from, when it came from one. An opening
+    /// balance, a payment and a correction cite none.
+    pub purchase_id: Option<i32>,
+    pub kind: SupplierDebtKindDto,
+    /// What the movement added to what the shop owes; zero on a payment or a
+    /// return.
+    pub debit_centimes: i64,
+    /// What it took off; zero on a purchase or an opening balance.
+    pub credit_centimes: i64,
+    /// The balance as of this movement: every older one counted, no newer
+    /// one. Computed in the core (services::supplier_debt).
+    pub balance_after_centimes: i64,
+    /// Null on every movement that is not a payment.
+    pub payment_mode: Option<PaymentMethodDto>,
+    pub user_id: i32,
+    pub note: Option<String>,
+    pub allocations: Vec<SupplierAllocationDto>,
+    /// `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
+    pub created_at: String,
+}
+
+/// A supplier's ledger: the movements newest first and the balance they sum
+/// to. The balance is in the envelope so a screen showing it never adds the
+/// column up itself.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SupplierLedgerDto.ts")]
+pub struct SupplierLedgerDto {
+    pub supplier_id: i32,
+    pub balance_centimes: i64,
+    pub entries: Vec<SupplierEntryDto>,
+}
+
+/// A supplier's account over a range of days: what the shop owed on the
+/// morning of `from`, every movement between the two days oldest first, and
+/// what it owed on the evening of `to`. Both balances are read off the core's
+/// running column, so a page printing them adds nothing up.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SupplierStatementDto.ts")]
+pub struct SupplierStatementDto {
+    pub supplier_id: i32,
+    /// `YYYY-MM-DD`, both ends included.
+    pub from: String,
+    pub to: String,
+    pub opening_centimes: i64,
+    pub entries: Vec<SupplierEntryDto>,
+    pub closing_centimes: i64,
+}
+
+/// What an expense is filed under (features.md §1, Expense). The row carries
+/// an i18n key and not a label: the desktop reads the three languages from
+/// its own files by that key, so a shop switching language does not rewrite
+/// its rows. `active` travels because a retired category still names the
+/// expenses filed under it while the form refuses new ones.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "ExpenseCategoryDto.ts")]
+pub struct ExpenseCategoryDto {
+    pub id: i32,
+    pub key: String,
+    pub sort_order: i32,
+    pub active: bool,
+}
+
+impl From<ExpenseCategory> for ExpenseCategoryDto {
+    fn from(c: ExpenseCategory) -> Self {
+        ExpenseCategoryDto {
+            id: c.id,
+            key: c.key,
+            sort_order: c.sort_order,
+            active: c.active,
+        }
+    }
+}
+
+/// One expense. The day is `YYYY-MM-DD` on the shop's calendar, which is what
+/// the column holds.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "ExpenseDto.ts")]
+pub struct ExpenseDto {
+    pub id: i32,
+    pub category_id: i32,
+    pub amount_centimes: i64,
+    pub expense_date: String,
+    pub note: Option<String>,
+}
+
+impl From<Expense> for ExpenseDto {
+    fn from(e: Expense) -> Self {
+        ExpenseDto {
+            id: e.id,
+            category_id: e.category_id,
+            amount_centimes: e.amount.as_centimes(),
+            expense_date: e.expense_date,
+            note: e.note,
+        }
+    }
+}
+
+/// One month of expenses and what it came to. The total is the core's, summed
+/// over the same days the list covers: a screen adding the rows up would be a
+/// second answer to the same question.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "ExpensesDto.ts")]
+pub struct ExpensesDto {
+    /// `YYYY-MM`, as the month was read.
+    pub month: String,
+    pub total_centimes: i64,
+    pub expenses: Vec<ExpenseDto>,
+}
+
+/// An expense as the form sends it. The user is not on the wire: it comes
+/// from the caller's identity like every other write.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewExpenseDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewExpenseDto {
+    pub category_id: i32,
+    pub amount_centimes: i64,
+    pub expense_date: String,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+impl TryFrom<NewExpenseDto> for NewExpense {
+    type Error = ApiError;
+
+    fn try_from(d: NewExpenseDto) -> Result<Self, ApiError> {
+        Ok(NewExpense {
+            category_id: d.category_id,
+            amount: Money::centimes(within_js_safe_range("amount_centimes", d.amount_centimes)?),
+            expense_date: parse_day("expense_date", &d.expense_date)?,
+            note: d.note,
+        })
+    }
+}
+
+/// Money that came in over the period, and what it adds up to. The total
+/// travels rather than being added on the screen, for the reason the month's
+/// does: one question, one answer.
+///
+/// `sales_centimes` is what the drawer took, the droit de timbre included.
+/// `stamp_centimes` is that tax on its own, a part of the figure above and
+/// never a second one to add: a screen showing the shop's own takings
+/// subtracts it, and one counting the till does not.
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export_to = "TakingsDto.ts")]
+pub struct TakingsDto {
+    pub sales_centimes: i64,
+    pub stamp_centimes: i64,
+    pub customer_payments_centimes: i64,
+    pub total_centimes: i64,
+}
+
+impl TryFrom<Takings> for TakingsDto {
+    type Error = ApiError;
+
+    fn try_from(t: Takings) -> Result<Self, ApiError> {
+        Ok(TakingsDto {
+            sales_centimes: t.sales.as_centimes(),
+            stamp_centimes: t.stamp.as_centimes(),
+            customer_payments_centimes: t.customer_payments.as_centimes(),
+            total_centimes: t.total().map_err(ApiError::from)?.as_centimes(),
+        })
+    }
+}
+
+/// Cash that left over the period. `refunds_centimes` is zero in this
+/// version: an avoir credits the customer's ledger and brings the goods back,
+/// and nothing says the drawer opened for it.
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export_to = "OutgoingsDto.ts")]
+pub struct OutgoingsDto {
+    pub refunds_centimes: i64,
+    pub supplier_payments_centimes: i64,
+    pub expenses_centimes: i64,
+    pub total_centimes: i64,
+}
+
+impl TryFrom<Outgoings> for OutgoingsDto {
+    type Error = ApiError;
+
+    fn try_from(o: Outgoings) -> Result<Self, ApiError> {
+        Ok(OutgoingsDto {
+            refunds_centimes: o.refunds.as_centimes(),
+            supplier_payments_centimes: o.supplier_payments.as_centimes(),
+            expenses_centimes: o.expenses.as_centimes(),
+            total_centimes: o.total().map_err(ApiError::from)?.as_centimes(),
+        })
+    }
+}
+
+/// The cash position over a day or a month (features.md §1, Dashboard). Never
+/// a stored figure: the core sums the ledgers on every call, and `from` and
+/// `to` say which days it read so a screen shows the range it got rather than
+/// the one it asked for.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "CashPositionDto.ts")]
+pub struct CashPositionDto {
+    pub from: String,
+    pub to: String,
+    pub cash_in: TakingsDto,
+    pub cash_out: OutgoingsDto,
+    pub cash_centimes: i64,
+    pub card_in: TakingsDto,
+}
+
+impl TryFrom<CashPosition> for CashPositionDto {
+    type Error = ApiError;
+
+    fn try_from(p: CashPosition) -> Result<Self, ApiError> {
+        Ok(CashPositionDto {
+            from: p.from.format(DATE_FORMAT).to_string(),
+            to: p.to.format(DATE_FORMAT).to_string(),
+            cash_in: TakingsDto::try_from(p.cash_in)?,
+            cash_out: OutgoingsDto::try_from(p.cash_out)?,
+            cash_centimes: p.cash.as_centimes(),
+            card_in: TakingsDto::try_from(p.card_in)?,
+        })
+    }
+}
+
+/// One product the recount put right: what the column said it had, what its
+/// movements add up to, and the difference between them. The name travels
+/// with the id because the panel is read by a person and it is what the log
+/// stored, so a past run reads the same after a rename.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "StockDriftDto.ts")]
+pub struct StockDriftDto {
+    pub product_id: i32,
+    pub name: String,
+    pub cached_milli: i64,
+    pub ledger_milli: i64,
+    pub difference_milli: i64,
+}
+
+impl From<Drift> for StockDriftDto {
+    fn from(d: Drift) -> Self {
+        StockDriftDto {
+            product_id: d.product_id,
+            difference_milli: d.difference_milli(),
+            name: d.name,
+            cached_milli: d.cached_milli,
+            ledger_milli: d.ledger_milli,
+        }
+    }
+}
+
+/// What one run of the recount found and did. `products_checked` is there so
+/// an empty drift list reads as "nothing is wrong" rather than as "nothing
+/// was looked at".
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "StockRecountDto.ts")]
+pub struct StockRecountDto {
+    /// The day on the shop's calendar the run was marked under.
+    pub day: String,
+    pub products_checked: i64,
+    pub drifts: Vec<StockDriftDto>,
+}
+
+impl From<Report> for StockRecountDto {
+    fn from(r: Report) -> Self {
+        StockRecountDto {
+            day: r.day,
+            // A count of this shop's products. The bound is unreachable on
+            // any file a shop could have, and a number that is merely
+            // bounded beats a refusal on a screen that is only reporting.
+            products_checked: i64::try_from(r.checked).unwrap_or(i64::MAX),
+            drifts: r.drifts.into_iter().map(StockDriftDto::from).collect(),
+        }
+    }
+}
+
+/// The last run as the file remembers it. `last_run_day` is null when the
+/// shop has never recounted, which is what a file opened for the first time
+/// says before the daily loop has woken once.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "LastStockRecountDto.ts")]
+pub struct LastStockRecountDto {
+    pub last_run_day: Option<String>,
+    pub drifts: Vec<StockDriftDto>,
+}
+
+impl From<LastRecount> for LastStockRecountDto {
+    fn from(l: LastRecount) -> Self {
+        LastStockRecountDto {
+            last_run_day: l.last_run_day,
+            drifts: l.drifts.into_iter().map(StockDriftDto::from).collect(),
+        }
+    }
+}
+
+/// `YYYY-MM` and nothing else: a month is the range a figure is asked over,
+/// and "2026-9" or a day would be answered for another one.
+///
+/// The month is written back out and compared with what came in, the way
+/// `parse_day` compares its day. Rust's integer parser takes a sign, so
+/// "+026-09" is four characters of year that read as 26 and "2026-+9" two of
+/// month that read as 9: both pass every check on shape and on length, and
+/// only the round trip catches them. A figure answered for the year 26 is one
+/// nobody would think to doubt.
+pub fn parse_month(field: &'static str, text: &str) -> Result<Month, ApiError> {
+    let refuse = || ApiError::Request(CoreError::validation(field, "a month is written YYYY-MM"));
+    let (year, month) = text.split_once('-').ok_or_else(refuse)?;
+    let year: i32 = year.parse().map_err(|_| refuse())?;
+    let month: u32 = month.parse().map_err(|_| refuse())?;
+    let parsed = Month::new(year, month).map_err(ApiError::Request)?;
+    if parsed.as_text() != text {
+        return Err(refuse());
+    }
+    Ok(parsed)
+}
+
+/// Where an order stands (features.md §1, Purchase). The whole union crosses
+/// from the first version: a screen that met an unknown state could only
+/// refuse the whole answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "PurchaseStatusDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum PurchaseStatusDto {
+    Ordered,
+    PartiallyReceived,
+    Received,
+    Cancelled,
+    ClosedShort,
+}
+
+impl From<PurchaseStatus> for PurchaseStatusDto {
+    fn from(s: PurchaseStatus) -> Self {
+        match s {
+            PurchaseStatus::Ordered => PurchaseStatusDto::Ordered,
+            PurchaseStatus::PartiallyReceived => PurchaseStatusDto::PartiallyReceived,
+            PurchaseStatus::Received => PurchaseStatusDto::Received,
+            PurchaseStatus::Cancelled => PurchaseStatusDto::Cancelled,
+            PurchaseStatus::ClosedShort => PurchaseStatusDto::ClosedShort,
+        }
+    }
+}
+
+impl From<PurchaseStatusDto> for PurchaseStatus {
+    fn from(s: PurchaseStatusDto) -> Self {
+        match s {
+            PurchaseStatusDto::Ordered => PurchaseStatus::Ordered,
+            PurchaseStatusDto::PartiallyReceived => PurchaseStatus::PartiallyReceived,
+            PurchaseStatusDto::Received => PurchaseStatus::Received,
+            PurchaseStatusDto::Cancelled => PurchaseStatus::Cancelled,
+            PurchaseStatusDto::ClosedShort => PurchaseStatus::ClosedShort,
+        }
+    }
+}
+
+/// An order as the list reads it: the paper and nothing of its lines. The
+/// list shows a row per order, and the lines are what `/purchases/{id}`
+/// answers.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PurchaseDto.ts")]
+pub struct PurchaseDto {
+    pub id: i32,
+    pub shop_id: i32,
+    pub supplier_id: i32,
+    /// The number written on the paper the supplier sent, when it carried
+    /// one.
+    pub supplier_document_number: Option<String>,
+    /// `YYYY-MM-DD` on the shop's calendar.
+    pub purchase_date: String,
+    pub due_date: Option<String>,
+    pub transport_centimes: i64,
+    pub extra_costs_centimes: i64,
+    pub status: PurchaseStatusDto,
+    pub user_id: i32,
+    pub note: Option<String>,
+    /// `YYYY-MM-DD HH:MM:SS`, the moment the row was written.
+    pub created_at: String,
+}
+
+impl From<Purchase> for PurchaseDto {
+    fn from(p: Purchase) -> Self {
+        PurchaseDto {
+            id: p.id,
+            shop_id: p.shop_id,
+            supplier_id: p.supplier_id,
+            supplier_document_number: p.supplier_document_number,
+            purchase_date: p.purchase_date,
+            due_date: p.due_date,
+            transport_centimes: p.transport.as_centimes(),
+            extra_costs_centimes: p.extra_costs.as_centimes(),
+            status: p.status.into(),
+            user_id: p.user_id,
+            note: p.note,
+            created_at: p.created_at.format(DATE_TIME_FORMAT).to_string(),
+        }
+    }
+}
+
+/// One product on an order, with what has arrived and what has gone back.
+/// Both totals are the file's running columns, so a screen counting the
+/// receipts itself would be a second answer.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PurchaseLineDto.ts")]
+pub struct PurchaseLineDto {
+    pub id: i32,
+    pub product_id: i32,
+    pub qty_ordered_milli: i64,
+    /// What the supplier charges for the unit.
+    pub unit_cost_centimes: i64,
+    /// That plus this line's share of the transport and the extra costs,
+    /// fixed when the order was saved.
+    pub landed_unit_cost_centimes: i64,
+    pub qty_received_milli: i64,
+    pub qty_returned_milli: i64,
+}
+
+impl From<PurchaseLine> for PurchaseLineDto {
+    fn from(l: PurchaseLine) -> Self {
+        PurchaseLineDto {
+            id: l.id,
+            product_id: l.product_id,
+            qty_ordered_milli: l.qty_ordered_milli,
+            unit_cost_centimes: l.unit_cost.as_centimes(),
+            landed_unit_cost_centimes: l.landed_unit_cost.as_centimes(),
+            qty_received_milli: l.qty_received_milli,
+            qty_returned_milli: l.qty_returned_milli,
+        }
+    }
+}
+
+/// What arrived on one delivery, line by line.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PurchaseReceiptLineDto.ts")]
+pub struct PurchaseReceiptLineDto {
+    pub purchase_line_id: i32,
+    pub qty_milli: i64,
+}
+
+/// One bon de réception: the delivery, its number and what came on it. It is
+/// not a document and takes no document number; the series is
+/// `reception:<year>` and resets on 1 January like every other one.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PurchaseReceiptDto.ts")]
+pub struct PurchaseReceiptDto {
+    pub id: i32,
+    pub series: String,
+    pub number: i64,
+    /// `YYYY-MM-DD HH:MM:SS` on the shop's calendar.
+    pub received_at: String,
+    pub user_id: i32,
+    pub note: Option<String>,
+    pub lines: Vec<PurchaseReceiptLineDto>,
+}
+
+/// A whole order: the paper, its lines with what has arrived and gone back,
+/// and every delivery against it, newest first. Every route that changes an
+/// order answers this, so the screen never has a change without the state it
+/// left behind.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PurchaseDetailDto.ts")]
+pub struct PurchaseDetailDto {
+    pub purchase: PurchaseDto,
+    pub lines: Vec<PurchaseLineDto>,
+    pub receipts: Vec<PurchaseReceiptDto>,
+}
+
+impl From<PurchaseView> for PurchaseDetailDto {
+    fn from(v: PurchaseView) -> Self {
+        PurchaseDetailDto {
+            purchase: PurchaseDto::from(v.purchase),
+            lines: v.lines.into_iter().map(PurchaseLineDto::from).collect(),
+            receipts: v
+                .receipts
+                .into_iter()
+                .map(|r| PurchaseReceiptDto {
+                    id: r.receipt.id,
+                    series: r.receipt.series,
+                    number: r.receipt.number,
+                    received_at: r.receipt.received_at.format(DATE_TIME_FORMAT).to_string(),
+                    user_id: r.receipt.user_id,
+                    note: r.receipt.note,
+                    lines: r
+                        .lines
+                        .into_iter()
+                        .map(|l| PurchaseReceiptLineDto {
+                            purchase_line_id: l.purchase_line_id,
+                            qty_milli: l.qty_milli,
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// One line of an order as the form sends it.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewPurchaseLineDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewPurchaseLineDto {
+    pub product_id: i32,
+    pub qty_ordered_milli: i64,
+    pub unit_cost_centimes: i64,
+}
+
+/// Money handed to the supplier as the order is written. The mode is on it
+/// because the ledger's file refuses a payment that does not say how it was
+/// taken.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "PaidNowDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct PaidNowDto {
+    pub amount_centimes: i64,
+    pub payment_mode: PaymentMethodDto,
+}
+
+/// An order as the screen sends it. `receive_now` is the common case of
+/// features.md §1: the goods came with the paper, so the whole receipt is
+/// written in the same transaction.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewPurchaseDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewPurchaseDto {
+    pub supplier_id: i32,
+    #[serde(default)]
+    pub supplier_document_number: Option<String>,
+    pub purchase_date: String,
+    #[serde(default)]
+    pub due_date: Option<String>,
+    #[serde(default)]
+    pub transport_centimes: i64,
+    #[serde(default)]
+    pub extra_costs_centimes: i64,
+    #[serde(default)]
+    pub note: Option<String>,
+    pub lines: Vec<NewPurchaseLineDto>,
+    #[serde(default)]
+    pub paid_now: Option<PaidNowDto>,
+    #[serde(default)]
+    pub receive_now: bool,
+}
+
+impl NewPurchaseDto {
+    /// The order as the core takes it. Every amount is checked against the
+    /// safe-integer bound here, at the edge, like every other one on the
+    /// wire; what the amounts mean is the core's business.
+    pub fn into_core(self) -> Result<NewPurchase, ApiError> {
+        let mut lines = Vec::with_capacity(self.lines.len());
+        for line in self.lines {
+            lines.push(NewLine {
+                product_id: line.product_id,
+                qty_ordered_milli: line.qty_ordered_milli,
+                unit_cost: Money::centimes(within_js_safe_range(
+                    "unit_cost_centimes",
+                    line.unit_cost_centimes,
+                )?),
+            });
+        }
+        let paid_now = match self.paid_now {
+            None => None,
+            Some(paid) => Some(Paid {
+                amount: Money::centimes(within_js_safe_range(
+                    "paid_now_centimes",
+                    paid.amount_centimes,
+                )?),
+                mode: paid.payment_mode.into(),
+            }),
+        };
+        Ok(NewPurchase {
+            supplier_id: self.supplier_id,
+            supplier_document_number: self.supplier_document_number,
+            purchase_date: self.purchase_date,
+            due_date: self.due_date,
+            transport: Money::centimes(within_js_safe_range(
+                "transport_centimes",
+                self.transport_centimes,
+            )?),
+            extra_costs: Money::centimes(within_js_safe_range(
+                "extra_costs_centimes",
+                self.extra_costs_centimes,
+            )?),
+            note: self.note,
+            lines,
+            paid_now,
+            receive_now: self.receive_now,
+        })
+    }
+}
+
+/// How much of one ordered line a delivery took in, or a return sent back.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "ReceiveLineDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct ReceiveLineDto {
+    pub purchase_line_id: i32,
+    pub qty_milli: i64,
+}
+
+impl From<ReceiveLineDto> for ReceiveLine {
+    fn from(l: ReceiveLineDto) -> Self {
+        ReceiveLine {
+            purchase_line_id: l.purchase_line_id,
+            qty_milli: l.qty_milli,
+        }
+    }
+}
+
+/// A delivery, or a return: the lines it names and a note if the shop wants
+/// to say why. The two carry the same fields because they are the same
+/// question asked in two directions, and the route is what says which.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewReceiptDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewReceiptDto {
+    pub lines: Vec<ReceiveLineDto>,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// Why an order was cancelled or closed short. Required, because writing off
+/// goods that never came is a decision and the audit log is where it is
+/// written down.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "CloseOrderDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct CloseOrderDto {
+    pub reason: String,
+}
+
+/// What one stretch of days came to (features.md §1, Dashboard). Every field
+/// is derived from the ledgers when the screen asks; no column stores any of
+/// it.
+///
+/// `sales_ttc_centimes` is what the tickets and factures of the period asked
+/// for over the counter, credit notes not taken off it. The margin is the
+/// other question: `lines_ht_centimes` less `discounts_centimes` is the
+/// revenue, `cost_of_goods_centimes` is what those goods cost at the cost
+/// they left on, and `margin_centimes` is the difference. A credit note
+/// lowers the revenue and the cost together, so what it leaves is the margin
+/// of what the customer kept.
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export_to = "DashboardFiguresDto.ts")]
+pub struct DashboardFiguresDto {
+    pub sales_ttc_centimes: i64,
+    pub sales_count: i64,
+    pub lines_ht_centimes: i64,
+    pub discounts_centimes: i64,
+    pub sales_ht_centimes: i64,
+    pub cost_of_goods_centimes: i64,
+    pub margin_centimes: i64,
+    pub expenses_centimes: i64,
+}
+
+impl From<Figures> for DashboardFiguresDto {
+    fn from(f: Figures) -> Self {
+        DashboardFiguresDto {
+            sales_ttc_centimes: f.sales_ttc.as_centimes(),
+            sales_count: f.sales_count,
+            lines_ht_centimes: f.lines_ht.as_centimes(),
+            discounts_centimes: f.discounts.as_centimes(),
+            sales_ht_centimes: f.sales_ht.as_centimes(),
+            cost_of_goods_centimes: f.cost_of_goods.as_centimes(),
+            margin_centimes: f.margin.as_centimes(),
+            expenses_centimes: f.expenses.as_centimes(),
+        }
+    }
+}
+
+/// A product the shop is short of: what the count says it has, and the
+/// threshold somebody set on the fiche. Quantities are thousandths of the
+/// unit, the way every quantity on the wire is.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "LowStockDto.ts")]
+pub struct LowStockDto {
+    pub product_id: i32,
+    pub name: String,
+    pub qty_on_hand_milli: i64,
+    pub low_stock_at_milli: i64,
+}
+
+impl From<LowStock> for LowStockDto {
+    fn from(l: LowStock) -> Self {
+        LowStockDto {
+            product_id: l.product_id,
+            name: l.name,
+            qty_on_hand_milli: l.qty_on_hand_milli,
+            low_stock_at_milli: l.low_stock_at_milli,
+        }
+    }
+}
+
+/// One product's month. `qty_milli` is net of what came back, so a product
+/// sold and credited in the same month reads as nothing moved.
+///
+/// `lines_ht_centimes` is this product's lines and not its share of a
+/// remise given off a whole document, which belongs to no line. It is
+/// therefore not the same figure as `DashboardFiguresDto::sales_ht_centimes`,
+/// and the margins of the products on a month that carried a remise do not
+/// add up to that month's margin. The ranking is what these are for.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "TopProductDto.ts")]
+pub struct TopProductDto {
+    pub product_id: i32,
+    pub name: String,
+    pub qty_milli: i64,
+    pub lines_ht_centimes: i64,
+    pub cost_of_goods_centimes: i64,
+    pub margin_centimes: i64,
+}
+
+impl From<TopProduct> for TopProductDto {
+    fn from(p: TopProduct) -> Self {
+        TopProductDto {
+            product_id: p.product_id,
+            name: p.name,
+            qty_milli: p.qty_milli,
+            lines_ht_centimes: p.lines_ht.as_centimes(),
+            cost_of_goods_centimes: p.cost_of_goods.as_centimes(),
+            margin_centimes: p.margin.as_centimes(),
+        }
+    }
+}
+
+/// One side of the outstanding money. `parties` counts only those in the red:
+/// a customer holding credit is left out rather than netted off, because
+/// money the shop owes one of them does not reduce what another one owes.
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export_to = "OwedDto.ts")]
+pub struct OwedDto {
+    pub total_centimes: i64,
+    pub parties: i64,
+}
+
+impl From<Owed> for OwedDto {
+    fn from(o: Owed) -> Self {
+        OwedDto {
+            total_centimes: o.total.as_centimes(),
+            parties: o.parties,
+        }
+    }
+}
+
+/// The whole dashboard for one day and the month it falls in on the shop's
+/// calendar. The two top lists are the month's, not the day's: a day names
+/// too few products for a ranking to say anything.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "DashboardDto.ts")]
+pub struct DashboardDto {
+    pub day: String,
+    pub month: String,
+    pub today: DashboardFiguresDto,
+    pub this_month: DashboardFiguresDto,
+    pub cash_today: CashPositionDto,
+    pub cash_this_month: CashPositionDto,
+    pub low_stock: Vec<LowStockDto>,
+    pub top_by_quantity: Vec<TopProductDto>,
+    pub top_by_margin: Vec<TopProductDto>,
+    pub customer_debt: OwedDto,
+    pub supplier_debt: OwedDto,
+    pub open_purchases: i64,
+}
+
+impl TryFrom<Dashboard> for DashboardDto {
+    type Error = ApiError;
+
+    fn try_from(d: Dashboard) -> Result<Self, ApiError> {
+        Ok(DashboardDto {
+            day: d.day.format(DATE_FORMAT).to_string(),
+            month: d.month.as_text(),
+            today: DashboardFiguresDto::from(d.today),
+            this_month: DashboardFiguresDto::from(d.this_month),
+            cash_today: CashPositionDto::try_from(d.cash_today)?,
+            cash_this_month: CashPositionDto::try_from(d.cash_this_month)?,
+            low_stock: d.low_stock.into_iter().map(LowStockDto::from).collect(),
+            top_by_quantity: d
+                .top_by_quantity
+                .into_iter()
+                .map(TopProductDto::from)
+                .collect(),
+            top_by_margin: d
+                .top_by_margin
+                .into_iter()
+                .map(TopProductDto::from)
+                .collect(),
+            customer_debt: OwedDto::from(d.customer_debt),
+            supplier_debt: OwedDto::from(d.supplier_debt),
+            open_purchases: d.open_purchases,
+        })
+    }
+}
+
+/// One bucket of the dashboard's chart: a day, or the week its days were
+/// folded into. `from` and `to` are both included and they are equal on a
+/// day, so a tooltip names the range the figure covers rather than the one
+/// the screen asked for.
+///
+/// `cash_in_centimes` is the drawer's side alone, sales paid on the spot plus
+/// money handed over against a debt. The card takings are a movement of the
+/// bank and not of the till, so they are not in this line; the day's own
+/// `/cash` answer is where they are.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "DashboardSeriesPointDto.ts")]
+pub struct DashboardSeriesPointDto {
+    pub from: String,
+    pub to: String,
+    pub figures: DashboardFiguresDto,
+    pub cash_in_centimes: i64,
+}
+
+impl From<SeriesPoint> for DashboardSeriesPointDto {
+    fn from(p: SeriesPoint) -> Self {
+        DashboardSeriesPointDto {
+            from: p.from.format(DATE_FORMAT).to_string(),
+            to: p.to.format(DATE_FORMAT).to_string(),
+            figures: DashboardFiguresDto::from(p.figures),
+            cash_in_centimes: p.cash_in.as_centimes(),
+        }
+    }
+}
+
+/// The dashboard's chart: a stretch of days ending on the day the screen
+/// asked about, each on its own and folded into weeks. Both lists run oldest
+/// first, and `days` skips nothing: a day the shop sold nothing is a row of
+/// zeros, because a gap in a chart reads as a day it was shut.
+///
+/// The weeks are cut back from `to`, so the last bucket is a whole week of
+/// the days the shop is in and the odd ones fall at the far end. Thirty days
+/// is four weeks and two days.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "DashboardSeriesDto.ts")]
+pub struct DashboardSeriesDto {
+    pub from: String,
+    pub to: String,
+    pub days: Vec<DashboardSeriesPointDto>,
+    pub weeks: Vec<DashboardSeriesPointDto>,
+}
+
+impl From<Series> for DashboardSeriesDto {
+    fn from(s: Series) -> Self {
+        DashboardSeriesDto {
+            from: s.from.format(DATE_FORMAT).to_string(),
+            to: s.to.format(DATE_FORMAT).to_string(),
+            days: s
+                .days
+                .into_iter()
+                .map(DashboardSeriesPointDto::from)
+                .collect(),
+            weeks: s
+                .weeks
+                .into_iter()
+                .map(DashboardSeriesPointDto::from)
+                .collect(),
+        }
+    }
+}
+
+/// What the import would do with one row of the file, flattened for the
+/// wire: three words rather than a tagged union, with the field and the
+/// reason beside them.
+///
+/// `field` and `reason` are the core's stable keys, not sentences: the
+/// screen translates them, the same way it translates an error code
+/// (architecture.md, error policy). A row that is created or updated
+/// carries neither.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "ImportOutcomeDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum ImportOutcomeDto {
+    Created,
+    Updated,
+    Refused,
+}
+
+/// One line of the dry run, named the way a person reading the spreadsheet
+/// beside it would: the row number the spreadsheet shows, header counted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "ImportRowDto.ts")]
+pub struct ImportRowDto {
+    pub row: u32,
+    pub name: String,
+    pub outcome: ImportOutcomeDto,
+    /// The column the refusal is about, and why. Null on a row that stands.
+    pub field: Option<String>,
+    pub reason: Option<String>,
+}
+
+impl From<&RowReport> for ImportRowDto {
+    fn from(r: &RowReport) -> Self {
+        let (outcome, field, reason) = match r.outcome {
+            Outcome::Created => (ImportOutcomeDto::Created, None, None),
+            Outcome::Updated => (ImportOutcomeDto::Updated, None, None),
+            Outcome::Refused { field, reason } => (
+                ImportOutcomeDto::Refused,
+                Some(field.to_owned()),
+                Some(reason.to_owned()),
+            ),
+        };
+        ImportRowDto {
+            row: r.row,
+            name: r.name.clone(),
+            outcome,
+            field,
+            reason,
+        }
+    }
+}
+
+/// The whole dry run: every row with its verdict, and the two counts the
+/// screen puts above the table. Nothing was written.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "ImportDryRunDto.ts")]
+pub struct ImportDryRunDto {
+    pub rows: Vec<ImportRowDto>,
+    pub accepted: i64,
+    pub refused: i64,
+}
+
+impl From<DryRun> for ImportDryRunDto {
+    fn from(d: DryRun) -> Self {
+        ImportDryRunDto {
+            rows: d.rows.iter().map(ImportRowDto::from).collect(),
+            accepted: i64::try_from(d.accepted).unwrap_or(i64::MAX),
+            refused: i64::try_from(d.refused).unwrap_or(i64::MAX),
+        }
+    }
+}
+
+/// What an apply wrote: the counts the audit row carries, so the screen and
+/// the log say the same thing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "ImportAppliedDto.ts")]
+pub struct ImportAppliedDto {
+    pub created: i64,
+    pub updated: i64,
+    pub categories_created: i64,
+}
+
+impl From<Applied> for ImportAppliedDto {
+    fn from(a: Applied) -> Self {
+        ImportAppliedDto {
+            created: i64::try_from(a.created).unwrap_or(i64::MAX),
+            updated: i64::try_from(a.updated).unwrap_or(i64::MAX),
+            categories_created: i64::try_from(a.categories_created).unwrap_or(i64::MAX),
+        }
+    }
+}
+
+/// The most labels one sheet is asked for. Eighteen fit on an A4 page
+/// (three across, six down), so two hundred is eleven pages and already
+/// more than anybody stands at a printer for. The cap is here so a body
+/// naming fifty thousand ids is refused before it becomes fifty thousand
+/// queries and a page nothing can render.
+pub const LABEL_SHEET_MAX: usize = 200;
+
+/// The products a sheet of labels is asked for. Ids and not a filter: the
+/// screen has a selection in front of it and the sheet is that selection, in
+/// the order the caller listed it.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[ts(export_to = "LabelSheetDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct LabelSheetDto {
+    pub ids: Vec<i32>,
 }

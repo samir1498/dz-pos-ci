@@ -2,7 +2,7 @@
 // from the API's answer and what it sends. The rules (a blank name, a bad
 // day) are the API crate's tests.
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/sh
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
+import { ThemeProvider } from "@/lib/theme";
 import { SettingsScreen } from "./settings";
 
 const store: StoreDto = {
@@ -31,7 +32,32 @@ const seeded: SettingsDto = {
   store,
   regime: { regime: "reel", valid_from: "2026-01-01" },
   regime_planned: null,
+  theme: null,
 };
+
+/**
+ * The régime is chosen through the kit's select, which is Radix's, and Radix
+ * calls two DOM methods jsdom does not implement. They are stubbed rather
+ * than avoided: what these tests assert is the body that leaves the screen,
+ * and the browser path of the same control is proved in
+ * `e2e/settings.spec.ts`, which drives a real Chromium.
+ */
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+});
+
+/** Opens the régime select of `form` and picks the option reading `label`. */
+async function chooseRegime(
+  user: ReturnType<typeof userEvent.setup>,
+  form: HTMLElement,
+  label: string,
+): Promise<void> {
+  await user.click(within(form).getByRole("combobox", { name: fr.field_regime }));
+  await user.click(await screen.findByRole("option", { name: label }));
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -70,7 +96,12 @@ function mount(lang: Lang = "fr") {
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        <SettingsScreen />
+        {/* The screen carries the theme panel, whose control reads the
+            provider. It shares this screen's settings query key, so the two
+            are one fetch and the call counts below are unchanged. */}
+        <ThemeProvider>
+          <SettingsScreen />
+        </ThemeProvider>
       </QueryClientProvider>
     </I18nProvider>,
   );
@@ -112,11 +143,14 @@ beforeEach(() => {
           : { ...current, regime: dated, regime_planned: null };
       return Promise.resolve(json(200, current));
     }
-    // The page carries the backups block too; it asks for the list as soon
-    // as the settings load, and an unanswered call would leave a second
-    // alert on the screen these tests read.
+    // The page carries the backups block and the stock recount block too;
+    // each asks for its own list as soon as the settings load, and an
+    // unanswered call would leave a second alert on the screen these tests
+    // read.
     if (url.endsWith("/backups"))
       return Promise.resolve(json(200, { backups: [], safety_copies: [] }));
+    if (url.endsWith("/stock/recount"))
+      return Promise.resolve(json(200, { last_run_day: null, drifts: [] }));
     // The régime form dates its default from the shop's calendar, which the
     // server owns; a fixed day here so the field is assertable.
     if (url.endsWith("/clock")) {
@@ -264,7 +298,7 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     const day = within(regimeForm).getByLabelText(fr.field_valid_from);
     await user.clear(day);
     await user.type(day, "2099-01-01");
@@ -284,7 +318,7 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     const day = within(regimeForm).getByLabelText(fr.field_valid_from);
     await user.clear(day);
     await user.type(day, "2026-06-01");
@@ -302,7 +336,7 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     await user.clear(within(regimeForm).getByLabelText(fr.field_valid_from));
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     expect(await within(regimeForm).findByRole("alert")).toHaveTextContent(fr.error_day_invalid);
@@ -315,7 +349,7 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     expect(await within(regimeForm).findByRole("alert")).toHaveTextContent(fr.error_validation);
   });
@@ -329,7 +363,7 @@ describe("the régime form", () => {
     expect(apply).toBeDisabled();
     await user.click(apply);
     expect(countOf("POST")).toBe(0);
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     expect(apply).toBeEnabled();
   });
 

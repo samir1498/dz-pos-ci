@@ -134,7 +134,7 @@ fn a_whole_avoir_credits_the_facture_takes_its_own_number_and_carries_no_stamp()
     .unwrap();
 
     assert_eq!(avoir.kind, DocumentKind::Avoir);
-    assert_eq!(avoir.series, "doc_avoir");
+    assert_eq!(avoir.series, "doc_avoir:2026");
     assert_eq!(avoir.number, 1, "the avoir took a number of its own series");
     assert_eq!(avoir.ref_document_id, Some(facture.id));
     assert_eq!(avoir.customer_id, Some(c));
@@ -1509,4 +1509,194 @@ fn remaining(conn: &mut SqliteConnection, document_id: i32) -> Money {
         .unwrap()
         .balance
         .map_or(Money::ZERO, |b| b.remaining_debt)
+}
+
+#[test]
+fn a_partial_avoir_at_a_rate_the_recap_does_not_carry_gives_back_no_remise() {
+    // A réel facture's recap carries a row for every rate its lines are at,
+    // so a facture with a line at a rate the recap misses is a file that
+    // disagrees with itself: a restored backup, or a row repaired by hand.
+    // What is left at such a rate is the line's own HT and no remise at all,
+    // because a remise at a rate is the difference between the group's lines
+    // and the base the recap taxed, and there is no row to read.
+    //
+    // Read any other way, the remise left at that rate goes below zero as
+    // soon as one avoir has taken part of the group, and the next avoir is
+    // written for a discount the table refuses and a base above its own HT.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 1900);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+    assert_eq!(facture.regime, Regime::Reel);
+    diesel::sql_query(format!(
+        "DELETE FROM document_tva WHERE document_id = {}",
+        facture.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    // Two of the three units, one at a time. The second is where a remise
+    // below zero shows: the first one leaves the group's HT lower than the
+    // base a recap row would have stated.
+    for day in [11, 12] {
+        let a_third = vec![AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 1_000,
+        }];
+        let avoir = avoir::issue(
+            &mut conn,
+            SHOP,
+            OWNER,
+            facture.id,
+            Some(a_third),
+            None,
+            Some(at(day)),
+        )
+        .unwrap_or_else(|err| panic!("the avoir of day {day} was refused: {err:?}"));
+        assert_eq!(
+            avoir.totals.discount,
+            Money::ZERO,
+            "the avoir of day {day} gave back a remise no recap row states"
+        );
+        assert_eq!(
+            avoir.totals.subtotal_ht, avoir.totals.total_ht,
+            "the avoir of day {day} taxed more or less than its own lines"
+        );
+    }
+}
+
+/// Moves the fiche's cost the way a delivery does, leaving the rest of the
+/// product as `product` created it. The quantity on hand is the ledger's and
+/// `products::update` keeps the stored one whatever this passes.
+fn move_the_cost(conn: &mut SqliteConnection, id: i32, name: &str, selling: i64, cost: i64) {
+    products::update(
+        conn,
+        SHOP,
+        OWNER,
+        id,
+        NewProduct {
+            name: name.to_string(),
+            barcode: None,
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(cost),
+            selling: Money::centimes(selling),
+            wholesale: None,
+            qty_on_hand_milli: 0,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(0).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap();
+}
+
+/// What a credit note puts back on the shelf is worth what it was worth when
+/// it left, not what the fiche says today. A delivery between the sale and
+/// the avoir moves the fiche's cost, and a reversal that read the fiche would
+/// hand the month a margin that moves with every purchase.
+#[test]
+fn an_avoir_returns_the_goods_at_the_cost_of_the_sale_it_reverses() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let sold_at = products::get(&mut conn, SHOP, p).unwrap().cost;
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+
+    let now_worth = Money::centimes(90_000);
+    move_the_cost(&mut conn, p, "Ciment", 100_000, now_worth.as_centimes());
+    assert_ne!(sold_at, now_worth, "the fiche has to have moved");
+
+    let avoir = avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(11))).unwrap();
+
+    let back = stock::list_for_product(&mut conn, SHOP, p)
+        .unwrap()
+        .into_iter()
+        .find(|m| m.kind == MovementKind::Return)
+        .expect("the goods came back on a return movement");
+    assert_eq!(back.document_id, Some(avoir.id));
+    assert_eq!(
+        back.unit_cost, sold_at,
+        "the reversal carried today's cost instead of the one the goods left on"
+    );
+}
+
+/// A `sale` movement written straight into the ledger, naming a document and
+/// a product that already have one. Nothing in the app writes a second cost
+/// for one product on one paper, which is why the refusal below has to be
+/// forged: a sale reads the fiche once for the whole basket.
+fn a_second_sale_movement(
+    conn: &mut SqliteConnection,
+    document_id: i32,
+    product_id: i32,
+    unit_cost_centimes: i64,
+) {
+    diesel::sql_query(
+        "INSERT INTO stock_movements (shop_id, product_id, kind, qty_milli, \
+         unit_cost_centimes, document_id, user_id, created_at) \
+         VALUES (?, ?, 'sale', -1000, ?, ?, ?, ?)",
+    )
+    .bind::<diesel::sql_types::Integer, _>(SHOP)
+    .bind::<diesel::sql_types::Integer, _>(product_id)
+    .bind::<diesel::sql_types::BigInt, _>(unit_cost_centimes)
+    .bind::<diesel::sql_types::Integer, _>(document_id)
+    .bind::<diesel::sql_types::Integer, _>(OWNER)
+    .bind::<diesel::sql_types::Timestamp, _>(at(10))
+    .execute(conn)
+    .unwrap();
+}
+
+/// Two costs for one product on one facture is a file that cannot say what
+/// the goods were worth, and a credit note against it is refused rather than
+/// written at whichever row the reader happened to keep.
+#[test]
+fn a_facture_whose_sale_movements_disagree_about_the_cost_credits_nothing() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+    a_second_sale_movement(&mut conn, facture.id, p, 77_777);
+
+    let refused = avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(11)));
+    assert!(
+        matches!(
+            refused,
+            Err(CoreError::UnpricedReversal { product_id, .. }) if product_id == p
+        ),
+        "two costs were read as one: {refused:?}"
+    );
+    // The whole credit note rolled back, so no number was burned and no goods
+    // went back on the shelf.
+    assert_eq!(
+        documents::list(&mut conn, SHOP, Some(DocumentKind::Avoir))
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+/// A sold line whose movement is gone. The fiche's cost is not the answer:
+/// it is the last delivery's, and writing it here is how a margin already
+/// earned moves with a purchase.
+#[test]
+fn a_sold_line_with_no_movement_left_is_refused_rather_than_priced_off_the_fiche() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+    diesel::sql_query(format!(
+        "DELETE FROM stock_movements WHERE document_id = {} AND kind = 'sale'",
+        facture.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let refused = avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(11)));
+    assert!(
+        matches!(
+            refused,
+            Err(CoreError::UnpricedReversal { product_id, .. }) if product_id == p
+        ),
+        "a missing movement was priced off the fiche: {refused:?}"
+    );
 }

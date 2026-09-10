@@ -140,7 +140,8 @@ code and shows the message to nobody.
 | `party_ids` | 422 | a facture either side of which is short of what décret 05-468 art. 3 asks | `party_side`, `missing_ids` |
 | `not_found` | 404 | a row that is not there, or is another shop's | |
 | `duplicate_barcode` | 409 | a barcode a product already holds | |
-| `exhausted` | 409 | a number series the shop hands out (in-store barcodes) has no next value | |
+| `conflict` | 409 | a value another row of the shop already holds where the file allows one (a supplier's name) | `field` |
+| `exhausted` | 409 | a number series the shop hands out (in-store barcodes, a document kind's series for one year) has no next value | |
 | `bad_request` | 422 | a body that did not parse, before any service ran | |
 | `unauthorized` | 401 | no launch token, or the wrong one; the answer carries `WWW-Authenticate: Bearer` | |
 | `method_not_allowed` | 405 | a route that does not take that method | |
@@ -148,6 +149,11 @@ code and shows the message to nobody.
 | `storage` | 500 | the shop file could not complete the operation | |
 | `print` | 500 | a stored row the template will not render | |
 | `restart_needed`, `restore_failed_restart_needed` | 500 | the shop file is not open in this process any more | |
+
+`conflict` is a refusal about a row that is already there rather than about
+what the caller wrote, which is why it is not a `validation`: a name another
+supplier already holds and a name too long for a ticket are two sentences a
+screen says differently, and both used to arrive as a `validation` on `name`.
 
 The three codes that carry figures are the one exception to "a code and a
 sentence", and the payload has six optional fields for them:
@@ -172,6 +178,59 @@ stale. Money crosses the wire as an integer number of centimes in a
 `number` (safe below 2^53, which is 90 trillion dinars) and is formatted
 only in `packages/shared`.
 
+## Design
+
+One source of colour, four themes, no branch in TypeScript.
+
+`packages/design` holds the tokens in three tiers: raw ramps
+(`primitives.ts`), the roles that point at them (`semantic.ts`), and the
+assembly TypeScript imports (`theme.ts`). The role layer carries a theme
+axis: Comptoir (light, stone paper, teal selection, ink sidebar, brass on
+the one action that moves money), Registre (dark, ink green surfaces, paper
+text), Observe (cool grey, emerald brand, rounder) and its dark twin. A
+theme owns colour, shadow and radius; space, font size and the control
+heights are off the axis, because a theme changes what the app is made of
+and never how much room it takes.
+
+`apps/desktop/src/theme.css` is generated from that layer and checked in:
+the token blocks (`:root` for Comptoir, one `[data-theme="<name>"]` block
+per other theme), the shadcn/ui variable set pointing at our roles, and the
+Tailwind v4 `@theme` map. `just theme` regenerates it and a vitest in
+`packages/design` fails the gates on a stale file, the shape `just
+types-check` has for the generated DTOs. The kit is shadcn/ui, so shadcn's
+names (`--background`, `--primary`, `--sidebar-accent`) are the emitted API
+while our roles stay the source; `--money` and `--font-numeric` are ours,
+because shadcn has no slot for a brass accent that means "this moves money"
+or for a figure font.
+
+The switch is one attribute. `data-theme` on `<html>`, written by
+`src/lib/theme.tsx`, and nothing else: no component branches on the theme,
+and `src/theme.test.ts` greps the source and fails the gates on a theme name
+or a `data-theme` outside the provider, the switcher and their test. The
+choice lives in the shop file (`preferences` table, `PUT /settings/theme`)
+so a second machine in the same shop opens on it; `null` means follow the
+operating system, which picks between Comptoir and Registre.
+
+Colour reaches a component as a utility class from that map and never as a
+literal. `apps/desktop/src/tokens.test.ts` fails the gates on `bg-[`,
+`text-[` or a hex outside the generated file. Fonts are vendored through
+the `@fontsource` packages and imported in `styles.css`; nothing is fetched
+over the network, and a test asserts it.
+
+**The desktop kit.** `apps/desktop/src/components/ui/` is shadcn/ui,
+installed through its own CLI onto the tokens above and never through
+`shadcn init`, which rewrites `styles.css`; `apps/desktop/src/components/`
+holds what is built on top of it (`AppShell`, `PageHeader`, `DataTable`,
+`Money`, `ThemeSwitcher` and the rest). `apps/desktop/eslint.config.js`
+carries one rule for it: no bare `<input>`, `<button>`, `<select>`,
+`<textarea>` or `<table>` in JSX outside `components/ui/` and the kit page,
+because a bare element wears the browser's own colour and height and looks
+like nothing in a diff. A screen written before the kit is named in
+`apps/desktop/src/lint/allowlist.json` rather than exempted silently, and a
+test fails on an entry whose file has nothing left to fix. See
+`context/processes/20260908-frontend-conventions.md` for the folder shape,
+the kit's two folders and what the CLI gets wrong on the way in.
+
 ## Data
 
 - SQLite everywhere. One file per shop, also when hosted. WAL mode,
@@ -181,6 +240,51 @@ only in `packages/shared`.
   applies it.
 - Append-only ledgers (stock movements, debt) are the truth; cached
   balances are derived and re-checked.
+- `documents` carries the rules its kind decides as CHECKs, not only as
+  service code (`2026-09-10-000007_document_kind_rules`): an avoir names the
+  document it is written against and a ticket, a facture and a proforma name
+  none; an amount tendered and change go together and only on a cash
+  document; a document is annulée exactly when it says when, by whom and why,
+  and only a ticket and a facture are annulled at all; a proforma's balance
+  triple says nothing is owed. The services already
+  refuse every one of those rows, so a restored backup, a hand-repaired row
+  or an import is what the constraints are for. SQLite cannot add a
+  table-level CHECK to a table that exists, so the migration rebuilds
+  `documents` the way migration 2 did, keeping every id: the lines, the TVA
+  recap, the movements, the ledger and the avoirs all name them.
+- `documents` gains `series_year INTEGER NOT NULL DEFAULT 0`
+  (`2026-09-10-000009_series_year`), an additive `ADD COLUMN` and not a
+  rebuild, backfilled from `issued_at` on the shop's calendar and never from
+  `created_at`, which is UTC. The existing `UNIQUE (shop_id, series, number)`
+  still holds because the series string already carries the year
+  (`doc_facture:2026`); `series_year` is what lets `number_of(kind, year,
+  number)` print the right year on a prior year's facture without parsing
+  the series string back apart.
+- The supply side is its own set of tables (migration
+  `2026-09-10-000008`) and the customer side is untouched: `suppliers`
+  holds the fiche, `supplier_ledger` and `supplier_allocations` mirror
+  `debt_ledger` and `debt_allocations` row for row and CHECK for CHECK,
+  with `purchase` where a customer has a sale and `return` where a
+  customer has an avoir. The alternative, one `parties` table with a role
+  and one party-keyed ledger, was rejected in the plan lens: every M2
+  query, index, CHECK and screen is customer-keyed and a supplier never
+  buys at the till.
+- `purchases` and `purchase_lines` hold what was ordered, with each line's
+  landed unit cost fixed when the purchase is saved; `purchase_receipts`
+  and `purchase_receipt_lines` hold what actually arrived, one row per
+  delivery, tied to the order by a composite key so a receipt can only name
+  a line of its own purchase and names it once; each line counts what
+  arrived against what was ordered and what went back against what
+  arrived. A purchase is never a row of `documents` and neither is a bon
+  de réception: that table's NOT NULL régime, its payment mode and its
+  customer key have no honest value for something the shop buys, and its
+  series are the numbering the tax code hands out for what the shop
+  sells. A receipt takes its own number from the counters table under
+  `reception:<year>`.
+- `expense_categories` carries an i18n key per shop and not a label, seeded
+  with the seven the spec names; `expenses` points at one. `jobs` holds the
+  day a once-a-day job last ran, per shop, so a restart does not run it
+  twice.
 - The audit log's action and entity names were rewritten onto one scheme in
   the facture-and-credit milestone (`sale.credit_override` became
   `document.issue_override`, and every row about a document now says
@@ -244,3 +348,26 @@ is done when they pass and the behaviour was driven, not when they pass.
 - Native window: `pnpm desktop tauri dev` needs a display (WSLg or
   `xvfb-run`). Windows builds come from CI.
 - Phone: Expo Go over Tailscale, EAS for builds.
+- A shop to develop against: `just seed` fills `.dev/dev.db` with a
+  catalogue, twelve customers, five suppliers and thirty days of trading, and
+  `just seed-clean` deletes the file so the next `just api` opens an empty
+  shop. Cleaning up is the whole file and never a row: the ledgers are append
+  only and the document series are gapless by rule, so there is no honest way
+  to take a seeded sale back out of a shop from the inside.
+
+The seeder is a development tool and cannot reach a shop's books. That is
+enforced in three places rather than one, because any single one of them is a
+line somebody edits:
+
+1. `dzpos-seed` is its own crate. Neither `dzpos-api` nor the desktop depends
+   on it, so no release build and no bundle can produce the binary; the API
+   has no `--seed` flag and no seed route.
+   `crates/api/tests/no_seed_entrypoint.rs` fails the moment any of that
+   changes, and CI runs it with the rest of `cargo test --workspace`.
+2. The binary refuses to run unless `DZPOS_DEV=1` is set, refuses any file
+   that is not directly inside a `.dev/` directory, and refuses one whose
+   settings carry a shop's own name and identifiers unless `--force` says
+   otherwise. `--force` means that and nothing else: it does not lift the
+   other two.
+3. `just seed` and `just seed-clean` take no path at all, so no argument a
+   caller typed can point either of them at a real database.

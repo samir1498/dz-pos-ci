@@ -134,13 +134,20 @@ fn movement(
 fn facture(number: i64) -> Option<DocumentRef> {
     Some(DocumentRef {
         kind: DocumentKind::Facture,
+        year: 2026,
         number,
     })
 }
 
-/// A document's number as the slip prints it: `FA-000042`, `AV-000003`.
+/// A document's number as the slip prints it: `FA-2026-000042`,
+/// `AV-2026-000003`.
 fn document_number(document: DocumentRef) -> String {
-    format!("{}-{:06}", document.kind.number_prefix(), document.number)
+    format!(
+        "{}-{}-{:06}",
+        document.kind.number_prefix(),
+        document.year,
+        document.number
+    )
 }
 
 /// One fixed row: the movement's id, why the debt moved, its two columns, the
@@ -239,6 +246,7 @@ fn twelve_movements() -> [Row; 12] {
             credit: 15_000,
             document: Some(DocumentRef {
                 kind: DocumentKind::Avoir,
+                year: 2026,
                 number: 3,
             }),
             day: 9,
@@ -553,8 +561,8 @@ fn a_customer_who_owes_nothing_yet_gets_a_slip_that_says_so() {
 
 #[test]
 fn a_balance_the_shop_owes_prints_the_amount_and_says_whose_way_it_goes() {
-    // The shop holding money for a customer is what an avoir leaves behind
-    // (T6). The words carry no sign, so the page has to say the direction in
+    // The shop holding money for a customer is what an avoir leaves behind.
+    // The words carry no sign, so the page has to say the direction in
     // words of its own or it reads as the opposite of what it means.
     let slip = RecentStatement {
         balance: Money::centimes(-20_000),

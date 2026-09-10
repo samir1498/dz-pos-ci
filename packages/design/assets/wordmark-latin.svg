@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" width="200" height="48" role="img" aria-label="Dinar POS">
+  <!-- Live text, not outlines: converting to paths needs the font binaries
+       and a tool this box does not have (see README.md beside this file).
+       A renderer without IBM Plex Sans falls to its own sans-serif, so the
+       silhouette moves; the app does not use this file, it sets the same two
+       words in HTML with the token font (components/Wordmark.tsx). -->
+  <text x="0" y="35" font-family="IBM Plex Sans, system-ui, sans-serif" font-size="34" font-weight="700" letter-spacing="0.34" fill="#1a1815">Dinar <tspan font-weight="600" fill="#b8862b">POS</tspan></text>
+</svg>

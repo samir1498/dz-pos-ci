@@ -26,17 +26,26 @@ const EDITED_PRICE_RENDERED = "199,99";
 
 import type { Page } from "@playwright/test";
 
+/**
+ * The kit's select is Radix's: a button that opens a listbox, not a
+ * `<select>`, so `selectOption` has nothing to act on. The trigger is opened
+ * and the option is clicked by the word it shows. Exact, because "9 %" is a
+ * substring of "19 %".
+ */
+async function chooseRate(page: Page, label: string) {
+  await page.getByRole("combobox", { name: t("field_rate"), exact: true }).click();
+  await page.getByRole("option", { name: label, exact: true }).click();
+}
+
 /** Adds a product through the form at 9 %, the way the first test does. */
 async function addProduct(page: Page, name: string) {
   await page.getByRole("button", { name: t("products_add") }).click();
-  await page.getByLabel(t("field_name"), { exact: true }).fill(name);
-  await page.getByLabel(t("field_price"), { exact: true }).fill(PRICE_INPUT);
+  // Not an exact match on the two required fields: the kit's FormField
+  // puts a required marker inside the label, so the label reads "Nom *".
+  await page.getByLabel(t("field_name")).fill(name);
+  await page.getByLabel(t("field_price")).fill(PRICE_INPUT);
   await page.getByLabel(t("field_stock"), { exact: true }).fill(STOCK_INPUT);
-  // By role, not by label: a <label> wrapping a <select> has the option
-  // texts in its own text, so an exact label match never resolves.
-  await page
-    .getByRole("combobox", { name: t("field_rate"), exact: true })
-    .selectOption({ label: t("rate_900") });
+  await chooseRate(page, t("rate_900"));
   await page.getByRole("button", { name: t("action_save") }).click();
 }
 
@@ -56,7 +65,7 @@ test("adds a product and saves the products screenshot", async ({ page }) => {
 
   await page.goto("/products");
 
-  await expect(page.getByRole("heading", { name: t("products_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("products_title") })).toBeVisible();
   await expect(page.getByText(t("products_empty"))).toBeVisible();
 
   await addProduct(page, PRODUCT_NAME);
@@ -100,14 +109,12 @@ test("edits a product in place and the row shows the stored values", async ({ pa
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: `${t("products_edit")} ${EDITED_NAME}` }).click();
 
-  const price = page.getByLabel(t("field_price"), { exact: true });
+  const price = page.getByLabel(t("field_price"));
   await expect(price).toHaveValue(PRICE_RENDERED);
   await price.fill(EDITED_PRICE_INPUT);
   await page.getByLabel(t("field_wholesale"), { exact: true }).fill("180");
   await page.getByLabel(t("field_low_stock"), { exact: true }).fill("3");
-  await page
-    .getByRole("combobox", { name: t("field_rate"), exact: true })
-    .selectOption({ label: t("rate_1900") });
+  await chooseRate(page, t("rate_1900"));
   await page.getByRole("button", { name: t("action_save") }).click();
 
   await expect(page.getByRole("button", { name: t("action_save") })).toBeHidden();
@@ -146,11 +153,35 @@ test("refuses a product with an empty name", async ({ page }) => {
   await page.goto("/products");
   await page.getByRole("button", { name: t("products_add") }).click();
 
-  await page.getByLabel(t("field_price"), { exact: true }).fill(PRICE_INPUT);
+  await page.getByLabel(t("field_price")).fill(PRICE_INPUT);
   await page.getByRole("button", { name: t("action_save") }).click();
 
   await expect(page.getByRole("alert").filter({ hasText: t("error_name_required") })).toBeVisible();
   // The form is still open, so nothing was saved.
   await expect(page.getByRole("button", { name: t("action_save") })).toBeVisible();
   expect(productPosts).toBe(0);
+});
+
+test("the filter bar narrows the catalogue and says so in the count", async ({ page }) => {
+  // Two products so a filter has something to remove, and both added
+  // through the form so the test stands alone under --grep.
+  await page.goto("/products");
+  await addProduct(page, "Farine dorée 5kg");
+  await addProduct(page, "Sucre roux 1kg");
+
+  const search = page.getByTestId("products-search");
+  await search.fill("farine");
+  await expect(page.getByRole("row").filter({ hasText: "Farine dorée 5kg" })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "Sucre roux 1kg" })).toHaveCount(0);
+  await expect(page.getByTestId("page-header")).toContainText(`1 ${t("products_count_one")}`);
+
+  // A search that matches nothing is not the screen a shop with no products
+  // sees: it offers to clear the filter, not to add the first product.
+  await search.fill("zzzz");
+  await expect(page.getByText(t("products_no_match"))).toBeVisible();
+  await expect(page.getByText(t("products_empty"))).toHaveCount(0);
+
+  await page.getByTestId("products-clear-filters").click();
+  await expect(page.getByRole("row").filter({ hasText: "Sucre roux 1kg" })).toBeVisible();
+  await expect(search).toHaveValue("");
 });

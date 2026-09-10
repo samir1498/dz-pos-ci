@@ -48,6 +48,23 @@ pub const ACTION_AVOIR: &str = "document.avoir";
 /// one (features.md §3).
 pub const ACTION_CANCEL: &str = "document.cancel";
 
+/// Money out that is not stock (features.md §1, Expense). An expense is
+/// never edited and never deleted, so `create` is the whole of its
+/// life and this row is the only trace of who spent what on which day. The
+/// entry carries the category's key rather than its id, because the log is
+/// read by a person and an id is a number they would have to look up.
+pub const ACTION_CREATE_EXPENSE: &str = "expense.create";
+
+/// A cached quantity on hand the ledger did not explain, corrected by the
+/// recount (features.md §1). The entry carries the product's name beside its
+/// id, both quantities and the difference between them, because it is the
+/// only record a recount leaves: there is no table of runs, and the drift
+/// list a shop owner reads is these rows read back. The day the run was
+/// marked under travels in the entry too, since the column's own timestamp
+/// is UTC and a run just after midnight in Algiers would file itself under
+/// yesterday.
+pub const ACTION_STOCK_DRIFT: &str = "stock.drift";
+
 /// A fiche closed while it was still carrying something: a balance either
 /// way, or a document still asking to be paid. The entry carries the reason
 /// the caller had to give, the balance at the moment of the close and how
@@ -56,6 +73,40 @@ pub const ACTION_CANCEL: &str = "document.cancel";
 /// is written down. A close over an account that was already settled is an
 /// ordinary update and is logged as one.
 pub const ACTION_CLOSE_CUSTOMER: &str = "customer.close";
+
+/// A supplier fiche closed while its account was still open: a balance either
+/// way, or an order still asking to be paid. The same decision the customer
+/// one records, on the side the shop owes rather than the side that owes it,
+/// and the entry carries the reason, the balance and how many orders were
+/// still open.
+pub const ACTION_CLOSE_SUPPLIER: &str = "supplier.close";
+/// Money paid to a supplier, written as a ledger movement with the orders it
+/// settled. The entry carries the balance before and after, so the log reads
+/// as the settlement it was without anyone summing the ledger again.
+pub const ACTION_PAY_SUPPLIER: &str = "supplier_debt.pay";
+/// A correction to what the shop owes a supplier, written as a ledger
+/// movement. The entry carries the balance before and after.
+pub const ACTION_ADJUST_SUPPLIER: &str = "supplier_debt.adjust";
+
+/// An order placed with a supplier. The entry carries what the order is
+/// worth once the extra costs are landed on its lines, so the log says what
+/// the shop committed to before any of it arrived.
+pub const ACTION_CREATE_PURCHASE: &str = "purchase.create";
+/// A delivery taken in against an order. The entry carries the bon de
+/// réception it was written on, the value that arrived at landed cost and the
+/// state the order moved to, because this is the moment the stock and the
+/// supplier's account both move.
+pub const ACTION_RECEIVE_PURCHASE: &str = "purchase.receive";
+/// Goods handed back to the supplier. It writes no document, so the log and
+/// the two rows it names (a stock movement out and a credit on the ledger)
+/// are the whole record of it.
+pub const ACTION_RETURN_PURCHASE: &str = "purchase.return";
+/// An order cancelled before anything arrived, with the reason the caller
+/// had to give.
+pub const ACTION_CANCEL_PURCHASE: &str = "purchase.cancel";
+/// An order closed after a partial delivery: the rest will never come and is
+/// written off. A decision, so the reason is in the entry.
+pub const ACTION_CLOSE_SHORT_PURCHASE: &str = "purchase.close_short";
 
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.
