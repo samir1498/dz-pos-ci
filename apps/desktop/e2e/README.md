@@ -7,18 +7,18 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes the seven committed screenshots
+just screenshot                   # writes the eight committed screenshots
 pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes only `products.png`; the other six say "... screenshot in Arabic"
+writes only `products.png`; the other seven say "... screenshot in Arabic"
 in their titles, so they match the grep in both runs but write a file only
 when `currentLang()` is `ar`, and the fr run of them does nothing
-observable. Under ar all six write: `products-ar.png`, `settings-ar.png`,
-`till-ar.png`, `customers-ar.png`, `till-credit-ar.png` and
-`documents-avoir-ar.png`.
+observable. Under ar all seven write: `products-ar.png`, `settings-ar.png`,
+`till-ar.png`, `customers-ar.png`, `suppliers-ar.png`, `till-credit-ar.png`
+and `documents-avoir-ar.png`.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
@@ -126,9 +126,10 @@ second language on; use the looped `just e2e` or a single `--project`.
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
   rows finds the API port and the run's launch token.
-- The seven committed screenshots, 1280x800, full page: `products.png`
+- The eight committed screenshots, 1280x800, full page: `products.png`
   (fr) and, in ar, `products-ar.png`, `settings-ar.png`, `till-ar.png`,
-  `customers-ar.png`, `till-credit-ar.png` and `documents-avoir-ar.png`.
+  `customers-ar.png`, `suppliers-ar.png`, `till-credit-ar.png` and
+  `documents-avoir-ar.png`.
   `en` keeps none; the two languages above are enough to show the layout
   and the RTL mirror.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.

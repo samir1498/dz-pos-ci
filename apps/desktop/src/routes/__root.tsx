@@ -22,6 +22,9 @@ function RootLayout() {
           <Link to="/products" className="underline">
             {t("nav_products")}
           </Link>
+          <Link to="/suppliers" className="underline">
+            {t("nav_suppliers")}
+          </Link>
           {/* After the three screens a shop works in: a document is found
               again here, not made here. */}
           <Link to="/documents" className="underline">

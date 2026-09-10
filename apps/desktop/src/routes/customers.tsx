@@ -32,8 +32,17 @@ import {
   customerStatementQueryKey,
   customersQueryKey,
 } from "@/api";
-import { isKey, useTranslation, type Key } from "@/i18n";
+import { useTranslation, type Key } from "@/i18n";
 import { useShopToday } from "@/lib/clock";
+import {
+  AmountField,
+  FieldError,
+  amount,
+  cleared,
+  errorKey,
+  readable,
+  shownPositive,
+} from "@/lib/fields";
 
 export const Route = createFileRoute("/customers")({ component: CustomersScreen });
 
@@ -59,26 +68,6 @@ const DEBT_KIND_KEY: Record<DebtKindDto, Key> = {
   adjustment: "debt_adjustment",
 };
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  not_found: "error_not_found",
-  money: "error_money",
-  storage: "error_storage",
-  restart_needed: "error_restart_needed",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unauthorized: "error_unauthorized",
-  unreachable: "error_unreachable",
-};
-
-/** The server sends a code, never a sentence; the UI owns the wording. */
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) {
-    return ERROR_KEY[error.code] ?? "error_unknown";
-  }
-  return "error_unknown";
-}
-
 /**
  * The tag the list shows for one customer, in the order the shop reads them:
  * a balance past the limit is the fact that stops a sale, and it outranks the
@@ -103,7 +92,7 @@ export function balanceLabel(balance_centimes: number): Key {
 }
 
 export function balanceShown(balance_centimes: number): string {
-  return formatCentimes(Math.abs(balance_centimes));
+  return shownPositive(balance_centimes);
 }
 
 export function statusKey(customer: CustomerDto): Key {
@@ -1217,72 +1206,6 @@ function AdjustForm({ customer }: { customer: CustomerDto }) {
       </div>
     </form>
   );
-}
-
-/** An amount in dinars, typed by a person. */
-function AmountField({
-  label,
-  hint,
-  value,
-  onChange,
-  errors,
-}: {
-  label: string;
-  hint?: string;
-  value: string;
-  onChange: (value: string) => void;
-  errors: unknown[];
-}) {
-  // The hint sits outside the label on purpose: inside it, it would be read
-  // as part of the field's name, and a test or a screen reader asking for
-  // "Créance de départ (DA)" would not find the box.
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="flex flex-col gap-1">
-        <span>{label}</span>
-        <input
-          dir="ltr"
-          inputMode="decimal"
-          className="rounded border px-2 py-1 font-mono text-end"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      </label>
-      {hint === undefined ? null : <span className="text-sm opacity-70">{hint}</span>}
-      <FieldError messages={errors} />
-    </div>
-  );
-}
-
-/** Field validators return translation keys, never sentences. */
-function FieldError({ messages }: { messages: unknown[] }) {
-  const { t } = useTranslation();
-  const key = messages.find((m): m is string => typeof m === "string");
-  if (key === undefined) return null;
-  return (
-    <span role="alert" className="text-sm text-red-700">
-      {t(isKey(key) ? key : "error_unknown")}
-    </span>
-  );
-}
-
-/** Blank is "nothing", not an empty string: the column is cleared. */
-function cleared(text: string): string | null {
-  const trimmed = text.trim();
-  return trimmed === "" ? null : trimmed;
-}
-
-/** Blank is "no amount at all"; anything unreadable was refused by the
- *  validator before this runs. */
-function amount(text: string): number | null {
-  if (text.trim() === "") return null;
-  return parseAmountToCentimes(text);
-}
-
-/** Whether an optional amount can be read: blank counts, since blank means
- *  the field was left empty. */
-function readable(text: string): boolean {
-  return text.trim() === "" || parseAmountToCentimes(text) !== null;
 }
 
 /** The update takes the fiche without the opening debt: the create type
