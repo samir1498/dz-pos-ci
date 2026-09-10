@@ -9,14 +9,6 @@
   ],
   "screens": [
     {
-      "file": "src/routes/products.tsx",
-      "screen": "products"
-    },
-    {
-      "file": "src/components/ExportImportPanel.tsx",
-      "screen": "products, the export and import panel"
-    },
-    {
       "file": "src/components/ThemeSwitcher.tsx",
       "screen": "the topbar's theme switch"
     },

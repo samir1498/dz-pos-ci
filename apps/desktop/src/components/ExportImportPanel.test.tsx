@@ -4,13 +4,24 @@
 // and the API crate's tests.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ImportDryRunDto } from "@dzpos/shared";
 import { I18nProvider } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import { ExportImportPanel } from "./ExportImportPanel";
+
+/**
+ * The rows of the dry-run report. The report is a `DataTable` now, so a row
+ * is a `<tr>` inside it rather than an element carrying its own id; the
+ * header row is dropped because it describes the columns and not the file.
+ */
+function importRows(): HTMLElement[] {
+  const table = screen.queryByTestId("import-table");
+  if (table === null) return [];
+  return within(table).getAllByRole("row").slice(1);
+}
 
 /** A workbook, as far as this screen is concerned: bytes with the media type
  * and the name the server puts on them. */
@@ -197,8 +208,8 @@ describe("the import", () => {
     await user.click(screen.getByTestId("import-dry-run"));
 
     expect(await screen.findByTestId("import-counts")).toHaveTextContent("1");
-    expect(screen.getAllByTestId("import-row")).toHaveLength(1);
-    expect(screen.getAllByTestId("import-row")[0]).toHaveTextContent(fr.import_outcome_created);
+    expect(importRows()).toHaveLength(1);
+    expect(importRows()[0]).toHaveTextContent(fr.import_outcome_created);
     // The dry run is the only call so far: nothing was written.
     expect(urls("POST")).toHaveLength(1);
     expect(urls("POST")[0]).toContain("/import/products/dry-run");
@@ -211,7 +222,8 @@ describe("the import", () => {
     await user.upload(screen.getByTestId("import-file"), xlsx());
     await user.click(screen.getByTestId("import-dry-run"));
 
-    const rows = await screen.findAllByTestId("import-row");
+    await screen.findByTestId("import-table");
+    const rows = importRows();
     expect(rows).toHaveLength(2);
     expect(rows[1]).toHaveTextContent(fr.import_outcome_refused);
     // The core sends a key; the screen owns the sentence.
@@ -261,7 +273,7 @@ describe("the import", () => {
     expect(posted[1]).not.toContain("dry-run");
     // The table is gone once the file landed: it described a file that has
     // been written, and leaving it up invites a second apply.
-    expect(screen.queryByTestId("import-row")).toBeNull();
+    expect(screen.queryByTestId("import-table")).toBeNull();
   });
 
   test("a server refusal on apply is shown and nothing is claimed done", async () => {

@@ -258,6 +258,13 @@ here. These are all of them.
 | `cash-out-total` | `expenses.tsx` | The other row labelled "total". |
 | `cash-net` | `expenses.tsx` | An amount, and the one figure that goes below zero. |
 | `card-in-total` | `expenses.tsx` | An amount, translated label. |
+| `page-header` | `PageHeader.tsx` | The screen's own header block, so a count can be read without matching the same figure inside the list. |
+| `products-search` | `products.tsx` | The search box; its label and its hint are translated and the hint repeats the barcode column's word. |
+| `products-clear-filters` | `products.tsx` | Absent until a filter is set, so a test counts it, and it says the same words as the empty screen's own button. |
+| `print-selected-labels` | `products.tsx` | Its label changes to the closing one once the sheet is open, so a name query matches only half the time. |
+| `print-label` | `products.tsx` | Absent on a product being typed, so a test counts it; the sheet's button beside it reads almost the same. |
+| `product-label` | `LabelPanel.tsx` | The iframe holding the page the core rendered; an iframe has no accessible text. |
+| `import-table` | `ExportImportPanel.tsx` | The dry-run report, so its rows can be counted apart from the products list on the same screen. |
 | `backups-table` | `BackupsPanel.tsx` | The list of copies. Its rows are read by role (the body is the second rowgroup); the table itself needs an id because the panel draws a second one under it. |
 | `safety-copies-table` | `BackupsPanel.tsx` | The copies a restore took of what it replaced, same columns as the list above, so only the table tells them apart. |
 | `backups-newest` | `BackupsPanel.tsx` | The date of the most recent copy, or the translated sentence for a shop that has none. |
