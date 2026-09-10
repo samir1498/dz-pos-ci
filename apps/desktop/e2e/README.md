@@ -132,7 +132,12 @@ second language on; use the looped `just e2e` or a single `--project`.
   alone, and a facture paid in cash carrying its TVA recap and its droit de
   timbre;
   `till-reversals-and-quotations.spec.ts`, a partial avoir, a whole
-  cancellation, the credit it leaves and a proforma.
+  cancellation, the credit it leaves and a proforma;
+  `zz-exports-and-labels.spec.ts`, the four workbooks read back as real
+  spreadsheets, the product template downloaded, the committed fixture
+  checked and applied, and the label of the product it created shown in the
+  sandboxed frame. Named to run last: it creates a product out of a file,
+  and every spec that starts from an empty catalogue has to have run first.
 - `messages.ts` is the shared loader for `src/i18n/{fr,en,ar}.json`, keyed
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own

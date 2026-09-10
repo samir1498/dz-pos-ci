@@ -5,9 +5,10 @@
 //!
 //! The core's own tests read every cell of every workbook (`export_service`,
 //! `import_service`). What is left for this layer is what the core cannot
-//! see: the media type, the filename header a browser saves under, the two
-//! counts on the way back, and that a file with a refusal in it writes
-//! nothing at all even when the caller posts it to the apply route anyway.
+//! see: the media type, the filename header a browser saves under, and the
+//! counts on the way back. That a file with a refusal in it writes nothing
+//! is the core's rule and the core's test; what is checked here is that the
+//! refusal crosses as the envelope every other one does.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
