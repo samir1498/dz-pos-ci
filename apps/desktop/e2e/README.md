@@ -7,13 +7,14 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes thirteen of the fourteen screenshots
+just screenshot                   # writes seventeen of the eighteen screenshots
 pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes only `products.png`; the other twelve say "... screenshot(s) in Arabic"
+writes `products.png` and the kit's four; the other twelve say
+"... screenshot(s) in Arabic"
 in their titles, so they match the grep in both runs but write a file only
 when `currentLang()` is `ar`, and the fr run of them does nothing
 observable. Under ar all twelve write: `products-ar.png`, `settings-ar.png`,
@@ -21,6 +22,13 @@ observable. Under ar all twelve write: `products-ar.png`, `settings-ar.png`,
 `expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
 `stock-recount-ar.png`, and the theme pair `theme-comptoir-ar.png` and
 `theme-observe-ar.png`.
+
+The kit's four (`kit-comptoir.png`, `kit-registre.png`, `kit-observe.png`,
+`kit-observe-dark.png`) are the exception to that pattern: they are written
+under fr and skipped in the other two projects, because the page they
+photograph is the component kit rather than a screen and its point is the
+four themes, not the three languages. One picture per theme, from
+`kit.spec.ts`, of the `/kit` page, which exists in a dev build only.
 
 `product-label-ar.png` is the fourteenth and the recipe cannot take it: its
 test needs the import test above it in the same file to have run, and
@@ -156,8 +164,17 @@ second language on; use the looped `just e2e` or a single `--project`.
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
   rows finds the API port and the run's launch token.
-- The fourteen committed screenshots, 1280x800, full page: `products.png`
-  (fr) and, in ar, `products-ar.png`, `settings-ar.png`, `till-ar.png`,
+- `kit.spec.ts` drives the shell and the component kit: the sidebar reaching
+  every screen with the topbar naming it, the sidebar's side read off its
+  geometry rather than its class list, a narrow window folding it into a
+  sheet, the theme switch in the topbar, and the `/kit` page with each
+  overlay opened. It runs before the settings and theme specs, so it hands
+  the shop back to "follow the machine" before it leaves. It writes the four
+  kit screenshots under fr.
+- The eighteen committed screenshots, 1280x800, full page: `products.png`
+  and the kit's four (`kit-comptoir.png`, `kit-registre.png`,
+  `kit-observe.png`, `kit-observe-dark.png`) in fr; in ar,
+  `products-ar.png`, `settings-ar.png`, `till-ar.png`,
   `customers-ar.png`, `suppliers-ar.png`, `purchases-ar.png`,
   `expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
   `stock-recount-ar.png`, `theme-comptoir-ar.png` and
@@ -223,6 +240,30 @@ here. These are all of them.
 | `stock-recount-clean` | `StockRecountPanel.tsx` | Absent until a run has happened, and the sentence it holds is translated. |
 | `stock-drift-row` | `StockRecountPanel.tsx` | One corrected product; the quantities inside it are numbers in three locales. |
 | `stock-drift-difference` | `StockRecountPanel.tsx` | The signed quantity, beside two other quantities on the same row. |
+| `shell-topbar` | `AppShell.tsx` | The bar itself, so a test can ask whether a switch is inside it rather than merely on the page. |
+| `shell-title` | `AppShell.tsx` | The page's `h1`. Its text is the sidebar item's, so a role query by name would be circular. |
+| `shell-day` | `AppShell.tsx` | The shop's day; absent until the server has answered, so a test counts it. |
+| `shell-shop` | `AppShell.tsx` | The shop's name at the foot of the sidebar, where the user will stand. |
+| `sidebar-trigger` | `sidebar.tsx` | The button that opens the sheet on a narrow window; its only text is off-screen and translated. |
+| `nav-<screen>` | `AppShell.tsx` | One per sidebar item (`nav-till`, `nav-products`, …). The link's text is translated and repeats the topbar's. |
+| `language-switcher` | `LanguageSwitcher.tsx` | The segmented control as a group; its three buttons name languages, not the group. |
+| `kit-page` | `KitPage.tsx` | The dev-only kit page's root, waited on before the screenshots. |
+| `kit-table` | `KitPage.tsx` | The kit's example table, so the money column can be measured without matching the empty one below it. |
+| `kit-dialog-trigger` | `KitPage.tsx` | The four overlay triggers sit in one row with translated-looking French labels; ids keep the spec off their text. |
+| `kit-sheet-trigger` | `KitPage.tsx` | As above. |
+| `kit-menu-trigger` | `KitPage.tsx` | As above. |
+| `kit-tooltip-trigger` | `KitPage.tsx` | As above. |
+| `kit-toast-trigger` | `KitPage.tsx` | As above. |
+
+## Headings are queried inside `main`
+
+The shell's topbar carries the page's `h1` and its text is the sidebar item's
+name, which in six cases is the same word as the screen's own heading
+("Produits", "Paramètres", "Clients", "Dépenses", "Documents",
+"Fournisseurs"). Playwright's role queries match by substring, so an
+unscoped `getByRole("heading", { name: t("products_title") })` finds two and
+fails on the ambiguity rather than on anything being wrong. Those queries go
+through `page.getByRole("main")`, which is the screen and not the frame.
 
 ## What the suite checks and where
 

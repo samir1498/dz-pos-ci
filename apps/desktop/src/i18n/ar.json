@@ -519,5 +519,17 @@
   "import_reason_too_many_decimals": "أرقام عشرية أكثر من اللازم: السعر رقمان والكمية ثلاثة",
   "error_label_not_ean13": "رمز هذا المنتج ليس EAN-13 من ثلاثة عشر رقمًا، فلا أعمدة لطباعتها.",
   "error_label_too_many": "عدد المنتجات المحدَّدة أكبر مما تسعه لوحة ملصقات واحدة.",
-  "import_update_keeps_stock": "أسطر التحديث تغيّر التسمية والأسعار ولا تمسّ المخزون: الاستيراد لا يحرّك الكميات أبدًا."
+  "import_update_keeps_stock": "أسطر التحديث تغيّر التسمية والأسعار ولا تمسّ المخزون: الاستيراد لا يحرّك الكميات أبدًا.",
+  "nav_section_sales": "البيع",
+  "nav_section_purchases": "المشتريات",
+  "nav_section_manage": "الإدارة",
+  "sidebar_toggle": "إظهار القائمة أو إخفاؤها",
+  "sidebar_title": "القائمة",
+  "sidebar_description": "أقسام التطبيق.",
+  "table_actions": "إجراءات",
+  "pill_issued": "صادرة",
+  "pill_cancelled": "ملغاة",
+  "pill_paid": "مدفوع",
+  "pill_open": "قيد التسديد",
+  "pill_low": "مخزون منخفض"
 }

@@ -519,5 +519,17 @@
   "import_reason_too_many_decimals": "trop de décimales : un prix en a deux, une quantité trois",
   "error_label_not_ean13": "Le code de ce produit n'est pas un EAN-13 à treize chiffres : il n'y a pas de code-barres à imprimer.",
   "error_label_too_many": "Trop de produits sélectionnés pour une planche d'étiquettes.",
-  "import_update_keeps_stock": "Les lignes en mise à jour changent le nom et les prix. Elles ne touchent pas au stock : un import ne fait jamais bouger les quantités."
+  "import_update_keeps_stock": "Les lignes en mise à jour changent le nom et les prix. Elles ne touchent pas au stock : un import ne fait jamais bouger les quantités.",
+  "nav_section_sales": "Vente",
+  "nav_section_purchases": "Achats",
+  "nav_section_manage": "Gestion",
+  "sidebar_toggle": "Afficher ou masquer le menu",
+  "sidebar_title": "Menu",
+  "sidebar_description": "Les sections de l'application.",
+  "table_actions": "Actions",
+  "pill_issued": "Émise",
+  "pill_cancelled": "Annulée",
+  "pill_paid": "Payé",
+  "pill_open": "En cours",
+  "pill_low": "Stock bas"
 }

@@ -90,7 +90,7 @@ test("files two expenses in two categories and shows the month's total and the c
   const electricity = await categoryId(request, "electricity");
 
   await page.goto("/expenses");
-  await expect(page.getByRole("heading", { name: t("expenses_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("expenses_title") })).toBeVisible();
   // The month the screen opens on is the shop's, read from /clock.
   await expect(page.getByTestId("expenses-month")).toHaveValue(month);
   await expect(page.getByText(t("expenses_empty"))).toBeVisible();

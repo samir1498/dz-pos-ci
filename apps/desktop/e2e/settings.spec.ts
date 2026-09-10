@@ -33,7 +33,7 @@ test("saves the store block, reads it back after a reload, and saves the setting
 
   await page.goto("/products");
   await page.getByRole("link", { name: t("nav_settings") }).click();
-  await expect(page.getByRole("heading", { name: t("settings_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("settings_title") })).toBeVisible();
 
   const name = page.getByLabel(t("field_name"), { exact: true });
   // The seeded shop, so the database is the fresh one the run started.

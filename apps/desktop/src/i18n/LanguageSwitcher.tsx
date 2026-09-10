@@ -10,6 +10,14 @@
 // dictionary (coding-rules: every visible string through i18n, in ar, fr
 // and en) rather than a bare constant map outside it, so a parity check
 // on the JSON files still covers them.
+//
+// It is drawn as one segmented control rather than three loose buttons: the
+// three are one choice, and a border around the set is what says so. The
+// buttons are the kit's `Button` on the ghost variant, with the chosen one
+// filled, so the sizes and the focus ring are the app's and not this file's.
+
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import { useTranslation, type Lang } from "./index";
 
@@ -27,18 +35,24 @@ export function LanguageSwitcher({ className }: { className?: string }) {
     <div
       role="group"
       aria-label={t("lang_switcher_label")}
-      className={className === undefined ? "flex gap-2" : `flex gap-2 ${className}`}
+      data-testid="language-switcher"
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-md border border-border bg-card p-0.5",
+        className,
+      )}
     >
       {ORDER.map((l) => (
-        <button
+        <Button
           key={l}
           type="button"
+          size="sm"
+          variant={lang === l ? "default" : "ghost"}
           aria-pressed={lang === l}
-          className={`rounded border px-2 py-1 text-sm ${lang === l ? "font-semibold" : ""}`}
+          className="h-7 px-2 text-xs"
           onClick={() => setLang(l)}
         >
           {t(NAME_KEY[l])}
-        </button>
+        </Button>
       ))}
     </div>
   );

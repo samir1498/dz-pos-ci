@@ -32,4 +32,12 @@
 @import "@fontsource/jetbrains-mono/latin-ext-600.css";
 
 @import "tailwindcss";
+/* The enter and exit utilities shadcn's overlays are written against
+   (`animate-in`, `fade-in-0`, `slide-in-from-top-2`). Tailwind v4 dropped the
+   plugin that used to supply them and this package is what took its place;
+   without it those class names are simply not generated, and a dialog would
+   appear and vanish with no transition while the markup still claimed one.
+   It ships utilities and keyframes only, no colours, so it cannot reach the
+   token layer. */
+@import "tw-animate-css";
 @import "./theme.css";

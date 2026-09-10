@@ -95,8 +95,63 @@ group of role values, and a label key in the three i18n files.
 
 The kit is shadcn/ui (`apps/desktop/components.json`, style new-york,
 cssVariables, lucide), so shadcn's names are the emitted API and our roles
-are the source. D3 installs components with the CLI; it must never run
-`shadcn init`, which would rewrite `styles.css`.
+are the source. Components are installed with the CLI; never run
+`shadcn init`, which rewrites `styles.css`. See "The kit" below for what
+the CLI gets wrong on the way in.
+
+## The kit
+
+Two folders, one rule about which is which.
+
+| Folder | What lives there | Who wrote it |
+|---|---|---|
+| `src/components/ui/` | shadcn/ui, one file per component, twenty-one of them. `button`, `input`, `label`, `select`, `checkbox`, `switch`, `textarea`, `table`, `card`, `badge`, `dialog`, `sheet`, `dropdown-menu`, `tabs`, `separator`, `skeleton`, `scroll-area`, `sidebar`, `breadcrumb`, `tooltip`, `sonner`. | The CLI, then corrected by hand. Re-add one with `pnpm dlx shadcn@latest add <name>` and redo the corrections below. |
+| `src/components/*.tsx` | Ours, on top of them: `AppShell`, `PageHeader`, `FormField`, `StatusPill`, `EmptyState`, `DataTable`, `MoneyInput`, `PayButton`, plus D2's `Money`, `Wordmark`, `Icon`, `ThemeSwitcher`. | Us. A screen imports from here first and reaches into `ui/` only for a control the kit has no opinion about. |
+
+`src/kit/KitPage.tsx` is every component in every state on one page, at
+`/kit` in a dev build only (`routes/kit.tsx` throws `notFound()` otherwise,
+and the import is dynamic so the page leaves the shipped bundle). It is what
+a reviewer compares against the mockups, and `e2e/kit.spec.ts` photographs
+it once per theme into `e2e/screenshots/kit-<theme>.png`.
+
+**What the CLI gets wrong, every time.** It resolved the `cn` import to a
+package named `cn` on npm instead of `@/lib/utils`, and it appended a
+hardcoded sidebar palette in `hsl()` plus a `.dark` class variant to
+`styles.css`. Revert that file and fix the imports. Then, in the files it
+wrote: strip every `dark:` variant (Tailwind's own dark variant answers to
+the machine, so it fires on a dark laptop whose shop chose the light theme);
+`bg-black/50` becomes `bg-scrim` and `text-white` becomes a foreground role;
+content-side physical properties become logical (`text-start`, `ps-`, `pe-`,
+`ms-`, `end-`, `border-s`); and `as React.CSSProperties` comes out, because
+`src/css-vars.d.ts` already widens the type for every file.
+
+The sheet and the sidebar keep a **physical** `side`, on purpose. A panel's
+edge, its border and the half it slides in from all have to agree, and
+`AppShell` computes the side from the page direction. Radix also keeps its
+own direction context and defaults to `ltr` whatever the document says, so
+the shell wraps everything in `Direction.Provider`; without it an Arabic
+select takes the arrow keys backwards.
+
+**The lint.** `apps/desktop/eslint.config.js` carries one rule: no `<input>`,
+`<button>`, `<select>`, `<textarea>` or `<table>` in JSX outside
+`components/ui/` and the kit. A bare element wears the browser's colour and
+height and the platform's focus ring, and it looks like nothing in a diff,
+which is why it is a rule rather than a review note. Tests are out of scope.
+`just lint` runs it; `just gates` runs it second, after `fmt`, because it
+needs no cargo.
+
+**The allowlist.** Every file written before the kit is named in
+`apps/desktop/src/lint/allowlist.json` with the screen it belongs to, so the
+list reads as work left rather than as permission. Eighteen entries when the
+kit landed. `src/lint/allowlist.test.ts` fails on an entry whose file is
+gone, and on an entry whose file has nothing left to fix: rewrite a screen
+on the kit and the gates make you delete its line in the same commit, which
+is what makes the count reach zero.
+
+Beside the lint, `src/tokens.test.ts` refuses `bg-[`, `text-[` and a hex
+anywhere, a `dark:` variant anywhere, and a hardcoded size (`p-[13px]`,
+`w-[240px]`) on a screen. The kit may still spell a size the scale has no
+name for, once, with a comment saying why.
 
 `design/shared/tokens.css` is the hand-written source of the values today,
 and the mockups in `design/` load it directly. `src/css.ts` emits the same
@@ -209,8 +264,11 @@ What a test has to do to count, on top of `quality-gates`:
 
 ## How to adopt
 
-`packages/design` is wired to nothing yet, and `apps/desktop` has no eslint.
-Four steps, in order.
+Steps 1 to 3 below are done: `packages/design` is wired in (D2) and
+`apps/desktop` has eslint with the one rule above (D3). What is left of this
+section is step 4, and the import rules in step 3's block, which are written
+against a `features/` tree the app does not have yet: they would fail on
+every screen today and they land with the wave that rewrites the screens.
 
 **1. Take the dependency.**
 
@@ -313,23 +371,23 @@ the TanStack and the Tauri ban and keeps only the primitives one:
 Add `"lint": "eslint src"` to `apps/desktop/package.json` and put it in the
 quality-gate chain.
 
-**4. Migrate three components first.** These three, because the mockups
-already define them, so the token mapping is a lookup rather than a
-decision:
+**4. Migrate the screens, one agent per screen.** The order this section
+used to give (button, then keypad, then product tile) was written before
+shadcn/ui was chosen; the button and the surfaces now come from the kit, so
+what is left is the screens themselves, and the queue is the allowlist in
+`apps/desktop/src/lint/allowlist.json`, longest file first.
 
-1. **Button**, `.btn` and its variants in `design/shared/components.css`
-   (`btn-primary`, `btn-secondary`, `btn-danger`, `btn-ghost`, sizes `sm`,
-   `lg`, `block`). Every screen needs it, and it pins the colour roles and
-   both control heights.
-2. **Numeric keypad**, `.keypad` and `.num` in the same file. It pins
-   `--touch-min`, `--control-h-lg` and the numeric font, and it is the
-   component a cashier touches most.
-3. **Product tile**, `.ptile` in `design/desktop/desktop.css`. It pins the
-   radius scale, the card surface and the shadow scale, and it is the first
-   component that will read real data from `packages/shared`.
+Two components in the mockups have no shadcn equivalent and are still to be
+drawn on the kit when their screen is rewritten: the **numeric keypad**
+(`.keypad` and `.num` in `design/shared/components.css`, which pins
+`--touch-min`, `--control-h-lg` and the figure font, and is the thing a
+cashier touches most) and the **product tile** (`.ptile` in
+`design/desktop/desktop.css`, which pins the radius scale, the card surface
+and the shadow scale).
 
-A migration is done when the component has no literal colour, no literal
-pixel, a `data-testid`, and every visible string through `t()`.
+A screen is migrated when its line is out of the allowlist, it has no
+literal colour and no literal pixel, its flows have their `data-testid`, and
+every visible string goes through `t()`.
 
 ## Open
 

@@ -56,7 +56,7 @@ test("adds a product and saves the products screenshot", async ({ page }) => {
 
   await page.goto("/products");
 
-  await expect(page.getByRole("heading", { name: t("products_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("products_title") })).toBeVisible();
   await expect(page.getByText(t("products_empty"))).toBeVisible();
 
   await addProduct(page, PRODUCT_NAME);

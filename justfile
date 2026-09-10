@@ -55,6 +55,14 @@ fmt:
 clippy: claim
     flock "$CARGO_TARGET_DIR/.lock" cargo clippy --workspace --all-targets -- -D warnings
 
+# the desktop's one eslint rule: no bare input, button, select, textarea or
+# table outside components/ui and the kit. The screens written before the kit
+# are exempted by name in apps/desktop/src/lint/allowlist.json, and the
+# vitest beside it refuses an entry whose file has nothing left to fix, so
+# the list can only shrink. No cargo, so it runs early and cheap.
+lint:
+    pnpm --filter dzpos-desktop lint
+
 test: claim
     flock "$CARGO_TARGET_DIR/.lock" cargo test --workspace
     pnpm -r test
@@ -94,7 +102,7 @@ theme:
     pnpm --filter @dzpos/design gen:theme
 
 # everything a PR needs, in order; stops at the first failure
-gates: fmt clippy types-check test build
+gates: fmt lint clippy types-check test build
 
 # ---- dev ----
 
