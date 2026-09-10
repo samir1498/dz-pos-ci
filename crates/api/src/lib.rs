@@ -459,6 +459,10 @@ pub fn router_with_origin(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),
         )
+        .route("/expense-categories", get(routes::expenses::categories))
+        .route("/expenses", get(routes::expenses::list))
+        .route("/expenses", post(routes::expenses::create))
+        .route("/cash", get(routes::expenses::cash))
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
         .route(

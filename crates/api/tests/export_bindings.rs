@@ -11,17 +11,18 @@
 
 use dzpos_api::dto::{
     AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AvoirLineDto, BackupDto, BackupsDto,
-    CancelDocumentDto, CategoryDto, ClockDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto,
-    CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto, DocumentKindDto,
-    DocumentStatusDto, HealthDto, NewAvoirDto, NewCustomerDto, NewPaymentDto, NewProductDto,
-    NewSaleDto, NewSaleLineDto, PartyKindDto, PaymentAllocationDto, PaymentDto, PaymentMethodDto,
+    CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CustomerDto, CustomerLedgerDto,
+    CustomerPaymentsDto, CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto,
+    DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto, HealthDto,
+    NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto, NewProductDto, NewSaleDto,
+    NewSaleLineDto, OutgoingsDto, PartyKindDto, PaymentAllocationDto, PaymentDto, PaymentMethodDto,
     PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto,
     SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto,
-    SaleTvaDto, SaleWarningDto, SettingsDto, StoreDto, UnitDto,
+    SaleTvaDto, SaleWarningDto, SettingsDto, StoreDto, TakingsDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 46] = [
+const FILES: [&str; 53] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -68,6 +69,13 @@ const FILES: [&str; 46] = [
     "PaymentDto.ts",
     "CustomerPaymentsDto.ts",
     "NewPaymentDto.ts",
+    "ExpenseCategoryDto.ts",
+    "ExpenseDto.ts",
+    "ExpensesDto.ts",
+    "NewExpenseDto.ts",
+    "TakingsDto.ts",
+    "OutgoingsDto.ts",
+    "CashPositionDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -171,6 +179,13 @@ fn export_bindings() {
     PaymentDto::export_all(&cfg).unwrap();
     CustomerPaymentsDto::export_all(&cfg).unwrap();
     NewPaymentDto::export_all(&cfg).unwrap();
+    ExpenseCategoryDto::export_all(&cfg).unwrap();
+    ExpenseDto::export_all(&cfg).unwrap();
+    ExpensesDto::export_all(&cfg).unwrap();
+    NewExpenseDto::export_all(&cfg).unwrap();
+    TakingsDto::export_all(&cfg).unwrap();
+    OutgoingsDto::export_all(&cfg).unwrap();
+    CashPositionDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

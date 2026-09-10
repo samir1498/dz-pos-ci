@@ -46,6 +46,13 @@ export type { SaleCancellationDto } from "./generated/SaleCancellationDto";
 export type { AvoirLineDto } from "./generated/AvoirLineDto";
 export type { NewAvoirDto } from "./generated/NewAvoirDto";
 export type { CancelDocumentDto } from "./generated/CancelDocumentDto";
+export type { CashPositionDto } from "./generated/CashPositionDto";
+export type { ExpenseCategoryDto } from "./generated/ExpenseCategoryDto";
+export type { ExpenseDto } from "./generated/ExpenseDto";
+export type { ExpensesDto } from "./generated/ExpensesDto";
+export type { NewExpenseDto } from "./generated/NewExpenseDto";
+export type { OutgoingsDto } from "./generated/OutgoingsDto";
+export type { TakingsDto } from "./generated/TakingsDto";
 
 export { ApiError, createClient } from "./client";
 // One zod schema per DTO, the check the client runs on every answer. They

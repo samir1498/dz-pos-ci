@@ -17,9 +17,12 @@ use dzpos_core::models::shop::{Shop, StoreBlock};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
 use dzpos_core::services::avoir::AvoirLine;
 use dzpos_core::services::backup::Backup;
+use dzpos_core::services::cash::{CashPosition, Outgoings, Takings};
+use dzpos_core::services::clock::Month;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
 use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
 use dzpos_core::services::documents::CancelEffect;
+use dzpos_core::services::expenses::{Expense, ExpenseCategory, NewExpense};
 use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, SaleKind, Warning};
 use dzpos_core::services::settings::DatedRegime;
 use serde::{Deserialize, Serialize};
@@ -1368,4 +1371,182 @@ impl NewPaymentDto {
             self.amount_centimes,
         )?))
     }
+}
+
+/// What an expense is filed under (features.md §1, Expense). The row carries
+/// an i18n key and not a label: the desktop reads the three languages from
+/// its own files by that key, so a shop switching language does not rewrite
+/// its rows. `active` travels because a retired category still names the
+/// expenses filed under it while the form refuses new ones.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "ExpenseCategoryDto.ts")]
+pub struct ExpenseCategoryDto {
+    pub id: i32,
+    pub key: String,
+    pub sort_order: i32,
+    pub active: bool,
+}
+
+impl From<ExpenseCategory> for ExpenseCategoryDto {
+    fn from(c: ExpenseCategory) -> Self {
+        ExpenseCategoryDto {
+            id: c.id,
+            key: c.key,
+            sort_order: c.sort_order,
+            active: c.active,
+        }
+    }
+}
+
+/// One expense. The day is `YYYY-MM-DD` on the shop's calendar, which is what
+/// the column holds.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "ExpenseDto.ts")]
+pub struct ExpenseDto {
+    pub id: i32,
+    pub category_id: i32,
+    pub amount_centimes: i64,
+    pub expense_date: String,
+    pub note: Option<String>,
+}
+
+impl From<Expense> for ExpenseDto {
+    fn from(e: Expense) -> Self {
+        ExpenseDto {
+            id: e.id,
+            category_id: e.category_id,
+            amount_centimes: e.amount.as_centimes(),
+            expense_date: e.expense_date,
+            note: e.note,
+        }
+    }
+}
+
+/// One month of expenses and what it came to. The total is the core's, summed
+/// over the same days the list covers: a screen adding the rows up would be a
+/// second answer to the same question.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "ExpensesDto.ts")]
+pub struct ExpensesDto {
+    /// `YYYY-MM`, as the month was read.
+    pub month: String,
+    pub total_centimes: i64,
+    pub expenses: Vec<ExpenseDto>,
+}
+
+/// An expense as the form sends it. The user is not on the wire: it comes
+/// from the caller's identity like every other write.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewExpenseDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewExpenseDto {
+    pub category_id: i32,
+    pub amount_centimes: i64,
+    pub expense_date: String,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+impl TryFrom<NewExpenseDto> for NewExpense {
+    type Error = ApiError;
+
+    fn try_from(d: NewExpenseDto) -> Result<Self, ApiError> {
+        Ok(NewExpense {
+            category_id: d.category_id,
+            amount: Money::centimes(within_js_safe_range("amount_centimes", d.amount_centimes)?),
+            expense_date: parse_day("expense_date", &d.expense_date)?,
+            note: d.note,
+        })
+    }
+}
+
+/// Money that came in over the period, and what it adds up to. The total
+/// travels rather than being added on the screen, for the reason the month's
+/// does: one question, one answer.
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export_to = "TakingsDto.ts")]
+pub struct TakingsDto {
+    pub sales_centimes: i64,
+    pub customer_payments_centimes: i64,
+    pub total_centimes: i64,
+}
+
+impl TryFrom<Takings> for TakingsDto {
+    type Error = ApiError;
+
+    fn try_from(t: Takings) -> Result<Self, ApiError> {
+        Ok(TakingsDto {
+            sales_centimes: t.sales.as_centimes(),
+            customer_payments_centimes: t.customer_payments.as_centimes(),
+            total_centimes: t.total().map_err(ApiError::from)?.as_centimes(),
+        })
+    }
+}
+
+/// Cash that left over the period. `refunds_centimes` is zero in this
+/// version: an avoir credits the customer's ledger and brings the goods back,
+/// and nothing says the drawer opened for it.
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export_to = "OutgoingsDto.ts")]
+pub struct OutgoingsDto {
+    pub refunds_centimes: i64,
+    pub supplier_payments_centimes: i64,
+    pub expenses_centimes: i64,
+    pub total_centimes: i64,
+}
+
+impl TryFrom<Outgoings> for OutgoingsDto {
+    type Error = ApiError;
+
+    fn try_from(o: Outgoings) -> Result<Self, ApiError> {
+        Ok(OutgoingsDto {
+            refunds_centimes: o.refunds.as_centimes(),
+            supplier_payments_centimes: o.supplier_payments.as_centimes(),
+            expenses_centimes: o.expenses.as_centimes(),
+            total_centimes: o.total().map_err(ApiError::from)?.as_centimes(),
+        })
+    }
+}
+
+/// The cash position over a day or a month (features.md §1, Dashboard). Never
+/// a stored figure: the core sums the ledgers on every call, and `from` and
+/// `to` say which days it read so a screen shows the range it got rather than
+/// the one it asked for.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "CashPositionDto.ts")]
+pub struct CashPositionDto {
+    pub from: String,
+    pub to: String,
+    pub cash_in: TakingsDto,
+    pub cash_out: OutgoingsDto,
+    pub cash_centimes: i64,
+    pub card_in: TakingsDto,
+}
+
+impl TryFrom<CashPosition> for CashPositionDto {
+    type Error = ApiError;
+
+    fn try_from(p: CashPosition) -> Result<Self, ApiError> {
+        Ok(CashPositionDto {
+            from: p.from.format(DATE_FORMAT).to_string(),
+            to: p.to.format(DATE_FORMAT).to_string(),
+            cash_in: TakingsDto::try_from(p.cash_in)?,
+            cash_out: OutgoingsDto::try_from(p.cash_out)?,
+            cash_centimes: p.cash.as_centimes(),
+            card_in: TakingsDto::try_from(p.card_in)?,
+        })
+    }
+}
+
+/// `YYYY-MM` and nothing else: a month is the range a figure is asked over,
+/// and "2026-9" or a day would be answered for another one.
+pub fn parse_month(field: &'static str, text: &str) -> Result<Month, ApiError> {
+    let refuse = || ApiError::Request(CoreError::validation(field, "a month is written YYYY-MM"));
+    let (year, month) = text.split_once('-').ok_or_else(refuse)?;
+    if year.len() != 4 || month.len() != 2 {
+        return Err(refuse());
+    }
+    let year: i32 = year.parse().map_err(|_| refuse())?;
+    let month: u32 = month.parse().map_err(|_| refuse())?;
+    Month::new(year, month).map_err(ApiError::Request)
 }
