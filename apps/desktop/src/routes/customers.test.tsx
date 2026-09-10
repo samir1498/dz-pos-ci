@@ -201,12 +201,14 @@ let list: CustomerDto[];
 let rows: CustomerLedgerDto;
 let payments: CustomerPaymentsDto;
 let writeAnswer: (() => Response) | null;
+let clockAnswer: (() => Response) | null;
 
 beforeEach(() => {
   list = [benali];
   rows = ledger;
   payments = noPayments;
   writeAnswer = null;
+  clockAnswer = null;
   vi.spyOn(window, "confirm").mockReturnValue(true);
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
@@ -262,7 +264,10 @@ beforeEach(() => {
     }
     // The shop's day, which the statement panel asks for before it offers a
     // range. A fixed one so the defaults it fills in are assertable.
-    if (url.endsWith("/clock")) return Promise.resolve(json(200, { today: SHOP_TODAY }));
+    if (url.endsWith("/clock")) {
+      if (clockAnswer !== null) return Promise.resolve(clockAnswer());
+      return Promise.resolve(json(200, { today: SHOP_TODAY }));
+    }
     if (url.includes("/ledger")) return Promise.resolve(json(200, rows));
     if (url.includes("/payments")) return Promise.resolve(json(200, payments));
     if (url.includes("/statement")) {
@@ -710,6 +715,23 @@ describe("payments", () => {
     expect(screen.getByLabelText(fr.field_statement_to)).toHaveValue(SHOP_TODAY);
     expect(screen.getByLabelText(fr.field_statement_from)).toHaveValue("2027-01-01");
     expect(fetched().some((url) => url.endsWith("/clock"))).toBe(true);
+  });
+
+  test("a clock the server will not answer is an error line with a retry, not a wait", async () => {
+    // The range waits for the shop's day, and the day is a call that can
+    // fail. Read as "not here yet", a refusal would leave the panel on its
+    // loading line for as long as the fiche stayed open and say nothing.
+    clockAnswer = () => json(500, { error: { code: "storage", message: "no" } });
+    await openTheFiche();
+
+    const failed = await screen.findByText(fr.error_storage);
+    expect(failed).toHaveAttribute("role", "alert");
+    expect(screen.queryByLabelText(fr.field_statement_to)).not.toBeInTheDocument();
+
+    clockAnswer = null;
+    await userEvent.click(screen.getByRole("button", { name: fr.action_retry }));
+
+    expect(await screen.findByLabelText(fr.field_statement_to)).toHaveValue(SHOP_TODAY);
   });
 
   test("a range that ends before it starts asks for nothing", async () => {

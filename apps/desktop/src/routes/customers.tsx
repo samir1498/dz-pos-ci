@@ -899,18 +899,33 @@ function PaymentRow({ payment }: { payment: PaymentDto }) {
  */
 function StatementPanel({ customer }: { customer: CustomerDto }) {
   const { t } = useTranslation();
-  const today = useShopToday();
+  const clock = useShopToday();
 
   return (
     <section className="flex flex-col gap-2 rounded border p-3">
       <h3 className="font-semibold">{t("customers_statement")}</h3>
       <p className="text-sm opacity-70">{t("customers_statement_hint")}</p>
       {/* The range defaults to the shop's own day, which the server owns,
-          so the fields wait for it rather than opening on the browser's. */}
-      {today === undefined ? (
+          so the fields wait for it rather than opening on the browser's.
+          A refusal is said out loud with a way to ask again: waiting is
+          what a call in flight looks like, not what a failed one does. */}
+      {clock.error !== null ? (
+        <>
+          <p role="alert" className="text-red-700">
+            {t(errorKey(clock.error))}
+          </p>
+          <button
+            type="button"
+            className="self-start rounded border px-3 py-1.5"
+            onClick={clock.retry}
+          >
+            {t("action_retry")}
+          </button>
+        </>
+      ) : clock.today === undefined ? (
         <p>{t("customers_loading")}</p>
       ) : (
-        <StatementRange customer={customer} today={today} />
+        <StatementRange customer={customer} today={clock.today} />
       )}
     </section>
   );

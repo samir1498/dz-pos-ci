@@ -52,7 +52,7 @@ export function SettingsScreen() {
   // The day a régime change defaults to belongs to the shop's calendar, not
   // to the machine's: the core reads a dated setting on Algeria's (§2, "One
   // clock"), so the form waits for the server to say which day it is.
-  const today = useShopToday();
+  const clock = useShopToday();
   // Lives here, not in the form: a save refetches the page and the form is
   // remounted on the fresh block (its key), which would drop the message.
   const [storeSaved, setStoreSaved] = useState(false);
@@ -74,13 +74,26 @@ export function SettingsScreen() {
             saved={storeSaved}
             onSaved={setStoreSaved}
           />
-          {today === undefined ? (
+          {clock.error !== null ? (
+            // The day is a call like any other and it can be refused. Said
+            // here rather than swallowed into the wait above: a panel that
+            // showed "loading" for a refusal would never come back on its
+            // own and would never say why.
+            <div className="flex flex-col items-start gap-2">
+              <p role="alert" className="text-red-700">
+                {t(errorKey(clock.error))}
+              </p>
+              <button type="button" className="rounded border px-3 py-1.5" onClick={clock.retry}>
+                {t("action_retry")}
+              </button>
+            </div>
+          ) : clock.today === undefined ? (
             <p>{t("products_loading")}</p>
           ) : (
             <RegimePanel
               current={settings.data.regime}
               planned={settings.data.regime_planned}
-              today={today}
+              today={clock.today}
             />
           )}
           <BackupsPanel />

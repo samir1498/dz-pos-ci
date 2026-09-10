@@ -80,11 +80,13 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let current: SettingsDto;
 let storeAnswer: (() => Response) | null;
 let regimeAnswer: (() => Response) | null;
+let clockAnswer: (() => Response) | null;
 
 beforeEach(() => {
   current = seeded;
   storeAnswer = null;
   regimeAnswer = null;
+  clockAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "PUT" && url.endsWith("/settings/store")) {
@@ -117,7 +119,10 @@ beforeEach(() => {
       return Promise.resolve(json(200, { backups: [], safety_copies: [] }));
     // The régime form dates its default from the shop's calendar, which the
     // server owns; a fixed day here so the field is assertable.
-    if (url.endsWith("/clock")) return Promise.resolve(json(200, { today: SHOP_TODAY }));
+    if (url.endsWith("/clock")) {
+      if (clockAnswer !== null) return Promise.resolve(clockAnswer());
+      return Promise.resolve(json(200, { today: SHOP_TODAY }));
+    }
     if (url.endsWith("/settings")) return Promise.resolve(json(200, current));
     return Promise.resolve(json(404, { error: { code: "not_found", message: "no" } }));
   });
@@ -219,6 +224,25 @@ describe("the régime form", () => {
     // the fork this replaced (the core dates documents on Algeria's
     // calendar, UTC+1, and a browser reads the machine's zone).
     mount();
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
+    expect(within(regimeForm).getByLabelText(fr.field_valid_from)).toHaveValue(SHOP_TODAY);
+  });
+
+  test("a clock the server will not answer is an error line with a retry, not a wait", async () => {
+    // The day is asked of the server, so it can fail like any other call. A
+    // panel that read the answer as "not here yet" would sit on its loading
+    // line for as long as the window stayed open, with no way back and
+    // nothing on the screen saying why.
+    clockAnswer = () => json(500, { error: { code: "storage", message: "no" } });
+    const user = userEvent.setup();
+    mount();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_storage);
+    expect(screen.queryByRole("form", { name: fr.settings_regime })).not.toBeInTheDocument();
+
+    clockAnswer = null;
+    await user.click(screen.getByRole("button", { name: fr.action_retry }));
+
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     expect(within(regimeForm).getByLabelText(fr.field_valid_from)).toHaveValue(SHOP_TODAY);
   });

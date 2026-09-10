@@ -38,6 +38,7 @@
   "action_save": "Save",
   "action_saving": "Saving…",
   "action_cancel": "Cancel",
+  "action_retry": "Retry",
   "error_validation": "Check the fields you entered.",
   "error_duplicate_barcode": "That barcode is already in use.",
   "error_not_found": "Not found.",

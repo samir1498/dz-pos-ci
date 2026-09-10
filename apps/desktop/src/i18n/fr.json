@@ -38,6 +38,7 @@
   "action_save": "Enregistrer",
   "action_saving": "Enregistrement…",
   "action_cancel": "Annuler",
+  "action_retry": "Réessayer",
   "error_validation": "Vérifiez les champs saisis.",
   "error_duplicate_barcode": "Ce code-barres est déjà utilisé.",
   "error_not_found": "Introuvable.",

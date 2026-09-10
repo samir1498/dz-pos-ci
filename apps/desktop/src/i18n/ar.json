@@ -38,6 +38,7 @@
   "action_save": "حفظ",
   "action_saving": "جارٍ الحفظ…",
   "action_cancel": "إلغاء",
+  "action_retry": "إعادة المحاولة",
   "error_validation": "تحقق من الحقول المُدخلة.",
   "error_duplicate_barcode": "هذا الرمز الشريطي مستعمل من قبل.",
   "error_not_found": "غير موجود.",
