@@ -11,11 +11,17 @@ facture at the till, credit notes, cancellation, proforma, payments,
 statement, debt slip) merged to main on 2026-09-10 at 03:36 (PR #19,
 79732ca): nine tasks run as a loop on `m2/2026-09-09`, each with three
 review lenses and a fix round, then a combined review of the whole diff.
-Two follow-ups sit on the M2 plan for Samir: T10 (the avoir's Remaining
-table refactor) and T11 (the client validator build-vs-buy and the till
-screen split). The loop pages hold the lessons and what the next sweep
-picks up. M3 is next once Samir says so. The ledger on the WSL box
-(`~/.dz-night/ledger.md`) holds the ticks.
+M3 (stock in, expenses, reports) runs as a loop on `m3/2026-09-10` since
+2026-09-10 06:33: nine tasks in its plan, the yearly reset of every
+document series first (Samir, 2026-09-10: the common practice, the year
+in the number), then suppliers, purchases with partial receipt, expenses,
+the stock re-derive, the dashboard, Excel. The two M2 refactors (T10 the
+avoir's Remaining table plus the kind rules as CHECKs, T11 the zod client
+and the till split, both approved by Samir on 2026-09-10) run first on the
+same branch. `context/loops/20260910-m3-loop.md` holds the waves and
+ports. A stale-info sweep of the repo and the boss site runs alongside
+(2026-09-10 morning). The ledger on the WSL box (`~/.dz-night/ledger.md`)
+holds the ticks.
 
 Status site for Anouar: https://dinar-reports.pages.dev/ (progress reports
 and reference pages; generator in `~/.dz-night/report/` on the WSL box).
