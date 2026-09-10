@@ -241,6 +241,7 @@ const fn status_for(e: &CoreError) -> StatusCode {
         | CoreError::Query(_)
         | CoreError::Io(_)
         | CoreError::Unstamped { .. }
+        | CoreError::UnpricedReversal { .. }
         | CoreError::Render(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }

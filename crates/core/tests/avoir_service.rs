@@ -1620,3 +1620,83 @@ fn an_avoir_returns_the_goods_at_the_cost_of_the_sale_it_reverses() {
         "the reversal carried today's cost instead of the one the goods left on"
     );
 }
+
+/// A `sale` movement written straight into the ledger, naming a document and
+/// a product that already have one. Nothing in the app writes a second cost
+/// for one product on one paper, which is why the refusal below has to be
+/// forged: a sale reads the fiche once for the whole basket.
+fn a_second_sale_movement(
+    conn: &mut SqliteConnection,
+    document_id: i32,
+    product_id: i32,
+    unit_cost_centimes: i64,
+) {
+    diesel::sql_query(
+        "INSERT INTO stock_movements (shop_id, product_id, kind, qty_milli, \
+         unit_cost_centimes, document_id, user_id, created_at) \
+         VALUES (?, ?, 'sale', -1000, ?, ?, ?, ?)",
+    )
+    .bind::<diesel::sql_types::Integer, _>(SHOP)
+    .bind::<diesel::sql_types::Integer, _>(product_id)
+    .bind::<diesel::sql_types::BigInt, _>(unit_cost_centimes)
+    .bind::<diesel::sql_types::Integer, _>(document_id)
+    .bind::<diesel::sql_types::Integer, _>(OWNER)
+    .bind::<diesel::sql_types::Timestamp, _>(at(10))
+    .execute(conn)
+    .unwrap();
+}
+
+/// Two costs for one product on one facture is a file that cannot say what
+/// the goods were worth, and a credit note against it is refused rather than
+/// written at whichever row the reader happened to keep.
+#[test]
+fn a_facture_whose_sale_movements_disagree_about_the_cost_credits_nothing() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+    a_second_sale_movement(&mut conn, facture.id, p, 77_777);
+
+    let refused = avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(11)));
+    assert!(
+        matches!(
+            refused,
+            Err(CoreError::UnpricedReversal { product_id, .. }) if product_id == p
+        ),
+        "two costs were read as one: {refused:?}"
+    );
+    // The whole credit note rolled back, so no number was burned and no goods
+    // went back on the shelf.
+    assert_eq!(
+        documents::list(&mut conn, SHOP, Some(DocumentKind::Avoir))
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+/// A sold line whose movement is gone. The fiche's cost is not the answer:
+/// it is the last delivery's, and writing it here is how a margin already
+/// earned moves with a purchase.
+#[test]
+fn a_sold_line_with_no_movement_left_is_refused_rather_than_priced_off_the_fiche() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+    diesel::sql_query(format!(
+        "DELETE FROM stock_movements WHERE document_id = {} AND kind = 'sale'",
+        facture.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let refused = avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(11)));
+    assert!(
+        matches!(
+            refused,
+            Err(CoreError::UnpricedReversal { product_id, .. }) if product_id == p
+        ),
+        "a missing movement was priced off the fiche: {refused:?}"
+    );
+}

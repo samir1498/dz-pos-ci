@@ -1,7 +1,9 @@
 //! The only place the stock ledger touches diesel. Every query is scoped by
 //! `shop_id` (rule 3).
 
+use diesel::dsl::sql;
 use diesel::prelude::*;
+use diesel::sql_types::{BigInt, Nullable};
 use diesel::sqlite::SqliteConnection;
 
 use std::collections::HashMap;
@@ -95,27 +97,51 @@ pub fn set_cached_quantity(
 ///
 /// One entry per product and not per line: a sale reads the fiche's cost
 /// once and writes it on every line it moves, so two lines of one product
-/// left on the same cost and a map keyed by the product loses nothing. An
-/// empty map is a document that moved no stock, which is what a reversal of
-/// a line whose product has gone reads.
+/// left on the same cost. That is asserted rather than assumed. The lowest
+/// and the highest cost of each product are read and a product whose two
+/// disagree is refused, so the day a line carries a cost of its own this
+/// answers an error instead of whichever row the map happened to keep last.
+///
+/// An empty map is a document that moved no stock; a product absent from it
+/// is a line the ledger cannot price, which the caller refuses.
 pub fn sale_costs_of_document(
     conn: &mut SqliteConnection,
     shop_id: i32,
     document_id: i32,
 ) -> Result<HashMap<i32, Money>, CoreError> {
-    let rows: Vec<(i32, i64)> = stock_movements::table
+    let rows: Vec<(i32, Option<i64>, Option<i64>)> = stock_movements::table
         .filter(stock_movements::shop_id.eq(shop_id))
         .filter(stock_movements::document_id.eq(document_id))
         .filter(stock_movements::kind.eq(MovementKind::Sale))
+        .group_by(stock_movements::product_id)
         .select((
             stock_movements::product_id,
-            stock_movements::unit_cost_centimes,
+            sql::<Nullable<BigInt>>("MIN(unit_cost_centimes)"),
+            sql::<Nullable<BigInt>>("MAX(unit_cost_centimes)"),
         ))
         .load(conn)?;
-    Ok(rows
-        .into_iter()
-        .map(|(product_id, centimes)| (product_id, Money::centimes(centimes)))
-        .collect())
+    let mut costs = HashMap::with_capacity(rows.len());
+    for (product_id, low, high) in rows {
+        // A group SQLite answered has at least one row in it, so neither
+        // bound is null; a file that answers otherwise is one this cannot
+        // price either, and it takes the same refusal.
+        let (Some(low), Some(high)) = (low, high) else {
+            return Err(CoreError::UnpricedReversal {
+                document_id,
+                product_id,
+                reason: "its sale movements carry no cost",
+            });
+        };
+        if low != high {
+            return Err(CoreError::UnpricedReversal {
+                document_id,
+                product_id,
+                reason: "its sale movements carry two different costs",
+            });
+        }
+        costs.insert(product_id, Money::centimes(low));
+    }
+    Ok(costs)
 }
 
 /// Every product of the shop with its cached quantity and the sum its ledger

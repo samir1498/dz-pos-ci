@@ -6,6 +6,7 @@
 //! asking for its amount and holding the goods off the shelf.
 
 use chrono::{NaiveDate, NaiveDateTime};
+use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
@@ -997,5 +998,49 @@ fn a_cancelled_ticket_returns_the_goods_at_the_cost_of_the_sale() {
     assert_eq!(
         back.unit_cost, sold_at,
         "the cancellation carried today's cost instead of the one the goods left on"
+    );
+}
+
+/// The cancellation's own path to the same rule: a ticket carries no credit
+/// note, so the movements are written by `documents` rather than by
+/// `avoir::issue`, and a sold line with no movement left is refused there too.
+#[test]
+fn a_cancelled_ticket_whose_movement_is_gone_is_refused_rather_than_priced_off_the_fiche() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000);
+    let ticket = sell(
+        &mut conn,
+        None,
+        vec![line(p, 2_000)],
+        PaymentMode::Cash,
+        SaleKind::Ticket,
+        10,
+    );
+    diesel::sql_query(format!(
+        "DELETE FROM stock_movements WHERE document_id = {} AND kind = 'sale'",
+        ticket.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let refused = documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        ticket.id,
+        "erreur de saisie".to_string(),
+        Some(at(11)),
+    );
+    assert!(
+        matches!(
+            refused,
+            Err(CoreError::UnpricedReversal { product_id, .. }) if product_id == p
+        ),
+        "a missing movement was priced off the fiche: {refused:?}"
+    );
+    // The whole cancellation rolled back: the ticket still stands.
+    assert_eq!(
+        documents::get(&mut conn, SHOP, ticket.id).unwrap().status,
+        DocumentStatus::Issued
     );
 }

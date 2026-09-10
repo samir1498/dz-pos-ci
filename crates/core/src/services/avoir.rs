@@ -44,7 +44,7 @@ use crate::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
     NewDocumentLine,
 };
-use crate::services::{audit, clock, debt, documents, optional_field, products, stock};
+use crate::services::{audit, clock, debt, documents, optional_field, stock};
 
 /// One line of a facture and how much of it is coming back.
 ///
@@ -233,12 +233,18 @@ pub fn issue(
             let Some(product_id) = line.product_id else {
                 continue;
             };
-            // The fiche's cost is the fallback and not the rule: a facture
-            // from before the ledger carried this movement has no sale row to
-            // read, and today's cost is the only figure the file still holds.
-            let unit_cost = match sold_at.get(&product_id) {
-                Some(cost) => *cost,
-                None => products::get(conn, shop_id, product_id)?.cost,
+            // The fiche's cost is not a fallback. `unit_cost_centimes` has
+            // been NOT NULL since the first documents migration and a sale is
+            // the only writer of a `sale` movement, so a sold line without one
+            // is a file that disagrees with itself; writing today's cost
+            // instead would move a margin already earned with the next
+            // delivery, which is the whole thing the ledger cost prevents.
+            let Some(unit_cost) = sold_at.get(&product_id).copied() else {
+                return Err(CoreError::UnpricedReversal {
+                    document_id: facture_id,
+                    product_id,
+                    reason: "the line it credits has no sale movement",
+                });
             };
             stock::record(
                 conn,
