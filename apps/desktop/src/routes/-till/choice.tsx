@@ -40,8 +40,10 @@ export function ChoiceGroup({
   );
 }
 
-/** One key of the row. `title` is the reason it is off, said on the control
- * itself so hovering the thing that refuses explains it. */
+/** One key of the row. `title` is the reason it is off, on the control itself
+ * and on the span around it: a disabled button fires no mouse event, so the
+ * browser would never show a tooltip the key carries alone, and the wrapper
+ * is what a cashier's pointer actually lands on. */
 export function Choice({
   checked,
   label,
@@ -55,7 +57,7 @@ export function Choice({
   disabled?: boolean;
   onPick: () => void;
 }) {
-  return (
+  const key = (
     <Button
       type="button"
       role="radio"
@@ -68,5 +70,11 @@ export function Choice({
     >
       {label}
     </Button>
+  );
+  if (title === undefined) return key;
+  return (
+    <span title={title} className="inline-flex">
+      {key}
+    </span>
   );
 }
