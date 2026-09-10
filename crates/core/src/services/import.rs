@@ -23,6 +23,18 @@
 //! or thousandths with integer arithmetic, rounding half away from zero, the
 //! way the money module rounds everywhere else. No price is ever the result
 //! of `value * 100.0`.
+//!
+//! A blank cost or a blank wholesale cell means something different
+//! depending on whether the row opens a product or touches one already
+//! there. Opening one, blank is what a fiche with nothing typed in that box
+//! would be: zero cost, no wholesale. Touching one, blank is the shop
+//! saying nothing about the price, not the shop saying "zero" or "no
+//! wholesale any more"; a boutique re-imports its own export every week to
+//! fix a name or a category, and that file must not zero out a cost line it
+//! never touched. The barcode column already works this way (a blank code
+//! leaves the product's number alone) and so does the stock column (a
+//! blank, or any, cell leaves the ledger's quantity alone); cost and
+//! wholesale follow the same rule.
 
 use calamine::{Data, Reader, Xlsx};
 use diesel::connection::Connection;
@@ -229,20 +241,36 @@ pub fn apply(
                 )?),
             };
             let rate = resolve_rate(conn, shop_id, category, fields)?;
+            let existing_id = existing(conn, shop_id, fields.barcode.as_deref())?;
+            // A blank cost or wholesale cell is the shop saying nothing
+            // about the price (module doc). On an update that means the
+            // product's own figure stands; on a create there is nothing to
+            // fall back to, so it is zero or no wholesale, as a fiche
+            // opened with the box empty would be.
+            let (cost, wholesale) = match existing_id {
+                Some(id) => {
+                    let before = products::get(conn, shop_id, id)?;
+                    (
+                        fields.cost.unwrap_or(before.cost),
+                        fields.wholesale.or(before.wholesale),
+                    )
+                }
+                None => (fields.cost.unwrap_or(Money::ZERO), fields.wholesale),
+            };
             let new = NewProduct {
                 name: draft.name.clone(),
                 barcode: fields.barcode.clone(),
                 category_id: category,
                 unit: fields.unit,
-                cost: fields.cost,
+                cost,
                 selling: fields.selling,
-                wholesale: fields.wholesale,
+                wholesale,
                 qty_on_hand_milli: fields.qty_on_hand_milli,
                 low_stock_at_milli: fields.low_stock_at_milli,
                 rate_bps: Some(rate),
                 active: fields.active,
             };
-            match existing(conn, shop_id, fields.barcode.as_deref())? {
+            match existing_id {
                 Some(id) => {
                     products::update(conn, shop_id, user_id, id, new)?;
                     done.updated = done.updated.saturating_add(1);
@@ -370,8 +398,12 @@ struct Fields {
     barcode: Option<String>,
     category: Option<String>,
     unit: Unit,
-    cost: Money,
+    /// `None` when the cell was blank: zero on a create, the existing
+    /// product's cost left alone on an update (see the module doc).
+    cost: Option<Money>,
     selling: Money,
+    /// `None` when the cell was blank: no wholesale on a create, the
+    /// existing product's wholesale left alone on an update.
     wholesale: Option<Money>,
     qty_on_hand_milli: i64,
     low_stock_at_milli: i64,
@@ -489,7 +521,7 @@ fn fields(
     }
     let unit = Unit::parse(&column(row, index, "unit")).ok_or(("unit", "unknown_unit"))?;
 
-    let cost = money(row, index, "cost_da")?.unwrap_or(Money::ZERO);
+    let cost = money(row, index, "cost_da")?;
     let selling = money(row, index, "selling_da")?.ok_or(("selling_da", "missing_amount"))?;
     let wholesale = money(row, index, "wholesale_da")?;
     let qty_on_hand_milli = qty(row, index, "stock")?.unwrap_or(0);

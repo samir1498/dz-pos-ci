@@ -338,6 +338,58 @@ fn an_update_leaves_the_stock_where_it_was_because_an_import_is_not_a_movement()
 }
 
 #[test]
+fn a_re_import_with_a_blank_cost_or_wholesale_leaves_them_where_they_were() {
+    // A shop re-imports its own export every week to fix a name or a
+    // category. A blank cost or wholesale cell in that file is the shop
+    // saying nothing about the price, not the shop saying "zero" or "no
+    // wholesale any more".
+    let (_dir, mut conn) = open_temp();
+    let id = products::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewProduct {
+            name: "Riz".to_string(),
+            barcode: Some("6130001234599".to_string()),
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(9_000),
+            selling: Money::centimes(15_000),
+            wholesale: Some(Money::centimes(12_000)),
+            qty_on_hand_milli: 0,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(1900).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap()
+    .id;
+
+    let mut row = a_row("Riz basmati", t("6130001234599"));
+    row[4] = Cell::Blank; // cost_da
+    row[6] = Cell::Blank; // wholesale_da
+    let bytes = workbook(&[row]);
+
+    let report = import::dry_run(&mut conn, SHOP, &bytes).unwrap();
+    assert_eq!(outcome(&report, "Riz basmati"), Outcome::Updated);
+
+    import::apply(&mut conn, SHOP, OWNER, &bytes).unwrap();
+
+    let after = products::get(&mut conn, SHOP, id).unwrap();
+    assert_eq!(after.name, "Riz basmati", "the name did change");
+    assert_eq!(
+        after.cost,
+        Money::centimes(9_000),
+        "a blank cost cell overwrote the product's real cost"
+    );
+    assert_eq!(
+        after.wholesale,
+        Some(Money::centimes(12_000)),
+        "a blank wholesale cell cleared the product's wholesale price"
+    );
+}
+
+#[test]
 fn a_price_with_a_third_decimal_is_refused_and_never_rounded_into_the_shop() {
     // Ruling, 2026-09-10. A shop that typed 80.505 and found the till
     // charging 80.51 would have no way of knowing where the centime came
