@@ -83,7 +83,7 @@ const cargoEnv = {
   // target/ of its own, which is the per-worktree folder the disk rules
   // forbid, so run it through just.
   CARGO_TARGET_DIR: process.env.CARGO_TARGET_DIR ?? path.join(repoRoot, "target"),
-  CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS ?? "2",
+  CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS ?? "4",
 };
 
 export default defineConfig({

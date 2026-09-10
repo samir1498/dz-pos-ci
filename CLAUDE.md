@@ -47,7 +47,7 @@ where each duplicated fact lives and how a fix is routed.
 - Disk, after the 125 GB day (2026-09-10): every cargo command in this repo
   runs through `just` (`just clippy`, `just test`, `just types`, `just api`,
   `just e2e`), which exports the one shared build folder
-  (`<main checkout>/.cargo-target`, two build jobs) and first runs
+  (`<main checkout>/.cargo-target`, four jobs, one cargo run at a time) and first runs
   `just claim`: cargo names our three crates' artifacts the same in every
   worktree and trusts mtimes, so a bare `cargo` in a worktree after another
   worktree built silently reuses the other branch's crates. `just claim`

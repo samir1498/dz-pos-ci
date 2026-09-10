@@ -8,12 +8,12 @@ export PATH := env_var("HOME") + "/.cargo/bin:" + env_var("PATH")
 # this repo: a target/ per worktree is what filled the disk on 2026-09-10.
 # The folder sits next to the main checkout's .git, so every worktree and
 # the laptop clone find the same one without an env var (set
-# CARGO_TARGET_DIR yourself to override). Two build jobs: cargo's lock
-# already makes it one build at a time across worktrees, and four rustc
-# jobs is what starved the box during the reboots. The e2e runner reads
+# CARGO_TARGET_DIR yourself to override). Four build jobs: the lock below
+# makes it one cargo run at a time across worktrees, and it was several
+# builds at once, not one build with four jobs, that starved the box. The e2e runner reads
 # both variables too.
 export CARGO_TARGET_DIR := env_var_or_default("CARGO_TARGET_DIR", `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"` + "/.cargo-target")
-export CARGO_BUILD_JOBS := env_var_or_default("CARGO_BUILD_JOBS", "2")
+export CARGO_BUILD_JOBS := env_var_or_default("CARGO_BUILD_JOBS", "4")
 
 # Cargo names an artifact of our own crates the same in every worktree and
 # decides freshness by mtime, so after a build in another checkout the
