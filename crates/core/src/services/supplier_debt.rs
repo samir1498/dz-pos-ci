@@ -769,6 +769,28 @@ fn ensure_purchase(
     Ok(())
 }
 
+/// That the shop still buys from this supplier. **T3's receipt path asks this
+/// before it writes anything**, the way a sale asks the same of a customer's
+/// fiche (`services::sales`): closing says the shop has stopped buying, and
+/// goods arriving on a closed fiche are either a mistake or a fiche somebody
+/// has to reopen on purpose.
+///
+/// The money side never asks it. A payment and a correction land on a closed
+/// fiche by design: the shop stopped buying, not paying.
+pub fn ensure_active(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    supplier_id: i32,
+) -> Result<(), CoreError> {
+    if suppliers_repo::get(conn, shop_id, supplier_id)?.active {
+        return Ok(());
+    }
+    Err(CoreError::validation(
+        "supplier_id",
+        "this supplier's fiche is closed; the shop no longer buys from them",
+    ))
+}
+
 fn ensure_supplier(
     conn: &mut SqliteConnection,
     shop_id: i32,

@@ -611,3 +611,49 @@ fn credit_is_placed_on_one_order_only_up_to_what_that_order_asks_for() {
         .unwrap()
         .is_empty());
 }
+
+#[test]
+fn a_closed_fiche_still_takes_a_correction() {
+    // A shop closes a fiche to stop buying from somebody, not to stop putting
+    // right what it owes them. The same rule the payment above holds.
+    let (_dir, mut conn) = open_temp();
+    let (supplier, _older, _newer) = two_orders(&mut conn);
+    suppliers::close(
+        &mut conn,
+        SHOP,
+        OWNER,
+        supplier,
+        Some("le fournisseur a fermé".to_string()),
+    )
+    .unwrap();
+    let written = supplier_debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        supplier,
+        Money::centimes(-30_000),
+        Some("rabais accordé".to_string()),
+    )
+    .unwrap();
+    assert_eq!(written.statement.balance, Money::centimes(130_000));
+}
+
+#[test]
+fn a_closed_fiche_is_what_a_purchase_is_refused_on() {
+    // What a closed fiche does refuse is more goods. T3's receipt path asks
+    // this before it writes a `purchase` row, the way a sale asks the same of
+    // a customer's fiche.
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    supplier_debt::ensure_active(&mut conn, SHOP, supplier).unwrap();
+    suppliers::close(&mut conn, SHOP, OWNER, supplier, None).unwrap();
+    let err = supplier_debt::ensure_active(&mut conn, SHOP, supplier).unwrap_err();
+    assert!(
+        matches!(&err, CoreError::Validation { field, .. } if field == "supplier_id"),
+        "{err}"
+    );
+    // And another shop's supplier is not found rather than active.
+    second_shop(&mut conn);
+    let err = supplier_debt::ensure_active(&mut conn, 2, supplier).unwrap_err();
+    assert_eq!(err.code(), "not_found", "{err}");
+}
