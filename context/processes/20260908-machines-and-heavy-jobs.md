@@ -95,7 +95,7 @@ disk hit zero five times in an hour.
 - Every cargo command in this repo runs through `just`, which exports the
   one shared build folder (`.cargo-target` next to the main checkout's
   `.git`, found through `git rev-parse --git-common-dir`, so the laptop
-  clone gets its own without an env var) and two build jobs. One shared
+  clone gets its own without an env var) and four build jobs (one cargo run at a time is the memory rule; several builds at once is what starved the box, not one build on four cores). One shared
   build folder for every worktree: ten worktrees cost one build's disk,
   and cargo's lock on the folder makes it one build at a time, which is
   also the memory rule.
