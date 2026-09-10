@@ -4,6 +4,39 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 export PATH := env_var("HOME") + "/.cargo/bin:" + env_var("PATH")
 
+# Every cargo command builds into one shared folder for every checkout of
+# this repo: a target/ per worktree is what filled the disk on 2026-09-10.
+# The folder sits next to the main checkout's .git, so every worktree and
+# the laptop clone find the same one without an env var (set
+# CARGO_TARGET_DIR yourself to override). Two build jobs: cargo's lock
+# already makes it one build at a time across worktrees, and four rustc
+# jobs is what starved the box during the reboots. The e2e runner reads
+# both variables too.
+export CARGO_TARGET_DIR := env_var_or_default("CARGO_TARGET_DIR", `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"` + "/.cargo-target")
+export CARGO_BUILD_JOBS := env_var_or_default("CARGO_BUILD_JOBS", "2")
+
+# Cargo names an artifact of our own crates the same in every worktree and
+# decides freshness by mtime, so after a build in another checkout the
+# shared folder holds that checkout's dzpos-core, and a checkout whose
+# sources are older reuses it without a word (2026-09-10: clippy in one
+# worktree failed on a type only the other branch had). This records which
+# checkout built last and, when it changes, touches this checkout's crate
+# sources so cargo rebuilds the three members; the dependencies stay
+# cached, they are identical in every checkout. Every cargo recipe below
+# depends on it; run a bare `cargo` in a worktree only after `just claim`.
+claim:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "$CARGO_TARGET_DIR"
+    me="{{justfile_directory()}}"
+    marker="$CARGO_TARGET_DIR/.owner"
+    owner="$(cat "$marker" 2>/dev/null || true)"
+    if [ "$owner" != "$me" ]; then
+        echo "claim: build folder last used by ${owner:-nobody}; touching this checkout's crates so cargo rebuilds them" >&2
+        find crates apps/desktop/src-tauri -name target -prune -o -type f -print0 | xargs -0 touch
+        printf '%s\n' "$me" > "$marker"
+    fi
+
 default:
     @just --list
 
@@ -12,10 +45,10 @@ default:
 fmt:
     cargo fmt --all --check
 
-clippy:
+clippy: claim
     cargo clippy --workspace --all-targets -- -D warnings
 
-test:
+test: claim
     cargo test --workspace
     pnpm -r test
 
@@ -27,7 +60,7 @@ build:
 # so a brand new DTO passed the gate; it also never noticed an orphan left
 # behind by a DTO that was deleted. Generating into a temp directory and
 # running `diff -r` both ways catches each of those.
-types-check:
+types-check: claim
     #!/usr/bin/env bash
     set -euo pipefail
     if [ -e crates/api/bindings ]; then
@@ -44,7 +77,7 @@ types-check:
 # Absolute: cargo runs a test from the crate's own directory, and a relative
 # path here wrote crates/api/packages/shared/src/generated the first time a
 # DTO was added after the recipe was written.
-types:
+types: claim
     DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" cargo test -p dzpos-api --test export_bindings
 
 # everything a PR needs, in order; stops at the first failure
@@ -62,7 +95,7 @@ gates: fmt clippy types-check test build
 # restarting the API. Vite inlines VITE_API_TOKEN into the served bundle,
 # and `--host` serves that bundle to every machine that can reach the
 # port: a per-run token is what keeps that from being a lasting credential.
-api port="4317" db=".dev/dev.db" origin="":
+api port="4317" db=".dev/dev.db" origin="": claim
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p .dev
@@ -97,7 +130,7 @@ tauri:
 # one database the first invocation starts, and the products suite's
 # first test needs an empty table. Run one language with
 # `pnpm desktop e2e --project ar`.
-e2e:
+e2e: claim
     #!/usr/bin/env bash
     set -euo pipefail
     for project in fr en ar; do
@@ -107,7 +140,7 @@ e2e:
 
 # only the tests that write a committed screenshot: fr (products.png) and
 # ar (the ten *-ar.png the e2e README lists); en keeps none.
-screenshot:
+screenshot: claim
     #!/usr/bin/env bash
     set -euo pipefail
     pnpm desktop e2e -g screenshot --project fr
@@ -116,9 +149,8 @@ screenshot:
 # ---- worktrees (one per task when the milestone loop runs tasks in parallel) ----
 
 # a checkout of <branch> under .claude/worktrees/<name> with its own
-# node_modules; cargo builds into the one shared
-# CARGO_TARGET_DIR=/home/samir/dz-pos/.cargo-target for every worktree (a
-# per-worktree target is what filled the disk on 2026-09-10).
+# node_modules; cargo builds into the one shared folder (see the top of
+# this file), so nothing here is a target/.
 # The e2e ports are per worktree: pass DZPOS_E2E_API_PORT and
 # DZPOS_E2E_WEB_PORT when running `just e2e` there (4319/5174 are the main
 # checkout's).
@@ -129,7 +161,7 @@ worktree name branch:
     if [ -e "$dir" ]; then echo "$dir exists" >&2; exit 1; fi
     git worktree add -b "{{branch}}" "$dir" HEAD
     (cd "$dir" && pnpm install --frozen-lockfile --silent)
-    echo "worktree $dir on {{branch}}; run cargo there with CARGO_TARGET_DIR=/home/samir/dz-pos/.cargo-target"
+    echo "worktree $dir on {{branch}}; run cargo there through just (or after just claim), never bare"
 
 # remove a worktree once its branch is merged.
 # target/ goes first: it is gitignored, so `git worktree remove` refuses to
@@ -178,7 +210,10 @@ disk:
     echo "host disk (the one that matters):"
     df -h /mnt/c | tail -1
     echo
-    echo "largest build artifacts:"
+    echo "shared build folder ($CARGO_TARGET_DIR, last used by $(cat "$CARGO_TARGET_DIR/.owner" 2>/dev/null || echo nobody)):"
+    du -xsh "$CARGO_TARGET_DIR" 2>/dev/null || echo "  none"
+    echo
+    echo "stray per-checkout target/ (there should be none):"
     { du -xsh target .claude/worktrees/*/target 2>/dev/null || true; } | sort -rh | grep . || echo "  none"
     echo
     free=$(df --output=avail -BG /mnt/c | tail -1 | tr -dc '0-9')
@@ -192,10 +227,12 @@ disk:
         echo "OK: ${free}G free on C:."
     fi
 
-# Delete every Rust target/ (main checkout + each worktree) and prune orphaned
-# worktree entries. Only target/ is removed: worktrees carry uncommitted work,
-# so never rm -rf the tree itself to reclaim space.
-clean-targets:
+# Delete every stray Rust target/ (main checkout + each worktree) and prune
+# orphaned worktree entries; with `shared=yes` the shared build folder goes
+# too (the next build is a cold one, minutes). Only build output is
+# removed: worktrees carry uncommitted work, so never rm -rf the tree
+# itself to reclaim space.
+clean-targets shared="no":
     #!/usr/bin/env bash
     set -euo pipefail
     shopt -s nullglob
@@ -204,6 +241,10 @@ clean-targets:
         echo "removing $t ($(du -xsh "$t" | cut -f1))"
         rm -rf "$t"
     done
+    if [ "{{shared}}" = "yes" ] && [ -d "$CARGO_TARGET_DIR" ]; then
+        echo "removing $CARGO_TARGET_DIR ($(du -xsh "$CARGO_TARGET_DIR" | cut -f1))"
+        rm -rf "$CARGO_TARGET_DIR"
+    fi
     git worktree prune
     echo "host disk now:"
     df -h /mnt/c | tail -1
