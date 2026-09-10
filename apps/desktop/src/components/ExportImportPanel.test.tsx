@@ -222,6 +222,30 @@ describe("the import", () => {
     expect(screen.getByText(fr.import_fix_first)).toBeInTheDocument();
   });
 
+  test("an updated row says the stock is left alone, and a file of creates does not", async () => {
+    dryRun = {
+      rows: [{ row: 2, name: "Café moulu 250 g", outcome: "updated", field: null, reason: null }],
+      accepted: 1,
+      refused: 0,
+    };
+    const user = userEvent.setup();
+    mount();
+    await user.upload(screen.getByTestId("import-file"), xlsx());
+    await user.click(screen.getByTestId("import-dry-run"));
+    expect(await screen.findByTestId("import-keeps-stock")).toHaveTextContent(
+      fr.import_update_keeps_stock,
+    );
+  });
+
+  test("a file that only creates says nothing about stock", async () => {
+    const user = userEvent.setup();
+    mount();
+    await user.upload(screen.getByTestId("import-file"), xlsx());
+    await user.click(screen.getByTestId("import-dry-run"));
+    await screen.findByTestId("import-counts");
+    expect(screen.queryByTestId("import-keeps-stock")).toBeNull();
+  });
+
   test("a clean file is applied as the same bytes and reports the counts", async () => {
     const user = userEvent.setup();
     mount();

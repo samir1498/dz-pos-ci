@@ -287,6 +287,13 @@ function DryRunTable({
           .replace("{accepted}", String(report.accepted))
           .replace("{refused}", String(report.refused))}
       </p>
+      {/* Only when a row really is an update: the sentence answers a
+          question nobody asked on a file that creates everything. */}
+      {report.rows.some((row) => row.outcome === "updated") ? (
+        <p className="text-sm opacity-80" data-testid="import-keeps-stock">
+          {t("import_update_keeps_stock")}
+        </p>
+      ) : null}
       <table className="w-full text-start">
         <caption className="sr-only">{t("import_title")}</caption>
         <thead>

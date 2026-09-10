@@ -508,5 +508,6 @@
   "error_label_no_barcode": "This product has no EAN-13 barcode, so there is no label to print.",
   "import_reason_too_many_decimals": "too many decimals: a price has two, a quantity three",
   "error_label_not_ean13": "This product's code is not a thirteen-digit EAN-13, so there are no bars to print.",
-  "error_label_too_many": "Too many products selected for one sheet of labels."
+  "error_label_too_many": "Too many products selected for one sheet of labels.",
+  "import_update_keeps_stock": "The rows being updated change the name and the prices. They leave stock alone: an import never moves quantities."
 }

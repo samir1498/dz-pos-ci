@@ -195,11 +195,15 @@ pub enum Key {
     /// under updates that product rather than opening a second one, and a
     /// blank code is numbered by the till.
     TemplateBarcodeNote,
+    /// What the `stock` column does, which is nothing on a product the shop
+    /// already has: quantities belong to the stock ledger and an import is
+    /// not a movement.
+    TemplateStockNote,
 }
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 76] = [
+    pub const ALL: [Key; 77] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -276,6 +280,7 @@ impl Key {
         Key::TemplateUnits,
         Key::TemplateRates,
         Key::TemplateBarcodeNote,
+        Key::TemplateStockNote,
     ];
 }
 
@@ -608,6 +613,9 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::TemplateRates, Lang::En) => "VAT rates",
         (Key::TemplateRates, Lang::Ar) => "نسب الرسم على القيمة المضافة",
 
+        (Key::TemplateStockNote, Lang::Fr) => "La colonne stock ne sert qu\u{2019}\u{e0} l\u{2019}ouverture d\u{2019}un nouveau produit. Sur un produit que la boutique a d\u{e9}j\u{e0}, elle est ignor\u{e9}e : un import ne fait jamais bouger le stock, seuls un achat, une vente et un recomptage le font.",
+        (Key::TemplateStockNote, Lang::En) => "The stock column opens a new product with that quantity. On a product the shop already has it is ignored: an import never moves stock, only a purchase, a sale and a recount do.",
+        (Key::TemplateStockNote, Lang::Ar) => "\u{639}\u{645}\u{648}\u{62f} \u{627}\u{644}\u{645}\u{62e}\u{632}\u{648}\u{646} \u{64a}\u{641}\u{62a}\u{62d} \u{645}\u{646}\u{62a}\u{648}\u{62c}\u{64b}\u{627} \u{62c}\u{62f}\u{64a}\u{62f}\u{64b}\u{627} \u{628}\u{647}\u{630}\u{647} \u{627}\u{644}\u{643}\u{645}\u{64a}\u{629}\u{60c} \u{648}\u{64a}\u{64f}\u{647}\u{645}\u{644} \u{639}\u{644}\u{649} \u{645}\u{646}\u{62a}\u{648}\u{62c} \u{645}\u{648}\u{62c}\u{648}\u{62f} \u{623}\u{635}\u{644}\u{64b}\u{627}: \u{627}\u{644}\u{627}\u{633}\u{62a}\u{64a}\u{631}\u{627}\u{62f} \u{644}\u{627} \u{64a}\u{62d}\u{631}\u{651}\u{643} \u{627}\u{644}\u{645}\u{62e}\u{632}\u{648}\u{646} \u{623}\u{628}\u{62f}\u{64b}\u{627}.",
         (Key::TemplateBarcodeNote, Lang::Fr) => concat!(
             "Un code-barres que la boutique utilise déjà met à jour ce produit ",
             "(nom, prix d\u{2019}achat, prix de vente) au lieu d\u{2019}en créer un second. ",

@@ -167,6 +167,13 @@ pub fn template(lang: Lang) -> Result<Vec<u8>, CoreError> {
         .checked_add(u32::try_from(ALLOWED_RATES_BPS.len() + 2).unwrap_or(u32::MAX))
         .ok_or_else(|| CoreError::validation("row", "more rates than a sheet holds"))?;
     allowed.write_string(note_row, 0, word(Key::TemplateBarcodeNote, lang))?;
+    // Two rows down, its own line: what the stock column does is a separate
+    // surprise from what a known barcode does, and a shop that reads only
+    // one of the two notes should not be reading them joined.
+    let stock_row = note_row
+        .checked_add(2)
+        .ok_or_else(|| CoreError::validation("row", "more rows than a sheet holds"))?;
+    allowed.write_string(stock_row, 0, word(Key::TemplateStockNote, lang))?;
 
     Ok(workbook.save_to_buffer()?)
 }

@@ -171,6 +171,15 @@ fn the_template_carries_the_columns_the_import_matches_and_says_what_a_known_bar
         words.iter().any(|w| w.contains("met à jour")),
         "the template never says a known barcode updates: {words:?}"
     );
+    // And what the stock column does, which is nothing on a product the
+    // shop already has: a shop that reads the sheet must not expect an
+    // import to correct a shelf count.
+    assert!(
+        words
+            .iter()
+            .any(|w| w.contains("ne fait jamais bouger le stock")),
+        "the template never says an import does not move stock: {words:?}"
+    );
 
     // And the example row it ships is one the import accepts, so a shop that
     // downloads the template and adds rows under the example is not refused
@@ -297,6 +306,33 @@ fn an_unknown_unit_a_rate_off_the_list_and_a_price_below_zero_are_each_refused()
         refusal(&report, "Sucre"),
         ("stock".into(), "negative_quantity".into())
     );
+}
+
+#[test]
+fn an_update_leaves_the_stock_where_it_was_because_an_import_is_not_a_movement() {
+    // The quantity belongs to the stock ledger (features.md §1): a purchase,
+    // a sale and a recount move it and nothing else does. A file carrying a
+    // stock column that silently overwrote what the shelf holds would put a
+    // shop's count out with no movement to explain it.
+    let (_dir, mut conn) = open_temp();
+    let id = a_stored_product(&mut conn, "Café en stock", "6130001234563", 12_000);
+    let before = products::get(&mut conn, SHOP, id).unwrap().qty_on_hand_milli;
+
+    let mut row = a_row("Café en stock", t("6130001234563"));
+    row[7] = n(999.0);
+    let bytes = workbook(&[row]);
+
+    let report = import::dry_run(&mut conn, SHOP, &bytes).unwrap();
+    assert_eq!(outcome(&report, "Café en stock"), Outcome::Updated);
+    import::apply(&mut conn, SHOP, OWNER, &bytes).unwrap();
+
+    let after = products::get(&mut conn, SHOP, id).unwrap();
+    assert_eq!(
+        after.qty_on_hand_milli, before,
+        "the import moved stock that no purchase, sale or recount moved"
+    );
+    // The prices it did come to change are changed.
+    assert_eq!(after.selling.as_centimes(), 12_000);
 }
 
 #[test]

@@ -508,5 +508,6 @@
   "error_label_no_barcode": "Ce produit n'a pas de code-barres EAN-13 : il n'y a pas d'étiquette à imprimer.",
   "import_reason_too_many_decimals": "trop de décimales : un prix en a deux, une quantité trois",
   "error_label_not_ean13": "Le code de ce produit n'est pas un EAN-13 à treize chiffres : il n'y a pas de code-barres à imprimer.",
-  "error_label_too_many": "Trop de produits sélectionnés pour une planche d'étiquettes."
+  "error_label_too_many": "Trop de produits sélectionnés pour une planche d'étiquettes.",
+  "import_update_keeps_stock": "Les lignes en mise à jour changent le nom et les prix. Elles ne touchent pas au stock : un import ne fait jamais bouger les quantités."
 }
