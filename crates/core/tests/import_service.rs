@@ -316,7 +316,9 @@ fn an_update_leaves_the_stock_where_it_was_because_an_import_is_not_a_movement()
     // shop's count out with no movement to explain it.
     let (_dir, mut conn) = open_temp();
     let id = a_stored_product(&mut conn, "Café en stock", "6130001234563", 12_000);
-    let before = products::get(&mut conn, SHOP, id).unwrap().qty_on_hand_milli;
+    let before = products::get(&mut conn, SHOP, id)
+        .unwrap()
+        .qty_on_hand_milli;
 
     let mut row = a_row("Café en stock", t("6130001234563"));
     row[7] = n(999.0);
@@ -370,7 +372,10 @@ fn a_price_with_a_third_decimal_is_refused_and_never_rounded_into_the_shop() {
         refusal(&report, "Compté trop précis"),
         ("stock".to_string(), "too_many_decimals".to_string())
     );
-    assert_eq!(outcome(&report, "Colonne à trois décimales"), Outcome::Created);
+    assert_eq!(
+        outcome(&report, "Colonne à trois décimales"),
+        Outcome::Created
+    );
     assert_eq!(report.refused, 3);
 
     // And nothing is written, so no rounded price ever reaches a product.
@@ -438,6 +443,24 @@ fn apply_audits_the_import_with_the_count() {
     assert_eq!(after["created"], 1);
     assert_eq!(after["updated"], 1);
     assert_eq!(after["categories_created"], 1);
+
+    // And the category the file invented is audited as the create it is,
+    // with the import named as where it came from. A category nobody typed
+    // on any screen is exactly the row an owner asks about later, and the
+    // log has to be able to answer "a file did that, on this day".
+    let category = entries
+        .iter()
+        .find(|e| e.entity == "category" && e.action == audit::ACTION_CREATE)
+        .unwrap_or_else(|| panic!("no category create in {entries:?}"));
+    let made: serde_json::Value =
+        serde_json::from_str(category.after.as_deref().unwrap_or("")).unwrap();
+    assert_eq!(made["name"], "Alimentation");
+    assert_eq!(made["default_rate_bps"], 1900);
+    assert_eq!(
+        made["source"], "product.import",
+        "the category create does not say a file opened it"
+    );
+    assert!(category.entity_id.is_some(), "the row it made is not named");
 }
 
 #[test]

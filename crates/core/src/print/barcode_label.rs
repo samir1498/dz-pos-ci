@@ -145,7 +145,10 @@ fn label(product: &Product, lang: Lang) -> Result<LabelView, CoreError> {
         .xmlns("http://www.w3.org/2000/svg".to_owned())
         .generate(symbol.encode())
         .map_err(|_| {
-            CoreError::validation("barcode_digits", "the bars for this barcode cannot be drawn")
+            CoreError::validation(
+                "barcode_digits",
+                "the bars for this barcode cannot be drawn",
+            )
         })?;
     Ok(LabelView {
         name: product.name.clone(),

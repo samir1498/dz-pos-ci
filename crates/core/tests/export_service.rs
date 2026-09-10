@@ -28,7 +28,7 @@ use dzpos_core::services::customers::{NewCustomer, PartyKind};
 use dzpos_core::services::export::{self, DayRange};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
 use dzpos_core::services::suppliers::NewSupplier;
-use dzpos_core::services::{customers, products, suppliers};
+use dzpos_core::services::{customers, documents, products, suppliers};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
@@ -315,6 +315,53 @@ fn a_range_leaves_out_the_documents_outside_it() {
 }
 
 #[test]
+fn a_cancelled_document_is_in_the_file_with_cancelled_in_its_status_column() {
+    // A sales export a comptable reads has to show the paper that was
+    // annulled as well as the ones that stand: a cancelled facture keeps
+    // its number (features.md §4, Numbering), and a file that dropped it
+    // would show a gap in the series with nothing to explain it.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre", 11_000);
+    let sale = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id: p,
+                qty_milli: 1_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(100_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
+            issued_at: Some(at(9)),
+        },
+    )
+    .unwrap();
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        sale.document.id,
+        "erreur de caisse".to_string(),
+        Some(at(9)),
+    )
+    .unwrap();
+
+    let bytes = export::sales(&mut conn, SHOP, Lang::Fr, DayRange::default()).unwrap();
+    let rows = sheet(&bytes, "Ventes");
+    assert_eq!(rows.len(), 2, "the annulled ticket is not in the file");
+    assert_eq!(text(&rows, 1, "status"), "cancelled");
+    // And it keeps the number it was issued under.
+    assert_eq!(text(&rows, 1, "number"), "TK-2026-000001");
+}
+
+#[test]
 fn a_document_issued_in_the_last_second_of_the_closing_day_is_inside_the_range() {
     // The range used to close at 23:59:59 inclusive, which is a second and
     // not the end of a day: a timestamp carrying a fraction of that second
@@ -467,4 +514,27 @@ fn an_amount_below_zero_keeps_its_sign_and_its_centimes() {
     let bytes = export::suppliers(&mut conn, SHOP, Lang::Fr).unwrap();
     let rows = sheet(&bytes, "Fournisseurs");
     assert_eq!(centimes(&rows, 1, "balance_da"), -5);
+}
+
+#[test]
+fn an_amount_far_past_what_a_float_counts_in_whole_centimes_survives_the_workbook() {
+    // 12 345 678 901 centimes is 123 456 789,01 DA. A workbook writes a
+    // number as an f64, which counts whole units exactly to 2^53 and this
+    // is nowhere near it, but the decimal spelling is what proves the two
+    // centimes on the end were not lost on the way: an amount read back a
+    // centime out is a workbook a comptable cannot reconcile.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Lot entier", 12_345_678_901);
+
+    let bytes = export::products(&mut conn, SHOP, Lang::Fr).unwrap();
+    let rows = sheet(&bytes, "Produits");
+    assert_eq!(centimes(&rows, 1, "selling_da"), 12_345_678_901);
+    // Read as the number it is, not as a rounded one: the cell holds
+    // 123456789.01 and the parse back to centimes is exact.
+    assert!(
+        (number(&rows, 1, "selling_da") - 123_456_789.01_f64).abs() < 0.005,
+        "{}",
+        number(&rows, 1, "selling_da")
+    );
+    let _ = p;
 }

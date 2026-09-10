@@ -279,6 +279,60 @@ fn a_code_whose_check_digit_is_wrong_gets_no_label_at_all() {
 /// away with different numbers.
 const TWELVE: &str = "200001000007";
 
+/// The geometry the sheet's stylesheet lays down, read back out of the
+/// golden rather than restated here: A4 is 210 x 297 mm, the page margin
+/// and the gap come off the file, and what the arithmetic has to give is
+/// three labels across and six down.
+fn millimetres(css: &str, after: &str) -> f64 {
+    let (_, rest) = css
+        .split_once(after)
+        .unwrap_or_else(|| panic!("no {after}"));
+    let digits: String = rest
+        .trim_start()
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    digits
+        .parse()
+        .unwrap_or_else(|_| panic!("no number after {after}"))
+}
+
+#[test]
+fn the_sheet_puts_eighteen_labels_on_an_a4_page() {
+    let mut updated = Vec::new();
+    // Eighteen products, so a full page is what the golden holds and a
+    // nineteenth would be the one that proves the grid wrapped onto a
+    // second page rather than shrinking to fit.
+    let products: Vec<Product> = (0..18)
+        .map(|i| product(&format!("Article {i}"), BARCODE, PRICE + i64::from(i)))
+        .collect();
+    let rendered = render_label_sheet(&products, Lang::Fr).unwrap();
+    let file = golden("sheet-full-fr.html", &rendered, &mut updated);
+
+    assert_eq!(
+        file.matches("<article class=\"label\">").count(),
+        18,
+        "the sheet does not carry the eighteen labels it was given"
+    );
+
+    // And they fit on one A4 page, by the sheet's own numbers.
+    let page_margin = millimetres(&file, "@page { size: A4; margin:");
+    let gap = millimetres(&file, ".sheet { display: flex; flex-wrap: wrap; gap:");
+    let width = millimetres(&file, ".label { box-sizing: border-box; inline-size:");
+    let height = millimetres(&file, "block-size:");
+
+    let usable_across = 210.0 - page_margin * 2.0;
+    let usable_down = 297.0 - page_margin * 2.0;
+    // n labels take n widths and n-1 gaps.
+    let across = ((usable_across + gap) / (width + gap)).floor();
+    let down = ((usable_down + gap) / (height + gap)).floor();
+    assert_eq!(across, 3.0, "{width} mm labels no longer go three across");
+    assert_eq!(down, 6.0, "{height} mm labels no longer go six down");
+    assert_eq!(across * down, 18.0, "a page no longer holds eighteen");
+
+    refuse_a_silent_regeneration(&updated);
+}
+
 #[test]
 fn a_code_of_twelve_digits_is_refused_rather_than_completed_by_the_encoder() {
     let refused = render_label(&product(NAME, TWELVE, PRICE), Lang::Fr).unwrap_err();

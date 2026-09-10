@@ -235,6 +235,26 @@ async fn the_template_downloads_and_comes_back_through_the_dry_run_clean() {
 }
 
 #[tokio::test]
+async fn a_body_past_the_import_cap_is_refused_before_the_parser_sees_it() {
+    let (_dir, app) = app();
+    // Eight megabytes is the cap the two import routes carry, above axum's
+    // 2 MB default (`routes::import::IMPORT_BODY_LIMIT`). A catalogue of
+    // twenty thousand products is around one megabyte, so nothing a shop
+    // sends comes near it; what this refuses is a file that would be read
+    // whole into memory before anybody could say it was not a workbook.
+    let over = vec![0_u8; dzpos_api::routes::import::IMPORT_BODY_LIMIT + 1];
+    let refused = call(&app, "POST", "/import/products/dry-run", Some(over)).await;
+    assert_eq!(refused.status, StatusCode::PAYLOAD_TOO_LARGE);
+
+    // And a body inside the cap reaches the parser, which is what says the
+    // cap is the thing that refused the one above and not the content.
+    let inside = vec![0_u8; 64];
+    let read = call(&app, "POST", "/import/products/dry-run", Some(inside)).await;
+    assert_eq!(read.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(read.json()["error"]["field"], json!("file"));
+}
+
+#[tokio::test]
 async fn a_file_that_is_not_a_workbook_is_refused_in_the_envelope() {
     let (_dir, app) = app();
     let refused = call(

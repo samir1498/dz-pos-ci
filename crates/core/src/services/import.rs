@@ -567,7 +567,9 @@ fn decimal(
     if raw.is_empty() {
         return Ok(None);
     }
-    scaled(&raw, scale).map(Some).map_err(|reason| (name, reason))
+    scaled(&raw, scale)
+        .map(Some)
+        .map_err(|reason| (name, reason))
 }
 
 /// A decimal spelling as an integer of `10^scale`ths, or the reason it is
@@ -613,11 +615,7 @@ fn scaled(raw: &str, scale: u32) -> Result<i64, &'static str> {
     // Anything past the scale that is not a zero. Checked before the value
     // is built, so nothing is computed from a number that will not be
     // taken.
-    if fraction
-        .chars()
-        .skip(scale as usize)
-        .any(|c| c != '0')
-    {
+    if fraction.chars().skip(scale as usize).any(|c| c != '0') {
         return Err("too_many_decimals");
     }
     let mut value: i64 = if whole.is_empty() {
