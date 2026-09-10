@@ -220,8 +220,11 @@ here. These are all of them.
 | `purchase-status` | `purchases_.$id.tsx` | The state the order is in; its word and a column header of the lines table read the same in English ("Received"). |
 | `expenses-month` | `expenses.tsx` | The month picker; its rendered text is the browser's own, in the browser's locale. |
 | `expenses-total` | `expenses.tsx` | An amount, so its text is a number in three locales. |
-| `expense-row` | `expenses.tsx` | One expense; the amounts inside it are numbers in three locales. |
-| `expense-category` | `expenses.tsx` | A `<select>` inside a wrapping `<label>` takes the option texts into its own accessible name, so a label query matches nothing. |
+| `expenses-add` | `expenses.tsx` | Opens the entry panel. The empty state offers a second button with the same words, so the name is ambiguous and the id is not. |
+| `expenses-table` | `expenses.tsx` | The month's list, or the empty state in its place. The rows are the second `rowgroup` inside it; `DataTable` has no id of its own per row. |
+| `expense-sheet` | `expenses.tsx` | The entry panel. |
+| `expense-form` | `expenses.tsx` | The form inside the panel; a flow waits on it to disappear to know the row was filed. |
+| `expense-category` | `expenses.tsx` | The category trigger. It opens a listbox rather than a native select, so the option is clicked by its own word once the trigger is open. |
 | `expense-amount` | `expenses.tsx` | An amount field, translated label, and `col_amount` reads the same word. |
 | `expense-date` | `expenses.tsx` | A date field, and `col_date` reads the same word. |
 | `expense-note` | `expenses.tsx` | A note field, and `col_note` reads the same word. |
