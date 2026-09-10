@@ -113,18 +113,71 @@ pub fn lines(
 /// once cannot both read the same total and each store their own. The file's
 /// CHECK refuses a total above what was ordered; how much a single receipt
 /// may add is the service's rule.
+///
+/// A quantity of nothing or less is refused here rather than by the file: a
+/// column expression that adds zero writes a row and reports success, and one
+/// that adds a negative walks the total backwards inside a CHECK that only
+/// looks at the ceiling. Both are a caller sending the wrong number, which is
+/// what a validation error says.
 pub fn add_received(
     conn: &mut SqliteConnection,
     shop_id: i32,
     line_id: i32,
     qty_milli: i64,
 ) -> Result<PurchaseLine, CoreError> {
+    at_least_one(qty_milli, "qty_milli", "a receipt takes in")?;
+    bump(
+        conn,
+        shop_id,
+        line_id,
+        purchase_lines::qty_received_milli.eq(purchase_lines::qty_received_milli + qty_milli),
+    )
+}
+
+/// The same for what went back to the supplier. The file keeps the total at
+/// or under what arrived; this keeps the step itself a real movement.
+pub fn add_returned(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    line_id: i32,
+    qty_milli: i64,
+) -> Result<PurchaseLine, CoreError> {
+    at_least_one(qty_milli, "qty_milli", "a return sends back")?;
+    bump(
+        conn,
+        shop_id,
+        line_id,
+        purchase_lines::qty_returned_milli.eq(purchase_lines::qty_returned_milli + qty_milli),
+    )
+}
+
+fn at_least_one(qty_milli: i64, field: &str, what: &str) -> Result<(), CoreError> {
+    if qty_milli <= 0 {
+        return Err(CoreError::Validation {
+            field: field.to_string(),
+            message: format!("{what} more than nothing"),
+        });
+    }
+    Ok(())
+}
+
+/// One line's running total moved by a column expression, scoped by shop.
+fn bump<C>(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    line_id: i32,
+    change: C,
+) -> Result<PurchaseLine, CoreError>
+where
+    C: diesel::query_builder::AsChangeset<Target = purchase_lines::table>,
+    C::Changeset: diesel::query_builder::QueryFragment<diesel::sqlite::Sqlite>,
+{
     let row: PurchaseLineRow = diesel::update(
         purchase_lines::table
             .filter(purchase_lines::shop_id.eq(shop_id))
             .filter(purchase_lines::id.eq(line_id)),
     )
-    .set(purchase_lines::qty_received_milli.eq(purchase_lines::qty_received_milli + qty_milli))
+    .set(change)
     .returning(PurchaseLineRow::as_returning())
     .get_result(conn)
     .optional()?
@@ -320,6 +373,7 @@ mod tests {
                 unit_cost_centimes: 20_000,
                 landed_unit_cost_centimes: 25_000,
                 qty_received_milli: 0,
+                qty_returned_milli: 0,
             },
         )
         .unwrap();
@@ -333,6 +387,76 @@ mod tests {
         assert!(add_received(&mut conn, SHOP, line.id, 1).is_err());
         assert_eq!(lines(&mut conn, SHOP, purchase.id).unwrap().len(), 1);
         assert!(lines(&mut conn, 2, purchase.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn what_goes_back_to_the_supplier_is_counted_and_never_more_than_arrived() {
+        let (_dir, mut conn) = open();
+        let supplier = a_supplier(&mut conn, "Sarl Amrani");
+        let product = a_product(&mut conn);
+        let purchase = insert(&mut conn, &draft(supplier, "2026-09-10")).unwrap();
+        let line = insert_line(
+            &mut conn,
+            &PurchaseLineRowWrite {
+                shop_id: SHOP,
+                purchase_id: purchase.id,
+                product_id: product,
+                qty_ordered_milli: 10_000,
+                unit_cost_centimes: 20_000,
+                landed_unit_cost_centimes: 25_000,
+                qty_received_milli: 0,
+                qty_returned_milli: 0,
+            },
+        )
+        .unwrap();
+        add_received(&mut conn, SHOP, line.id, 6_000).unwrap();
+        let after = add_returned(&mut conn, SHOP, line.id, 2_000).unwrap();
+        assert_eq!(after.qty_returned_milli, 2_000);
+        assert_eq!(after.qty_received_milli, 6_000);
+        let again = add_returned(&mut conn, SHOP, line.id, 4_000).unwrap();
+        assert_eq!(again.qty_returned_milli, 6_000);
+        // Goods the shop never took in are goods it cannot send back.
+        assert!(add_returned(&mut conn, SHOP, line.id, 1).is_err());
+    }
+
+    #[test]
+    fn a_receipt_and_a_return_of_nothing_are_refused_before_the_file_sees_them() {
+        // A column expression adding zero writes a row and reports success,
+        // and one adding a negative walks the total backwards inside a CHECK
+        // that only looks at the ceiling. Both are a caller sending the wrong
+        // number, so both come back as a validation error.
+        let (_dir, mut conn) = open();
+        let supplier = a_supplier(&mut conn, "Sarl Amrani");
+        let product = a_product(&mut conn);
+        let purchase = insert(&mut conn, &draft(supplier, "2026-09-10")).unwrap();
+        let line = insert_line(
+            &mut conn,
+            &PurchaseLineRowWrite {
+                shop_id: SHOP,
+                purchase_id: purchase.id,
+                product_id: product,
+                qty_ordered_milli: 10_000,
+                unit_cost_centimes: 20_000,
+                landed_unit_cost_centimes: 25_000,
+                qty_received_milli: 4_000,
+                qty_returned_milli: 0,
+            },
+        )
+        .unwrap();
+        for nothing in [0, -1_000] {
+            match add_received(&mut conn, SHOP, line.id, nothing) {
+                Err(CoreError::Validation { ref field, .. }) if field == "qty_milli" => {}
+                other => panic!("a receipt of {nothing} answered {other:?}"),
+            }
+            match add_returned(&mut conn, SHOP, line.id, nothing) {
+                Err(CoreError::Validation { ref field, .. }) if field == "qty_milli" => {}
+                other => panic!("a return of {nothing} answered {other:?}"),
+            }
+        }
+        // And nothing moved on the way past.
+        let read = lines(&mut conn, SHOP, purchase.id).unwrap();
+        assert_eq!(read[0].qty_received_milli, 4_000);
+        assert_eq!(read[0].qty_returned_milli, 0);
     }
 
     #[test]
@@ -351,6 +475,7 @@ mod tests {
                 unit_cost_centimes: 20_000,
                 landed_unit_cost_centimes: 25_000,
                 qty_received_milli: 0,
+                qty_returned_milli: 0,
             },
         )
         .unwrap();
@@ -361,7 +486,7 @@ mod tests {
                 purchase_id: purchase.id,
                 series: "reception:2026".to_string(),
                 number: 1,
-                received_at: "2026-09-10".to_string(),
+                received_at: crate::services::clock::now(),
                 user_id: OWNER,
                 note: None,
             },
@@ -373,6 +498,7 @@ mod tests {
             &mut conn,
             &PurchaseReceiptLineRowWrite {
                 shop_id: SHOP,
+                purchase_id: purchase.id,
                 receipt_id: receipt.id,
                 purchase_line_id: line.id,
                 qty_milli: 4_000,
@@ -393,7 +519,7 @@ mod tests {
                 purchase_id: purchase.id,
                 series: "reception:2026".to_string(),
                 number: 1,
-                received_at: "2026-09-11".to_string(),
+                received_at: crate::services::clock::now(),
                 user_id: OWNER,
                 note: None,
             },

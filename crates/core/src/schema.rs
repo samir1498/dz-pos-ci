@@ -285,6 +285,7 @@ diesel::table! {
         unit_cost_centimes -> BigInt,
         landed_unit_cost_centimes -> BigInt,
         qty_received_milli -> BigInt,
+        qty_returned_milli -> BigInt,
     }
 }
 
@@ -295,7 +296,8 @@ diesel::table! {
         purchase_id -> Integer,
         series -> Text,
         number -> BigInt,
-        received_at -> Text,
+        // A moment on the shop's calendar, the way `issued_at` is.
+        received_at -> Timestamp,
         user_id -> Integer,
         note -> Nullable<Text>,
         created_at -> Timestamp,
@@ -306,6 +308,9 @@ diesel::table! {
     purchase_receipt_lines (id) {
         id -> Integer,
         shop_id -> Integer,
+        // Carried so the two keys onto the receipt and onto the line can be
+        // composite: a delivery only names a line of its own purchase.
+        purchase_id -> Integer,
         receipt_id -> Integer,
         purchase_line_id -> Integer,
         qty_milli -> BigInt,

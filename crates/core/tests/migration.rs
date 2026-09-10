@@ -383,8 +383,8 @@ fn insert_with_all(table: &str, overrides: &[(&str, &str)]) -> String {
         ),
         "purchase_lines" => (
             "shop_id, purchase_id, product_id, qty_ordered_milli, unit_cost_centimes, \
-             landed_unit_cost_centimes, qty_received_milli",
-            &["1", "1", "1", "1000", "0", "0", "0"],
+             landed_unit_cost_centimes, qty_received_milli, qty_returned_milli",
+            &["1", "1", "1", "1000", "0", "0", "0", "0"],
         ),
         "purchase_receipts" => (
             "shop_id, purchase_id, series, number, received_at, user_id, note",
@@ -393,14 +393,14 @@ fn insert_with_all(table: &str, overrides: &[(&str, &str)]) -> String {
                 "1",
                 "'reception:2026'",
                 "1",
-                "'2026-09-10'",
+                "'2026-09-10 09:30:00'",
                 "1",
                 "NULL",
             ],
         ),
         "purchase_receipt_lines" => (
-            "shop_id, receipt_id, purchase_line_id, qty_milli",
-            &["1", "1", "1", "1000"],
+            "shop_id, purchase_id, receipt_id, purchase_line_id, qty_milli",
+            &["1", "1", "1", "1", "1000"],
         ),
         "expense_categories" => (
             "shop_id, key, sort_order, active",
@@ -844,6 +844,7 @@ fn every_money_and_quantity_column_of_the_supply_tables_refuses_a_real_a_text_an
         ("purchase_lines", "unit_cost_centimes"),
         ("purchase_lines", "landed_unit_cost_centimes"),
         ("purchase_lines", "qty_received_milli"),
+        ("purchase_lines", "qty_returned_milli"),
         ("supplier_ledger", "debit_centimes"),
         ("supplier_ledger", "credit_centimes"),
         ("expense_categories", "sort_order"),
@@ -1089,6 +1090,261 @@ fn a_supplier_name_a_document_number_and_a_category_key_are_each_taken_once() {
         probe(&mut conn, "jobs", "name", "'stock_rederive'").is_err(),
         "one shop carried the same job twice"
     );
+    // A receipt's own number, the way a document's is: taken once inside its
+    // series and free in another. The seeded receipt already holds number 1
+    // of `reception:2026`.
+    assert!(
+        probe(&mut conn, "purchase_receipts", "number", "1").is_err(),
+        "a receipt number was handed out twice inside one series"
+    );
+    assert!(probe(&mut conn, "purchase_receipts", "number", "2").is_ok());
+    clear(&mut conn, "purchase_receipts");
+    assert!(
+        diesel::sql_query(insert_with_all(
+            "purchase_receipts",
+            &[("series", "'reception:2027'"), ("number", "1")],
+        ))
+        .execute(&mut conn)
+        .is_ok(),
+        "the same number was refused in another series"
+    );
+}
+
+#[test]
+fn an_active_flag_is_a_zero_or_a_one_and_nothing_else() {
+    // The boolean is an INTEGER because a STRICT table has no boolean type,
+    // so the CHECK is the only thing keeping a 2, a -1 or the word "true" out
+    // of a column every list filters on.
+    let (_dir, mut conn) = open_temp();
+    seed_for_supply_probes(&mut conn);
+    for (table, column) in [("suppliers", "active"), ("expense_categories", "active")] {
+        for fine in ["0", "1"] {
+            assert!(
+                probe(&mut conn, table, column, fine).is_ok(),
+                "{table}.{column} refused {fine}"
+            );
+            clear(&mut conn, table);
+        }
+        // Not "1.0" and not "'1'": STRICT converts a lossless real and a
+        // numeric string into the integer the column declares, which is the
+        // behaviour `a_lossless_real_is_stored_as_an_integer_by_strict_itself`
+        // pins. What the CHECK is for is a number that is not a flag.
+        for bad in ["2", "-1", "'true'", "'abc'"] {
+            assert!(
+                probe(&mut conn, table, column, bad).is_err(),
+                "{table}.{column} accepted {bad}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_receipt_line_names_a_line_of_its_own_purchase_and_names_it_once() {
+    // The receipt is against one purchase and the line belongs to one
+    // purchase, and nothing tied the two together: a delivery on this order
+    // could add stock against a line of somebody else's order and the debt
+    // would land on the wrong paper. The composite keys are what tie them,
+    // and they read the same fact from both ends.
+    let (_dir, mut conn) = open_temp();
+    seed_for_supply_probes(&mut conn);
+    // A second purchase, from the same supplier, with a line of its own.
+    diesel::sql_query(insert_with_all(
+        "purchases",
+        &[
+            ("note", "'seconde commande'"),
+            ("purchase_date", "'2026-09-11'"),
+        ],
+    ))
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(insert_with("purchase_lines", "purchase_id", "2"))
+        .execute(&mut conn)
+        .unwrap();
+    // Receipt 1 is against purchase 1, and line 2 is a line of purchase 2.
+    assert!(
+        diesel::sql_query(insert_with_all(
+            "purchase_receipt_lines",
+            &[("purchase_line_id", "2")],
+        ))
+        .execute(&mut conn)
+        .is_err(),
+        "a delivery on one purchase took a line of another"
+    );
+    // And the purchase the receipt line carries has to be the receipt's own,
+    // which is the same fact read from the other end.
+    assert!(
+        diesel::sql_query(insert_with_all(
+            "purchase_receipt_lines",
+            &[("purchase_id", "2"), ("purchase_line_id", "2")],
+        ))
+        .execute(&mut conn)
+        .is_err(),
+        "a receipt line named a purchase its receipt does not belong to"
+    );
+    // The line of its own purchase is taken, once.
+    assert!(
+        diesel::sql_query(insert_with("purchase_receipt_lines", "qty_milli", "400"))
+            .execute(&mut conn)
+            .is_ok(),
+        "a delivery could not name a line of its own purchase"
+    );
+    assert!(
+        diesel::sql_query(insert_with("purchase_receipt_lines", "qty_milli", "300"))
+            .execute(&mut conn)
+            .is_err(),
+        "one line was written twice on one receipt"
+    );
+    // A second receipt against the same purchase may name it again: two
+    // deliveries against one line is what a partial receipt is.
+    diesel::sql_query(insert_with_all(
+        "purchase_receipts",
+        &[("number", "2"), ("note", "'seconde livraison'")],
+    ))
+    .execute(&mut conn)
+    .unwrap();
+    assert!(
+        diesel::sql_query(insert_with_all(
+            "purchase_receipt_lines",
+            &[("receipt_id", "2"), ("qty_milli", "300")],
+        ))
+        .execute(&mut conn)
+        .is_ok(),
+        "a second delivery could not name the line the first one did"
+    );
+}
+
+#[test]
+fn a_purchase_line_refuses_a_returned_quantity_above_what_arrived() {
+    // features.md §1 lists `return` among the stock movements, and what goes
+    // back to a supplier is what came from them: a line returning more than
+    // it received is stock the shop never had and a credit it is not owed.
+    let (_dir, mut conn) = open_temp();
+    seed_for_supply_probes(&mut conn);
+    assert!(
+        diesel::sql_query(insert_with_all(
+            "purchase_lines",
+            &[("qty_received_milli", "600"), ("qty_returned_milli", "600")],
+        ))
+        .execute(&mut conn)
+        .is_ok(),
+        "a line returning everything it received was refused"
+    );
+    assert!(
+        diesel::sql_query(insert_with_all(
+            "purchase_lines",
+            &[("qty_received_milli", "600"), ("qty_returned_milli", "601")],
+        ))
+        .execute(&mut conn)
+        .is_err(),
+        "a line returned more than arrived"
+    );
+    // Nothing received is nothing to send back.
+    assert!(
+        diesel::sql_query(insert_with_all(
+            "purchase_lines",
+            &[("qty_received_milli", "0"), ("qty_returned_milli", "1")],
+        ))
+        .execute(&mut conn)
+        .is_err(),
+        "a line sent back goods it never took in"
+    );
+}
+
+#[test]
+fn the_supply_tables_keep_what_they_name_and_lose_only_what_they_may() {
+    // The foreign key actions migration 8 chose, each read off the file
+    // rather than off the schema: a supplier with an order or a movement
+    // behind them is never deleted, nor is a product on a line or a category
+    // an expense is filed under; a purchase takes its own lines with it, and
+    // a purchase a movement merely cites goes away leaving what is owed
+    // behind, because what the shop owes is not a fact about the order that
+    // caused it.
+    let (_dir, mut conn) = open_temp();
+    seed_for_supply_probes(&mut conn);
+    diesel::sql_query(
+        "INSERT INTO supplier_ledger (id, shop_id, supplier_id, purchase_id, kind,          debit_centimes, credit_centimes, user_id, note)          VALUES (2, 1, 1, 1, 'purchase', 100000, 0, 1, 'seed')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(insert_with("expenses", "amount_centimes", "300000"))
+        .execute(&mut conn)
+        .unwrap();
+
+    for (what, sql) in [
+        (
+            "a supplier with an order behind them",
+            "DELETE FROM suppliers WHERE id = 1",
+        ),
+        (
+            "a product on a purchase line",
+            "DELETE FROM products WHERE id = 1",
+        ),
+        (
+            "a category an expense is filed under",
+            "DELETE FROM expense_categories WHERE id = 1",
+        ),
+    ] {
+        assert!(
+            diesel::sql_query(sql).execute(&mut conn).is_err(),
+            "{what} was deleted"
+        );
+    }
+
+    // The receipt holds the order down, so it goes first; then the order
+    // takes its own lines with it and leaves the ledger row standing without
+    // the purchase it named.
+    diesel::sql_query("DELETE FROM purchase_receipt_lines")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query("DELETE FROM purchase_receipts WHERE id = 1")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query("DELETE FROM purchases WHERE id = 1")
+        .execute(&mut conn)
+        .unwrap();
+    assert_eq!(
+        count(&mut conn, "SELECT COUNT(*) AS n FROM purchase_lines"),
+        0,
+        "the lines did not go with the order they belong to"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM supplier_ledger WHERE id = 2 AND purchase_id IS NULL              AND debit_centimes = 100000"
+        ),
+        1,
+        "the movement went with the order instead of losing its id"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+
+    // A payment and the purchase it settled, with the allocation that ties
+    // them together: neither end goes.
+    diesel::sql_query(insert_with("purchases", "note", "'a payer'"))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO supplier_ledger (id, shop_id, supplier_id, kind, debit_centimes,          credit_centimes, user_id, payment_mode)          VALUES (3, 1, 1, 'payment', 0, 50000, 1, 'cash')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO supplier_allocations (shop_id, payment_ledger_id, purchase_id,          amount_centimes) VALUES (1, 3, 2, 50000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    assert!(
+        diesel::sql_query("DELETE FROM supplier_ledger WHERE id = 3")
+            .execute(&mut conn)
+            .is_err(),
+        "a payment an allocation settles with was deleted"
+    );
+    assert!(
+        diesel::sql_query("DELETE FROM purchases WHERE id = 2")
+            .execute(&mut conn)
+            .is_err(),
+        "a purchase an allocation settled was deleted"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
 }
 
 #[test]
@@ -3354,9 +3610,9 @@ fn a_database_with_a_shops_m2_history_takes_the_suppliers_and_purchases_tables()
          unit_cost_centimes, landed_unit_cost_centimes, qty_received_milli) \
          VALUES (1, 1, 1, 1, 10000, 20000, 25000, 4000)",
         "INSERT INTO purchase_receipts (id, shop_id, purchase_id, series, number, received_at, \
-         user_id) VALUES (1, 1, 1, 'reception:2026', 1, '2026-09-10', 1)",
-        "INSERT INTO purchase_receipt_lines (shop_id, receipt_id, purchase_line_id, qty_milli) \
-         VALUES (1, 1, 1, 4000)",
+         user_id) VALUES (1, 1, 1, 'reception:2026', 1, '2026-09-10 09:30:00', 1)",
+        "INSERT INTO purchase_receipt_lines (shop_id, purchase_id, receipt_id, \
+         purchase_line_id, qty_milli) VALUES (1, 1, 1, 1, 4000)",
         "INSERT INTO supplier_ledger (id, shop_id, supplier_id, purchase_id, kind, \
          debit_centimes, credit_centimes, user_id) VALUES (1, 1, 1, 1, 'purchase', 100000, 0, 1)",
         "INSERT INTO supplier_ledger (id, shop_id, supplier_id, kind, debit_centimes, \

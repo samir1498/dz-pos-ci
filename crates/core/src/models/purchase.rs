@@ -75,6 +75,9 @@ pub struct PurchaseLine {
     /// The running total the receipts add up to, never above what was
     /// ordered.
     pub qty_received_milli: i64,
+    /// What went back to the supplier, never above what arrived: goods the
+    /// shop never took in are goods it cannot send back.
+    pub qty_returned_milli: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,6 +88,7 @@ pub struct NewPurchaseLine {
     pub unit_cost: Money,
     pub landed_unit_cost: Money,
     pub qty_received_milli: i64,
+    pub qty_returned_milli: i64,
 }
 
 /// One delivery against one purchase: the bon de réception, kept and listed
@@ -97,8 +101,10 @@ pub struct PurchaseReceipt {
     /// The counter the number came out of, `reception:<year>`.
     pub series: String,
     pub number: i64,
-    /// A day on the shop's calendar.
-    pub received_at: String,
+    /// A moment on the shop's calendar, the way a document's `issued_at` is:
+    /// two deliveries land on one afternoon often enough, and the list and
+    /// the statement both order by this.
+    pub received_at: NaiveDateTime,
     pub user_id: i32,
     pub note: Option<String>,
     pub created_at: NaiveDateTime,
@@ -109,7 +115,7 @@ pub struct NewPurchaseReceipt {
     pub purchase_id: i32,
     pub series: String,
     pub number: i64,
-    pub received_at: String,
+    pub received_at: NaiveDateTime,
     pub user_id: i32,
     pub note: Option<String>,
 }
@@ -120,6 +126,9 @@ pub struct NewPurchaseReceipt {
 pub struct PurchaseReceiptLine {
     pub id: i32,
     pub shop_id: i32,
+    /// The purchase both the receipt and the line belong to. Stored so the
+    /// file can tie the two together rather than trusting a caller to.
+    pub purchase_id: i32,
     pub receipt_id: i32,
     pub purchase_line_id: i32,
     pub qty_milli: i64,
@@ -127,6 +136,7 @@ pub struct PurchaseReceiptLine {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewPurchaseReceiptLine {
+    pub purchase_id: i32,
     pub receipt_id: i32,
     pub purchase_line_id: i32,
     pub qty_milli: i64,
@@ -177,6 +187,7 @@ pub(crate) struct PurchaseLineRow {
     pub unit_cost_centimes: i64,
     pub landed_unit_cost_centimes: i64,
     pub qty_received_milli: i64,
+    pub qty_returned_milli: i64,
 }
 
 #[derive(Debug, Insertable)]
@@ -189,6 +200,7 @@ pub(crate) struct PurchaseLineRowWrite {
     pub unit_cost_centimes: i64,
     pub landed_unit_cost_centimes: i64,
     pub qty_received_milli: i64,
+    pub qty_returned_milli: i64,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
@@ -200,7 +212,7 @@ pub(crate) struct PurchaseReceiptRow {
     pub purchase_id: i32,
     pub series: String,
     pub number: i64,
-    pub received_at: String,
+    pub received_at: NaiveDateTime,
     pub user_id: i32,
     pub note: Option<String>,
     pub created_at: NaiveDateTime,
@@ -213,7 +225,7 @@ pub(crate) struct PurchaseReceiptRowWrite {
     pub purchase_id: i32,
     pub series: String,
     pub number: i64,
-    pub received_at: String,
+    pub received_at: NaiveDateTime,
     pub user_id: i32,
     pub note: Option<String>,
 }
@@ -224,6 +236,7 @@ pub(crate) struct PurchaseReceiptRowWrite {
 pub(crate) struct PurchaseReceiptLineRow {
     pub id: i32,
     pub shop_id: i32,
+    pub purchase_id: i32,
     pub receipt_id: i32,
     pub purchase_line_id: i32,
     pub qty_milli: i64,
@@ -233,6 +246,7 @@ pub(crate) struct PurchaseReceiptLineRow {
 #[diesel(table_name = purchase_receipt_lines)]
 pub(crate) struct PurchaseReceiptLineRowWrite {
     pub shop_id: i32,
+    pub purchase_id: i32,
     pub receipt_id: i32,
     pub purchase_line_id: i32,
     pub qty_milli: i64,
@@ -268,6 +282,7 @@ impl From<PurchaseLineRow> for PurchaseLine {
             unit_cost: Money::centimes(r.unit_cost_centimes),
             landed_unit_cost: Money::centimes(r.landed_unit_cost_centimes),
             qty_received_milli: r.qty_received_milli,
+            qty_returned_milli: r.qty_returned_milli,
         }
     }
 }
@@ -293,6 +308,7 @@ impl From<PurchaseReceiptLineRow> for PurchaseReceiptLine {
         PurchaseReceiptLine {
             id: r.id,
             shop_id: r.shop_id,
+            purchase_id: r.purchase_id,
             receipt_id: r.receipt_id,
             purchase_line_id: r.purchase_line_id,
             qty_milli: r.qty_milli,

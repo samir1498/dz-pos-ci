@@ -121,6 +121,13 @@ CREATE UNIQUE INDEX idx_purchases_supplier_document
 -- disagree with the paper they came from. How much one receipt may add is a
 -- rule the service holds (T3); this is the state the file refuses to hold.
 --
+-- `qty_returned_milli` is the same running total for what went back to the
+-- supplier, and it is bounded by what arrived rather than by what was
+-- ordered: goods the shop never took in are goods it cannot send back, and a
+-- return above them is a credit the shop is not owed. Bounding it in the file
+-- means T3's rule holds against a restored backup and a row repaired by hand
+-- as well as against its own service.
+--
 -- `purchase_id` CASCADEs so a purchase deleted before anything arrived takes
 -- its own lines; `product_id` RESTRICTs because a product named on a purchase
 -- outlives the fiche, the way a movement's does.
@@ -139,7 +146,15 @@ CREATE TABLE purchase_lines (
                AND landed_unit_cost_centimes >= 0),
     qty_received_milli        INTEGER NOT NULL DEFAULT 0
         CHECK (typeof(qty_received_milli) = 'integer' AND qty_received_milli >= 0),
-    CHECK (qty_received_milli <= qty_ordered_milli)
+    qty_returned_milli        INTEGER NOT NULL DEFAULT 0
+        CHECK (typeof(qty_returned_milli) = 'integer' AND qty_returned_milli >= 0),
+    CHECK (qty_received_milli <= qty_ordered_milli),
+    CHECK (qty_returned_milli <= qty_received_milli),
+    -- The key a receipt line points at. A plain `REFERENCES purchase_lines(id)`
+    -- lets a delivery on one order name a line of another, which would land
+    -- the stock and the debt on the wrong paper; the pair is what ties the
+    -- line to its own purchase, and SQLite needs it unique to reference it.
+    UNIQUE (purchase_id, id)
 ) STRICT;
 CREATE INDEX idx_purchase_lines_purchase ON purchase_lines (shop_id, purchase_id, id);
 
@@ -158,27 +173,55 @@ CREATE TABLE purchase_receipts (
     series      TEXT NOT NULL,
     number      INTEGER NOT NULL
         CHECK (typeof(number) = 'integer' AND number >= 1),
+    -- A moment on the shop's calendar and not a day, the way `issued_at` is:
+    -- two deliveries land on one afternoon often enough, and the statement
+    -- and the list both order by this.
     received_at TEXT NOT NULL,
     user_id     INTEGER NOT NULL REFERENCES users(id),
     note        TEXT,
     created_at  TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-    UNIQUE (shop_id, series, number)
+    UNIQUE (shop_id, series, number),
+    -- The other half of the pair a receipt line points at, so the purchase
+    -- the line carries has to be the receipt's own.
+    UNIQUE (purchase_id, id)
 ) STRICT;
 CREATE INDEX idx_purchase_receipts_purchase ON purchase_receipts (shop_id, purchase_id, id);
 
 -- What arrived on one delivery, line by line. A quantity of nothing is
 -- refused: a receipt line saying nothing came in says nothing at all, and the
 -- lines that were not delivered this time are simply absent.
+--
+-- `purchase_id` is here so the two keys below can be composite. Keyed only on
+-- the receipt and the line, a delivery against one order could name a line of
+-- another order: the stock would land on the right product and the value
+-- would land on the wrong paper, and nothing in the file would say so. Both
+-- keys carry the purchase, so the receipt and the line have to agree about
+-- which order this is, read from either end.
+--
+-- One row per line per receipt: a delivery says once how much of a line
+-- arrived. Two rows for the same line on one paper would be a quantity nobody
+-- can read off it. A second delivery is a second receipt and names the line
+-- again, which is what a partial receipt is.
 CREATE TABLE purchase_receipt_lines (
     id               INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     shop_id          INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-    receipt_id       INTEGER NOT NULL REFERENCES purchase_receipts(id) ON DELETE CASCADE,
-    purchase_line_id INTEGER NOT NULL REFERENCES purchase_lines(id) ON DELETE RESTRICT,
+    purchase_id      INTEGER NOT NULL,
+    receipt_id       INTEGER NOT NULL,
+    purchase_line_id INTEGER NOT NULL,
     qty_milli        INTEGER NOT NULL
-        CHECK (typeof(qty_milli) = 'integer' AND qty_milli > 0)
+        CHECK (typeof(qty_milli) = 'integer' AND qty_milli > 0),
+    UNIQUE (receipt_id, purchase_line_id),
+    -- The receipt takes its lines with it, the way a document takes its own.
+    FOREIGN KEY (purchase_id, receipt_id)
+        REFERENCES purchase_receipts(purchase_id, id) ON DELETE CASCADE,
+    -- The line does not: a line with stock behind it outlives an edit to the
+    -- order, and a purchase with a delivery on it is held down by the receipt
+    -- above anyway.
+    FOREIGN KEY (purchase_id, purchase_line_id)
+        REFERENCES purchase_lines(purchase_id, id) ON DELETE RESTRICT
 ) STRICT;
-CREATE INDEX idx_purchase_receipt_lines_receipt
-    ON purchase_receipt_lines (shop_id, receipt_id, id);
+-- No index on (shop_id, receipt_id): the UNIQUE above already opens with
+-- `receipt_id`, and one delivery's lines are read through it.
 
 -- What the shop owes its suppliers, the mirror of `debt_ledger` as migration
 -- 6 left it. A balance is the sum of this table and never a stored number.

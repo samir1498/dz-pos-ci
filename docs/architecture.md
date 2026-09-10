@@ -205,7 +205,10 @@ only in `packages/shared`.
 - `purchases` and `purchase_lines` hold what was ordered, with each line's
   landed unit cost fixed when the purchase is saved; `purchase_receipts`
   and `purchase_receipt_lines` hold what actually arrived, one row per
-  delivery. A purchase is never a row of `documents` and neither is a bon
+  delivery, tied to the order by a composite key so a receipt can only name
+  a line of its own purchase and names it once; each line counts what
+  arrived against what was ordered and what went back against what
+  arrived. A purchase is never a row of `documents` and neither is a bon
   de réception: that table's NOT NULL régime, its payment mode and its
   customer key have no honest value for something the shop buys, and its
   series are the numbering the tax code hands out for what the shop
