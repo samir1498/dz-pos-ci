@@ -166,6 +166,38 @@ text_enum! {
     }
 }
 
+text_enum! {
+    /// Why what the shop owes a supplier moved. The mirror of `DebtKind`, and
+    /// it differs by exactly what the two sides do differently: `Purchase`
+    /// where a customer has a sale, and `Return` where a customer has an
+    /// avoir. A `Sale` here would be a supplier buying at the till.
+    ///
+    /// `Purchase` is written when goods arrive and not when the order is
+    /// saved (plan lens, 2026-09-10), so a purchase closed short owes nothing
+    /// for what never came.
+    SupplierDebtKind {
+        Opening => "opening",
+        Purchase => "purchase",
+        Payment => "payment",
+        Return => "return",
+        Adjustment => "adjustment",
+    }
+}
+
+text_enum! {
+    /// Where a purchase has got to. `Ordered` until something arrives,
+    /// `PartiallyReceived` and `Received` as it does, `Cancelled` when
+    /// nothing ever did, `ClosedShort` when the rest never will and the shop
+    /// has stopped waiting for it.
+    PurchaseStatus {
+        Ordered => "ordered",
+        PartiallyReceived => "partially_received",
+        Received => "received",
+        Cancelled => "cancelled",
+        ClosedShort => "closed_short",
+    }
+}
+
 impl DocumentKind {
     /// The counter series this kind takes its numbers from. One series per
     /// kind, uninterrupted (décret 05-468 art. 10).

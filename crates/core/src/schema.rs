@@ -236,6 +236,146 @@ diesel::table! {
     }
 }
 
+// ---- migrations/2026-09-10-000008_suppliers_purchases_expenses ----
+
+diesel::table! {
+    suppliers (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        name -> Text,
+        phone -> Nullable<Text>,
+        address -> Nullable<Text>,
+        rc -> Nullable<Text>,
+        nif -> Nullable<Text>,
+        nis -> Nullable<Text>,
+        ai -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        active -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    purchases (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        supplier_id -> Integer,
+        supplier_document_number -> Nullable<Text>,
+        // Days on the shop's calendar, `YYYY-MM-DD`, where `created_at` below
+        // is the UTC moment the row was written.
+        purchase_date -> Text,
+        due_date -> Nullable<Text>,
+        transport_centimes -> BigInt,
+        extra_costs_centimes -> BigInt,
+        status -> Text,
+        user_id -> Integer,
+        note -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    purchase_lines (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        purchase_id -> Integer,
+        product_id -> Integer,
+        qty_ordered_milli -> BigInt,
+        unit_cost_centimes -> BigInt,
+        landed_unit_cost_centimes -> BigInt,
+        qty_received_milli -> BigInt,
+    }
+}
+
+diesel::table! {
+    purchase_receipts (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        purchase_id -> Integer,
+        series -> Text,
+        number -> BigInt,
+        received_at -> Text,
+        user_id -> Integer,
+        note -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    purchase_receipt_lines (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        receipt_id -> Integer,
+        purchase_line_id -> Integer,
+        qty_milli -> BigInt,
+    }
+}
+
+diesel::table! {
+    supplier_ledger (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        supplier_id -> Integer,
+        purchase_id -> Nullable<Integer>,
+        kind -> Text,
+        debit_centimes -> BigInt,
+        credit_centimes -> BigInt,
+        user_id -> Integer,
+        note -> Nullable<Text>,
+        created_at -> Timestamp,
+        // Null on every movement that is not a payment, and never null on one.
+        payment_mode -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    supplier_allocations (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        payment_ledger_id -> Integer,
+        purchase_id -> Integer,
+        amount_centimes -> BigInt,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    expense_categories (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        // The i18n key, not a label: the desktop reads the three languages
+        // from its own files by this key.
+        key -> Text,
+        sort_order -> Integer,
+        active -> Bool,
+    }
+}
+
+diesel::table! {
+    expenses (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        category_id -> Integer,
+        amount_centimes -> BigInt,
+        expense_date -> Text,
+        note -> Nullable<Text>,
+        user_id -> Integer,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    jobs (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        name -> Text,
+        // Null means the job has never run.
+        last_run_day -> Nullable<Text>,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(categories -> shops (shop_id));
 diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
@@ -263,6 +403,31 @@ diesel::joinable!(debt_ledger -> users (user_id));
 diesel::joinable!(debt_allocations -> shops (shop_id));
 diesel::joinable!(debt_allocations -> debt_ledger (payment_ledger_id));
 diesel::joinable!(debt_allocations -> documents (document_id));
+diesel::joinable!(suppliers -> shops (shop_id));
+diesel::joinable!(purchases -> shops (shop_id));
+diesel::joinable!(purchases -> suppliers (supplier_id));
+diesel::joinable!(purchases -> users (user_id));
+diesel::joinable!(purchase_lines -> shops (shop_id));
+diesel::joinable!(purchase_lines -> purchases (purchase_id));
+diesel::joinable!(purchase_lines -> products (product_id));
+diesel::joinable!(purchase_receipts -> shops (shop_id));
+diesel::joinable!(purchase_receipts -> purchases (purchase_id));
+diesel::joinable!(purchase_receipts -> users (user_id));
+diesel::joinable!(purchase_receipt_lines -> shops (shop_id));
+diesel::joinable!(purchase_receipt_lines -> purchase_receipts (receipt_id));
+diesel::joinable!(purchase_receipt_lines -> purchase_lines (purchase_line_id));
+diesel::joinable!(supplier_ledger -> shops (shop_id));
+diesel::joinable!(supplier_ledger -> suppliers (supplier_id));
+diesel::joinable!(supplier_ledger -> purchases (purchase_id));
+diesel::joinable!(supplier_ledger -> users (user_id));
+diesel::joinable!(supplier_allocations -> shops (shop_id));
+diesel::joinable!(supplier_allocations -> supplier_ledger (payment_ledger_id));
+diesel::joinable!(supplier_allocations -> purchases (purchase_id));
+diesel::joinable!(expense_categories -> shops (shop_id));
+diesel::joinable!(expenses -> shops (shop_id));
+diesel::joinable!(expenses -> expense_categories (category_id));
+diesel::joinable!(expenses -> users (user_id));
+diesel::joinable!(jobs -> shops (shop_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     audit_log,
@@ -274,9 +439,19 @@ diesel::allow_tables_to_appear_in_same_query!(
     document_lines,
     document_tva,
     documents,
+    expense_categories,
+    expenses,
+    jobs,
     products,
+    purchase_lines,
+    purchase_receipt_lines,
+    purchase_receipts,
+    purchases,
     settings,
     shops,
     stock_movements,
+    supplier_allocations,
+    supplier_ledger,
+    suppliers,
     users
 );
