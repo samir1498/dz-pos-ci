@@ -11,10 +11,10 @@ tasks:
     desc: 'The logo: one mark (a coin carrying a stroke that reads as the Latin D and the Arabic dal), a Latin wordmark and an Arabic wordmark set to the same height, weight and spacing so the pair reads as one identity; SVG sources in packages/design/assets (mark, wordmark-latin, wordmark-arabic, lockups on light and dark, favicon, 80 mm ticket header in pure black); the desktop''s language switch swaps the wordmark (fr and en Latin, ar Arabic) and the mark stays; drawn first as a page on the boss site for Samir to approve'
     status: 'pending'
   - id: 'D2'
-    desc: 'Two themes in the tokens package: the semantic layer gains a theme axis, Comptoir (light: stone paper, teal selection, brass on the pay button, ink sidebar) and Registre (dark: ink green surfaces, paper text, brass accent); the generated theme CSS emits the shadcn/ui variable set (background, foreground, card, primary, muted, border, ring, sidebar, radius, plus font-numeric and the brass money accent) for :root and [data-theme=registre] and the Tailwind v4 @theme inline mapping, the way ObserveOne''s src/index.css does (Anouar, 2026-09-10: the kit is shadcn/ui and ObserveOne''s theme is the design example; its shape is copied, not its colours); components.json, cva, tailwind-merge, clsx, lucide-react; fonts vendored through fontsource (IBM Plex Sans, IBM Plex Sans Arabic, JetBrains Mono), no external host; a theme switcher in settings persisted in the shop file (OS preference as the default); the mockup tokens.css test extended to both themes; a grep test that fails the gates on raw palette utilities or hex literals in the app; Money, Wordmark and Icon as the first kit pieces'
+    desc: 'Two themes in the tokens package: the semantic layer gains a theme axis, Comptoir (light: stone paper, teal selection, brass on the pay button, ink sidebar) and Registre (dark: ink green surfaces, paper text, brass accent), both emitted as CSS custom-property blocks (:root and [data-theme=registre]) and as a Tailwind v4 @theme so utility classes come only from tokens; a theme switcher in settings persisted in the shop file (OS preference as the default); the mockup tokens.css test extended to both themes; JetBrains Mono for every amount; fonts vendored through fontsource (IBM Plex Sans, IBM Plex Sans Arabic, JetBrains Mono), no external host, tested; Lucide icons as the one icon set (MIT, stroke, RTL-safe); a grep test that fails the gates on raw palette utilities or hex literals in the app; Money, Wordmark and Icon as the first kit pieces'
     status: 'pending'
   - id: 'D3'
-    desc: 'The component kit is shadcn/ui installed through its CLI into apps/desktop/src/components/ui (button, input, label, select, checkbox, switch, table, card, badge, dialog, sheet, dropdown-menu, tabs, separator, skeleton, scroll-area, sidebar, breadcrumb, tooltip) on the D2 theme, plus the app shell (sidebar and topbar with the wordmark and the theme and language switches), page header, form field, status pill, empty state and data table built on them; an eslint rule that fails the gates on a raw input, button, select or table outside components/ui and on colour or pixel literals; every existing screen rewritten on the kit with its tests and e2e green and the screenshots retaken in both themes; RTL checked on every component (Radix handles direction; the sidebar and sheet sides follow dir); after purchases and the stock recount merge and before the dashboard; a fourth review lens per task from then on: the screenshot next to ObserveOne''s equivalent screen and the mockup'
+    desc: 'The component kit in apps/desktop/src/components on the tokens (app shell with sidebar and topbar carrying the wordmark and the theme and language switches, page header, card, table, form field and input, select, button variants, chips, status pill, money cell, empty state, dialog), matching the mockup stylesheet and the two themes; an eslint rule that fails the gates on a raw input, button, select, table or a colour or pixel literal outside the kit; every existing screen rewritten on the kit with its tests and e2e green and its screenshots retaken in both themes; RTL checked on every component; after purchases and the stock recount merge and before the dashboard; a fourth review lens per task from then on: the screenshot next to the mockup'
     status: 'pending'
   - id: 'D4'
     desc: 'The Claude Design link: create the Dinar POS design-system project, push colors_and_type.css for both themes, the logo files, and one preview card per kit component (@dsCard markers) built from the kit''s own markup, so Samir iterates in claude.ai/design; the README in the project says which file is the source (the repo) and that /design-sync pulls changes back; the landing page in Astro is a later plan, not this one'
@@ -43,14 +43,11 @@ recount merge and before the dashboard, so the dashboard is born on the kit.
 Icons: Lucide (MIT, stroke icons, the set shadcn and ObserveOne use), never
 hand-drawn; the logo is the one custom drawing.
 
-Anouar, 2026-09-10 (after seeing the three directions and finding them all
-not good): what ObserveOne taught is to pick the UI framework by hand and do
-the design on it, or to hand Claude a design system already liked so it
-reproduces that; ObserveOne is shadcn/ui (new-york, Radix, Tailwind v4,
-Lucide, Inter through fontsource) with its own theme in src/index.css. So the
-kit is shadcn/ui, ObserveOne's theme file is the shape to copy, Comptoir and
-Registre are the two colour sets on it, and a designer, if Anouar hires one,
-inherits shadcn variables.
+Anouar, 2026-09-10, after seeing the three directions and finding them all
+not good, suggested building on a hand-picked UI framework the way ObserveOne
+is (shadcn/ui) with ObserveOne's theme as the example. Samir decided the same
+hour to keep the original plan: the two themes on our own tokens and our own
+kit; a designer, if Anouar hires one later, inherits the token file.
 
 The Claude Design link: `/design-login` done 2026-09-10; a design-system
 project for Dinar POS is created and the kit pushed into it (`colors_and_type.css`,
