@@ -20,6 +20,7 @@ import { THEME_CSS_PATH, toThemeCss } from "./themeCss";
 
 const OUT = fileURLToPath(new URL(`../../../${THEME_CSS_PATH}`, import.meta.url));
 const STYLES = fileURLToPath(new URL("../../../apps/desktop/src/styles.css", import.meta.url));
+const INDEX = fileURLToPath(new URL("../../../apps/desktop/index.html", import.meta.url));
 
 const generated = toThemeCss();
 
@@ -45,14 +46,23 @@ describe("theme.css", () => {
   /**
    * The shop counter has no internet. A face fetched from a CDN would look
    * fine on the box that built it and fall back to system-ui on the machine
-   * that matters, so the rule is checked rather than remembered. Both files
-   * are read: the faces moved to styles.css and the rule moved with them.
+   * that matters, so the rule is checked rather than remembered.
+   *
+   * Three files, not two. The generated stylesheet and styles.css are where
+   * an @import would go, but the easiest way to reintroduce a Google Fonts
+   * face is the one every tutorial shows: two preconnects and a stylesheet
+   * link pasted into the document head. That head is
+   * `apps/desktop/index.html`, which neither of the other two checks reach,
+   * so it is read here as text and held to the same rule.
    */
-  it("names no external host, here or in styles.css", () => {
-    for (const css of [generated, readFileSync(STYLES, "utf8")]) {
-      expect(css).not.toMatch(/https?:/);
-      expect(css).not.toMatch(/\/\/fonts\./);
-    }
+  it.each([
+    ["the generated stylesheet", () => generated],
+    ["styles.css", () => readFileSync(STYLES, "utf8")],
+    ["index.html", () => readFileSync(INDEX, "utf8")],
+  ])("names no external host in %s", (_where, read) => {
+    const text = read();
+    expect(text).not.toMatch(/https?:/);
+    expect(text).not.toMatch(/\/\/fonts\./);
   });
 
   it("imports exactly the weights and subsets the brief lists", () => {

@@ -5,6 +5,12 @@
 //   tabular figures on. A column of totals then lines up on the digit rather
 //   than on the glyph width, which is the whole reason the design carries a
 //   second face at all.
+// - A weight, 500, which is `font-medium`. The bundle carries JetBrains Mono
+//   at 500 and 600 only, so a bare amount inheriting the body's 400 asks for
+//   a face that is not there and the browser synthesises one: the digits come
+//   out thinner than every amount that sits inside a heading or a button, and
+//   at 13 px on a counter screen that reads as a rendering fault rather than
+//   a design. Naming the weight the file actually ships keeps the column even.
 // - `dir="ltr"`. An amount reads left to right with Western digits on an
 //   Arabic screen too, the same decision the fiscal identifiers and the
 //   barcodes already take; without it the minus sign of a negative balance
@@ -26,7 +32,11 @@ export function Money({
   "data-testid"?: string;
 }) {
   return (
-    <span dir="ltr" data-testid={testId} className={cn("font-numeric tabular-nums", className)}>
+    <span
+      dir="ltr"
+      data-testid={testId}
+      className={cn("font-numeric font-medium tabular-nums", className)}
+    >
       {formatCentimes(centimes)}
     </span>
   );

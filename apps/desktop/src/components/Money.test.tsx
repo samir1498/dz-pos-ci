@@ -31,6 +31,17 @@ describe("Money", () => {
     expect(screen.getByTestId("m")).toHaveClass("font-numeric", "tabular-nums");
   });
 
+  /**
+   * A weight the bundle actually carries. `styles.css` imports JetBrains Mono
+   * at 500 and 600 and nothing else, so inheriting the body's 400 makes the
+   * browser synthesise a lighter face and the amount comes out thinner than
+   * the ones inside headings and buttons. `font-medium` is 500.
+   */
+  test("asks for a weight JetBrains Mono ships", () => {
+    render(<Money centimes={0} data-testid="m" />);
+    expect(screen.getByTestId("m")).toHaveClass("font-medium");
+  });
+
   /** A caller's class wins over the component's own on the same property. */
   test("lets a caller add classes without losing the figure font", () => {
     render(<Money centimes={0} className="text-lg" data-testid="m" />);
