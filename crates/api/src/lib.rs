@@ -436,6 +436,7 @@ pub fn router_with_origin(
         .route("/backups", get(routes::backups::list))
         .route("/backups", post(routes::backups::create))
         .route("/backups/{name}/restore", post(routes::backups::restore))
+        .route("/cash", get(routes::expenses::cash))
         .route("/categories", get(routes::categories::list))
         .route("/clock", get(routes::clock))
         .route("/customers", get(routes::customers::list))
@@ -459,6 +460,36 @@ pub fn router_with_origin(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),
         )
+        .route("/expense-categories", get(routes::expenses::categories))
+        .route("/expenses", get(routes::expenses::list))
+        .route("/expenses", post(routes::expenses::create))
+        .route("/products", get(routes::products::list))
+        .route("/products", post(routes::products::create))
+        .route(
+            "/products/{id}",
+            get(routes::products::get_one).put(routes::products::update),
+        )
+        .route("/purchases", get(routes::purchases::list))
+        .route("/purchases", post(routes::purchases::create))
+        .route("/purchases/{id}", get(routes::purchases::get_one))
+        .route("/purchases/{id}/receipts", post(routes::purchases::receive))
+        .route("/purchases/{id}/returns", post(routes::purchases::returns))
+        .route("/purchases/{id}/cancel", post(routes::purchases::cancel))
+        .route(
+            "/purchases/{id}/close-short",
+            post(routes::purchases::close_short),
+        )
+        .route("/sales", get(routes::sales::list))
+        .route("/sales", post(routes::sales::create))
+        .route("/sales/{id}", get(routes::sales::get_one))
+        .route("/sales/{id}/avoir", post(routes::sales::avoir))
+        .route("/sales/{id}/avoirs", get(routes::sales::avoirs))
+        .route("/sales/{id}/cancel", post(routes::sales::cancel))
+        .route("/sales/{id}/ticket", get(routes::sales::ticket))
+        .route("/sales/{id}/facture", get(routes::sales::facture))
+        .route("/settings", get(routes::settings::read))
+        .route("/settings/store", put(routes::settings::update_store))
+        .route("/settings/regime", post(routes::settings::change_regime))
         .route("/suppliers", get(routes::suppliers::list))
         .route("/suppliers", post(routes::suppliers::create))
         .route(
@@ -476,33 +507,6 @@ pub fn router_with_origin(
             "/suppliers/{id}/statement",
             get(routes::suppliers::statement),
         )
-        .route("/purchases", get(routes::purchases::list))
-        .route("/purchases", post(routes::purchases::create))
-        .route("/purchases/{id}", get(routes::purchases::get_one))
-        .route("/purchases/{id}/receipts", post(routes::purchases::receive))
-        .route("/purchases/{id}/returns", post(routes::purchases::returns))
-        .route("/purchases/{id}/cancel", post(routes::purchases::cancel))
-        .route(
-            "/purchases/{id}/close-short",
-            post(routes::purchases::close_short),
-        )
-        .route("/products", get(routes::products::list))
-        .route("/products", post(routes::products::create))
-        .route(
-            "/products/{id}",
-            get(routes::products::get_one).put(routes::products::update),
-        )
-        .route("/sales", get(routes::sales::list))
-        .route("/sales", post(routes::sales::create))
-        .route("/sales/{id}", get(routes::sales::get_one))
-        .route("/sales/{id}/avoir", post(routes::sales::avoir))
-        .route("/sales/{id}/avoirs", get(routes::sales::avoirs))
-        .route("/sales/{id}/cancel", post(routes::sales::cancel))
-        .route("/sales/{id}/ticket", get(routes::sales::ticket))
-        .route("/sales/{id}/facture", get(routes::sales::facture))
-        .route("/settings", get(routes::settings::read))
-        .route("/settings/store", put(routes::settings::update_store))
-        .route("/settings/regime", post(routes::settings::change_regime))
         .fallback(routes::not_found)
         .method_not_allowed_fallback(routes::method_not_allowed)
         .layer(from_fn_with_state(token.clone(), token::require));
