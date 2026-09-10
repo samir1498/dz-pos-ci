@@ -145,13 +145,61 @@ describe("the shadcn variable set", () => {
     expect(theme).toMatch(/^\s*--text-md: var\(--text-md\);$/m);
     expect(theme).toMatch(/^\s*--color-background: var\(--background\);$/m);
     expect(theme).toMatch(/^\s*--color-muted-foreground: var\(--muted-foreground\);$/m);
-    expect(theme).toMatch(/^\s*--color-money: var\(--money\);$/m);
+    // `--color-money` is the role's own name, so it is a reference, not an
+    // alias; the test below is the one that says why.
+    expect(theme).toMatch(/^\s*--color-money: var\(--color-money\);$/m);
+  });
+});
+
+/**
+ * The two Tailwind blocks mean opposite things and the file has to keep them
+ * that way.
+ *
+ * `@theme inline` carries a value into the utility and declares the key as a
+ * variable of its own. `@theme reference` registers the utility and emits
+ * nothing. So a key belongs in `inline` only when nothing else in the file
+ * declares it, and in `reference` only when something does.
+ *
+ * Getting it backwards is invisible in a browser today. Our roles are spelled
+ * `--color-*`, so the shadcn pair `--primary: var(--color-primary)` gave the
+ * inline block a `--color-primary: var(--primary)` sitting on top of it: a
+ * two-step cycle. It renders, because the unlayered token block wins the
+ * cascade over Tailwind's layer, and it stops rendering the day the layering
+ * changes or someone reads the variable from JavaScript. `--money` had the
+ * same knot. Both are references now.
+ */
+describe("the two Tailwind blocks", () => {
+  const cut = (marker: string, from: number): [string, number] => {
+    const start = generated.indexOf(marker, from);
+    const end = generated.indexOf("\n}", start) + 2;
+    return [generated.slice(start, end), end];
+  };
+  const [reference, afterReference] = cut("@theme reference", 0);
+  const [inline] = cut("@theme inline", afterReference);
+  const outside = generated.replace(reference, "").replace(inline, "");
+
+  const keysIn = (block: string): string[] =>
+    [...block.matchAll(/^ {2}(--[a-z0-9-]+):/gm)].map((match) => match[1]);
+
+  /** A key declared in both blocks would resolve to whichever came last. */
+  it("declares no Tailwind key twice", () => {
+    const keys = [...keysIn(reference), ...keysIn(inline)];
+    expect(keys.length).toBe(new Set(keys).size);
   });
 
-  /** A key declared in both theme blocks would resolve to whichever came last. */
-  it("declares no Tailwind key twice", () => {
-    const theme = generated.slice(generated.indexOf("@theme"));
-    const keys = [...theme.matchAll(/^\s*(--[a-z0-9-]+):/gm)].map((match) => match[1]);
-    expect(keys.length).toBe(new Set(keys).size);
+  it("keeps every inline key out of the rest of the file", () => {
+    const declared = new Set(keysIn(outside));
+    expect(keysIn(inline).filter((key) => declared.has(key))).toEqual([]);
+  });
+
+  it("declares every reference key in the rest of the file", () => {
+    const declared = new Set(keysIn(outside));
+    expect(keysIn(reference).filter((key) => !declared.has(key))).toEqual([]);
+  });
+
+  /** The two the review found, named so a regression says which. */
+  it.each(["--color-primary", "--color-money"])("routes %s through reference", (key) => {
+    expect(keysIn(reference)).toContain(key);
+    expect(keysIn(inline)).not.toContain(key);
   });
 });

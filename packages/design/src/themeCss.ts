@@ -121,27 +121,49 @@ const line = (name: string, value: string): string => `  ${name}: ${value};`;
 
 const shadcnLines = (): string[] => SHADCN.map(([name, role]) => line(name, `var(${role})`));
 
-const referenceLines = (): string[] =>
-  REFERENCE_GROUPS.flatMap(([prefix, keys]) =>
-    keys.map((key) => line(`${prefix}${key}`, `var(${prefix}${key})`)),
-  ).concat(EXTRA_UTILITIES.filter(isIdentity).map(([name]) => line(name, `var(${name})`)));
-
 /** Every shadcn name becomes a Tailwind colour key, except the two lengths. */
 const NOT_A_COLOUR: ReadonlySet<string> = new Set(["--radius"]);
 
+/** The Tailwind colour key a shadcn name earns: `--card` gives `--color-card`. */
+const colourKey = (name: string): string => `--color-${name.slice(2)}`;
+
 /**
- * An extra whose key already equals the variable it points at is a reference,
- * not an alias: put it in `@theme inline` and Tailwind emits
+ * A pair whose Tailwind key already equals the variable it would point at is
+ * a reference, not an alias: put it in `@theme inline` and Tailwind emits
  * `--color-warn: var(--color-warn)` into its own layer, a declaration that
  * refers to itself. The unlayered token block still wins the cascade, so it
  * renders, but it is a cycle waiting for the day the layering moves.
+ *
+ * Two shadcn names hit this and it took a review to see why: our roles are
+ * already spelled `--color-*`. `--primary` points at the role
+ * `--color-primary`, so its Tailwind key is `--color-primary` too, and the
+ * inline block was emitting `--color-primary: var(--primary)` on top of
+ * `--primary: var(--color-primary)`. `--money` and `--color-money` are the
+ * same knot. Both go to `@theme reference` instead, where Tailwind registers
+ * `bg-primary` and `text-money` against the role and emits no variable, so
+ * the name is declared once in the whole file.
  */
 const isIdentity = ([name, role]: readonly [string, string]): boolean => name === role;
 
-const inlineLines = (): string[] => [
-  ...SHADCN.filter(([name]) => !NOT_A_COLOUR.has(name)).map(([name]) =>
-    line(`--color-${name.slice(2)}`, `var(${name})`),
+/** The shadcn colour pairs, split by whether the key names its own role. */
+const shadcnColours = (): readonly (readonly [string, string])[] =>
+  SHADCN.filter(([name]) => !NOT_A_COLOUR.has(name)).map(([name, role]) => [
+    colourKey(name),
+    isIdentity([colourKey(name), role]) ? colourKey(name) : name,
+  ]);
+
+const referenceLines = (): string[] => [
+  ...REFERENCE_GROUPS.flatMap(([prefix, keys]) =>
+    keys.map((key) => line(`${prefix}${key}`, `var(${prefix}${key})`)),
   ),
+  ...shadcnColours().filter(isIdentity).map(([key]) => line(key, `var(${key})`)),
+  ...EXTRA_UTILITIES.filter(isIdentity).map(([name]) => line(name, `var(${name})`)),
+];
+
+const inlineLines = (): string[] => [
+  ...shadcnColours()
+    .filter((entry) => !isIdentity(entry))
+    .map(([key, source]) => line(key, `var(${source})`)),
   ...EXTRA_UTILITIES.filter((entry) => !isIdentity(entry)).map(([name, role]) =>
     line(name, `var(${role})`),
   ),
