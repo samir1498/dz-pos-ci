@@ -1114,11 +1114,13 @@ fn a_document_already_settled_by_an_allocation_nobody_wrote_a_payment_for_refuse
     );
 }
 
-/// The same guard on the other half of the settlement. `settle_oldest_first`
-/// has money and looks for paper; `settle_document` is handed the paper, which
-/// is what an avoir uses to reach the facture it was written against. Both
-/// have to sum the allocations already on a document, because the remaining
-/// column alone cannot see a row written straight into the table.
+/// The same guard reached down the other road. `settle_oldest_first` has
+/// money and looks for paper; `settle_document` is handed the paper, which is
+/// what an avoir uses to reach the facture it was written against. They pick
+/// the documents differently and then hand them to one `settle`, where the
+/// guard is written once: Σ of the allocations already on a document, because
+/// the remaining column alone cannot see a row written straight into the
+/// table. Removing that one `if` fails this test and its twin above.
 #[test]
 fn a_named_document_cannot_be_settled_past_what_it_asked_for() {
     let (_dir, mut conn) = open_temp();

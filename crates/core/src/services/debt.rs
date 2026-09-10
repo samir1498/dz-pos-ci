@@ -513,37 +513,49 @@ fn allocated_json(allocations: &[DebtAllocation]) -> serde_json::Value {
     )
 }
 
-/// Spreads `amount` over the customer's unpaid documents, oldest first, and
-/// writes back what is left on each. Runs inside the transaction of whichever
-/// movement is settling paper: a payment, or a correction downwards.
+/// One paper a credit movement can be placed on: which document, what it is
+/// still asking for, and what it asked for when it was issued.
+struct Target {
+    document_id: i32,
+    remaining: Money,
+    net_to_pay: Money,
+}
+
+/// Spreads `amount` over `targets` in the order they are given, writing one
+/// allocation per document it reaches and the new remaining on each. Runs
+/// inside the transaction of whichever movement is settling paper.
 ///
-/// The money can run out before the documents do, and the documents can run
-/// out before the money does; both are ordinary. The second one is what
-/// happens when part of the balance came from an opening row or a correction,
-/// which cite no document at all.
-pub fn settle_oldest_first(
+/// The money can run out before the papers do, and the papers can run out
+/// before the money does; both are ordinary. The second one is what happens
+/// when part of the balance came from an opening row or a correction, which
+/// cite no document at all.
+///
+/// The guard is written here and only here: Σ of what has been placed on a
+/// document, this allocation included, is never above what the document
+/// asked for. The remaining column alone would not catch it, because a row
+/// written straight into `debt_allocations` moves no column and the document
+/// would end up settled twice over with nothing saying so.
+fn settle(
     conn: &mut SqliteConnection,
     shop_id: i32,
-    customer_id: i32,
     payment_ledger_id: i32,
+    targets: &[Target],
     amount: Money,
 ) -> Result<Vec<DebtAllocation>, CoreError> {
-    let unpaid = documents_repo::unpaid_of_customer(conn, shop_id, customer_id)?;
     let mut left = amount;
     let mut written = Vec::new();
-    for (document_id, remaining_centimes, net_to_pay_centimes) in unpaid {
+    for target in targets {
         if left == Money::ZERO {
             break;
         }
-        let remaining = Money::centimes(remaining_centimes);
-        let take = left.min(remaining);
-        // Σ of what has been placed on this document, this allocation
-        // included, never above what the document asked for. The remaining
-        // column alone would not catch it: a row written straight into
-        // `debt_allocations` moves no column, and the document would end up
-        // settled twice over with nothing saying so.
-        let already = allocated_on(conn, shop_id, document_id)?;
-        if already.checked_add(take)? > Money::centimes(net_to_pay_centimes) {
+        let take = left.min(target.remaining);
+        // An allocation of nothing settles nothing and would sit against the
+        // document forever.
+        if take == Money::ZERO {
+            continue;
+        }
+        let already = allocated_on(conn, shop_id, target.document_id)?;
+        if already.checked_add(take)? > target.net_to_pay {
             return Err(CoreError::validation(
                 "amount_centimes",
                 "a document cannot be settled for more than it asked for",
@@ -554,19 +566,42 @@ pub fn settle_oldest_first(
             shop_id,
             NewDebtAllocation {
                 payment_ledger_id,
-                document_id,
+                document_id: target.document_id,
                 amount: take,
             },
         )?);
         documents_repo::set_remaining_debt(
             conn,
             shop_id,
-            document_id,
-            remaining.checked_sub(take)?.as_centimes(),
+            target.document_id,
+            target.remaining.checked_sub(take)?.as_centimes(),
         )?;
         left = left.checked_sub(take)?;
     }
     Ok(written)
+}
+
+/// Spreads `amount` over the customer's unpaid documents, oldest first, and
+/// writes back what is left on each. Runs inside the transaction of whichever
+/// movement is settling paper: a payment, or a correction downwards.
+pub fn settle_oldest_first(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+    payment_ledger_id: i32,
+    amount: Money,
+) -> Result<Vec<DebtAllocation>, CoreError> {
+    let targets: Vec<Target> = documents_repo::unpaid_of_customer(conn, shop_id, customer_id)?
+        .into_iter()
+        .map(
+            |(document_id, remaining_centimes, net_to_pay_centimes)| Target {
+                document_id,
+                remaining: Money::centimes(remaining_centimes),
+                net_to_pay: Money::centimes(net_to_pay_centimes),
+            },
+        )
+        .collect();
+    settle(conn, shop_id, payment_ledger_id, &targets, amount)
 }
 
 /// Places part of a credit movement on one named document and writes back
@@ -592,40 +627,29 @@ pub fn settle_document(
     }
     let document = documents_repo::get(conn, shop_id, document_id)?;
     let remaining = document.balance.map_or(Money::ZERO, |b| b.remaining_debt);
+    // Refused here rather than quietly taking what fits: a caller that names
+    // one document is saying the whole amount belongs on it, and the rest
+    // spreading by age is the caller's own next step, not this one's.
     if amount > remaining {
         return Err(CoreError::validation(
             "amount",
             "a document cannot be settled for more than it is still asking for",
         ));
     }
-    // The same guard `settle_oldest_first` carries, for the same reason: an
-    // allocation written straight into the table moves no column, so the
-    // remaining figure above would read a document that has already been
-    // settled in full as still asking for everything. Σ of what is on it is
-    // the only thing that sees such a row.
-    let already = allocated_on(conn, shop_id, document_id)?;
-    if already.checked_add(amount)? > document.totals.net_to_pay {
-        return Err(CoreError::validation(
-            "amount_centimes",
-            "a document cannot be settled for more than it asked for",
-        ));
-    }
-    let written = allocate(
+    let written = settle(
         conn,
         shop_id,
-        NewDebtAllocation {
-            payment_ledger_id,
+        payment_ledger_id,
+        &[Target {
             document_id,
-            amount,
-        },
+            remaining,
+            net_to_pay: document.totals.net_to_pay,
+        }],
+        amount,
     )?;
-    documents_repo::set_remaining_debt(
-        conn,
-        shop_id,
-        document_id,
-        remaining.checked_sub(amount)?.as_centimes(),
-    )?;
-    Ok(Some(written))
+    // One target and an amount it can take in full, so `settle` wrote
+    // exactly one row.
+    Ok(written.into_iter().next())
 }
 
 /// What the shop is holding for the customer, read off a balance: an amount
