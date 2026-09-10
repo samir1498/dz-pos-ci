@@ -181,6 +181,18 @@ only in `packages/shared`.
   applies it.
 - Append-only ledgers (stock movements, debt) are the truth; cached
   balances are derived and re-checked.
+- `documents` carries the rules its kind decides as CHECKs, not only as
+  service code (`2026-09-10-000007_document_kind_rules`): an avoir names the
+  document it is written against and a ticket, a facture and a proforma name
+  none; an amount tendered and change go together and only on a cash
+  document; a document is annulée exactly when it says when, by whom and why,
+  and only a ticket and a facture are annulled at all; a proforma's balance
+  triple says nothing is owed. The services already
+  refuse every one of those rows, so a restored backup, a hand-repaired row
+  or an import is what the constraints are for. SQLite cannot add a
+  table-level CHECK to a table that exists, so the migration rebuilds
+  `documents` the way migration 2 did, keeping every id: the lines, the TVA
+  recap, the movements, the ledger and the avoirs all name them.
 - The audit log's action and entity names were rewritten onto one scheme in
   the facture-and-credit milestone (`sale.credit_override` became
   `document.issue_override`, and every row about a document now says

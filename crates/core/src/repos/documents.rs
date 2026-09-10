@@ -1,9 +1,7 @@
 //! The only place documents touch diesel. Every query is scoped by `shop_id`
 //! (rule 3).
 
-use diesel::dsl::sql;
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Nullable};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
@@ -75,39 +73,6 @@ pub fn line_belongs_to_document(
         .first(conn)
         .optional()?;
     Ok(found.is_some())
-}
-
-/// How much of each of the named facture lines earlier avoirs have already
-/// credited, by line id. A line no avoir has touched is not a key, which the
-/// caller reads as nothing credited.
-///
-/// One grouped query rather than one per line: a facture has as many lines as
-/// the basket had, and the avoir screen asks this for all of them at once.
-/// An avoir cannot itself be cancelled, so there is no status to filter on;
-/// the shop is filtered on the way every query here is (rule 3).
-pub fn credited_by_line(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    line_ids: &[i32],
-) -> Result<Vec<(i32, i64)>, CoreError> {
-    if line_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let rows: Vec<(Option<i32>, Option<i64>)> = document_lines::table
-        .inner_join(documents::table.on(documents::id.eq(document_lines::document_id)))
-        .filter(document_lines::shop_id.eq(shop_id))
-        .filter(document_lines::ref_line_id.eq_any(line_ids))
-        .filter(documents::kind.eq(DocumentKind::Avoir))
-        .group_by(document_lines::ref_line_id)
-        .select((
-            document_lines::ref_line_id,
-            sql::<Nullable<BigInt>>("SUM(document_lines.qty_milli)"),
-        ))
-        .load(conn)?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|(line_id, qty)| Some((line_id?, qty.unwrap_or(0))))
-        .collect())
 }
 
 /// Every avoir written against one document, oldest first: the order they were
