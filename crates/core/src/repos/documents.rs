@@ -289,10 +289,21 @@ pub fn list_in_range(
     if let Some(from) = from.and_then(|d| d.and_hms_opt(0, 0, 0)) {
         query = query.filter(documents::issued_at.ge(from));
     }
-    // The last second of the closing day, so a document issued at 23:59 on
-    // the day a shop asked for is in the file it asked for.
-    if let Some(to) = to.and_then(|d| d.and_hms_opt(23, 59, 59)) {
-        query = query.filter(documents::issued_at.le(to));
+    // Half-open at the top: everything before midnight opening the day
+    // after, rather than everything up to and including 23:59:59.
+    //
+    // 23:59:59 is a second, not the end of a day. A timestamp carrying a
+    // fraction of it sorts above the bound, so a sale rung up at 23:59:59.4
+    // fell out of a range that names the day it was issued on, and the
+    // comptable reading that month got a file with the last sale missing
+    // and nothing on the page to say so. `succ_opt` is the day after, and
+    // it fails only past the end of the calendar, where a `to` no shop
+    // typed leaves the range open at the top rather than empty.
+    if let Some(after) = to
+        .and_then(|d| d.succ_opt())
+        .and_then(|d| d.and_hms_opt(0, 0, 0))
+    {
+        query = query.filter(documents::issued_at.lt(after));
     }
     let rows: Vec<DocumentRow> = query
         .order((documents::issued_at.asc(), documents::id.asc()))

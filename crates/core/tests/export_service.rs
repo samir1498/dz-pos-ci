@@ -315,6 +315,73 @@ fn a_range_leaves_out_the_documents_outside_it() {
 }
 
 #[test]
+fn a_document_issued_in_the_last_second_of_the_closing_day_is_inside_the_range() {
+    // The range used to close at 23:59:59 inclusive, which is a second and
+    // not the end of a day: a timestamp carrying a fraction of that second
+    // sorted above it and the document fell out of a range that names the
+    // day it was issued on. A comptable reading a month would have been
+    // handed a file missing the last sale of the month, with nothing on the
+    // page to say so.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre", 11_000);
+    let last_second = NaiveDate::from_ymd_opt(2026, 9, 12)
+        .unwrap()
+        .and_hms_milli_opt(23, 59, 59, 400)
+        .unwrap();
+    sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id: p,
+                qty_milli: 1_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(100_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
+            issued_at: Some(last_second),
+        },
+    )
+    .unwrap();
+
+    let closing = export::sales(
+        &mut conn,
+        SHOP,
+        Lang::Fr,
+        DayRange {
+            from: NaiveDate::from_ymd_opt(2026, 9, 1),
+            to: NaiveDate::from_ymd_opt(2026, 9, 12),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        sheet(&closing, "Ventes").len(),
+        2,
+        "the last sale of the closing day is not in the range that names it"
+    );
+
+    // And the day after it is still outside: half-open at the top, not one
+    // day wider.
+    let day_before = export::sales(
+        &mut conn,
+        SHOP,
+        Lang::Fr,
+        DayRange {
+            from: NaiveDate::from_ymd_opt(2026, 9, 1),
+            to: NaiveDate::from_ymd_opt(2026, 9, 11),
+        },
+    )
+    .unwrap();
+    assert_eq!(sheet(&day_before, "Ventes").len(), 1, "header only");
+}
+
+#[test]
 fn the_customers_workbook_carries_the_fiche_and_the_balance_the_ledger_sums_to() {
     let (_dir, mut conn) = open_temp();
     seed_second_shop(&mut conn);
