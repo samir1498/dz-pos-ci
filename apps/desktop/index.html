@@ -22,9 +22,11 @@
         }
       })();
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <!-- No font link. The three families are vendored under
+         packages/design/assets/fonts and declared in the generated
+         apps/desktop/src/theme.css: a shop counter has no internet, and a
+         face fetched from a CDN would look right on the machine that built
+         it and fall back to system-ui on the one that matters. -->
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>dz-pos</title>

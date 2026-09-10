@@ -9,6 +9,7 @@
     "exactOptionalPropertyTypes": true,
     "noEmit": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "types": ["node"]
   },

@@ -47,6 +47,12 @@ types-check:
 types:
     DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" cargo test -p dzpos-api --test export_bindings
 
+# regenerate apps/desktop/src/theme.css from the token source. The check
+# that a stale file fails the gates is a vitest in packages/design, so it
+# rides along in `just test`; this is the `just types` beside it.
+theme:
+    pnpm --filter @dzpos/design gen:theme
+
 # everything a PR needs, in order; stops at the first failure
 gates: fmt clippy types-check test build
 

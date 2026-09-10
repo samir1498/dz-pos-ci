@@ -1,1 +1,6 @@
+/* Tailwind first, then the generated tokens: the token blocks are unlayered
+   and Tailwind's own output sits in @layer theme, so an unlayered :root wins
+   the cascade whatever order they land in. theme.css is generated
+   (packages/design/src/themeCss.ts); nothing else belongs in this file. */
 @import "tailwindcss";
+@import "./theme.css";

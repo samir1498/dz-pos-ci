@@ -1,0 +1,298 @@
+/* Generated from packages/design/src by `pnpm --filter @dzpos/design gen:theme`.
+   Do not edit: packages/design/src/themeCss.test.ts fails the gates when this
+   file and the token source disagree, the way just types-check does for the
+   generated DTOs.
+
+   Three parts: the vendored faces (no font is fetched over the network, the
+   shop counter has none), the token custom properties for Comptoir and
+   Registre, and the Tailwind v4 theme map. */
+
+/* ---- Faces. Vendored under packages/design/assets/fonts. ---- */
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url("../../../packages/design/assets/fonts/ibm-plex-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: url("../../../packages/design/assets/fonts/ibm-plex-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../../../packages/design/assets/fonts/ibm-plex-sans-arabic-400-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../../../packages/design/assets/fonts/ibm-plex-sans-arabic-500-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("../../../packages/design/assets/fonts/ibm-plex-sans-arabic-600-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../../../packages/design/assets/fonts/ibm-plex-sans-arabic-700-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("../../../packages/design/assets/fonts/jetbrains-mono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("../../../packages/design/assets/fonts/jetbrains-mono-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---- Tokens. The source is packages/design/src/semantic.ts. ---- */
+:root {
+  /* Tier 1: primitives. No component reads these. */
+  --p-stone-0: #ffffff;
+  --p-stone-50: #f8f7f4;
+  --p-stone-100: #f1efea;
+  --p-stone-200: #e5e2db;
+  --p-stone-300: #d3cfc5;
+  --p-stone-400: #a9a49a;
+  --p-stone-500: #7d786f;
+  --p-stone-600: #5c5850;
+  --p-stone-700: #443f38;
+  --p-stone-800: #2b2823;
+  --p-stone-900: #1a1815;
+  --p-teal-50: #eaf6f3;
+  --p-teal-100: #cfeae2;
+  --p-teal-300: #7fc7b3;
+  --p-teal-500: #1f8a70;
+  --p-teal-600: #17715b;
+  --p-teal-700: #125a49;
+  --p-teal-800: #0e463a;
+  --p-red-50: #fdeeed;
+  --p-red-100: #f9d6d3;
+  --p-red-300: #e8867e;
+  --p-red-500: #c9403a;
+  --p-red-600: #a8332e;
+  --p-red-700: #862a26;
+  --p-red-900: #4a1f1c;
+  --p-amber-50: #fdf5e6;
+  --p-amber-100: #f9e6bf;
+  --p-amber-300: #e9c05f;
+  --p-amber-500: #c98a1a;
+  --p-amber-700: #8a5e0f;
+  --p-amber-900: #4a3610;
+  --p-blue-50: #eaf1fb;
+  --p-blue-300: #8db3ea;
+  --p-blue-500: #2f6fcf;
+  --p-blue-700: #1f4c90;
+  --p-blue-900: #16305c;
+  --p-ink-200: #7a877f;
+  --p-ink-300: #4a5a53;
+  --p-ink-400: #3a4b44;
+  --p-ink-500: #2c4038;
+  --p-ink-600: #23392f;
+  --p-ink-700: #1b2c25;
+  --p-ink-800: #14211c;
+  --p-brass-300: #e9d9b0;
+  --p-brass-500: #b8862b;
+  --p-brass-700: #8f6820;
+  --p-paper-50: #f4f1e8;
+  --p-paper-100: #d9d2c0;
+  --p-paper-200: #b9b3a2;
+
+  /* Tier 2: semantic. This is the API. */
+  --color-primary: var(--p-teal-600);
+  --color-primary-hover: var(--p-teal-700);
+  --color-primary-soft: var(--p-teal-50);
+  --color-on-primary: var(--p-stone-0);
+  --color-money: var(--p-brass-500);
+  --color-money-hover: var(--p-brass-700);
+  --color-on-money: var(--p-ink-800);
+  --color-danger: var(--p-red-600);
+  --color-danger-soft: var(--p-red-50);
+  --color-warn: var(--p-amber-500);
+  --color-warn-soft: var(--p-amber-50);
+  --color-info: var(--p-blue-500);
+  --color-info-soft: var(--p-blue-50);
+  --color-success: var(--p-teal-500);
+  --surface-bg: var(--p-stone-50);
+  --surface-card: var(--p-stone-0);
+  --surface-raised: var(--p-stone-100);
+  --surface-hover: var(--p-stone-100);
+  --surface-selected: var(--p-teal-50);
+  --surface-scrim: rgb(26 24 21 / 0.45);
+  --surface-inverse: var(--p-ink-800);
+  --text-primary: var(--p-stone-900);
+  --text-secondary: var(--p-stone-600);
+  --text-tertiary: var(--p-stone-400);
+  --text-disabled: var(--p-stone-300);
+  --text-on-inverse: var(--p-paper-50);
+  --text-danger: var(--p-red-600);
+  --text-success: var(--p-teal-600);
+  --border-default: var(--p-stone-200);
+  --border-strong: var(--p-stone-300);
+  --border-focus: var(--p-teal-500);
+  --border-danger: var(--p-red-500);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgb(26 24 21 / 0.06);
+  --shadow-md: 0 4px 12px rgb(26 24 21 / 0.08);
+  --shadow-lg: 0 12px 32px rgb(26 24 21 / 0.14);
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-numeric: "JetBrains Mono", ui-monospace, monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --text-3xl: 34px;
+  --touch-min: 44px;
+  --control-h: 40px;
+  --control-h-lg: 52px;
+}
+
+[data-theme="registre"] {
+  --color-primary: var(--p-teal-300);
+  --color-primary-hover: var(--p-teal-100);
+  --color-primary-soft: var(--p-teal-800);
+  --color-on-primary: var(--p-ink-800);
+  --color-money: var(--p-brass-500);
+  --color-money-hover: var(--p-brass-300);
+  --color-on-money: var(--p-ink-800);
+  --color-danger: var(--p-red-300);
+  --color-danger-soft: var(--p-red-900);
+  --color-warn: var(--p-amber-300);
+  --color-warn-soft: var(--p-amber-900);
+  --color-info: var(--p-blue-300);
+  --color-info-soft: var(--p-blue-900);
+  --color-success: var(--p-teal-300);
+  --surface-bg: var(--p-ink-800);
+  --surface-card: var(--p-ink-700);
+  --surface-raised: var(--p-ink-600);
+  --surface-hover: var(--p-ink-600);
+  --surface-selected: var(--p-teal-800);
+  --surface-scrim: rgb(0 0 0 / 0.6);
+  --surface-inverse: var(--p-paper-50);
+  --text-primary: var(--p-paper-50);
+  --text-secondary: var(--p-paper-100);
+  --text-tertiary: var(--p-paper-200);
+  --text-disabled: var(--p-ink-200);
+  --text-on-inverse: var(--p-ink-800);
+  --text-danger: var(--p-red-300);
+  --text-success: var(--p-teal-300);
+  --border-default: var(--p-ink-500);
+  --border-strong: var(--p-ink-400);
+  --border-focus: var(--p-teal-300);
+  --border-danger: var(--p-red-300);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.6);
+}
+
+[dir="rtl"] {
+  --font-sans: "IBM Plex Sans Arabic", "IBM Plex Sans", system-ui, sans-serif;
+}
+
+/* ---- Tailwind v4. `reference` declares the keys whose variable this
+   file already carries; `inline` carries the value into the utility for the
+   roles Tailwind's namespaces have no room for under their token name. ---- */
+@theme reference {
+  --color-primary: var(--color-primary);
+  --color-primary-hover: var(--color-primary-hover);
+  --color-primary-soft: var(--color-primary-soft);
+  --color-on-primary: var(--color-on-primary);
+  --color-money: var(--color-money);
+  --color-money-hover: var(--color-money-hover);
+  --color-on-money: var(--color-on-money);
+  --color-danger: var(--color-danger);
+  --color-danger-soft: var(--color-danger-soft);
+  --color-warn: var(--color-warn);
+  --color-warn-soft: var(--color-warn-soft);
+  --color-info: var(--color-info);
+  --color-info-soft: var(--color-info-soft);
+  --color-success: var(--color-success);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-numeric: var(--font-numeric);
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-md: var(--text-md);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --text-2xl: var(--text-2xl);
+  --text-3xl: var(--text-3xl);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-full: var(--radius-full);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+@theme inline {
+  --color-bg: var(--surface-bg);
+  --color-card: var(--surface-card);
+  --color-raised: var(--surface-raised);
+  --color-hover: var(--surface-hover);
+  --color-selected: var(--surface-selected);
+  --color-scrim: var(--surface-scrim);
+  --color-inverse: var(--surface-inverse);
+  --color-fg: var(--text-primary);
+  --color-muted: var(--text-secondary);
+  --color-faint: var(--text-tertiary);
+  --color-fg-disabled: var(--text-disabled);
+  --color-on-inverse: var(--text-on-inverse);
+  --color-fg-danger: var(--text-danger);
+  --color-fg-success: var(--text-success);
+  --color-line: var(--border-default);
+  --color-line-strong: var(--border-strong);
+  --color-focus: var(--border-focus);
+  --color-line-danger: var(--border-danger);
+}
+
+/* ---- Base. The document, not a component. ---- */
+html {
+  font-family: var(--font-sans);
+  background: var(--surface-bg);
+  color: var(--text-primary);
+}
