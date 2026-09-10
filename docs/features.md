@@ -430,8 +430,14 @@ facture are annulled, by an allowlist rather than by naming what is refused,
 and a document is annulled once. Cancelling a ticket that has already been
 printed stays allowed until roles land (§5), and the audit log carries who
 did it. A cancellation is refused without a reason, and the core answers what
-a cancellation will do before it is taken, so the confirm on the screen says
-which avoir it will write and what it will put back.
+a cancellation will do before it is taken: `GET /sales/{id}` carries a
+`cancel_effect` beside the document, one of `nothing_to_reverse`,
+`stock_back`, or `stock_back_and_avoir` with the amount that avoir would
+carry. It is a union and not a word beside a nullable amount, so the amount
+cannot go missing on the one shape that has one. The confirm on the screen
+reads that field and nothing else: a facture whose goods have all come back
+on earlier avoirs still carries debt, was still sold on credit and still
+names a customer, and cancelling it does nothing at all.
 
 **Proforma.** A quotation: made out to a named customer, priced the way the
 till prices a basket, numbered out of the proforma series, and moving
