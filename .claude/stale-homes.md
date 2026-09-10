@@ -17,6 +17,9 @@
 | Core module layers | `crates/core/src/lib.rs` mod list | `docs/architecture.md` § Layers inside core |
 | Golden-file tooling | `crates/core/tests/print_ticket.rs` (`goldens_dir`, `golden`, `UPDATE_GOLDENS`) | `docs/architecture.md` Testing matrix, `docs/features.md` §4 |
 | e2e spec list | `apps/desktop/e2e/*.spec.ts` | `apps/desktop/e2e/README.md` § Files |
+| Who opens and merges PRs | `context/processes/20260908-git-and-planning.md` | `docs/roadmap.md` § How milestones are run, the boss site's How the work runs page |
+| Milestone status tags in `docs/roadmap.md` headings and on the boss reference pages (roadmap, how-the-work-runs, file-structure, decisions) | the roadmap entry in `context/roadmaps/` | the sweep at each checkpoint rewrites them; nothing else may |
+| Committed e2e screenshots | `apps/desktop/e2e/README.md` § screenshots | the `justfile` screenshot comment points there |
 
 ## Routing
 
