@@ -1,5 +1,7 @@
 {
   "app_name": "dz-pos",
+  "brand_word": "دينار",
+  "brand_suffix": "بوس",
   "lang_switcher_label": "اللغة",
   "lang_name_fr": "Français",
   "lang_name_en": "English",

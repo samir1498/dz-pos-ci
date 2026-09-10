@@ -27,7 +27,10 @@
          apps/desktop/src/theme.css: a shop counter has no internet, and a
          face fetched from a CDN would look right on the machine that built
          it and fall back to system-ui on the one that matters. -->
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- The 24 px variant of the mark, straight out of the design package
+         rather than copied into a public/ folder, so there is one drawing.
+         Vite rewrites this path at build time. -->
+    <link rel="icon" type="image/svg+xml" href="../../packages/design/assets/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>dz-pos</title>
   </head>

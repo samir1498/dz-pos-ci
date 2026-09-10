@@ -12,12 +12,14 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@dzpos/design": "workspace:*",
     "@dzpos/shared": "workspace:*",
     "@tanstack/react-form": "^1.33.0",
     "@tanstack/react-query": "^5.101.1",
     "@tanstack/react-router": "^1.170.16",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/cli": "^2.11.3",
+    "lucide-react": "1.43.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

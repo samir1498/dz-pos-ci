@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="96" height="96" role="img" aria-label="Dinar POS">
+  <!-- The coin, brass. -->
+  <circle cx="50" cy="50" r="46" fill="#b8862b"/>
+  <!-- The milled edge. It goes below 32 px; use favicon.svg there. -->
+  <circle cx="50" cy="50" r="40" fill="none" stroke="#14211c" stroke-width="3"/>
+  <!-- One stroke for two scripts: the bowl closes into a Latin D against the
+       coin edge, and the foot on the baseline makes it an Arabic dal. -->
+  <path d="M40 28 A 24 24 0 0 1 40 72" fill="none" stroke="#14211c" stroke-width="11" stroke-linecap="round"/>
+  <path d="M40 72 L 30 72" fill="none" stroke="#14211c" stroke-width="11" stroke-linecap="round"/>
+</svg>

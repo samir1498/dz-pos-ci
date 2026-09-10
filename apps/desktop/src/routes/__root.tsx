@@ -1,4 +1,5 @@
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
+import { Wordmark } from "@/components/Wordmark";
 import { useTranslation } from "@/i18n";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 
@@ -9,7 +10,7 @@ function RootLayout() {
   return (
     <div dir={dir} className="min-h-screen">
       <header className="flex items-center gap-4 border-b p-4">
-        <span className="font-semibold">{t("app_name")}</span>
+        <Wordmark />
         <nav className="flex gap-4">
           {/* The till comes first: it is the home and the screen the shop
               spends its day on. */}
