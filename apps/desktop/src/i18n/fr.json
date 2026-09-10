@@ -402,5 +402,6 @@
   "stock_recount_ledger": "Mouvements",
   "stock_recount_difference": "Écart",
   "stock_recount_done": "Recomptage fait.",
+  "stock_recount_marks_today": "Un recomptage compte le stock maintenant et marque la journée comme faite : un écart qui apparaît plus tard aujourd'hui attend le recomptage de demain, ou une nouvelle pression sur ce bouton.",
   "action_recount_now": "Recompter maintenant"
 }

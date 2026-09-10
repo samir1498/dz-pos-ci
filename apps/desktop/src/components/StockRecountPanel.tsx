@@ -151,6 +151,11 @@ export function StockRecountPanel() {
       ) : null}
       {done && serverError === null ? <p role="status">{t("stock_recount_done")}</p> : null}
 
+      {/* Said beside the button rather than in the panel's opening line: it
+          is about the press, not about the nightly run, and the owner reads
+          it while deciding whether to press. */}
+      <p className="text-sm opacity-80">{t("stock_recount_marks_today")}</p>
+
       <div>
         <button
           type="button"

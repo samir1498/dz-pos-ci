@@ -153,7 +153,10 @@ the cached quantity, the ledger quantity and the difference. Those rows are
 the whole record of a recount: there is no table of runs, and the panel
 reads the drifts of the last run back out of the log by the day the run was
 marked under. A run that finds nothing still marks the day and writes no
-row.
+row. A run asked for from the settings screen counts the stock at that
+moment and marks the day like any other, so a drift that arises later the
+same day is caught by tomorrow's run or by another press of the button, and
+the panel says so.
 
 **Expense.** Category (seeded: rent, electricity, water, salaries,
 transport, maintenance, other), amount, date, note. The seven categories

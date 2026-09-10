@@ -90,6 +90,16 @@ describe("the stock recount panel", () => {
     expect(screen.queryByTestId("stock-recount-clean")).toBeNull();
   });
 
+  test("the button says that it marks the day, not only that it counts", async () => {
+    // The button is the whole of the on demand story and the owner cannot
+    // see the marker it moves. Someone who presses it, sells for an hour and
+    // presses it again gets nothing the second time, which reads as a broken
+    // button unless the panel has said what the press does.
+    mount();
+    await screen.findByTestId("stock-recount-day");
+    expect(screen.getByText(fr.stock_recount_marks_today)).toBeInTheDocument();
+  });
+
   test("a run that found nothing shows the day and says nothing was out", async () => {
     last = { last_run_day: "2026-09-09", drifts: [] };
     mount();

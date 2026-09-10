@@ -402,5 +402,6 @@
   "stock_recount_ledger": "الحركات",
   "stock_recount_difference": "الفرق",
   "stock_recount_done": "تمت إعادة الجرد.",
+  "stock_recount_marks_today": "إعادة الجرد تحسب المخزون الآن وتسجل اليوم كيوم تم جرده: أي فرق يظهر لاحقًا اليوم ينتظر جرد الغد أو ضغطة أخرى على هذا الزر.",
   "action_recount_now": "أعد الجرد الآن"
 }

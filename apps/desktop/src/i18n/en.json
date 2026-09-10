@@ -402,5 +402,6 @@
   "stock_recount_ledger": "Movements",
   "stock_recount_difference": "Difference",
   "stock_recount_done": "Recount done.",
+  "stock_recount_marks_today": "A recount counts the stock now and marks today as done: a difference that appears later today waits for tomorrow's recount, or for another press of this button.",
   "action_recount_now": "Recount now"
 }
