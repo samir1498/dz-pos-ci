@@ -32,6 +32,19 @@ use crate::print::strings::{text, Key};
 /// owns the paper and this owns the number.
 const BAR_HEIGHT: u32 = 60;
 
+/// Thirteen ASCII digits carrying a correct GS1 check digit: the shape
+/// `EAN13::new` accepts, and the one shape both the label and the import
+/// care about (`services::import`, dz-review 2026-09-10). A code the
+/// encoder makes for a shop's own shelf (`services::products::in_store_barcode`)
+/// is thirteen digits with a correct check digit by construction, so it
+/// always passes this.
+pub fn is_ean13(code: &str) -> bool {
+    code.len() == EAN13_LEN && code.bytes().all(|b| b.is_ascii_digit()) && EAN13::new(code).is_ok()
+}
+
+/// GS1 prefix and check digit length: thirteen digits, always.
+const EAN13_LEN: usize = 13;
+
 /// One label, made. The template has a `for` and no rule at all, the way the
 /// ticket's does.
 struct LabelView {
@@ -129,12 +142,14 @@ fn label(product: &Product, lang: Lang) -> Result<LabelView, CoreError> {
     // carrying a supplier's own reference is not going to get an EAN-13
     // label whatever anybody types, and telling that shop it has "no
     // barcode" sends it looking at a field that is visibly filled.
-    if code.len() != 13 || !code.bytes().all(|b| b.is_ascii_digit()) {
+    if !is_ean13(code) {
         return Err(CoreError::validation(
             "barcode_digits",
-            "this barcode is not thirteen digits and has no EAN-13 bars",
+            "this barcode is not a valid EAN-13 and has no bars",
         ));
     }
+    // `is_ean13` above already proved `EAN13::new` accepts this code; this
+    // second call only gets at the symbol to encode, not a fresh check.
     let symbol = EAN13::new(code).map_err(|_| {
         CoreError::validation(
             "barcode_digits",

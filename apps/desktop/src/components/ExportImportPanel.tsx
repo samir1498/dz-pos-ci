@@ -65,6 +65,7 @@ const REASON_KEY: Record<string, Key> = {
   rate_not_allowed: "import_reason_rate_not_allowed",
   rate_missing: "import_reason_rate_missing",
   duplicate_in_file: "import_reason_duplicate_in_file",
+  bad_barcode: "import_reason_bad_barcode",
 };
 
 export function ExportImportPanel() {

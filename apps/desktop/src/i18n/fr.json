@@ -535,6 +535,7 @@
   "import_reason_rate_not_allowed": "taux de TVA non prévu",
   "import_reason_rate_missing": "le taux manque pour une nouvelle catégorie",
   "import_reason_duplicate_in_file": "ce code-barres est déjà sur une autre ligne du fichier",
+  "import_reason_bad_barcode": "ce code-barres n'a pas treize chiffres avec une clé GS1 correcte",
   "col_row": "Ligne",
   "col_outcome": "Résultat",
   "col_pick": "Sélectionner",

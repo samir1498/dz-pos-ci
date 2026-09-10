@@ -23,6 +23,18 @@
 //! or thousandths with integer arithmetic, rounding half away from zero, the
 //! way the money module rounds everywhere else. No price is ever the result
 //! of `value * 100.0`.
+//!
+//! A blank cost or a blank wholesale cell means something different
+//! depending on whether the row opens a product or touches one already
+//! there. Opening one, blank is what a fiche with nothing typed in that box
+//! would be: zero cost, no wholesale. Touching one, blank is the shop
+//! saying nothing about the price, not the shop saying "zero" or "no
+//! wholesale any more"; a boutique re-imports its own export every week to
+//! fix a name or a category, and that file must not zero out a cost line it
+//! never touched. The barcode column already works this way (a blank code
+//! leaves the product's number alone) and so does the stock column (a
+//! blank, or any, cell leaves the ledger's quantity alone); cost and
+//! wholesale follow the same rule.
 
 use calamine::{Data, Reader, Xlsx};
 use diesel::connection::Connection;
@@ -35,6 +47,7 @@ use crate::lang::Lang;
 use crate::models::category::CategoryRowWrite;
 use crate::models::product::{NewProduct, Unit};
 use crate::money::{Bps, Money};
+use crate::print::barcode_label::is_ean13;
 use crate::print::strings::{text as word, Key};
 use crate::repos::categories as categories_repo;
 use crate::repos::products as products_repo;
@@ -46,6 +59,15 @@ pub use crate::services::export::PRODUCT_COLUMNS;
 /// is thousandths of the unit).
 const MONEY_SCALE: u32 = 2;
 const QTY_SCALE: u32 = 3;
+
+/// The most data rows one file is imported with. A shop's whole catalogue
+/// is a few thousand products; five thousand is already a file nobody
+/// scrolls to the bottom of by hand, and the cap is checked before a
+/// single row is parsed, matched or looked up, so a file with a stray
+/// fifty thousand rows is refused in one read rather than after fifty
+/// thousand database lookups (dz-review 2026-09-10, the same reasoning as
+/// `LABEL_SHEET_MAX` in the API crate).
+pub const IMPORT_MAX_ROWS: usize = 5_000;
 
 /// The rates a row may name, as the percentages a person types them:
 /// features.md, TVA rates row (19 % standard, 9 % reduced, 0 % exempt). A
@@ -229,20 +251,36 @@ pub fn apply(
                 )?),
             };
             let rate = resolve_rate(conn, shop_id, category, fields)?;
+            let existing_id = existing(conn, shop_id, fields.barcode.as_deref())?;
+            // A blank cost or wholesale cell is the shop saying nothing
+            // about the price (module doc). On an update that means the
+            // product's own figure stands; on a create there is nothing to
+            // fall back to, so it is zero or no wholesale, as a fiche
+            // opened with the box empty would be.
+            let (cost, wholesale) = match existing_id {
+                Some(id) => {
+                    let before = products::get(conn, shop_id, id)?;
+                    (
+                        fields.cost.unwrap_or(before.cost),
+                        fields.wholesale.or(before.wholesale),
+                    )
+                }
+                None => (fields.cost.unwrap_or(Money::ZERO), fields.wholesale),
+            };
             let new = NewProduct {
                 name: draft.name.clone(),
                 barcode: fields.barcode.clone(),
                 category_id: category,
                 unit: fields.unit,
-                cost: fields.cost,
+                cost,
                 selling: fields.selling,
-                wholesale: fields.wholesale,
+                wholesale,
                 qty_on_hand_milli: fields.qty_on_hand_milli,
                 low_stock_at_milli: fields.low_stock_at_milli,
                 rate_bps: Some(rate),
                 active: fields.active,
             };
-            match existing(conn, shop_id, fields.barcode.as_deref())? {
+            match existing_id {
                 Some(id) => {
                     products::update(conn, shop_id, user_id, id, new)?;
                     done.updated = done.updated.saturating_add(1);
@@ -370,8 +408,12 @@ struct Fields {
     barcode: Option<String>,
     category: Option<String>,
     unit: Unit,
-    cost: Money,
+    /// `None` when the cell was blank: zero on a create, the existing
+    /// product's cost left alone on an update (see the module doc).
+    cost: Option<Money>,
     selling: Money,
+    /// `None` when the cell was blank: no wholesale on a create, the
+    /// existing product's wholesale left alone on an update.
     wholesale: Option<Money>,
     qty_on_hand_milli: i64,
     low_stock_at_milli: i64,
@@ -404,6 +446,15 @@ fn parse(bytes: &[u8]) -> Result<Vec<Draft>, CoreError> {
         .ok_or_else(|| CoreError::validation("file", "the workbook has no sheet"))?
         .map_err(|_| CoreError::validation("file", "the first sheet could not be read"))?;
     let rows: Vec<Vec<Data>> = range.rows().map(<[Data]>::to_vec).collect();
+    // Checked before the header is even matched: a row count over the cap
+    // is refused on the shape of the file alone, before a single cell is
+    // read for what it says.
+    if rows.len().saturating_sub(1) > IMPORT_MAX_ROWS {
+        return Err(CoreError::validation(
+            "rows",
+            "more rows than one import takes at a time",
+        ));
+    }
     let Some(header) = rows.first() else {
         return Err(CoreError::validation("file", "the sheet is empty"));
     };
@@ -489,7 +540,7 @@ fn fields(
     }
     let unit = Unit::parse(&column(row, index, "unit")).ok_or(("unit", "unknown_unit"))?;
 
-    let cost = money(row, index, "cost_da")?.unwrap_or(Money::ZERO);
+    let cost = money(row, index, "cost_da")?;
     let selling = money(row, index, "selling_da")?.ok_or(("selling_da", "missing_amount"))?;
     let wholesale = money(row, index, "wholesale_da")?;
     let qty_on_hand_milli = qty(row, index, "stock")?.unwrap_or(0);
@@ -508,7 +559,18 @@ fn fields(
 
     let barcode = {
         let value = column(row, index, "barcode");
-        (!value.is_empty()).then_some(value)
+        if value.is_empty() {
+            None
+        } else if is_ean13(&value) {
+            Some(value)
+        } else {
+            // A code that is not thirteen digits with a correct check
+            // digit lands here otherwise and only fails months later at
+            // label time, on a shelf that already sold under it. The
+            // in-store codes the till generates are always this shape, so
+            // this never refuses a code a blank cell would have made.
+            return Err(("barcode", "bad_barcode"));
+        }
     };
     let category = {
         let value = column(row, index, "category");

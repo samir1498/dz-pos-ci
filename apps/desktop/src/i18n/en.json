@@ -535,6 +535,7 @@
   "import_reason_rate_not_allowed": "this TVA rate is not one of the allowed ones",
   "import_reason_rate_missing": "a new category needs the rate of its row",
   "import_reason_duplicate_in_file": "this barcode is on another row of this file",
+  "import_reason_bad_barcode": "this barcode is not thirteen digits with a correct GS1 check digit",
   "col_row": "Row",
   "col_outcome": "Outcome",
   "col_pick": "Select",

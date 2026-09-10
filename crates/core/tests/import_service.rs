@@ -192,7 +192,7 @@ fn the_template_carries_the_columns_the_import_matches_and_says_what_a_known_bar
 #[test]
 fn a_dry_run_accepts_a_clean_file_and_writes_nothing() {
     let (_dir, mut conn) = open_temp();
-    let bytes = workbook(&[a_row("Café moulu", t("6130001234567"))]);
+    let bytes = workbook(&[a_row("Café moulu", t("6130001234563"))]);
 
     let report = import::dry_run(&mut conn, SHOP, &bytes).unwrap();
     assert_eq!(report.accepted, 1);
@@ -207,7 +207,7 @@ fn a_dry_run_accepts_a_clean_file_and_writes_nothing() {
 fn apply_writes_the_products_and_the_category_the_file_names() {
     let (_dir, mut conn) = open_temp();
     let bytes = workbook(&[
-        a_row("Café moulu", t("6130001234567")),
+        a_row("Café moulu", t("6130001234563")),
         a_row("Thé vert", Cell::Blank),
     ]);
 
@@ -224,7 +224,7 @@ fn apply_writes_the_products_and_the_category_the_file_names() {
     assert_eq!(coffee.unit, Unit::Piece);
     assert_eq!(coffee.rate_bps, Bps::new(1900).unwrap());
     assert_eq!(coffee.qty_on_hand_milli, 12_000);
-    assert_eq!(coffee.barcode.as_deref(), Some("6130001234567"));
+    assert_eq!(coffee.barcode.as_deref(), Some("6130001234563"));
     // A blank code is numbered by the till, the way the fiche numbers one.
     let tea = stored.iter().find(|p| p.name == "Thé vert").unwrap();
     assert_eq!(tea.barcode.as_deref().unwrap_or("").len(), 13);
@@ -234,8 +234,8 @@ fn apply_writes_the_products_and_the_category_the_file_names() {
 #[test]
 fn a_barcode_the_shop_already_sells_under_updates_that_product() {
     let (_dir, mut conn) = open_temp();
-    let id = a_stored_product(&mut conn, "Café", "6130001234567", 10_000);
-    let mut row = a_row("Café moulu 250 g", t("6130001234567"));
+    let id = a_stored_product(&mut conn, "Café", "6130001234563", 10_000);
+    let mut row = a_row("Café moulu 250 g", t("6130001234563"));
     row[5] = n(155.0);
 
     let report = import::dry_run(&mut conn, SHOP, &workbook(&[row.clone()])).unwrap();
@@ -256,7 +256,7 @@ fn a_barcode_the_shop_already_sells_under_updates_that_product() {
 #[test]
 fn a_row_with_no_name_is_refused_under_the_name_column() {
     let (_dir, mut conn) = open_temp();
-    let mut row = a_row("", t("6130001234567"));
+    let mut row = a_row("", t("6130001234563"));
     row[0] = Cell::Blank;
 
     let report = import::dry_run(&mut conn, SHOP, &workbook(&[row])).unwrap();
@@ -273,13 +273,13 @@ fn a_row_with_no_name_is_refused_under_the_name_column() {
 #[test]
 fn an_unknown_unit_a_rate_off_the_list_and_a_price_below_zero_are_each_refused() {
     let (_dir, mut conn) = open_temp();
-    let mut bad_unit = a_row("Sac", t("6130000000001"));
+    let mut bad_unit = a_row("Sac", t("6130000000107"));
     bad_unit[3] = t("sachet");
-    let mut bad_rate = a_row("Lait", t("6130000000002"));
+    let mut bad_rate = a_row("Lait", t("6130000000206"));
     bad_rate[9] = n(7.0);
-    let mut bad_price = a_row("Pain", t("6130000000003"));
+    let mut bad_price = a_row("Pain", t("6130000000305"));
     bad_price[5] = n(-1.0);
-    let mut bad_stock = a_row("Sucre", t("6130000000004"));
+    let mut bad_stock = a_row("Sucre", t("6130000000404"));
     bad_stock[7] = n(-2.0);
 
     let report = import::dry_run(
@@ -305,6 +305,76 @@ fn an_unknown_unit_a_rate_off_the_list_and_a_price_below_zero_are_each_refused()
     assert_eq!(
         refusal(&report, "Sucre"),
         ("stock".into(), "negative_quantity".into())
+    );
+}
+
+#[test]
+fn a_barcode_that_is_not_a_valid_ean13_is_refused_and_a_correct_one_passes() {
+    // barcode_label.rs refuses to draw bars for anything but thirteen
+    // digits with a correct GS1 check digit; the import now refuses the row
+    // on the same shape, so a code that will not print a label never lands
+    // in the shop's catalogue in the first place (dz-review 2026-09-10).
+    let (_dir, mut conn) = open_temp();
+    let twelve_digits = a_row("Douze chiffres", t("613000123456"));
+    // 6130000000992 is the correct EAN-13 for this body; 991 carries the
+    // wrong check digit on purpose.
+    let bad_check_digit = a_row("Mauvaise clé", t("6130000000991"));
+    let valid = a_row("Code valide", t("6130000000992"));
+
+    let report = import::dry_run(
+        &mut conn,
+        SHOP,
+        &workbook(&[twelve_digits, bad_check_digit, valid]),
+    )
+    .unwrap();
+
+    assert_eq!(
+        refusal(&report, "Douze chiffres"),
+        ("barcode".into(), "bad_barcode".into())
+    );
+    assert_eq!(
+        refusal(&report, "Mauvaise clé"),
+        ("barcode".into(), "bad_barcode".into())
+    );
+    assert_eq!(outcome(&report, "Code valide"), Outcome::Created);
+}
+
+#[test]
+fn an_in_store_barcode_the_till_generated_passes_the_same_check() {
+    // The generator (`services::products::in_store_barcode`) is the other
+    // source of a barcode this shop's products carry; it must not be caught
+    // by the check the import just gained, or a shop re-importing its own
+    // export would see its own generated codes refused.
+    let (_dir, mut conn) = open_temp();
+    let made = products::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewProduct {
+            name: "Généré par la caisse".to_string(),
+            barcode: None,
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(1_000),
+            selling: Money::centimes(2_000),
+            wholesale: None,
+            qty_on_hand_milli: 0,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(1900).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap();
+    let code = made
+        .barcode
+        .expect("the till assigns a code to a blank fiche");
+
+    let row = a_row("Nom changé", t(&code));
+    let report = import::dry_run(&mut conn, SHOP, &workbook(&[row])).unwrap();
+    assert_eq!(
+        outcome(&report, "Nom changé"),
+        Outcome::Updated,
+        "the till's own in-store code was refused by the import's own check"
     );
 }
 
@@ -335,6 +405,58 @@ fn an_update_leaves_the_stock_where_it_was_because_an_import_is_not_a_movement()
     );
     // The prices it did come to change are changed.
     assert_eq!(after.selling.as_centimes(), 12_000);
+}
+
+#[test]
+fn a_re_import_with_a_blank_cost_or_wholesale_leaves_them_where_they_were() {
+    // A shop re-imports its own export every week to fix a name or a
+    // category. A blank cost or wholesale cell in that file is the shop
+    // saying nothing about the price, not the shop saying "zero" or "no
+    // wholesale any more".
+    let (_dir, mut conn) = open_temp();
+    let id = products::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewProduct {
+            name: "Riz".to_string(),
+            barcode: Some("6130001234594".to_string()),
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(9_000),
+            selling: Money::centimes(15_000),
+            wholesale: Some(Money::centimes(12_000)),
+            qty_on_hand_milli: 0,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(1900).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap()
+    .id;
+
+    let mut row = a_row("Riz basmati", t("6130001234594"));
+    row[4] = Cell::Blank; // cost_da
+    row[6] = Cell::Blank; // wholesale_da
+    let bytes = workbook(&[row]);
+
+    let report = import::dry_run(&mut conn, SHOP, &bytes).unwrap();
+    assert_eq!(outcome(&report, "Riz basmati"), Outcome::Updated);
+
+    import::apply(&mut conn, SHOP, OWNER, &bytes).unwrap();
+
+    let after = products::get(&mut conn, SHOP, id).unwrap();
+    assert_eq!(after.name, "Riz basmati", "the name did change");
+    assert_eq!(
+        after.cost,
+        Money::centimes(9_000),
+        "a blank cost cell overwrote the product's real cost"
+    );
+    assert_eq!(
+        after.wholesale,
+        Some(Money::centimes(12_000)),
+        "a blank wholesale cell cleared the product's wholesale price"
+    );
 }
 
 #[test]
@@ -387,8 +509,8 @@ fn a_price_with_a_third_decimal_is_refused_and_never_rounded_into_the_shop() {
 fn two_rows_carrying_the_same_barcode_refuse_each_other() {
     let (_dir, mut conn) = open_temp();
     let bytes = workbook(&[
-        a_row("Café moulu", t("6130001234567")),
-        a_row("Café en grains", t("6130001234567")),
+        a_row("Café moulu", t("6130001234563")),
+        a_row("Café en grains", t("6130001234563")),
     ]);
 
     let report = import::dry_run(&mut conn, SHOP, &bytes).unwrap();
@@ -404,9 +526,9 @@ fn two_rows_carrying_the_same_barcode_refuse_each_other() {
 #[test]
 fn apply_writes_nothing_at_all_when_one_row_is_refused() {
     let (_dir, mut conn) = open_temp();
-    let mut bad = a_row("Lait", t("6130000000002"));
+    let mut bad = a_row("Lait", t("6130000000206"));
     bad[9] = n(7.0);
-    let bytes = workbook(&[a_row("Café moulu", t("6130001234567")), bad]);
+    let bytes = workbook(&[a_row("Café moulu", t("6130001234563")), bad]);
 
     let refused = import::apply(&mut conn, SHOP, OWNER, &bytes).unwrap_err();
     match refused {
@@ -425,9 +547,9 @@ fn apply_writes_nothing_at_all_when_one_row_is_refused() {
 #[test]
 fn apply_audits_the_import_with_the_count() {
     let (_dir, mut conn) = open_temp();
-    a_stored_product(&mut conn, "Café", "6130001234567", 10_000);
+    a_stored_product(&mut conn, "Café", "6130001234563", 10_000);
     let bytes = workbook(&[
-        a_row("Café moulu 250 g", t("6130001234567")),
+        a_row("Café moulu 250 g", t("6130001234563")),
         a_row("Thé vert", Cell::Blank),
     ]);
 
@@ -489,6 +611,32 @@ fn a_file_whose_header_row_is_not_the_templates_is_refused_whole() {
         CoreError::Validation { field, .. } => assert_eq!(field, "header"),
         other => panic!("{other:?}"),
     }
+}
+
+/// `n` rows, each its own blank-barcode product: blank so none of them
+/// looks up or collides with another, which keeps this about the row count
+/// and nothing else.
+fn rows_of(n: usize) -> Vec<Vec<Cell>> {
+    (0..n)
+        .map(|i| a_row(&format!("Produit {i}"), Cell::Blank))
+        .collect()
+}
+
+#[test]
+fn a_file_one_row_over_the_cap_is_refused_and_the_cap_itself_passes() {
+    let (_dir, mut conn) = open_temp();
+
+    let over = workbook(&rows_of(import::IMPORT_MAX_ROWS + 1));
+    let refused = import::dry_run(&mut conn, SHOP, &over).unwrap_err();
+    match refused {
+        CoreError::Validation { field, .. } => assert_eq!(field, "rows"),
+        other => panic!("{other:?}"),
+    }
+
+    let at_cap = workbook(&rows_of(import::IMPORT_MAX_ROWS));
+    let report = import::dry_run(&mut conn, SHOP, &at_cap).unwrap();
+    assert_eq!(report.accepted, import::IMPORT_MAX_ROWS);
+    assert_eq!(report.refused, 0);
 }
 
 /// Where the browser suite's committed workbook lives.

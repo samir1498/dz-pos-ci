@@ -31,9 +31,10 @@ fn at(d: u32, hour: u32) -> NaiveDateTime {
     day(d).and_hms_opt(hour, 0, 0).unwrap()
 }
 
-/// A product taxed at nothing, so `total_ttc` is the lines' own HT and every
-/// figure below is readable by hand.
-fn product(conn: &mut SqliteConnection, name: &str, selling: i64, cost: i64) -> i32 {
+/// A product at `rate_bps` (most tests pass 0, so `total_ttc` is the lines'
+/// own HT and every figure below is readable by hand; the TVA tests pass
+/// the standard 1900 to tell `sales_ttc` and `sales_ht` apart).
+fn product(conn: &mut SqliteConnection, name: &str, selling: i64, cost: i64, rate_bps: u32) -> i32 {
     products::create(
         conn,
         SHOP,
@@ -48,7 +49,7 @@ fn product(conn: &mut SqliteConnection, name: &str, selling: i64, cost: i64) -> 
             wholesale: None,
             qty_on_hand_milli: 100_000,
             low_stock_at_milli: 0,
-            rate_bps: Some(Bps::new(0).unwrap()),
+            rate_bps: Some(Bps::new(rate_bps).unwrap()),
             active: true,
         },
     )
@@ -159,7 +160,7 @@ fn a_day_nothing_happened_on_answers_zeros_and_not_nothing() {
 #[test]
 fn the_margin_is_what_the_lines_asked_for_less_what_the_goods_cost() {
     let (_dir, mut conn) = open_temp();
-    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     sell(&mut conn, p, 3, SaleKind::Ticket, None, 9);
 
     let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
@@ -171,9 +172,71 @@ fn the_margin_is_what_the_lines_asked_for_less_what_the_goods_cost() {
 }
 
 #[test]
+fn sales_ttc_is_ht_plus_the_tva_rounded_once_per_rate_and_cash_in_reads_it() {
+    // Every other product in this file carries rate_bps 0, where `sales_ttc`
+    // and `sales_ht` (`lines_ht` less the remise, features.md's
+    // `subtotal_ht`) read the same figure and the two are never told apart.
+    // This one is taxed at the standard 19 % (features.md, TVA rates) and
+    // sold with a remise, so they cannot agree by accident.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment taxé", 3_367, 2_000, 1_900);
+
+    sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id: p,
+                qty_milli: 3_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::centimes(34),
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(10_000_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
+            issued_at: Some(at(15, 9)),
+        },
+    )
+    .unwrap();
+
+    // Independent arithmetic, not the code's own helper: features.md's
+    // totals table, `tva = round(subtotal_ht_at_rate × rate)`, half away
+    // from zero, to the centime.
+    let lines_ht = 3_367 * 3;
+    let subtotal_ht = lines_ht - 34;
+    assert_eq!(subtotal_ht, 10_067);
+    let raw = subtotal_ht * 1_900; // subtotal_ht centimes × rate_bps
+    let half_away_from_zero = (raw + (10_000 / 2)) / 10_000;
+    assert_eq!(half_away_from_zero, 1_913, "1 912,73 rounds up to 1 913");
+    let total_ttc = subtotal_ht + half_away_from_zero;
+    assert_eq!(total_ttc, 11_980);
+    // Under the 300,00 DA stamp floor (money::stamp::STAMP_FLOOR), so the
+    // cash a customer hands over is exactly the TTC figure and nothing this
+    // test computed is muddied by the droit de timbre.
+    assert!(total_ttc <= 30_000);
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(read.today.sales_ht, Money::centimes(subtotal_ht));
+    assert_eq!(read.today.sales_ttc, Money::centimes(total_ttc));
+    assert!(
+        read.today.sales_ttc > read.today.sales_ht,
+        "a taxed sale's TTC must read above its HT"
+    );
+    assert_eq!(
+        read.cash_today.cash_in.sales,
+        Money::centimes(total_ttc),
+        "a cash sale's cash_in must read the TTC figure"
+    );
+}
+
+#[test]
 fn a_cancelled_sale_leaves_both_sides_of_the_margin_at_once() {
     let (_dir, mut conn) = open_temp();
-    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     let ticket = sell(&mut conn, p, 3, SaleKind::Ticket, None, 9);
     documents::cancel(
         &mut conn,
@@ -205,7 +268,7 @@ fn a_cancelled_facture_and_the_credit_note_it_issued_leave_together() {
     // month would show a margin below zero for a sale that simply never
     // happened.
     let (_dir, mut conn) = open_temp();
-    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
     let facture = sell(&mut conn, p, 3, SaleKind::Facture, Some(c), 9);
     documents::cancel(
@@ -228,7 +291,7 @@ fn a_cancelled_facture_and_the_credit_note_it_issued_leave_together() {
 #[test]
 fn an_avoir_on_a_standing_facture_lowers_the_revenue_and_the_cost_together() {
     let (_dir, mut conn) = open_temp();
-    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
     let facture = sell(&mut conn, p, 3, SaleKind::Facture, Some(c), 9);
     avoir::issue(
@@ -260,7 +323,7 @@ fn an_avoir_on_a_standing_facture_lowers_the_revenue_and_the_cost_together() {
 #[test]
 fn a_remise_off_the_whole_document_comes_off_the_margin() {
     let (_dir, mut conn) = open_temp();
-    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     sales::issue(
         &mut conn,
         SHOP,
@@ -297,7 +360,7 @@ fn a_remise_off_the_whole_document_comes_off_the_margin() {
 #[test]
 fn the_day_is_a_slice_of_its_month_and_neither_reaches_the_other_month() {
     let (_dir, mut conn) = open_temp();
-    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     sell(&mut conn, p, 1, SaleKind::Ticket, None, 9);
     // The same shop, the day before and the day after, and the two days that
     // sit just outside the month.
@@ -353,7 +416,7 @@ fn the_day_is_a_slice_of_its_month_and_neither_reaches_the_other_month() {
 #[test]
 fn the_cash_position_is_the_one_the_cash_rule_answers() {
     let (_dir, mut conn) = open_temp();
-    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     sell(&mut conn, p, 3, SaleKind::Ticket, None, 9);
 
     let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
@@ -416,7 +479,7 @@ fn the_low_stock_list_names_the_products_in_use_that_have_fallen_under() {
     .unwrap()
     .id;
     // Stocked above its threshold, so it is nobody's problem.
-    product(&mut conn, "Gravier", 3_000, 1_000);
+    product(&mut conn, "Gravier", 3_000, 1_000, 0);
 
     let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
     let named: Vec<i32> = read.low_stock.iter().map(|l| l.product_id).collect();
@@ -430,9 +493,9 @@ fn the_low_stock_list_names_the_products_in_use_that_have_fallen_under() {
 fn the_top_lists_rank_by_units_and_by_margin_and_they_are_not_the_same_list() {
     let (_dir, mut conn) = open_temp();
     // Many units, almost nothing on each.
-    let cheap = product(&mut conn, "Sable", 1_000, 900);
+    let cheap = product(&mut conn, "Sable", 1_000, 900, 0);
     // Few units, a great deal on each.
-    let rich = product(&mut conn, "Ciment", 50_000, 10_000);
+    let rich = product(&mut conn, "Ciment", 50_000, 10_000, 0);
     sell(&mut conn, cheap, 20, SaleKind::Ticket, None, 9);
     sell(&mut conn, rich, 2, SaleKind::Ticket, None, 10);
 
@@ -463,7 +526,7 @@ fn the_debts_are_the_parties_in_the_red_and_a_party_in_credit_is_not_netted_off(
     let in_credit = common::a_customer(&mut conn, "Cherif");
     // One customer owes; the other is holding credit the shop owes back.
     common::a_payment_row(&mut conn, in_credit, 5_000);
-    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     sell(&mut conn, p, 3, SaleKind::Facture, Some(owing), 9);
 
     let supplier = common::a_supplier(&mut conn, "Cimenterie");
@@ -499,7 +562,7 @@ fn the_debts_are_the_parties_in_the_red_and_a_party_in_credit_is_not_netted_off(
 #[test]
 fn a_partial_avoir_gives_back_its_share_of_the_remise_and_no_more() {
     let (_dir, mut conn) = open_temp();
-    let p = product(&mut conn, "Ciment", 1_000, 600);
+    let p = product(&mut conn, "Ciment", 1_000, 600, 0);
     let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
     let facture = sales::issue(
         &mut conn,
@@ -557,7 +620,7 @@ fn a_partial_avoir_gives_back_its_share_of_the_remise_and_no_more() {
 #[test]
 fn cancelling_a_facture_takes_the_avoirs_written_against_it_and_no_others() {
     let (_dir, mut conn) = open_temp();
-    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
 
     // The one that goes: two units, one credited, then annulled.
@@ -617,8 +680,8 @@ fn cancelling_a_facture_takes_the_avoirs_written_against_it_and_no_others() {
 #[test]
 fn a_product_whose_month_came_to_nothing_is_off_the_top_lists() {
     let (_dir, mut conn) = open_temp();
-    let sold = product(&mut conn, "Ciment", 10_000, 6_000);
-    let returned = product(&mut conn, "Sable", 4_000, 1_000);
+    let sold = product(&mut conn, "Ciment", 10_000, 6_000, 0);
+    let returned = product(&mut conn, "Sable", 4_000, 1_000, 0);
     let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
     sell(&mut conn, sold, 3, SaleKind::Ticket, None, 9);
     let credited = sell(&mut conn, returned, 2, SaleKind::Facture, Some(c), 10);
@@ -694,8 +757,8 @@ fn sell_on(
 /// expense on two, a credit note and a cancellation, so the sum below is over
 /// figures that go both ways.
 fn a_month_of_trading(conn: &mut SqliteConnection) {
-    let ciment = product(conn, "Ciment", 10_000, 6_000);
-    let sable = product(conn, "Sable", 4_000, 1_000);
+    let ciment = product(conn, "Ciment", 10_000, 6_000, 0);
+    let sable = product(conn, "Sable", 4_000, 1_000, 0);
     let buyer = common::an_identified_customer(conn, "Entreprise Benali");
     for d in [1u32, 3, 8, 14, 15, 21, 22, 29, 30] {
         sell_on(conn, ciment, 2, d, 9);
