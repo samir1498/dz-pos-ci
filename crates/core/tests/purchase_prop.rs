@@ -16,6 +16,7 @@
 
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::models::product::{NewProduct, Unit};
+use dzpos_core::models::purchase::PurchaseLine as PurchaseLineDto;
 use dzpos_core::money::{Bps, Money};
 use dzpos_core::services::purchases::{
     self, NewLine, NewPurchase, Paid, PurchaseStatus, PurchaseView, ReceiveLine,
@@ -113,27 +114,66 @@ fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
     (dir, conn)
 }
 
-/// What one delivery or one return was worth, at the landed cost of each line
-/// it names. Every paper is worth what it says on its own, so the value is
-/// summed paper by paper rather than off the running totals: a receipt of
-/// nine and a return of two are two roundings to the centime, and netting
-/// them to seven first would be a third answer neither row carries.
-fn value_of(view: &PurchaseView, moved: &[ReceiveLine]) -> Money {
+/// What one delivery or one return is worth, stated here the way the rule
+/// reads rather than the way the service computes it: a movement is worth
+/// what the line is worth once it has moved, less what it was worth before.
+///
+/// Never `checked_mul_milli` on the movement's own quantity. That is the
+/// half-up rounding the service used to do per paper, and two halves of a
+/// line each rounded up come to a centime more than the line is worth; a test
+/// that repeated it would agree with the bug.
+fn value_of(view: &PurchaseView, moved: &[ReceiveLine], before: Which) -> Money {
     let mut total = Money::ZERO;
     for line in moved {
         let Some(ordered) = view.lines.iter().find(|l| l.id == line.purchase_line_id) else {
             continue;
         };
-        total = total
-            .checked_add(
-                ordered
-                    .landed_unit_cost
-                    .checked_mul_milli(line.qty_milli)
-                    .unwrap(),
-            )
+        let start = match before {
+            Which::Received => ordered.qty_received_milli,
+            Which::Returned => ordered.qty_returned_milli,
+        };
+        let step = running_value(ordered, start + line.qty_milli)
+            .checked_sub(running_value(ordered, start))
             .unwrap();
+        total = total.checked_add(step).unwrap();
     }
     total
+}
+
+/// Which running total a movement is measured against.
+#[derive(Debug, Clone, Copy)]
+enum Which {
+    Received,
+    Returned,
+}
+
+/// What the first `qty_milli` of a line are worth: rounded down, except at the
+/// whole ordered quantity, where it is the line's landed total.
+fn running_value(line: &PurchaseLineDto, qty_milli: i64) -> Money {
+    if qty_milli >= line.qty_ordered_milli {
+        return line
+            .landed_unit_cost
+            .checked_mul_milli(line.qty_ordered_milli)
+            .unwrap();
+    }
+    let raw = i128::from(line.landed_unit_cost.as_centimes()) * i128::from(qty_milli) / 1_000;
+    Money::centimes(i64::try_from(raw).unwrap())
+}
+
+/// Every `purchase` debit and every `return` credit the ledger carries for one
+/// order, read back out of the file. The invariant below is stated against
+/// these rows and not against any second arithmetic.
+fn rows_of(conn: &mut SqliteConnection, supplier_id: i32, purchase_id: i32) -> (Money, Money) {
+    let mut debits = Money::ZERO;
+    let mut credits = Money::ZERO;
+    for entry in supplier_debt::ledger(conn, SHOP, supplier_id).unwrap() {
+        if entry.purchase_id != Some(purchase_id) {
+            continue;
+        }
+        debits = debits.checked_add(entry.debit).unwrap();
+        credits = credits.checked_add(entry.credit).unwrap();
+    }
+    (debits, credits)
 }
 
 proptest! {
@@ -261,7 +301,9 @@ proptest! {
                     if taking.is_empty() || view.purchase.status == PurchaseStatus::Received {
                         continue;
                     }
-                    arrived = arrived.checked_add(value_of(&view, &taking)).unwrap();
+                    arrived = arrived
+                        .checked_add(value_of(&view, &taking, Which::Received))
+                        .unwrap();
                     purchases::receive(&mut conn, SHOP, OWNER, purchase_id, taking, None).unwrap();
                 }
                 Step::Return(by) => {
@@ -279,7 +321,9 @@ proptest! {
                     if back.is_empty() {
                         continue;
                     }
-                    sent_back = sent_back.checked_add(value_of(&view, &back)).unwrap();
+                    sent_back = sent_back
+                        .checked_add(value_of(&view, &back, Which::Returned))
+                        .unwrap();
                     purchases::return_to_supplier(&mut conn, SHOP, OWNER, purchase_id, back, None)
                         .unwrap();
                 }
@@ -317,6 +361,38 @@ proptest! {
                 supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
                 owed
             );
+            // Stated against the rows the file carries and against nothing
+            // this test computed: what the order has been debited never rises
+            // above what its lines are worth, and reaches it exactly once
+            // every line has arrived. That is the invariant the half-up
+            // rounding per delivery broke, and the one a full prepayment
+            // depends on.
+            let (debits, credits) = rows_of(&mut conn, supplier, purchase_id);
+            let mut worth = Money::ZERO;
+            let mut whole = true;
+            let mut all_back = true;
+            for line in &view.lines {
+                worth = worth
+                    .checked_add(
+                        line.landed_unit_cost
+                            .checked_mul_milli(line.qty_ordered_milli)
+                            .unwrap(),
+                    )
+                    .unwrap();
+                whole &= line.qty_received_milli == line.qty_ordered_milli;
+                all_back &= line.qty_returned_milli == line.qty_received_milli;
+            }
+            prop_assert!(debits <= worth, "debited {debits:?} of {worth:?}");
+            if whole {
+                prop_assert_eq!(debits, worth);
+            }
+            // And back the other way: a return never credits more than the
+            // order was debited, and everything back is everything credited.
+            prop_assert!(credits <= debits, "credited {credits:?} of {debits:?}");
+            if all_back {
+                prop_assert_eq!(credits, debits);
+            }
+
             // And the shelf itself: what arrived less what went back.
             for line in &view.lines {
                 let on_hand = products::get(&mut conn, SHOP, line.product_id)
@@ -374,7 +450,7 @@ proptest! {
                 qty_milli: l.qty_ordered_milli,
             })
             .collect();
-        let value = value_of(&saved, &all);
+        let value = value_of(&saved, &all, Which::Received);
         purchases::receive(&mut conn, SHOP, OWNER, saved.purchase.id, all, None).unwrap();
         prop_assert_eq!(
             supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),

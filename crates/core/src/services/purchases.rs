@@ -383,7 +383,8 @@ pub fn return_to_supplier(
                     user_id,
                 },
             )?;
-            value = value.checked_add(line.landed_unit_cost.checked_mul_milli(back.qty_milli)?)?;
+            value =
+                value.checked_add(step_value(line, line.qty_returned_milli, back.qty_milli)?)?;
         }
         // Goods worth nothing take nothing off the account, and a movement of
         // zero would sit in every statement the shop ever reads.
@@ -629,14 +630,15 @@ fn receive_inside(
         // What the product costs the shop is what the goods last landed at,
         // so a margin read tomorrow is read against today's delivery.
         products_repo::set_cost(conn, shop_id, line.product_id, line.landed_unit_cost)?;
-        value = value.checked_add(
-            line.landed_unit_cost
-                .checked_mul_milli(arriving.qty_milli)?,
-        )?;
+        value = value.checked_add(step_value(
+            line,
+            line.qty_received_milli,
+            arriving.qty_milli,
+        )?)?;
     }
 
     // Debt follows goods: the debit is for the value that actually arrived,
-    // at the cost it landed at. Goods worth nothing raise no debt, and a
+    // at the cost it landed at. Goods worth nothing raise no debt, because a
     // movement of zero would sit in every statement for ever.
     if value != Money::ZERO {
         supplier_debt::append_at(
@@ -653,11 +655,13 @@ fn receive_inside(
             },
             Some(at),
         )?;
-        // Credit the shop was already holding lands on the order now that the
-        // order has a value to land on: an advance paid when the paper was
-        // written is money this delivery is owed against.
-        supplier_debt::place_credit_on(conn, shop_id, purchase_id, value)?;
     }
+    // Credit the shop was already holding lands on the order now that the
+    // order has a value to land on: an advance paid when the paper was
+    // written is money this delivery is owed against. Outside the branch
+    // above, because a delivery that rounds to nothing still finishes a line
+    // and the credit must not wait for a delivery that will never come.
+    supplier_debt::place_credit_on(conn, shop_id, purchase_id, value)?;
 
     let after = repo::lines(conn, shop_id, purchase_id)?;
     let whole = after
@@ -791,8 +795,8 @@ struct Landed {
 /// each other. The shares are floored and the remainder goes to the last
 /// line, so the shares add up to the extra costs exactly; the per-unit
 /// division is floored too, which is the one place the order loses centimes:
-/// a line's landed total can come out under its value plus its share by less
-/// than one unit's worth. Nothing is ever gained, so the sum of the landed
+/// a line's landed total can come out under its value plus its share by fewer
+/// centimes than the line has units, plus one. Nothing is ever gained, so the sum of the landed
 /// line totals is never above the lines' value plus the extra costs, which is
 /// what `purchase_prop` pins.
 fn spread(
@@ -834,14 +838,25 @@ fn spread(
     }
 
     let extra = new.transport.checked_add(new.extra_costs)?;
-    if extra != Money::ZERO && order_value == Money::ZERO {
-        // A share of a line worth nothing is nothing, so there is no honest
-        // place to put the amount. Refused on the field that carries most of
-        // it rather than spread by quantity, which would add kilos to pieces.
-        return Err(CoreError::validation(
-            "transport_centimes",
-            "costs cannot be spread over lines that are worth nothing",
-        ));
+    if order_value == Money::ZERO {
+        if extra != Money::ZERO {
+            // A share of a line worth nothing is nothing, so there is no
+            // honest place to put the amount. Refused on the field that
+            // carries most of it rather than spread by quantity, which would
+            // add kilos to pieces.
+            return Err(CoreError::validation(
+                "transport_centimes",
+                "costs cannot be spread over lines that are worth nothing",
+            ));
+        }
+        // Free samples, and nothing to spread over them. Answered here rather
+        // than through the loop below, which would divide by the order's
+        // value: an order of one line never reached that division because the
+        // single line takes the remainder, and an order of two did.
+        return Ok(Landed {
+            per_line: vec![Money::ZERO; new.lines.len()],
+            total: Money::ZERO,
+        });
     }
 
     let mut per_line = Vec::with_capacity(new.lines.len());
@@ -875,6 +890,50 @@ fn spread(
         per_line.push(landed);
     }
     Ok(Landed { per_line, total })
+}
+
+/// What one movement of `qty_milli` is worth, given that `before` of the line
+/// had already moved the same way.
+///
+/// The difference the movement makes to a running total, never the movement
+/// priced on its own. A delivery priced on its own is rounded half-up, and
+/// two halves of a line each rounded up come to a centime more than the line
+/// is worth: an order paid in full up front is then left asking for that
+/// centime for ever, and one whose halves round down is quietly forgiven one.
+///
+/// The same function prices a return, against the quantity that has already
+/// gone back, so a line received whole and returned whole leaves nothing on
+/// the account whatever the rounding did on the way.
+fn step_value(line: &PurchaseLine, before: i64, qty_milli: i64) -> Result<Money, CoreError> {
+    let after = before
+        .checked_add(qty_milli)
+        .ok_or(crate::money::MoneyError::Overflow)?;
+    let was = running_value(line, before)?;
+    let now = running_value(line, after)?;
+    Ok(now.checked_sub(was)?)
+}
+
+/// What the first `qty_milli` of a line are worth on the ledger: the landed
+/// cost times the quantity, rounded down, except at the whole ordered
+/// quantity where it is the line's landed total rounded once the way `spread`
+/// rounded it. Monotone, so a movement is never worth a negative amount, and
+/// exact at the end, so the deliveries of a line add up to what the line is
+/// worth and no more.
+fn running_value(line: &PurchaseLine, qty_milli: i64) -> Result<Money, CoreError> {
+    if qty_milli >= line.qty_ordered_milli {
+        return Ok(line
+            .landed_unit_cost
+            .checked_mul_milli(line.qty_ordered_milli)?);
+    }
+    // Both factors are at or above zero here (the file and `spread` both
+    // refuse a negative), so the truncation this division does is a floor.
+    let raw = i128::from(line.landed_unit_cost.as_centimes())
+        .checked_mul(i128::from(qty_milli))
+        .ok_or(crate::money::MoneyError::Overflow)?
+        / i128::from(crate::money::MILLI_PER_UNIT);
+    Ok(Money::centimes(
+        i64::try_from(raw).map_err(|_| crate::money::MoneyError::Overflow)?,
+    ))
 }
 
 /// `extra × value / order_value`, floored, in i128 so two i64 factors cannot

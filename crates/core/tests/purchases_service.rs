@@ -1045,3 +1045,312 @@ fn money_handed_over_with_the_order_is_logged_the_way_any_other_payment_is() {
     // And what it settled, so the log reads against the order.
     assert!(after.contains("\"allocations\":[{"), "{after}");
 }
+
+#[test]
+fn an_order_of_free_samples_is_saved_and_one_with_costs_on_it_is_not() {
+    // Two lines worth nothing between them. With no extra costs there is
+    // nothing to spread and the order is ordinary: a supplier's free samples
+    // are goods the shop takes in and counts. With extra costs there is no
+    // honest line to put them on, and the refusal names the field.
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    let farine = a_product(&mut conn, "Farine 5kg", 0);
+    let sucre = a_product(&mut conn, "Sucre 1kg", 0);
+    let free = vec![line(farine, 10_000, 0), line(sucre, 20_000, 0)];
+    let saved = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewPurchase {
+            receive_now: true,
+            ..an_order(supplier, free.clone())
+        },
+    )
+    .unwrap();
+    assert_eq!(saved.purchase.status, PurchaseStatus::Received);
+    assert_eq!(saved.lines[0].landed_unit_cost, Money::ZERO);
+    assert_eq!(saved.lines[1].landed_unit_cost, Money::ZERO);
+    // The goods are on the shelf and the shop owes nothing for them.
+    assert_eq!(on_hand(&mut conn, farine), 10_000);
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::ZERO
+    );
+
+    let err = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewPurchase {
+            transport: Money::centimes(5_000),
+            ..an_order(supplier, free)
+        },
+    )
+    .unwrap_err();
+    match err {
+        dzpos_core::error::CoreError::Validation { ref field, .. } => {
+            assert_eq!(field, "transport_centimes");
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_line_received_in_parts_debits_its_landed_total_and_never_a_centime_more() {
+    // A landed cost of 12,85 over two units: the whole line is worth 25,70.
+    // Rounding each delivery half-up on its own gives 6,43 and 19,28, which is
+    // 25,71: one centime the order never owed, and a shop that had paid the
+    // whole 25,70 up front would be left with an order asking for ever.
+    //
+    // The rule instead: a delivery is worth what the line is worth once it has
+    // arrived, less what it was worth before, and the last one takes the
+    // remainder.
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    let farine = a_product(&mut conn, "Farine 5kg", 0);
+    let saved = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        an_order(supplier, vec![line(farine, 2_000, 1_285)]),
+    )
+    .unwrap();
+    let whole = Money::centimes(1_285).checked_mul_milli(2_000).unwrap();
+    assert_eq!(whole, Money::centimes(2_570));
+
+    purchases::receive(
+        &mut conn,
+        SHOP,
+        OWNER,
+        saved.purchase.id,
+        vec![ReceiveLine {
+            purchase_line_id: saved.lines[0].id,
+            qty_milli: 500,
+        }],
+        None,
+    )
+    .unwrap();
+    // Half of a unit, rounded down: 6,42 and not 6,43.
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::centimes(642)
+    );
+
+    purchases::receive(
+        &mut conn,
+        SHOP,
+        OWNER,
+        saved.purchase.id,
+        vec![ReceiveLine {
+            purchase_line_id: saved.lines[0].id,
+            qty_milli: 1_500,
+        }],
+        None,
+    )
+    .unwrap();
+    // The delivery that finishes the line takes the remainder, so the order
+    // has been debited exactly what it is worth.
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        whole
+    );
+}
+
+#[test]
+fn an_order_paid_in_full_before_the_goods_is_settled_by_the_last_delivery() {
+    // The centime above, seen from the account: the shop pays the whole order
+    // the day it is written, and the deliveries have to add up to exactly
+    // that or the order never stops asking to be paid.
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    let farine = a_product(&mut conn, "Farine 5kg", 0);
+    let saved = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewPurchase {
+            paid_now: Some(Paid {
+                amount: Money::centimes(2_570),
+                mode: PaymentMethod::Cash,
+            }),
+            ..an_order(supplier, vec![line(farine, 2_000, 1_285)])
+        },
+    )
+    .unwrap();
+    for part in [500, 1_500] {
+        purchases::receive(
+            &mut conn,
+            SHOP,
+            OWNER,
+            saved.purchase.id,
+            vec![ReceiveLine {
+                purchase_line_id: saved.lines[0].id,
+                qty_milli: part,
+            }],
+            None,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::ZERO
+    );
+    assert!(supplier_debt::open_purchases(&mut conn, SHOP, supplier)
+        .unwrap()
+        .is_empty());
+}
+
+#[test]
+fn a_delivery_worth_nothing_finishes_the_line_without_a_row_of_nothing() {
+    // A thousandth of a unit at a centime is worth nothing at all, and the
+    // ledger has no row for a movement of nothing (M2's rule: it would sit in
+    // every statement for ever). The delivery still finishes the line and
+    // still moves the stock, and the service still asks for the credit the
+    // shop is holding to be placed, which is why that call sits outside the
+    // branch that writes the row.
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    let farine = a_product(&mut conn, "Farine 5kg", 0);
+    let saved = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        an_order(supplier, vec![line(farine, 1_001, 1)]),
+    )
+    .unwrap();
+    // One unit in: worth one centime, and the order owes it.
+    purchases::receive(
+        &mut conn,
+        SHOP,
+        OWNER,
+        saved.purchase.id,
+        vec![ReceiveLine {
+            purchase_line_id: saved.lines[0].id,
+            qty_milli: 1_000,
+        }],
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::centimes(1)
+    );
+    // Paid, and then the last thousandth arrives worth nothing.
+    supplier_debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        supplier,
+        Money::centimes(1),
+        PaymentMethod::Cash,
+        None,
+        dzpos_core::services::clock::now(),
+    )
+    .unwrap();
+    let after = purchases::receive(
+        &mut conn,
+        SHOP,
+        OWNER,
+        saved.purchase.id,
+        vec![ReceiveLine {
+            purchase_line_id: saved.lines[0].id,
+            qty_milli: 1,
+        }],
+        None,
+    )
+    .unwrap();
+    assert_eq!(after.purchase.status, PurchaseStatus::Received);
+    assert_eq!(on_hand(&mut conn, farine), 1_001);
+    // Nothing was added, so the balance is still nothing and no row of zero
+    // was written.
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::ZERO
+    );
+    let ledger = supplier_debt::ledger(&mut conn, SHOP, supplier).unwrap();
+    assert!(ledger
+        .iter()
+        .all(|e| e.debit != Money::ZERO || e.credit != Money::ZERO));
+}
+
+#[test]
+fn returning_everything_that_arrived_takes_the_whole_debit_back_off() {
+    // The mirror of the delivery rule: a return is worth what has gone back
+    // once it has, less what had gone back before. A line received whole and
+    // returned whole leaves nothing on the account, whatever the rounding did
+    // on the way.
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    let farine = a_product(&mut conn, "Farine 5kg", 0);
+    let saved = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewPurchase {
+            receive_now: true,
+            ..an_order(supplier, vec![line(farine, 2_000, 1_285)])
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::centimes(2_570)
+    );
+    for part in [500, 1_500] {
+        purchases::return_to_supplier(
+            &mut conn,
+            SHOP,
+            OWNER,
+            saved.purchase.id,
+            vec![ReceiveLine {
+                purchase_line_id: saved.lines[0].id,
+                qty_milli: part,
+            }],
+            None,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::ZERO
+    );
+    assert_eq!(on_hand(&mut conn, farine), 0);
+}
+
+#[test]
+fn an_order_whose_every_line_has_arrived_takes_no_further_delivery() {
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    let farine = a_product(&mut conn, "Farine 5kg", 0);
+    let saved = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewPurchase {
+            receive_now: true,
+            ..an_order(supplier, vec![line(farine, 10_000, 20_000)])
+        },
+    )
+    .unwrap();
+    assert_eq!(saved.purchase.status, PurchaseStatus::Received);
+    let err = purchases::receive(
+        &mut conn,
+        SHOP,
+        OWNER,
+        saved.purchase.id,
+        vec![ReceiveLine {
+            purchase_line_id: saved.lines[0].id,
+            qty_milli: 1_000,
+        }],
+        None,
+    )
+    .unwrap_err();
+    match err {
+        dzpos_core::error::CoreError::Validation { ref field, .. } => assert_eq!(field, "status"),
+        other => panic!("{other:?}"),
+    }
+    // And no number of the year's series was burnt on the way past.
+    let after = purchases::get(&mut conn, SHOP, saved.purchase.id).unwrap();
+    assert_eq!(after.receipts.len(), 1);
+    assert_eq!(after.receipts[0].receipt.number, 1);
+}
