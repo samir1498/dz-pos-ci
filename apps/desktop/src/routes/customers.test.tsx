@@ -1,8 +1,14 @@
-// The customers screen is checked for what it shows from the API's answer
-// and for what it sends. The rules (a blank name, a zero adjustment, a field
+// The customers screens are checked for what they show from the API's answer
+// and for what they send. The rules (a blank name, a zero adjustment, a field
 // too long) are the API crate's tests; what these hold is the wiring: the
 // centimes, the party kind, the whole row on an update and the ledger
 // refreshing after a correction.
+//
+// Two screens since the kit landed. `/customers` is the list and the fiche
+// panel over it; `/customers/{id}` is the account, with the movements, the
+// payments and the two papers. Both are mounted through a memory router with
+// the same two paths the app has, because the list's rows link to the account
+// and a `Link` without a router is a screen that cannot render.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -14,12 +20,15 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  useParams,
 } from "@tanstack/react-router";
+import { formatCentimes } from "@dzpos/shared";
 import type { CustomerDto, CustomerLedgerDto, CustomerPaymentsDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
-import { CustomerFiche, CustomersScreen } from "./customers";
+import { CustomersScreen } from "./customers";
+import { CustomerFiche } from "./customers_.$id";
 
 const benali: CustomerDto = {
   id: 3,
@@ -151,17 +160,57 @@ function fetched(): string[] {
     .map((call) => String(call[0]));
 }
 
-function mount(lang: Lang = "fr") {
+/** The account page as the router hands it over: an id off the path. */
+function FicheRoute() {
+  const params = useParams({ strict: false });
+  return <CustomerFiche id={Number(params.id)} />;
+}
+
+/**
+ * The two screens under a router of their own. Not the app's: the smallest
+ * one that carries the same two paths, so the list's rows can build a link to
+ * the account the way they do in the app.
+ */
+function app(at: string, lang: Lang) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const rootRoute = createRootRoute();
+  const listRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/customers",
+    component: CustomersScreen,
+  });
+  const ficheRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/customers/$id",
+    component: FicheRoute,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([listRoute, ficheRoute]),
+    history: createMemoryHistory({ initialEntries: [at] }),
   });
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        <CustomersScreen />
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </I18nProvider>,
   );
+}
+
+function mount(lang: Lang = "fr") {
+  return app("/customers", lang);
+}
+
+function mountFiche(id: number, lang: Lang = "fr") {
+  return app(`/customers/${id}`, lang);
+}
+
+/** The fiche panel, opened from a row of the list. */
+async function openThePanel(name: string) {
+  await userEvent.click(await screen.findByRole("button", { name: `${fr.customers_edit} ${name}` }));
+  return screen.findByTestId("customer-fiche");
 }
 
 const noPayments: CustomerPaymentsDto = {
@@ -334,6 +383,18 @@ describe("the list", () => {
     expect(within(ardoise).queryByText(fr.status_no_credit)).not.toBeInTheDocument();
   });
 
+  // The row's name is a link rather than the whole row being clickable: what
+  // a customer has done is a page, and a page is something the shop can open
+  // in the way it opens any other link.
+  test("a row names the account page it opens", async () => {
+    mount();
+    const row = await screen.findByRole("row", { name: /Entreprise Benali/ });
+    expect(within(row).getByRole("link", { name: "Entreprise Benali" })).toHaveAttribute(
+      "href",
+      "/customers/3",
+    );
+  });
+
   test("the search travels to the API and the list follows it", async () => {
     list = [benali, overLimit];
     mount();
@@ -353,13 +414,14 @@ describe("the list", () => {
   });
 });
 
-describe("the fiche", () => {
+describe("the fiche panel", () => {
   test("creates one, posting centimes, the party kind and the opening debt", async () => {
     list = [];
     mount();
     await screen.findByText(fr.customers_empty);
 
     await userEvent.click(screen.getByRole("button", { name: fr.customers_add }));
+    await screen.findByTestId("customer-fiche");
     await userEvent.type(screen.getByLabelText(fr.field_name), "Entreprise Benali");
     await userEvent.click(screen.getByRole("radio", { name: fr.party_company }));
     await userEvent.type(screen.getByLabelText(fr.field_phone), "0770 11 22 33");
@@ -388,9 +450,7 @@ describe("the fiche", () => {
 
   test("an update sends the whole row, with a null for every field cleared", async () => {
     mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
-    );
+    await openThePanel("Entreprise Benali");
 
     await userEvent.clear(screen.getByLabelText(fr.field_rc));
     await userEvent.clear(screen.getByLabelText(fr.field_credit_limit));
@@ -425,9 +485,7 @@ describe("the fiche", () => {
   // without it, so the rule is written once.
   test("closing a fiche that still carries a balance asks why", async () => {
     mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
-    );
+    await openThePanel("Entreprise Benali");
     expect(screen.queryByTestId("customer-close-reason")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByLabelText(fr.field_customer_active));
@@ -445,9 +503,7 @@ describe("the fiche", () => {
   test("closing a settled fiche asks nothing", async () => {
     list = [noCredit];
     mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Ali Cash` }),
-    );
+    await openThePanel("Ali Cash");
     await userEvent.click(screen.getByLabelText(fr.field_customer_active));
     expect(screen.queryByTestId("customer-close-reason")).not.toBeInTheDocument();
   });
@@ -466,9 +522,7 @@ describe("the fiche", () => {
         },
       });
     mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Ali Cash` }),
-    );
+    await openThePanel("Ali Cash");
     await userEvent.click(screen.getByLabelText(fr.field_customer_active));
     expect(screen.queryByTestId("customer-close-reason")).not.toBeInTheDocument();
 
@@ -478,9 +532,7 @@ describe("the fiche", () => {
 
   test("the opening debt is asked for once and never on an existing fiche", async () => {
     mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
-    );
+    await openThePanel("Entreprise Benali");
     expect(screen.queryByLabelText(fr.field_opening_debt)).not.toBeInTheDocument();
   });
 
@@ -491,6 +543,7 @@ describe("the fiche", () => {
     mount();
     await screen.findByText(fr.customers_empty);
     await userEvent.click(screen.getByRole("button", { name: fr.customers_add }));
+    await screen.findByTestId("customer-fiche");
     await userEvent.type(screen.getByLabelText(fr.field_name), "Entreprise Benali");
     await userEvent.click(screen.getByRole("button", { name: fr.action_save }));
 
@@ -502,10 +555,7 @@ describe("the fiche", () => {
 
 describe("the ledger", () => {
   test("reads the movements with the balance the core ran up", async () => {
-    mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
-    );
+    mountFiche(3);
 
     const row = await screen.findByRole("row", { name: /solde de départ/ });
     expect(within(row).getByText(fr.debt_opening)).toBeInTheDocument();
@@ -513,10 +563,7 @@ describe("the ledger", () => {
   });
 
   test("an adjustment posts signed centimes and the ledger comes back changed", async () => {
-    mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
-    );
+    mountFiche(3);
     await screen.findByRole("row", { name: /solde de départ/ });
 
     await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
@@ -538,10 +585,9 @@ describe("the ledger", () => {
 
   test("a cancelled confirmation posts nothing", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(false);
-    mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
-    );
+    mountFiche(3);
+    await screen.findByRole("row", { name: /solde de départ/ });
+
     await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
     await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
 
@@ -549,10 +595,7 @@ describe("the ledger", () => {
   });
 
   test("a refused correction keeps the figure that was typed", async () => {
-    mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
-    );
+    mountFiche(3);
     await screen.findByRole("row", { name: /solde de départ/ });
 
     writeAnswer = () =>
@@ -563,16 +606,16 @@ describe("the ledger", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_validation);
     // Emptying the box on a refusal means retyping the figure to find out
-    // what was wrong with it.
-    expect(screen.getByLabelText(fr.field_adjust_amount)).toHaveValue("-500");
+    // what was wrong with it. The box shows the canonical spelling of the
+    // integer it understood, which is what MoneyInput leaves behind on blur.
+    expect(screen.getByLabelText(fr.field_adjust_amount)).toHaveValue(formatCentimes(-50_000));
     expect(screen.getByLabelText(fr.field_adjust_note)).toHaveValue("erreur de saisie");
   });
 
   test("an adjustment of nothing is refused before it leaves the screen", async () => {
-    mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
-    );
+    mountFiche(3);
+    await screen.findByRole("row", { name: /solde de départ/ });
+
     await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "0");
     await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
 
@@ -582,27 +625,24 @@ describe("the ledger", () => {
 });
 
 describe("a credit balance", () => {
-  test("a negative balance is named a credit rather than shown as a minus debt", async () => {
+  test("the list names it a credit rather than showing it as a minus debt", async () => {
     list = [holdingCredit];
-    rows = { ...ledger, customer_id: 9, balance_centimes: -100_000, entries: [] };
-    payments = { ...noPayments, customer_id: 9, balance_centimes: -100_000 };
     mount();
 
-    // The list says it on the row, before anything is opened.
     const row = await screen.findByRole("row", { name: /Yacine Avoir/ });
     expect(within(row).getByText(fr.customers_credit)).toBeInTheDocument();
     expect(within(row).getByText("1 000,00")).toBeInTheDocument();
     expect(within(row).queryByText("-1 000,00")).toBeNull();
+  });
 
-    // And the fiche labels the figure the same way, beside the amount rather
-    // than as a column header the whole table shares.
-    await userEvent.click(
-      screen.getByRole("button", { name: `${fr.customers_edit} Yacine Avoir` }),
-    );
-    const heading = await screen.findByRole("heading", { name: fr.customers_ledger });
-    const fiche = heading.closest("section");
-    if (fiche === null) throw new Error("the ledger heading sits in no section");
-    const said = within(fiche);
+  test("the account page labels the figure the same way", async () => {
+    list = [holdingCredit];
+    rows = { ...ledger, customer_id: 9, balance_centimes: -100_000, entries: [] };
+    payments = { ...noPayments, customer_id: 9, balance_centimes: -100_000 };
+    mountFiche(9);
+
+    const card = await screen.findByTestId("customer-balance");
+    const said = within(card);
     expect(said.getByText(fr.customers_credit)).toBeInTheDocument();
     expect(said.getByText("1 000,00")).toBeInTheDocument();
     expect(said.queryByText(fr.customers_balance)).toBeNull();
@@ -610,30 +650,26 @@ describe("a credit balance", () => {
 });
 
 describe("payments", () => {
-  async function openTheFiche() {
-    mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
-    );
-    await screen.findByRole("row", { name: /solde de départ/ });
+  /** The dialog is where the money is typed, and it is its own confirmation:
+   *  it says what taking the money means before the brass button is there. */
+  async function openThePayment(id = 3) {
+    mountFiche(id);
+    await userEvent.click(await screen.findByRole("button", { name: fr.customers_pay }));
+    return screen.findByTestId("customer-pay-dialog");
   }
 
   test("a closed fiche still takes a payment, and says why the form is there", async () => {
     list = [closed];
-    mount();
-    await userEvent.click(
-      await screen.findByRole("button", { name: `${fr.customers_edit} Nadir Fermé` }),
-    );
+    mountFiche(8);
 
-    // The form stays: a shop closes a fiche to stop selling, not to stop
+    // The panel stays: a shop closes a fiche to stop selling, not to stop
     // collecting, and the note next to it says so.
-    expect(await screen.findByLabelText(fr.field_payment_amount)).toBeInTheDocument();
-    expect(screen.getByText(fr.customers_closed_still_collects)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: fr.action_take_payment })).toBeEnabled();
+    expect(await screen.findByText(fr.customers_closed_still_collects)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: fr.customers_pay })).toBeEnabled();
   });
 
   test("a payment posts the amount, the mode and the note, and the allocations come back", async () => {
-    await openTheFiche();
+    await openThePayment();
 
     await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "1000");
     await userEvent.click(screen.getByRole("radio", { name: fr.payment_cash }));
@@ -646,19 +682,18 @@ describe("payments", () => {
       payment_mode: "cash",
       note: "acompte",
     });
-    expect(window.confirm).toHaveBeenCalledWith(fr.customers_pay_confirm);
 
     // The documents the money landed on are shown open: which facture a
     // payment settled is what a customer asks at the counter.
-    const rows = await screen.findAllByTestId("customer-payment");
-    expect(within(rows[0]).getByText("600,00")).toBeInTheDocument();
-    expect(within(rows[0]).getByText("400,00")).toBeInTheDocument();
-    expect(within(rows[0]).getByText("1 000,00")).toBeInTheDocument();
+    const paidRows = await screen.findAllByTestId("customer-payment");
+    expect(within(paidRows[0]).getByText("600,00")).toBeInTheDocument();
+    expect(within(paidRows[0]).getByText("400,00")).toBeInTheDocument();
+    expect(within(paidRows[0]).getByText("1 000,00")).toBeInTheDocument();
     expect(await screen.findByRole("status")).toHaveTextContent(fr.customers_paid);
   });
 
   test("a payment above the debt says so and names what is still owed", async () => {
-    await openTheFiche();
+    await openThePayment();
     writeAnswer = () =>
       json(422, {
         error: {
@@ -676,12 +711,13 @@ describe("payments", () => {
     expect(alert).toHaveTextContent(fr.error_payment_above_debt);
     // "Too much" is useless without the amount that would not have been.
     expect(alert).toHaveTextContent("1 500,00");
-    // A refused payment keeps the figure that was typed.
-    expect(screen.getByLabelText(fr.field_payment_amount)).toHaveValue("2000");
+    // A refused payment keeps the figure that was typed, in the spelling the
+    // box settles on once it loses the caret.
+    expect(screen.getByLabelText(fr.field_payment_amount)).toHaveValue(formatCentimes(200_000));
   });
 
   test("a payment of nothing is refused before it leaves the screen", async () => {
-    await openTheFiche();
+    await openThePayment();
 
     await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "0");
     await userEvent.click(screen.getByRole("button", { name: fr.action_take_payment }));
@@ -691,9 +727,8 @@ describe("payments", () => {
   });
 
   test("the statement is asked for over the range and shown as the page the core rendered", async () => {
-    await openTheFiche();
-
-    await userEvent.click(screen.getByRole("button", { name: fr.action_statement }));
+    mountFiche(3);
+    await userEvent.click(await screen.findByRole("button", { name: fr.action_statement }));
 
     const frame = await screen.findByTestId("customer-statement");
     expect(frame).toHaveAttribute("sandbox", "");
@@ -707,12 +742,12 @@ describe("payments", () => {
   });
 
   test("the range opens on the shop's day, which the server says and the browser does not", async () => {
-    await openTheFiche();
+    mountFiche(3);
 
     // The stub answers a fixed `/clock`; a screen reading `new Date()` would
     // date the range from whatever zone the machine is in, which is a day
     // either side of the ledger for a shop open past midnight.
-    expect(screen.getByLabelText(fr.field_statement_to)).toHaveValue(SHOP_TODAY);
+    expect(await screen.findByLabelText(fr.field_statement_to)).toHaveValue(SHOP_TODAY);
     expect(screen.getByLabelText(fr.field_statement_from)).toHaveValue("2027-01-01");
     expect(fetched().some((url) => url.endsWith("/clock"))).toBe(true);
   });
@@ -722,7 +757,7 @@ describe("payments", () => {
     // fail. Read as "not here yet", a refusal would leave the panel on its
     // loading line for as long as the fiche stayed open and say nothing.
     clockAnswer = () => json(500, { error: { code: "storage", message: "no" } });
-    await openTheFiche();
+    mountFiche(3);
 
     const failed = await screen.findByText(fr.error_storage);
     expect(failed).toHaveAttribute("role", "alert");
@@ -735,9 +770,9 @@ describe("payments", () => {
   });
 
   test("a range that ends before it starts asks for nothing", async () => {
-    await openTheFiche();
+    mountFiche(3);
 
-    const from = screen.getByLabelText(fr.field_statement_from);
+    const from = await screen.findByLabelText(fr.field_statement_from);
     await userEvent.clear(from);
     await userEvent.type(from, "2027-12-31");
 
@@ -747,7 +782,8 @@ describe("payments", () => {
   });
 
   test("the debt slip is asked for on the button and shown as the page the core rendered", async () => {
-    await openTheFiche();
+    mountFiche(3);
+    await screen.findByRole("row", { name: /solde de départ/ });
     // Nothing is fetched before the button: a slip nobody asked for is a
     // render of a page nobody is going to print.
     expect(fetched().some((url) => url.includes("/debt-slip"))).toBe(false);
@@ -774,37 +810,12 @@ describe("Arabic", () => {
   });
 });
 
-/** The fiche on a page of its own, which is what `/customers/$id` opens. The
- * router here is not the app's; it is the smallest one that lets the fiche's
- * own `Link` render, the way the till's tests build theirs. */
+/** The account page on its own, which is what `/customers/$id` opens. */
 describe("one customer by id", () => {
-  function mountFiche(id: number) {
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
-    const rootRoute = createRootRoute();
-    const ficheRoute = createRoute({
-      getParentRoute: () => rootRoute,
-      path: "/",
-      component: () => <CustomerFiche id={id} />,
-    });
-    const router = createRouter({
-      routeTree: rootRoute.addChildren([ficheRoute]),
-      history: createMemoryHistory({ initialEntries: ["/"] }),
-    });
-    return render(
-      <I18nProvider lang="fr">
-        <QueryClientProvider client={client}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
-      </I18nProvider>,
-    );
-  }
-
   test("reads the one fiche by id and shows the ledger under it", async () => {
     mountFiche(3);
 
-    expect(await screen.findByDisplayValue("Entreprise Benali")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Entreprise Benali" })).toBeInTheDocument();
     // The fiche it shows came from the customer's own route, not from the
     // list: a page addressed by id must not depend on a list being loaded.
     expect(fetched().some((url) => /\/customers\/3$/.test(url))).toBe(true);
@@ -812,7 +823,7 @@ describe("one customer by id", () => {
     expect(
       await screen.findByRole("heading", { name: fr.customers_ledger }),
     ).toBeInTheDocument();
-    // And the same two papers the panel offers.
+    // And the same two papers the list's rows lead to.
     expect(screen.getByRole("button", { name: fr.action_debt_slip })).toBeInTheDocument();
   });
 
