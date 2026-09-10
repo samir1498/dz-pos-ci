@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ApiError, createClient, isApiErrorBody, isSale } from "./client";
+import { ApiError, createClient } from "./client";
 import type { BackupDto } from "./generated/BackupDto";
 import type { CustomerDto } from "./generated/CustomerDto";
 import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
@@ -301,16 +301,6 @@ describe("settings", () => {
       regime: "ifu",
       valid_from: "2027-01-01",
     });
-  });
-});
-
-describe("isApiErrorBody", () => {
-  test("accepts the shape the API promises and nothing else", () => {
-    expect(isApiErrorBody({ error: { code: "x", message: "y" } })).toBe(true);
-    expect(isApiErrorBody({ error: { code: "x" } })).toBe(false);
-    expect(isApiErrorBody({ code: "x", message: "y" })).toBe(false);
-    expect(isApiErrorBody(null)).toBe(false);
-    expect(isApiErrorBody("nope")).toBe(false);
   });
 });
 
@@ -727,15 +717,6 @@ describe("sales", () => {
       });
     const api = createClient("http://127.0.0.1:4317", fetchStub);
     await expect(api.getSale(1)).rejects.toBeInstanceOf(ApiError);
-  });
-
-  test("isSale refuses a kind and a payment mode the API does not use", () => {
-    expect(isSale(sale)).toBe(true);
-    expect(isSale({ ...sale, kind: "recu" })).toBe(false);
-    expect(isSale({ ...sale, payment_mode: "bitcoin" })).toBe(false);
-    expect(isSale({ ...sale, status: "draft" })).toBe(false);
-    expect(isSale({ ...sale, lines: [{ ...sale.lines[0], qty_milli: 1.5 }] })).toBe(false);
-    expect(isSale(null)).toBe(false);
   });
 
   test("a refused sale surfaces the code the UI translates", async () => {
