@@ -1,7 +1,13 @@
 /* dz-pos design tokens, three tiers, mirrored in packages/design
    (primitives.ts, semantic.ts, theme.ts); css.test.ts there fails when
    this file and the package disagree on a variable.
-   Tier 1 primitives: never used by components. Tier 2 semantic: the API. */
+   Tier 1 primitives: never used by components. Tier 2 semantic: the API.
+
+   Two themes share one set of names. `:root` is Comptoir (light: stone
+   paper, teal selection, ink sidebar, brass on the one action that moves
+   money). `[data-theme="registre"]` overrides every colour role with the
+   dark ledger: ink green surfaces, paper text, brass accent. A component
+   reads the role, never the theme. */
 
 :root {
   /* ---- Tier 1: primitives ---- */
@@ -27,24 +33,49 @@
 
   --p-red-50: #fdeeed;
   --p-red-100: #f9d6d3;
+  --p-red-300: #e8867e;
   --p-red-500: #c9403a;
   --p-red-600: #a8332e;
   --p-red-700: #862a26;
+  --p-red-900: #4a1f1c;
 
   --p-amber-50: #fdf5e6;
   --p-amber-100: #f9e6bf;
+  --p-amber-300: #e9c05f;
   --p-amber-500: #c98a1a;
   --p-amber-700: #8a5e0f;
+  --p-amber-900: #4a3610;
 
   --p-blue-50: #eaf1fb;
+  --p-blue-300: #8db3ea;
   --p-blue-500: #2f6fcf;
   --p-blue-700: #1f4c90;
+  --p-blue-900: #16305c;
 
-  /* ---- Tier 2: semantic ---- */
+  --p-ink-200: #7a877f;
+  --p-ink-300: #4a5a53;
+  --p-ink-400: #3a4b44;
+  --p-ink-500: #2c4038;
+  --p-ink-600: #23392f;
+  --p-ink-700: #1b2c25;
+  --p-ink-800: #14211c;
+
+  --p-brass-300: #e9d9b0;
+  --p-brass-500: #b8862b;
+  --p-brass-700: #8f6820;
+
+  --p-paper-50: #f4f1e8;
+  --p-paper-100: #d9d2c0;
+  --p-paper-200: #b9b3a2;
+
+  /* ---- Tier 2: semantic, Comptoir ---- */
   --color-primary: var(--p-teal-600);
   --color-primary-hover: var(--p-teal-700);
   --color-primary-soft: var(--p-teal-50);
   --color-on-primary: var(--p-stone-0);
+  --color-money: var(--p-brass-500);
+  --color-money-hover: var(--p-brass-700);
+  --color-on-money: var(--p-ink-800);
   --color-danger: var(--p-red-600);
   --color-danger-soft: var(--p-red-50);
   --color-warn: var(--p-amber-500);
@@ -59,13 +90,13 @@
   --surface-hover: var(--p-stone-100);
   --surface-selected: var(--p-teal-50);
   --surface-scrim: rgb(26 24 21 / 0.45);
-  --surface-inverse: var(--p-stone-800);
+  --surface-inverse: var(--p-ink-800);
 
   --text-primary: var(--p-stone-900);
   --text-secondary: var(--p-stone-600);
   --text-tertiary: var(--p-stone-400);
   --text-disabled: var(--p-stone-300);
-  --text-on-inverse: var(--p-stone-50);
+  --text-on-inverse: var(--p-paper-50);
   --text-danger: var(--p-red-600);
   --text-success: var(--p-teal-600);
 
@@ -95,7 +126,7 @@
 
   --font-sans: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --font-numeric: "IBM Plex Sans", system-ui, sans-serif;
+  --font-numeric: "JetBrains Mono", ui-monospace, monospace;
 
   --text-xs: 12px;
   --text-sm: 13px;
@@ -108,6 +139,51 @@
   --touch-min: 44px;
   --control-h: 40px;
   --control-h-lg: 52px;
+}
+
+/* Registre. Every colour role again, none inherited: a role that fell
+   through to the Comptoir value would be a light colour on an ink surface,
+   and the miss would only show on the one screen nobody opened. */
+[data-theme="registre"] {
+  --color-primary: var(--p-teal-300);
+  --color-primary-hover: var(--p-teal-100);
+  --color-primary-soft: var(--p-teal-800);
+  --color-on-primary: var(--p-ink-800);
+  --color-money: var(--p-brass-500);
+  --color-money-hover: var(--p-brass-300);
+  --color-on-money: var(--p-ink-800);
+  --color-danger: var(--p-red-300);
+  --color-danger-soft: var(--p-red-900);
+  --color-warn: var(--p-amber-300);
+  --color-warn-soft: var(--p-amber-900);
+  --color-info: var(--p-blue-300);
+  --color-info-soft: var(--p-blue-900);
+  --color-success: var(--p-teal-300);
+
+  --surface-bg: var(--p-ink-800);
+  --surface-card: var(--p-ink-700);
+  --surface-raised: var(--p-ink-600);
+  --surface-hover: var(--p-ink-600);
+  --surface-selected: var(--p-teal-800);
+  --surface-scrim: rgb(0 0 0 / 0.6);
+  --surface-inverse: var(--p-paper-50);
+
+  --text-primary: var(--p-paper-50);
+  --text-secondary: var(--p-paper-100);
+  --text-tertiary: var(--p-paper-200);
+  --text-disabled: var(--p-ink-200);
+  --text-on-inverse: var(--p-ink-800);
+  --text-danger: var(--p-red-300);
+  --text-success: var(--p-teal-300);
+
+  --border-default: var(--p-ink-500);
+  --border-strong: var(--p-ink-400);
+  --border-focus: var(--p-teal-300);
+  --border-danger: var(--p-red-300);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.6);
 }
 
 [dir="rtl"] {

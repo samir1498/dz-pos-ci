@@ -13,12 +13,17 @@ import {
   fontSize,
   layout,
   radius,
+  registreBorder,
+  registreColor,
+  registreShadow,
+  registreSurface,
+  registreText,
   shadow,
   space,
   surface,
   textColor,
 } from "./semantic";
-import type { PxGroup, Token, TokenGroup, TokenPx } from "./semantic";
+import type { PxGroup, ThemeName, Token, TokenGroup, TokenPx } from "./semantic";
 
 const stringValue = (token: Token): string => {
   switch (token.kind) {
@@ -72,3 +77,27 @@ export const theme = {
 };
 
 export type Theme = typeof theme;
+
+/**
+ * Both themes resolved. The desktop never reads this: it switches with the
+ * `data-theme` attribute and the cascade does the work. React Native has no
+ * cascade, so mobile picks the object and re-renders. `theme` above stays
+ * Comptoir so an existing import keeps meaning what it meant.
+ *
+ * The Registre groups carry the same keys as the Comptoir ones (the parity
+ * test in css.test.ts is what holds that), which is why this typechecks as
+ * a `Theme` without a cast.
+ */
+export const themes: Readonly<Record<ThemeName, Theme>> = {
+  comptoir: theme,
+  registre: {
+    ...theme,
+    colors: {
+      ...resolveStrings(registreColor),
+      surface: resolveStrings(registreSurface),
+      text: resolveStrings(registreText),
+      border: resolveStrings(registreBorder),
+    },
+    shadow: resolveStrings(registreShadow),
+  },
+};

@@ -2,9 +2,9 @@
 // reachable only at "@dzpos/design/primitives", a path the apps never
 // import. A convention for now; no lint rule enforces it yet.
 
-export { theme } from "./theme";
+export { theme, themes as resolvedThemes } from "./theme";
 export type { Theme } from "./theme";
-export { toCss } from "./css";
+export { themeSelector, toCss } from "./css";
 export {
   borderColor,
   color,
@@ -17,5 +17,17 @@ export {
   space,
   surface,
   textColor,
+  themeColorsOf,
+  themes as themeTokens,
+  THEMES,
 } from "./semantic";
-export type { PxGroup, Token, TokenGroup, TokenLiteral, TokenPx, TokenRef } from "./semantic";
+export type {
+  PxGroup,
+  ThemeColors,
+  ThemeName,
+  Token,
+  TokenGroup,
+  TokenLiteral,
+  TokenPx,
+  TokenRef,
+} from "./semantic";
