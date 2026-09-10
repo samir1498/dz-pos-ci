@@ -25,7 +25,7 @@ const tempBackups = path.join(artifactsDir, "backups");
 
 // Ports beside the dev ones (4317 API, 5173 Vite) so a running `just api`
 // / `just dev` pair does not collide with a test run. Two checkouts on one
-// box (a worktree per task in the M1 loop) each pass their own pair.
+// box (a worktree per task) each pass their own pair.
 function port(name: string, fallback: number): number {
   const raw = process.env[name];
   const value = raw === undefined || raw === "" ? fallback : Number(raw);
@@ -39,7 +39,7 @@ const webPort = port("DZPOS_E2E_WEB_PORT", 5174);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const baseURL = `http://127.0.0.1:${webPort}`;
 
-// One project per UI language (T7). Each sets `dzpos-lang` in localStorage
+// One project per UI language. Each sets `dzpos-lang` in localStorage
 // through `storageState` before the app's first script runs, the way
 // I18nProvider reads it (src/i18n/index.tsx, `initialLang`), and a browser
 // `locale` matching it so the OS-level bits (date pickers, number input
@@ -86,7 +86,11 @@ export default defineConfig({
   testDir: path.join(desktopDir, "e2e"),
   outputDir: path.join(artifactsDir, "test-results"),
   reporter: [["list"]],
-  // One browser, one worker: the two tests share one SQLite file.
+  // One browser, one worker. Every spec in the run shares one API process
+  // over one SQLite file, so two of them writing at once would each see
+  // rows the other seeded; and the suites are ordered by filename on
+  // purpose (the settings spec leaves the shop under the réel for the till
+  // specs that follow it).
   fullyParallel: false,
   workers: 1,
   retries: 0,

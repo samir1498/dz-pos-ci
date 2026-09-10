@@ -15,8 +15,12 @@ use dzpos_core::models::document::{Document, DocumentKind, DocumentLine, Documen
 use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::models::shop::{Shop, StoreBlock};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
+use dzpos_core::services::avoir::AvoirLine;
 use dzpos_core::services::backup::Backup;
-use dzpos_core::services::sales::{NewSale, NewSaleLine};
+use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
+use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
+use dzpos_core::services::documents::CancelEffect;
+use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, SaleKind, Warning};
 use dzpos_core::services::settings::DatedRegime;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -201,6 +205,17 @@ pub struct HealthDto {
     pub shop_id: i32,
 }
 
+/// The day the shop is on, `YYYY-MM-DD`. A screen that needs "today" asks
+/// for it rather than reading the machine's calendar: the core dates every
+/// document on Algeria's, UTC+1 with no daylight saving, and a browser in
+/// another zone would date a statement a day either side of what the ledger
+/// holds (features.md §2, "One clock").
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "ClockDto.ts")]
+pub struct ClockDto {
+    pub today: String,
+}
+
 /// The shape every failure takes. Generated so the client can narrow on
 /// `code` without repeating the string list.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -214,6 +229,37 @@ pub struct ApiErrorDto {
 pub struct ApiErrorPayloadDto {
     pub code: String,
     pub message: String,
+    /// Only on `credit_limit`: what the customer would owe once this sale
+    /// landed, and the limit that refused it. Absent from every other error,
+    /// so the till reads them as optional and never as a zero somebody meant
+    /// (crates/api/src/error.rs writes them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub balance_after_centimes: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub credit_limit_centimes: Option<i64>,
+    /// The field of the request a refusal is about, when it is about one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub field: Option<String>,
+    /// Only on a payment refused for being more than the debt: what the
+    /// customer actually owes. "Too much" is useless without the amount that
+    /// would not have been.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub outstanding_centimes: Option<i64>,
+    /// Only on `party_ids`: which half of the facture is short (`seller` or
+    /// `buyer`) and which identifiers it is short of (`rc`, `nis`, `name`,
+    /// `address`). The till sends the cashier to the settings or to the
+    /// fiche on the side, and names the fields from the list; neither is
+    /// re-derived from the code (architecture.md rule 2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub party_side: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub missing_ids: Option<Vec<String>>,
 }
 
 /// The seller block a ticket prints (features.md §3). Sent whole on every
@@ -413,8 +459,9 @@ impl From<PaymentModeDto> for PaymentMode {
     }
 }
 
-/// The document kinds of features.md §3. M1 issues `ticket`; the union is
-/// whole so a later milestone adds a screen, not a type.
+/// The document kinds of features.md §3. The till issues `ticket` and
+/// `facture`; the union is whole so a later milestone adds a screen, not a
+/// type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export_to = "DocumentKindDto.ts")]
 #[serde(rename_all = "snake_case")]
@@ -425,6 +472,7 @@ pub enum DocumentKindDto {
     BonDeLivraison,
     Avoir,
     BonDeReception,
+    Quittance,
 }
 
 impl From<DocumentKind> for DocumentKindDto {
@@ -436,6 +484,35 @@ impl From<DocumentKind> for DocumentKindDto {
             DocumentKind::BonDeLivraison => DocumentKindDto::BonDeLivraison,
             DocumentKind::Avoir => DocumentKindDto::Avoir,
             DocumentKind::BonDeReception => DocumentKindDto::BonDeReception,
+            DocumentKind::Quittance => DocumentKindDto::Quittance,
+        }
+    }
+}
+
+/// The paper the till rings a basket up on (features.md §3). Three values
+/// and not `DocumentKindDto`: an avoir and a bon de livraison are their own
+/// writes with their own rules, and a till that could name one on `POST
+/// /sales` would be issuing a document nobody asked for.
+///
+/// A proforma is here because the till is where the basket is. It is the one
+/// value that ends in no sale: the core hands it to `services::proforma`,
+/// which writes the quotation and moves neither stock nor debt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[ts(export_to = "SaleKindDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum SaleKindDto {
+    #[default]
+    Ticket,
+    Facture,
+    Proforma,
+}
+
+impl From<SaleKindDto> for SaleKind {
+    fn from(k: SaleKindDto) -> Self {
+        match k {
+            SaleKindDto::Ticket => SaleKind::Ticket,
+            SaleKindDto::Facture => SaleKind::Facture,
+            SaleKindDto::Proforma => SaleKind::Proforma,
         }
     }
 }
@@ -474,6 +551,9 @@ pub struct SaleLineDto {
     pub line_discount_centimes: i64,
     pub rate_bps: u32,
     pub line_total_centimes: i64,
+    /// The facture line this one credits, on an avoir line and nowhere else.
+    /// The screen showing an avoir beside its facture lines the two up by it.
+    pub ref_line_id: Option<i32>,
 }
 
 impl From<DocumentLine> for SaleLineDto {
@@ -489,12 +569,13 @@ impl From<DocumentLine> for SaleLineDto {
             line_discount_centimes: l.line_discount.as_centimes(),
             rate_bps: l.rate_bps.as_u32(),
             line_total_centimes: l.line_total.as_centimes(),
+            ref_line_id: l.ref_line_id,
         }
     }
 }
 
 /// One row of the TVA recap, stored at issue so a reprint never recomputes
-/// it. Empty under the IFU (`regime_ifu_prints_no_tva`).
+/// it. Empty under the IFU (`an_ifu_facture_names_no_tax_in_any_language`).
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export_to = "SaleTvaDto.ts")]
 pub struct SaleTvaDto {
@@ -527,6 +608,20 @@ pub struct SaleTotalsDto {
     pub net_to_pay_centimes: i64,
 }
 
+/// What the customer owed before this document, what it leaves unpaid, and
+/// what they owe now (features.md §3, the balance triple). Stored on the
+/// document at issue and never recomputed, so a screen and a reprint say the
+/// same thing. `remaining_debt_centimes` is the one of the three that moves
+/// afterwards: a payment settles part of a document and the column says how
+/// much of it is left. Null on a document that names no customer.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SaleBalanceDto.ts")]
+pub struct SaleBalanceDto {
+    pub old_balance_centimes: i64,
+    pub remaining_debt_centimes: i64,
+    pub total_debt_centimes: i64,
+}
+
 /// A sale as the till reads it back: the document, its lines and its TVA
 /// recap in one answer, so the receipt view makes one call.
 #[derive(Debug, Clone, Serialize, TS)]
@@ -537,6 +632,11 @@ pub struct SaleDto {
     pub kind: DocumentKindDto,
     pub series: String,
     pub number: i64,
+    /// The number as it is printed and as a customer quotes it back,
+    /// `FA-000001`. Built by the core beside the templates that print it
+    /// (`print::number`), so a screen naming a document and the paper in the
+    /// customer's hand cannot spell it two ways.
+    pub printed_number: String,
     /// `YYYY-MM-DD HH:MM:SS` on the shop's calendar (core, services::clock).
     pub issued_at: String,
     pub user_id: i32,
@@ -544,12 +644,89 @@ pub struct SaleDto {
     pub payment_mode: PaymentModeDto,
     pub seller: StoreDto,
     pub customer_id: Option<i32>,
+    /// The facture an avoir is written against, null on every other kind.
+    /// The screen showing an avoir follows it to name the paper it credits.
+    pub ref_document_id: Option<i32>,
+    /// The buyer's name as this document printed it, snapshotted at issue.
+    /// Null on a ticket sold to whoever walked in. A list naming the customer
+    /// reads it from here and never from the fiche: the fiche is edited in
+    /// place, and the paper says who it was made out to on the day.
+    pub buyer_name: Option<String>,
+    /// Null on a document with no customer, which is every cash ticket.
+    pub balance: Option<SaleBalanceDto>,
     pub totals: SaleTotalsDto,
     pub tva: Vec<SaleTvaDto>,
     pub tendered_centimes: Option<i64>,
     pub change_centimes: Option<i64>,
     pub status: DocumentStatusDto,
+    /// Filled exactly when `status` is `cancelled`: when it was annulled, by
+    /// whom, why, and the avoir that carried the money back when one did.
+    pub cancellation: Option<SaleCancellationDto>,
     pub lines: Vec<SaleLineDto>,
+    /// What cancelling this document would do, so a screen can say it before
+    /// it asks. Null on a list and on the answer to a sale: it is a question
+    /// about one stored document and it costs a read of that document's credit
+    /// notes, so only a read of one document carries it.
+    pub cancel_effect: Option<SaleCancelEffectDto>,
+    /// What the till should say while still handing over the ticket, null
+    /// when there is nothing to say. A read of a stored document carries
+    /// none: a warning is about the moment the sale was rung up, not about
+    /// the paper.
+    pub warning: Option<SaleWarningDto>,
+}
+
+/// What cancelling a document would do. A union rather than a word and a
+/// nullable amount, so the amount cannot go missing on the one shape that has
+/// one, and so the day a fourth effect exists the screens matching on these
+/// three stop compiling.
+///
+/// The screen must not work this out from the document's own fields. A
+/// facture whose goods have all come back on earlier credit notes carries
+/// debt, was sold on credit and names a customer, and cancelling it does
+/// nothing at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "SaleCancelEffectDto.ts")]
+#[serde(tag = "effect", rename_all = "snake_case")]
+pub enum SaleCancelEffectDto {
+    /// Annulled and nothing moves: every line has already come back.
+    NothingToReverse,
+    /// The goods go back on the shelf. Nobody was owed anything.
+    StockBack,
+    /// The goods go back and this much comes off the customer's account. On a
+    /// facture that is a numbered avoir; on a ticket it is a ledger row alone,
+    /// because an avoir is written against a facture.
+    StockBackAndAvoir { amount_centimes: i64 },
+}
+
+impl From<CancelEffect> for SaleCancelEffectDto {
+    fn from(e: CancelEffect) -> Self {
+        match e {
+            CancelEffect::NothingToReverse => SaleCancelEffectDto::NothingToReverse,
+            CancelEffect::StockBack => SaleCancelEffectDto::StockBack,
+            CancelEffect::StockBackAndAvoir { amount } => SaleCancelEffectDto::StockBackAndAvoir {
+                amount_centimes: amount.as_centimes(),
+            },
+        }
+    }
+}
+
+/// What the till should say about a sale that went through anyway. A union
+/// rather than a string, so the day a second warning exists the screens that
+/// match on this one stop compiling instead of quietly ignoring it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "SaleWarningDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum SaleWarningDto {
+    /// The balance this sale leaves reached the customer's warn threshold.
+    NearLimit,
+}
+
+impl From<Warning> for SaleWarningDto {
+    fn from(w: Warning) -> Self {
+        match w {
+            Warning::NearLimit => SaleWarningDto::NearLimit,
+        }
+    }
 }
 
 impl From<Document> for SaleDto {
@@ -557,6 +734,7 @@ impl From<Document> for SaleDto {
         SaleDto {
             id: d.id,
             shop_id: d.shop_id,
+            printed_number: dzpos_core::print::number(&d),
             kind: d.kind.into(),
             series: d.series,
             number: d.number,
@@ -574,6 +752,13 @@ impl From<Document> for SaleDto {
                 phone: d.seller.phone,
             },
             customer_id: d.customer_id,
+            ref_document_id: d.ref_document_id,
+            buyer_name: d.buyer.as_ref().map(|b| b.name.clone()),
+            balance: d.balance.map(|b| SaleBalanceDto {
+                old_balance_centimes: b.old_balance.as_centimes(),
+                remaining_debt_centimes: b.remaining_debt.as_centimes(),
+                total_debt_centimes: b.total_debt.as_centimes(),
+            }),
             totals: SaleTotalsDto {
                 total_ht_centimes: d.totals.total_ht.as_centimes(),
                 discount_centimes: d.totals.discount.as_centimes(),
@@ -587,7 +772,24 @@ impl From<Document> for SaleDto {
             tendered_centimes: d.tendered.map(Money::as_centimes),
             change_centimes: d.change.map(Money::as_centimes),
             status: d.status.into(),
+            cancellation: d.cancellation.map(|c| SaleCancellationDto {
+                cancelled_at: c.at.format(DATE_TIME_FORMAT).to_string(),
+                cancelled_by: c.by,
+                reason: c.reason,
+                avoir_document_id: c.avoir_document_id,
+            }),
             lines: d.lines.into_iter().map(Into::into).collect(),
+            cancel_effect: None,
+            warning: None,
+        }
+    }
+}
+
+impl From<Sale> for SaleDto {
+    fn from(s: Sale) -> Self {
+        SaleDto {
+            warning: s.warning.map(Into::into),
+            ..SaleDto::from(s.document)
         }
     }
 }
@@ -620,6 +822,22 @@ pub struct NewSaleDto {
     pub payment_mode: PaymentModeDto,
     #[serde(default)]
     pub tendered_centimes: Option<i64>,
+    /// Who the sale is made out to. Required on credit; on cash and card it
+    /// names the buyer on the document and moves no debt.
+    #[serde(default)]
+    pub customer_id: Option<i32>,
+    /// Sell past the customer's credit limit on purpose. `override` on the
+    /// wire because that is what the button says; `override` is a Rust
+    /// keyword, so the field is spelled out here and renamed on both sides.
+    #[serde(default, rename = "override")]
+    #[ts(rename = "override")]
+    pub override_credit: bool,
+    /// Ticket or facture, decided at the till before the sale is saved
+    /// (features.md §3). Left out means a ticket: a sale to a consumer is
+    /// the ordinary case and asks nothing of the buyer, so a caller written
+    /// before this field existed keeps issuing what it always did.
+    #[serde(default)]
+    pub kind: SaleKindDto,
 }
 
 impl TryFrom<NewSaleDto> for NewSale {
@@ -654,9 +872,363 @@ impl TryFrom<NewSaleDto> for NewSale {
                 .map(|c| within_js_safe_range("tendered_centimes", c))
                 .transpose()?
                 .map(Money::centimes),
+            customer_id: d.customer_id,
+            override_credit: d.override_credit,
+            kind: d.kind.into(),
             // The server dates the document (core, services::clock).
             issued_at: None,
         })
+    }
+}
+
+/// Who the buyer is (features.md §2). Asked for on the fiche, never inferred
+/// from whether an RC was typed in: loi 04-02 art. 10 decides ticket against
+/// facture by the buyer, so an inference would flip the rule the moment
+/// somebody cleared a field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "PartyKindDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum PartyKindDto {
+    Company,
+    Consumer,
+}
+
+impl From<PartyKind> for PartyKindDto {
+    fn from(k: PartyKind) -> Self {
+        match k {
+            PartyKind::Company => PartyKindDto::Company,
+            PartyKind::Consumer => PartyKindDto::Consumer,
+        }
+    }
+}
+
+impl From<PartyKindDto> for PartyKind {
+    fn from(k: PartyKindDto) -> Self {
+        match k {
+            PartyKindDto::Company => PartyKind::Company,
+            PartyKindDto::Consumer => PartyKind::Consumer,
+        }
+    }
+}
+
+/// Why the debt moved (features.md §2). The whole union crosses from the
+/// first version: the ledger already holds the `sale` and `payment` rows the
+/// till writes, and a screen that met an unknown kind could only refuse the
+/// whole answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "DebtKindDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum DebtKindDto {
+    Opening,
+    Sale,
+    Payment,
+    Avoir,
+    Adjustment,
+}
+
+impl From<DebtKind> for DebtKindDto {
+    fn from(k: DebtKind) -> Self {
+        match k {
+            DebtKind::Opening => DebtKindDto::Opening,
+            DebtKind::Sale => DebtKindDto::Sale,
+            DebtKind::Payment => DebtKindDto::Payment,
+            DebtKind::Avoir => DebtKindDto::Avoir,
+            DebtKind::Adjustment => DebtKindDto::Adjustment,
+        }
+    }
+}
+
+/// What a cancellation left on the document it annulled (features.md §3).
+/// Whole or absent: a screen never has to ask whether the date is there
+/// while the reason is not.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "SaleCancellationDto.ts")]
+pub struct SaleCancellationDto {
+    /// `YYYY-MM-DD HH:MM:SS` on the shop's calendar.
+    pub cancelled_at: String,
+    pub cancelled_by: i32,
+    pub reason: String,
+    /// The avoir the cancellation issued, null when there was nothing to
+    /// carry back: a cash ticket owed nobody anything.
+    pub avoir_document_id: Option<i32>,
+}
+
+/// One line of a facture and how much of it is coming back on an avoir. The
+/// line is named by id and never by the product on it: a facture carries one
+/// product on two lines as soon as a line discount is involved.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "AvoirLineDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct AvoirLineDto {
+    pub document_line_id: i32,
+    pub qty_milli: i64,
+}
+
+/// What is coming back on a credit note. `lines` of null is the whole of what
+/// is left on the facture, which is what the "avoir the lot" button sends and
+/// what a cancellation uses.
+///
+/// Which is why a field this type does not know is refused rather than
+/// dropped: `line` for `lines` would otherwise read as the whole facture
+/// coming back, and a shop asking for one unit of three would have credited
+/// all three without being told.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewAvoirDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewAvoirDto {
+    pub lines: Option<Vec<AvoirLineDto>>,
+    pub reason: Option<String>,
+}
+
+impl NewAvoirDto {
+    pub fn lines(&self) -> Option<Vec<AvoirLine>> {
+        self.lines.as_ref().map(|lines| {
+            lines
+                .iter()
+                .map(|l| AvoirLine {
+                    document_line_id: l.document_line_id,
+                    qty_milli: l.qty_milli,
+                })
+                .collect()
+        })
+    }
+}
+
+/// Why a document is being annulled. Required: a document annulled for no
+/// stated reason is what features.md §5 keeps a log against.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "CancelDocumentDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct CancelDocumentDto {
+    pub reason: String,
+}
+
+/// The fiche as a screen reads it, with what the customer owes. The balance
+/// is the ledger's sum computed in the core, never a stored column, and it
+/// travels with the fiche so the list does not make a call per row.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "CustomerDto.ts")]
+pub struct CustomerDto {
+    pub id: i32,
+    pub shop_id: i32,
+    pub name: String,
+    pub party_kind: PartyKindDto,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    /// Null is no limit at all, zero is no credit at all: two different
+    /// answers, and the till acts on them differently.
+    pub credit_limit_centimes: Option<i64>,
+    pub warn_threshold_centimes: Option<i64>,
+    pub notes: Option<String>,
+    pub active: bool,
+    /// Below zero is the shop owing the customer after an overpayment.
+    pub balance_centimes: i64,
+}
+
+impl From<CustomerWithBalance> for CustomerDto {
+    fn from(c: CustomerWithBalance) -> Self {
+        let balance = c.balance.as_centimes();
+        let c = c.customer;
+        CustomerDto {
+            id: c.id,
+            shop_id: c.shop_id,
+            name: c.name,
+            party_kind: c.party_kind.into(),
+            phone: c.phone,
+            address: c.address,
+            rc: c.rc,
+            nif: c.nif,
+            nis: c.nis,
+            ai: c.ai,
+            credit_limit_centimes: c.credit_limit.map(Money::as_centimes),
+            warn_threshold_centimes: c.warn_threshold.map(Money::as_centimes),
+            notes: c.notes,
+            active: c.active,
+            balance_centimes: balance,
+        }
+    }
+}
+
+/// The fields a fiche is written with, on a create and on an update alike.
+/// The whole row travels every time, the way the store block does: a field
+/// left out is a bug at the edge, and a null clears the column.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "CustomerWriteDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct CustomerWriteDto {
+    pub name: String,
+    pub party_kind: PartyKindDto,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    pub credit_limit_centimes: Option<i64>,
+    pub warn_threshold_centimes: Option<i64>,
+    pub notes: Option<String>,
+    pub active: bool,
+    /// Why a fiche is being closed. Asked for only when the update closes one
+    /// that still carries a balance either way or a document still asking to
+    /// be paid, and ignored on every other update.
+    #[serde(default)]
+    pub close_reason: Option<String>,
+}
+
+/// A new fiche: the same fields, plus the debt the shop was already carrying
+/// for this customer before it had the app. The opening debt is only on the
+/// create because it is a ledger movement, not a column, and an update that
+/// could set it would be an edit to the ledger nobody could see (features.md
+/// §2).
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewCustomerDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewCustomerDto {
+    pub name: String,
+    pub party_kind: PartyKindDto,
+    pub phone: Option<String>,
+    pub address: Option<String>,
+    pub rc: Option<String>,
+    pub nif: Option<String>,
+    pub nis: Option<String>,
+    pub ai: Option<String>,
+    pub credit_limit_centimes: Option<i64>,
+    pub warn_threshold_centimes: Option<i64>,
+    pub notes: Option<String>,
+    #[serde(default = "yes")]
+    pub active: bool,
+    #[serde(default)]
+    pub opening_debt_centimes: Option<i64>,
+}
+
+impl TryFrom<CustomerWriteDto> for NewCustomer {
+    type Error = ApiError;
+
+    fn try_from(d: CustomerWriteDto) -> Result<Self, ApiError> {
+        Ok(NewCustomer {
+            name: d.name,
+            party_kind: d.party_kind.into(),
+            phone: d.phone,
+            address: d.address,
+            rc: d.rc,
+            nif: d.nif,
+            nis: d.nis,
+            ai: d.ai,
+            credit_limit: money_field("credit_limit_centimes", d.credit_limit_centimes)?,
+            warn_threshold: money_field("warn_threshold_centimes", d.warn_threshold_centimes)?,
+            notes: d.notes,
+            active: d.active,
+        })
+    }
+}
+
+impl TryFrom<NewCustomerDto> for NewCustomer {
+    type Error = ApiError;
+
+    fn try_from(d: NewCustomerDto) -> Result<Self, ApiError> {
+        NewCustomer::try_from(CustomerWriteDto {
+            name: d.name,
+            party_kind: d.party_kind,
+            phone: d.phone,
+            address: d.address,
+            rc: d.rc,
+            nif: d.nif,
+            nis: d.nis,
+            ai: d.ai,
+            credit_limit_centimes: d.credit_limit_centimes,
+            warn_threshold_centimes: d.warn_threshold_centimes,
+            notes: d.notes,
+            active: d.active,
+            // A fiche being created closes nothing.
+            close_reason: None,
+        })
+    }
+}
+
+/// An optional amount on the wire, checked against the safe-integer bound
+/// like every other one: `None` stays `None`, which is the field left empty.
+pub fn money_field(field: &'static str, value: Option<i64>) -> Result<Option<Money>, ApiError> {
+    value
+        .map(|c| within_js_safe_range(field, c))
+        .transpose()
+        .map(|c| c.map(Money::centimes))
+}
+
+/// One movement of the ledger, with the balance it left behind.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "DebtEntryDto.ts")]
+pub struct DebtEntryDto {
+    pub id: i32,
+    pub customer_id: i32,
+    /// The document the movement came from, when it came from one. An
+    /// opening balance and an adjustment cite none.
+    pub document_id: Option<i32>,
+    pub kind: DebtKindDto,
+    /// What the movement added to the debt; zero on a payment or an avoir.
+    pub debit_centimes: i64,
+    /// What it took off; zero on a sale or an opening balance.
+    pub credit_centimes: i64,
+    /// The balance as of this movement: every older one counted, no newer
+    /// one. Computed in the core (services::debt).
+    pub balance_after_centimes: i64,
+    pub user_id: i32,
+    pub note: Option<String>,
+    /// `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
+    pub created_at: String,
+}
+
+impl From<LedgerLine> for DebtEntryDto {
+    fn from(l: LedgerLine) -> Self {
+        DebtEntryDto {
+            id: l.entry.id,
+            customer_id: l.entry.customer_id,
+            document_id: l.entry.document_id,
+            kind: l.entry.kind.into(),
+            debit_centimes: l.entry.debit.as_centimes(),
+            credit_centimes: l.entry.credit.as_centimes(),
+            balance_after_centimes: l.balance_after.as_centimes(),
+            user_id: l.entry.user_id,
+            note: l.entry.note,
+            created_at: l.entry.created_at.format(DATE_TIME_FORMAT).to_string(),
+        }
+    }
+}
+
+/// A customer's ledger: the movements newest first and the balance they sum
+/// to. The balance is in the envelope so a screen showing it never adds the
+/// column up itself.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "CustomerLedgerDto.ts")]
+pub struct CustomerLedgerDto {
+    pub customer_id: i32,
+    pub balance_centimes: i64,
+    pub entries: Vec<DebtEntryDto>,
+}
+
+/// A correction to what a customer owes: signed centimes and why. Positive
+/// raises the debt, negative lowers it, zero is refused. The ledger is
+/// append-only, so this writes a movement rather than editing one.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "AdjustmentDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct AdjustmentDto {
+    pub amount_centimes: i64,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+impl AdjustmentDto {
+    /// The amount as money the core will take. The safe-integer bound is
+    /// checked here, at the edge, like every other amount on the wire.
+    pub fn amount(&self) -> Result<Money, ApiError> {
+        Ok(Money::centimes(within_js_safe_range(
+            "amount_centimes",
+            self.amount_centimes,
+        )?))
     }
 }
 
@@ -677,4 +1249,123 @@ pub fn parse_day(field: &'static str, text: &str) -> Result<NaiveDate, ApiError>
         .ok_or_else(|| {
             ApiError::Request(CoreError::validation(field, "a day is written YYYY-MM-DD"))
         })
+}
+
+/// How a payment against a debt was taken (features.md §2). Two ways and not
+/// three: settling a credit with more credit is not a payment, so this is not
+/// `PaymentModeDto`, which is what a document was sold under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "PaymentMethodDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum PaymentMethodDto {
+    Cash,
+    Card,
+}
+
+impl From<PaymentMethod> for PaymentMethodDto {
+    fn from(m: PaymentMethod) -> Self {
+        match m {
+            PaymentMethod::Cash => PaymentMethodDto::Cash,
+            PaymentMethod::Card => PaymentMethodDto::Card,
+        }
+    }
+}
+
+impl From<PaymentMethodDto> for PaymentMethod {
+    fn from(m: PaymentMethodDto) -> Self {
+        match m {
+            PaymentMethodDto::Cash => PaymentMethod::Cash,
+            PaymentMethodDto::Card => PaymentMethod::Card,
+        }
+    }
+}
+
+/// What one payment placed on one document (features.md §2). A payment is one
+/// movement and the documents it settled are these, oldest first.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PaymentAllocationDto.ts")]
+pub struct PaymentAllocationDto {
+    pub document_id: i32,
+    pub amount_centimes: i64,
+}
+
+impl From<DebtAllocation> for PaymentAllocationDto {
+    fn from(a: DebtAllocation) -> Self {
+        PaymentAllocationDto {
+            document_id: a.document_id,
+            amount_centimes: a.amount.as_centimes(),
+        }
+    }
+}
+
+/// One payment, with what it settled and the balance it left behind. The
+/// allocations travel with it so a screen showing a payment never asks a
+/// second time what the money went to.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PaymentDto.ts")]
+pub struct PaymentDto {
+    /// The ledger movement's id: a payment is a row of the ledger, and an
+    /// allocation names it.
+    pub ledger_id: i32,
+    pub customer_id: i32,
+    pub amount_centimes: i64,
+    /// Null on a payment written before the mode was stored; nothing writes
+    /// one without it now.
+    pub payment_mode: Option<PaymentMethodDto>,
+    pub note: Option<String>,
+    /// The balance as of this payment: every older movement counted, no newer
+    /// one. Computed in the core (services::debt).
+    pub balance_after_centimes: i64,
+    pub allocations: Vec<PaymentAllocationDto>,
+    /// `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
+    pub created_at: String,
+}
+
+impl From<Payment> for PaymentDto {
+    fn from(p: Payment) -> Self {
+        PaymentDto {
+            ledger_id: p.entry.id,
+            customer_id: p.entry.customer_id,
+            amount_centimes: p.entry.credit.as_centimes(),
+            payment_mode: p.entry.payment_mode.map(Into::into),
+            note: p.entry.note,
+            balance_after_centimes: p.balance_after.as_centimes(),
+            allocations: p.allocations.into_iter().map(Into::into).collect(),
+            created_at: p.entry.created_at.format(DATE_TIME_FORMAT).to_string(),
+        }
+    }
+}
+
+/// A customer's payments, newest first, and the balance the whole ledger sums
+/// to. The balance is in the envelope for the reason the ledger's is: a screen
+/// showing it never adds a column up itself.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "CustomerPaymentsDto.ts")]
+pub struct CustomerPaymentsDto {
+    pub customer_id: i32,
+    pub balance_centimes: i64,
+    pub payments: Vec<PaymentDto>,
+}
+
+/// Money against a debt: how much, how it was taken, and why if the shop
+/// wants to say. The moment is the server's, like a document's `issued_at`.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewPaymentDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewPaymentDto {
+    pub amount_centimes: i64,
+    pub payment_mode: PaymentMethodDto,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+impl NewPaymentDto {
+    /// The amount as money the core will take. The safe-integer bound is
+    /// checked here, at the edge, like every other amount on the wire.
+    pub fn amount(&self) -> Result<Money, ApiError> {
+        Ok(Money::centimes(within_js_safe_range(
+            "amount_centimes",
+            self.amount_centimes,
+        )?))
+    }
 }

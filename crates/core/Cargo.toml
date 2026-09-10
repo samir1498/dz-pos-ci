@@ -4,7 +4,15 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-diesel = { workspace = true, features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35"] }
+# `64-column-tables`: `documents` passed 32 columns when the buyer block and
+# the balance triple landed (migration 4), and diesel's default table macro
+# stops there.
+diesel = { workspace = true, features = [
+    "sqlite",
+    "chrono",
+    "returning_clauses_for_sqlite_3_35",
+    "64-column-tables",
+] }
 diesel_migrations = "2.2"
 # bundled: one binary, no system sqlite on the shop's Windows PC
 libsqlite3-sys = { version = "0.37", features = ["bundled"] }

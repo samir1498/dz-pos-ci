@@ -612,7 +612,7 @@ describe("in Arabic", () => {
 
 describe("in English", () => {
   test("a fractional category rate uses the shop's comma, not an English period", async () => {
-    // Ruling (coordinator review of T7, 2026-09-09): numbers follow the
+    // Ruling (coordinator review, 2026-09-09): numbers follow the
     // shop's own format, not the UI language. formatCentimes and
     // formatQty already read comma-decimal in every language
     // ("9,20", "24,5"); rateLabel's fallback for a rate the fixed list

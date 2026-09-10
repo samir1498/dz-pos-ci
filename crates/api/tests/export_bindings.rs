@@ -10,19 +10,24 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    ApiErrorDto, ApiErrorPayloadDto, BackupDto, BackupsDto, CategoryDto, DatedRegimeDto,
-    DocumentKindDto, DocumentStatusDto, HealthDto, NewProductDto, NewSaleDto, NewSaleLineDto,
-    PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SaleDto, SaleLineDto,
-    SaleTotalsDto, SaleTvaDto, SettingsDto, StoreDto, UnitDto,
+    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AvoirLineDto, BackupDto, BackupsDto,
+    CancelDocumentDto, CategoryDto, ClockDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto,
+    CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto, DocumentKindDto,
+    DocumentStatusDto, HealthDto, NewAvoirDto, NewCustomerDto, NewPaymentDto, NewProductDto,
+    NewSaleDto, NewSaleLineDto, PartyKindDto, PaymentAllocationDto, PaymentDto, PaymentMethodDto,
+    PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto,
+    SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto,
+    SaleTvaDto, SaleWarningDto, SettingsDto, StoreDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 24] = [
+const FILES: [&str; 46] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
     "CategoryDto.ts",
     "HealthDto.ts",
+    "ClockDto.ts",
     "ApiErrorDto.ts",
     "ApiErrorPayloadDto.ts",
     "StoreDto.ts",
@@ -39,9 +44,30 @@ const FILES: [&str; 24] = [
     "SaleLineDto.ts",
     "SaleTvaDto.ts",
     "SaleTotalsDto.ts",
+    "SaleBalanceDto.ts",
+    "SaleWarningDto.ts",
     "SaleDto.ts",
     "NewSaleLineDto.ts",
     "NewSaleDto.ts",
+    "SaleKindDto.ts",
+    "SaleCancelEffectDto.ts",
+    "SaleCancellationDto.ts",
+    "AvoirLineDto.ts",
+    "NewAvoirDto.ts",
+    "CancelDocumentDto.ts",
+    "PartyKindDto.ts",
+    "DebtKindDto.ts",
+    "CustomerDto.ts",
+    "CustomerWriteDto.ts",
+    "NewCustomerDto.ts",
+    "DebtEntryDto.ts",
+    "CustomerLedgerDto.ts",
+    "AdjustmentDto.ts",
+    "PaymentMethodDto.ts",
+    "PaymentAllocationDto.ts",
+    "PaymentDto.ts",
+    "CustomerPaymentsDto.ts",
+    "NewPaymentDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -104,6 +130,7 @@ fn export_bindings() {
     NewProductDto::export_all(&cfg).unwrap();
     CategoryDto::export_all(&cfg).unwrap();
     HealthDto::export_all(&cfg).unwrap();
+    ClockDto::export_all(&cfg).unwrap();
     ApiErrorDto::export_all(&cfg).unwrap();
     ApiErrorPayloadDto::export_all(&cfg).unwrap();
     StoreDto::export_all(&cfg).unwrap();
@@ -120,9 +147,30 @@ fn export_bindings() {
     SaleLineDto::export_all(&cfg).unwrap();
     SaleTvaDto::export_all(&cfg).unwrap();
     SaleTotalsDto::export_all(&cfg).unwrap();
+    SaleBalanceDto::export_all(&cfg).unwrap();
+    SaleWarningDto::export_all(&cfg).unwrap();
     SaleDto::export_all(&cfg).unwrap();
     NewSaleLineDto::export_all(&cfg).unwrap();
     NewSaleDto::export_all(&cfg).unwrap();
+    SaleKindDto::export_all(&cfg).unwrap();
+    SaleCancelEffectDto::export_all(&cfg).unwrap();
+    SaleCancellationDto::export_all(&cfg).unwrap();
+    AvoirLineDto::export_all(&cfg).unwrap();
+    NewAvoirDto::export_all(&cfg).unwrap();
+    CancelDocumentDto::export_all(&cfg).unwrap();
+    PartyKindDto::export_all(&cfg).unwrap();
+    DebtKindDto::export_all(&cfg).unwrap();
+    CustomerDto::export_all(&cfg).unwrap();
+    CustomerWriteDto::export_all(&cfg).unwrap();
+    NewCustomerDto::export_all(&cfg).unwrap();
+    DebtEntryDto::export_all(&cfg).unwrap();
+    CustomerLedgerDto::export_all(&cfg).unwrap();
+    AdjustmentDto::export_all(&cfg).unwrap();
+    PaymentMethodDto::export_all(&cfg).unwrap();
+    PaymentAllocationDto::export_all(&cfg).unwrap();
+    PaymentDto::export_all(&cfg).unwrap();
+    CustomerPaymentsDto::export_all(&cfg).unwrap();
+    NewPaymentDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

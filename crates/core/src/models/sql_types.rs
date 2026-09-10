@@ -100,8 +100,13 @@ text_enum! {
 }
 
 text_enum! {
-    /// The document kinds of features.md §3. M1 issues `Ticket` only; the
-    /// others exist so a later milestone adds a screen, not a migration.
+    /// The document kinds of features.md §3. The till issues `Ticket` and
+    /// `Facture`; the others exist so a later milestone adds a screen, not a
+    /// migration.
+    /// `Quittance` is the stamped receipt for a payment against a debt, and
+    /// nothing issues one: the comptable has not said whether a payment on
+    /// account needs its own numbered document (R8), and a kind added once
+    /// there are documents means rebuilding the table again.
     DocumentKind {
         Ticket => "ticket",
         Facture => "facture",
@@ -109,6 +114,46 @@ text_enum! {
         BonDeLivraison => "bon_de_livraison",
         Avoir => "avoir",
         BonDeReception => "bon_de_reception",
+        Quittance => "quittance",
+    }
+}
+
+text_enum! {
+    /// Whether a party is a company or a private consumer. A field on the
+    /// fiche, never inferred from whether an RC was typed in: loi 04-02
+    /// art. 10 decides ticket against facture by who the buyer is, and
+    /// `a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number` and `a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else` ask a different set of fields of each,
+    /// so an inference would flip the rule the moment a field is cleared.
+    PartyKind {
+        Company => "company",
+        Consumer => "consumer",
+    }
+}
+
+text_enum! {
+    /// Why the debt moved (features.md §2). `opening` is the balance the shop
+    /// was carrying before it had this app; `adjustment` is how a mistake is
+    /// corrected, because the ledger is append-only and a row is never edited.
+    DebtKind {
+        Opening => "opening",
+        Sale => "sale",
+        Payment => "payment",
+        Avoir => "avoir",
+        Adjustment => "adjustment",
+    }
+}
+
+text_enum! {
+    /// How a payment against a debt reached the till (features.md §2). Two
+    /// ways and not three: settling a credit with more credit is not a
+    /// payment, so `PaymentMode::Credit` has no counterpart here.
+    ///
+    /// It is informational on the movement. No stamp is computed from it: the
+    /// droit de timbre is a question about the receipt a later settlement is
+    /// handed, and the comptable has not answered it (R8).
+    PaymentMethod {
+        Cash => "cash",
+        Card => "card",
     }
 }
 
@@ -132,6 +177,7 @@ impl DocumentKind {
             DocumentKind::BonDeLivraison => "doc_bon_de_livraison",
             DocumentKind::Avoir => "doc_avoir",
             DocumentKind::BonDeReception => "doc_bon_de_reception",
+            DocumentKind::Quittance => "doc_quittance",
         }
     }
 
@@ -148,6 +194,7 @@ impl DocumentKind {
             DocumentKind::BonDeLivraison => "BL",
             DocumentKind::Avoir => "AV",
             DocumentKind::BonDeReception => "BR",
+            DocumentKind::Quittance => "QT",
         }
     }
 }

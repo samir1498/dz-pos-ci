@@ -3,6 +3,7 @@
 
 pub mod backups;
 pub mod categories;
+pub mod customers;
 pub mod products;
 pub mod sales;
 pub mod settings;
@@ -10,7 +11,7 @@ pub mod settings;
 use axum::extract::State;
 use axum::Json;
 
-use crate::dto::HealthDto;
+use crate::dto::{ClockDto, HealthDto};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -18,6 +19,18 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthDto> {
     Json(HealthDto {
         status: "ok".to_string(),
         shop_id: state.shop_id,
+    })
+}
+
+/// The shop's calendar. Read from the same `clock` the services date
+/// documents with, so a screen and a stored row never disagree about which
+/// day it is.
+pub async fn clock() -> Json<ClockDto> {
+    Json(ClockDto {
+        today: dzpos_core::services::clock::now()
+            .date()
+            .format("%Y-%m-%d")
+            .to_string(),
     })
 }
 

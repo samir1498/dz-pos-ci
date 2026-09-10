@@ -24,7 +24,8 @@ use dzpos_core::money::{
 use dzpos_core::print::render_ticket;
 use dzpos_core::print::strings::{text, Key};
 use dzpos_core::services::documents::{
-    Document, DocumentKind, DocumentLine, DocumentStatus, SellerBlock,
+    BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, PartyBlock, PartyKind,
+    SellerBlock,
 };
 
 const SHOP: i32 = 1;
@@ -45,6 +46,17 @@ const GLOBAL_DISCOUNT: i64 = 2_000;
 /// A thousand dinars handed over in cash.
 const TENDERED: i64 = 100_000;
 
+/// What the credit customer owed before this ticket: 2 500,00 DA. Written
+/// out rather than derived, so the triple on the paper is checked against a
+/// number a reader chose and not against one the code worked out.
+const OLD_BALANCE: i64 = 250_000;
+
+/// What the shop was holding for the other credit customer before this
+/// ticket: 5 000,00 DA the wrong way round. Large enough that the basket
+/// cannot take the closing balance back above zero, so the paper has to name
+/// the customer a creditor and not a debtor.
+const CREDIT_HELD: i64 = -500_000;
+
 /// The same basket, sold three ways. Each is a golden per language: the
 /// régime decides the TVA half of the paper and the payment mode decides
 /// the money half, and neither is a variation of the other.
@@ -58,14 +70,29 @@ enum Case {
     /// art. 100-I), and a card takes no note and gives no coins back, so
     /// three rows that are on every other ticket are absent from this one.
     Card,
+    /// Réel, credit: nothing tendered and no stamp, like the card, plus the
+    /// three rows of the debt block. The customer owed 2 500,00 before this
+    /// basket and owes that plus the net to pay after it.
+    Credit,
+    /// Réel, credit, to a customer the shop is holding money for: the same
+    /// three rows, closing below zero. The facture calls that a credit and
+    /// the ticket has to call it the same thing, or one basket rung up twice
+    /// tells the customer two different stories.
+    CreditHeld,
 }
 
 impl Case {
-    const ALL: [Case; 3] = [Case::Reel, Case::Ifu, Case::Card];
+    const ALL: [Case; 5] = [
+        Case::Reel,
+        Case::Ifu,
+        Case::Card,
+        Case::Credit,
+        Case::CreditHeld,
+    ];
 
     const fn regime(self) -> Regime {
         match self {
-            Case::Reel | Case::Card => Regime::Reel,
+            Case::Reel | Case::Card | Case::Credit | Case::CreditHeld => Regime::Reel,
             Case::Ifu => Regime::Ifu,
         }
     }
@@ -74,6 +101,17 @@ impl Case {
         match self {
             Case::Reel | Case::Ifu => PaymentMode::Cash,
             Case::Card => PaymentMode::Card,
+            Case::Credit | Case::CreditHeld => PaymentMode::Credit,
+        }
+    }
+
+    /// What the customer's account stood at before this basket, on the cases
+    /// that name a customer at all.
+    const fn old_balance(self) -> Option<i64> {
+        match self {
+            Case::Reel | Case::Ifu | Case::Card => None,
+            Case::Credit => Some(OLD_BALANCE),
+            Case::CreditHeld => Some(CREDIT_HELD),
         }
     }
 
@@ -83,12 +121,16 @@ impl Case {
             Case::Reel => "",
             Case::Ifu => "-ifu",
             Case::Card => "-card",
+            Case::Credit => "-credit",
+            Case::CreditHeld => "-credit-held",
         }
     }
 }
 
+mod common;
+
 fn goldens_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/print/ticket_80mm")
+    common::goldens_dir("ticket_80mm")
 }
 
 /// The one document every golden renders. Its totals come from
@@ -138,6 +180,7 @@ fn fixed_sale(case: Case) -> Document {
                 .unwrap()
                 .checked_sub(line.line_discount)
                 .unwrap(),
+            ref_line_id: None,
         })
         .collect();
 
@@ -154,6 +197,23 @@ fn fixed_sale(case: Case) -> Document {
         PaymentMode::Cash => Some(Money::centimes(TENDERED)),
         PaymentMode::Card | PaymentMode::Credit => None,
     };
+    // Only the credit sale names a customer here, so only it carries a buyer
+    // block and a balance. The triple is the ledger's answer at issue time:
+    // what was owed, what this document leaves unpaid, what is owed now.
+    let balance = case.old_balance().map(|old| BalanceTriple {
+        old_balance: Money::centimes(old),
+        remaining_debt: totals.net_to_pay,
+        total_debt: Money::centimes(old).checked_add(totals.net_to_pay).unwrap(),
+    });
+    let buyer = case.old_balance().map(|_| PartyBlock {
+        name: "Entreprise Amrani".to_owned(),
+        party_kind: PartyKind::Company,
+        rc: Some("16/00-7654321 B 25".to_owned()),
+        nif: Some("000216007654321".to_owned()),
+        nis: None,
+        ai: None,
+        address: Some("7 rue Larbi Ben M'hidi, Alger".to_owned()),
+    });
 
     Document {
         id: 1,
@@ -177,11 +237,17 @@ fn fixed_sale(case: Case) -> Document {
             address: Some("12 rue Didouche Mourad, Alger".to_owned()),
             phone: Some("0555 12 34 56".to_owned()),
         },
-        customer_id: None,
+        customer_id: case.old_balance().map(|_| 7),
+        // A till ticket is sold to whoever walked in unless the sale is on
+        // credit, and then it is owed by somebody the paper has to name.
+        buyer,
+        ref_document_id: None,
+        balance,
         change: tendered.map(|t| t.checked_sub(totals.net_to_pay).unwrap()),
         tendered,
         totals,
         status: DocumentStatus::Issued,
+        cancellation: None,
         lines,
         created_at: issued_at,
     }
@@ -263,6 +329,35 @@ fn centimes(printed: &str) -> i64 {
     sign * (whole * 100 + rest)
 }
 
+/// The text of every `<span class="rate rate-{marker}">` in the file: the
+/// rate cells, which carry a figure no amount parser would catch. The facture
+/// suite has the same pair of helpers, copied rather than shared for the
+/// reason its own header gives.
+fn rates(html: &str, marker: &str) -> Vec<String> {
+    let opening = format!("<span class=\"rate rate-{marker}\">");
+    html.split(&opening)
+        .skip(1)
+        .map(|rest| {
+            let end = rest.find("</span>").expect("a rate span never closes");
+            rest[..end].to_owned()
+        })
+        .collect()
+}
+
+/// "9,5 %" back to 950 basis points, and "19 %" to 1900. The golden's own
+/// digits, read by a parser that shares no code with the one that printed
+/// them.
+fn bps(printed: &str) -> u32 {
+    let digits: String = printed
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == ',')
+        .collect();
+    let (whole, rest) = digits.split_once(',').unwrap_or((digits.as_str(), ""));
+    let whole: u32 = whole.parse().unwrap();
+    let rest: u32 = format!("{rest:0<2}").parse().unwrap();
+    whole * 100 + rest
+}
+
 /// Every amount in the golden, against the totals the document stores.
 fn the_golden_says_what_the_document_stores(html: &str, doc: &Document) {
     let totals = &doc.totals;
@@ -302,11 +397,38 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document) {
         assert_eq!(centimes(printed), row.amount.as_centimes(), "a TVA row");
     }
 
+    // Each recap row names the rate its tax belongs to, and the paper is read
+    // for it the way the facture's is: an amount that landed under the wrong
+    // rate adds up on the page and is wrong on it.
+    let recap_rates = rates(html, "tva");
+    assert_eq!(
+        recap_rates.len(),
+        totals.tva_by_rate.len(),
+        "one rate per recap row"
+    );
+    for (printed, row) in recap_rates.iter().zip(&totals.tva_by_rate) {
+        assert_eq!(bps(printed), row.rate.as_u32(), "a recap row's rate");
+    }
+
     let lines = amounts(html, "line");
     assert_eq!(lines.len(), doc.lines.len(), "one total per sold line");
     for (printed, line) in lines.iter().zip(&doc.lines) {
         assert_eq!(centimes(printed), line.line_total.as_centimes(), "a line");
     }
+
+    // The rate on a line is the rate the line was sold at, réel only: under
+    // the IFU there is no rate column at all, not a column of zeroes
+    // (`an_ifu_ticket_names_no_tax_in_any_language`, below).
+    let line_rates = rates(html, "line");
+    let expected: Vec<u32> = match doc.regime {
+        Regime::Reel => doc.lines.iter().map(|l| l.rate_bps.as_u32()).collect(),
+        Regime::Ifu => Vec::new(),
+    };
+    assert_eq!(
+        line_rates.iter().map(|r| bps(r)).collect::<Vec<u32>>(),
+        expected,
+        "the rate cells of the lines"
+    );
 
     // A line discount is an amount on the paper like any other, so it is
     // read back like any other. A line that carries none prints no row.
@@ -339,6 +461,22 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document) {
         doc.change.map(Money::as_centimes),
         "the change row"
     );
+
+    // The debt block, the three amounts together or none at all. Read off
+    // the paper and compared with the triple the document stores, so a
+    // regenerated golden cannot quietly print a balance the document never
+    // held.
+    for (marker, amount) in [
+        ("old-balance", doc.balance.map(|b| b.old_balance)),
+        ("this-document", doc.balance.map(|b| b.remaining_debt)),
+        ("total-debt", doc.balance.map(|b| b.total_debt)),
+    ] {
+        assert_eq!(
+            optional_amount(html, marker),
+            amount.map(Money::as_centimes),
+            "the {marker} row"
+        );
+    }
 }
 
 /// One case against its three goldens: the render is the file, and the file
@@ -381,6 +519,113 @@ fn the_card_ticket_is_its_golden_in_every_language() {
 /// The cash ticket is checked in the same test so a template that dropped
 /// all three for everyone could not pass this.
 #[test]
+fn the_credit_ticket_is_its_golden_in_every_language() {
+    each_language_of(Case::Credit);
+}
+
+#[test]
+fn the_credit_held_ticket_is_its_golden_in_every_language() {
+    each_language_of(Case::CreditHeld);
+}
+
+/// A balance that closes below zero is money the shop is holding, and the
+/// facture has always named it that way (`the_balance_block_says_credit_when
+/// _the_avoir_closes_below_zero`). The ticket printed "total dû" over the
+/// same figure, so one customer's account had two names depending on which
+/// paper they were handed. The sign decides it and not the payment mode: the
+/// debtor's ticket beside it is what keeps a template that renamed the row
+/// for everybody from passing.
+#[test]
+fn a_ticket_that_closes_below_zero_names_the_customer_a_creditor() {
+    let held = fixed_sale(Case::CreditHeld);
+    let owed = fixed_sale(Case::Credit);
+    let closing = held
+        .balance
+        .expect("the credit-held ticket carries a balance")
+        .total_debt;
+    assert!(
+        closing.is_negative(),
+        "the fixture no longer closes below zero: {closing:?}"
+    );
+
+    for lang in Lang::ALL {
+        let html = render_ticket(&held, lang).unwrap();
+        assert!(
+            html.contains(text(Key::TotalCredit, lang)),
+            "the {lang:?} ticket does not name the credit"
+        );
+        assert!(
+            !html.contains(text(Key::TotalDebt, lang)),
+            "the {lang:?} ticket still calls the credit a debt"
+        );
+        assert_eq!(
+            centimes(&one_amount(&html, "total-debt")),
+            closing.as_centimes(),
+            "the {lang:?} ticket prints a figure the document does not store"
+        );
+
+        let debtor = render_ticket(&owed, lang).unwrap();
+        assert!(
+            debtor.contains(text(Key::TotalDebt, lang)),
+            "the {lang:?} ticket stopped naming a debt a debt"
+        );
+        assert!(
+            !debtor.contains(text(Key::TotalCredit, lang)),
+            "the {lang:?} ticket calls a debt a credit"
+        );
+    }
+}
+
+/// The paper a customer takes away when they have paid nothing: it says how
+/// it was paid, it carries none of the three cash rows, and it closes on
+/// what is now owed. The three balance amounts add up on the paper itself,
+/// so a reader can check the closing figure against the opening one without
+/// knowing what the till computed.
+#[test]
+fn a_credit_ticket_says_credit_carries_no_cash_row_and_closes_on_the_debt() {
+    let doc = fixed_sale(Case::Credit);
+    assert_eq!(doc.totals.stamp, Money::ZERO, "the stamp is cash only");
+    assert_eq!(doc.tendered, None);
+    assert_eq!(doc.change, None);
+
+    for lang in Lang::ALL {
+        let html = render_ticket(&doc, lang).unwrap();
+        assert!(html.contains(text(Key::Credit, lang)), "{lang:?}");
+        for absent in ["stamp", "tendered", "change"] {
+            assert!(
+                amounts(&html, absent).is_empty(),
+                "the {lang:?} credit ticket keeps a {absent} row"
+            );
+        }
+        for label in [
+            Key::Balance,
+            Key::OldBalance,
+            Key::ThisDocument,
+            Key::TotalDebt,
+        ] {
+            assert!(html.contains(text(label, lang)), "{lang:?} {label:?}");
+        }
+        let old = centimes(&one_amount(&html, "old-balance"));
+        let this = centimes(&one_amount(&html, "this-document"));
+        let total = centimes(&one_amount(&html, "total-debt"));
+        assert_eq!(old, OLD_BALANCE);
+        assert_eq!(this, doc.totals.net_to_pay.as_centimes());
+        assert_eq!(old + this, total, "the block does not add up on the paper");
+    }
+
+    // A ticket that names nobody prints none of it: three rows of zeroes
+    // would tell a walk-in customer they owe nothing they never owed.
+    let anonymous = render_ticket(&fixed_sale(Case::Reel), Lang::Fr).unwrap();
+    for absent in ["old-balance", "this-document", "total-debt"] {
+        assert!(
+            amounts(&anonymous, absent).is_empty(),
+            "an anonymous ticket carries a {absent} row"
+        );
+    }
+    assert!(!anonymous.contains(text(Key::TotalDebt, Lang::Fr)));
+}
+
+#[test]
 fn a_card_ticket_carries_no_stamp_and_neither_half_of_the_change() {
     let card = fixed_sale(Case::Card);
     assert_eq!(card.totals.stamp, Money::ZERO, "the stamp is cash only");
@@ -413,7 +658,7 @@ fn a_card_ticket_carries_no_stamp_and_neither_half_of_the_change() {
     }
 }
 
-/// `regime_ifu_prints_no_tva`, read off the paper: the word is not on it,
+/// The IFU rule read off the paper: the word is not on it,
 /// in any of the three languages it could be on it in. CTCA 2026 art. 64
 /// forbids an IFU document from mentioning the tax at all, so this is the
 /// rule and not a layout preference.
@@ -431,6 +676,13 @@ fn an_ifu_ticket_names_no_tax_in_any_language() {
         assert!(
             !html.contains("amount-tva"),
             "the {lang:?} IFU ticket keeps a TVA row"
+        );
+        // Nor a rate cell anywhere: not in the recap it has none of, and not
+        // on a line either. A rate is a tax figure whatever the row it sits
+        // on, and a column of 0 % would name the tax as surely as the word.
+        assert!(
+            rates(&html, "tva").is_empty() && rates(&html, "line").is_empty(),
+            "the {lang:?} IFU ticket keeps a rate cell"
         );
         // "hors taxe" names a tax too, so the total row changes word under
         // the IFU rather than only losing the recap below it.

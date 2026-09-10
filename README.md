@@ -28,7 +28,8 @@ apps/mobile      Expo / React Native, placeholder, not started
 packages/shared  TS: API client, types generated from crates/api, money display
 packages/design  TS: design tokens in three tiers
 fixtures/        money fixtures read by cargo test and vitest alike;
-                 print/ticket_80mm/ goldens read by cargo test alone
+                 print/{ticket_80mm,facture_a4,statement_a4,debt_slip_80mm}/
+                 goldens read by cargo test alone
 docs/            features.md and architecture.md, the spec every task cites;
                  roadmap.md, the milestones to a first shop
 ```
@@ -43,10 +44,13 @@ The `justfile` at the root is the list; `just` alone prints it.
 
 ```
 just gates        # fmt, clippy, generated types check, tests, builds; what a PR needs
-just e2e          # Playwright against a fresh API and database
+just e2e          # Playwright against a fresh API and database, fr then en then ar
 just api          # the API on 4317 with a dev database and a fresh launch token
 just dev          # the web UI on 5173, reads the token just api wrote
 just tauri        # the native window; needs a display
+just types        # rewrite packages/shared/src/generated from the Rust DTOs
+just screenshot   # retake only the committed screenshots under e2e/screenshots
+just status       # where we are: the ladder and the active plans
 ```
 
 Every API route but `/health` needs the launch token, so `just api` runs
@@ -81,6 +85,7 @@ From the architecture notes; the reasons are there.
 warnings`, the generated TypeScript types diffed against the Rust DTOs,
 `cargo test`, `pnpm -r test`, `pnpm -r build`. CI runs the same on Linux
 and Windows, plus coverage with `cargo llvm-cov`. `just e2e` runs before a
-merge but not in CI yet. Sonar: not wired yet, Rust support on the team server is
-unverified (`rust:S1481` probe returned 404); check before promising a gate
-on the core.
+merge but not in CI yet; it runs the three language projects one after the
+other, because they share a port pair. Sonar: not wired yet, Rust support on
+the team server is unverified (`rust:S1481` probe returned 404); check
+before promising a gate on the core.

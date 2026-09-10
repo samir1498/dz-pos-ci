@@ -437,6 +437,28 @@ pub fn router_with_origin(
         .route("/backups", post(routes::backups::create))
         .route("/backups/{name}/restore", post(routes::backups::restore))
         .route("/categories", get(routes::categories::list))
+        .route("/clock", get(routes::clock))
+        .route("/customers", get(routes::customers::list))
+        .route("/customers", post(routes::customers::create))
+        .route(
+            "/customers/{id}",
+            get(routes::customers::get_one).put(routes::customers::update),
+        )
+        .route("/customers/{id}/ledger", get(routes::customers::ledger))
+        .route("/customers/{id}/payments", get(routes::customers::payments))
+        .route("/customers/{id}/payments", post(routes::customers::pay))
+        .route(
+            "/customers/{id}/statement",
+            get(routes::customers::statement),
+        )
+        .route(
+            "/customers/{id}/debt-slip",
+            get(routes::customers::debt_slip),
+        )
+        .route(
+            "/customers/{id}/adjustments",
+            post(routes::customers::adjust),
+        )
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
         .route(
@@ -446,7 +468,11 @@ pub fn router_with_origin(
         .route("/sales", get(routes::sales::list))
         .route("/sales", post(routes::sales::create))
         .route("/sales/{id}", get(routes::sales::get_one))
+        .route("/sales/{id}/avoir", post(routes::sales::avoir))
+        .route("/sales/{id}/avoirs", get(routes::sales::avoirs))
+        .route("/sales/{id}/cancel", post(routes::sales::cancel))
         .route("/sales/{id}/ticket", get(routes::sales::ticket))
+        .route("/sales/{id}/facture", get(routes::sales::facture))
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))

@@ -3,9 +3,13 @@ import type { DocumentKindDto } from "./DocumentKindDto";
 import type { DocumentStatusDto } from "./DocumentStatusDto";
 import type { PaymentModeDto } from "./PaymentModeDto";
 import type { RegimeDto } from "./RegimeDto";
+import type { SaleBalanceDto } from "./SaleBalanceDto";
+import type { SaleCancelEffectDto } from "./SaleCancelEffectDto";
+import type { SaleCancellationDto } from "./SaleCancellationDto";
 import type { SaleLineDto } from "./SaleLineDto";
 import type { SaleTotalsDto } from "./SaleTotalsDto";
 import type { SaleTvaDto } from "./SaleTvaDto";
+import type { SaleWarningDto } from "./SaleWarningDto";
 import type { StoreDto } from "./StoreDto";
 
 /**
@@ -14,6 +18,48 @@ import type { StoreDto } from "./StoreDto";
  */
 export type SaleDto = { id: number, shop_id: number, kind: DocumentKindDto, series: string, number: number, 
 /**
+ * The number as it is printed and as a customer quotes it back,
+ * `FA-000001`. Built by the core beside the templates that print it
+ * (`print::number`), so a screen naming a document and the paper in the
+ * customer's hand cannot spell it two ways.
+ */
+printed_number: string, 
+/**
  * `YYYY-MM-DD HH:MM:SS` on the shop's calendar (core, services::clock).
  */
-issued_at: string, user_id: number, regime: RegimeDto, payment_mode: PaymentModeDto, seller: StoreDto, customer_id: number | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, tendered_centimes: number | null, change_centimes: number | null, status: DocumentStatusDto, lines: Array<SaleLineDto>, };
+issued_at: string, user_id: number, regime: RegimeDto, payment_mode: PaymentModeDto, seller: StoreDto, customer_id: number | null, 
+/**
+ * The facture an avoir is written against, null on every other kind.
+ * The screen showing an avoir follows it to name the paper it credits.
+ */
+ref_document_id: number | null, 
+/**
+ * The buyer's name as this document printed it, snapshotted at issue.
+ * Null on a ticket sold to whoever walked in. A list naming the customer
+ * reads it from here and never from the fiche: the fiche is edited in
+ * place, and the paper says who it was made out to on the day.
+ */
+buyer_name: string | null, 
+/**
+ * Null on a document with no customer, which is every cash ticket.
+ */
+balance: SaleBalanceDto | null, totals: SaleTotalsDto, tva: Array<SaleTvaDto>, tendered_centimes: number | null, change_centimes: number | null, status: DocumentStatusDto, 
+/**
+ * Filled exactly when `status` is `cancelled`: when it was annulled, by
+ * whom, why, and the avoir that carried the money back when one did.
+ */
+cancellation: SaleCancellationDto | null, lines: Array<SaleLineDto>, 
+/**
+ * What cancelling this document would do, so a screen can say it before
+ * it asks. Null on a list and on the answer to a sale: it is a question
+ * about one stored document and it costs a read of that document's credit
+ * notes, so only a read of one document carries it.
+ */
+cancel_effect: SaleCancelEffectDto | null, 
+/**
+ * What the till should say while still handing over the ticket, null
+ * when there is nothing to say. A read of a stored document carries
+ * none: a warning is about the moment the sale was rung up, not about
+ * the paper.
+ */
+warning: SaleWarningDto | null, };

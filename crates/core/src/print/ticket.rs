@@ -13,17 +13,11 @@ use askama::Template;
 
 use crate::error::CoreError;
 use crate::lang::Lang;
-use crate::models::document::{Document, DocumentLine, SellerBlock};
+use crate::models::document::{BalanceTriple, Document, DocumentLine, SellerBlock};
 use crate::money::format::{format_centimes, format_qty};
-use crate::money::{Bps, Money, PaymentMode, Regime};
+use crate::money::{PaymentMode, Regime};
 use crate::print::strings::{text, Key};
-
-/// `TK-000123`: the kind's short prefix, a hyphen, and the number in the
-/// series padded to six digits. The stored `series` is the counter's name
-/// (`doc_ticket`), which is a column and not something a customer quotes;
-/// the prefix is the printed form of the same series and lives beside it on
-/// `DocumentKind` so the two cannot drift.
-const NUMBER_DIGITS: usize = 6;
+use crate::print::{number, payment_mode_key, percent, some_amount};
 
 /// The date and time as the shop reads them. `issued_at` is already on the
 /// shop's calendar (`services::clock` writes it there, UTC+1 all year), so
@@ -33,7 +27,7 @@ const STAMP_FORMAT: &str = "%d/%m/%Y %H:%M";
 /// The seller's identifiers, in the order a ticket prints them. Only the
 /// ones the document snapshotted appear: a ticket carries the seller
 /// identity and no empty rows (features.md, party identifiers row; a
-/// facture's fuller block is M2's).
+/// facture carries the fuller block of both parties).
 struct SellerId {
     label: &'static str,
     value: String,
@@ -52,15 +46,36 @@ struct LineView {
     unit_price: String,
     /// The line's TVA rate, under the réel only. Under the IFU there is no
     /// rate column at all, not a column of zeroes
-    /// (`regime_ifu_prints_no_tva`).
+    /// (`an_ifu_ticket_names_no_tax_in_any_language`).
     rate: Option<String>,
     discount: Option<String>,
     total: String,
 }
 
+/// One line of the TVA recap. The word and the rate are two fields rather
+/// than one built string, so the golden carries the rate in a span of its own
+/// and the suite can read it back the way the facture's does: a recap row
+/// that slid onto the wrong rate is caught by the rate and not only by the
+/// amount beside it.
 struct TvaRow {
-    label: String,
+    label: &'static str,
+    rate: String,
     amount: String,
+}
+
+/// The three amounts of the debt as they stood when the ticket was issued.
+/// Printed together or not at all, the way the facture prints them: an old
+/// balance without the closing one is a figure the reader cannot check. The
+/// two papers say the same thing in the same words, so a customer holding
+/// both does not find two spellings of what they owe.
+struct BalanceView {
+    title: &'static str,
+    old_label: &'static str,
+    old: String,
+    this_label: &'static str,
+    this: String,
+    total_label: &'static str,
+    total: String,
 }
 
 #[derive(Template)]
@@ -89,6 +104,7 @@ struct TicketView {
     tendered: Option<String>,
     change_label: &'static str,
     change: Option<String>,
+    balance: Option<BalanceView>,
     currency: &'static str,
     thank_you: &'static str,
 }
@@ -99,7 +115,7 @@ struct TicketView {
 /// languages under the réel paid in cash, the same three under the IFU, and
 /// the same three under the réel paid by card.
 pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, CoreError> {
-    // `regime_ifu_prints_no_tva` is a rule about the document, not a layout
+    // `an_ifu_ticket_names_no_tax_in_any_language` is a rule about the document, not a layout
     // the template applies on the way past. A stored IFU document that
     // carries a TVA recap contradicts the régime it was issued under (a
     // restored file, a repaired row, an import), and there is no honest
@@ -148,7 +164,8 @@ fn view(doc: &Document, lang: Lang) -> TicketView {
             .tva_by_rate
             .iter()
             .map(|row| TvaRow {
-                label: format!("{} {}", text(Key::Tva, lang), percent(row.rate)),
+                label: text(Key::Tva, lang),
+                rate: percent(row.rate),
                 amount: format_centimes(row.amount),
             })
             .collect(),
@@ -157,29 +174,47 @@ fn view(doc: &Document, lang: Lang) -> TicketView {
         net_to_pay_label: text(Key::NetToPay, lang),
         net_to_pay: format_centimes(totals.net_to_pay),
         payment_mode_label: text(Key::PaymentMode, lang),
-        payment_mode: text(payment_mode(doc.payment_mode), lang),
+        payment_mode: text(payment_mode_key(doc.payment_mode), lang),
         tendered_label: text(Key::Tendered, lang),
         tendered: cash.then(|| doc.tendered.map(format_centimes)).flatten(),
         change_label: text(Key::Change, lang),
         change: cash.then(|| doc.change.map(format_centimes)).flatten(),
+        // Whenever the document stored one, which is whenever it names a
+        // customer. Not a rule about the payment mode: a ticket paid in cash
+        // by a customer who still owes for last week says so, and it says it
+        // in the same three rows the facture uses.
+        balance: doc.balance.map(|b| balance(b, lang)),
         currency: text(Key::Currency, lang),
         thank_you: text(Key::ThankYou, lang),
     }
 }
 
-/// A row that is only there when there is something on it. Zero is not a
-/// discount and not a stamp; a ticket says nothing about either.
-fn some_amount(amount: Money) -> Option<String> {
-    (amount != Money::ZERO).then(|| format_centimes(amount))
-}
-
-fn number(doc: &Document) -> String {
-    format!(
-        "{}-{:0width$}",
-        doc.kind.number_prefix(),
-        doc.number,
-        width = NUMBER_DIGITS
-    )
+/// The debt block, read off the document and never recomputed: a reprint
+/// shows the balance the customer was handed, not a sum of today's ledger.
+///
+/// The closing row is named by its sign, exactly as the facture names it
+/// (`facture::balance_view`): below zero is money the shop is holding for
+/// the customer, and calling that a debt on the 80 mm paper while the A4
+/// paper calls it a credit gives one account two names. The figure keeps the
+/// sign the document stores either way; only the label moves.
+fn balance(balance: BalanceTriple, lang: Lang) -> BalanceView {
+    let in_credit = balance.total_debt.is_negative();
+    BalanceView {
+        title: text(Key::Balance, lang),
+        old_label: text(Key::OldBalance, lang),
+        old: format_centimes(balance.old_balance),
+        this_label: text(Key::ThisDocument, lang),
+        this: format_centimes(balance.remaining_debt),
+        total_label: text(
+            if in_credit {
+                Key::TotalCredit
+            } else {
+                Key::TotalDebt
+            },
+            lang,
+        ),
+        total: format_centimes(balance.total_debt),
+    }
 }
 
 fn seller(seller: &SellerBlock) -> SellerView {
@@ -213,45 +248,5 @@ fn line(line: &DocumentLine, reel: bool) -> LineView {
         rate: reel.then(|| percent(line.rate_bps)),
         discount: some_amount(line.line_discount),
         total: format_centimes(line.line_total),
-    }
-}
-
-/// A rate in basis points as a person reads it: 1900 is `19 %`, 950 is
-/// `9,5 %`. The space before the sign is a narrow no-break one, the same
-/// character the thousands separator uses, so a rate never breaks across
-/// two lines of a 72 mm column.
-fn percent(rate: Bps) -> String {
-    let bps = rate.as_u32();
-    let whole = bps / 100;
-    let rest = bps % 100;
-    if rest == 0 {
-        return format!("{whole}\u{202f}%");
-    }
-    let decimals = format!("{rest:02}");
-    format!("{whole},{}\u{202f}%", decimals.trim_end_matches('0'))
-}
-
-const fn payment_mode(mode: PaymentMode) -> Key {
-    match mode {
-        PaymentMode::Cash => Key::Cash,
-        PaymentMode::Card => Key::Card,
-        PaymentMode::Credit => Key::Credit,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::percent;
-    use crate::money::Bps;
-
-    #[test]
-    fn a_rate_is_a_percentage_with_the_decimals_it_needs() {
-        let bps = |v: u32| Bps::new(v).unwrap_or(Bps::ZERO);
-        assert_eq!(percent(bps(1900)), "19\u{202f}%");
-        assert_eq!(percent(bps(900)), "9\u{202f}%");
-        assert_eq!(percent(bps(0)), "0\u{202f}%");
-        assert_eq!(percent(bps(950)), "9,5\u{202f}%");
-        assert_eq!(percent(bps(1)), "0,01\u{202f}%");
-        assert_eq!(percent(bps(10_000)), "100\u{202f}%");
     }
 }

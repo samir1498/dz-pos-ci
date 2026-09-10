@@ -46,7 +46,7 @@ body { margin: 0; background: #fff; color: #000 }
 <div class="dashed"></div>
 {%- for line in lines %}
 <div class="item-name">{{ line.name }}</div>
-<div class="row item-detail"><span class="num">{{ line.qty }} × {{ line.unit_price }}{% if let Some(rate) = line.rate %} · {{ rate }}{% endif %}</span><span class="amount amount-line">{{ line.total }}</span></div>
+<div class="row item-detail"><span class="num">{{ line.qty }} × {{ line.unit_price }}{% if let Some(rate) = line.rate %} · <span class="rate rate-line">{{ rate }}</span>{% endif %}</span><span class="amount amount-line">{{ line.total }}</span></div>
 {%- if let Some(discount) = line.discount %}
 <div class="row item-detail"><span class="label">{{ discount_label }}</span><span class="amount amount-line-discount">-{{ discount }}</span></div>
 {%- endif %}
@@ -57,7 +57,7 @@ body { margin: 0; background: #fff; color: #000 }
 <div class="row"><span class="label">{{ discount_label }}</span><span class="amount amount-discount">-{{ discount }}</span><span class="cur">{{ currency }}</span></div>
 {%- endif %}
 {%- for tva in tva_rows %}
-<div class="row"><span class="label">{{ tva.label }}</span><span class="amount amount-tva">{{ tva.amount }}</span><span class="cur">{{ currency }}</span></div>
+<div class="row"><span class="label">{{ tva.label }} <span class="rate rate-tva">{{ tva.rate }}</span></span><span class="amount amount-tva">{{ tva.amount }}</span><span class="cur">{{ currency }}</span></div>
 {%- endfor %}
 {%- if let Some(stamp) = stamp %}
 <div class="row"><span class="label">{{ stamp_label }}</span><span class="amount amount-stamp">{{ stamp }}</span><span class="cur">{{ currency }}</span></div>
@@ -70,6 +70,13 @@ body { margin: 0; background: #fff; color: #000 }
 {%- endif %}
 {%- if let Some(change) = change %}
 <div class="row"><span class="label">{{ change_label }}</span><span class="amount amount-change">{{ change }}</span><span class="cur">{{ currency }}</span></div>
+{%- endif %}
+{%- if let Some(balance) = balance %}
+<div class="dashed"></div>
+<div class="center">{{ balance.title }}</div>
+<div class="row"><span class="label">{{ balance.old_label }}</span><span class="amount amount-old-balance">{{ balance.old }}</span><span class="cur">{{ currency }}</span></div>
+<div class="row"><span class="label">{{ balance.this_label }}</span><span class="amount amount-this-document">{{ balance.this }}</span><span class="cur">{{ currency }}</span></div>
+<div class="row net"><span class="label">{{ balance.total_label }}</span><span class="amount amount-total-debt">{{ balance.total }}</span><span class="cur">{{ currency }}</span></div>
 {%- endif %}
 <div class="dashed"></div>
 <div class="center">{{ thank_you }}</div>

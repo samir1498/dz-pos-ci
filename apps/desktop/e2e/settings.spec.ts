@@ -95,4 +95,15 @@ test("a régime change dated ahead is planned; dated back it is in force", async
   await expect(current).toContainText(`${t("regime_ifu")} · ${t("regime_since")} ${day(-1)}`);
   await page.reload();
   await expect(page.getByTestId("regime-current")).toContainText(t("regime_ifu"));
+
+  // Back to the réel before leaving, dated today so it is in force at once.
+  // The suites share one shop file and this one runs early in the alphabet:
+  // every till spec after it would otherwise ring its baskets up under the
+  // IFU, where no facture prints a TVA recap. The earlier rows stay, which
+  // is the point of a dated régime, so the two changes above are still on
+  // the record.
+  await regimeForm.getByRole("combobox", { name: t("field_regime") }).selectOption("reel");
+  await regimeForm.getByLabel(t("field_valid_from"), { exact: true }).fill(day(0));
+  await regimeForm.getByRole("button", { name: t("action_apply") }).click();
+  await expect(page.getByTestId("regime-current")).toContainText(t("regime_reel"));
 });

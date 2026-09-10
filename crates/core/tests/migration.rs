@@ -26,12 +26,9 @@ struct Pragma {
     foreign_keys: i32,
 }
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 /// A database carrying the first `n` migrations and nothing after them, so
 /// migration `n + 1` can be applied to a file that already holds a shop's
@@ -52,6 +49,36 @@ fn open_at_migration(n: usize) -> (tempfile::TempDir, SqliteConnection) {
     (dir, conn)
 }
 
+/// A database carrying every migration up to but not including the one whose
+/// name contains `marker`, so that migration can be applied to a file that
+/// already holds a shop's data. Named rather than numbered because a
+/// migration written on another branch can land in between and shift every
+/// ordinal after it; the file this opens is the one this migration actually
+/// runs against.
+fn open_before_migration(marker: &str) -> (tempfile::TempDir, SqliteConnection) {
+    use diesel::connection::SimpleConnection;
+    use diesel::migration::Migration;
+    use diesel_migrations::MigrationHarness;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let mut conn = SqliteConnection::establish(&path.to_string_lossy()).unwrap();
+    conn.batch_execute("PRAGMA foreign_keys=ON;").unwrap();
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    let mut reached = false;
+    for migration in pending.iter() {
+        if Migration::<diesel::sqlite::Sqlite>::name(migration.as_ref())
+            .to_string()
+            .contains(marker)
+        {
+            reached = true;
+            break;
+        }
+        conn.run_migration(migration).unwrap();
+    }
+    assert!(reached, "no migration is named {marker}");
+    (dir, conn)
+}
+
 /// What `shops(id)` does to a row of `table` when the shop is deleted, as
 /// SQLite itself reports it.
 fn on_delete_from_shops(conn: &mut SqliteConnection, table: &str) -> String {
@@ -63,6 +90,14 @@ fn on_delete_from_shops(conn: &mut SqliteConnection, table: &str) -> String {
     .unwrap();
     assert_eq!(rows.len(), 1, "{table} has no foreign key onto shops");
     rows[0].name.clone()
+}
+
+/// Orphans the file carries: rows whose parent is gone. `PRAGMA
+/// foreign_key_check` reports them as rows and never fails a statement, so a
+/// migration that runs with the keys off cannot catch its own; this is where
+/// they are caught.
+fn orphan_rows(conn: &mut SqliteConnection) -> i32 {
+    count(conn, "SELECT COUNT(*) AS n FROM pragma_foreign_key_check")
 }
 
 fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
@@ -86,6 +121,9 @@ fn migration_creates_every_table() {
             "audit_log",
             "categories",
             "counters",
+            "customers",
+            "debt_allocations",
+            "debt_ledger",
             "document_lines",
             "document_tva",
             "documents",
@@ -107,6 +145,9 @@ fn every_table_carries_shop_id() {
         "audit_log",
         "categories",
         "counters",
+        "customers",
+        "debt_allocations",
+        "debt_ledger",
         "document_lines",
         "document_tva",
         "documents",
@@ -181,6 +222,9 @@ fn every_table_is_strict() {
         "document_tva",
         "stock_movements",
         "audit_log",
+        "customers",
+        "debt_ledger",
+        "debt_allocations",
     ] {
         let strict = count(
             &mut conn,
@@ -205,7 +249,8 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
             "shop_id, kind, series, number, issued_at, user_id, regime, payment_mode, \
              seller_name, total_ht_centimes, discount_centimes, subtotal_ht_centimes, \
              tva_centimes, total_ttc_centimes, stamp_centimes, net_to_pay_centimes, \
-             tendered_centimes, change_centimes, status",
+             tendered_centimes, change_centimes, old_balance_centimes, \
+             remaining_debt_centimes, total_debt_centimes, buyer_party_kind, status",
             &[
                 "1",
                 "'ticket'",
@@ -225,6 +270,10 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
                 "0",
                 "0",
                 "0",
+                "NULL",
+                "NULL",
+                "NULL",
+                "NULL",
                 "'issued'",
             ],
         ),
@@ -244,6 +293,18 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
         "audit_log" => (
             "shop_id, user_id, action, entity, entity_id",
             &["1", "1", "'update'", "'product'", "1"],
+        ),
+        "customers" => (
+            "shop_id, name, party_kind, credit_limit_centimes, warn_threshold_centimes, active",
+            &["1", "'Ahmed'", "'company'", "0", "0", "1"],
+        ),
+        "debt_ledger" => (
+            "shop_id, customer_id, kind, debit_centimes, credit_centimes, user_id, note",
+            &["1", "1", "'sale'", "0", "0", "1", "NULL"],
+        ),
+        "debt_allocations" => (
+            "shop_id, payment_ledger_id, document_id, amount_centimes",
+            &["1", "1", "1", "1"],
         ),
         other => panic!("no insert template for {other}"),
     };
@@ -496,6 +557,12 @@ fn clear(conn: &mut SqliteConnection, table: &str) {
         // The seeded document is what the line, TVA and movement probes point
         // at, so it stays; the probe rows above it go.
         "documents" => "DELETE FROM documents WHERE series <> 'seed'".to_string(),
+        // The seeded customer and the seeded payment are what the ledger and
+        // the allocation probes point at, and both RESTRICT, so a blanket
+        // DELETE would fail rather than clear. The seed rows carry a marker
+        // the probe rows do not.
+        "customers" => "DELETE FROM customers WHERE name <> 'seed'".to_string(),
+        "debt_ledger" => "DELETE FROM debt_ledger WHERE note IS NULL".to_string(),
         other => format!("DELETE FROM {other}"),
     };
     diesel::sql_query(sql).execute(conn).unwrap();
@@ -513,6 +580,141 @@ fn seed_for_probes(conn: &mut SqliteConnection) {
     diesel::sql_query(insert_with("documents", "series", "'seed'"))
         .execute(conn)
         .unwrap();
+}
+
+/// The above, plus the customer the ledger probes point at and the payment
+/// row the allocation probes settle. Both are marked so `clear` can tell them
+/// from a probe row.
+fn seed_for_debt_probes(conn: &mut SqliteConnection) {
+    seed_for_probes(conn);
+    diesel::sql_query(insert_with("customers", "name", "'seed'"))
+        .execute(conn)
+        .unwrap();
+    diesel::sql_query(insert_with("debt_ledger", "note", "'seed'"))
+        .execute(conn)
+        .unwrap();
+}
+
+#[test]
+fn every_money_column_of_a_customer_and_the_debt_ledger_refuses_a_real_and_a_text() {
+    // Rule 6 again, on the tables migration 4 adds. A credit limit and a
+    // ledger movement are both amounts owed, and a debt read back as
+    // something other than centimes is a customer billed the wrong figure.
+    let (_dir, mut conn) = open_temp();
+    seed_for_debt_probes(&mut conn);
+    let columns = [
+        ("customers", "credit_limit_centimes"),
+        ("customers", "warn_threshold_centimes"),
+        ("debt_ledger", "debit_centimes"),
+        ("debt_ledger", "credit_centimes"),
+    ];
+    for (table, column) in columns {
+        assert!(
+            probe(&mut conn, table, column, "0").is_ok(),
+            "{table}.{column}: an integer was refused"
+        );
+        clear(&mut conn, table);
+        for bad in ["19.99", "'19.99'", "'abc'", "-1"] {
+            assert!(
+                probe(&mut conn, table, column, bad).is_err(),
+                "{table}.{column} accepted {bad}"
+            );
+        }
+    }
+    // An allocation of nothing settles nothing, so zero is refused where the
+    // other columns take it.
+    assert!(probe(&mut conn, "debt_allocations", "amount_centimes", "1").is_ok());
+    clear(&mut conn, "debt_allocations");
+    for bad in ["0", "-1", "19.99", "'abc'"] {
+        assert!(
+            probe(&mut conn, "debt_allocations", "amount_centimes", bad).is_err(),
+            "debt_allocations.amount_centimes accepted {bad}"
+        );
+    }
+}
+
+#[test]
+fn a_ledger_row_carries_one_direction_and_a_customer_one_of_the_two_party_kinds() {
+    let (_dir, mut conn) = open_temp();
+    seed_for_debt_probes(&mut conn);
+    // features.md §2: a row raises the debt or lowers it. A row carrying both
+    // would be two movements wearing one id.
+    assert!(
+        diesel::sql_query(
+            "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+             credit_centimes, user_id) VALUES (1, 1, 'sale', 1000, 1000, 1)"
+        )
+        .execute(&mut conn)
+        .is_err(),
+        "a ledger row carried a debit and a credit at once"
+    );
+    for one_way in [("1000", "0"), ("0", "1000")] {
+        diesel::sql_query(format!(
+            "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+             credit_centimes, user_id) VALUES (1, 1, 'sale', {}, {}, 1)",
+            one_way.0, one_way.1
+        ))
+        .execute(&mut conn)
+        .unwrap();
+    }
+    // A payment is not on this list because it cannot be written the way the
+    // others are: migration 6 ties the mode to the kind, so a payment carries
+    // one and nothing else may. It is probed below with its mode.
+    for value in ["'opening'", "'sale'", "'avoir'", "'adjustment'"] {
+        assert!(
+            probe(&mut conn, "debt_ledger", "kind", value).is_ok(),
+            "debt_ledger.kind refused {value}"
+        );
+    }
+    assert!(
+        diesel::sql_query(
+            "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+             credit_centimes, user_id, payment_mode) VALUES (1, 1, 'payment', 0, 0, 1, 'cash')"
+        )
+        .execute(&mut conn)
+        .is_ok(),
+        "debt_ledger.kind refused 'payment'"
+    );
+    assert!(probe(&mut conn, "debt_ledger", "kind", "'writeoff'").is_err());
+    for value in ["'company'", "'consumer'"] {
+        assert!(
+            probe(&mut conn, "customers", "party_kind", value).is_ok(),
+            "customers.party_kind refused {value}"
+        );
+    }
+    for value in ["'entreprise'", "''"] {
+        assert!(
+            probe(&mut conn, "customers", "party_kind", value).is_err(),
+            "customers.party_kind accepted {value}"
+        );
+    }
+}
+
+#[test]
+fn the_balance_columns_of_a_document_take_a_negative_and_the_others_do_not() {
+    // A customer who overpays is owed money, and the statement says so
+    // (features.md §2). The triple is the one place a document carries a
+    // signed amount, so it is pinned here rather than left to a reader to
+    // notice the missing `>= 0`.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    for column in [
+        "old_balance_centimes",
+        "remaining_debt_centimes",
+        "total_debt_centimes",
+    ] {
+        assert!(
+            probe(&mut conn, "documents", column, "-5000").is_ok(),
+            "documents.{column} refused a negative balance"
+        );
+        clear(&mut conn, "documents");
+        for bad in ["19.99", "'abc'"] {
+            assert!(
+                probe(&mut conn, "documents", column, bad).is_err(),
+                "documents.{column} accepted {bad}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -583,6 +785,10 @@ fn a_document_only_takes_the_kinds_regimes_modes_and_states_the_spec_names() {
                 "'bon_de_livraison'",
                 "'avoir'",
                 "'bon_de_reception'",
+                // Admitted since migration 4 so the stamped receipt the
+                // comptable may ask for is not another table rebuild.
+                // Nothing issues one.
+                "'quittance'",
             ],
             vec!["'recu'", "''"],
         ),
@@ -596,6 +802,13 @@ fn a_document_only_takes_the_kinds_regimes_modes_and_states_the_spec_names() {
             "status",
             vec!["'issued'", "'cancelled'"],
             vec!["'draft'", "''"],
+        ),
+        // The snapshotted buyer kind. NULL is the ticket with no buyer at
+        // all, which the template already covers.
+        (
+            "buyer_party_kind",
+            vec!["'company'", "'consumer'"],
+            vec!["'entreprise'", "''"],
         ),
     ];
     for (column, good, bad) in sets {
@@ -690,7 +903,7 @@ fn a_database_at_the_first_migration_takes_the_second() {
     // keeps working, not a schema that merely applies.
     use dzpos_core::models::product::{NewProduct, Unit};
     use dzpos_core::money::{Bps, Money, PaymentMode};
-    use dzpos_core::services::sales::{NewSale, NewSaleLine};
+    use dzpos_core::services::sales::{NewSale, NewSaleLine, SaleKind};
     use dzpos_core::services::{products, sales};
     let product = products::create(
         &mut conn,
@@ -725,10 +938,14 @@ fn a_database_at_the_first_migration_takes_the_second() {
             global_discount: Money::ZERO,
             payment_mode: PaymentMode::Cash,
             tendered: Some(Money::centimes(5_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: None,
         },
     )
-    .unwrap();
+    .unwrap()
+    .document;
     assert_eq!(sale.number, 1);
     assert_eq!(sale.totals.total_ht, Money::centimes(2_000));
     assert_eq!(
@@ -824,12 +1041,605 @@ fn a_database_at_the_second_migration_takes_the_third() {
 }
 
 #[test]
+fn a_database_at_the_third_migration_takes_the_fourth() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. This one rebuilds
+    // `documents` to give `customer_id` the table it has been waiting for, and
+    // document_lines, document_tva and stock_movements all point at
+    // `documents.id`, so what has to be proved is that every child row is
+    // still attached to the same parent afterwards.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_at_migration(3);
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'customers'"
+        ),
+        0,
+        "migration 3 is not the version this test claims to start from"
+    );
+    diesel::sql_query(
+        "INSERT INTO products (id, shop_id, name, unit, cost_centimes, selling_centimes, \
+         qty_on_hand_milli, low_stock_at_milli, rate_bps) \
+         VALUES (7, 1, 'Sucre', 'piece', 0, 0, 4000, 0, 1900)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
+         regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+         subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+         net_to_pay_centimes, status) \
+         VALUES (3, 1, 'ticket', 'doc_ticket', 12, '2026-09-09 10:00:00', 1, 'reel', \
+         'cash', 'Mon magasin', 1000, 0, 1000, 190, 1190, 0, 1190, 'issued')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO document_lines (id, shop_id, document_id, position, name, qty_milli, \
+         unit_price_centimes, line_discount_centimes, rate_bps, line_total_centimes) \
+         VALUES (5, 1, 3, 0, 'Sucre', 1000, 1000, 0, 1900, 1000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO document_lines (id, shop_id, document_id, position, name, qty_milli, \
+         unit_price_centimes, line_discount_centimes, rate_bps, line_total_centimes) \
+         VALUES (8, 1, 3, 1, 'Café', 2000, 500, 0, 900, 1000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO document_tva (id, shop_id, document_id, rate_bps, base_centimes, \
+         amount_centimes) VALUES (6, 1, 3, 1900, 1000, 190)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO stock_movements (id, shop_id, product_id, kind, qty_milli, \
+         unit_cost_centimes, document_id, user_id) VALUES (9, 1, 7, 'sale', -1000, 0, 3, 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+
+    assert_eq!(
+        orphan_rows(&mut conn),
+        0,
+        "the rebuilt file has a row pointing at a parent that is not there"
+    );
+
+    // The document came across whole, keeping the id and the number the paper
+    // in the customer's hand carries.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 3 AND number = 12 \
+             AND series = 'doc_ticket' AND net_to_pay_centimes = 1190 \
+             AND buyer_name IS NULL AND old_balance_centimes IS NULL \
+             AND ref_document_id IS NULL"
+        ),
+        1,
+        "the document did not survive the table rebuild unchanged"
+    );
+    // Every child kept its own id and its parent. A cascade that fired while
+    // the old table was dropped would show up as a zero here.
+    for (table, id) in [
+        ("document_lines", 5),
+        ("document_lines", 8),
+        ("document_tva", 6),
+    ] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!("SELECT COUNT(*) AS n FROM {table} WHERE id = {id} AND document_id = 3")
+            ),
+            1,
+            "{table} lost its row when documents was rebuilt"
+        );
+    }
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM stock_movements WHERE id = 9 AND document_id = 3"
+        ),
+        1,
+        "the stock movement lost the document that moved it"
+    );
+    // The two foreign keys the rebuild existed for.
+    let keys: Vec<Name> = diesel::sql_query(
+        "SELECT \"table\" || '.' || \"from\" || '.' || on_delete AS name \
+         FROM pragma_foreign_key_list('documents') ORDER BY name",
+    )
+    .load(&mut conn)
+    .unwrap();
+    let keys: Vec<String> = keys.into_iter().map(|r| r.name).collect();
+    assert!(
+        keys.contains(&"customers.customer_id.RESTRICT".to_string()),
+        "customer_id still has no foreign key: {keys:?}"
+    );
+    assert!(
+        keys.contains(&"documents.ref_document_id.RESTRICT".to_string()),
+        "ref_document_id still has no foreign key: {keys:?}"
+    );
+    // The `PRAGMA foreign_keys = OFF` the rebuild needs must not outlive it,
+    // or every write after the upgrade would land unchecked.
+    let pragma: Pragma = diesel::sql_query("PRAGMA foreign_keys")
+        .get_result(&mut conn)
+        .unwrap();
+    assert_eq!(
+        pragma.foreign_keys, 1,
+        "the migration left the foreign keys off"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' \
+             AND name = 'idx_documents_shop_issued'"
+        ),
+        1,
+        "the index went with the dropped table and was not put back"
+    );
+    // AUTOINCREMENT counts from sqlite_sequence, keyed by table name: a
+    // rename that lost the row would hand number 3 out again.
+    diesel::sql_query(
+        "INSERT INTO documents (shop_id, kind, series, number, issued_at, user_id, \
+         regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+         subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+         net_to_pay_centimes, status) \
+         VALUES (1, 'ticket', 'doc_ticket', 13, '2026-09-09 10:01:00', 1, 'reel', \
+         'cash', 'Mon magasin', 0, 0, 0, 0, 0, 0, 0, 'issued')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        count(&mut conn, "SELECT MAX(id) AS n FROM documents"),
+        4,
+        "the sequence did not follow the table through the rename"
+    );
+
+    // And the upgraded file carries a customer with an opening debt, read
+    // back as the balance a statement would print.
+    diesel::sql_query(
+        "INSERT INTO customers (id, shop_id, name, party_kind, credit_limit_centimes) \
+         VALUES (1, 1, 'Ahmed Benali', 'company', 5000000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+         credit_centimes, user_id, note) \
+         VALUES (1, 1, 'opening', 250000, 0, 1, 'report ancien carnet')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT SUM(debit_centimes - credit_centimes) AS n FROM debt_ledger \
+             WHERE shop_id = 1 AND customer_id = 1"
+        ),
+        250000
+    );
+    // A document may now name that customer, which is what the rebuild was
+    // for, and the customer cannot then be deleted out from under it.
+    diesel::sql_query("UPDATE documents SET customer_id = 1 WHERE id = 3")
+        .execute(&mut conn)
+        .unwrap();
+    assert!(
+        diesel::sql_query("DELETE FROM customers WHERE id = 1")
+            .execute(&mut conn)
+            .is_err(),
+        "a customer named on a document was deleted"
+    );
+}
+
+#[test]
+fn a_database_without_the_payment_mode_column_takes_the_migration_that_adds_it() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. This one adds one
+    // nullable column to a table that already holds movements, so what has to
+    // be proved is that the movements are still there, still say what they
+    // said, and read as no payment mode at all rather than as a made-up one.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_before_migration("debt_payment_mode");
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('debt_ledger') \
+             WHERE name = 'payment_mode'"
+        ),
+        0,
+        "the file this starts from already carries the column"
+    );
+    diesel::sql_query(
+        "INSERT INTO customers (id, shop_id, name, party_kind) VALUES (1, 1, 'Ahmed', 'consumer')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, kind, debit_centimes, \
+         credit_centimes, user_id, note) \
+         VALUES (5, 1, 1, 'opening', 250000, 0, 1, 'report ancien carnet')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_ledger WHERE id = 5 AND kind = 'opening' \
+             AND debit_centimes = 250000 AND note = 'report ancien carnet' \
+             AND payment_mode IS NULL"
+        ),
+        1,
+        "the movement the file already carried did not survive the new column"
+    );
+    // The column takes the two ways a payment is taken and nothing else: a
+    // 'credit' here would be a payment settled with more credit.
+    for mode in ["cash", "card"] {
+        assert_eq!(
+            diesel::sql_query(format!(
+                "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+                 credit_centimes, user_id, payment_mode) \
+                 VALUES (1, 1, 'payment', 0, 1000, 1, '{mode}')"
+            ))
+            .execute(&mut conn)
+            .unwrap(),
+            1,
+            "a payment in {mode} was refused"
+        );
+    }
+    assert!(
+        diesel::sql_query(
+            "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+             credit_centimes, user_id, payment_mode) \
+             VALUES (1, 1, 'payment', 0, 1000, 1, 'credit')"
+        )
+        .execute(&mut conn)
+        .is_err(),
+        "the column took a mode that is not a way of paying"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
+
+/// Customer 1, facture 4 made out to them with a buyer block and a balance
+/// triple, and the ledger movement the sale wrote. Every figure here is read
+/// back by the tests that revert the migration.
+fn seed_a_facture_naming_a_customer(conn: &mut SqliteConnection) {
+    diesel::sql_query(insert_with("customers", "name", "'Entreprise Benali'"))
+        .execute(conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
+         regime, payment_mode, seller_name, customer_id, buyer_name, buyer_party_kind, \
+         buyer_rc, buyer_nif, total_ht_centimes, discount_centimes, subtotal_ht_centimes, \
+         tva_centimes, total_ttc_centimes, stamp_centimes, net_to_pay_centimes, \
+         old_balance_centimes, remaining_debt_centimes, total_debt_centimes) \
+         VALUES (4, 1, 'facture', 'doc_facture', 7, '2026-09-09 10:00:00', 1, 'reel', \
+         'credit', 'Mon magasin', 1, 'Entreprise Benali', 'company', \
+         '16/00-7654321 B 22', '000216007654321', 100000, 0, 100000, 19000, 119000, 0, \
+         119000, 250000, 119000, 369000)",
+    )
+    .execute(conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (shop_id, customer_id, document_id, kind, debit_centimes, \
+         credit_centimes, user_id) VALUES (1, 1, 4, 'sale', 119000, 0, 1)",
+    )
+    .execute(conn)
+    .unwrap();
+}
+
+#[test]
+fn a_database_without_the_cancellation_columns_takes_the_migration_that_adds_them() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. This one adds four
+    // nullable columns to a table that already holds documents, so what has
+    // to be proved is that the documents are still there, still say what they
+    // said, and read as never cancelled rather than as cancelled by nobody.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_before_migration("cancellation");
+    for column in [
+        "cancelled_at",
+        "cancelled_by",
+        "cancel_reason",
+        "cancel_avoir_document_id",
+    ] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM pragma_table_info('documents') \
+                     WHERE name = '{column}'"
+                )
+            ),
+            0,
+            "the file this starts from already carries {column}"
+        );
+    }
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('document_lines') \
+             WHERE name = 'ref_line_id'"
+        ),
+        0,
+        "the file this starts from already carries ref_line_id"
+    );
+    seed_a_facture_naming_a_customer(&mut conn);
+    diesel::sql_query(
+        "INSERT INTO document_lines (id, shop_id, document_id, position, name, qty_milli, \
+         unit_price_centimes, line_discount_centimes, rate_bps, line_total_centimes) \
+         VALUES (9, 1, 4, 0, 'Ciment', 1000, 100000, 0, 1900, 100000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND net_to_pay_centimes = 119000 AND status = 'issued' \
+             AND cancelled_at IS NULL AND cancelled_by IS NULL \
+             AND cancel_reason IS NULL AND cancel_avoir_document_id IS NULL"
+        ),
+        1,
+        "the facture the file already carried did not survive the new columns"
+    );
+    // A line the file already carried credits nothing, which is what every
+    // line of a ticket, a facture and a proforma says.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM document_lines WHERE id = 9 AND qty_milli = 1000 \
+             AND line_total_centimes = 100000 AND ref_line_id IS NULL"
+        ),
+        1,
+        "the line the file already carried did not survive the new column"
+    );
+    // The facture line an avoir line credits is a line of this file.
+    assert!(
+        diesel::sql_query("UPDATE document_lines SET ref_line_id = 999 WHERE id = 9")
+            .execute(&mut conn)
+            .is_err(),
+        "the credited-line reference took an id no line has"
+    );
+
+    // A cancellation is written whole: the day, the person and the reason
+    // travel together, because a document marked annulée with nobody's name
+    // on it is exactly what features.md §5 keeps a log against. Which half of
+    // a half-written block is missing is the model's answer (`cancellation`
+    // reads it back the way `buyer_block` and `balance_triple` do), so the
+    // columns only have to take the whole of one.
+    assert_eq!(
+        diesel::sql_query(
+            "UPDATE documents SET status = 'cancelled', cancelled_at = '2026-09-10 09:15:00', \
+             cancelled_by = 1, cancel_reason = 'erreur de saisie' WHERE id = 4"
+        )
+        .execute(&mut conn)
+        .unwrap(),
+        1,
+        "a whole cancellation was refused"
+    );
+    // The person who cancelled is a user of this file and the avoir a
+    // cancellation issued is a document of it, so both columns name a row
+    // rather than holding a number somebody typed.
+    for bad in ["cancelled_by = 999", "cancel_avoir_document_id = 999"] {
+        assert!(
+            diesel::sql_query(format!("UPDATE documents SET {bad} WHERE id = 4"))
+                .execute(&mut conn)
+                .is_err(),
+            "the cancellation block took an id no row has: {bad}"
+        );
+    }
+    // Who cancelled is an id and never a name typed into the wrong box. A
+    // STRICT table converts a number into text for the two TEXT columns, so
+    // the integer one is where the refusal shows (STRICT tables,
+    // architecture.md, Data).
+    assert!(
+        diesel::sql_query("UPDATE documents SET cancelled_by = 'Ahmed' WHERE id = 4")
+            .execute(&mut conn)
+            .is_err(),
+        "the cancellation block took a name where it holds a user id"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
+
+#[test]
 fn the_migration_reverts_and_reapplies() {
     // architecture.md, Data: a migration ships with a test that runs it.
     // Reverting all the way back to an empty file is what proves each
     // down.sql undoes its own up.sql and nothing else.
     use diesel_migrations::MigrationHarness;
     let (_dir, mut conn) = open_temp();
+    // A revert on an empty file proves the tables move and says nothing about
+    // the rows: the down.sql copies documents back the way the up.sql copied
+    // them across, and a facture with a buyer, a balance and a debt behind it
+    // is what that copy has to carry.
+    seed_a_facture_naming_a_customer(&mut conn);
+
+    // Read before the revert as well as after: an assertion that only ever
+    // says "not there" would go on passing if the pattern below stopped
+    // matching the CHECK the migration actually writes.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
+             AND name = 'debt_ledger' AND sql LIKE '%kind <> ''payment''%'"
+        ),
+        1,
+        "the migrated file does not carry the check this asserts is removed"
+    );
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // The seventh one rebuilt the ledger to hang a two-column CHECK on it, so
+    // its down rebuilds it once more without that CHECK. The column stays: it
+    // belongs to the fifth migration and comes off with the fifth
+    // migration's down, below.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
+             AND name = 'debt_ledger' AND sql LIKE '%kind <> ''payment''%'"
+        ),
+        0,
+        "the check down.sql left the check behind"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('debt_ledger') \
+             WHERE name = 'payment_mode'"
+        ),
+        1,
+        "the check down.sql took the column the fifth migration added"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_ledger WHERE customer_id = 1 AND kind = 'sale'"
+        ),
+        1,
+        "the check down.sql took a movement with it"
+    );
+
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // The sixth one only adds columns, so its down takes the five and leaves
+    // every document standing with the number a comptable reads and the buyer
+    // block it was made out to.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('document_lines') \
+             WHERE name = 'ref_line_id'"
+        ),
+        0,
+        "the cancellation down.sql left ref_line_id behind"
+    );
+    for column in [
+        "cancelled_at",
+        "cancelled_by",
+        "cancel_reason",
+        "cancel_avoir_document_id",
+    ] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM pragma_table_info('documents') \
+                     WHERE name = '{column}'"
+                )
+            ),
+            0,
+            "the cancellation down.sql left {column} behind"
+        );
+    }
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND series = 'doc_facture' AND net_to_pay_centimes = 119000 \
+             AND customer_id = 1 AND buyer_name = 'Entreprise Benali'"
+        ),
+        1,
+        "the cancellation down.sql took the facture or its buyer block with the columns"
+    );
+
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // The fifth one only adds a column, so its down takes the column and
+    // leaves every movement standing: the ledger row the facture wrote is
+    // still there with the id the allocations would name.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('debt_ledger') \
+             WHERE name = 'payment_mode'"
+        ),
+        0,
+        "the payment mode down.sql left its column behind"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_ledger WHERE customer_id = 1 AND kind = 'sale'"
+        ),
+        1,
+        "the payment mode down.sql took a movement with the column"
+    );
+
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // The facture is still there, keeping its id, its number and the totals a
+    // comptable reads. The buyer block and the balance are gone with the
+    // columns that held them, and `customer_id` is emptied on purpose: the
+    // customers table goes with them, so a kept id would name nothing. A
+    // downgrade loses which customer a document was made out to.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND series = 'doc_facture' AND net_to_pay_centimes = 119000 \
+             AND customer_id IS NULL AND seller_name = 'Mon magasin'"
+        ),
+        1,
+        "the facture did not survive the down copy"
+    );
+    assert_eq!(
+        count(&mut conn, "SELECT COUNT(*) AS n FROM documents"),
+        1,
+        "the down copy left a document behind or wrote one twice"
+    );
+    // The fourth one rebuilds documents, so its down has to rebuild it again
+    // and put the three tables it added away, without taking documents with
+    // them.
+    for table in ["customers", "debt_ledger", "debt_allocations"] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
+                     AND name = '{table}'"
+                )
+            ),
+            0,
+            "the customers down.sql left {table} behind"
+        );
+    }
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('documents') \
+             WHERE name = 'buyer_name'"
+        ),
+        0,
+        "the customers down.sql left the buyer block on documents"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ),
+        1,
+        "the customers down.sql took the second migration's tables with it"
+    );
+    let pragma: Pragma = diesel::sql_query("PRAGMA foreign_keys")
+        .get_result(&mut conn)
+        .unwrap();
+    assert_eq!(
+        pragma.foreign_keys, 1,
+        "the down.sql left the foreign keys off"
+    );
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     // The third one only recreates stock_movements, so its down leaves the
@@ -877,11 +1687,33 @@ fn the_migration_reverts_and_reapplies() {
     );
     conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
         .unwrap();
+    assert_eq!(
+        orphan_rows(&mut conn),
+        0,
+        "the reapplied file has a row pointing at a parent that is not there"
+    );
     assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM shops"), 1);
     assert_eq!(
         on_delete_from_shops(&mut conn, "stock_movements"),
         "RESTRICT",
         "the file reapplied to a schema the third migration had already fixed"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'customers'"
+        ),
+        1,
+        "the fourth migration did not reapply"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('debt_ledger') \
+             WHERE name = 'payment_mode'"
+        ),
+        1,
+        "the fifth migration did not reapply"
     );
 }
 
@@ -891,9 +1723,18 @@ fn every_ledger_table_restricts_the_shop_it_belongs_to() {
     // décret 05-468 art. 10 for the series, ISO 27001 for the trail, and
     // features.md §1 for the ledger the stock on hand is only a cache of.
     // stock_movements shipped as CASCADE in migration 2 and migration 3 is
-    // what put it with the others.
+    // what put it with the others. The debt ledger and its allocations joined
+    // them in migration 4, and the customers they name with them: a balance a
+    // DELETE can empty is not a balance either.
     let (_dir, mut conn) = open_temp();
-    for table in ["documents", "audit_log", "stock_movements"] {
+    for table in [
+        "documents",
+        "audit_log",
+        "stock_movements",
+        "customers",
+        "debt_ledger",
+        "debt_allocations",
+    ] {
         assert_eq!(
             on_delete_from_shops(&mut conn, table),
             "RESTRICT",
@@ -1024,4 +1865,328 @@ fn a_shop_with_a_document_an_audit_entry_or_a_movement_cannot_be_deleted() {
             diesel::sql_query(cleanup).execute(&mut conn).unwrap();
         }
     }
+}
+
+#[test]
+fn the_debt_tables_keep_what_they_name_and_lose_only_what_they_may() {
+    // The four foreign key actions migration 4 chose, each read off the file
+    // rather than off the schema: a customer with a history cannot be
+    // deleted, a payment and a document an allocation settles cannot be
+    // deleted, and a document a movement merely cites goes away leaving the
+    // movement behind, because what the customer owes is not a fact about
+    // the document that caused it.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    diesel::sql_query(insert_with("customers", "name", "'Entreprise Benali'"))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, document_id, kind, \
+         debit_centimes, credit_centimes, user_id) \
+         VALUES (1, 1, 1, 1, 'sale', 100000, 0, 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    assert!(
+        diesel::sql_query("DELETE FROM customers WHERE id = 1")
+            .execute(&mut conn)
+            .is_err(),
+        "a customer with a ledger behind them was deleted"
+    );
+
+    // The sale is deleted; what the customer owes for it is not.
+    diesel::sql_query("DELETE FROM documents WHERE id = 1")
+        .execute(&mut conn)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_ledger WHERE id = 1 AND document_id IS NULL \
+             AND debit_centimes = 100000"
+        ),
+        1,
+        "the movement went with the document instead of losing its id"
+    );
+
+    // A payment and the document it settled, this time with the allocation
+    // that ties them together.
+    diesel::sql_query(insert_with("documents", "number", "2"))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, kind, debit_centimes, \
+         credit_centimes, user_id, payment_mode) \
+         VALUES (2, 1, 1, 'payment', 0, 50000, 1, 'cash')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_allocations (shop_id, payment_ledger_id, document_id, \
+         amount_centimes) VALUES (1, 2, 2, 50000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    assert!(
+        diesel::sql_query("DELETE FROM debt_ledger WHERE id = 2")
+            .execute(&mut conn)
+            .is_err(),
+        "a payment an allocation settles with was deleted"
+    );
+    assert!(
+        diesel::sql_query("DELETE FROM documents WHERE id = 2")
+            .execute(&mut conn)
+            .is_err(),
+        "a document an allocation settled was deleted"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
+
+#[test]
+fn a_facture_naming_a_customer_goes_down_and_up_without_orphaning_itself() {
+    // The round trip above walks the file all the way back, which empties it
+    // before anything is reapplied. This one reverts the fourth migration
+    // only and puts it straight back, which is the move a developer makes and
+    // the one where a kept `customer_id` would come back up pointing into a
+    // `customers` table that was just recreated empty.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_temp();
+    seed_a_facture_naming_a_customer(&mut conn);
+
+    // The fifth, sixth and seventh migrations sit on top of the fourth and
+    // only touch tables the fourth left standing, so all three come off
+    // first; the round trip above is where those steps are asserted.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // Everything the fourth migration added to `documents` is off the table
+    // again: the seven columns of the buyer block and the three of the
+    // balance triple.
+    for column in [
+        "buyer_name",
+        "buyer_party_kind",
+        "buyer_rc",
+        "buyer_nif",
+        "buyer_nis",
+        "buyer_ai",
+        "buyer_address",
+        "old_balance_centimes",
+        "remaining_debt_centimes",
+        "total_debt_centimes",
+    ] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM pragma_table_info('documents') \
+                     WHERE name = '{column}'"
+                )
+            ),
+            0,
+            "the down.sql left {column} on documents"
+        );
+    }
+
+    conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+
+    // The money came back untouched. The two copies are where a column could
+    // quietly land in the wrong place, and a total off by a copy is a facture
+    // that no longer matches the paper the customer holds.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 \
+             AND total_ht_centimes = 100000 AND tva_centimes = 19000 \
+             AND total_ttc_centimes = 119000 AND net_to_pay_centimes = 119000"
+        ),
+        1,
+        "the totals are not what was seeded before the round trip"
+    );
+    assert_eq!(
+        orphan_rows(&mut conn),
+        0,
+        "the reapplied file has a row pointing at a customer that is not there"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND customer_id IS NULL"
+        ),
+        1,
+        "the facture kept a customer id the down.sql had no customer to keep"
+    );
+}
+
+#[test]
+fn a_database_whose_ledger_lets_any_movement_carry_a_mode_takes_the_check() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. This one rebuilds a
+    // table that already holds movements, so what has to be proved is that
+    // every one of them is still there with the id it had, that the
+    // allocations still name the same movements, and that the row migration
+    // 4's comment forbids is now refused by the file itself.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_before_migration("debt_payment_mode_check");
+    diesel::sql_query(
+        "INSERT INTO customers (id, shop_id, name, party_kind) VALUES (1, 1, 'Ahmed', 'consumer')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    // A document for the allocation to point at, written straight in: what
+    // this asserts is the ledger, not how a facture gets issued.
+    diesel::sql_query(
+        "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
+         regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+         subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+         net_to_pay_centimes) VALUES (1, 1, 'facture', 'doc_facture', 1, \
+         '2026-09-09 10:00:00', 1, 'reel', 'credit', 'Magasin', 100000, 0, 100000, \
+         19000, 119000, 0, 119000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    // The file this starts from takes the row the new CHECK refuses, which is
+    // what makes the rebuild worth running: an opening balance stamped 'cash'
+    // reads as money that was handed over and never was.
+    assert_eq!(
+        diesel::sql_query(
+            "INSERT INTO debt_ledger (id, shop_id, customer_id, kind, debit_centimes, \
+             credit_centimes, user_id, payment_mode) \
+             VALUES (4, 1, 1, 'opening', 1000, 0, 1, 'cash')"
+        )
+        .execute(&mut conn)
+        .unwrap(),
+        1,
+        "the file this starts from already refuses the row"
+    );
+    diesel::sql_query("DELETE FROM debt_ledger WHERE id = 4")
+        .execute(&mut conn)
+        .unwrap();
+    // An opening with no mode, a payment with one, and an allocation naming
+    // that payment by its id.
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, kind, debit_centimes, \
+         credit_centimes, user_id, note) \
+         VALUES (5, 1, 1, 'opening', 250000, 0, 1, 'report ancien carnet')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, kind, debit_centimes, \
+         credit_centimes, user_id, payment_mode) \
+         VALUES (6, 1, 1, 'payment', 0, 100000, 1, 'card')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_allocations (shop_id, payment_ledger_id, document_id, amount_centimes) \
+         VALUES (1, 6, 1, 100000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_ledger WHERE id = 5 AND kind = 'opening' \
+             AND debit_centimes = 250000 AND note = 'report ancien carnet' \
+             AND payment_mode IS NULL"
+        ),
+        1,
+        "the movement the file already carried did not survive the rebuild"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_ledger WHERE id = 6 AND kind = 'payment' \
+             AND credit_centimes = 100000 AND payment_mode = 'card'"
+        ),
+        1,
+        "the payment did not survive the rebuild with its mode"
+    );
+    // The ids are what the allocations point at, so a rebuild that reassigned
+    // them would say a facture had been settled by somebody else's payment.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_allocations WHERE payment_ledger_id = 6"
+        ),
+        1,
+        "the allocation lost the payment it names"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+    // The index goes with the table when it is dropped, so it is written
+    // again: a balance reads one customer's rows through it.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' \
+             AND name = 'idx_debt_ledger_shop_customer'"
+        ),
+        1,
+        "the rebuilt table lost its index"
+    );
+
+    // What the file now refuses on its own, both ways round: a mode on a
+    // movement nobody handed money over for, and a payment that does not say
+    // what it was handed over in.
+    for (kind, mode) in [
+        ("opening", "'cash'"),
+        ("sale", "'cash'"),
+        ("avoir", "'cash'"),
+        ("adjustment", "'cash'"),
+        ("payment", "NULL"),
+    ] {
+        assert!(
+            diesel::sql_query(format!(
+                "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+                 credit_centimes, user_id, payment_mode) \
+                 VALUES (1, 1, '{kind}', 1000, 0, 1, {mode})"
+            ))
+            .execute(&mut conn)
+            .is_err(),
+            "a {kind} with a mode of {mode} was taken"
+        );
+    }
+    // And what it still takes: a payment with the mode `pay` fills in, and
+    // every other kind without one.
+    for (kind, mode) in [
+        ("payment", "'cash'"),
+        ("payment", "'card'"),
+        ("sale", "NULL"),
+        ("avoir", "NULL"),
+    ] {
+        assert_eq!(
+            diesel::sql_query(format!(
+                "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+                 credit_centimes, user_id, payment_mode) \
+                 VALUES (1, 1, '{kind}', 1000, 0, 1, {mode})"
+            ))
+            .execute(&mut conn)
+            .unwrap(),
+            1,
+            "a {kind} paid {mode} was refused"
+        );
+    }
+    // The per-column check migration 4 wrote is still on the rebuilt table.
+    assert!(
+        diesel::sql_query(
+            "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+             credit_centimes, user_id, payment_mode) \
+             VALUES (1, 1, 'payment', 0, 1000, 1, 'credit')"
+        )
+        .execute(&mut conn)
+        .is_err(),
+        "the rebuilt table took a mode that is not a way of paying"
+    );
 }

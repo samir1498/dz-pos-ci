@@ -1,0 +1,77 @@
+{#- The 80 mm debt slip. One page, no external file, like the ticket beside
+it: the bytes this renders are the bytes a browser prints and the bytes a
+server hands over (features.md §4). The template holds no rule: every
+string, every amount and every "only if present" is decided in
+crates/core/src/print/debt_slip.rs and arrives here already made. -#}
+<!doctype html>
+<html lang="{{ lang_tag }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<title>{{ title }} {{ customer.name }}</title>
+{%- if arabic_unreviewed %}
+<!-- The Arabic wording of this template is unreviewed by a native speaker, like words_ar (research R6). -->
+{%- endif %}
+<style>
+@page { size: 80mm auto; margin: 0 }
+body { margin: 0; background: #fff; color: #000 }
+.slip { inline-size: 72mm; margin: 0 auto; padding: 4mm 0; font: 12px/1.45 "DejaVu Sans Mono", "Courier New", monospace }
+.center { text-align: center }
+.name { font-size: 15px; font-weight: 700 }
+.dashed { border-block-start: 1px dashed #000; margin-block: 2mm }
+.row { display: flex; justify-content: space-between; gap: 3mm }
+.row .label { overflow-wrap: anywhere }
+.amount, .num { white-space: nowrap }
+.cur { margin-inline-start: .4em }
+.who { overflow-wrap: anywhere }
+.movement { color: #333 }
+.net { font-weight: 700; font-size: 14px }
+.notice { font-size: 11px }
+</style>
+</head>
+<body>
+<article class="slip">
+<div class="center">
+<div class="name">{{ seller.name }}</div>
+{%- if let Some(address) = seller.address %}
+<div>{{ address }}</div>
+{%- endif %}
+{%- if let Some(phone) = seller.phone %}
+<div class="num">{{ phone }}</div>
+{%- endif %}
+{%- for id in seller.ids %}
+<div>{{ id.label }} <span class="num">{{ id.value }}</span></div>
+{%- endfor %}
+</div>
+<div class="dashed"></div>
+<div class="center">{{ title }}</div>
+<div class="center num">{{ printed_at }}</div>
+<div class="dashed"></div>
+<div>{{ customer.title }}</div>
+<div class="who name">{{ customer.name }}</div>
+{%- if let Some(address) = customer.address %}
+<div class="who">{{ address }}</div>
+{%- endif %}
+{%- if let Some(phone) = customer.phone %}
+<div class="num">{{ phone }}</div>
+{%- endif %}
+{%- for id in customer.ids %}
+<div>{{ id.label }} <span class="num">{{ id.value }}</span></div>
+{%- endfor %}
+<div class="dashed"></div>
+<div class="row net"><span class="label">{{ balance_label }}</span><span class="amount amount-balance">{{ balance }}</span><span class="cur">{{ currency }}</span></div>
+<div>{{ in_words_label }} <strong class="in-words">{{ in_words }}</strong>{% if let Some(in_favour) = in_favour %} {{ in_favour }}{% endif %}</div>
+<div class="dashed"></div>
+<div>{{ movements_label }}</div>
+{%- if movements.is_empty() %}
+<div class="movement">{{ no_movement }}</div>
+{%- else %}
+{%- for movement in movements %}
+<div class="row"><span class="num">{{ movement.date }}</span><span class="label">{{ movement.kind }}</span>{% if let Some(document) = movement.document %}<span class="num">{{ document }}</span>{% endif %}</div>
+<div class="row movement"><span>{% if let Some(debit) = movement.debit %}{{ debit_label }} <span class="amount amount-debit">{{ debit }}</span>{% endif %}{% if let Some(credit) = movement.credit %}{{ credit_label }} <span class="amount amount-credit">{{ credit }}</span>{% endif %}</span><span class="amount amount-running">{{ movement.balance }}</span></div>
+{%- endfor %}
+{%- endif %}
+<div class="dashed"></div>
+<div class="center notice">{{ no_fiscal_value }}</div>
+</article>
+</body>
+</html>

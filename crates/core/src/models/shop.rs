@@ -8,7 +8,7 @@ use crate::schema::shops;
 
 /// The shop as the rest of the app sees it. Every identifier is optional
 /// on the row: a shop under IFU prints a ticket with its name alone, and
-/// the facture rule (M2) is what demands RC and NIS at issue.
+/// the facture rule is what demands RC and NIS at issue.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Shop {
     pub id: i32,

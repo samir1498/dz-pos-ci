@@ -9,7 +9,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { CategoryDto, ProductDto, SaleDto, SettingsDto } from "@dzpos/shared";
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
+import type { CategoryDto, CustomerDto, ProductDto, SaleDto, SettingsDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import { TillScreen } from "./till";
 
@@ -89,12 +96,16 @@ const sale: SaleDto = {
   // series a cashier could read (crates/core/src/models/sql_types.rs).
   series: "doc_ticket",
   number: 12,
+  printed_number: "TK-000012",
   issued_at: "2026-09-09 10:00:00",
   user_id: 1,
   regime: "reel",
   payment_mode: "cash",
   seller: settings.store,
   customer_id: null,
+  ref_document_id: null,
+  buyer_name: null,
+  balance: null,
   totals: {
     total_ht_centimes: 110_000,
     discount_centimes: 0,
@@ -111,6 +122,8 @@ const sale: SaleDto = {
   tendered_centimes: 150_000,
   change_centimes: 20_800,
   status: "issued",
+  cancellation: null,
+  cancel_effect: null,
   lines: [
     {
       id: 1,
@@ -123,6 +136,7 @@ const sale: SaleDto = {
       line_discount_centimes: 0,
       rate_bps: 1900,
       line_total_centimes: 80_000,
+      ref_line_id: null,
     },
     {
       id: 2,
@@ -135,9 +149,52 @@ const sale: SaleDto = {
       line_discount_centimes: 0,
       rate_bps: 900,
       line_total_centimes: 30_000,
+      ref_line_id: null,
     },
   ],
+  warning: null,
 };
+
+/** A customer who can buy on credit: 5 000,00 of limit, warned at 4 000,00,
+ * owing nothing yet. The e2e drives the same three numbers. */
+const amrani: CustomerDto = {
+  id: 3,
+  shop_id: 1,
+  name: "Entreprise Amrani",
+  party_kind: "company",
+  phone: "0555 00 11 22",
+  address: null,
+  rc: null,
+  nif: null,
+  nis: null,
+  ai: null,
+  credit_limit_centimes: 500_000,
+  warn_threshold_centimes: 400_000,
+  notes: null,
+  active: true,
+  balance_centimes: 0,
+};
+
+/** Zero limit is no credit at all, which is not the same answer as no limit
+ * (features.md §1). */
+const noCredit: CustomerDto = {
+  ...amrani,
+  id: 4,
+  name: "Boutique Kaci",
+  credit_limit_centimes: 0,
+  warn_threshold_centimes: null,
+};
+
+/** Already past what the shop allowed: the banner says so before a line is
+ * even in the cart. */
+const overLimit: CustomerDto = {
+  ...amrani,
+  id: 5,
+  name: "Garage Sadi",
+  balance_centimes: 600_000,
+};
+
+const anonymous: CustomerDto = { ...amrani, id: 6, name: "Fiche fermée", active: false };
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -156,25 +213,38 @@ function isInit(value: unknown): value is RequestInit {
 const TICKET_HTML =
   '<!doctype html><html><body><div class="amount-net-to-pay">1 292,00</div></body></html>';
 
+/** The A4 page the core renders from a stored facture. Its own string, so
+ * an assertion cannot pass on the ticket's bytes by accident. */
+const FACTURE_HTML =
+  '<!doctype html><html><body><div class="title">FACTURE</div></body></html>';
+
 function html(status: number, body: string): Response {
   return new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let rows: ProductDto[];
+let customerRows: CustomerDto[];
 let saleAnswer: (() => Response) | null;
 let ticketAnswer: (() => Response) | null;
 
-/** The JSON body of the POST to /sales, or undefined if none was made. */
-function salePost(): Record<string, unknown> | undefined {
+/** Every JSON body posted to /sales, oldest first. An override sends the
+ * basket a second time, so the two calls have to be told apart. */
+function salePosts(): Record<string, unknown>[] {
+  const bodies: Record<string, unknown>[] = [];
   for (const call of fetchMock.mock.calls) {
     const init: unknown = call[1];
     if (isInit(init) && init.method === "POST" && String(call[0]).endsWith("/sales")) {
       if (typeof init.body !== "string") throw new Error("the till posted no JSON body");
-      return JSON.parse(init.body);
+      bodies.push(JSON.parse(init.body));
     }
   }
-  return undefined;
+  return bodies;
+}
+
+/** The JSON body of the first POST to /sales, or undefined if none was made. */
+function salePost(): Record<string, unknown> | undefined {
+  return salePosts()[0];
 }
 
 function posted(): boolean {
@@ -189,8 +259,17 @@ function ticketFetch(): string | undefined {
     .find((url) => url.includes(`/sales/${sale.id}/ticket`));
 }
 
+/** The last facture URL the panel asked for, sheet and language included. */
+function facturePrinted(): string | undefined {
+  return fetchMock.mock.calls
+    .map((call) => String(call[0]))
+    .filter((url) => url.includes(`/sales/${sale.id}/facture`))
+    .pop();
+}
+
 beforeEach(() => {
   rows = [coffee, tomato, crate, salt];
+  customerRows = [amrani, noCredit, overLimit, anonymous];
   saleAnswer = null;
   ticketAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
@@ -198,10 +277,14 @@ beforeEach(() => {
     if (init?.method === "POST" && url.endsWith("/sales")) {
       return Promise.resolve(saleAnswer !== null ? saleAnswer() : json(201, sale));
     }
+    if (url.includes("/customers")) return Promise.resolve(json(200, customerRows));
     if (url.endsWith("/categories")) return Promise.resolve(json(200, categories));
     if (url.endsWith("/settings")) return Promise.resolve(json(200, settings));
     if (url.includes(`/sales/${sale.id}/ticket`)) {
       return Promise.resolve(ticketAnswer !== null ? ticketAnswer() : html(200, TICKET_HTML));
+    }
+    if (url.includes(`/sales/${sale.id}/facture`)) {
+      return Promise.resolve(html(200, FACTURE_HTML));
     }
     if (url.endsWith(`/sales/${sale.id}`)) return Promise.resolve(json(200, sale));
     return Promise.resolve(json(200, rows));
@@ -214,14 +297,31 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** The till inside a router of its own, and nothing else in it: the screen
+ * carries `Link`s to the customers and the settings screens, and a `Link`
+ * outside a router throws. The real route tree would drag the root layout
+ * and its navigation into every assertion here, so this is one route with
+ * no layout, on a memory history. */
 function mount(lang: Lang = "fr") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  const rootRoute = createRootRoute();
+  const tillRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/",
+    component: TillScreen,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([tillRoute]),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        <TillScreen />
+        {/* The router this test builds is not the app's, and the app's is
+            what the `Register` declaration types `Link` against. */}
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </I18nProvider>,
   );
@@ -571,6 +671,9 @@ describe("paying", () => {
       global_discount_centimes: 0,
       payment_mode: "cash",
       tendered_centimes: 150_000,
+      customer_id: null,
+      override: false,
+      kind: "ticket",
     });
   });
 
@@ -605,13 +708,13 @@ describe("paying", () => {
     expect(posted()).toBe(false);
   });
 
-  test("credit is drawn, disabled, and says when it arrives", async () => {
+  test("credit is drawn, disabled and says what it needs until a customer is picked", async () => {
     mount();
     const credit = await screen.findByRole("radio", { name: "Crédit" });
     expect(credit).toBeDisabled();
     expect(credit.closest("label")).toHaveAttribute(
       "title",
-      "Une vente à crédit a besoin d'un compte client, prévu dans la prochaine version.",
+      "Choisissez un client qui peut acheter à crédit.",
     );
   });
 
@@ -723,5 +826,391 @@ describe("in Arabic", () => {
 
     await screen.findByTestId("till-ticket");
     expect(ticketFetch()).toBe(`http://127.0.0.1:4317/sales/${sale.id}/ticket?lang=ar`);
+  });
+});
+
+// The sale on credit. The rules are the core's (features.md §1); what is
+// pinned here is what the screen posts, what it refuses to post, and what it
+// shows a cashier when the server refuses.
+describe("on credit", () => {
+  /** Rings up one coffee and picks the customer, which is the shortest
+   * basket that can go on credit. */
+  async function ringUpFor(
+    user: ReturnType<typeof userEvent.setup>,
+    customer: CustomerDto,
+  ): Promise<void> {
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await screen.findByRole("option", { name: customer.name });
+    await user.selectOptions(screen.getByLabelText("Client", { selector: "select" }), [
+      String(customer.id),
+    ]);
+  }
+
+  async function payOnCredit(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+    await user.click(screen.getByRole("radio", { name: "Crédit" }));
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+  }
+
+  test("the body carries the customer and the credit mode", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpFor(user, amrani);
+    await payOnCredit(user);
+
+    await screen.findByRole("status");
+    expect(salePost()).toMatchObject({
+      payment_mode: "credit",
+      customer_id: amrani.id,
+      tendered_centimes: null,
+      override: false,
+    });
+  });
+
+  test("credit is not on offer without a customer, and nothing is posted", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    const credit = screen.getByRole("radio", { name: "Crédit" });
+    expect(credit).toBeDisabled();
+    await user.click(credit);
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    expect(posted()).toBe(false);
+  });
+
+  test("a customer with a limit of zero cannot buy on credit", async () => {
+    // Zero is no credit at all; null would be no limit at all. The screen
+    // has to tell the two apart the way the core does.
+    const user = userEvent.setup();
+    mount();
+    await ringUpFor(user, noCredit);
+    expect(screen.getByRole("radio", { name: "Crédit" })).toBeDisabled();
+  });
+
+  test("a customer already past the limit is flagged before a line is rung up", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpFor(user, overLimit);
+    const banner = await screen.findByTestId("till-limit-banner");
+    expect(banner).toHaveTextContent("Plafond dépassé");
+    // The two amounts, the customer's own balance against their limit.
+    expect(banner).toHaveTextContent("6 000,00");
+    expect(banner).toHaveTextContent("5 000,00");
+  });
+
+  test("a closed fiche is never offered", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await screen.findByRole("option", { name: amrani.name });
+    expect(screen.queryByRole("option", { name: anonymous.name })).not.toBeInTheDocument();
+  });
+
+  test("the refusal shows both amounts and the override resends the same basket", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "credit_limit",
+          message: "past the limit",
+          balance_after_centimes: 550_000,
+          credit_limit_centimes: 500_000,
+        },
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await payOnCredit(user);
+
+    expect(await screen.findByTestId("till-balance-after")).toHaveTextContent("5 500,00");
+    expect(screen.getByTestId("till-credit-limit")).toHaveTextContent("5 000,00");
+    // The other answer to the refusal: the customer's own fiche, where money
+    // comes off what they already owe. The link carries their id, so nobody
+    // types the name back into a search box.
+    expect(screen.getByRole("link", { name: "Ouvrir la fiche du client" })).toHaveAttribute(
+      "href",
+      `/customers/${amrani.id}`,
+    );
+    const refused = salePost();
+    expect(refused).toMatchObject({ override: false });
+
+    // The override asks first, and a cashier who says no sends nothing.
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await user.click(screen.getByRole("button", { name: "Forcer la vente" }));
+    expect(confirm).toHaveBeenCalled();
+    expect(fetchMock.mock.calls.filter((c) => String(c[0]).endsWith("/sales")).length).toBe(1);
+
+    // Said yes, the same basket goes again with the flag on.
+    confirm.mockReturnValue(true);
+    saleAnswer = () =>
+      json(201, { ...sale, payment_mode: "credit", customer_id: amrani.id, tendered_centimes: null });
+    await user.click(screen.getByRole("button", { name: "Forcer la vente" }));
+    await screen.findByRole("status");
+    const posts = salePosts();
+    expect(posts).toHaveLength(2);
+    expect(posts[1]).toEqual({ ...refused, override: true });
+  });
+
+  test("editing the basket takes the refusal away, so the override cannot resend what is gone", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "credit_limit",
+          message: "past the limit",
+          balance_after_centimes: 550_000,
+          credit_limit_centimes: 500_000,
+        },
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await payOnCredit(user);
+    await screen.findByTestId("till-balance-after");
+
+    // The line the refusal was about goes off the cart. What the button
+    // would resend is no longer what the cashier is looking at, so there
+    // is no button.
+    await user.click(screen.getByRole("button", { name: `Un de moins ${coffee.name}` }));
+    expect(screen.queryByRole("button", { name: "Forcer la vente" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("till-balance-after")).not.toBeInTheDocument();
+    expect(salePosts()).toHaveLength(1);
+  });
+
+  test("a sale that reaches the warning threshold still goes through and says so", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(201, {
+        ...sale,
+        payment_mode: "credit",
+        customer_id: amrani.id,
+        tendered_centimes: null,
+        change_centimes: null,
+        balance: {
+          old_balance_centimes: 0,
+          remaining_debt_centimes: 450_000,
+          total_debt_centimes: 450_000,
+        },
+        warning: "near_limit",
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await payOnCredit(user);
+
+    const done = await screen.findByRole("status");
+    expect(within(done).getByTestId("till-near-limit")).toBeInTheDocument();
+    // The balance the document stores, not one the screen worked out.
+    expect(within(done).getByTestId("till-new-balance")).toHaveTextContent("4 500,00");
+  });
+});
+
+describe("the facture at the till", () => {
+  /** One coffee, and the customer picked, which is the shortest basket a
+   * facture can be made out for. */
+  async function ringUpFor(
+    user: ReturnType<typeof userEvent.setup>,
+    customer: CustomerDto,
+  ): Promise<void> {
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await screen.findByRole("option", { name: customer.name });
+    await user.selectOptions(screen.getByLabelText("Client", { selector: "select" }), [
+      String(customer.id),
+    ]);
+  }
+
+  /** The answer the API gives for a facture: its own kind, its own series
+   * and the number as the paper prints it. */
+  const issued: SaleDto = {
+    ...sale,
+    kind: "facture",
+    series: "doc_facture",
+    number: 1,
+    printed_number: "FA-000001",
+    customer_id: amrani.id,
+  };
+
+  test("the facture is not on offer without a customer and the body says ticket", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+
+    const facture = screen.getByRole("radio", { name: "Facture" });
+    expect(facture).toBeDisabled();
+    // Disabled and saying why, the way the credit choice does.
+    expect(facture.closest("label")).toHaveAttribute(
+      "title",
+      "Une facture est établie au nom d'un client.",
+    );
+    expect(screen.getByRole("radio", { name: "Ticket" })).toBeChecked();
+
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()).toMatchObject({ kind: "ticket" });
+  });
+
+  test("the proforma needs a customer too and posts its own kind", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () => json(201, { ...issued, kind: "proforma" });
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+
+    // A quotation is made out to somebody the way a facture is, so it is
+    // offered on the same terms and says why when it is not.
+    const proforma = screen.getByRole("radio", { name: "Proforma" });
+    expect(proforma).toBeDisabled();
+    expect(proforma.closest("label")).toHaveAttribute(
+      "title",
+      "Une proforma est établie au nom d'un client : choisissez-en un.",
+    );
+
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Proforma" }));
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()).toMatchObject({ kind: "proforma", customer_id: amrani.id });
+  });
+
+  test("a quotation is still refused when the basket itself is wrong", async () => {
+    // A proforma takes no money, so the cash box and the credit limit are not
+    // part of what makes it sendable. What is in the basket still is: a
+    // global discount that is not an amount is as wrong on a quotation as on
+    // a sale, and nothing may be posted while it stands.
+    const user = userEvent.setup();
+    saleAnswer = () => json(201, { ...issued, kind: "proforma" });
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Proforma" }));
+    await user.type(screen.getByLabelText("Remise globale (DA)"), "abc");
+
+    // Said out loud, and the button will not send it.
+    expect(screen.getByText("Remise invalide.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Encaisser" })).toBeDisabled();
+
+    // Corrected, and the quotation goes.
+    await user.clear(screen.getByLabelText("Remise globale (DA)"));
+    await user.type(screen.getByLabelText("Remise globale (DA)"), "50");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()).toMatchObject({ kind: "proforma", global_discount_centimes: 5_000 });
+  });
+
+  test("picking a customer opens the switch and the body posts the facture kind", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () => json(201, issued);
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    await screen.findByRole("status");
+    expect(salePost()).toMatchObject({ kind: "facture", customer_id: amrani.id });
+  });
+
+  test("unpicking the customer takes the sale back to a ticket", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    expect(screen.getByRole("radio", { name: "Facture" })).toBeChecked();
+
+    // Back to the walk-in customer: a facture is made out to somebody, so
+    // the switch does not stay on a choice the server would refuse.
+    await user.selectOptions(screen.getByLabelText("Client", { selector: "select" }), [""]);
+    expect(screen.getByRole("radio", { name: "Ticket" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Facture" })).toBeDisabled();
+
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()).toMatchObject({ kind: "ticket" });
+  });
+
+  test("the refusal names the side, the identifiers and where to fill them in", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "party_ids",
+          message: "the buyer block of a facture is missing rc, nis",
+          party_side: "buyer",
+          missing_ids: ["rc", "nis"],
+        },
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    const panel = await screen.findByTestId("till-party-ids");
+    expect(within(panel).getByText("Il manque à la fiche du client :")).toBeInTheDocument();
+    const missing = within(panel).getByTestId("till-party-ids-missing");
+    expect(missing).toHaveTextContent("RC");
+    expect(missing).toHaveTextContent("NIS");
+    // The screen sends the cashier to the half it can fix, not to a
+    // generic settings page.
+    expect(within(panel).getByRole("link", { name: "Compléter la fiche du client" })).toHaveAttribute(
+      "href",
+      "/customers",
+    );
+    // The panel says the whole thing, so the generic line is not repeated
+    // underneath it.
+    expect(screen.queryByText("Identifiants manquants.")).toBeNull();
+  });
+
+  test("a seller block that is short sends the cashier to the settings instead", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "party_ids",
+          message: "the seller block of a facture is missing nis",
+          party_side: "seller",
+          missing_ids: ["nis"],
+        },
+      });
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    const panel = await screen.findByTestId("till-party-ids");
+    expect(within(panel).getByText("Il manque au bloc du magasin :")).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("link", { name: "Compléter les paramètres du magasin" }),
+    ).toHaveAttribute("href", "/settings");
+  });
+
+  test("the confirmation and the print panel are the facture's, on the sheet asked for", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () => json(201, issued);
+    mount();
+    await ringUpFor(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Facture" }));
+    await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+
+    const done = await screen.findByRole("status");
+    expect(within(done).getByText("Facture émise")).toBeInTheDocument();
+    // The number as the paper spells it, which is what a customer quotes.
+    expect(within(done).getByTestId("till-document-number")).toHaveTextContent("FA-000001");
+
+    await user.click(within(done).getByRole("button", { name: "Imprimer" }));
+    const frame = await screen.findByTestId("till-facture");
+    expect(frame).toHaveAttribute("srcdoc", FACTURE_HTML);
+    expect(facturePrinted()).toContain("paper=a4");
+    expect(facturePrinted()).toContain("lang=fr");
+
+    // The half sheet is the same facture on smaller paper, asked for again.
+    await user.click(screen.getByRole("radio", { name: "A5" }));
+    await waitFor(() => expect(facturePrinted()).toContain("paper=a5"));
+    expect(screen.queryByTestId("till-ticket")).toBeNull();
   });
 });

@@ -58,10 +58,60 @@ struct Body {
     error: Payload,
 }
 
+/// The envelope's payload. The figures beside the code are the one exception
+/// to "a code and a sentence": the till has to say by how much a credit limit
+/// was passed and the fiche by how much a payment overshot, and re-deriving
+/// either on the screen would be a second answer to what a customer owes
+/// (architecture.md rule 2). They are left out of every other error's body
+/// rather than sent as nulls, so nothing else on the wire changed shape.
 #[derive(Serialize)]
 struct Payload {
     code: &'static str,
     message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    balance_after_centimes: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    credit_limit_centimes: Option<i64>,
+    /// Which field of the request the refusal is about. Every validation
+    /// error names one, so the screen can put the message under the input
+    /// rather than reading the name out of the sentence.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field: Option<String>,
+    /// What the customer still owes, on a payment that asked for more.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    outstanding_centimes: Option<i64>,
+    /// The same exception, for the same reason, on the facture's party
+    /// blocks: the till has to say which side is short and of what, and
+    /// working that out on the screen would be a second reading of décret
+    /// 05-468 art. 3. Absent from every other error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    party_side: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    missing_ids: Option<Vec<&'static str>>,
+}
+
+/// What an error carries besides its code and its sentence. One value per
+/// optional field of the payload, filled by the one error that knows it and
+/// left empty by every other, so the body of an ordinary refusal is the two
+/// keys it always was.
+struct Figures {
+    balance_after_centimes: Option<i64>,
+    credit_limit_centimes: Option<i64>,
+    field: Option<String>,
+    outstanding_centimes: Option<i64>,
+    party_side: Option<&'static str>,
+    missing_ids: Option<Vec<&'static str>>,
+}
+
+impl Figures {
+    const NONE: Self = Self {
+        balance_after_centimes: None,
+        credit_limit_centimes: None,
+        field: None,
+        outstanding_centimes: None,
+        party_side: None,
+        missing_ids: None,
+    };
 }
 
 impl ApiError {
@@ -97,6 +147,59 @@ impl ApiError {
             ),
         }
     }
+
+    /// What an error carries besides its code and its sentence. A credit
+    /// refusal names what the sale would have taken the customer to and the
+    /// limit it passed; a payment above the debt names what is actually
+    /// owed, and the field it is about, so the form can say "you can take at
+    /// most this much" without asking the balance again; a facture the party
+    /// blocks refuse names the side that is short and the identifiers it is
+    /// short of, because working that out on the screen would be a second
+    /// reading of décret 05-468 art. 3. Every other error carries none of
+    /// them, and the fields are then absent from the body.
+    fn figures(&self) -> Figures {
+        match self {
+            ApiError::Core(CoreError::CreditLimit {
+                balance_after,
+                credit_limit,
+            })
+            | ApiError::Request(CoreError::CreditLimit {
+                balance_after,
+                credit_limit,
+            }) => Figures {
+                balance_after_centimes: Some(balance_after.as_centimes()),
+                credit_limit_centimes: Some(credit_limit.as_centimes()),
+                ..Figures::NONE
+            },
+            ApiError::Core(CoreError::PaymentAboveDebt {
+                outstanding_centimes,
+            })
+            | ApiError::Request(CoreError::PaymentAboveDebt {
+                outstanding_centimes,
+            }) => Figures {
+                field: Some("amount_centimes".to_owned()),
+                outstanding_centimes: Some(*outstanding_centimes),
+                ..Figures::NONE
+            },
+            // Every validation error already names the field it is about;
+            // only the payment one used to say so on the wire, and a screen
+            // that wanted to put the message under the input had to read it
+            // out of the sentence. The name travels beside the code now, for
+            // all of them.
+            ApiError::Core(CoreError::Validation { field, .. })
+            | ApiError::Request(CoreError::Validation { field, .. }) => Figures {
+                field: Some(field.clone()),
+                ..Figures::NONE
+            },
+            ApiError::Core(CoreError::PartyIds { side, missing })
+            | ApiError::Request(CoreError::PartyIds { side, missing }) => Figures {
+                party_side: Some(side.as_str()),
+                missing_ids: Some(missing.clone()),
+                ..Figures::NONE
+            },
+            _ => Figures::NONE,
+        }
+    }
 }
 
 /// What a core error means once a service has run. A `Money` error here is a
@@ -104,7 +207,20 @@ impl ApiError {
 /// and the caller has nothing to correct: 500, not 422.
 const fn status_for(e: &CoreError) -> StatusCode {
     match e {
-        CoreError::Validation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+        // A credit refusal is the request itself the server will not carry
+        // out: the basket is well formed and the caller can act on it, by
+        // paying another way or by resending with `override`. The two
+        // amounts in the payload are what the till renders, so it sits with
+        // the 422s and not with the conflicts.
+        // A payment above the debt sits with them for the same reason: the
+        // caller can act on it, by taking what is owed instead. So does a
+        // facture the party blocks refuse: the request is well formed and
+        // the caller can act on it, by filling the fiche or the settings in,
+        // or by ringing the same basket up as a ticket.
+        CoreError::Validation { .. }
+        | CoreError::CreditLimit { .. }
+        | CoreError::PaymentAboveDebt { .. }
+        | CoreError::PartyIds { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
         // A template that will not render is the app's own bug: the
@@ -153,10 +269,27 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = self.parts();
         let message = self.message();
+        let Figures {
+            balance_after_centimes,
+            credit_limit_centimes,
+            field,
+            outstanding_centimes,
+            party_side,
+            missing_ids,
+        } = self.figures();
         let mut res = (
             status,
             Json(Body {
-                error: Payload { code, message },
+                error: Payload {
+                    code,
+                    message,
+                    balance_after_centimes,
+                    credit_limit_centimes,
+                    field,
+                    outstanding_centimes,
+                    party_side,
+                    missing_ids,
+                },
             }),
         )
             .into_response();

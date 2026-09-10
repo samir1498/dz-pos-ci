@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>INVOICE FA-000042</title>
+<style>
+@page { size: A4; margin: 12mm }
+body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", Arial, sans-serif }
+.doc { max-inline-size: 186mm; margin: 0 auto; position: relative }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; border-block-end: 2px solid #000; padding-block-end: 3mm }
+.head h1 { font-size: 20px; margin: 0 0 1mm }
+.ident { text-align: end }
+.num { white-space: nowrap }
+.annulee { position: absolute; inset-block-start: 92mm; inset-inline: 0; text-align: center }
+.annulee span { display: inline-block; border: 3px solid #949494; color: #949494; font-size: 44px; font-weight: 700; letter-spacing: .15em; padding: 3mm 10mm; transform: rotate(-24deg) }
+.cancelled { margin-block-start: 1mm; font-weight: 700 }
+.notice { margin: 4mm 0 0; border: 1px solid #000; padding: 2mm 3mm; font-weight: 700 }
+.parties { display: flex; gap: 6mm; margin-block-start: 6mm }
+.party { flex: 1 1 0; border: 1px solid #000; padding: 3mm }
+.party h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 2mm }
+.party .who { font-weight: 700 }
+.label { color: #333 }
+.lines { display: flex; margin-block-start: 6mm }
+.lines table { flex: 1 1 auto }
+table { border-collapse: collapse }
+th, td { border: 1px solid #000; padding: 1.6mm 2mm; text-align: start; vertical-align: top }
+th { background: #eee; font-weight: 700 }
+td.n, th.n { text-align: end; white-space: nowrap }
+.totals { display: flex; justify-content: flex-end; margin-block-start: 4mm }
+.totals table { inline-size: 96mm }
+.totals td { border: none; padding: 1mm 2mm }
+.totals tr.net td { border-block-start: 1px solid #000; font-weight: 700; font-size: 13px }
+.cur { margin-inline-start: .4em }
+.words { margin-block-start: 5mm; border: 1px solid #000; padding: 3mm }
+.blocks { display: flex; gap: 6mm; margin-block-start: 5mm }
+.block { flex: 1 1 0; border: 1px solid #000; padding: 3mm }
+.block h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 2mm }
+.block .row { display: flex; justify-content: space-between; gap: 4mm }
+.block .row.total { font-weight: 700 }
+.sign { display: flex; justify-content: space-between; gap: 20mm; margin-block-start: 10mm }
+.sign div { flex: 1 1 0; border-block-start: 1px solid #000; padding-block-start: 2mm; min-block-size: 22mm }
+</style>
+</head>
+<body>
+<article class="doc">
+<header class="head">
+<div>
+<h1>INVOICE</h1>
+<div class="num">FA-000042</div>
+<div class="num">09/09/2026</div>
+</div>
+<div class="ident">
+<div class="who">Mon magasin</div>
+</div>
+</header>
+<section class="parties">
+<div class="party">
+<h2>Seller</h2>
+<div class="who">Mon magasin</div>
+<div>12 rue Didouche Mourad, Alger</div>
+<div class="num">0555 12 34 56</div>
+<div><span class="label">RC</span> <span class="num">16/00-1234567 B 25</span></div>
+<div><span class="label">NIF</span> <span class="num">000216001234567</span></div>
+<div><span class="label">NIS</span> <span class="num">000216001234567 00</span></div>
+<div><span class="label">AI</span> <span class="num">16001234567</span></div>
+</div>
+<div class="party">
+<h2>Customer</h2>
+<div class="who">Yacine Meziane</div>
+<div>14 rue des Frères Bouadou, Bir Mourad Raïs</div>
+</div>
+</section>
+<div class="lines">
+<table>
+<thead>
+<tr><th>Description</th><th class="n">Qty</th><th class="n">Unit price excl. tax</th><th class="n">Discount</th><th class="n">VAT</th><th class="n">Amount excl. tax</th></tr>
+</thead>
+<tbody>
+<tr><td>Huile &#60;Elio&#62; &#38; Co 5 L</td><td class="n num"><span class="qty qty-line">2</span></td><td class="n"><span class="amount amount-unit-price">150,00</span></td><td class="n"></td><td class="n num"><span class="rate rate-line">19 %</span></td><td class="n"><span class="amount amount-line">300,00</span></td></tr>
+<tr><td>Farine</td><td class="n num"><span class="qty qty-line">1,5</span></td><td class="n"><span class="amount amount-unit-price">320,00</span></td><td class="n"></td><td class="n num"><span class="rate rate-line">9 %</span></td><td class="n"><span class="amount amount-line">480,00</span></td></tr>
+<tr><td>Pain</td><td class="n num"><span class="qty qty-line">1</span></td><td class="n"><span class="amount amount-unit-price">80,00</span></td><td class="n"><span class="amount amount-line-discount">-10,00</span></td><td class="n num"><span class="rate rate-line">0 %</span></td><td class="n"><span class="amount amount-line">70,00</span></td></tr>
+</tbody>
+</table>
+</div>
+<div class="totals">
+<table>
+<tbody>
+<tr><td>Total excl. tax</td><td class="n"><span class="amount amount-total">850,00</span><span class="cur">DZD</span></td></tr>
+<tr><td>Discount</td><td class="n"><span class="amount amount-discount">-20,00</span><span class="cur">DZD</span></td></tr>
+<tr><td>Subtotal excl. tax</td><td class="n"><span class="amount amount-subtotal">830,00</span><span class="cur">DZD</span></td></tr>
+<tr><td>VAT <span class="rate rate-tva">0 %</span> <span class="label">Base <span class="amount amount-tva-base">68,36</span></span></td><td class="n"><span class="amount amount-tva">0,00</span><span class="cur">DZD</span></td></tr>
+<tr><td>VAT <span class="rate rate-tva">9 %</span> <span class="label">Base <span class="amount amount-tva-base">468,69</span></span></td><td class="n"><span class="amount amount-tva">42,18</span><span class="cur">DZD</span></td></tr>
+<tr><td>VAT <span class="rate rate-tva">19 %</span> <span class="label">Base <span class="amount amount-tva-base">292,95</span></span></td><td class="n"><span class="amount amount-tva">55,66</span><span class="cur">DZD</span></td></tr>
+<tr><td>Total incl. tax</td><td class="n"><span class="amount amount-total-ttc">927,84</span><span class="cur">DZD</span></td></tr>
+<tr><td>Stamp duty</td><td class="n"><span class="amount amount-stamp">10,00</span><span class="cur">DZD</span></td></tr>
+<tr class="net"><td>Net to pay</td><td class="n"><span class="amount amount-net-to-pay">937,84</span><span class="cur">DZD</span></td></tr>
+</tbody>
+</table>
+</div>
+<p class="words">This invoice is closed at the sum of <strong class="in-words">nine hundred and thirty-seven dinars and eighty-four centimes</strong></p>
+<section class="blocks">
+<div class="block">
+<h2>Payment mode</h2>
+<div>Cash</div>
+</div>
+</section>
+<section class="sign">
+<div>Seller · Stamp and signature</div>
+<div>Customer · Stamp and signature</div>
+</section>
+</article>
+</body>
+</html>

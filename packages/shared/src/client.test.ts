@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { ApiError, createClient, isApiErrorBody, isSale } from "./client";
 import type { BackupDto } from "./generated/BackupDto";
+import type { CustomerDto } from "./generated/CustomerDto";
+import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
+import type { CustomerPaymentsDto } from "./generated/CustomerPaymentsDto";
+import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
+import type { PaymentDto } from "./generated/PaymentDto";
+import type { DebtEntryDto } from "./generated/DebtEntryDto";
 import type { BackupsDto } from "./generated/BackupsDto";
 import type { NewProductDto } from "./generated/NewProductDto";
 import type { NewSaleDto } from "./generated/NewSaleDto";
@@ -403,6 +409,7 @@ const sale: SaleDto = {
   kind: "ticket",
   series: "doc_ticket",
   number: 1,
+  printed_number: "TK-000001",
   issued_at: "2026-09-09 10:00:00",
   user_id: 1,
   regime: "reel",
@@ -417,6 +424,9 @@ const sale: SaleDto = {
     phone: null,
   },
   customer_id: null,
+  ref_document_id: null,
+  buyer_name: null,
+  balance: null,
   totals: {
     total_ht_centimes: 22_000,
     discount_centimes: 0,
@@ -430,6 +440,8 @@ const sale: SaleDto = {
   tendered_centimes: 30_000,
   change_centimes: 3_820,
   status: "issued",
+  cancellation: null,
+  cancel_effect: null,
   lines: [
     {
       id: 1,
@@ -442,8 +454,10 @@ const sale: SaleDto = {
       line_discount_centimes: 0,
       rate_bps: 1900,
       line_total_centimes: 22_000,
+      ref_line_id: null,
     },
   ],
+  warning: null,
 };
 
 describe("sales", () => {
@@ -468,6 +482,9 @@ describe("sales", () => {
       global_discount_centimes: 0,
       payment_mode: "cash",
       tendered_centimes: 30_000,
+      customer_id: null,
+      override: false,
+      kind: "ticket",
     };
     const api = createClient("http://127.0.0.1:4317", fetchStub);
     await expect(api.createSale(basket)).resolves.toEqual(sale);
@@ -476,15 +493,145 @@ describe("sales", () => {
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(basket);
   });
 
+  test("a warning the app does not know is refused, the way an unknown mode is", async () => {
+    // `near_limit` is the only one there is. A screen that matches on the
+    // union would fall through a second one silently, so the guard stops it
+    // at the door instead.
+    const stub: typeof fetch = async () =>
+      new Response(JSON.stringify({ ...sale, warning: "over_limit" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    const api = createClient("http://127.0.0.1:4317", stub);
+    await expect(
+      api.createSale({
+        lines: [],
+        global_discount_centimes: 0,
+        payment_mode: "credit",
+        tendered_centimes: null,
+        customer_id: 3,
+        override: false,
+        kind: "ticket",
+      }),
+    ).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  test("a credit refusal carries the balance after and the limit, other errors carry neither", async () => {
+    const refusal: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "credit_limit",
+            message: "past the limit",
+            balance_after_centimes: 550_000,
+            credit_limit_centimes: 500_000,
+          },
+        }),
+        { status: 422, headers: { "content-type": "application/json" } },
+      );
+    const api = createClient("http://127.0.0.1:4317", refusal);
+    await expect(
+      api.createSale({
+        lines: [],
+        global_discount_centimes: 0,
+        payment_mode: "credit",
+        tendered_centimes: null,
+        customer_id: 3,
+        override: false,
+        kind: "ticket",
+      }),
+    ).rejects.toMatchObject({
+      code: "credit_limit",
+      status: 422,
+      balanceAfterCentimes: 550_000,
+      creditLimitCentimes: 500_000,
+    });
+
+    // Absent, not zero: a screen that read a missing amount as nothing would
+    // tell a cashier the limit is 0,00 on every other refusal.
+    const plain: typeof fetch = async () =>
+      new Response(JSON.stringify({ error: { code: "validation", message: "no" } }), {
+        status: 422,
+        headers: { "content-type": "application/json" },
+      });
+    await expect(createClient("http://x", plain).getSale(1)).rejects.toMatchObject({
+      code: "validation",
+      balanceAfterCentimes: undefined,
+      creditLimitCentimes: undefined,
+    });
+  });
+
   test("a sale is read back by id and the list is one call", async () => {
     const fetchStub: typeof fetch = async (input) =>
-      new Response(JSON.stringify(String(input).endsWith("/sales") ? [sale] : sale), {
+      new Response(JSON.stringify(String(input).includes("/sales?") || String(input).endsWith("/sales") ? [sale] : sale), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
     const api = createClient("http://127.0.0.1:4317", fetchStub);
     await expect(api.getSale(1)).resolves.toEqual(sale);
     await expect(api.listSales()).resolves.toEqual([sale]);
+  });
+
+  test("the list asks for one kind only when it is given one", async () => {
+    // No kind is every document the till issued, so a facture is reachable
+    // once its print panel is closed; a kind narrows it to that series.
+    const calls: string[] = [];
+    const fetchStub: typeof fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(JSON.stringify([sale]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await api.listSales();
+    await api.listSales("facture");
+    await api.listSales("ticket");
+    expect(calls).toEqual([
+      "http://127.0.0.1:4317/sales",
+      "http://127.0.0.1:4317/sales?kind=facture",
+      "http://127.0.0.1:4317/sales?kind=ticket",
+    ]);
+  });
+
+  test("a list with one row of the wrong shape is refused whole", async () => {
+    const api = createClient("http://x", stub(200, [sale, { ...sale, kind: "reçu" }]));
+    await expect(api.listSales("facture")).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  test("a sale with no printed number is refused rather than shown blank", async () => {
+    // The number the paper carries comes from the server, so a body without
+    // it would put an empty string where the cashier reads FA-000001 back to
+    // the customer. The guard stops it at the door.
+    const withoutNumber: Record<string, unknown> = { ...sale };
+    delete withoutNumber.printed_number;
+    const api = createClient("http://x", stub(200, withoutNumber));
+    await expect(api.getSale(1)).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  test("the cancel effect is taken shape by shape and its amount is not read off the others", async () => {
+    // The amount belongs to one of the three shapes. A guard that only looked
+    // for the word would let an amount through on `stock_back`, and the
+    // confirm would show a figure the server never sent.
+    for (const effect of [
+      { effect: "nothing_to_reverse" },
+      { effect: "stock_back" },
+      { effect: "stock_back_and_avoir", amount_centimes: 300_000 },
+    ]) {
+      const api = createClient("http://x", stub(200, { ...sale, cancel_effect: effect }));
+      await expect(api.getSale(1)).resolves.toMatchObject({ cancel_effect: effect });
+    }
+
+    for (const bad of [
+      // The one that carries an amount, without it.
+      { effect: "stock_back_and_avoir" },
+      { effect: "stock_back_and_avoir", amount_centimes: 1.5 },
+      // A word nothing matches on.
+      { effect: "avoir" },
+    ]) {
+      const api = createClient("http://x", stub(200, { ...sale, cancel_effect: bad }));
+      await expect(api.getSale(1)).rejects.toMatchObject({ code: "bad_response" });
+    }
   });
 
   test("a ticket comes back as the page the core rendered, not as JSON", async () => {
@@ -500,6 +647,62 @@ describe("sales", () => {
     const api = createClient("http://127.0.0.1:4317", { fetch: fetchStub, token: "t" });
     await expect(api.getSaleTicket(7, "ar")).resolves.toBe(page);
     expect(calls[0]).toBe("http://127.0.0.1:4317/sales/7/ticket?lang=ar");
+  });
+
+  test("the facture asks for the sheet as well as the language", async () => {
+    const page = '<!doctype html>\n<html lang="fr"><body>FACTURE</body></html>\n';
+    const calls: string[] = [];
+    const fetchStub: typeof fetch = async (input) => {
+      calls.push(String(input));
+      return new Response(page, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", { fetch: fetchStub, token: "t" });
+    await expect(api.getSaleFacture(7, "fr", "a4")).resolves.toBe(page);
+    await expect(api.getSaleFacture(7, "ar", "a5")).resolves.toBe(page);
+    expect(calls).toEqual([
+      "http://127.0.0.1:4317/sales/7/facture?lang=fr&paper=a4",
+      "http://127.0.0.1:4317/sales/7/facture?lang=ar&paper=a5",
+    ]);
+  });
+
+  test("a facture the id does not name surfaces the code and never the HTML", async () => {
+    const api = createClient(
+      "http://127.0.0.1:4317",
+      stub(404, { error: { code: "not_found", message: "facture 7 does not exist in this shop" } }),
+    );
+    await expect(api.getSaleFacture(7, "fr", "a4")).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  test("a facture the party blocks refuse carries the side and the missing ids", async () => {
+    const api = createClient(
+      "http://127.0.0.1:4317",
+      stub(422, {
+        error: {
+          code: "party_ids",
+          message: "the buyer block of a facture is missing rc, nis",
+          party_side: "buyer",
+          missing_ids: ["rc", "nis"],
+        },
+      }),
+    );
+    await expect(
+      api.createSale({
+        lines: [{ product_id: 1, qty_milli: 1_000, unit_price_centimes: null, line_discount_centimes: 0 }],
+        global_discount_centimes: 0,
+        payment_mode: "cash",
+        tendered_centimes: 200_000,
+        customer_id: 4,
+        override: false,
+        kind: "facture",
+      }),
+    ).rejects.toMatchObject({
+      code: "party_ids",
+      partySide: "buyer",
+      missingIds: ["rc", "nis"],
+    });
   });
 
   test("a ticket the server refused surfaces the code and never the HTML", async () => {
@@ -548,7 +751,288 @@ describe("sales", () => {
         global_discount_centimes: 0,
         payment_mode: "cash",
         tendered_centimes: null,
+        customer_id: null,
+        override: false,
+        kind: "ticket",
       }),
     ).rejects.toMatchObject({ code: "validation", status: 422 });
+  });
+});
+
+const customer: CustomerDto = {
+  id: 3,
+  shop_id: 1,
+  name: "Entreprise Benali",
+  party_kind: "company",
+  phone: "0770 11 22 33",
+  address: null,
+  rc: null,
+  nif: null,
+  nis: null,
+  ai: null,
+  credit_limit_centimes: 5_000_000,
+  warn_threshold_centimes: 4_000_000,
+  notes: null,
+  active: true,
+  balance_centimes: 150_000,
+};
+
+const entry: DebtEntryDto = {
+  id: 9,
+  customer_id: 3,
+  document_id: null,
+  kind: "opening",
+  debit_centimes: 150_000,
+  credit_centimes: 0,
+  balance_after_centimes: 150_000,
+  user_id: 1,
+  note: "solde de départ",
+  created_at: "2026-09-09 10:00:00",
+};
+
+const ledger: CustomerLedgerDto = {
+  customer_id: 3,
+  balance_centimes: 150_000,
+  entries: [entry],
+};
+
+const payment: PaymentDto = {
+  ledger_id: 11,
+  customer_id: 3,
+  amount_centimes: 70_000,
+  payment_mode: "cash",
+  note: "acompte",
+  balance_after_centimes: 80_000,
+  allocations: [{ document_id: 4, amount_centimes: 70_000 }],
+  created_at: "2026-09-12 16:30:00",
+};
+
+const payments: CustomerPaymentsDto = {
+  customer_id: 3,
+  balance_centimes: 80_000,
+  payments: [payment],
+};
+
+const write: CustomerWriteDto = {
+  name: "Entreprise Benali",
+  party_kind: "company",
+  phone: "0770 11 22 33",
+  address: null,
+  rc: null,
+  nif: null,
+  nis: null,
+  ai: null,
+  credit_limit_centimes: 5_000_000,
+  warn_threshold_centimes: 4_000_000,
+  notes: null,
+  active: true,
+  // The fiche stays open, so there is nothing to say why: the reason is
+  // asked for only when a fiche with an account behind it is closed.
+  close_reason: null,
+};
+
+/** Records what was asked for and answers `body`. */
+function recorder(body: unknown, status = 200) {
+  const calls: { url: string; init: RequestInit | undefined }[] = [];
+  const fetchStub: typeof fetch = async (input, init) => {
+    calls.push({ url: String(input), init });
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  return { calls, fetchStub };
+}
+
+describe("customers", () => {
+  test("lists them, and a search travels as an encoded query", async () => {
+    const { calls, fetchStub } = recorder([customer]);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.listCustomers()).resolves.toEqual([customer]);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers");
+
+    await api.listCustomers("benali & fils");
+    expect(calls[1]?.url).toBe("http://127.0.0.1:4317/customers?q=benali+%26+fils");
+  });
+
+  test("a blank search asks for the whole list rather than an empty filter", async () => {
+    const { calls, fetchStub } = recorder([customer]);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await api.listCustomers("   ");
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers");
+  });
+
+  test("creates one with the opening debt in centimes", async () => {
+    const { calls, fetchStub } = recorder(customer, 201);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    const posted = { ...write, opening_debt_centimes: 150_000 };
+    await expect(api.createCustomer(posted)).resolves.toEqual(customer);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(posted);
+  });
+
+  test("updates one with the whole row, nulls included", async () => {
+    const cleared = { ...write, rc: null, credit_limit_centimes: null };
+    const { calls, fetchStub } = recorder({ ...customer, ...cleared });
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await api.updateCustomer(3, cleared);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers/3");
+    expect(calls[0]?.init?.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(cleared);
+  });
+
+  test("reads one fiche and its ledger", async () => {
+    const one = recorder(customer);
+    await expect(
+      createClient("http://127.0.0.1:4317", one.fetchStub).getCustomer(3),
+    ).resolves.toEqual(customer);
+    expect(one.calls[0]?.url).toBe("http://127.0.0.1:4317/customers/3");
+
+    const rows = recorder(ledger);
+    await expect(
+      createClient("http://127.0.0.1:4317", rows.fetchStub).customerLedger(3),
+    ).resolves.toEqual(ledger);
+    expect(rows.calls[0]?.url).toBe("http://127.0.0.1:4317/customers/3/ledger");
+  });
+
+  test("an adjustment posts signed centimes and answers the ledger again", async () => {
+    const lowered: CustomerLedgerDto = { ...ledger, balance_centimes: 100_000 };
+    const { calls, fetchStub } = recorder(lowered, 201);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(
+      api.adjustCustomerDebt(3, { amount_centimes: -50_000, note: "erreur de saisie" }),
+    ).resolves.toEqual(lowered);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/customers/3/adjustments");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      amount_centimes: -50_000,
+      note: "erreur de saisie",
+    });
+  });
+
+  test("a fiche or a movement of the wrong shape is refused, never handed to the UI", async () => {
+    for (const bad of [
+      { ...customer, balance_centimes: 9.5 },
+      { ...customer, party_kind: "societe" },
+      { ...customer, credit_limit_centimes: "5000" },
+      { ...customer, active: "yes" },
+    ]) {
+      const api = createClient("http://x", stub(200, [bad]));
+      await expect(api.listCustomers()).rejects.toMatchObject({ code: "bad_response" });
+    }
+    for (const bad of [
+      { ...ledger, balance_centimes: null },
+      { ...ledger, entries: [{ ...entry, kind: "remise" }] },
+      { ...ledger, entries: [{ ...entry, balance_after_centimes: 2 ** 53 }] },
+    ]) {
+      const api = createClient("http://x", stub(200, bad));
+      await expect(api.customerLedger(3)).rejects.toMatchObject({ code: "bad_response" });
+    }
+  });
+
+  test("the server's refusal keeps its code", async () => {
+    const api = createClient(
+      "http://x",
+      stub(422, { error: { code: "validation", message: "amount ..." } }),
+    );
+    await expect(
+      api.adjustCustomerDebt(3, { amount_centimes: 0, note: null }),
+    ).rejects.toMatchObject({ code: "validation", status: 422 });
+  });
+
+  test("payments come back with what each one settled", async () => {
+    const { calls, fetchStub } = recorder(payments);
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+
+    await expect(api.customerPayments(3)).resolves.toEqual(payments);
+    await expect(
+      api.payCustomer(3, { amount_centimes: 70_000, payment_mode: "cash", note: "acompte" }),
+    ).resolves.toEqual(payments);
+
+    expect(calls[0].url).toBe("http://127.0.0.1:4317/customers/3/payments");
+    expect(calls[1].init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[1].init?.body))).toEqual({
+      amount_centimes: 70_000,
+      payment_mode: "cash",
+      note: "acompte",
+    });
+  });
+
+  test("a payment of the wrong shape is refused, never handed to the UI", async () => {
+    for (const bad of [
+      // The envelope itself.
+      { ...payments, balance_centimes: 9.5 },
+      { ...payments, customer_id: null },
+      { ...payments, payments: {} },
+      // One payment inside it. An amount JSON.parse had to round and a mode
+      // the app does not know are both answers it cannot show.
+      { ...payments, payments: [{ ...payment, amount_centimes: 2 ** 53 }] },
+      { ...payments, payments: [{ ...payment, payment_mode: "cheque" }] },
+      { ...payments, payments: [{ ...payment, balance_after_centimes: null }] },
+      // And one allocation inside that.
+      {
+        ...payments,
+        payments: [{ ...payment, allocations: [{ document_id: 4, amount_centimes: 1.5 }] }],
+      },
+      { ...payments, payments: [{ ...payment, allocations: [{ document_id: 4 }] }] },
+    ]) {
+      const api = createClient("http://x", stub(200, bad));
+      await expect(api.customerPayments(3)).rejects.toMatchObject({ code: "bad_response" });
+    }
+  });
+
+  test("a payment above the debt carries the field and what is owed; other errors carry neither", async () => {
+    const api = createClient(
+      "http://x",
+      stub(422, {
+        error: {
+          code: "validation",
+          message: "a payment is never more than what the customer owes",
+          field: "amount_centimes",
+          outstanding_centimes: 150_000,
+        },
+      }),
+    );
+    await expect(
+      api.payCustomer(3, { amount_centimes: 200_000, payment_mode: "cash", note: null }),
+    ).rejects.toMatchObject({
+      code: "validation",
+      status: 422,
+      field: "amount_centimes",
+      outstandingCentimes: 150_000,
+    });
+
+    // Absent, not zero: a form that read a missing figure as nothing would
+    // tell a cashier the customer owes 0,00 on every other refusal.
+    const plain = createClient(
+      "http://x",
+      stub(422, { error: { code: "validation", message: "no" } }),
+    );
+    await expect(
+      plain.payCustomer(3, { amount_centimes: 1, payment_mode: "cash", note: null }),
+    ).rejects.toMatchObject({
+      code: "validation",
+      field: undefined,
+      outstandingCentimes: undefined,
+      balanceAfterCentimes: undefined,
+      creditLimitCentimes: undefined,
+    });
+
+    // A figure of the wrong type is not a refusal this client can read, so
+    // the whole envelope is one it does not know rather than one it half
+    // believes.
+    for (const bad of [
+      { code: "validation", message: "no", outstanding_centimes: "150000" },
+      { code: "validation", message: "no", outstanding_centimes: 1.5 },
+      { code: "validation", message: "no", field: 7 },
+      { code: "credit_limit", message: "no", balance_after_centimes: "550000" },
+      { code: "credit_limit", message: "no", credit_limit_centimes: null },
+    ]) {
+      const wrong = createClient("http://x", stub(422, { error: bad }));
+      await expect(
+        wrong.payCustomer(3, { amount_centimes: 1, payment_mode: "cash", note: null }),
+      ).rejects.toMatchObject({ code: "unreachable", status: 422 });
+    }
   });
 });

@@ -13,19 +13,17 @@ use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::documents::{
-    self, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, SellerBlock,
+    self, BalanceTriple, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, PartyBlock,
+    PartyKind, SellerBlock,
 };
 use dzpos_core::services::products;
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 fn at(day: u32, hour: u32) -> NaiveDateTime {
     NaiveDate::from_ymd_opt(2026, 9, day)
@@ -115,6 +113,9 @@ fn draft(kind: DocumentKind, product_id: Option<i32>, issued_at: NaiveDateTime) 
             phone: None,
         },
         customer_id: None,
+        buyer: None,
+        ref_document_id: None,
+        balance: None,
         totals: totals(10_000),
         tendered: Some(Money::centimes(10_000)),
         change: Some(Money::ZERO),
@@ -127,6 +128,7 @@ fn draft(kind: DocumentKind, product_id: Option<i32>, issued_at: NaiveDateTime) 
             line_discount: Money::ZERO,
             rate_bps: Bps::new(1900).unwrap(),
             line_total: Money::centimes(10_000),
+            ref_line_id: None,
         }],
     }
 }
@@ -411,7 +413,7 @@ fn totals_that_disagree_with_their_lines(conn: &mut SqliteConnection) -> Vec<i32
 #[test]
 fn a_stored_total_always_adds_up_from_the_stored_lines() {
     use dzpos_core::models::product::Unit;
-    use dzpos_core::services::sales::{self, NewSale, NewSaleLine};
+    use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
     use dzpos_core::services::settings;
 
     let priced = |conn: &mut SqliteConnection, name: &str, selling: i64, rate: u32| {
@@ -457,6 +459,9 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             global_discount: Money::centimes(1_000),
             payment_mode: PaymentMode::Cash,
             tendered: Some(Money::centimes(100_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9, 10)),
         },
     )
@@ -471,10 +476,14 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             global_discount: Money::ZERO,
             payment_mode: PaymentMode::Card,
             tendered: None,
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9, 11)),
         },
     )
-    .unwrap();
+    .unwrap()
+    .document;
     // Réel at 0%: one recap row, a base equal to the subtotal and an amount of
     // zero. It is the only document whose recap the tva_centimes disjunct
     // cannot speak for, so it is what proves the base-sum disjunct on its own.
@@ -488,10 +497,14 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             global_discount: Money::ZERO,
             payment_mode: PaymentMode::Cash,
             tendered: Some(Money::centimes(100_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9, 12)),
         },
     )
-    .unwrap();
+    .unwrap()
+    .document;
     // Under the IFU: no recap row at all, and the stamp still applies.
     settings::set_regime(&mut conn, SHOP, OWNER, Regime::Ifu, at(9, 13)).unwrap();
     let ifu = sales::issue(
@@ -503,10 +516,14 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
             global_discount: Money::centimes(500),
             payment_mode: PaymentMode::Cash,
             tendered: Some(Money::centimes(100_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
             issued_at: Some(at(9, 14)),
         },
     )
-    .unwrap();
+    .unwrap()
+    .document;
 
     assert_eq!(
         totals_that_disagree_with_their_lines(&mut conn),
@@ -590,4 +607,237 @@ fn a_stored_total_always_adds_up_from_the_stored_lines() {
         vec![exempt.id],
         "a réel document with no recap left was not named"
     );
+}
+
+/// A customer to make a facture out to. Inserted raw: what is under test here
+/// is the document, and the customer service has its own file.
+fn a_customer(conn: &mut SqliteConnection) -> i32 {
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+    diesel::sql_query(
+        "INSERT INTO customers (shop_id, name, party_kind, rc, nif) \
+         VALUES (1, 'Entreprise Benali', 'company', '16/00-7654321 B 22', '000216007654321')",
+    )
+    .execute(conn)
+    .unwrap();
+    let row: Id = diesel::sql_query("SELECT MAX(id) AS id FROM customers WHERE shop_id = 1")
+        .get_result(conn)
+        .unwrap();
+    row.id
+}
+
+#[test]
+fn a_facture_stores_its_buyer_block_and_its_balance_and_reads_them_back() {
+    // The buyer block is a snapshot, so what matters is that every field
+    // reaches the file and comes back: a field dropped between the write and
+    // the read is invisible until a comptable reads the paper.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let customer = a_customer(&mut conn);
+    let mut new = draft(DocumentKind::Facture, Some(p), at(9, 10));
+    new.customer_id = Some(customer);
+    new.buyer = Some(PartyBlock {
+        name: "Entreprise Benali".to_string(),
+        party_kind: PartyKind::Company,
+        rc: Some("16/00-7654321 B 22".to_string()),
+        nif: Some("000216007654321".to_string()),
+        nis: Some("000216007654321000".to_string()),
+        ai: None,
+        address: Some("Zone industrielle, Rouiba".to_string()),
+    });
+    new.balance = Some(BalanceTriple {
+        old_balance: Money::centimes(250_000),
+        remaining_debt: Money::centimes(260_000),
+        total_debt: Money::centimes(260_000),
+    });
+    let issued = documents::issue(&mut conn, SHOP, new).unwrap();
+
+    let read = documents::get(&mut conn, SHOP, issued.id).unwrap();
+    assert_eq!(read.customer_id, Some(customer));
+    assert_eq!(read.buyer, issued.buyer);
+    assert_eq!(
+        read.buyer.as_ref().map(|b| b.party_kind),
+        Some(PartyKind::Company)
+    );
+    assert_eq!(
+        read.buyer.as_ref().and_then(|b| b.nis.as_deref()),
+        Some("000216007654321000"),
+        "a buyer identifier was lost between the write and the read"
+    );
+    assert_eq!(
+        read.balance.map(|b| b.old_balance),
+        Some(Money::centimes(250_000))
+    );
+    assert_eq!(
+        read.balance.map(|b| b.remaining_debt),
+        Some(Money::centimes(260_000))
+    );
+    assert_eq!(read.ref_document_id, None);
+}
+
+#[test]
+fn a_ticket_with_no_customer_carries_no_buyer_and_no_balance() {
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let issued = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Ticket, Some(p), at(9, 10)),
+    )
+    .unwrap();
+    let read = documents::get(&mut conn, SHOP, issued.id).unwrap();
+    assert_eq!(read.buyer, None);
+    assert_eq!(read.balance, None);
+}
+
+#[test]
+fn a_stored_balance_missing_one_of_its_three_amounts_is_refused() {
+    // Two of three would let a facture print a closing balance its own
+    // opening balance does not explain. The service writes all three or none,
+    // so the only way in is a file written by something else, and that is an
+    // error rather than a guess.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let issued = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Ticket, Some(p), at(9, 10)),
+    )
+    .unwrap();
+    diesel::sql_query(format!(
+        "UPDATE documents SET old_balance_centimes = 1000 WHERE id = {}",
+        issued.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let err = documents::get(&mut conn, SHOP, issued.id).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "balance"),
+        "a half-written balance triple read back as a document: {err}"
+    );
+}
+
+#[test]
+fn a_stored_buyer_name_without_a_party_kind_is_refused() {
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let issued = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Ticket, Some(p), at(9, 10)),
+    )
+    .unwrap();
+    diesel::sql_query(format!(
+        "UPDATE documents SET buyer_name = 'Benali' WHERE id = {}",
+        issued.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let err = documents::get(&mut conn, SHOP, issued.id).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "buyer"),
+        "a half-written buyer block read back as a document: {err}"
+    );
+}
+
+/// A customer and a document belonging to the second shop, inserted raw for
+/// the same reason its product is: the seed is not what is under test.
+fn seed_second_shop_customer_and_document(conn: &mut SqliteConnection) -> (i32, i32) {
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+    diesel::sql_query("INSERT OR IGNORE INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
+        .execute(conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO customers (shop_id, name, party_kind) \
+         VALUES (2, 'Client du voisin', 'company')",
+    )
+    .execute(conn)
+    .unwrap();
+    let customer: Id = diesel::sql_query("SELECT MAX(id) AS id FROM customers WHERE shop_id = 2")
+        .get_result(conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO documents (shop_id, kind, series, number, issued_at, user_id, regime, \
+         payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+         subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+         net_to_pay_centimes) VALUES (2, 'facture', 'doc_facture', 1, \
+         '2026-09-09 10:00:00', 1, 'reel', 'credit', 'Magasin du voisin', 10000, 0, 10000, \
+         1900, 11900, 0, 11900)",
+    )
+    .execute(conn)
+    .unwrap();
+    let document: Id = diesel::sql_query("SELECT MAX(id) AS id FROM documents WHERE shop_id = 2")
+        .get_result(conn)
+        .unwrap();
+    (customer.id, document.id)
+}
+
+#[test]
+fn a_document_made_out_to_another_shops_customer_is_refused_and_burns_no_number() {
+    // Rule 3: the foreign key would take the neighbour's fiche, and the
+    // buyer block printed on the paper would name their customer.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let (elsewhere, _) = seed_second_shop_customer_and_document(&mut conn);
+
+    let mut stolen = draft(DocumentKind::Facture, Some(p), at(9, 10));
+    stolen.customer_id = Some(elsewhere);
+    let err = documents::issue(&mut conn, SHOP, stolen).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::NotFound {
+                entity: "customer",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+
+    let next = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Facture, Some(p), at(9, 11)),
+    )
+    .unwrap();
+    assert_eq!(next.number, 1, "the refused facture burned a number");
+    assert_eq!(documents::list(&mut conn, SHOP, None).unwrap().len(), 1);
+}
+
+#[test]
+fn a_document_written_against_another_shops_document_is_refused_and_burns_no_number() {
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let (_, elsewhere) = seed_second_shop_customer_and_document(&mut conn);
+
+    let mut stolen = draft(DocumentKind::Avoir, Some(p), at(9, 10));
+    stolen.ref_document_id = Some(elsewhere);
+    let err = documents::issue(&mut conn, SHOP, stolen).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            CoreError::NotFound {
+                entity: "document",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+
+    let next = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Avoir, Some(p), at(9, 11)),
+    )
+    .unwrap();
+    assert_eq!(next.number, 1, "the refused avoir burned a number");
 }

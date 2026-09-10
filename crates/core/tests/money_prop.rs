@@ -330,7 +330,7 @@ proptest! {
     }
 
     /// Under the IFU there is no TVA row and no TVA, and the net is the
-    /// subtotal plus the stamp (`regime_ifu_prints_no_tva`).
+    /// subtotal plus the stamp (`an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime`).
     #[test]
     fn ifu_carries_no_tva(lines in basket(), mode in any_mode()) {
         let t = compute_totals(&lines, &opts(Money::ZERO, mode, true, Regime::Ifu)).unwrap();
