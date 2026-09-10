@@ -22,9 +22,11 @@ struct Args {
     /// database.
     #[arg(long)]
     backup_dir: Option<std::path::PathBuf>,
-    /// Take a copy of the shop file at launch if the newest is a day old,
-    /// and keep checking while the server runs. The desktop does this on its
-    /// own; the flag is how the loop is exercised without Tauri.
+    /// Run the daily chores: a copy of the shop file when the newest is a
+    /// day old, and the stock recount when the shop has not had one today,
+    /// checked again while the server runs. The desktop does both on its
+    /// own; the flag is how the loop is exercised without Tauri. Off by
+    /// default, so a test server never marks a run behind a spec's back.
     #[arg(long, default_value_t = false)]
     daily_backup: bool,
     /// One more browser origin cleared to call this server, on top of the
@@ -82,8 +84,8 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| dzpos_api::default_backup_dir(&args.db));
     let state = dzpos_api::AppState::open_with_backup_dir(&args.db, args.shop, &backup_dir)?;
     if args.daily_backup {
-        // Detached on purpose: the copy is a chore, and the server answering
-        // never waits on it.
+        // Detached on purpose: a copy and a recount are background chores,
+        // and the server answering never waits on either.
         tokio::spawn(dzpos_api::daily::run(state.clone()));
     }
     let (listener, port) = dzpos_api::bind(args.port).await?;

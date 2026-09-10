@@ -7,18 +7,18 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes the nine committed screenshots
+just screenshot                   # writes the ten committed screenshots
 pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes only `products.png`; the other eight say "... screenshot in Arabic"
+writes only `products.png`; the other nine say "... screenshot in Arabic"
 in their titles, so they match the grep in both runs but write a file only
 when `currentLang()` is `ar`, and the fr run of them does nothing
-observable. Under ar all eight write: `products-ar.png`, `settings-ar.png`,
+observable. Under ar all nine write: `products-ar.png`, `settings-ar.png`,
 `till-ar.png`, `customers-ar.png`, `suppliers-ar.png`, `expenses-ar.png`,
-`till-credit-ar.png` and `documents-avoir-ar.png`.
+`till-credit-ar.png`, `documents-avoir-ar.png` and `stock-recount-ar.png`.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
@@ -116,6 +116,8 @@ second language on; use the looped `just e2e` or a single `--project`.
   the shop back under the réel before it leaves;
   `settlement.spec.ts`, two credit sales settled oldest first, a payment
   above the debt refused, and the statement printed;
+  `stock-recount.spec.ts`, a product opened with stock and sold from, then
+  the recount run from the settings panel finding nothing to correct;
   `suppliers.spec.ts`, a supplier fiche opened with an opening debt, money
   paid against it and the movements it leaves;
   `till.spec.ts`, one whole cash sale from `/` landing on the till to the
@@ -131,10 +133,11 @@ second language on; use the looped `just e2e` or a single `--project`.
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
   rows finds the API port and the run's launch token.
-- The nine committed screenshots, 1280x800, full page: `products.png`
+- The ten committed screenshots, 1280x800, full page: `products.png`
   (fr) and, in ar, `products-ar.png`, `settings-ar.png`, `till-ar.png`,
   `customers-ar.png`, `suppliers-ar.png`, `expenses-ar.png`,
-  `till-credit-ar.png` and `documents-avoir-ar.png`.
+  `till-credit-ar.png`, `documents-avoir-ar.png` and
+  `stock-recount-ar.png`.
   `en` keeps none; the two languages above are enough to show the layout
   and the RTL mirror.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
@@ -186,6 +189,11 @@ here. These are all of them.
 | `backup-row` | `BackupsPanel.tsx` | One copy in the list; its text is a filename and a date. |
 | `backups-newest` | `BackupsPanel.tsx` | The one the restore button acts on. |
 | `safety-copy-row` | `BackupsPanel.tsx` | The copy a restore takes of what it is about to replace. |
+| `stock-recount-day` | `StockRecountPanel.tsx` | A day, or the translated sentence for a shop that has never recounted. |
+| `stock-recount-checked` | `StockRecountPanel.tsx` | Absent until a run answers, so a test counts it; its text is a bare number. |
+| `stock-recount-clean` | `StockRecountPanel.tsx` | Absent until a run has happened, and the sentence it holds is translated. |
+| `stock-drift-row` | `StockRecountPanel.tsx` | One corrected product; the quantities inside it are numbers in three locales. |
+| `stock-drift-difference` | `StockRecountPanel.tsx` | The signed quantity, beside two other quantities on the same row. |
 
 ## What the suite checks and where
 
