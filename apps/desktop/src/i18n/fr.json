@@ -606,5 +606,6 @@
   "field_blank_is_zero": "Vide vaut zéro.",
   "field_blank_is_none": "Vide veut dire « pas de prix de gros ».",
   "products_add_first": "Ajouter le premier produit",
-  "products_count_one": "produit"
+  "products_count_one": "produit",
+  "close": "Fermer"
 }

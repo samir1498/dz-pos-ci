@@ -54,14 +54,16 @@ export function FormField({
 
   return (
     <div className={cn("flex flex-col gap-1.5 text-start", className)}>
-      <Label htmlFor={id}>
-        {label}
+      {/* The star sits beside the label, not inside it: a label's text is its
+          name to a test and to a screen reader, and "Nom*" is not "Nom". */}
+      <div className="flex items-baseline gap-1">
+        <Label htmlFor={id}>{label}</Label>
         {required ? (
           <span aria-hidden="true" className="text-fg-danger">
             *
           </span>
         ) : null}
-      </Label>
+      </div>
       {children({
         id,
         "aria-invalid": error !== undefined,

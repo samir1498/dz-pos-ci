@@ -606,5 +606,6 @@
   "field_blank_is_zero": "Blank means zero.",
   "field_blank_is_none": "Blank means “no wholesale price”.",
   "products_add_first": "Add the first product",
-  "products_count_one": "product"
+  "products_count_one": "product",
+  "close": "Close"
 }

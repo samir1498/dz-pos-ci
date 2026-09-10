@@ -26,6 +26,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileText,
+  LayoutDashboard,
   Package,
   Receipt,
   Settings,
@@ -87,6 +88,7 @@ interface NavItem {
  * which is what a route with no place in the navigation should look like.
  */
 export const NAV: readonly NavItem[] = [
+  { to: "/dashboard", label: "nav_dashboard", icon: LayoutDashboard, section: "sales" },
   { to: "/till", label: "nav_till", icon: ShoppingCart, section: "sales" },
   { to: "/customers", label: "nav_customers", icon: Users, section: "sales" },
   { to: "/documents", label: "nav_documents", icon: FileText, section: "sales" },
