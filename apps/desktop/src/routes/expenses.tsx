@@ -197,7 +197,12 @@ function Month({
       <div className="grid gap-4 lg:grid-cols-3">
         <TotalCard month={expenses.data} pending={expenses.isPending} />
         <div className="lg:col-span-2">
-          {cash.isPending ? <Skeleton className="h-56 w-full" /> : null}
+          {cash.isPending ? (
+            <>
+              <p className="sr-only">{t("cash_loading")}</p>
+              <Skeleton className="h-56 w-full" />
+            </>
+          ) : null}
           {cash.isError ? <Refusal error={cash.error} /> : null}
           {cash.isSuccess ? <CashPanel position={cash.data} /> : null}
         </div>
