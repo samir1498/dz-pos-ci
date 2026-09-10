@@ -19,6 +19,9 @@ tasks:
   - id: 'D4'
     desc: 'The Claude Design link: create the Dinar POS design-system project, push colors_and_type.css for both themes, the logo files, and one preview card per kit component (@dsCard markers) built from the kit''s own markup, so Samir iterates in claude.ai/design; the README in the project says which file is the source (the repo) and that /design-sync pulls changes back; the landing page in Astro is a later plan, not this one'
     status: 'pending'
+  - id: 'D5'
+    desc: 'Landing assets (Samir, 2026-09-10): product shots and screen collages for the Astro landing, made from the real screens once the kit lands: the e2e suite captures the till, the fiche, the dashboard and a facture in both themes and in fr and ar at 2x, a small script composes them into device mockups (a laptop frame, a phone frame for M6 later) and fanned multi-screen collages with the brand colours behind, exported as PNG and WebP under packages/design/assets/shots; the logo lockups, the palette and the type specimen exported beside them; the landing itself is a later plan in Astro'
+    status: 'pending'
 acceptance: []
 ---
 # Design system and branding
