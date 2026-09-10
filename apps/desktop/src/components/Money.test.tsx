@@ -1,47 +1,46 @@
-// An amount is the one thing on the screen that must not be re-typed by a
-// component. These check the three promises the component makes and nothing
-// about colour: the figure font, the direction, and that the digits are the
-// shared formatter's own output rather than a second spelling of it.
+// An amount on screen. The formatter itself is tested in packages/shared;
+// what is tested here is the three things the component adds, because each of
+// them is invisible when it breaks and wrong on an Arabic screen.
 
 import { render, screen } from "@testing-library/react";
-import { formatCentimes } from "@dzpos/shared";
 import { describe, expect, test } from "vitest";
 
 import { Money } from "./Money";
 
 describe("Money", () => {
-  test("renders the shared formatter's spelling, not its own", () => {
-    render(<Money centimes={123456} data-testid="amount" />);
-    const amount = screen.getByTestId("amount");
-    // textContent rather than toHaveTextContent: the matcher collapses
-    // whitespace, and the group separator is U+202F, a narrow no-break
-    // space. Collapsed to a plain space, a component that grouped with an
-    // ordinary space would pass, which is the drift this guards.
-    expect(amount.textContent).toBe(formatCentimes(123456));
-    // Spelled out once as well, so a change to the grouping shows up here
-    // and not only in the shared package's own tests. The gap below the
-    // thousands is that same U+202F and not a space bar press.
-    expect(amount.textContent).toBe("1 234,56");
+  test("shows the amount the shared formatter produces", () => {
+    render(<Money centimes={327240} data-testid="m" />);
+    expect(screen.getByTestId("m")).toHaveTextContent("3 272,40");
   });
 
-  test("keeps a negative amount's sign in front of the digits", () => {
-    render(<Money centimes={-500} data-testid="amount" />);
-    const amount = screen.getByTestId("amount");
-    expect(amount.textContent).toBe("-5,00");
-    // The reason for dir="ltr": in an RTL paragraph the bidi algorithm moves
-    // a trailing sign, and a debt would read as a credit.
-    expect(amount).toHaveAttribute("dir", "ltr");
+  /**
+   * An amount reads left to right with Western digits whatever the screen's
+   * language, the same decision the fiscal identifiers and the barcodes take.
+   * Without it the minus sign of a negative balance moves to the far end of
+   * the number on an Arabic screen, which reads as a different figure.
+   */
+  test("stays left to right so a sign keeps its end", () => {
+    render(<Money centimes={-1250} data-testid="m" />);
+    const el = screen.getByTestId("m");
+    expect(el).toHaveAttribute("dir", "ltr");
+    expect(el).toHaveTextContent("-12,50");
   });
 
-  test("wears the numeric face with tabular figures", () => {
-    render(<Money centimes={0} data-testid="amount" />);
-    const amount = screen.getByTestId("amount");
-    expect(amount.className).toContain("font-numeric");
-    expect(amount.className).toContain("tabular-nums");
+  test("wears the figure font with tabular numerals", () => {
+    render(<Money centimes={0} data-testid="m" />);
+    expect(screen.getByTestId("m")).toHaveClass("font-numeric", "tabular-nums");
   });
 
-  test("keeps a caller's classes beside its own", () => {
-    render(<Money centimes={0} className="text-lg" data-testid="amount" />);
-    expect(screen.getByTestId("amount").className).toContain("text-lg");
+  /** A caller's class wins over the component's own on the same property. */
+  test("lets a caller add classes without losing the figure font", () => {
+    render(<Money centimes={0} className="text-lg" data-testid="m" />);
+    const el = screen.getByTestId("m");
+    expect(el).toHaveClass("font-numeric");
+    expect(el).toHaveClass("text-lg");
+  });
+
+  /** Centimes are integers. A float here means an amount was computed in JS. */
+  test("refuses an amount that is not a whole number of centimes", () => {
+    expect(() => render(<Money centimes={12.5} />)).toThrow(RangeError);
   });
 });

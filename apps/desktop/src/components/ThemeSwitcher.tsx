@@ -9,9 +9,11 @@
 
 import { THEMES } from "@dzpos/design";
 import type { ThemeDto } from "@dzpos/shared";
+import { Palette } from "lucide-react";
 
-import { useTheme } from "@/lib/theme";
+import { Icon } from "@/components/Icon";
 import { isKey, useTranslation, type Key } from "@/i18n";
+import { useTheme } from "@/lib/theme";
 
 /** "follow the machine", which is `null` on the wire and in the shop file. */
 const SYSTEM = "system";
@@ -39,6 +41,7 @@ export function ThemeSwitcher({ className }: { className?: string }) {
   const { choice, setChoice, saving } = useTheme();
   return (
     <label className={className === undefined ? "flex items-center gap-2" : `flex items-center gap-2 ${className}`}>
+      <Icon as={Palette} size={18} className="text-muted-foreground" />
       <span className="sr-only">{t("theme_label")}</span>
       <select
         data-testid="theme-switcher"

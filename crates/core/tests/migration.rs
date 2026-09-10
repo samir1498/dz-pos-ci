@@ -130,6 +130,7 @@ fn migration_creates_every_table() {
             "expense_categories",
             "expenses",
             "jobs",
+            "preferences",
             "products",
             "purchase_lines",
             "purchase_receipt_lines",
@@ -164,6 +165,7 @@ fn every_table_carries_shop_id() {
         "expense_categories",
         "expenses",
         "jobs",
+        "preferences",
         "products",
         "purchase_lines",
         "purchase_receipt_lines",
@@ -233,6 +235,7 @@ fn every_table_is_strict() {
     for table in [
         "shops",
         "settings",
+        "preferences",
         "users",
         "counters",
         "categories",
@@ -2281,10 +2284,23 @@ fn the_migration_reverts_and_reapplies() {
         1
     );
 
-    // The ninth is the top of the stack: the year a series counts in. Its
-    // down puts the series string back the way the file below it spells it
-    // and takes the column off, which is what the kind rules underneath it
-    // are asserted against.
+    // The tenth is the top of the stack: the preferences table. It adds a
+    // table and nothing else, so its down drops it and touches no document.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master \
+             WHERE type = 'table' AND name = 'preferences'"
+        ),
+        0,
+        "the preferences down.sql left the table behind"
+    );
+
+    // The ninth: the year a series counts in. Its down puts the series string
+    // back the way the file below it spells it and takes the column off,
+    // which is what the kind rules underneath it are asserted against.
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     assert_eq!(

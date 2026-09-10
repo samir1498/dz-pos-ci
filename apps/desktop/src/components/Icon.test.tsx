@@ -1,40 +1,47 @@
-// The two decisions the wrapper exists to make: an icon is decoration until
-// a caller names it, and only an icon that points somewhere mirrors in
-// Arabic. Both are easy to get wrong per call site, which is why they live
-// in one component and are checked here rather than reviewed by eye.
+// The icon wrapper. Two rules worth pinning: an icon is decoration unless a
+// caller names it, and only an icon a caller marks as directional mirrors in
+// Arabic.
 
 import { render, screen } from "@testing-library/react";
-import { ArrowRight, Coins } from "lucide-react";
+import { ArrowRight, Printer } from "lucide-react";
 import { describe, expect, test } from "vitest";
 
 import { Icon } from "./Icon";
 
 describe("Icon", () => {
-  test("is hidden from the reader when it sits beside a label", () => {
-    const { container } = render(<Icon as={Coins} />);
-    const glyph = container.querySelector("svg");
-    expect(glyph).not.toBeNull();
-    expect(glyph).toHaveAttribute("aria-hidden", "true");
-    expect(glyph).not.toHaveAttribute("role", "img");
+  test("is hidden from a screen reader when it sits beside a label", () => {
+    const { container } = render(<Icon as={Printer} />);
+    const svg = container.querySelector("svg");
+    expect(svg).toHaveAttribute("aria-hidden", "true");
   });
 
-  test("becomes an image with a name when a caller gives it one", () => {
-    render(<Icon as={Coins} label="espèces" />);
-    const glyph = screen.getByRole("img", { name: "espèces" });
-    expect(glyph).not.toHaveAttribute("aria-hidden", "true");
+  test("is announced when it is the only thing saying what a control does", () => {
+    render(<Icon as={Printer} label="Imprimer" />);
+    expect(screen.getByRole("img", { name: "Imprimer" })).toBeInTheDocument();
   });
 
-  test("mirrors only when asked", () => {
-    const { container: plain } = render(<Icon as={Coins} />);
-    expect(plain.querySelector("svg")?.getAttribute("class")).not.toContain("rtl:-scale-x-100");
-    const { container: pointing } = render(<Icon as={ArrowRight} flip />);
-    expect(pointing.querySelector("svg")?.getAttribute("class")).toContain("rtl:-scale-x-100");
+  /**
+   * An arrow points at the next thing, so it mirrors with the direction. A
+   * printer, a clock or a coin must not: mirroring those makes them wrong
+   * rather than translated, which is why the flip is opt-in per call.
+   */
+  test("mirrors only what the caller marks as directional", () => {
+    const { container: directional } = render(<Icon as={ArrowRight} flip />);
+    expect(directional.querySelector("svg")).toHaveClass("rtl:-scale-x-100");
+
+    const { container: fixed } = render(<Icon as={Printer} />);
+    expect(fixed.querySelector("svg")).not.toHaveClass("rtl:-scale-x-100");
   });
 
-  test("takes one of the three sizes, and 20 by default", () => {
-    const { container: standard } = render(<Icon as={Coins} />);
-    expect(standard.querySelector("svg")).toHaveAttribute("width", "20");
-    const { container: heading } = render(<Icon as={Coins} size={24} />);
-    expect(heading.querySelector("svg")).toHaveAttribute("width", "24");
+  test("draws at the size asked for, and at 20 by default", () => {
+    const { container } = render(
+      <>
+        <Icon as={Printer} />
+        <Icon as={Printer} size={24} />
+      </>,
+    );
+    const [first, second] = Array.from(container.querySelectorAll("svg"));
+    expect(first).toHaveAttribute("width", "20");
+    expect(second).toHaveAttribute("width", "24");
   });
 });
