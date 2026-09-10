@@ -1,9 +1,3 @@
-// The callers are T2 (suppliers), T3 (purchases), T4 (expenses) and T5 (the
-// re-derive job): the tables land here before the services that read them, and
-// `repos` is crate-internal on purpose (architecture.md: nothing outside this
-// crate touches diesel), so a plain build sees no use of these yet.
-#![allow(dead_code)]
-
 //! The only place the job markers touch diesel. One row per
 //! `(shop_id, name)`, holding the day that job last ran.
 

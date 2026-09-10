@@ -55,6 +55,16 @@ pub const ACTION_CANCEL: &str = "document.cancel";
 /// read by a person and an id is a number they would have to look up.
 pub const ACTION_CREATE_EXPENSE: &str = "expense.create";
 
+/// A cached quantity on hand the ledger did not explain, corrected by the
+/// recount (features.md §1). The entry carries the product's name beside its
+/// id, both quantities and the difference between them, because it is the
+/// only record a recount leaves: there is no table of runs, and the drift
+/// list a shop owner reads is these rows read back. The day the run was
+/// marked under travels in the entry too, since the column's own timestamp
+/// is UTC and a run just after midnight in Algiers would file itself under
+/// yesterday.
+pub const ACTION_STOCK_DRIFT: &str = "stock.drift";
+
 /// A fiche closed while it was still carrying something: a balance either
 /// way, or a document still asking to be paid. The entry carries the reason
 /// the caller had to give, the balance at the moment of the close and how
