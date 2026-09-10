@@ -185,8 +185,9 @@ only in `packages/shared`.
   service code (`2026-09-10-000007_document_kind_rules`): an avoir names the
   document it is written against and a ticket, a facture and a proforma name
   none; an amount tendered and change go together and only on a cash
-  document; a document is annulée exactly when it says when, by whom and why;
-  a proforma's balance triple says nothing is owed. The services already
+  document; a document is annulée exactly when it says when, by whom and why,
+  and only a ticket and a facture are annulled at all; a proforma's balance
+  triple says nothing is owed. The services already
   refuse every one of those rows, so a restored backup, a hand-repaired row
   or an import is what the constraints are for. SQLite cannot add a
   table-level CHECK to a table that exists, so the migration rebuilds

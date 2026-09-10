@@ -143,6 +143,12 @@ CREATE TABLE documents_with_kind_rules (
     -- `documents::cancel` is the one writer of this column and it writes it
     -- with the block.
     CHECK (cancel_avoir_document_id IS NULL OR status = 'cancelled'),
+    -- And only the two papers a sale is handed over on are annulled at all.
+    -- `documents::cancel` names them and refuses every other kind by not
+    -- being on the list: a quotation moved nothing to put back, and an avoir
+    -- is the instrument that undoes a facture rather than something undone in
+    -- turn.
+    CHECK (status <> 'cancelled' OR kind IN ('ticket', 'facture')),
 
     -- A quotation moves no goods and no money (features.md §3). `proforma.rs`
     -- writes the triple as three zeros rather than leaving it out, so the
