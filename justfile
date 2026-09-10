@@ -71,21 +71,45 @@ api port="4317" db=".dev/dev.db" origin="":
     chmod 600 .dev/api-token
     DZPOS_API_TOKEN="$(cat .dev/api-token)" cargo run -p dzpos-api -- --db {{db}} --port {{port}} {{ if origin != "" { "--allow-origin " + origin } else { "" } }}
 
-# fill a development shop file with a catalogue, twelve customers, five
-# suppliers and thirty days of trading, so the dashboard, the statements and
-# the exports have something to show. Deterministic: the same file every run.
-# Refuses a file the dev API is holding open, because the seeder would write
-# into a database the server has its own connection to; stop `just api`
-# first. Pass `force=1` to delete the file and start over.
-seed db=".dev/dev.db" force="":
+# ---- the development shop file (.dev/dev.db) ----
+#
+# Dev only, and enforced in three places, not one: `dzpos-seed` is its own
+# crate that neither the API nor the desktop depends on, so no release build
+# can produce it (crates/api/tests/no_seed_entrypoint.rs holds that); the
+# binary refuses to run without DZPOS_DEV=1, refuses any file that is not
+# directly inside .dev/, and refuses one whose settings carry a real shop's
+# name and identifiers; and these two recipes take no path at all.
+
+# fill .dev/dev.db with a catalogue, twelve customers, five suppliers and
+# thirty days of trading, so the dashboard, the statements and the exports
+# have something to show. Deterministic: the same file on every machine, and
+# repeatable, because it deletes the file first and fills a fresh one.
+seed:
     #!/usr/bin/env bash
     set -euo pipefail
-    mkdir -p "$(dirname "{{db}}")"
-    if [ -e "{{db}}" ] && command -v fuser >/dev/null 2>&1 && fuser "{{db}}" >/dev/null 2>&1; then
-        echo "{{db}} is open in another process (the dev API?); stop it first" >&2
+    just seed-clean
+    DZPOS_DEV=1 cargo run -p dzpos-seed --bin dzpos-seed -- --db .dev/dev.db
+
+# delete .dev/dev.db so the next `just api` starts an empty shop.
+#
+# A whole file and never a row. The ledgers are append only and the document
+# series are gapless by rule, so there is no honest way to take a seeded sale
+# back out of a shop from the inside: cleaning up a development file is `rm`.
+# Only ever .dev/dev.db, and it takes no argument, so no path a caller typed
+# can reach a real shop's database.
+seed-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p .dev
+    # Unlinking a file the API still holds open succeeds on Linux and leaves
+    # the server writing into an inode nobody else can see, so the running
+    # server is what stops us rather than the file system.
+    if [ -e .dev/dev.db ] && command -v fuser >/dev/null 2>&1 && fuser .dev/dev.db >/dev/null 2>&1; then
+        echo ".dev/dev.db is open in another process (the dev API?); stop it first" >&2
         exit 1
     fi
-    cargo run -p dzpos-api --bin seed -- --db "{{db}}" {{ if force != "" { "--force" } else { "" } }}
+    rm -f .dev/dev.db .dev/dev.db-wal .dev/dev.db-shm
+    echo "removed .dev/dev.db"
 
 # web UI only, reachable from the laptop over Tailscale. Needs `just api`
 # running (it made the token this reads) and started with the laptop's

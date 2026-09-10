@@ -50,6 +50,12 @@ use crate::services::{
     supplier_debt, suppliers,
 };
 
+/// The name the seeded shop trades under. Public because the binary reads it
+/// back off a file it is about to overwrite: a shop file carrying identifiers
+/// is somebody's books unless it is this one, and that is the difference
+/// between re-seeding a development file and writing over a real shop.
+pub const SHOP_NAME: &str = "Supérette El Bahdja";
+
 /// The one number the whole file comes out of. Changing it changes every
 /// figure the seeded shop shows, which is why it is a constant and not an
 /// argument: a screenshot in a bug report has to be reproducible from the
@@ -252,7 +258,7 @@ fn the_shop_itself(
         shop_id,
         user_id,
         StoreBlock {
-            name: "Supérette El Bahdja".to_string(),
+            name: SHOP_NAME.to_string(),
             rc: Some("16/00-1048573 B 21".to_string()),
             nif: Some("000216104857321".to_string()),
             nis: Some("000216104857300".to_string()),

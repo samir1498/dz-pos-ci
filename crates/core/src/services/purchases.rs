@@ -298,11 +298,7 @@ pub fn save(
 
 /// A delivery against an order: what arrived, the bon de réception it is
 /// written on, the stock it put on the shelf and the debt it left behind.
-/// One transaction for all of it.
-///
-/// `received_at` is the moment the goods were taken in; `None` is now on the
-/// shop's clock. It decides the year the number comes out of and the day the
-/// ledger row lands on, so the two cannot disagree.
+/// One transaction for all of it, taken in now on the shop's clock.
 pub fn receive(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -318,8 +314,9 @@ pub fn receive(
 /// `debt::append` is the shape this follows: a till never names one, and the
 /// callers that write history rather than make it do.
 ///
-/// `None` is now on the shop's clock, so `receive` above is this with nothing
-/// said.
+/// `at` decides the year the receipt's number comes out of and the day the
+/// ledger row lands on, so the two cannot disagree. `None` is now on the
+/// shop's clock, so `receive` above is this with nothing said.
 #[allow(clippy::too_many_arguments)]
 pub fn receive_at(
     conn: &mut SqliteConnection,

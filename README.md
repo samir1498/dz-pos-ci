@@ -46,12 +46,21 @@ The `justfile` at the root is the list; `just` alone prints it.
 just gates        # fmt, clippy, generated types check, tests, builds; what a PR needs
 just e2e          # Playwright against a fresh API and database, fr then en then ar
 just api          # the API on 4317 with a dev database and a fresh launch token
+just seed         # fill .dev/dev.db with a month of trading to develop against
+just seed-clean   # delete .dev/dev.db so the next `just api` opens an empty shop
 just dev          # the web UI on 5173, reads the token just api wrote
 just tauri        # the native window; needs a display
 just types        # rewrite packages/shared/src/generated from the Rust DTOs
 just screenshot   # retake only the committed screenshots under e2e/screenshots
 just status       # where we are: the ladder and the active plans
 ```
+
+`just seed` writes the same file on every machine, and writes it fresh each
+run: it deletes `.dev/dev.db` and fills a new one. Cleaning up is the whole
+file and never a row, because the ledgers are append only and the document
+series are gapless. Both recipes are development only and take no path;
+`docs/architecture.md` (Local development) says where that is enforced and
+why it is enforced in three places.
 
 Every API route but `/health` needs the launch token, so `just api` runs
 first and `just dev` after it. From another machine, pass the browser's
