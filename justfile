@@ -106,14 +106,14 @@ e2e:
     done
 
 # only the tests that write a committed screenshot: fr (products.png) and
-# ar (products-ar.png, settings-ar.png); en keeps none.
+# ar (the six *-ar.png the e2e README lists); en keeps none.
 screenshot:
     #!/usr/bin/env bash
     set -euo pipefail
     pnpm desktop e2e -g screenshot --project fr
     pnpm desktop e2e -g screenshot --project ar
 
-# ---- worktrees (one per task when the M1 loop runs tasks in parallel) ----
+# ---- worktrees (one per task when the milestone loop runs tasks in parallel) ----
 
 # a checkout of <branch> under .claude/worktrees/<name> with its own
 # node_modules and its own cargo target (a shared target dir rebuilds
