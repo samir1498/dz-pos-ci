@@ -872,3 +872,51 @@ fn a_window_of_no_days_and_one_longer_than_a_year_are_both_refused() {
     assert!(dashboard::series(&mut conn, SHOP, day(30), 1).is_ok());
     assert!(dashboard::series(&mut conn, SHOP, day(30), 366).is_ok());
 }
+
+#[test]
+fn the_series_walks_through_a_year_end_and_a_leap_day_without_a_gap() {
+    let (_dir, mut conn) = open_temp();
+    // Every fixture above keeps the window inside September; a rollover
+    // bug at a month or year end would pass them all. Ten days ending on
+    // 5 January reach back into December; nine ending on 2 March 2028
+    // cross the leap day.
+    for (last, days, first, must_hold) in [
+        (
+            NaiveDate::from_ymd_opt(2026, 1, 5).unwrap(),
+            10,
+            NaiveDate::from_ymd_opt(2025, 12, 27).unwrap(),
+            [
+                NaiveDate::from_ymd_opt(2025, 12, 31).unwrap(),
+                NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            ],
+        ),
+        (
+            NaiveDate::from_ymd_opt(2028, 3, 2).unwrap(),
+            9,
+            NaiveDate::from_ymd_opt(2028, 2, 23).unwrap(),
+            [
+                NaiveDate::from_ymd_opt(2028, 2, 29).unwrap(),
+                NaiveDate::from_ymd_opt(2028, 3, 1).unwrap(),
+            ],
+        ),
+    ] {
+        let series = dashboard::series(&mut conn, SHOP, last, days).unwrap();
+        assert_eq!(series.from, first, "{last}");
+        assert_eq!(series.to, last, "{last}");
+        assert_eq!(series.days.len(), days as usize, "{last}");
+        for pair in series.days.windows(2) {
+            assert_eq!(
+                pair[1].from,
+                pair[0].from.succ_opt().unwrap(),
+                "consecutive days around {}",
+                pair[0].from
+            );
+        }
+        for d in must_hold {
+            assert!(
+                series.days.iter().any(|p| p.from == d),
+                "{d} is in the window"
+            );
+        }
+    }
+}
