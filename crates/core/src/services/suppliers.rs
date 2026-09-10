@@ -114,14 +114,20 @@ pub fn create(
             "an opening balance the supplier owes the shop is not a debt to carry over",
         ));
     }
+    // Zero is nothing carried over: no movement is written for it, and the
+    // log says nothing about one either. Filtered here rather than at the
+    // write below, so the entry and the ledger are told the same thing; a
+    // `0` in the logged field reads as an opening balance somebody set to
+    // nothing, which is a movement a reader would go looking for.
+    let opening_debt = opening_debt.filter(|d| *d != Money::ZERO);
     // The fiche, its opening movement and the audit entry are one
     // transaction: an opening debt without its supplier, or a supplier nobody
     // can trace, is the failure this log exists to prevent (features.md §5).
     conn.transaction(|conn| {
         let created = repo::insert(conn, &write)?;
-        // Zero is not written: a movement of nothing would sit in every
-        // statement the supplier is ever sent.
-        if let Some(amount) = opening_debt.filter(|d| *d != Money::ZERO) {
+        // A movement of nothing would sit in every statement the supplier is
+        // ever sent.
+        if let Some(amount) = opening_debt {
             supplier_debt::append(
                 conn,
                 shop_id,

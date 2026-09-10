@@ -133,6 +133,12 @@ fn an_opening_debt_of_nothing_writes_no_movement() {
     assert!(supplier_debt::ledger(&mut conn, SHOP, made.id)
         .unwrap()
         .is_empty());
+    // And the log says nothing about one either: a zero in that field reads
+    // as an opening balance that was set to nothing, which is a movement
+    // somebody would go looking for.
+    let entry = audit::list(&mut conn, SHOP).unwrap().remove(0);
+    let after = entry.after.unwrap_or_default();
+    assert!(!after.contains("opening_debt"), "{after}");
 }
 
 #[test]
