@@ -18,7 +18,7 @@ tasks:
     status: 'done'
   - id: 'T8'
     desc: 'The customer debt slip on 80 mm (balance and last movements, goldens ×3), the combined dz-review Pass 2 over T3, T4, T6 and T7 (money, numbering, deletion), features.md §3 and §4 updated to what M2 shipped, the checkpoint PR that closes M2'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T1'
     desc: 'Migration: customers (identifiers, party_kind company|consumer, credit_limit_centimes null = no limit and 0 = no credit, warn_threshold_centimes null = no warning, opening debt as the first ledger row), append-only debt_ledger (opening, sale, payment, avoir, adjustment; one of debit/credit zero), debt_allocations; documents rebuilt outside diesel''s transaction (foreign_keys OFF, twelve-step copy with ids, foreign_key_check, ON) with customer_id FK RESTRICT, kind admitting quittance (variant with series and prefix, nothing issues it), ref_document_id FK, the buyer block with buyer_party_kind, the balance triple; models, repos, customers and debt services with audit; previous-version test keeps every child row and id; no yearly reset (R8)'
     status: 'done'
