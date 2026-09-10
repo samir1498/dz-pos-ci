@@ -234,14 +234,15 @@ here. These are all of them.
 | `cash-out-total` | `expenses.tsx` | The other row labelled "total". |
 | `cash-net` | `expenses.tsx` | An amount, and the one figure that goes below zero. |
 | `card-in-total` | `expenses.tsx` | An amount, translated label. |
-| `backup-row` | `BackupsPanel.tsx` | One copy in the list; its text is a filename and a date. |
-| `backups-newest` | `BackupsPanel.tsx` | The one the restore button acts on. |
-| `safety-copy-row` | `BackupsPanel.tsx` | The copy a restore takes of what it is about to replace. |
+| `backups-table` | `BackupsPanel.tsx` | The list of copies. Its rows are read by role (the body is the second rowgroup); the table itself needs an id because the panel draws a second one under it. |
+| `safety-copies-table` | `BackupsPanel.tsx` | The copies a restore took of what it replaced, same columns as the list above, so only the table tells them apart. |
+| `backups-newest` | `BackupsPanel.tsx` | The date of the most recent copy, or the translated sentence for a shop that has none. |
+| `backup-restore-dialog` | `BackupsPanel.tsx` | The second ask before a restore. The spec finds it by role; the id is there for a screenshot to point at. |
 | `theme-switcher` | `ThemeSwitcher.tsx` | The select is rendered twice (topbar and settings panel) with the same translated label, so a label query matches two things. |
 | `stock-recount-day` | `StockRecountPanel.tsx` | A day, or the translated sentence for a shop that has never recounted. |
 | `stock-recount-checked` | `StockRecountPanel.tsx` | Absent until a run answers, so a test counts it; its text is a bare number. |
 | `stock-recount-clean` | `StockRecountPanel.tsx` | Absent until a run has happened, and the sentence it holds is translated. |
-| `stock-drift-row` | `StockRecountPanel.tsx` | One corrected product; the quantities inside it are numbers in three locales. |
+| `stock-drift-table` | `StockRecountPanel.tsx` | The corrections the last run made. Absent when nothing was out, so a test counts it; its rows are read by role. |
 | `stock-drift-difference` | `StockRecountPanel.tsx` | The signed quantity, beside two other quantities on the same row. |
 | `shell-topbar` | `AppShell.tsx` | The bar itself, so a test can ask whether a switch is inside it rather than merely on the page. |
 | `shell-title` | `AppShell.tsx` | The page's `h1`. Its text is the sidebar item's, so a role query by name would be circular. |

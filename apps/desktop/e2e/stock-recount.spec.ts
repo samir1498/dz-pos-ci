@@ -104,7 +104,7 @@ test("a shop that has only traded has nothing to correct, and saves the recount 
     String(report.products_checked),
   );
   await expect(page.getByTestId("stock-recount-clean")).toHaveText(t("stock_recount_none"));
-  await expect(page.getByTestId("stock-drift-row")).toHaveCount(0);
+  await expect(page.getByTestId("stock-drift-table")).toHaveCount(0);
 
   // The stock the fiche shows after the recount is the opening minus the
   // sale, which is what it showed before: nothing was corrected because
