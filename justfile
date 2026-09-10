@@ -24,6 +24,13 @@ export CARGO_BUILD_JOBS := env_var_or_default("CARGO_BUILD_JOBS", "2")
 # sources so cargo rebuilds the three members; the dependencies stay
 # cached, they are identical in every checkout. Every cargo recipe below
 # depends on it; run a bare `cargo` in a worktree only after `just claim`.
+#
+# The recipes that compile and then run something hold a lock on the
+# folder for the whole run: cargo's own lock only covers compilation, so
+# while one worktree's `cargo test` was running its binaries another
+# worktree's build replaced the rlib the doc-tests were about to link
+# ("extern location for dzpos_core does not exist", 2026-09-10). One cargo
+# invocation at a time across every checkout; the second one waits.
 claim:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -46,10 +53,10 @@ fmt:
     cargo fmt --all --check
 
 clippy: claim
-    cargo clippy --workspace --all-targets -- -D warnings
+    flock "$CARGO_TARGET_DIR/.lock" cargo clippy --workspace --all-targets -- -D warnings
 
 test: claim
-    cargo test --workspace
+    flock "$CARGO_TARGET_DIR/.lock" cargo test --workspace
     pnpm -r test
 
 build:
@@ -69,7 +76,7 @@ types-check: claim
     fi
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' EXIT
-    DZPOS_TS_OUT_DIR="$tmp" cargo test -p dzpos-api --test export_bindings
+    DZPOS_TS_OUT_DIR="$tmp" flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --test export_bindings
     diff -r "$tmp" packages/shared/src/generated
 
 # regenerate the committed TS types after a DTO change (the test never
@@ -78,7 +85,7 @@ types-check: claim
 # path here wrote crates/api/packages/shared/src/generated the first time a
 # DTO was added after the recipe was written.
 types: claim
-    DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" cargo test -p dzpos-api --test export_bindings
+    DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --test export_bindings
 
 # regenerate apps/desktop/src/theme.css from the token source. The check
 # that a stale file fails the gates is a vitest in packages/design, so it
