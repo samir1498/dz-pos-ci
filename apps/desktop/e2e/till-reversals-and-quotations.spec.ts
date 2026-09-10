@@ -277,7 +277,7 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   const cancelledRow = page
     .getByRole("row")
     .filter({ has: page.getByRole("button", { name: cancelled.printed_number }) });
-  await expect(cancelledRow.getByText(t("documents_cancelled"))).toBeVisible();
+  await expect(cancelledRow.getByText(t("pill_cancelled"))).toBeVisible();
 
   // A row opens the document, with its lines and the sheet the core
   // rendered beside them.

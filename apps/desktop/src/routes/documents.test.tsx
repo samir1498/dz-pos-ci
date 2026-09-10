@@ -250,7 +250,7 @@ describe("the document list", () => {
     expect(cells.getByText(fr.documents_kind_facture)).toBeTruthy();
     expect(cells.getByText("Entreprise Benali")).toBeTruthy();
     expect(cells.getByText("3 000,00")).toBeTruthy();
-    expect(cells.getByText(fr.documents_issued)).toBeTruthy();
+    expect(cells.getByText(fr.pill_issued)).toBeTruthy();
 
     // The ticket is there too, and it names no buyer: it was sold to
     // whoever walked in.
@@ -274,7 +274,7 @@ describe("the document list", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByText("FA-2026-000004");
-    await user.click(screen.getByLabelText(fr.documents_kind_facture));
+    await user.click(screen.getByRole("tab", { name: fr.documents_kind_facture }));
     await waitFor(() => {
       expect(screen.queryByText("TK-2026-000012")).toBeNull();
     });
@@ -287,6 +287,17 @@ describe("the document list", () => {
     mount("ar");
     await screen.findByText("FA-2026-000004");
     expect(screen.getByText(ar.documents_title)).toBeTruthy();
+  });
+
+  test("a shop with no documents yet gets the empty state, not an empty table", async () => {
+    // The first morning is the correct state, not a fault: a table with a
+    // head and no body reads as a screen that failed to load.
+    list = [];
+    mount();
+    const empty = await screen.findByTestId("documents-empty");
+    expect(within(empty).getByText(fr.documents_empty)).toBeTruthy();
+    expect(within(empty).getByText(fr.documents_empty_hint)).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 });
 
@@ -392,7 +403,7 @@ describe("the cancellation", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByText("FA-2026-000004");
-    await user.click(screen.getByLabelText(fr.documents_kind_facture));
+    await user.click(screen.getByRole("tab", { name: fr.documents_kind_facture }));
     await waitFor(() => {
       expect(screen.queryByText("TK-2026-000012")).toBeNull();
     });
@@ -437,6 +448,25 @@ describe("the cancellation", () => {
       ).length;
       expect(after).toBeGreaterThan(before);
     });
+  });
+
+  test("escape closes the dialog and annuls nothing", async () => {
+    // The cancellation moved into a dialog with this rewrite, so the way out
+    // of it without confirming is a path of its own: a form that used to be
+    // abandoned with a button can now also be abandoned with the key every
+    // dialog answers to, and neither may post.
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
+    await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
+    await screen.findByRole("button", { name: fr.documents_cancel_confirm });
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: fr.documents_cancel_confirm })).toBeNull();
+    });
+    expect(posted.some((p) => p.url.includes("/cancel"))).toBe(false);
   });
 
   test("the reason travels and the answer's block is shown", async () => {
