@@ -78,6 +78,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useTranslation } from "@/i18n";
 
 /** One block of the page: a name, and the states of one component under it. */
 function Section({ name, children }: { name: string; children: React.ReactNode }) {
@@ -115,6 +116,7 @@ const COLUMNS: readonly Column<Line>[] = [
 const STATES: readonly Status[] = ["issued", "cancelled", "paid", "open", "low"];
 
 export function KitPage() {
+  const { dir } = useTranslation();
   const [amount, setAmount] = useState<number | null>(1_284_000);
   const [checked, setChecked] = useState(true);
   const [on, setOn] = useState(true);
@@ -280,10 +282,13 @@ export function KitPage() {
               Ouvrir un panneau
             </Button>
           </SheetTrigger>
-          <SheetContent>
+          {/* The side is physical on purpose (the panel's edge, its border
+              and the half it slides in from have to agree), so the caller
+              picks it from the page direction the way AppShell does. */}
+          <SheetContent side={dir === "rtl" ? "left" : "right"}>
             <SheetHeader>
               <SheetTitle>Le client</SheetTitle>
-              <SheetDescription>Le panneau s'ouvre du côté de la lecture.</SheetDescription>
+              <SheetDescription>Le panneau s'ouvre du côté opposé à la lecture.</SheetDescription>
             </SheetHeader>
           </SheetContent>
         </Sheet>

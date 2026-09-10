@@ -59,7 +59,7 @@ test("opens a company fiche with an opening debt, adjusts it, and saves the cust
   page.on("dialog", (dialog) => void dialog.accept());
 
   await page.goto("/customers");
-  await expect(page.getByRole("heading", { name: t("customers_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("customers_title") })).toBeVisible();
 
   await page.getByRole("button", { name: t("customers_add") }).click();
   await page.getByLabel(t("field_name"), { exact: true }).fill(name);

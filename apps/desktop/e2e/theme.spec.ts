@@ -100,7 +100,7 @@ test("the settings screen offers the same switch, and saves the Arabic screensho
   page,
 }) => {
   await page.goto("/settings");
-  await expect(page.getByRole("heading", { name: t("settings_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("settings_title") })).toBeVisible();
   const panel = page.getByRole("region", { name: t("settings_theme") });
   await expect(panel).toBeVisible();
   const switcher = panel.getByTestId("theme-switcher");

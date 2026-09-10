@@ -90,6 +90,19 @@ test("a narrow window folds the sidebar into a sheet", async ({ page }) => {
   const sheet = page.getByRole("dialog");
   await expect(sheet).toBeVisible();
   await expect(sheet.getByTestId("nav-products")).toBeVisible();
+
+  // The sheet opens on the same side the permanent panel was on, which in
+  // Arabic is the right. It is the sidebar's `side` that decides, and the
+  // shell reads that off the page direction.
+  const box = await sheet.boundingBox();
+  expect(box).not.toBeNull();
+  const middle = (box?.x ?? 0) + (box?.width ?? 0) / 2;
+  if (currentLang() === "ar") {
+    expect(middle, "the sheet should open on the right in Arabic").toBeGreaterThan(350);
+  } else {
+    expect(middle, "the sheet should open on the left").toBeLessThan(350);
+  }
+
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
 });

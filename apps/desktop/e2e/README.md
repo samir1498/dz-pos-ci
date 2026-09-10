@@ -255,6 +255,16 @@ here. These are all of them.
 | `kit-tooltip-trigger` | `KitPage.tsx` | As above. |
 | `kit-toast-trigger` | `KitPage.tsx` | As above. |
 
+## Headings are queried inside `main`
+
+The shell's topbar carries the page's `h1` and its text is the sidebar item's
+name, which in six cases is the same word as the screen's own heading
+("Produits", "Paramètres", "Clients", "Dépenses", "Documents",
+"Fournisseurs"). Playwright's role queries match by substring, so an
+unscoped `getByRole("heading", { name: t("products_title") })` finds two and
+fails on the ambiguity rather than on anything being wrong. Those queries go
+through `page.getByRole("main")`, which is the screen and not the frame.
+
 ## What the suite checks and where
 
 - The rate is checked twice: on the request body (`postedRates`,

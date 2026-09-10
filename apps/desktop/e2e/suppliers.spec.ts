@@ -58,7 +58,7 @@ test("opens a supplier with an opening debt, pays part of it, and saves the supp
   page.on("dialog", (dialog) => void dialog.accept());
 
   await page.goto("/suppliers");
-  await expect(page.getByRole("heading", { name: t("suppliers_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("suppliers_title") })).toBeVisible();
 
   await page.getByRole("button", { name: t("suppliers_add") }).click();
   await page.getByLabel(t("field_name"), { exact: true }).fill(name);

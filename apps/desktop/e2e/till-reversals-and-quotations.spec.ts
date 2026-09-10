@@ -268,7 +268,7 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
 
   // ---- and the documents screen finds every one of them.
   await page.goto("/documents");
-  await expect(page.getByRole("heading", { name: t("documents_title") })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: t("documents_title") })).toBeVisible();
   await expect(page.getByRole("button", { name: facture.printed_number })).toBeVisible();
   await expect(page.getByRole("button", { name: avoir.printed_number })).toBeVisible();
   await expect(page.getByRole("button", { name: proforma.printed_number })).toBeVisible();
