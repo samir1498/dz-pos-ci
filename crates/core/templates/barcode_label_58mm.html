@@ -1,0 +1,32 @@
+{#- One 58 x 40 mm shelf label. Same contract as the ticket: no external
+file, no rule in the markup. The name, the price, the bars and the digits
+all arrive already made from crates/core/src/print/barcode_label.rs. -#}
+<!doctype html>
+<html lang="{{ lang_tag }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<title>{{ label.code }}</title>
+{%- if arabic_unreviewed %}
+<!-- The Arabic wording of this template is unreviewed by a native speaker, like words_ar (research R6). -->
+{%- endif %}
+<style>
+@page { size: 58mm 40mm; margin: 0 }
+body { margin: 0; background: #fff; color: #000 }
+.label { box-sizing: border-box; inline-size: 58mm; block-size: 40mm; padding: 2mm; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; font: 11px/1.25 "DejaVu Sans", Arial, sans-serif }
+.label .name { font-weight: 700; font-size: 12px; overflow-wrap: anywhere; max-block-size: 10mm; overflow: hidden }
+.label .price { font-weight: 700; font-size: 17px; white-space: nowrap }
+.label .cur { margin-inline-start: .3em; font-size: 12px }
+.label .bars { inline-size: 46mm; block-size: 12mm }
+.label .bars svg { inline-size: 100%; block-size: 100%; display: block }
+.label .code { font-size: 10px; letter-spacing: .12em; white-space: nowrap; font-family: "DejaVu Sans Mono", "Courier New", monospace }
+</style>
+</head>
+<body>
+<article class="label">
+<div class="name">{{ label.name }}</div>
+<div class="price"><span class="amount">{{ label.price }}</span><span class="cur">{{ label.currency }}</span></div>
+<div class="bars">{{ label.bars|safe }}</div>
+<div><span class="code">{{ label.code }}</span></div>
+</article>
+</body>
+</html>
