@@ -16,8 +16,8 @@ use crate::repos::preferences as repo;
 pub const THEME: &str = "theme";
 
 /// The four themes the design package emits a block for. `Comptoir` is the
-/// light one and the default the app falls back to when the machine says
-/// nothing; the rest are chosen by hand.
+/// default, the one a shop that has never chosen opens on; the rest are
+/// chosen by hand.
 ///
 /// A fifth theme is a stylesheet and one arm here. The table carries no CHECK
 /// on the value on purpose, so adding one is not a migration.
@@ -53,7 +53,8 @@ impl Theme {
     }
 }
 
-/// The shop's chosen theme, or `None` for "follow the machine".
+/// The shop's chosen theme, or `None` when it has never chosen (the app then
+/// opens on Comptoir).
 ///
 /// A stored value the code does not know reads as `None` rather than as an
 /// error. The alternative is a shop that cannot open its own settings screen
@@ -66,7 +67,7 @@ pub fn theme(conn: &mut SqliteConnection, shop_id: i32) -> Result<Option<Theme>,
 }
 
 /// Records the shop's theme, or forgets it when `theme` is `None`, which puts
-/// the app back on the machine's own light or dark preference.
+/// the app back on the default.
 pub fn set_theme(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -95,7 +96,7 @@ mod tests {
     }
 
     #[test]
-    fn a_shop_that_has_never_chosen_follows_the_machine() {
+    fn a_shop_that_has_never_chosen_has_no_stored_theme() {
         let (_dir, mut conn) = open();
         assert_eq!(theme(&mut conn, SHOP).unwrap(), None);
     }
@@ -115,7 +116,7 @@ mod tests {
     }
 
     #[test]
-    fn choosing_nothing_puts_the_shop_back_on_the_machine() {
+    fn choosing_nothing_puts_the_shop_back_on_the_default() {
         let (_dir, mut conn) = open();
         set_theme(&mut conn, SHOP, Some(Theme::Registre), at()).unwrap();
         set_theme(&mut conn, SHOP, None, at()).unwrap();

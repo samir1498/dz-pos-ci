@@ -16,7 +16,7 @@
 // arrives after first paint, and without the mirror a return visitor would
 // see a flash of Comptoir before their dark theme arrived.
 
-import { OS_THEME } from "@dzpos/design";
+import { DEFAULT_THEME } from "@dzpos/design";
 import type { SettingsDto, ThemeDto } from "@dzpos/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -26,11 +26,8 @@ import { api, settingsQueryKey } from "@/api";
 /** Read by the blocking script in index.html before React exists. */
 export const STORAGE_KEY = "dzpos-theme";
 
-/** The media query the two OS-driven themes are chosen by. */
-const DARK_QUERY = "(prefers-color-scheme: dark)";
-
 interface Ctx {
-  /** What the shop saved. `null` is a choice: follow the machine. */
+  /** What the shop saved. `null` is "never chosen", which resolves to the default. */
   readonly choice: ThemeDto | null;
   /** The name actually on `<html>`, which is what a screenshot shows. */
   readonly resolved: ThemeDto;
@@ -40,33 +37,8 @@ interface Ctx {
 
 const ThemeContext = createContext<Ctx | null>(null);
 
-/**
- * `false` where the browser has no matchMedia. A Tauri webview always has
- * one; jsdom does not, and neither does an embed with the API turned off, so
- * the app falls to the light theme rather than throwing on mount.
- */
-function prefersDark(): boolean {
-  if (typeof window.matchMedia !== "function") return false;
-  return window.matchMedia(DARK_QUERY).matches;
-}
-
-function useSystemDark(): boolean {
-  const [dark, setDark] = useState(prefersDark);
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const query = window.matchMedia(DARK_QUERY);
-    const onChange = (event: MediaQueryListEvent) => setDark(event.matches);
-    query.addEventListener("change", onChange);
-    // The machine may have flipped between the first render and this effect.
-    setDark(query.matches);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
-  return dark;
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const dark = useSystemDark();
   // The settings page is one object and the theme rides on it, so this shares
   // the key the settings screen already reads rather than adding a route the
   // shop file would have to answer twice.
@@ -80,7 +52,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const resolved: ThemeDto = choice ?? (dark ? OS_THEME.dark : OS_THEME.light);
+  // Nothing saved is Comptoir. The machine's light-or-dark setting used to
+  // pick between two themes here; Samir made Comptoir the default on
+  // 2026-09-10, so the preference is a choice the shop makes on purpose.
+  const resolved: ThemeDto = choice ?? DEFAULT_THEME;
 
   useEffect(() => {
     document.documentElement.dataset.theme = resolved;

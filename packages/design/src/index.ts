@@ -19,7 +19,7 @@ export {
   textColor,
   themeTokensOf,
   themes as themeTokens,
-  OS_THEME,
+  DEFAULT_THEME,
   THEMES,
 } from "./semantic";
 export type {

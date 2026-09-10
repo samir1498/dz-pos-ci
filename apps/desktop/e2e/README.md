@@ -152,7 +152,7 @@ second language on; use the looped `just e2e` or a single `--project`.
   `theme.spec.ts`, each of the four themes chosen, kept in the shop file and
   still there after a reload, with the painted background read off the
   document element rather than only the attribute; it hands the shop back to
-  "follow the machine" before it leaves, the way the settings spec hands the
+  Comptoir, the default, before it leaves, the way the settings spec hands the
   régime back, because it runs before the till specs and their screenshots
   are taken in the light theme;
   `till.spec.ts`, one whole cash sale from `/` landing on the till to the
@@ -187,7 +187,7 @@ second language on; use the looped `just e2e` or a single `--project`.
   geometry rather than its class list, a narrow window folding it into a
   sheet, the theme switch in the topbar, and the `/kit` page with each
   overlay opened. It runs before the settings and theme specs, so it hands
-  the shop back to "follow the machine" before it leaves. It writes the four
+  the shop back to Comptoir, the default, before it leaves. It writes the four
   kit screenshots under fr.
 - The twenty-three committed screenshots, 1280x800, full page: `products.png`,
   `customers.png`, `dashboard.png` and the kit's four (`kit-comptoir.png`,

@@ -25,8 +25,8 @@
       // knows the shop's choice once the API has answered, which is long
       // after first paint, so a shop on Registre saw a white flash on every
       // load. The provider mirrors the resolved name here on its way past.
-      // With nothing stored (a fresh machine) the machine's own preference
-      // picks between the two OS themes, which is what the provider does too.
+      // With nothing stored (a fresh machine) it is Comptoir, the default,
+      // which is what the provider resolves too.
       (function () {
         var names = ["comptoir", "registre", "observe", "observe-dark"];
         var theme = null;
@@ -36,10 +36,7 @@
           // storage blocked; fall through to the media query
         }
         if (names.indexOf(theme) === -1) {
-          theme =
-            window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
-              ? "registre"
-              : "comptoir";
+          theme = "comptoir";
         }
         document.documentElement.setAttribute("data-theme", theme);
       })();

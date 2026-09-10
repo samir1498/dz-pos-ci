@@ -67,7 +67,7 @@ layers, one source of values.
 | `src/theme.ts` | assembly | the single `theme` object with every reference resolved to a value. What TypeScript imports. |
 | `src/css.ts` | emitter | turns the same semantic layer into `:root` (Comptoir), one `[data-theme="<name>"]` block per other theme, and `[dir="rtl"]`. |
 | `src/themeCss.ts` | emitter | writes `apps/desktop/src/theme.css`: the blocks above, the shadcn/ui variable set pointing at our roles, and the Tailwind v4 `@theme` map. `just theme` runs it; `themeCss.test.ts` fails the gates on a stale file. |
-| `src/index.ts` | barrel | exports `theme`, `Theme`, `themes`, `THEMES`, `OS_THEME`, the semantic groups, `toCss` and `themeSelector`. It does not re-export `primitives`. |
+| `src/index.ts` | barrel | exports `theme`, `Theme`, `themes`, `THEMES`, `DEFAULT_THEME`, the semantic groups, `toCss` and `themeSelector`. It does not re-export `primitives`. |
 
 The theme axis. Tier 2 carries four themes, not one: `comptoir` (light,
 the default and what `:root` holds), `registre` (dark ink), `observe` (cool
@@ -81,8 +81,8 @@ the one screen nobody opened. It also holds each theme to a contrast floor,
 4.5:1 for body text on its own background and 3:1 for a status colour or
 the text on a filled control.
 
-`OS_THEME` names the two the operating system chooses between. The other
-two are picked by hand.
+`DEFAULT_THEME` is Comptoir, the theme a shop that has never chosen opens on; the operating system's light-or-dark setting is not consulted (Samir, 2026-09-10). The other
+three are picked by hand.
 
 The switch is `data-theme` on `<html>` and nothing else. Every theme is a
 block of CSS variables, so a component wears `bg-background` and

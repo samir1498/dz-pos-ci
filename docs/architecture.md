@@ -208,8 +208,9 @@ The switch is one attribute. `data-theme` on `<html>`, written by
 and `src/theme.test.ts` greps the source and fails the gates on a theme name
 or a `data-theme` outside the provider, the switcher and their test. The
 choice lives in the shop file (`preferences` table, `PUT /settings/theme`)
-so a second machine in the same shop opens on it; `null` means follow the
-operating system, which picks between Comptoir and Registre.
+so a second machine in the same shop opens on it; `null` means the shop has
+never chosen, and the app opens on Comptoir, the default (the operating
+system's light-or-dark setting is not consulted).
 
 Colour reaches a component as a utility class from that map and never as a
 literal. `apps/desktop/src/tokens.test.ts` fails the gates on `bg-[`,

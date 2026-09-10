@@ -7,7 +7,7 @@
 // component wears `bg-background` and `text-muted-foreground` and never learns
 // which theme is on.
 
-import { THEMES } from "@dzpos/design";
+import { DEFAULT_THEME, THEMES } from "@dzpos/design";
 import type { ThemeName } from "@dzpos/design";
 import type { ThemeDto } from "@dzpos/shared";
 import { Palette } from "lucide-react";
@@ -15,9 +15,6 @@ import { Palette } from "lucide-react";
 import { Icon } from "@/components/Icon";
 import { useTranslation, type Key } from "@/i18n";
 import { useTheme } from "@/lib/theme";
-
-/** "follow the machine", which is `null` on the wire and in the shop file. */
-const SYSTEM = "system";
 
 /**
  * The label key of each theme, spelled out rather than built from the name:
@@ -39,9 +36,8 @@ export const THEME_LABEL: Readonly<Record<ThemeName, Key>> = {
 };
 
 /** The value the select shows. Guards the read rather than asserting it. */
-function toChoice(value: string): ThemeDto | null {
-  if (value === SYSTEM) return null;
-  return THEMES.find((name): name is ThemeDto => name === value) ?? null;
+function toChoice(value: string): ThemeDto {
+  return THEMES.find((name): name is ThemeDto => name === value) ?? DEFAULT_THEME;
 }
 
 export function ThemeSwitcher({ className }: { className?: string }) {
@@ -56,10 +52,9 @@ export function ThemeSwitcher({ className }: { className?: string }) {
         aria-label={t("theme_label")}
         disabled={saving}
         className="rounded-md border border-border bg-card px-2 py-1 text-sm text-foreground"
-        value={choice ?? SYSTEM}
+        value={choice ?? DEFAULT_THEME}
         onChange={(e) => setChoice(toChoice(e.target.value))}
       >
-        <option value={SYSTEM}>{t("theme_system")}</option>
         {THEMES.map((name) => (
           <option key={name} value={name}>
             {t(THEME_LABEL[name])}
