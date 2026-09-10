@@ -657,18 +657,24 @@ fn a_ledger_row_carries_one_direction_and_a_customer_one_of_the_two_party_kinds(
         .execute(&mut conn)
         .unwrap();
     }
-    for value in [
-        "'opening'",
-        "'sale'",
-        "'payment'",
-        "'avoir'",
-        "'adjustment'",
-    ] {
+    // A payment is not on this list because it cannot be written the way the
+    // others are: migration 6 ties the mode to the kind, so a payment carries
+    // one and nothing else may. It is probed below with its mode.
+    for value in ["'opening'", "'sale'", "'avoir'", "'adjustment'"] {
         assert!(
             probe(&mut conn, "debt_ledger", "kind", value).is_ok(),
             "debt_ledger.kind refused {value}"
         );
     }
+    assert!(
+        diesel::sql_query(
+            "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+             credit_centimes, user_id, payment_mode) VALUES (1, 1, 'payment', 0, 0, 1, 'cash')"
+        )
+        .execute(&mut conn)
+        .is_ok(),
+        "debt_ledger.kind refused 'payment'"
+    );
     assert!(probe(&mut conn, "debt_ledger", "kind", "'writeoff'").is_err());
     for value in ["'company'", "'consumer'"] {
         assert!(
@@ -1461,6 +1467,18 @@ fn the_migration_reverts_and_reapplies() {
     // is what that copy has to carry.
     seed_a_facture_naming_a_customer(&mut conn);
 
+    // Read before the revert as well as after: an assertion that only ever
+    // says "not there" would go on passing if the pattern below stopped
+    // matching the CHECK the migration actually writes.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
+             AND name = 'debt_ledger' AND sql LIKE '%kind <> ''payment''%'"
+        ),
+        1,
+        "the migrated file does not carry the check this asserts is removed"
+    );
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     // The seventh one rebuilt the ledger to hang a two-column CHECK on it, so
@@ -1471,7 +1489,7 @@ fn the_migration_reverts_and_reapplies() {
         count(
             &mut conn,
             "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
-             AND name = 'debt_ledger' AND sql LIKE '%OR kind = ''payment''%'"
+             AND name = 'debt_ledger' AND sql LIKE '%kind <> ''payment''%'"
         ),
         0,
         "the check down.sql left the check behind"
@@ -1898,7 +1916,8 @@ fn the_debt_tables_keep_what_they_name_and_lose_only_what_they_may() {
         .unwrap();
     diesel::sql_query(
         "INSERT INTO debt_ledger (id, shop_id, customer_id, kind, debit_centimes, \
-         credit_centimes, user_id) VALUES (2, 1, 1, 'payment', 0, 50000, 1)",
+         credit_centimes, user_id, payment_mode) \
+         VALUES (2, 1, 1, 'payment', 0, 50000, 1, 'cash')",
     )
     .execute(&mut conn)
     .unwrap();
@@ -2118,28 +2137,32 @@ fn a_database_whose_ledger_lets_any_movement_carry_a_mode_takes_the_check() {
         "the rebuilt table lost its index"
     );
 
-    // What the file now refuses on its own: a mode on a movement nobody
-    // handed money over for.
-    for kind in ["opening", "sale", "avoir", "adjustment"] {
+    // What the file now refuses on its own, both ways round: a mode on a
+    // movement nobody handed money over for, and a payment that does not say
+    // what it was handed over in.
+    for (kind, mode) in [
+        ("opening", "'cash'"),
+        ("sale", "'cash'"),
+        ("avoir", "'cash'"),
+        ("adjustment", "'cash'"),
+        ("payment", "NULL"),
+    ] {
         assert!(
             diesel::sql_query(format!(
                 "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
                  credit_centimes, user_id, payment_mode) \
-                 VALUES (1, 1, '{kind}', 1000, 0, 1, 'cash')"
+                 VALUES (1, 1, '{kind}', 1000, 0, 1, {mode})"
             ))
             .execute(&mut conn)
             .is_err(),
-            "a {kind} was stamped with a payment mode"
+            "a {kind} with a mode of {mode} was taken"
         );
     }
-    // And what it still takes. A payment with the mode `pay` fills in, every
-    // other kind without one, and a payment with none: money settled out of
-    // credit the customer was already holding was handed over in nothing, and
-    // the table does not make one up for it.
+    // And what it still takes: a payment with the mode `pay` fills in, and
+    // every other kind without one.
     for (kind, mode) in [
         ("payment", "'cash'"),
         ("payment", "'card'"),
-        ("payment", "NULL"),
         ("sale", "NULL"),
         ("avoir", "NULL"),
     ] {

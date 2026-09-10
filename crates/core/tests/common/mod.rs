@@ -15,7 +15,8 @@
 
 use std::path::PathBuf;
 
-use diesel::SqliteConnection;
+use diesel::sql_types::{BigInt, Integer, Timestamp};
+use diesel::{RunQueryDsl, SqliteConnection};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
 use dzpos_core::services::shops;
@@ -113,4 +114,45 @@ pub fn goldens_dir(template: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../fixtures/print")
         .join(template)
+}
+
+/// One payment row, written straight into the ledger, carrying the mode
+/// migration 6 insists a payment carries.
+///
+/// No service writes this. `debt::append` stamps every row it is handed with
+/// no mode at all, which is right for every kind but this one; and `debt::pay`
+/// — the only writer of a payment in shipped code — settles the documents as
+/// it goes, which is the very thing a test of `allocate` on its own, or of a
+/// payment past what is owed, is not asking for. So the row is written the way
+/// `documents_service` writes its customer: in SQL, beside the test that needs
+/// it, and nowhere near the code under test.
+///
+/// The day is stamped rather than left to the column's default: the default is
+/// `CURRENT_TIMESTAMP`, which is UTC, while every row a service writes carries
+/// the shop's clock, and one hour a day the two disagree about which day a
+/// movement landed on. It is bound rather than written into the string so the
+/// stamp is spelled the way diesel spells every other row's; a statement reads
+/// the ledger in `created_at` order and a second spelling sorts on its own.
+pub fn a_payment_row(conn: &mut SqliteConnection, customer_id: i32, credit_centimes: i64) -> i32 {
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = Integer)]
+        id: i32,
+    }
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (shop_id, customer_id, kind, debit_centimes, \
+         credit_centimes, user_id, payment_mode, created_at) \
+         VALUES (?, ?, 'payment', 0, ?, ?, 'cash', ?)",
+    )
+    .bind::<Integer, _>(SHOP)
+    .bind::<Integer, _>(customer_id)
+    .bind::<BigInt, _>(credit_centimes)
+    .bind::<Integer, _>(OWNER)
+    .bind::<Timestamp, _>(dzpos_core::services::clock::now())
+    .execute(conn)
+    .unwrap();
+    diesel::sql_query("SELECT last_insert_rowid() AS id")
+        .get_result::<Id>(conn)
+        .unwrap()
+        .id
 }

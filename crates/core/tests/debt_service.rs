@@ -26,7 +26,7 @@ const OWNER: i32 = 1;
 
 mod common;
 
-use common::{a_customer, a_fiche as fiche, open_temp};
+use common::{a_customer, a_fiche as fiche, a_payment_row, open_temp};
 
 fn movement(customer_id: i32, kind: DebtKind, debit: i64, credit: i64) -> NewDebtEntry {
     NewDebtEntry {
@@ -56,12 +56,7 @@ fn a_balance_is_the_sum_of_what_was_appended() {
         movement(customer, DebtKind::Sale, 250_000, 0),
     )
     .unwrap();
-    debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 100_000),
-    )
-    .unwrap();
+    a_payment_row(&mut conn, customer, 100_000);
     assert_eq!(
         debt::balance(&mut conn, SHOP, customer).unwrap(),
         Money::centimes(150_000)
@@ -80,12 +75,7 @@ fn a_customer_who_overpays_is_owed_money() {
         movement(customer, DebtKind::Sale, 100_000, 0),
     )
     .unwrap();
-    debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 150_000),
-    )
-    .unwrap();
+    a_payment_row(&mut conn, customer, 150_000);
     assert_eq!(
         debt::balance(&mut conn, SHOP, customer).unwrap(),
         Money::centimes(-50_000)
@@ -256,18 +246,13 @@ fn an_allocation_says_which_document_a_payment_settled() {
     let (_dir, mut conn) = open_temp();
     let customer = a_customer(&mut conn, "Entreprise Benali");
     a_document(&mut conn, 1, SHOP, 1);
-    let payment = debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 50_000),
-    )
-    .unwrap();
+    let payment = a_payment_row(&mut conn, customer, 50_000);
 
     let made = debt::allocate(
         &mut conn,
         SHOP,
         NewDebtAllocation {
-            payment_ledger_id: payment.id,
+            payment_ledger_id: payment,
             document_id: 1,
             amount: Money::centimes(50_000),
         },
@@ -283,19 +268,14 @@ fn an_allocation_of_nothing_is_refused() {
     let (_dir, mut conn) = open_temp();
     let customer = a_customer(&mut conn, "Entreprise Benali");
     a_document(&mut conn, 1, SHOP, 1);
-    let payment = debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 50_000),
-    )
-    .unwrap();
+    let payment = a_payment_row(&mut conn, customer, 50_000);
 
     for amount in [Money::ZERO, Money::centimes(-1)] {
         let err = debt::allocate(
             &mut conn,
             SHOP,
             NewDebtAllocation {
-                payment_ledger_id: payment.id,
+                payment_ledger_id: payment,
                 document_id: 1,
                 amount,
             },
@@ -320,18 +300,13 @@ fn an_allocation_never_reaches_across_shops() {
     let customer = a_customer(&mut conn, "Entreprise Benali");
     a_document(&mut conn, 1, SHOP, 1);
     a_document(&mut conn, 2, 2, 1);
-    let payment = debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 50_000),
-    )
-    .unwrap();
+    let payment = a_payment_row(&mut conn, customer, 50_000);
 
     let stolen_document = debt::allocate(
         &mut conn,
         SHOP,
         NewDebtAllocation {
-            payment_ledger_id: payment.id,
+            payment_ledger_id: payment,
             document_id: 2,
             amount: Money::centimes(50_000),
         },
@@ -352,7 +327,7 @@ fn an_allocation_never_reaches_across_shops() {
         &mut conn,
         2,
         NewDebtAllocation {
-            payment_ledger_id: payment.id,
+            payment_ledger_id: payment,
             document_id: 2,
             amount: Money::centimes(50_000),
         },
@@ -425,7 +400,7 @@ fn the_statement_runs_the_balance_up_from_the_oldest_movement() {
     let id = a_customer(&mut conn, "Brahim");
     debt::append(&mut conn, SHOP, movement(id, DebtKind::Opening, 150_000, 0)).unwrap();
     debt::append(&mut conn, SHOP, movement(id, DebtKind::Sale, 50_000, 0)).unwrap();
-    debt::append(&mut conn, SHOP, movement(id, DebtKind::Payment, 0, 70_000)).unwrap();
+    a_payment_row(&mut conn, id, 70_000);
 
     let statement = debt::statement(&mut conn, SHOP, id).unwrap();
     assert_eq!(
@@ -1018,25 +993,12 @@ fn a_document_already_settled_by_an_allocation_nobody_wrote_a_payment_for_refuse
     // An allocation written straight into the table moves no column, so the
     // document still reads as unpaid while it has already been settled in
     // full. Σ of the allocations is the only thing that catches it.
-    let payment = debt::append(
-        &mut conn,
-        SHOP,
-        NewDebtEntry {
-            customer_id: customer,
-            document_id: None,
-            kind: DebtKind::Payment,
-            debit: Money::ZERO,
-            credit: Money::centimes(100_000),
-            user_id: OWNER,
-            note: None,
-        },
-    )
-    .unwrap();
+    let payment = a_payment_row(&mut conn, customer, 100_000);
     debt::allocate(
         &mut conn,
         SHOP,
         NewDebtAllocation {
-            payment_ledger_id: payment.id,
+            payment_ledger_id: payment,
             document_id: document,
             amount: Money::centimes(100_000),
         },
@@ -1103,25 +1065,12 @@ fn a_named_document_cannot_be_settled_past_what_it_asked_for() {
 
     // Settled in full by a row that moved no column, so the document still
     // reads as asking for its whole amount.
-    let forged = debt::append(
-        &mut conn,
-        SHOP,
-        NewDebtEntry {
-            customer_id: customer,
-            document_id: None,
-            kind: DebtKind::Payment,
-            debit: Money::ZERO,
-            credit: Money::centimes(100_000),
-            user_id: OWNER,
-            note: None,
-        },
-    )
-    .unwrap();
+    let forged = a_payment_row(&mut conn, customer, 100_000);
     debt::allocate(
         &mut conn,
         SHOP,
         NewDebtAllocation {
-            payment_ledger_id: forged.id,
+            payment_ledger_id: forged,
             document_id: document,
             amount: Money::centimes(100_000),
         },

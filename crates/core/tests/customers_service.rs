@@ -19,7 +19,7 @@ const OWNER: i32 = 1;
 
 mod common;
 
-use common::open_temp;
+use common::{a_payment_row, open_temp};
 
 fn fiche(name: &str) -> NewCustomer {
     NewCustomer {
@@ -478,20 +478,7 @@ fn the_list_and_the_fiche_carry_the_balance_the_ledger_sums_to() {
     )
     .unwrap();
     let clear = customers::create(&mut conn, SHOP, OWNER, fiche("Zoubir"), None).unwrap();
-    debt::append(
-        &mut conn,
-        SHOP,
-        debt::NewDebtEntry {
-            customer_id: owing.id,
-            document_id: None,
-            kind: debt::DebtKind::Payment,
-            debit: Money::ZERO,
-            credit: Money::centimes(50_000),
-            user_id: OWNER,
-            note: None,
-        },
-    )
-    .unwrap();
+    a_payment_row(&mut conn, owing.id, 50_000);
 
     let rows = customers::list_with_balance(&mut conn, SHOP, None).unwrap();
     let balances: Vec<(String, Money)> = rows

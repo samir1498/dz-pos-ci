@@ -13,21 +13,27 @@
 -- is rebuilt. Nothing else about it changes. Same columns in the same order,
 -- same per-column checks, same index.
 --
--- Not the stronger rule that every payment carries a mode. A payment is
--- money handed over in something today, and `pay` always says which; but a
--- settlement out of credit the customer was already holding is money nobody
--- handed over, and a table that demanded a mode there would be asking for a
--- 'cash' nobody counted.
+-- The rule goes both ways. A payment is money handed over in something and
+-- `pay`, the one writer of a payment row, always says which; every other kind
+-- is money nobody handed over and carries none. A settlement out of credit
+-- the customer was already holding writes no ledger row at all
+-- (`services::debt::settle_from_credit` writes allocations against the credit
+-- rows that are already there), so there is no payment left that legitimately
+-- has nothing to say: a mode-less payment is a repair or an import that lost
+-- the column, and the table refuses it.
 --
 -- Additive in what it holds: every movement keeps its id, because
 -- `debt_allocations.payment_ledger_id` points at those ids and an id that
 -- moved would say a facture was settled by somebody else's payment.
 --
 -- Nothing this app has written can fail the new rule. `services::debt::pay`
--- is the one writer that fills the mode in and `append_at` writes NULL on
--- every other kind, so the rebuild's INSERT is a copy and not a repair. What
--- the CHECK is for is the file that came from somewhere else: a restored
--- backup, a row repaired by hand, an import.
+-- is the one writer of a payment row and it fills the mode in; `append_at`
+-- writes NULL whatever kind it is handed, and no shipped caller hands it a
+-- payment. So the rebuild's INSERT is a copy and not a repair. A caller that
+-- did hand `append_at` a payment would now be refused here rather than
+-- writing a mode-less row. What the CHECK is for beyond that is the file that
+-- came from somewhere else: a restored backup, a row repaired by hand, an
+-- import.
 
 -- Step 1 of the rebuild, and it has to be outside a transaction: a pragma
 -- inside one is a no-op. `metadata.toml` tells diesel not to wrap this file.
@@ -55,10 +61,11 @@ CREATE TABLE debt_ledger_checked (
         CHECK (payment_mode IS NULL OR payment_mode IN ('cash', 'card')),
     -- One direction per row, as migration 2 wrote it.
     CHECK (debit_centimes = 0 OR credit_centimes = 0),
-    -- And the mode belongs to a payment and to nothing else, which is what
+    -- And the mode is on a payment and on nothing else, which is what
     -- migration 4's own comment says the column means and what an ALTER
-    -- TABLE could not say.
-    CHECK (payment_mode IS NULL OR kind = 'payment')
+    -- TABLE could not say. Written as an equality so it holds in both
+    -- directions: no other kind carries a mode, and no payment lacks one.
+    CHECK ((payment_mode IS NULL) = (kind <> 'payment'))
 ) STRICT;
 
 -- Ids carried over rather than reassigned, the way the documents rebuild
