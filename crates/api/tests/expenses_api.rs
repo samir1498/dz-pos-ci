@@ -146,7 +146,21 @@ async fn a_month_answers_its_own_rows_and_the_total_the_core_summed() {
 async fn a_bad_month_a_bad_day_and_a_bad_amount_are_refused_by_the_field_they_are_wrong_on() {
     let h = harness();
     let rent = a_category(&h.app, "rent").await;
-    for month in ["2026-9", "2026-13", "septembre", "2026-09-01"] {
+    // The last three are the round trip. `+026-09` is four characters of
+    // year that parse as 26, and `2026-+9` two of month that parse as 9, so
+    // only writing the month back out and comparing catches them; a plus is
+    // sent percent-encoded because a bare one is a space on a query string.
+    // A leading space is there to prove the guard covers the whole shape and
+    // not one character of it.
+    for month in [
+        "2026-9",
+        "2026-13",
+        "septembre",
+        "2026-09-01",
+        "%2B026-09",
+        "2026-%2B9",
+        "%20026-09",
+    ] {
         let (status, body) = call(&h.app, "GET", &format!("/expenses?month={month}"), None).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "month {month}");
         assert_eq!(body["error"]["field"], json!("month"), "month {month}");

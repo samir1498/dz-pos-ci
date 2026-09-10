@@ -1547,13 +1547,21 @@ impl TryFrom<CashPosition> for CashPositionDto {
 
 /// `YYYY-MM` and nothing else: a month is the range a figure is asked over,
 /// and "2026-9" or a day would be answered for another one.
+///
+/// The month is written back out and compared with what came in, the way
+/// `parse_day` compares its day. Rust's integer parser takes a sign, so
+/// "+026-09" is four characters of year that read as 26 and "2026-+9" two of
+/// month that read as 9: both pass every check on shape and on length, and
+/// only the round trip catches them. A figure answered for the year 26 is one
+/// nobody would think to doubt.
 pub fn parse_month(field: &'static str, text: &str) -> Result<Month, ApiError> {
     let refuse = || ApiError::Request(CoreError::validation(field, "a month is written YYYY-MM"));
     let (year, month) = text.split_once('-').ok_or_else(refuse)?;
-    if year.len() != 4 || month.len() != 2 {
-        return Err(refuse());
-    }
     let year: i32 = year.parse().map_err(|_| refuse())?;
     let month: u32 = month.parse().map_err(|_| refuse())?;
-    Month::new(year, month).map_err(ApiError::Request)
+    let parsed = Month::new(year, month).map_err(ApiError::Request)?;
+    if parsed.as_text() != text {
+        return Err(refuse());
+    }
+    Ok(parsed)
 }
