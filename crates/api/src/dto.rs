@@ -912,9 +912,9 @@ impl From<PartyKindDto> for PartyKind {
 }
 
 /// Why the debt moved (features.md §2). The whole union crosses from the
-/// first version: the ledger already holds `sale` and `payment` rows that T3
-/// writes, and a screen that met an unknown kind could only refuse the whole
-/// answer.
+/// first version: the ledger already holds the `sale` and `payment` rows the
+/// till writes, and a screen that met an unknown kind could only refuse the
+/// whole answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export_to = "DebtKindDto.ts")]
 #[serde(rename_all = "lowercase")]
@@ -1020,7 +1020,7 @@ pub struct CustomerDto {
     pub nis: Option<String>,
     pub ai: Option<String>,
     /// Null is no limit at all, zero is no credit at all: two different
-    /// answers, and the till acts on them differently (T3).
+    /// answers, and the till acts on them differently.
     pub credit_limit_centimes: Option<i64>,
     pub warn_threshold_centimes: Option<i64>,
     pub notes: Option<String>,

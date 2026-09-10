@@ -44,7 +44,7 @@ pub enum CoreError {
     /// `validation`, so a screen that already translates it says the same
     /// sentence and reads the amount out of the payload.
     ///
-    /// Money that came in above a debt is an avoir's business (T6), never a
+    /// Money that came in above a debt is an avoir's business, never a
     /// credit balance a payment quietly opened.
     #[error("a payment is never more than what the customer owes")]
     PaymentAboveDebt { outstanding_centimes: i64 },

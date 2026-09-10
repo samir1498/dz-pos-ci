@@ -88,7 +88,8 @@ export function BackupsPanel() {
   function askThenRestore(name: string) {
     setDone(null);
     setServerError(null);
-    // A confirm dialog is the M1 answer, translated like every other string.
+    // A confirm dialog is the answer until roles land, translated like
+    // every other string.
     // A restore throws away everything since the copy, so it is never one
     // click away.
     if (!window.confirm(t("backups_confirm_restore"))) return;

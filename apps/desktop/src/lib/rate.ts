@@ -19,7 +19,7 @@ export const RATES: readonly { bps: number; key: Key }[] = [
  * does not carry. Both the sign and the decimal separator come from i18n
  * rather than a literal "%" and a hardcoded French comma.
  *
- * Ruling (coordinator review of T7, 2026-09-09): numbers follow the shop's
+ * Ruling (coordinator review, 2026-09-09): numbers follow the shop's
  * own format, not the UI language. Amounts, quantities and rates all read
  * comma-decimal in fr, en and ar today, so `decimal_separator` is "," in
  * every dictionary; it stays a per-language key rather than a bare constant

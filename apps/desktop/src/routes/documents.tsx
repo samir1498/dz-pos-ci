@@ -36,6 +36,7 @@ import {
   saleFactureQueryKey,
   saleSheetPrefixes,
   saleTicketQueryKey,
+  saleQueryKey,
   salesQueryKey,
   salesQueryPrefix,
 } from "@/api";
@@ -200,7 +201,7 @@ export function DocumentsScreen() {
 function DocumentDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const { t } = useTranslation();
   const [paper, setPaper] = useState<PrintPaper>("a4");
-  const document = useQuery({ queryKey: ["sale", id], queryFn: () => api.getSale(id) });
+  const document = useQuery({ queryKey: saleQueryKey(id), queryFn: () => api.getSale(id) });
 
   if (document.isPending) return <p>{t("products_loading")}</p>;
   if (document.isError) {
@@ -455,7 +456,7 @@ async function everythingItTouched(
   customerId: number | null,
 ): Promise<void> {
   const keys: readonly (readonly (string | number | undefined)[])[] = [
-    ["sale", documentId],
+    saleQueryKey(documentId),
     saleAvoirsQueryKey(documentId),
     salesQueryPrefix(),
     ...saleSheetPrefixes(documentId),

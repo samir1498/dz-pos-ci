@@ -2,8 +2,8 @@
 
 /**
  * Why the debt moved (features.md §2). The whole union crosses from the
- * first version: the ledger already holds `sale` and `payment` rows that T3
- * writes, and a screen that met an unknown kind could only refuse the whole
- * answer.
+ * first version: the ledger already holds the `sale` and `payment` rows the
+ * till writes, and a screen that met an unknown kind could only refuse the
+ * whole answer.
  */
 export type DebtKindDto = "opening" | "sale" | "payment" | "avoir" | "adjustment";

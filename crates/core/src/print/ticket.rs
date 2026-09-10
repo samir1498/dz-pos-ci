@@ -27,7 +27,7 @@ const STAMP_FORMAT: &str = "%d/%m/%Y %H:%M";
 /// The seller's identifiers, in the order a ticket prints them. Only the
 /// ones the document snapshotted appear: a ticket carries the seller
 /// identity and no empty rows (features.md, party identifiers row; a
-/// facture's fuller block is M2's).
+/// facture carries the fuller block of both parties).
 struct SellerId {
     label: &'static str,
     value: String,

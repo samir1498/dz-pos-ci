@@ -25,7 +25,7 @@ const tempBackups = path.join(artifactsDir, "backups");
 
 // Ports beside the dev ones (4317 API, 5173 Vite) so a running `just api`
 // / `just dev` pair does not collide with a test run. Two checkouts on one
-// box (a worktree per task in the M1 loop) each pass their own pair.
+// box (a worktree per task) each pass their own pair.
 function port(name: string, fallback: number): number {
   const raw = process.env[name];
   const value = raw === undefined || raw === "" ? fallback : Number(raw);
@@ -39,7 +39,7 @@ const webPort = port("DZPOS_E2E_WEB_PORT", 5174);
 const apiUrl = `http://127.0.0.1:${apiPort}`;
 const baseURL = `http://127.0.0.1:${webPort}`;
 
-// One project per UI language (T7). Each sets `dzpos-lang` in localStorage
+// One project per UI language. Each sets `dzpos-lang` in localStorage
 // through `storageState` before the app's first script runs, the way
 // I18nProvider reads it (src/i18n/index.tsx, `initialLang`), and a browser
 // `locale` matching it so the OS-level bits (date pickers, number input

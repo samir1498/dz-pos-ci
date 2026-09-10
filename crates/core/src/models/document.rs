@@ -144,8 +144,9 @@ pub struct Document {
     /// whoever walked in; a facture always carries one, because it is made
     /// out to somebody (décret 05-468 art. 3).
     pub buyer: Option<PartyBlock>,
-    /// The facture an avoir is written against. T4 owns the rule about which
-    /// factures may be named; here it is only carried.
+    /// The facture an avoir is written against. The rule about which
+    /// factures may be named lives in `services::avoir`; here it is only
+    /// carried.
     pub ref_document_id: Option<i32>,
     /// `None` when the document has no customer and so no balance to print.
     pub balance: Option<BalanceTriple>,

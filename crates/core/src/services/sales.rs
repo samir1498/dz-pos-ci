@@ -1,12 +1,12 @@
 //! The till's one write: a sale becomes a fiscal document, its stock leaves
 //! the ledger, and both commit together (features.md §1, Sale).
 //!
-//! M2 adds the sale on credit. It names a customer, it snapshots the buyer
-//! block onto the document, it writes one `sale` movement on that customer's
-//! ledger and it stores the balance triple the paper prints, all inside the
-//! same transaction as the document and the stock.
+//! A sale on credit names a customer. It snapshots the buyer block onto the
+//! document, writes one `sale` movement on that customer's ledger and stores
+//! the balance triple the paper prints, all inside the same transaction as
+//! the document and the stock.
 //!
-//! M2 also adds the choice of paper (features.md §3). Loi 04-02 art. 10, as
+//! The caller also chooses the paper (features.md §3). Loi 04-02 art. 10, as
 //! rewritten by loi 10-06 art. 3, decides ticket against facture by who the
 //! buyer is and never by an amount or by how the sale is paid, so the
 //! operator names the kind on the request and a facture is refused unless

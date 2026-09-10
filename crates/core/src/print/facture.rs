@@ -10,11 +10,11 @@
 //! totals (décret 05-468 art. 3), and splitting them into three files would
 //! have been three goldens of the same layout drifting apart.
 //!
-//! T9 asked whether the avoir wanted a file of its own and the answer was
-//! no: what it does not share with a facture is a title, a line naming the
-//! facture it is written against, a words line that says avoir, and the
-//! stamp row it never carries. Four conditionals against a second copy of
-//! the parties, the lines, the totals and the signature block.
+//! The avoir has no file of its own on purpose: what it does not share with
+//! a facture is a title, a line naming the facture it is written against, a
+//! words line that says avoir, and the stamp row it never carries. Four
+//! conditionals against a second copy of the parties, the lines, the totals
+//! and the signature block.
 
 use askama::Template;
 use chrono::NaiveDateTime;
@@ -60,8 +60,8 @@ impl Paper {
 }
 
 /// The day the shop cancelled a facture and why, as the caller read them
-/// beside the document. They are not on `Document`: T6 adds the
-/// `cancelled_at` and `cancel_reason` columns, and a caller that has them
+/// beside the document. They are not on `Document`: `cancelled_at` and
+/// `cancel_reason` are columns on the row, and a caller that has read them
 /// hands them over here. Without them a cancelled facture still prints as
 /// cancelled, because the status is on the row; it just cannot say when or
 /// why.
@@ -304,17 +304,17 @@ pub fn render_facture_with(
         ));
     };
     // Only a facture has a cancelled wording ("facture annulée",
-    // features.md, Numbering row). Nothing cancels an avoir or a proforma
-    // in M2, and inventing the French for it here would be a fiscal wording
-    // nobody reviewed.
+    // features.md, Numbering row). Nothing cancels an avoir or a proforma,
+    // and inventing the French for it here would be a fiscal wording nobody
+    // reviewed.
     if doc.status == DocumentStatus::Cancelled && doc.kind != DocumentKind::Facture {
         return Err(CoreError::render(
             "only a facture has a printed cancelled wording",
         ));
     }
     // An avoir hands the lines back and asks for nothing, so it carries no
-    // droit de timbre (T6, and the stamp is a cash sale's tax anyway, Code
-    // du timbre 2026 art. 100-I). A stored avoir carrying one contradicts
+    // droit de timbre (the stamp is a cash sale's tax anyway, Code du
+    // timbre 2026 art. 100-I). A stored avoir carrying one contradicts
     // the rule that wrote it: the recap refusal above is the honest answer
     // here too, because dropping the row hands the buyer a total whose parts
     // do not add up.
@@ -323,7 +323,7 @@ pub fn render_facture_with(
             "an avoir carries a droit de timbre and has no printable form",
         ));
     }
-    // A proforma moves no stock and creates no debt (T6), and the triple it
+    // A proforma moves no stock and creates no debt, and the triple it
     // stores is three zeroes. One that carries a debt contradicts the rule
     // that wrote it: printing the block would say a quote moved a ledger and
     // dropping it would hide that the stored row says otherwise.
@@ -506,7 +506,7 @@ fn view(
         in_words_label: text(in_words_key(doc.kind), lang),
         in_words,
         // A proforma settles nothing and shows no ledger: it stores a triple
-        // of zeroes (T6) and printing it would be a debt of nothing said
+        // of zeroes and printing it would be a debt of nothing said
         // three times under a heading that says "solde".
         balance: match doc.kind {
             DocumentKind::Proforma => None,

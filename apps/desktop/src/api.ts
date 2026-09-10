@@ -138,6 +138,13 @@ export function saleSheetPrefixes(id: number): readonly (readonly (string | numb
   ];
 }
 
+/** One document read on its own, which is what the documents screen opens a
+ * row into. A factory beside the list's, so the id is always the second
+ * element and no call site spells the key out. */
+export function saleQueryKey(id: number): readonly (string | number)[] {
+  return ["sale", id];
+}
+
 /** The document list, keyed by the kind filter so the narrowed list and the
  * whole one are two entries and a filter change is not answered from the
  * other's cache. `undefined` is every kind, which is what the route reads a

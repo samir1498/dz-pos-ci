@@ -29,7 +29,8 @@ pub struct Customer {
     pub ai: Option<String>,
     /// What the customer may owe at most. `None` is no limit at all and
     /// `Some(Money::ZERO)` is no credit at all; they are different answers
-    /// and the till acts on them differently (T3 owns the check).
+    /// and the till acts on them differently. The check itself is in
+    /// `services::sales`, not here.
     pub credit_limit: Option<Money>,
     /// Where the till starts warning. `None` is no warning.
     pub warn_threshold: Option<Money>,

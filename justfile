@@ -90,7 +90,7 @@ tauri:
 
 # ---- e2e (headless chromium; starts its own API and Vite) ----
 
-# the whole suite, once per UI language project (fr, en, ar; T7). Each
+# the whole suite, once per UI language project (fr, en, ar). Each
 # `playwright test` invocation starts its own API and Vite pair and its
 # webServer command deletes the db file first, so three invocations give
 # three empty databases; three projects in one invocation would share the

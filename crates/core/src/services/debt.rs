@@ -400,7 +400,7 @@ pub struct Payment {
 ///
 /// A payment is never more than the customer owes. Money over the debt is not
 /// a payment, it is a credit the shop is holding, and the only thing that
-/// opens one is an avoir (T6): a payment allowed to overshoot would open one
+/// opens one is an avoir: a payment allowed to overshoot would open one
 /// silently, with no document behind it and nothing on the statement saying
 /// where it came from.
 ///

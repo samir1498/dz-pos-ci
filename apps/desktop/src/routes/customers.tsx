@@ -4,7 +4,7 @@
 //
 // Nothing on this screen deletes a customer: the ledger holds the fiche, so a
 // shop that has stopped dealing with somebody clears the active box instead,
-// and the till's picker (T3) then leaves them out.
+// and the till's picker then leaves them out.
 
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -407,7 +407,7 @@ function CustomerForm({
           ai: cleared(value.ai),
           // A blank limit is "no limit at all", which is not a limit of
           // nothing: the two are different answers and the till acts on them
-          // differently (T3).
+          // differently.
           credit_limit_centimes: amount(value.creditLimit),
           warn_threshold_centimes: amount(value.warnThreshold),
           notes: cleared(value.notes),
