@@ -7,6 +7,7 @@ pub mod customers;
 pub mod products;
 pub mod sales;
 pub mod settings;
+pub mod suppliers;
 
 use axum::extract::State;
 use axum::Json;

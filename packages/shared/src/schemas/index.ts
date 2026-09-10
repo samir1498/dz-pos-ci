@@ -43,3 +43,11 @@ export {
   paymentMethodSchema,
   paymentSchema,
 } from "./customer";
+export {
+  supplierAllocationSchema,
+  supplierDebtKindSchema,
+  supplierEntrySchema,
+  supplierLedgerSchema,
+  supplierSchema,
+  supplierStatementSchema,
+} from "./supplier";

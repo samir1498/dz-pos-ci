@@ -55,6 +55,23 @@ pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<Purchase>, 
     Ok(rows.into_iter().map(Purchase::from).collect())
 }
 
+/// One supplier's orders, oldest first: the order money fills them in
+/// (features.md §2, oldest-first settlement). `purchase_date` is a day and
+/// two orders land on one often, so the id breaks the tie, and the id is the
+/// order they were written in.
+pub fn of_supplier(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    supplier_id: i32,
+) -> Result<Vec<i32>, CoreError> {
+    Ok(purchases::table
+        .filter(purchases::shop_id.eq(shop_id))
+        .filter(purchases::supplier_id.eq(supplier_id))
+        .order((purchases::purchase_date.asc(), purchases::id.asc()))
+        .select(purchases::id)
+        .load(conn)?)
+}
+
 /// Moves the purchase to another state. The only column of a purchase this
 /// layer updates: everything else about an order is settled when it is saved,
 /// and what has arrived is counted on the lines.

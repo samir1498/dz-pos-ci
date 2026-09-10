@@ -49,8 +49,45 @@ blank), category, unit of measure (piece, kg, litre, box), cost price,
 selling price, wholesale price (optional), quantity on hand, low-stock
 threshold, TVA rate (see open decision 3), active flag. Batches/lots: later.
 
-**Supplier.** Name (unique), phone, address, RC, NIF, NIS, AI, opening debt
-(money owed before the software existed), notes.
+**Supplier.** Name (unique inside the shop), phone, address, RC, NIF, NIS, AI,
+notes, and an `active` flag the way a product has one. The opening debt is not
+a column: it is the first `opening` row of the supplier ledger, so the balance
+has one source and correcting it later is an `adjustment` movement a comptable
+can read. There is no credit limit and no warning threshold, and no
+`party_kind`: those are what a shop grants a buyer, and nothing it hands a
+supplier is a document it issues. A second fiche under one name is refused on
+the name, because two fiches would read at a counter as one party carrying two
+balances.
+
+**Supplier debt.** Append-only per supplier, the mirror of the customer ledger
+(§2): a movement is one of `opening`, `purchase`, `payment`, `return` or
+`adjustment`, it raises what the shop owes or lowers it, never both and never
+neither, and the balance is the sum of the table rather than a stored number.
+It may go below zero, which is an advance sitting with the supplier and is
+named as one rather than shown as a minus. A movement carries how it was paid
+exactly when it is a payment: `cash` or `card`, and null on every other kind.
+
+A payment settles the supplier's open orders oldest first and stops where the
+money does; what no order can take stays on the balance, which is what a
+payment against an opening balance is. What is still owed on one order is
+derived from the ledger and the allocations rather than stored, so nothing has
+to be written back to a purchase and no column can disagree with the sum. A
+payment above what is owed is refused with the outstanding figure, the way the
+customer side's is. A correction is an `adjustment` movement, optionally
+noted; downwards it settles the orders oldest first, upwards it is debt no
+order carries.
+
+The suppliers screen offers no delete (the ledger and the orders hold the
+fiche). Closing a fiche that still carries something (a balance either way, or
+an order still asking to be paid) needs a reason, and the reason goes into the
+audit log beside the balance and the number of orders left open. The fiche
+stays usable after it: payments and corrections still land on a closed fiche,
+and a purchase is what it refuses (T3). One supplier has an address of its
+own, `/suppliers/$id`, and the route and the list's expanded row render one
+and the same component, so the two cannot drift. The account over a range of
+days is answered as JSON (`GET /suppliers/{id}/statement?from=&to=`): a
+printed statement is a paper a customer is handed, and the shop's own copy of
+what it owes is a screen.
 
 **Purchase.** Supplier, supplier's document number, date, lines (product,
 quantity, unit cost), transport and extra costs, amount paid now, due date

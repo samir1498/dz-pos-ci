@@ -140,6 +140,7 @@ code and shows the message to nobody.
 | `party_ids` | 422 | a facture either side of which is short of what décret 05-468 art. 3 asks | `party_side`, `missing_ids` |
 | `not_found` | 404 | a row that is not there, or is another shop's | |
 | `duplicate_barcode` | 409 | a barcode a product already holds | |
+| `conflict` | 409 | a value another row of the shop already holds where the file allows one (a supplier's name) | `field` |
 | `exhausted` | 409 | a number series the shop hands out (in-store barcodes, a document kind's series for one year) has no next value | |
 | `bad_request` | 422 | a body that did not parse, before any service ran | |
 | `unauthorized` | 401 | no launch token, or the wrong one; the answer carries `WWW-Authenticate: Bearer` | |
@@ -148,6 +149,11 @@ code and shows the message to nobody.
 | `storage` | 500 | the shop file could not complete the operation | |
 | `print` | 500 | a stored row the template will not render | |
 | `restart_needed`, `restore_failed_restart_needed` | 500 | the shop file is not open in this process any more | |
+
+`conflict` is a refusal about a row that is already there rather than about
+what the caller wrote, which is why it is not a `validation`: a name another
+supplier already holds and a name too long for a ticket are two sentences a
+screen says differently, and both used to arrive as a `validation` on `name`.
 
 The three codes that carry figures are the one exception to "a code and a
 sentence", and the payload has six optional fields for them:
