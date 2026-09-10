@@ -5,7 +5,7 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
-use crate::models::stock::{StockMovement, StockMovementRow, StockMovementRowWrite};
+use crate::models::stock::{Counted, StockMovement, StockMovementRow, StockMovementRowWrite};
 use crate::schema::{products, stock_movements};
 
 pub fn insert(
@@ -59,16 +59,42 @@ pub fn add_to_cached_quantity(
     Ok(())
 }
 
+/// Writes a cached quantity outright, which only the recount does: every
+/// other caller moves the cache by a movement it is writing beside it
+/// (`add_to_cached_quantity`). Zero rows changed means the product is not in
+/// this shop.
+pub fn set_cached_quantity(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    product_id: i32,
+    qty_milli: i64,
+) -> Result<(), CoreError> {
+    let changed = diesel::update(
+        products::table
+            .filter(products::shop_id.eq(shop_id))
+            .filter(products::id.eq(product_id)),
+    )
+    .set(products::qty_on_hand_milli.eq(qty_milli))
+    .execute(conn)?;
+    if changed == 0 {
+        return Err(CoreError::NotFound {
+            entity: "product",
+            id: product_id,
+        });
+    }
+    Ok(())
+}
+
 /// Every product of the shop with its cached quantity and the sum its ledger
 /// explains. A product with no movement sums to zero.
 pub fn cached_and_ledger(
     conn: &mut SqliteConnection,
     shop_id: i32,
-) -> Result<Vec<(i32, i64, i64)>, CoreError> {
-    let cached: Vec<(i32, i64)> = products::table
+) -> Result<Vec<Counted>, CoreError> {
+    let cached: Vec<(i32, String, i64)> = products::table
         .filter(products::shop_id.eq(shop_id))
         .order(products::id.asc())
-        .select((products::id, products::qty_on_hand_milli))
+        .select((products::id, products::name, products::qty_on_hand_milli))
         .load(conn)?;
     // Written out rather than built with the dsl: diesel types SUM over a
     // BigInt column as Nullable<Numeric>, which would put a decimal on a path
@@ -86,14 +112,23 @@ pub fn cached_and_ledger(
     )
     .bind::<diesel::sql_types::Integer, _>(shop_id)
     .load(conn)?;
+    // Indexed rather than scanned per product: the recount walks the whole
+    // catalogue, and a shop with a few thousand products was doing a few
+    // million comparisons to answer a question SQLite had already grouped.
+    let by_product: std::collections::HashMap<i32, i64> = sums
+        .into_iter()
+        .map(|s| (s.product_id, s.total_milli))
+        .collect();
     Ok(cached
         .into_iter()
-        .map(|(id, qty)| {
-            let ledger = sums
-                .iter()
-                .find(|s| s.product_id == id)
-                .map_or(0, |s| s.total_milli);
-            (id, qty, ledger)
+        .map(|(product_id, name, cached_milli)| Counted {
+            product_id,
+            name,
+            cached_milli,
+            // A product with no movement at all is not missing from the
+            // answer: its ledger explains nothing, which is a sum of zero,
+            // and a cache above that is drift like any other.
+            ledger_milli: by_product.get(&product_id).copied().unwrap_or(0),
         })
         .collect())
 }

@@ -390,5 +390,18 @@
   "error_supplier_name_taken": "Another supplier already carries that name.",
   "error_supplier_payment_above_debt": "The payment is above what the shop owes this supplier. Still owed:",
   "error_conflict": "That value is already used in this shop.",
-  "error_name_too_long": "Name too long: 200 characters at most."
+  "error_name_too_long": "Name too long: 200 characters at most.",
+  "settings_stock_recount": "Stock recount",
+  "settings_stock_recount_hint": "Every night the quantity on hand is worked out again from the movements. The movement ledger is what counts: the quantity stored on the product is corrected from it.",
+  "stock_recount_last_run_label": "Last recount",
+  "stock_recount_checked_label": "Products checked",
+  "stock_recount_never": "Never recounted.",
+  "stock_recount_none": "Nothing was out at the last recount.",
+  "stock_recount_corrected": "The stored quantity was corrected from the movement ledger.",
+  "stock_recount_cached": "Stored",
+  "stock_recount_ledger": "Movements",
+  "stock_recount_difference": "Difference",
+  "stock_recount_done": "Recount done.",
+  "stock_recount_marks_today": "A recount counts the stock now and marks today as done: a difference that appears later today waits for tomorrow's recount, or for another press of this button.",
+  "action_recount_now": "Recount now"
 }

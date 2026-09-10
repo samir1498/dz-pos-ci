@@ -36,12 +36,46 @@ pub struct StockMovement {
     pub created_at: NaiveDateTime,
 }
 
-/// A product whose cached quantity and ledger sum disagree. features.md §1:
-/// the nightly job re-derives and reports; it never silently repairs, since
-/// the difference is the thing a shop owner has to look at.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A product whose cached quantity and ledger sum disagreed at a recount.
+/// features.md §1: the quantity on hand is derived from the ledger and
+/// cached on the product, so the ledger is the truth and the cache is what
+/// the recount writes back; this row is the record of what it moved and by
+/// how much.
+///
+/// The name travels beside the id because the drift list is read by a
+/// person, and an id is a number they would have to look up in a table the
+/// row does not carry. It is also what the audit entry stores, so reading a
+/// past run back needs no join against a product that may since have been
+/// renamed.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Drift {
     pub product_id: i32,
+    pub name: String,
+    pub cached_milli: i64,
+    pub ledger_milli: i64,
+}
+
+impl Drift {
+    /// What the correction moved the cache by: positive when the ledger
+    /// holds more than the cache said.
+    ///
+    /// Saturating rather than plain: both figures are thousandths of a unit
+    /// and no movement this app writes could put them a whole `i64` apart,
+    /// but the cached one can be anything a repaired file left behind, and a
+    /// number that is merely bounded is a better answer than a till that
+    /// stops.
+    pub fn difference_milli(&self) -> i64 {
+        self.ledger_milli.saturating_sub(self.cached_milli)
+    }
+}
+
+/// One product as the recount compares it: what the column says it has and
+/// what its movements add up to. Crate-internal, because it is the shape the
+/// repo hands back and `Drift` is the shape a caller reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Counted {
+    pub product_id: i32,
+    pub name: String,
     pub cached_milli: i64,
     pub ledger_milli: i64,
 }

@@ -68,12 +68,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         .setup({
             let token = token.clone();
             move |app| {
-                // The daily copy of the shop file (features.md §1). Started
-                // before the router takes the state, and detached: a backup
+                // The daily chores (features.md §1): the copy of the shop
+                // file, and the stock recount that follows it. Started
+                // before the router takes the state, and detached: a chore
                 // that fails logs and waits for the next check rather than
                 // stopping the till.
-                let backups = state.clone();
-                tauri::async_runtime::spawn(dzpos_api::daily::run(backups));
+                let chores = state.clone();
+                tauri::async_runtime::spawn(dzpos_api::daily::run(chores));
                 let router = dzpos_api::router(state, &token);
                 let task = tauri::async_runtime::spawn(async move {
                     if let Err(e) = axum::serve(listener, router).await {

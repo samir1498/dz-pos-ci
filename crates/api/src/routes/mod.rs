@@ -8,6 +8,7 @@ pub mod expenses;
 pub mod products;
 pub mod sales;
 pub mod settings;
+pub mod stock;
 pub mod suppliers;
 
 use axum::extract::State;

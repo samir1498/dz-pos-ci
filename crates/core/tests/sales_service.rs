@@ -166,7 +166,10 @@ fn the_stock_leaves_line_by_line_and_names_the_document() {
         products::get(&mut conn, SHOP, b).unwrap().qty_on_hand_milli,
         8_500
     );
-    assert!(stock::rederive(&mut conn, SHOP).unwrap().is_empty());
+    assert!(stock::recount(&mut conn, SHOP, OWNER)
+        .unwrap()
+        .drifts
+        .is_empty());
 }
 
 #[test]
