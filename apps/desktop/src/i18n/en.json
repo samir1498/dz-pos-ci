@@ -531,5 +531,13 @@
   "pill_cancelled": "Cancelled",
   "pill_paid": "Paid",
   "pill_open": "Open",
-  "pill_low": "Low stock"
+  "pill_low": "Low stock",
+  "keypad_label": "Number pad",
+  "keypad_backspace": "Delete a digit",
+  "keypad_enter": "Confirm",
+  "col_total": "Total",
+  "till_no_customer": "No customer matches.",
+  "till_customer_clear": "Remove the customer",
+  "till_products": "Products on sale",
+  "till_totals": "The total, line by line"
 }

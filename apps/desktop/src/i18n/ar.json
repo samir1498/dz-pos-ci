@@ -531,5 +531,13 @@
   "pill_cancelled": "ملغاة",
   "pill_paid": "مدفوع",
   "pill_open": "قيد التسديد",
-  "pill_low": "مخزون منخفض"
+  "pill_low": "مخزون منخفض",
+  "keypad_label": "لوحة الأرقام",
+  "keypad_backspace": "حذف رقم",
+  "keypad_enter": "تأكيد",
+  "col_total": "المجموع",
+  "till_no_customer": "لا يوجد زبون مطابق.",
+  "till_customer_clear": "إزالة الزبون",
+  "till_products": "المنتجات المعروضة",
+  "till_totals": "تفصيل المجموع"
 }

@@ -531,5 +531,13 @@
   "pill_cancelled": "Annulée",
   "pill_paid": "Payé",
   "pill_open": "En cours",
-  "pill_low": "Stock bas"
+  "pill_low": "Stock bas",
+  "keypad_label": "Pavé numérique",
+  "keypad_backspace": "Effacer un chiffre",
+  "keypad_enter": "Valider",
+  "col_total": "Total",
+  "till_no_customer": "Aucun client ne correspond.",
+  "till_customer_clear": "Enlever le client",
+  "till_products": "Produits en vente",
+  "till_totals": "Détail du total"
 }

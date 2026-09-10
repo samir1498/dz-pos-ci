@@ -28,6 +28,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
+import { Keypad, keyedAmount } from "@/components/Keypad";
 import { Money } from "@/components/Money";
 import { MoneyInput } from "@/components/MoneyInput";
 import { PageHeader } from "@/components/PageHeader";
@@ -118,6 +119,7 @@ const STATES: readonly Status[] = ["issued", "cancelled", "paid", "open", "low"]
 export function KitPage() {
   const { dir } = useTranslation();
   const [amount, setAmount] = useState<number | null>(1_284_000);
+  const [typedAmount, setTypedAmount] = useState<number | null>(150_000);
   const [checked, setChecked] = useState(true);
   const [on, setOn] = useState(true);
 
@@ -203,6 +205,18 @@ export function KitPage() {
             {(parts) => <Textarea {...parts} rows={3} placeholder="Ce que le comptoir doit savoir." />}
           </FormField>
           <FormField label="Désactivé">{(parts) => <Input {...parts} disabled value="" readOnly />}</FormField>
+        </div>
+      </Section>
+
+      {/* The pad and the box it types into, because a keypad on its own says
+          nothing: what is worth looking at is the amount growing in the
+          figure face as the keys go down. */}
+      <Section name="Keypad">
+        <div className="w-full max-w-xs space-y-3">
+          <div className="rounded-md border border-border bg-muted px-3 py-2 text-end">
+            <Money centimes={typedAmount ?? 0} className="text-xl" />
+          </div>
+          <Keypad onKey={(key) => setTypedAmount((current) => keyedAmount(current, key))} />
         </div>
       </Section>
 
