@@ -8,11 +8,12 @@
 // which theme is on.
 
 import { THEMES } from "@dzpos/design";
+import type { ThemeName } from "@dzpos/design";
 import type { ThemeDto } from "@dzpos/shared";
 import { Palette } from "lucide-react";
 
 import { Icon } from "@/components/Icon";
-import { isKey, useTranslation, type Key } from "@/i18n";
+import { useTranslation, type Key } from "@/i18n";
 import { useTheme } from "@/lib/theme";
 
 /** "follow the machine", which is `null` on the wire and in the shop file. */
@@ -22,8 +23,15 @@ const SYSTEM = "system";
  * The label key of each theme, spelled out rather than built from the name:
  * a key the i18n files do not carry has to fail the parity test, and a
  * template string would hide it from that check.
+ *
+ * Keyed by `ThemeName` rather than `string`, so a fifth theme added to the
+ * package fails to compile here until it has a label. It used to be a
+ * `Record<string, Key>` with a `?? "theme_label"` at the point of use, which
+ * compiled fine and shipped a select whose new entry read "Theme". The type
+ * is the check now, and `src/theme.test.ts` proves the keys the three
+ * dictionaries carry.
  */
-const LABEL: Readonly<Record<string, Key>> = {
+export const THEME_LABEL: Readonly<Record<ThemeName, Key>> = {
   comptoir: "theme_comptoir",
   registre: "theme_registre",
   observe: "theme_observe",
@@ -52,14 +60,11 @@ export function ThemeSwitcher({ className }: { className?: string }) {
         onChange={(e) => setChoice(toChoice(e.target.value))}
       >
         <option value={SYSTEM}>{t("theme_system")}</option>
-        {THEMES.map((name) => {
-          const key = LABEL[name];
-          return (
-            <option key={name} value={name}>
-              {t(key !== undefined && isKey(key) ? key : "theme_label")}
-            </option>
-          );
-        })}
+        {THEMES.map((name) => (
+          <option key={name} value={name}>
+            {t(THEME_LABEL[name])}
+          </option>
+        ))}
       </select>
     </label>
   );

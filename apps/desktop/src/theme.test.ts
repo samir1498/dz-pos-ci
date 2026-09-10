@@ -4,6 +4,11 @@ import { join, relative } from "node:path";
 import { OS_THEME, THEMES } from "@dzpos/design";
 import { describe, expect, it } from "vitest";
 
+import { THEME_LABEL } from "@/components/ThemeSwitcher";
+import ar from "@/i18n/ar.json";
+import en from "@/i18n/en.json";
+import fr from "@/i18n/fr.json";
+
 /**
  * A theme is a block of CSS variables and nothing else. The switch is one
  * attribute on `<html>`; a component wears `bg-background` and
@@ -82,6 +87,27 @@ describe("the theme is an attribute, not a branch", () => {
     const css = readFileSync(join(SRC, "theme.css"), "utf8");
     for (const name of THEMES.slice(1)) {
       expect(css).toContain(`[data-theme="${name}"]`);
+    }
+  });
+});
+
+/**
+ * The switcher is the one component allowed to say "Comptoir" out loud, so
+ * the labels are checked where the names already live. `keys.test.ts` proves
+ * the three dictionaries carry the same key set; this proves that set holds
+ * the four keys the select reaches for, in each file, because a theme whose
+ * label is missing renders an option the shop cannot tell from the others.
+ */
+describe("every theme's label", () => {
+  it.each(THEMES)("is in fr, en and ar for %s", (name) => {
+    const key = THEME_LABEL[name];
+    for (const [lang, dict] of [
+      ["fr", fr],
+      ["en", en],
+      ["ar", ar],
+    ] satisfies readonly (readonly [string, Readonly<Record<string, string>>])[]) {
+      expect({ lang, key, label: dict[key] }).toEqual({ lang, key, label: expect.any(String) });
+      expect(dict[key]?.trim()).not.toBe("");
     }
   });
 });
