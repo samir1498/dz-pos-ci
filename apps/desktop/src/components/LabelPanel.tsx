@@ -22,9 +22,26 @@ const ERROR_KEY: Record<string, Key> = {
   unreachable: "error_unreachable",
 };
 
+/** The two ways a label is refused, told apart by the field the server
+ * names. Both arrive as `validation`, and the shop does two different
+ * things about them: a product with no code at all gets one typed or
+ * generated, and a product carrying a supplier's own reference is not
+ * going to get an EAN-13 label whatever anybody types. Saying "no
+ * barcode" about a fiche that visibly has one sends the shop looking for
+ * a field that is already filled. */
+const FIELD_KEY: Record<string, Key> = {
+  barcode: "error_label_no_barcode",
+  barcode_digits: "error_label_not_ean13",
+  ids: "error_label_too_many",
+};
+
 function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) return ERROR_KEY[error.code] ?? "error_unknown";
-  return "error_unknown";
+  if (!(error instanceof ApiError)) return "error_unknown";
+  if (error.code === "validation" && error.field !== undefined) {
+    const named = FIELD_KEY[error.field];
+    if (named !== undefined) return named;
+  }
+  return ERROR_KEY[error.code] ?? "error_unknown";
 }
 
 /** The label of one product, or a sheet of the products named. */

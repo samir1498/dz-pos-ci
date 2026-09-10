@@ -16,6 +16,7 @@
 use std::path::PathBuf;
 
 use chrono::NaiveDate;
+use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
 use dzpos_core::models::product::{Product, Unit};
 use dzpos_core::money::{Bps, Money};
@@ -257,10 +258,14 @@ fn a_code_whose_check_digit_is_wrong_gets_no_label_at_all() {
         barcode: None,
         ..product(NAME, BARCODE, PRICE)
     };
-    assert_eq!(
-        render_label(&no_code, Lang::Fr).unwrap_err().code(),
-        "validation"
-    );
+    let empty = render_label(&no_code, Lang::Fr).unwrap_err();
+    assert_eq!(empty.code(), "validation");
+    // An empty column and a code that is not an EAN-13 are two different
+    // things to do something about, so they are two fields.
+    match &empty {
+        CoreError::Validation { field, .. } => assert_eq!(*field, "barcode"),
+        other => panic!("{other:?}"),
+    }
 
     // Not thirteen digits at all: a supplier reference typed into the fiche.
     let typed = render_label(&product(NAME, "REF-4471", PRICE), Lang::Fr).unwrap_err();
@@ -278,6 +283,12 @@ const TWELVE: &str = "200001000007";
 fn a_code_of_twelve_digits_is_refused_rather_than_completed_by_the_encoder() {
     let refused = render_label(&product(NAME, TWELVE, PRICE), Lang::Fr).unwrap_err();
     assert_eq!(refused.code(), "validation");
+    // Its own field, so the screen can say "not an EAN-13" about a fiche
+    // that visibly carries a code, rather than "no barcode".
+    match &refused {
+        CoreError::Validation { field, .. } => assert_eq!(*field, "barcode_digits"),
+        other => panic!("{other:?}"),
+    }
 
     // The same rule on the sheet, and one more shape a fiche really holds:
     // thirteen characters that are not all digits.

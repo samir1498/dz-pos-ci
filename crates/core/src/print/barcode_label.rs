@@ -123,15 +123,21 @@ fn label(product: &Product, lang: Lang) -> Result<LabelView, CoreError> {
     // recomputes the check digit and refuses a code whose own thirteenth is
     // wrong. That is the checksum test: the encoder and the printed digits
     // cannot disagree, because the same string feeds both.
+    // A field of its own, not `barcode`: the screen shows two different
+    // sentences and the shop does two different things about them. A fiche
+    // with nothing in the column gets a code typed or generated; a fiche
+    // carrying a supplier's own reference is not going to get an EAN-13
+    // label whatever anybody types, and telling that shop it has "no
+    // barcode" sends it looking at a field that is visibly filled.
     if code.len() != 13 || !code.bytes().all(|b| b.is_ascii_digit()) {
         return Err(CoreError::validation(
-            "barcode",
+            "barcode_digits",
             "this barcode is not thirteen digits and has no EAN-13 bars",
         ));
     }
     let symbol = EAN13::new(code).map_err(|_| {
         CoreError::validation(
-            "barcode",
+            "barcode_digits",
             "this barcode is not a valid EAN-13 and has no bars",
         )
     })?;
@@ -139,7 +145,7 @@ fn label(product: &Product, lang: Lang) -> Result<LabelView, CoreError> {
         .xmlns("http://www.w3.org/2000/svg".to_owned())
         .generate(symbol.encode())
         .map_err(|_| {
-            CoreError::validation("barcode", "the bars for this barcode cannot be drawn")
+            CoreError::validation("barcode_digits", "the bars for this barcode cannot be drawn")
         })?;
     Ok(LabelView {
         name: product.name.clone(),

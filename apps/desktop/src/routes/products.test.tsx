@@ -678,10 +678,29 @@ describe("the labels", () => {
     expect(asked.some((url) => url.includes("/products/1/label?lang=fr"))).toBe(true);
   });
 
-  test("a product with no EAN-13 says so instead of showing an empty page", async () => {
+  test("a product with no barcode at all and one whose code is not an EAN-13 read differently", async () => {
     rows = [product];
     labelAnswer = () =>
-      json(422, { error: { code: "validation", field: "barcode", message: "no bars" } });
+      json(422, {
+        error: { code: "validation", field: "barcode_digits", message: "not thirteen digits" },
+      });
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("Huile Elio 5L");
+    await user.click(screen.getByRole("button", { name: /Huile Elio 5L/ }));
+    await screen.findByLabelText("Catégorie");
+    await user.click(screen.getByTestId("print-label"));
+
+    // A fiche that visibly carries a supplier reference must not be told
+    // it has no barcode: the shop would go looking at a filled field.
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_label_not_ean13);
+    expect(screen.queryByTestId("product-label")).toBeNull();
+  });
+
+  test("an empty barcode column says so, and the two refusals are not one message", async () => {
+    rows = [product];
+    labelAnswer = () =>
+      json(422, { error: { code: "validation", field: "barcode", message: "none at all" } });
     const user = userEvent.setup();
     mount();
     await screen.findByText("Huile Elio 5L");
@@ -690,7 +709,7 @@ describe("the labels", () => {
     await user.click(screen.getByTestId("print-label"));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_label_no_barcode);
-    expect(screen.queryByTestId("product-label")).toBeNull();
+    expect(fr.error_label_no_barcode).not.toBe(fr.error_label_not_ean13);
   });
 
   test("the sheet is the ticked rows, and nothing is offered while none is ticked", async () => {
