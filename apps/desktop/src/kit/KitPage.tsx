@@ -32,6 +32,7 @@ import { Money } from "@/components/Money";
 import { MoneyInput } from "@/components/MoneyInput";
 import { PageHeader } from "@/components/PageHeader";
 import { PayButton } from "@/components/PayButton";
+import { ProductTile } from "@/components/ProductTile";
 import { StatusPill, type Status } from "@/components/StatusPill";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -358,6 +359,24 @@ export function KitPage() {
             ))}
           </div>
         </ScrollArea>
+      </Section>
+
+      <Section name="ProductTile">
+        <div
+          data-testid="kit-tiles"
+          className="grid w-full gap-3 sm:grid-cols-3 lg:grid-cols-4"
+        >
+          <ProductTile name="Farine 5 kg" priceCentimes={128_400} qtyMilli={42_000} lowStockAtMilli={5_000} />
+          <ProductTile name="Sucre cristallisé 1 kg" priceCentimes={27_000} qtyMilli={4_000} lowStockAtMilli={5_000} />
+          <ProductTile name="Huile de table 5 L" priceCentimes={129_950} qtyMilli={0} lowStockAtMilli={5_000} />
+          <ProductTile
+            name="Café moulu 250 g"
+            priceCentimes={45_000}
+            qtyMilli={0}
+            lowStockAtMilli={2_000}
+            disabled
+          />
+        </div>
       </Section>
 
       <Section name="DataTable">
