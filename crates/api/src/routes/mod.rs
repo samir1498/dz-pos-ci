@@ -6,6 +6,7 @@ pub mod categories;
 pub mod customers;
 pub mod expenses;
 pub mod products;
+pub mod purchases;
 pub mod sales;
 pub mod settings;
 pub mod stock;

@@ -82,7 +82,7 @@ fiche). Closing a fiche that still carries something (a balance either way, or
 an order still asking to be paid) needs a reason, and the reason goes into the
 audit log beside the balance and the number of orders left open. The fiche
 stays usable after it: payments and corrections still land on a closed fiche,
-and a purchase is what it refuses (T3). One supplier has an address of its
+and a purchase is what it refuses. One supplier has an address of its
 own, `/suppliers/$id`, and the route and the list's expanded row render one
 and the same component, so the two cannot drift. The account over a range of
 days is answered as JSON (`GET /suppliers/{id}/statement?from=&to=`): a
@@ -91,8 +91,62 @@ what it owes is a screen.
 
 **Purchase.** Supplier, supplier's document number, date, lines (product,
 quantity, unit cost), transport and extra costs, amount paid now, due date
-for the rest. Saving a purchase moves stock in and adds the unpaid part to
-the supplier's debt. A purchase can be received in parts.
+for the rest. The supplier has to be one the shop still buys from: a closed
+fiche refuses an order and goes on taking payments. A product is named once
+on an order, because the cost a delivery leaves on the product has to name
+one line.
+
+Money handed over as the order is written is a payment like any other, so it
+settles the supplier's oldest open order first (§2) and not necessarily the
+order it arrived with: a shop that pays on today's order while last week's is
+still open has paid last week's. What no order can take stays on the balance
+as credit, and the next delivery places it.
+
+Stock and supplier debt move on receipt and never on save (plan lens,
+2026-09-10). An order is a piece of paper until goods are handed over, so an
+order closed short owes nothing for what never came and a shelf count does
+not rise because somebody wrote an order. Saving with "received now" writes
+the whole delivery in the same transaction, which is the common case: the
+goods come with the paper.
+
+**The landed cost is fixed when the order is saved.** Transport and the other
+extra costs are agreed once for the whole order, so they are spread over the
+lines by value (quantity × unit cost), rounded down, with the remainder on the
+last line; each share is then divided per unit and rounded down again. Every
+receipt of that line uses the answer. A share recomputed at each delivery
+would move a cost a sale has already been measured against, and a margin
+would change without anybody selling anything. The second rounding is the one
+place centimes are lost: a line's landed total can come out under its value
+plus its share by fewer centimes than the line has units, plus one, and never
+above it
+(`purchase_prop.rs` pins both halves). Extra costs over lines that are worth
+nothing are refused, because a share of nothing is nothing and there is no
+honest line to put the amount on.
+
+A delivery is worth what the line is worth once it has arrived, less what the
+line was worth before: the parts round down and the delivery that finishes a
+line takes the remainder, so an order received in parts is debited exactly its
+landed total and an order paid in full up front is left asking for nothing. A
+return is priced the same way against what has already gone back, so a line
+received whole and returned whole leaves nothing on the account.
+
+A delivery is a `purchase_receipts` row, the bon de réception, numbered from
+a `reception:<year>` counter that resets on 1 January like every other series.
+It is listed on the order and M3 does not print it. Each of its lines writes
+one `purchase` stock movement at the line's landed cost and sets the product's
+cost to it, and the delivery as a whole writes one `purchase` row on the
+supplier's ledger for the value that arrived. Credit the supplier was holding
+is placed on the order at that moment, so an order paid the day it was written
+is not left asking to be paid again. An order takes deliveries until every
+line is full; then it is `received`.
+
+A purchase is cancelled only while nothing has arrived, and closed short after
+a partial delivery when the rest never will. Both carry a reason into the
+audit log. **A return to the supplier** writes no document: a `return` stock
+movement out at the landed cost and a `return` row on the ledger are the whole
+record. It is bounded by what arrived and has not gone back yet. On an order
+already settled the balance goes below zero, which is credit the supplier is
+holding, exactly as on the customer side.
 
 **Sale (till).** Lines (product, quantity, unit price, line discount),
 global discount, payment mode (cash; credit on the customer's ledger; card

@@ -1,9 +1,3 @@
-// The callers are T2 (suppliers), T3 (purchases), T4 (expenses) and T5 (the
-// re-derive job): the tables land here before the services that read them, and
-// `repos` is crate-internal on purpose (architecture.md: nothing outside this
-// crate touches diesel), so a plain build sees no use of these yet.
-#![allow(dead_code)]
-
 //! The only place purchases, their lines and their bons de réception touch
 //! diesel. Every query is scoped by `shop_id` (rule 3).
 

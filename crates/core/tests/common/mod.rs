@@ -174,10 +174,11 @@ fn last_id(conn: &mut SqliteConnection) -> i32 {
 
 /// One order placed with a supplier, written straight into the file.
 ///
-/// T3 is what saves a purchase, and until it lands a test that needs money
-/// owed on a piece of paper writes the paper itself. `repos` is
-/// crate-internal (architecture.md), so this is SQL beside the test rather
-/// than a repo call: the same reason `a_payment_row` above is.
+/// `services::purchases` is what saves a purchase, and a test about the
+/// ledger writes the paper itself rather than going through it: the order is
+/// a fixture here, not the thing under test. `repos` is crate-internal
+/// (architecture.md), so this is SQL beside the test rather than a repo call,
+/// the same reason `a_payment_row` above is.
 ///
 /// `day` is the day on the shop's calendar the order was placed on, and it
 /// is what settles which purchase a payment fills first.
@@ -195,10 +196,10 @@ pub fn a_purchase_row(conn: &mut SqliteConnection, supplier_id: i32, day: &str) 
     last_id(conn)
 }
 
-/// The debit a receipt writes for the value that arrived (T3). Written here
-/// for the same reason the purchase above is: what a payment settles is a
-/// purchase carrying value on the ledger, and nothing in this milestone
-/// writes one yet.
+/// The debit a receipt writes for the value that arrived. Written here for
+/// the same reason the purchase above is: what a payment settles is a
+/// purchase carrying value on the ledger, and the receipt that would put it
+/// there is not what these tests are about.
 pub fn a_purchase_ledger_row(
     conn: &mut SqliteConnection,
     supplier_id: i32,
