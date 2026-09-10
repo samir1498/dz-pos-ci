@@ -3,6 +3,13 @@
 // close over an open account) are the API crate's tests; what these hold is
 // the wiring: the centimes, the whole row on an update, the close carrying
 // its reason, and the ledger refreshing after a payment.
+//
+// The screen is two pages now, so the tests mount a router at a path rather
+// than a component: `/suppliers` is the list with its panel, `/suppliers/{id}`
+// is the statement with the ledger and the two dialogs. The panel and the
+// dialogs are Radix overlays, which put `aria-hidden` on everything behind
+// them: a query by role after one opens sees the overlay and nothing else,
+// which is why the tests that go back to the list close the panel first.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -20,6 +27,19 @@ import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
 import { SupplierFiche, SuppliersScreen } from "./suppliers";
+
+/**
+ * The amounts as they are read back. packages/shared groups thousands with
+ * U+202F, a narrow no-break space, and testing-library normalises every space
+ * character to an ordinary one before it matches; so these carry the ordinary
+ * space, and a test that pasted the narrow one would pass for the wrong
+ * reason rather than fail. The formatting itself is money.test.ts's.
+ */
+const ONE_FIVE_HUNDRED = "1 500,00";
+const ONE_THOUSAND = "1 000,00";
+/** The same figure inside a form control. `toHaveValue` reads the raw
+ *  string, with no normalising, so this is the narrow space itself. */
+const TWO_THOUSAND_TYPED = "2\u202f000,00";
 
 const amrani: SupplierDto = {
   id: 3,
@@ -127,43 +147,51 @@ function sent(method: string): { url: string; body: Record<string, unknown> } {
   return { url: String(last[0]), body: JSON.parse(init.body) };
 }
 
-function mount(lang: Lang = "fr") {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return render(
-    <I18nProvider lang={lang}>
-      <QueryClientProvider client={client}>
-        <SuppliersScreen />
-      </QueryClientProvider>
-    </I18nProvider>,
-  );
-}
-
-/** The fiche links back to the list, so it needs a router around it: a
- *  `<Link>` with no router is what the page would be if the route file were
- *  wrong. */
-function mountFiche(id: number) {
+/**
+ * Both pages behind one router, entered at the path under test. The list
+ * links to the statement, so a bare `render(<SuppliersScreen />)` would throw
+ * on the first row it drew; and the statement links back, which is what the
+ * route file would be wrong about if it were wrong.
+ */
+function mountAt(path: string, lang: Lang = "fr") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const rootRoute = createRootRoute();
+  const listRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/suppliers",
+    component: SuppliersScreen,
+  });
   const ficheRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: "/",
-    component: () => <SupplierFiche id={id} />,
+    path: "/suppliers/$id",
+    component: OneSupplier,
   });
+  function OneSupplier() {
+    const { id } = ficheRoute.useParams();
+    return <SupplierFiche id={Number(id)} />;
+  }
   const router = createRouter({
-    routeTree: rootRoute.addChildren([ficheRoute]),
-    history: createMemoryHistory({ initialEntries: ["/"] }),
+    routeTree: rootRoute.addChildren([listRoute, ficheRoute]),
+    history: createMemoryHistory({ initialEntries: [path] }),
   });
   return render(
-    <I18nProvider lang="fr">
+    <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
         <RouterProvider router={router} />
       </QueryClientProvider>
     </I18nProvider>,
   );
+}
+
+const mount = (lang: Lang = "fr") => mountAt("/suppliers", lang);
+const mountFiche = (id: number) => mountAt(`/suppliers/${id}`);
+
+/** Opens the fiche panel over the list, the way a row's own button does. */
+async function openPanel(name: string) {
+  const row = await screen.findByRole("row", { name: new RegExp(name) });
+  await userEvent.click(within(row).getByRole("button", { name: `${fr.suppliers_edit} ${name}` }));
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -175,7 +203,6 @@ beforeEach(() => {
   list = [amrani];
   rows = ledger;
   writeAnswer = null;
-  vi.spyOn(window, "confirm").mockReturnValue(true);
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "POST" || init?.method === "PUT") {
@@ -240,7 +267,7 @@ describe("the list", () => {
     mount();
 
     const owing = await screen.findByRole("row", { name: /Sarl Amrani/ });
-    expect(within(owing).getByText("1 500,00")).toBeInTheDocument();
+    expect(within(owing).getByText(ONE_FIVE_HUNDRED)).toBeInTheDocument();
     expect(within(owing).queryByText(fr.suppliers_advance)).not.toBeInTheDocument();
 
     // An advance is named rather than shown as a minus: the amount is drawn
@@ -248,6 +275,15 @@ describe("the list", () => {
     const advance = screen.getByRole("row", { name: /Bensalem/ });
     expect(within(advance).getByText("500,00")).toBeInTheDocument();
     expect(within(advance).getByText(fr.suppliers_advance)).toBeInTheDocument();
+  });
+
+  test("a settled account and an open one wear different pills", async () => {
+    list = [amrani, closed];
+    mount();
+    const owing = await screen.findByRole("row", { name: /Sarl Amrani/ });
+    expect(within(owing).getByText(fr.pill_open)).toBeInTheDocument();
+    const settled = screen.getByRole("row", { name: /Zoubir Fermé/ });
+    expect(within(settled).getByText(fr.pill_paid)).toBeInTheDocument();
   });
 
   test("the search travels to the API and the list follows it", async () => {
@@ -269,9 +305,30 @@ describe("the list", () => {
     const row = await screen.findByRole("row", { name: /Zoubir Fermé/ });
     expect(within(row).getByText(fr.suppliers_inactive)).toBeInTheDocument();
   });
+
+  test("an empty list says what would fill it rather than showing a bare frame", async () => {
+    list = [];
+    mount();
+    expect(await screen.findByText(fr.suppliers_empty)).toBeInTheDocument();
+    expect(screen.getByText(fr.suppliers_empty_hint)).toBeInTheDocument();
+  });
+
+  test("the panel gives the list back when it is dismissed", async () => {
+    // The panel is a Radix overlay, so everything behind it is `aria-hidden`
+    // while it is open: a row is not there to be found, and it is there again
+    // the moment the panel goes. A test that never closed one would pass
+    // against a screen that had lost its list.
+    mount();
+    await openPanel("Sarl Amrani");
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /Sarl Amrani/ })).not.toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("row", { name: /Sarl Amrani/ })).toBeInTheDocument();
+  });
 });
 
-describe("the form", () => {
+describe("the fiche panel", () => {
   test("a new fiche sends the fields and the opening debt in centimes", async () => {
     mount();
     await screen.findByRole("row", { name: /Sarl Amrani/ });
@@ -299,10 +356,7 @@ describe("the form", () => {
 
   test("an update sends the whole fiche, a cleared field as null, and no opening debt", async () => {
     mount();
-    const row = await screen.findByRole("row", { name: /Sarl Amrani/ });
-    await userEvent.click(
-      within(row).getByRole("button", { name: `${fr.suppliers_edit} Sarl Amrani` }),
-    );
+    await openPanel("Sarl Amrani");
 
     await userEvent.clear(screen.getByLabelText(fr.field_phone));
     await userEvent.click(screen.getByRole("button", { name: fr.action_save }));
@@ -352,39 +406,29 @@ describe("the form", () => {
 
   test("the opening debt is only on a new fiche", async () => {
     mount();
-    const row = await screen.findByRole("row", { name: /Sarl Amrani/ });
-    await userEvent.click(
-      within(row).getByRole("button", { name: `${fr.suppliers_edit} Sarl Amrani` }),
-    );
+    await openPanel("Sarl Amrani");
     expect(screen.queryByLabelText(fr.field_supplier_opening_debt)).not.toBeInTheDocument();
   });
 });
 
-describe("the ledger", () => {
+describe("the statement", () => {
   test("shows the movements with the balance the core computed", async () => {
-    mount();
-    const row = await screen.findByRole("row", { name: /Sarl Amrani/ });
-    await userEvent.click(
-      within(row).getByRole("button", { name: `${fr.suppliers_edit} Sarl Amrani` }),
-    );
+    mountFiche(3);
 
     const opening = await screen.findByRole("row", { name: new RegExp(fr.debt_opening) });
     // The debit column and the running balance the core computed: two cells,
     // one figure, and the second is the one no screen adds up.
-    expect(within(opening).getAllByText("1 500,00")).toHaveLength(2);
+    expect(within(opening).getAllByText(ONE_FIVE_HUNDRED)).toHaveLength(2);
     expect(within(opening).getByText("solde de départ")).toBeInTheDocument();
   });
 
-  test("a payment sends centimes and the mode, and the balance follows it", async () => {
-    mount();
-    const row = await screen.findByRole("row", { name: /Sarl Amrani/ });
-    await userEvent.click(
-      within(row).getByRole("button", { name: `${fr.suppliers_edit} Sarl Amrani` }),
-    );
+  test("a payment sends centimes and the mode, and what it settled comes back", async () => {
+    mountFiche(3);
+    await userEvent.click(await screen.findByTestId("supplier-pay-open"));
 
     await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "1000");
     await userEvent.type(screen.getByLabelText(fr.field_payment_note), "acompte");
-    await userEvent.click(screen.getByRole("radio", { name: fr.payment_card }));
+    await userEvent.click(screen.getByRole("button", { name: fr.payment_card }));
     await userEvent.click(screen.getByRole("button", { name: fr.action_pay_supplier }));
 
     await waitFor(() => {
@@ -400,15 +444,12 @@ describe("the ledger", () => {
     // What the payment settled comes from the server's answer, not from a
     // figure the screen worked out.
     const settled = await screen.findByTestId("supplier-allocations");
-    expect(within(settled).getByText("1 000,00")).toBeInTheDocument();
+    expect(within(settled).getByText(ONE_THOUSAND)).toBeInTheDocument();
   });
 
   test("a payment above the debt says how much is actually owed", async () => {
-    mount();
-    const row = await screen.findByRole("row", { name: /Sarl Amrani/ });
-    await userEvent.click(
-      within(row).getByRole("button", { name: `${fr.suppliers_edit} Sarl Amrani` }),
-    );
+    mountFiche(3);
+    await userEvent.click(await screen.findByTestId("supplier-pay-open"));
     writeAnswer = () =>
       json(422, {
         error: {
@@ -423,18 +464,31 @@ describe("the ledger", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(fr.error_supplier_payment_above_debt);
-    expect(alert).toHaveTextContent("1 500,00");
-    // The refused amount is still in the box: the message says what is owed,
-    // and an emptied box means typing the figure again to find out why.
-    expect(screen.getByLabelText(fr.field_payment_amount)).toHaveValue("2000");
+    expect(alert).toHaveTextContent(ONE_FIVE_HUNDRED);
+    // The refused amount is still in the box and the dialog is still open:
+    // the message says what is owed, and an emptied box means typing the
+    // figure again to find out why.
+    expect(screen.getByLabelText(fr.field_payment_amount)).toHaveValue(TWO_THOUSAND_TYPED);
+  });
+
+  test("a zero payment is refused on the screen, before the round trip", async () => {
+    mountFiche(3);
+    await userEvent.click(await screen.findByTestId("supplier-pay-open"));
+    await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "0");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_pay_supplier }));
+
+    expect(await screen.findByText(fr.error_payment_amount_zero)).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter((call) => {
+        const init: unknown = call[1];
+        return isInit(init) && init.method === "POST";
+      }),
+    ).toHaveLength(0);
   });
 
   test("a correction sends the signed amount and the ledger it answers is shown", async () => {
-    mount();
-    const row = await screen.findByRole("row", { name: /Sarl Amrani/ });
-    await userEvent.click(
-      within(row).getByRole("button", { name: `${fr.suppliers_edit} Sarl Amrani` }),
-    );
+    mountFiche(3);
+    await userEvent.click(await screen.findByTestId("supplier-adjust-open"));
 
     await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
     await userEvent.type(screen.getByLabelText(fr.field_adjust_note), "erreur de saisie");
@@ -452,10 +506,7 @@ describe("the ledger", () => {
 describe("closing", () => {
   test("a fiche that owes something asks for a reason and sends it", async () => {
     mount();
-    const row = await screen.findByRole("row", { name: /Sarl Amrani/ });
-    await userEvent.click(
-      within(row).getByRole("button", { name: `${fr.suppliers_edit} Sarl Amrani` }),
-    );
+    await openPanel("Sarl Amrani");
 
     await userEvent.type(screen.getByTestId("supplier-close-reason"), "le fournisseur a fermé");
     await userEvent.click(screen.getByRole("button", { name: fr.action_close_supplier }));
@@ -472,10 +523,7 @@ describe("closing", () => {
     // order still asking to be paid is a fact only the server holds.
     list = [{ ...amrani, balance_centimes: 0 }];
     mount();
-    const row = await screen.findByRole("row", { name: /Sarl Amrani/ });
-    await userEvent.click(
-      within(row).getByRole("button", { name: `${fr.suppliers_edit} Sarl Amrani` }),
-    );
+    await openPanel("Sarl Amrani");
     expect(screen.queryByTestId("supplier-close-reason")).not.toBeInTheDocument();
 
     writeAnswer = () =>
@@ -488,10 +536,7 @@ describe("closing", () => {
   test("a closed fiche says money still moves on it and offers to reopen", async () => {
     list = [closed];
     mount();
-    const row = await screen.findByRole("row", { name: /Zoubir Fermé/ });
-    await userEvent.click(
-      within(row).getByRole("button", { name: `${fr.suppliers_edit} Zoubir Fermé` }),
-    );
+    await openPanel("Zoubir Fermé");
 
     expect(screen.getByText(fr.suppliers_closed_still_pays)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: fr.action_reopen_supplier }));
@@ -503,7 +548,7 @@ describe("closing", () => {
   });
 });
 
-describe("the fiche on its own page", () => {
+describe("the statement on its own page", () => {
   test("reads one supplier by id and shows the same ledger", async () => {
     mountFiche(3);
     expect(await screen.findByRole("heading", { name: fr.suppliers_ledger })).toBeInTheDocument();

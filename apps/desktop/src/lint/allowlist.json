@@ -9,7 +9,6 @@
     { "file": "src/routes/products.tsx", "screen": "products" },
     { "file": "src/routes/customers.tsx", "screen": "customers" },
     { "file": "src/routes/documents.tsx", "screen": "documents" },
-    { "file": "src/routes/suppliers.tsx", "screen": "suppliers" },
     { "file": "src/routes/purchases.tsx", "screen": "purchases" },
     { "file": "src/routes/purchases_.new.tsx", "screen": "a new purchase order" },
     { "file": "src/routes/purchases_.$id.tsx", "screen": "a purchase order" },

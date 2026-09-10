@@ -1,14 +1,17 @@
-// One supplier's fiche, addressable. Anything that names a supplier links
-// here: the purchase screen when it lands (T3).
+// One supplier's statement, addressable. Anything that names a supplier links
+// here: the purchase screen does, and so does every row of the list.
 //
 // The trailing underscore on `suppliers_` keeps this out from under the list
 // screen's route rather than nesting inside it, the way the customer fiche's
 // does: `/suppliers` is a whole page of its own and not a layout with an
-// outlet. The fiche itself lives in `suppliers.tsx` beside the panel that
-// shows the same two components, so the two ways in cannot drift apart.
+// outlet. The page itself lives in `suppliers.tsx` beside the panel that
+// shows the same fiche, so the two ways in cannot drift apart.
 
 import { Link, createFileRoute } from "@tanstack/react-router";
+
+import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n";
+
 import { SupplierFiche } from "./suppliers";
 
 export const Route = createFileRoute("/suppliers_/$id")({ component: OneSupplier });
@@ -27,13 +30,13 @@ function OneSupplier() {
 function NotASupplier() {
   const { t } = useTranslation();
   return (
-    <section className="flex flex-col gap-4">
-      <p role="alert" className="text-red-700">
+    <section className="flex flex-col items-start gap-4">
+      <p role="alert" className="text-sm text-fg-danger">
         {t("error_not_found")}
       </p>
-      <Link to="/suppliers" className="underline">
-        {t("action_back_to_suppliers")}
-      </Link>
+      <Button variant="link" asChild>
+        <Link to="/suppliers">{t("action_back_to_suppliers")}</Link>
+      </Button>
     </section>
   );
 }

@@ -366,6 +366,8 @@
   "suppliers_new": "مورّد جديد",
   "suppliers_loading": "جارٍ التحميل…",
   "suppliers_empty": "لا يوجد موردون.",
+  "suppliers_empty_hint": "أضف أول مورّد: تحتفظ البطاقة ببيانات الاتصال وبالمعرّفات وبما يدين له المحل.",
+  "suppliers_fiche_hint": "بيانات الاتصال بالمورّد ومعرّفاته. أما الحركات فتُقرأ في كشف الحساب.",
   "suppliers_search": "البحث عن مورّد",
   "suppliers_search_hint": "الاسم أو الهاتف",
   "suppliers_edit": "فتح البطاقة",

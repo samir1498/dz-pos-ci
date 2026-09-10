@@ -366,6 +366,8 @@
   "suppliers_new": "Nouveau fournisseur",
   "suppliers_loading": "Chargement…",
   "suppliers_empty": "Aucun fournisseur.",
+  "suppliers_empty_hint": "Ajoutez le premier fournisseur : la fiche garde ses coordonnées, ses identifiants et ce que le magasin lui doit.",
+  "suppliers_fiche_hint": "Les coordonnées et les identifiants du fournisseur. Les mouvements se lisent sur le relevé.",
   "suppliers_search": "Rechercher un fournisseur",
   "suppliers_search_hint": "Nom ou téléphone",
   "suppliers_edit": "Ouvrir la fiche",

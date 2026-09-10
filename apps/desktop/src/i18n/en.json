@@ -366,6 +366,8 @@
   "suppliers_new": "New supplier",
   "suppliers_loading": "Loading…",
   "suppliers_empty": "No suppliers.",
+  "suppliers_empty_hint": "Add the first supplier: the fiche keeps their contact details, their identifiers and what the shop owes them.",
+  "suppliers_fiche_hint": "The supplier's contact details and identifiers. The movements are read on the statement.",
   "suppliers_search": "Search a supplier",
   "suppliers_search_hint": "Name or phone",
   "suppliers_edit": "Open the fiche",
