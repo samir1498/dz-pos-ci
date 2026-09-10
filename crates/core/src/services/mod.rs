@@ -47,3 +47,5 @@ pub mod sales;
 pub mod settings;
 pub mod shops;
 pub mod stock;
+pub mod supplier_debt;
+pub mod suppliers;
