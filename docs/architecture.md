@@ -181,6 +181,13 @@ only in `packages/shared`.
   applies it.
 - Append-only ledgers (stock movements, debt) are the truth; cached
   balances are derived and re-checked.
+- The audit log's action and entity names were rewritten onto one scheme in
+  the facture-and-credit milestone (`sale.credit_override` became
+  `document.issue_override`, and every row about a document now says
+  `document`), and no row already written under the old names is migrated.
+  That is only safe because no shop has data yet: a file with a history would
+  need a data migration alongside the rename, or its old rows would drop out
+  of the queries that read the log by name.
 - Encryption at rest: OS-level (BitLocker / FileVault) on the shop PC,
   disk encryption on the server; the app does not roll its own. Backups are
   copies of the file, restorable from the settings screen and tested by
