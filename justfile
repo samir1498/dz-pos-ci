@@ -130,9 +130,18 @@ worktree name branch:
     (cd "$dir" && pnpm install --frozen-lockfile --silent)
     echo "worktree $dir on {{branch}}; run cargo there with CARGO_TARGET_DIR=$dir/target"
 
-# remove a worktree once its branch is merged
+# remove a worktree once its branch is merged.
+# target/ goes first: it is gitignored, so `git worktree remove` refuses to
+# touch it and the whole tree gets left behind as an orphan (that is how t5
+# survived with 268K of build output and no entry in `git worktree list`).
+# A worktree's target/ was 36 GB on 2026-09-10 - see `just disk`.
 worktree-rm name:
-    git worktree remove ".claude/worktrees/{{name}}"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir=".claude/worktrees/{{name}}"
+    [ -d "$dir/target" ] && rm -rf "$dir/target"
+    git worktree remove "$dir"
+    git worktree prune
 
 # ---- mockups (design/) ----
 
@@ -155,3 +164,45 @@ ctx *args:
 status:
     @sed -n '/## Ladder/,$p' context/progress/now.md
     @cd context && ctx status
+
+
+# ---- disk (context/processes/machines-and-heavy-jobs) ----
+
+# What the disk really looks like. `df -h /` lies: / is a VHDX living on the
+# Windows C: drive, so it reports the guest's virtual size, not the host space
+# it still has room to grow into. /mnt/c is the number that matters.
+disk:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "host disk (the one that matters):"
+    df -h /mnt/c | tail -1
+    echo
+    echo "largest build artifacts:"
+    { du -xsh target .claude/worktrees/*/target 2>/dev/null || true; } | sort -rh | grep . || echo "  none"
+    echo
+    free=$(df --output=avail -BG /mnt/c | tail -1 | tr -dc '0-9')
+    if [ "${free:-0}" -lt 5 ]; then
+        echo "STOP: ${free}G free on C:. Deleting inside the distro does not reach Windows;" >&2
+        echo "Samir must run C:\\Users\\Anwender\\compact-wsl.ps1 as admin." >&2
+        exit 1
+    elif [ "${free:-0}" -lt 20 ]; then
+        echo "WARNING: ${free}G free on C:. Run 'just clean-targets' before any heavy build." >&2
+    else
+        echo "OK: ${free}G free on C:."
+    fi
+
+# Delete every Rust target/ (main checkout + each worktree) and prune orphaned
+# worktree entries. Only target/ is removed: worktrees carry uncommitted work,
+# so never rm -rf the tree itself to reclaim space.
+clean-targets:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    shopt -s nullglob
+    for t in target .claude/worktrees/*/target; do
+        [ -d "$t" ] || continue
+        echo "removing $t ($(du -xsh "$t" | cut -f1))"
+        rm -rf "$t"
+    done
+    git worktree prune
+    echo "host disk now:"
+    df -h /mnt/c | tail -1

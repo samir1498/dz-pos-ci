@@ -18,7 +18,7 @@ the same pages; this file is the index.
 - `quality-gates`: `just gates` and `just e2e`, what counts as tested, the extra layers
   for money, roles and deletion.
 - `machines-and-heavy-jobs`: WSL box vs laptop, the shared-box claim rule,
-  no worktrees while one session per machine works the repo.
+  the disk gate, worktree teardown.
 - `security-and-provenance`: ISO 27001 controls per feature; where a
   learned fact or a fiscal claim gets written.
 - `git-and-planning`: branch + PR, the `ctx:` trailer, session rituals.
@@ -40,3 +40,16 @@ where each duplicated fact lives and how a fix is routed.
   bookkeeping goes straight to `main`.
 - Never excuse a failure as already present before your change; state the
   actual root cause.
+- On the WSL box, `df -h /` lies (it is a VHDX on Windows `C:`). Check
+  `df -h /mnt/c`, or just `just disk`, before any heavy build. Tearing down
+  a worktree means `just worktree-rm <name>`, never a bare `rm -rf` of the
+  tree — worktrees hold uncommitted work; only `target/` is disposable.
+- Disk, after the 125 GB day (2026-09-10): every cargo command in this repo
+  runs with `CARGO_TARGET_DIR=/home/samir/dz-pos/.cargo-target` (one shared
+  build folder for every worktree, cargo's lock makes it one build at a
+  time); never a per-worktree `target/`. A worktree is torn down with
+  `just worktree-rm` the moment its branch merges, never moved around to
+  keep a warm cache. `df -h /mnt/c` before any build; under 20 GB free,
+  clean first. One Claude session per conversation: a second
+  `claude --continue` on the same transcript kills the first one's agents.
+- Never `pkill -f`.
