@@ -355,9 +355,10 @@ comptable (R8) before a shop leans on it.
 
 Numbering: per kind, gapless, assigned at issue and never reused; a
 cancelled facture keeps its number and is marked "facture annulée"; an
-avoir is its own kind with its own series. A yearly reset of the series is
-common practice but not in the decree; confirm with the comptable (R8)
-before it becomes a setting.
+avoir is its own kind with its own series. The series restart at 1 each
+year and the number carries the year, the common practice in Algeria and
+not a rule of the decree (decided by Samir on 2026-09-10, built in M3 as
+its first task); the comptable (R8) confirms the practice, not the choice.
 
 **Avoir.** A facture is never edited and never deleted, so a shop that has
 to carry money back writes an avoir: a second numbered document out of the
