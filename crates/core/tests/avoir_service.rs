@@ -1510,3 +1510,57 @@ fn remaining(conn: &mut SqliteConnection, document_id: i32) -> Money {
         .balance
         .map_or(Money::ZERO, |b| b.remaining_debt)
 }
+
+#[test]
+fn a_partial_avoir_at_a_rate_the_recap_does_not_carry_gives_back_no_remise() {
+    // A réel facture's recap carries a row for every rate its lines are at,
+    // so a facture with a line at a rate the recap misses is a file that
+    // disagrees with itself: a restored backup, or a row repaired by hand.
+    // What is left at such a rate is the line's own HT and no remise at all,
+    // because a remise at a rate is the difference between the group's lines
+    // and the base the recap taxed, and there is no row to read.
+    //
+    // Read any other way, the remise left at that rate goes below zero as
+    // soon as one avoir has taken part of the group, and the next avoir is
+    // written for a discount the table refuses and a base above its own HT.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 1900);
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+    assert_eq!(facture.regime, Regime::Reel);
+    diesel::sql_query(format!(
+        "DELETE FROM document_tva WHERE document_id = {}",
+        facture.id
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    // Two of the three units, one at a time. The second is where a remise
+    // below zero shows: the first one leaves the group's HT lower than the
+    // base a recap row would have stated.
+    for day in [11, 12] {
+        let a_third = vec![AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 1_000,
+        }];
+        let avoir = avoir::issue(
+            &mut conn,
+            SHOP,
+            OWNER,
+            facture.id,
+            Some(a_third),
+            None,
+            Some(at(day)),
+        )
+        .unwrap_or_else(|err| panic!("the avoir of day {day} was refused: {err:?}"));
+        assert_eq!(
+            avoir.totals.discount,
+            Money::ZERO,
+            "the avoir of day {day} gave back a remise no recap row states"
+        );
+        assert_eq!(
+            avoir.totals.subtotal_ht, avoir.totals.total_ht,
+            "the avoir of day {day} taxed more or less than its own lines"
+        );
+    }
+}
