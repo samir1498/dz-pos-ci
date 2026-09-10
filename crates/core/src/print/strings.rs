@@ -187,11 +187,19 @@ pub enum Key {
     /// The second tab of the import template: the units and the TVA rates a
     /// row may name, and nothing else. It is read, never written back.
     SheetAllowedValues,
+    /// The heading over the list of units a `unit` cell may hold.
+    TemplateUnits,
+    /// The heading over the list of TVA rates a `rate_percent` cell may hold.
+    TemplateRates,
+    /// What the example row is there to say: a code the shop already sells
+    /// under updates that product rather than opening a second one, and a
+    /// blank code is numbered by the till.
+    TemplateBarcodeNote,
 }
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 73] = [
+    pub const ALL: [Key; 76] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -265,6 +273,9 @@ impl Key {
         Key::SheetCustomers,
         Key::SheetSuppliers,
         Key::SheetAllowedValues,
+        Key::TemplateUnits,
+        Key::TemplateRates,
+        Key::TemplateBarcodeNote,
     ];
 }
 
@@ -588,5 +599,32 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::SheetAllowedValues, Lang::Fr) => "Valeurs autorisées",
         (Key::SheetAllowedValues, Lang::En) => "Allowed values",
         (Key::SheetAllowedValues, Lang::Ar) => "القيم المسموح بها",
+
+        (Key::TemplateUnits, Lang::Fr) => "Unités",
+        (Key::TemplateUnits, Lang::En) => "Units",
+        (Key::TemplateUnits, Lang::Ar) => "الوحدات",
+
+        (Key::TemplateRates, Lang::Fr) => "Taux de TVA",
+        (Key::TemplateRates, Lang::En) => "VAT rates",
+        (Key::TemplateRates, Lang::Ar) => "نسب الرسم على القيمة المضافة",
+
+        (Key::TemplateBarcodeNote, Lang::Fr) => concat!(
+            "Un code-barres que la boutique utilise déjà met à jour ce produit ",
+            "(nom, prix d\u{2019}achat, prix de vente) au lieu d\u{2019}en créer un second. ",
+            "Laissez la colonne vide et la caisse attribue un code."
+        ),
+        (Key::TemplateBarcodeNote, Lang::En) => concat!(
+            "A barcode the shop already sells under updates that product ",
+            "(name, cost, price) instead of opening a second one. ",
+            "Leave the column empty and the till assigns a code."
+        ),
+        (Key::TemplateBarcodeNote, Lang::Ar) => concat!(
+            "\u{0627}\u{0644}\u{0631}\u{0645}\u{0632} \u{0627}\u{0644}\u{0634}\u{0631}\u{064a}\u{0637}\u{064a} ",
+            "\u{0627}\u{0644}\u{0645}\u{0633}\u{062a}\u{0639}\u{0645}\u{0644} \u{0645}\u{0646} \u{0642}\u{0628}\u{0644} ",
+            "\u{064a}\u{062d}\u{062f}\u{0651}\u{062b} \u{0627}\u{0644}\u{0645}\u{0646}\u{062a}\u{0648}\u{062c} ",
+            "\u{0628}\u{062f}\u{0644} \u{0625}\u{0646}\u{0634}\u{0627}\u{0621} \u{0645}\u{0646}\u{062a}\u{0648}\u{062c} \u{062b}\u{0627}\u{0646}\u{064d}. ",
+            "\u{0627}\u{062a}\u{0631}\u{0643} \u{0627}\u{0644}\u{062e}\u{0627}\u{0646}\u{0629} \u{0641}\u{0627}\u{0631}\u{063a}\u{0629} ",
+            "\u{0644}\u{062a}\u{0639}\u{064a}\u{0651}\u{0646} \u{0627}\u{0644}\u{0635}\u{0646}\u{062f}\u{0648}\u{0642} \u{0631}\u{0645}\u{0632}\u{064b}\u{0627}."
+        ),
     }
 }

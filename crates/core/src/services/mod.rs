@@ -44,6 +44,7 @@ pub mod debt;
 pub mod documents;
 pub mod expenses;
 pub mod export;
+pub mod import;
 pub mod products;
 pub mod proforma;
 pub mod purchases;
