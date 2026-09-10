@@ -25,6 +25,20 @@ thiserror = "2"
 # compile time and HTML-escaped by default, so a shop name with an "&" in it
 # cannot break a ticket and no template file ships beside the app.
 askama = { version = "0.16.1", default-features = false, features = ["std", "derive"] }
+# The Excel half of features.md §1 (export four workbooks, import products
+# from a template). Both are pure Rust and neither pulls a C library in:
+# `rust_xlsxwriter`'s zip backend is the Rust `zip` crate unless the `zlib`
+# feature is on, and it is not. Versions checked on crates.io 2026-09-10.
+# `chrono` on the writer is what lets a date leave as a date rather than as
+# a string a spreadsheet cannot sort.
+rust_xlsxwriter = { version = "0.99.0", features = ["chrono"] }
+# `dates` so a cell a person typed as a date reads back as one; used by the
+# product import and by the tests that read a written workbook's cells.
+calamine = { version = "0.36.1", features = ["dates"] }
+# EAN-13 bars as SVG for the barcode label. Its only dependency, `image`, is
+# optional and off in the default features (ascii, json, svg, std), so this
+# adds no native code either.
+barcoders = "2.0.0"
 
 [dev-dependencies]
 tempfile = "3"

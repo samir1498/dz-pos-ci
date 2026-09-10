@@ -172,11 +172,26 @@ pub enum Key {
     /// The words line of a debt slip. Not the statement's, which says "le
     /// présent relevé" about a page covering a period this one has none of.
     DebtInWords,
+
+    // The Excel workbooks (features.md §1, Backup). Only the sheet name is
+    // translated: a workbook's header row and its unit and status cells are
+    // the stable key names, so a products export edited in a spreadsheet
+    // reads straight back through the import and no column has to be found
+    // again in three languages. The tab is what a person sees first, and it
+    // is the one place a word costs nothing to translate.
+    /// The tab of the products workbook, and of the import template.
+    SheetProducts,
+    SheetSales,
+    SheetCustomers,
+    SheetSuppliers,
+    /// The second tab of the import template: the units and the TVA rates a
+    /// row may name, and nothing else. It is read, never written back.
+    SheetAllowedValues,
 }
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 68] = [
+    pub const ALL: [Key; 73] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -245,6 +260,11 @@ impl Key {
         Key::LastMovements,
         Key::NoFiscalValue,
         Key::DebtInWords,
+        Key::SheetProducts,
+        Key::SheetSales,
+        Key::SheetCustomers,
+        Key::SheetSuppliers,
+        Key::SheetAllowedValues,
     ];
 }
 
@@ -548,5 +568,25 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::DebtInWords, Lang::Fr) => "Arrêtée la présente situation à la somme de",
         (Key::DebtInWords, Lang::En) => "This slip is closed at the sum of",
         (Key::DebtInWords, Lang::Ar) => "أوقفت هذه الوضعية بمبلغ",
+
+        (Key::SheetProducts, Lang::Fr) => "Produits",
+        (Key::SheetProducts, Lang::En) => "Products",
+        (Key::SheetProducts, Lang::Ar) => "المنتجات",
+
+        (Key::SheetSales, Lang::Fr) => "Ventes",
+        (Key::SheetSales, Lang::En) => "Sales",
+        (Key::SheetSales, Lang::Ar) => "المبيعات",
+
+        (Key::SheetCustomers, Lang::Fr) => "Clients",
+        (Key::SheetCustomers, Lang::En) => "Customers",
+        (Key::SheetCustomers, Lang::Ar) => "الزبائن",
+
+        (Key::SheetSuppliers, Lang::Fr) => "Fournisseurs",
+        (Key::SheetSuppliers, Lang::En) => "Suppliers",
+        (Key::SheetSuppliers, Lang::Ar) => "الموردون",
+
+        (Key::SheetAllowedValues, Lang::Fr) => "Valeurs autorisées",
+        (Key::SheetAllowedValues, Lang::En) => "Allowed values",
+        (Key::SheetAllowedValues, Lang::Ar) => "القيم المسموح بها",
     }
 }
