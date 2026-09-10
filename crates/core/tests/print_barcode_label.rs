@@ -267,6 +267,41 @@ fn a_code_whose_check_digit_is_wrong_gets_no_label_at_all() {
     assert_eq!(typed.code(), "validation");
 }
 
+/// The twelve digits of `BARCODE` without its check digit. barcoders takes
+/// a twelve-digit EAN-13 and appends the check digit it computes, so the
+/// bars would carry thirteen digits while the label printed the twelve off
+/// the fiche: a scanner and a person reading the same sticker would come
+/// away with different numbers.
+const TWELVE: &str = "200001000007";
+
+#[test]
+fn a_code_of_twelve_digits_is_refused_rather_than_completed_by_the_encoder() {
+    let refused = render_label(&product(NAME, TWELVE, PRICE), Lang::Fr).unwrap_err();
+    assert_eq!(refused.code(), "validation");
+
+    // The same rule on the sheet, and one more shape a fiche really holds:
+    // thirteen characters that are not all digits.
+    assert_eq!(
+        render_label_sheet(&[product(NAME, TWELVE, PRICE)], Lang::Fr)
+            .unwrap_err()
+            .code(),
+        "validation"
+    );
+    assert_eq!(
+        render_label(&product(NAME, "20000100000A4", PRICE), Lang::Fr)
+            .unwrap_err()
+            .code(),
+        "validation"
+    );
+    // Fourteen digits is an ITF-14 carton code, not a shelf label.
+    assert_eq!(
+        render_label(&product(NAME, "20000100000749", PRICE), Lang::Fr)
+            .unwrap_err()
+            .code(),
+        "validation"
+    );
+}
+
 #[test]
 fn the_sheet_lays_the_labels_out_on_a4_and_refuses_when_one_of_them_cannot_be_printed() {
     let mut updated = Vec::new();

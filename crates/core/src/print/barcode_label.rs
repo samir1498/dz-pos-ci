@@ -111,10 +111,24 @@ fn label(product: &Product, lang: Lang) -> Result<LabelView, CoreError> {
             "this product has no barcode to print",
         ));
     }
-    // `EAN13::new` parses the thirteen digits and recomputes the check
-    // digit, so a code whose own thirteenth is wrong is refused here rather
-    // than drawn. That is the checksum test: the encoder and the printed
-    // digits cannot disagree, because the same string feeds both.
+    // Thirteen ASCII digits, checked here and not left to the encoder.
+    // barcoders takes a twelve-digit code as an EAN-13 body and appends the
+    // check digit it computes, so a fiche carrying twelve would get bars
+    // for thirteen digits under a printed number of twelve: the scanner and
+    // the person reading the same sticker would come away with different
+    // products. Fourteen is an ITF-14 carton code and not a shelf label,
+    // and a non-ASCII digit is not a number at all.
+    //
+    // Past this gate `EAN13::new` sees exactly thirteen digits, where it
+    // recomputes the check digit and refuses a code whose own thirteenth is
+    // wrong. That is the checksum test: the encoder and the printed digits
+    // cannot disagree, because the same string feeds both.
+    if code.len() != 13 || !code.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(CoreError::validation(
+            "barcode",
+            "this barcode is not thirteen digits and has no EAN-13 bars",
+        ));
+    }
     let symbol = EAN13::new(code).map_err(|_| {
         CoreError::validation(
             "barcode",
