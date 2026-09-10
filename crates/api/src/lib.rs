@@ -459,6 +459,23 @@ pub fn router_with_origin(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),
         )
+        .route("/suppliers", get(routes::suppliers::list))
+        .route("/suppliers", post(routes::suppliers::create))
+        .route(
+            "/suppliers/{id}",
+            get(routes::suppliers::get_one).put(routes::suppliers::update),
+        )
+        .route("/suppliers/{id}/close", post(routes::suppliers::close))
+        .route("/suppliers/{id}/ledger", get(routes::suppliers::ledger))
+        .route("/suppliers/{id}/payments", post(routes::suppliers::pay))
+        .route(
+            "/suppliers/{id}/adjustments",
+            post(routes::suppliers::adjust),
+        )
+        .route(
+            "/suppliers/{id}/statement",
+            get(routes::suppliers::statement),
+        )
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
         .route(
