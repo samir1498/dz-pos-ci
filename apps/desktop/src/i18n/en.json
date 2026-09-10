@@ -519,5 +519,17 @@
   "import_reason_too_many_decimals": "too many decimals: a price has two, a quantity three",
   "error_label_not_ean13": "This product's code is not a thirteen-digit EAN-13, so there are no bars to print.",
   "error_label_too_many": "Too many products selected for one sheet of labels.",
-  "import_update_keeps_stock": "The rows being updated change the name and the prices. They leave stock alone: an import never moves quantities."
+  "import_update_keeps_stock": "The rows being updated change the name and the prices. They leave stock alone: an import never moves quantities.",
+  "nav_section_sales": "Sales",
+  "nav_section_purchases": "Purchases",
+  "nav_section_manage": "Manage",
+  "sidebar_toggle": "Show or hide the menu",
+  "sidebar_title": "Menu",
+  "sidebar_description": "The sections of the app.",
+  "table_actions": "Actions",
+  "pill_issued": "Issued",
+  "pill_cancelled": "Cancelled",
+  "pill_paid": "Paid",
+  "pill_open": "Open",
+  "pill_low": "Low stock"
 }
