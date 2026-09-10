@@ -409,7 +409,11 @@ export function ProductsScreen() {
           if (!next) setLabels(null);
         }}
       >
-        <DialogContent className="max-w-3xl">
+        {/* `sm:` on purpose: DialogContent's own cap is `sm:max-w-lg`, and
+            an unprefixed override loses to it at every width the media
+            query covers, which is the only width a sheet of labels is read
+            at. */}
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{t("labels_title")}</DialogTitle>
             <DialogDescription>{t("labels_sheet_hint")}</DialogDescription>
