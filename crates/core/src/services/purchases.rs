@@ -311,9 +311,28 @@ pub fn receive(
     lines: Vec<ReceiveLine>,
     note: Option<String>,
 ) -> Result<PurchaseView, CoreError> {
+    receive_at(conn, shop_id, user_id, purchase_id, lines, note, None)
+}
+
+/// The same delivery on a moment the caller names. `debt::append_at` beside
+/// `debt::append` is the shape this follows: a till never names one, and the
+/// callers that write history rather than make it do.
+///
+/// `None` is now on the shop's clock, so `receive` above is this with nothing
+/// said.
+#[allow(clippy::too_many_arguments)]
+pub fn receive_at(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    purchase_id: i32,
+    lines: Vec<ReceiveLine>,
+    note: Option<String>,
+    at: Option<NaiveDateTime>,
+) -> Result<PurchaseView, CoreError> {
     let note = optional_field("note", note.as_deref())?;
     conn.transaction(|conn| {
-        receive_inside(conn, shop_id, user_id, purchase_id, &lines, note, None)?;
+        receive_inside(conn, shop_id, user_id, purchase_id, &lines, note, at)?;
         get(conn, shop_id, purchase_id)
     })
 }
@@ -333,6 +352,21 @@ pub fn return_to_supplier(
     lines: Vec<ReceiveLine>,
     note: Option<String>,
 ) -> Result<PurchaseView, CoreError> {
+    return_to_supplier_at(conn, shop_id, user_id, purchase_id, lines, note, None)
+}
+
+/// The same return on a moment the caller names; `None` is now on the shop's
+/// clock. See `receive_at` for why the pair exists.
+#[allow(clippy::too_many_arguments)]
+pub fn return_to_supplier_at(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    purchase_id: i32,
+    lines: Vec<ReceiveLine>,
+    note: Option<String>,
+    at: Option<NaiveDateTime>,
+) -> Result<PurchaseView, CoreError> {
     let note = optional_field("note", note.as_deref())?;
     if lines.is_empty() {
         return Err(CoreError::validation(
@@ -342,7 +376,7 @@ pub fn return_to_supplier(
     }
     conn.transaction(|conn| {
         let purchase = repo::get(conn, shop_id, purchase_id)?;
-        let at = clock::now();
+        let at = at.unwrap_or_else(clock::now);
         let ordered = repo::lines(conn, shop_id, purchase_id)?;
         no_line_twice(&lines)?;
         let mut value = Money::ZERO;

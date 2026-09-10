@@ -71,6 +71,22 @@ api port="4317" db=".dev/dev.db" origin="":
     chmod 600 .dev/api-token
     DZPOS_API_TOKEN="$(cat .dev/api-token)" cargo run -p dzpos-api -- --db {{db}} --port {{port}} {{ if origin != "" { "--allow-origin " + origin } else { "" } }}
 
+# fill a development shop file with a catalogue, twelve customers, five
+# suppliers and thirty days of trading, so the dashboard, the statements and
+# the exports have something to show. Deterministic: the same file every run.
+# Refuses a file the dev API is holding open, because the seeder would write
+# into a database the server has its own connection to; stop `just api`
+# first. Pass `force=1` to delete the file and start over.
+seed db=".dev/dev.db" force="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "$(dirname "{{db}}")"
+    if [ -e "{{db}}" ] && command -v fuser >/dev/null 2>&1 && fuser "{{db}}" >/dev/null 2>&1; then
+        echo "{{db}} is open in another process (the dev API?); stop it first" >&2
+        exit 1
+    fi
+    cargo run -p dzpos-api --bin seed -- --db "{{db}}" {{ if force != "" { "--force" } else { "" } }}
+
 # web UI only, reachable from the laptop over Tailscale. Needs `just api`
 # running (it made the token this reads) and started with the laptop's
 # origin as its third argument, or the API refuses the browser (CORS names
