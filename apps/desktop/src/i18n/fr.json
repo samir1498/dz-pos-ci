@@ -390,5 +390,17 @@
   "error_supplier_name_taken": "Ce nom est déjà celui d'un autre fournisseur.",
   "error_supplier_payment_above_debt": "Le paiement dépasse la dette envers le fournisseur. Reste dû :",
   "error_conflict": "Cette valeur est déjà utilisée dans le magasin.",
-  "error_name_too_long": "Nom trop long : 200 caractères au maximum."
+  "error_name_too_long": "Nom trop long : 200 caractères au maximum.",
+  "settings_stock_recount": "Recomptage du stock",
+  "settings_stock_recount_hint": "Chaque nuit, la quantité en stock est recalculée à partir des mouvements. Le journal des mouvements fait foi : la quantité enregistrée sur la fiche est corrigée d'après lui.",
+  "stock_recount_last_run_label": "Dernier recomptage",
+  "stock_recount_checked_label": "Produits vérifiés",
+  "stock_recount_never": "Jamais recompté.",
+  "stock_recount_none": "Aucun écart au dernier recomptage.",
+  "stock_recount_corrected": "La quantité enregistrée a été corrigée d'après le journal des mouvements.",
+  "stock_recount_cached": "Enregistré",
+  "stock_recount_ledger": "Mouvements",
+  "stock_recount_difference": "Écart",
+  "stock_recount_done": "Recomptage fait.",
+  "action_recount_now": "Recompter maintenant"
 }

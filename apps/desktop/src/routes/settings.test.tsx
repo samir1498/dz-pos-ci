@@ -112,11 +112,14 @@ beforeEach(() => {
           : { ...current, regime: dated, regime_planned: null };
       return Promise.resolve(json(200, current));
     }
-    // The page carries the backups block too; it asks for the list as soon
-    // as the settings load, and an unanswered call would leave a second
-    // alert on the screen these tests read.
+    // The page carries the backups block and the stock recount block too;
+    // each asks for its own list as soon as the settings load, and an
+    // unanswered call would leave a second alert on the screen these tests
+    // read.
     if (url.endsWith("/backups"))
       return Promise.resolve(json(200, { backups: [], safety_copies: [] }));
+    if (url.endsWith("/stock/recount"))
+      return Promise.resolve(json(200, { last_run_day: null, drifts: [] }));
     // The régime form dates its default from the shop's calendar, which the
     // server owns; a fixed day here so the field is assertable.
     if (url.endsWith("/clock")) {
