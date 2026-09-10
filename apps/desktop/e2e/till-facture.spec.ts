@@ -101,15 +101,45 @@ async function seedProduct(
   expect(res.status()).toBe(201);
 }
 
-/** The shop's régime, straight from the API. The suite asserts a TVA recap,
- * which only the réel prints; the settings suite leaves the shop there, and
- * this reads it rather than trusting the order two spec files run in. */
+/** The day the shop dates its documents on, which is the core's and not this
+ * machine's. A régime change is dated, so the day has to come from the same
+ * calendar the core reads it back on. */
+async function shopToday(request: APIRequestContext): Promise<string> {
+  const res = await request.get(`${apiUrl()}/clock`, { headers: apiHeaders() });
+  expect(res.ok()).toBe(true);
+  const clock: { today: string } = await res.json();
+  return clock.today;
+}
+
+/** The régime in force today, straight from the API. */
 async function regime(request: APIRequestContext): Promise<string> {
   const res = await request.get(`${apiUrl()}/settings`, { headers: apiHeaders() });
   expect(res.ok()).toBe(true);
   const settings: { regime: { regime: string } } = await res.json();
   return settings.regime.regime;
 }
+
+/** Puts the shop under the réel for the sale this spec is about to ring up.
+ * The suites share one shop file and this one asserts a TVA recap and a droit
+ * de timbre, neither of which the IFU prints, so the régime is this spec's to
+ * make sure of rather than something to inherit from whichever spec ran
+ * before it. The change is only sent when it is a change: the core refuses a
+ * régime that is already in force on the day given, because taking it would
+ * move the "since" date a comptable reads to the day of the click. */
+async function sellUnderTheReel(request: APIRequestContext): Promise<void> {
+  if ((await regime(request)) !== "reel") {
+    const res = await request.post(`${apiUrl()}/settings/regime`, {
+      headers: apiHeaders(),
+      data: { regime: "reel", valid_from: await shopToday(request) },
+    });
+    expect(res.status()).toBe(200);
+  }
+  expect(await regime(request)).toBe("reel");
+}
+
+test.beforeEach(async ({ request }) => {
+  await sellUnderTheReel(request);
+});
 
 async function seedCustomer(request: APIRequestContext): Promise<number> {
   const res = await request.post(`${apiUrl()}/customers`, {
@@ -283,11 +313,6 @@ test("a facture paid in cash carries the TVA recap and the droit de timbre", asy
     },
   });
   expect(created.status()).toBe(201);
-
-  // The régime is the settings suite's parting state, not this suite's to
-  // set: a facture under the IFU would print no recap at all and the
-  // assertions below would be about the wrong shop.
-  expect(await regime(request)).toBe("reel");
 
   await page.goto("/");
   await expect(page).toHaveURL(/\/till$/);
