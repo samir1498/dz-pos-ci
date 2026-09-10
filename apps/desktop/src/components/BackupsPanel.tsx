@@ -151,7 +151,16 @@ export function BackupsPanel() {
               <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1">
                 <dt className="text-sm text-muted-foreground">{t("backups_newest_label")}</dt>
                 <dd data-testid="backups-newest" className="font-medium text-foreground">
-                  {newest === undefined ? t("backups_none") : readableTime(newest.taken_at)}
+                  {newest === undefined ? (
+                    t("backups_none")
+                  ) : (
+                    // A date and a time read left to right with Western
+                    // digits on the Arabic screen too; without this the hour
+                    // swaps in front of the day.
+                    <span dir="ltr" className="font-numeric tabular-nums">
+                      {readableTime(newest.taken_at)}
+                    </span>
+                  )}
                 </dd>
               </dl>
 
@@ -180,7 +189,9 @@ export function BackupsPanel() {
                       setAsking(row);
                     }}
                   >
-                    <Icon as={RotateCcw} size={18} />
+                    {/* An undo, which the kit mirrors with the page: on the
+                        Arabic screen "back" is the other way round. */}
+                    <Icon as={RotateCcw} size={18} flip />
                     {restore.isPending && restore.variables === row.name
                       ? t("action_restoring")
                       : t("action_restore")}
