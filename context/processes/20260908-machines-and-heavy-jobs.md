@@ -117,8 +117,14 @@ disk hit zero five times in an hour.
   touches that checkout's crate sources, so the three members rebuild and
   the dependencies (identical everywhere) stay cached. Every cargo recipe
   in the justfile depends on it; a bare `cargo` in a worktree comes after
-  `just claim`. A gate run that overlapped another worktree's build is not
-  a gate run: rerun it through `just`.
+  `just claim`. The compile-and-run recipes (`just clippy`, `just test`,
+  `just types`, `just types-check`) also hold `flock` on the folder for
+  the whole run, because cargo's own lock only covers compilation: while
+  one worktree's `cargo test` ran its binaries, another worktree's build
+  replaced the rlib its doc-tests were about to link. One cargo
+  invocation at a time across every checkout; the second waits. A gate
+  run that overlapped another worktree's build is not a gate run: rerun
+  it through `just`.
 - A worktree is torn down with `just worktree-rm` the moment its branch
   merges. Moving a worktree to a new task to keep its warm cache (what the
   loop did all morning) is what kept four `target/` folders alive.

@@ -24,6 +24,13 @@ export CARGO_BUILD_JOBS := env_var_or_default("CARGO_BUILD_JOBS", "2")
 # sources so cargo rebuilds the workspace's own members; the dependencies stay
 # cached, they are identical in every checkout. Every cargo recipe below
 # depends on it; run a bare `cargo` in a worktree only after `just claim`.
+#
+# The recipes that compile and then run something hold a lock on the
+# folder for the whole run: cargo's own lock only covers compilation, so
+# while one worktree's `cargo test` was running its binaries another
+# worktree's build replaced the rlib the doc-tests were about to link
+# ("extern location for dzpos_core does not exist", 2026-09-10). One cargo
+# invocation at a time across every checkout; the second one waits.
 claim:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -46,10 +53,10 @@ fmt:
     cargo fmt --all --check
 
 clippy: claim
-    cargo clippy --workspace --all-targets -- -D warnings
+    flock "$CARGO_TARGET_DIR/.lock" cargo clippy --workspace --all-targets -- -D warnings
 
 test: claim
-    cargo test --workspace
+    flock "$CARGO_TARGET_DIR/.lock" cargo test --workspace
     pnpm -r test
 
 build:
@@ -69,7 +76,7 @@ types-check: claim
     fi
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' EXIT
-    DZPOS_TS_OUT_DIR="$tmp" cargo test -p dzpos-api --test export_bindings
+    DZPOS_TS_OUT_DIR="$tmp" flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --test export_bindings
     diff -r "$tmp" packages/shared/src/generated
 
 # regenerate the committed TS types after a DTO change (the test never
@@ -78,7 +85,7 @@ types-check: claim
 # path here wrote crates/api/packages/shared/src/generated the first time a
 # DTO was added after the recipe was written.
 types: claim
-    DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" cargo test -p dzpos-api --test export_bindings
+    DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --test export_bindings
 
 # everything a PR needs, in order; stops at the first failure
 gates: fmt clippy types-check test build
@@ -128,7 +135,10 @@ seed: claim
     # The binary deletes the file itself, so the run is repeatable; the guard
     # above is here rather than in `just seed-clean` because re-entering just
     # from a recipe body runs whatever else the recipe list has grown.
-    DZPOS_DEV=1 cargo run -p dzpos-seed --bin dzpos-seed -- --db .dev/dev.db
+    # Under the same lock every other cargo recipe takes: this one compiles,
+    # and a build in another checkout pulling the rlib out from under it is
+    # what the lock exists for.
+    DZPOS_DEV=1 flock "$CARGO_TARGET_DIR/.lock" cargo run -p dzpos-seed --bin dzpos-seed -- --db .dev/dev.db
 
 # delete .dev/dev.db so the next `just api` starts an empty shop.
 #
