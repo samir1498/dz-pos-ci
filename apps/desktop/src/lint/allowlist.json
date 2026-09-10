@@ -16,7 +16,6 @@
     { "file": "src/routes/settings.tsx", "screen": "settings" },
     { "file": "src/components/BackupsPanel.tsx", "screen": "settings, the backups panel" },
     { "file": "src/components/StockRecountPanel.tsx", "screen": "settings, the stock recount panel" },
-    { "file": "src/components/ExportImportPanel.tsx", "screen": "products, the export and import panel" },
     { "file": "src/components/ThemeSwitcher.tsx", "screen": "the topbar's theme switch" },
     { "file": "src/lib/fields.tsx", "screen": "the shared money field the forms use" }
   ]

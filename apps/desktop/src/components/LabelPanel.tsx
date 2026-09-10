@@ -65,9 +65,9 @@ export function LabelPanel({ ask }: { ask: LabelAsk }) {
 
   return (
     <>
-      {page.isPending ? <p>{t("products_loading")}</p> : null}
+      {page.isPending ? <p className="text-muted-foreground">{t("products_loading")}</p> : null}
       {page.isError ? (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-fg-danger">
           {t(errorKey(page.error))}
         </p>
       ) : null}
@@ -78,7 +78,7 @@ export function LabelPanel({ ask }: { ask: LabelAsk }) {
           // An empty sandbox: the page carries no script and needs no
           // origin, so it cannot reach this one.
           sandbox=""
-          className="h-96 w-full border-0"
+          className="h-96 w-full rounded-md border border-border bg-card"
           data-testid="product-label"
         />
       ) : null}

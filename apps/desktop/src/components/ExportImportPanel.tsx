@@ -13,6 +13,13 @@ import { useRef, useState } from "react";
 import { ApiError } from "@dzpos/shared";
 import type { ExportKind, ImportDryRunDto, ImportRowDto } from "@dzpos/shared";
 import { api, categoriesQueryKey, productsQueryKey } from "@/api";
+import { DataTable, type Column } from "@/components/DataTable";
+import { FormField } from "@/components/FormField";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { saveBlob } from "@/lib/download";
 import { useTranslation, type Key } from "@/i18n";
 
@@ -134,140 +141,153 @@ export function ExportImportPanel() {
   const clean = dryRun !== null && dryRun.refused === 0 && dryRun.accepted > 0;
 
   return (
-    <section
-      aria-labelledby="settings-export-import"
-      className="flex flex-col gap-3 rounded border p-4"
-    >
-      <h2 id="settings-export-import" className="font-semibold">
-        {t("settings_export_import")}
-      </h2>
-      <p className="text-sm opacity-80">{t("settings_export_import_hint")}</p>
+    <Card aria-labelledby="settings-export-import" data-testid="export-import">
+      <CardHeader>
+        {/* A heading and not `CardTitle`, which is a div: this block is a
+            section of the settings screen and a screen reader's outline has
+            to be able to jump to it. */}
+        <h2 id="settings-export-import" className="text-md leading-none font-semibold">
+          {t("settings_export_import")}
+        </h2>
+        <CardDescription>{t("settings_export_import_hint")}</CardDescription>
+      </CardHeader>
 
-      <div className="flex flex-wrap items-end gap-2">
-        {EXPORTS.map((one) => (
-          <button
-            key={one.kind}
-            type="button"
-            data-testid={one.testId}
-            className="rounded border px-3 py-1.5 disabled:opacity-50"
-            disabled={busy || (one.kind === "sales" && backwards)}
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end gap-2">
+          {EXPORTS.map((one) => (
+            <Button
+              key={one.kind}
+              variant="outline"
+              data-testid={one.testId}
+              disabled={busy || (one.kind === "sales" && backwards)}
+              onClick={() => {
+                setServerError(null);
+                download.mutate(one.kind);
+              }}
+            >
+              {t(one.label)}
+            </Button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-4">
+          <FormField label={t("field_from")}>
+            {(parts) => (
+              <Input
+                {...parts}
+                type="date"
+                dir="ltr"
+                className="font-numeric tabular-nums"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField label={t("field_to")}>
+            {(parts) => (
+              <Input
+                {...parts}
+                type="date"
+                dir="ltr"
+                className="font-numeric tabular-nums"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            )}
+          </FormField>
+          <p className="text-sm text-muted-foreground">{t("export_range_hint")}</p>
+        </div>
+        {backwards ? (
+          <p role="alert" className="text-fg-danger">
+            {t("error_statement_range_invalid")}
+          </p>
+        ) : null}
+
+        <Separator />
+
+        <h3 className="text-md font-semibold">{t("import_title")}</h3>
+        <p className="text-sm text-muted-foreground">{t("import_hint")}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            data-testid="import-template"
+            disabled={busy}
             onClick={() => {
               setServerError(null);
-              download.mutate(one.kind);
+              template.mutate();
             }}
           >
-            {t(one.label)}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1">
-          <span>{t("field_from")}</span>
-          <input
-            type="date"
-            dir="ltr"
-            className="rounded border px-2 py-1 font-mono"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            {t("action_download_template")}
+          </Button>
+          <Input
+            ref={picker}
+            type="file"
+            accept=".xlsx"
+            aria-label={t("import_pick_file")}
+            data-testid="import-file"
+            className="w-auto"
+            onChange={(e) => {
+              const chosen = e.target.files?.[0] ?? null;
+              setDryRun(null);
+              setDone(null);
+              setServerError(null);
+              setFile(chosen);
+            }}
           />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span>{t("field_to")}</span>
-          <input
-            type="date"
-            dir="ltr"
-            className="rounded border px-2 py-1 font-mono"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-          />
-        </label>
-        <p className="text-sm opacity-80">{t("export_range_hint")}</p>
-      </div>
-      {backwards ? (
-        <p role="alert" className="text-red-700">
-          {t("error_statement_range_invalid")}
-        </p>
-      ) : null}
-
-      <h3 className="font-semibold">{t("import_title")}</h3>
-      <p className="text-sm opacity-80">{t("import_hint")}</p>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-testid="import-template"
-          className="rounded border px-3 py-1.5 disabled:opacity-50"
-          disabled={busy}
-          onClick={() => {
-            setServerError(null);
-            template.mutate();
-          }}
-        >
-          {t("action_download_template")}
-        </button>
-        <input
-          ref={picker}
-          type="file"
-          accept=".xlsx"
-          aria-label={t("import_pick_file")}
-          data-testid="import-file"
-          onChange={(e) => {
-            const chosen = e.target.files?.[0] ?? null;
-            setDryRun(null);
-            setDone(null);
-            setServerError(null);
-            setFile(chosen);
-          }}
-        />
-        <button
-          type="button"
-          data-testid="import-dry-run"
-          className="rounded border px-3 py-1.5 disabled:opacity-50"
-          disabled={busy || file === null}
-          onClick={() => {
-            if (file !== null) check.mutate(file);
-          }}
-        >
-          {check.isPending ? t("action_checking") : t("action_check_file")}
-        </button>
-      </div>
-
-      {dryRun !== null ? (
-        <DryRunTable report={dryRun} reasonKey={(reason) => REASON_KEY[reason]} />
-      ) : null}
-
-      {dryRun !== null ? (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            data-testid="import-apply"
-            className="rounded border px-3 py-1.5 disabled:opacity-50"
-            disabled={busy || !clean || file === null}
+          <Button
+            data-testid="import-dry-run"
+            disabled={busy || file === null}
             onClick={() => {
-              if (file !== null) apply.mutate(file);
+              if (file !== null) check.mutate(file);
             }}
           >
-            {apply.isPending ? t("action_importing") : t("action_import")}
-          </button>
-          {clean ? null : <p className="text-sm opacity-80">{t("import_fix_first")}</p>}
+            {check.isPending ? t("action_checking") : t("action_check_file")}
+          </Button>
         </div>
-      ) : null}
 
-      {serverError !== null ? (
-        <p role="alert" className="text-red-700">
-          {t(serverError)}
-        </p>
-      ) : null}
-      {done !== null && serverError === null ? (
-        <p role="status" data-testid="import-done">
-          {done}
-        </p>
-      ) : null}
-    </section>
+        {dryRun !== null ? (
+          <DryRunReport report={dryRun} reasonKey={(reason) => REASON_KEY[reason]} />
+        ) : null}
+
+        {dryRun !== null ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              data-testid="import-apply"
+              disabled={busy || !clean || file === null}
+              onClick={() => {
+                if (file !== null) apply.mutate(file);
+              }}
+            >
+              {apply.isPending ? t("action_importing") : t("action_import")}
+            </Button>
+            {clean ? null : (
+              <p className="text-sm text-muted-foreground">{t("import_fix_first")}</p>
+            )}
+          </div>
+        ) : null}
+
+        {serverError !== null ? (
+          <p role="alert" className="text-fg-danger">
+            {t(serverError)}
+          </p>
+        ) : null}
+        {done !== null && serverError === null ? (
+          <p role="status" data-testid="import-done">
+            {done}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
-function DryRunTable({
+/**
+ * What the file would do, read before anything is written. The outcome wears
+ * a badge rather than a colour alone, and the refusal carries the field the
+ * core named beside it: "unknown_unit" on line 4 is a cell to go and fix, and
+ * a row that only said "refused" sends the shop back through the whole file.
+ */
+function DryRunReport({
   report,
   reasonKey,
 }: {
@@ -280,8 +300,44 @@ function DryRunTable({
     updated: "import_outcome_updated",
     refused: "import_outcome_refused",
   };
+  const tone = (outcome: ImportRowDto["outcome"]) =>
+    outcome === "refused" ? "destructive" : outcome === "updated" ? "secondary" : "default";
+
+  const columns: readonly Column<ImportRowDto>[] = [
+    {
+      id: "row",
+      header: t("col_row"),
+      numeric: true,
+      cell: (row) => (
+        <span dir="ltr" data-testid="import-row-number">
+          {row.row}
+        </span>
+      ),
+    },
+    { id: "name", header: t("col_name"), cell: (row) => row.name },
+    {
+      id: "outcome",
+      header: t("col_outcome"),
+      cell: (row) => {
+        const known = row.reason === null ? undefined : reasonKey(row.reason);
+        return (
+          <span className="flex flex-wrap items-center gap-2">
+            <Badge variant={tone(row.outcome)}>{t(outcomeLabel[row.outcome])}</Badge>
+            {row.field === null ? null : (
+              <span className="text-sm text-muted-foreground">
+                {row.field}
+                {": "}
+                {known === undefined ? row.reason : t(known)}
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
+  ];
+
   return (
-    <>
+    <div className="flex flex-col gap-2">
       <p data-testid="import-counts">
         {t("import_counts")
           .replace("{accepted}", String(report.accepted))
@@ -290,49 +346,17 @@ function DryRunTable({
       {/* Only when a row really is an update: the sentence answers a
           question nobody asked on a file that creates everything. */}
       {report.rows.some((row) => row.outcome === "updated") ? (
-        <p className="text-sm opacity-80" data-testid="import-keeps-stock">
+        <p className="text-sm text-muted-foreground" data-testid="import-keeps-stock">
           {t("import_update_keeps_stock")}
         </p>
       ) : null}
-      <table className="w-full text-start">
-        <caption className="sr-only">{t("import_title")}</caption>
-        <thead>
-          <tr>
-            <th scope="col" className="pb-2 text-start">
-              {t("col_row")}
-            </th>
-            <th scope="col" className="pb-2 text-start">
-              {t("col_name")}
-            </th>
-            <th scope="col" className="pb-2 text-start">
-              {t("col_outcome")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {report.rows.map((row) => {
-            const known = row.reason === null ? undefined : reasonKey(row.reason);
-            return (
-              <tr key={row.row} className="border-t" data-testid="import-row">
-                <td className="py-1.5 pe-3 font-mono" dir="ltr">
-                  {row.row}
-                </td>
-                <td className="py-1.5 pe-3">{row.name}</td>
-                <td className="py-1.5 pe-3">
-                  {t(outcomeLabel[row.outcome])}
-                  {row.field === null ? null : (
-                    <span className="ms-2 text-sm opacity-80">
-                      {row.field}
-                      {": "}
-                      {known === undefined ? row.reason : t(known)}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </>
+      <DataTable
+        columns={columns}
+        rows={report.rows}
+        rowKey={(row) => row.row}
+        caption={t("import_title")}
+        data-testid="import-table"
+      />
+    </div>
   );
 }
