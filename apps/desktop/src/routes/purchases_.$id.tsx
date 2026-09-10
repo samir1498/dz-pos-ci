@@ -200,6 +200,9 @@ function LinesTable({
           <th scope="col" className="text-end pb-2 ps-3">{t("col_ordered")}</th>
           <th scope="col" className="text-end pb-2 ps-3">{t("col_received")}</th>
           <th scope="col" className="text-end pb-2 ps-3">{t("col_returned")}</th>
+          {/* TODO(M4): a cashier does not see these two. What the shop pays
+              for its stock is not something a till operator has any call to
+              read, and there are no roles in the app until §5 lands. */}
           <th scope="col" className="text-end pb-2 ps-3">{t("col_unit_cost")}</th>
           <th scope="col" className="text-end pb-2 ps-3">{t("col_landed_cost")}</th>
         </tr>

@@ -96,6 +96,12 @@ fiche refuses an order and goes on taking payments. A product is named once
 on an order, because the cost a delivery leaves on the product has to name
 one line.
 
+Money handed over as the order is written is a payment like any other, so it
+settles the supplier's oldest open order first (§2) and not necessarily the
+order it arrived with: a shop that pays on today's order while last week's is
+still open has paid last week's. What no order can take stays on the balance
+as credit, and the next delivery places it.
+
 Stock and supplier debt move on receipt and never on save (plan lens,
 2026-09-10). An order is a piece of paper until goods are handed over, so an
 order closed short owes nothing for what never came and a shelf count does
@@ -111,10 +117,18 @@ receipt of that line uses the answer. A share recomputed at each delivery
 would move a cost a sale has already been measured against, and a margin
 would change without anybody selling anything. The second rounding is the one
 place centimes are lost: a line's landed total can come out under its value
-plus its share by less than one unit's worth, never above it
+plus its share by fewer centimes than the line has units, plus one, and never
+above it
 (`purchase_prop.rs` pins both halves). Extra costs over lines that are worth
 nothing are refused, because a share of nothing is nothing and there is no
 honest line to put the amount on.
+
+A delivery is worth what the line is worth once it has arrived, less what the
+line was worth before: the parts round down and the delivery that finishes a
+line takes the remainder, so an order received in parts is debited exactly its
+landed total and an order paid in full up front is left asking for nothing. A
+return is priced the same way against what has already gone back, so a line
+received whole and returned whole leaves nothing on the account.
 
 A delivery is a `purchase_receipts` row, the bon de réception, numbered from
 a `reception:<year>` counter that resets on 1 January like every other series.

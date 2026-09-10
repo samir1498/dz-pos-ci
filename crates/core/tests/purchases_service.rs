@@ -426,7 +426,7 @@ fn a_receipt_after_the_purchase_was_fully_paid_lands_the_credit_on_it() {
 }
 
 #[test]
-fn paid_now_with_the_goods_settles_the_order_it_was_saved_with() {
+fn paid_now_with_the_goods_settles_the_only_order_the_supplier_has_open() {
     let (_dir, mut conn) = open_temp();
     let supplier = a_supplier(&mut conn, "Sarl Amrani");
     let farine = a_product(&mut conn, "Farine 5kg", 0);
@@ -1353,4 +1353,67 @@ fn an_order_whose_every_line_has_arrived_takes_no_further_delivery() {
     let after = purchases::get(&mut conn, SHOP, saved.purchase.id).unwrap();
     assert_eq!(after.receipts.len(), 1);
     assert_eq!(after.receipts[0].receipt.number, 1);
+}
+
+#[test]
+fn money_handed_over_with_an_order_settles_the_supplier_s_oldest_open_order() {
+    // The deliberate reading, pinned because it surprises: a payment settles
+    // the supplier's open orders oldest first (features.md §2), and money
+    // handed over while a new order is written is a payment like any other.
+    // So a shop that pays 500,00 on today's order while last week's is still
+    // open has paid last week's, and today's still shows what it is worth.
+    //
+    // The alternative, placing it on the order it arrived with, would make
+    // one payment in the app behave unlike every other and leave the oldest
+    // order open while the newest was settled out of turn.
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    let farine = a_product(&mut conn, "Farine 5kg", 0);
+    let sucre = a_product(&mut conn, "Sucre 1kg", 0);
+    let older = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewPurchase {
+            purchase_date: "2026-09-01".to_string(),
+            receive_now: true,
+            ..an_order(supplier, vec![line(farine, 10_000, 20_000)])
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::centimes(200_000)
+    );
+
+    let newer = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewPurchase {
+            receive_now: true,
+            paid_now: Some(Paid {
+                amount: Money::centimes(50_000),
+                mode: PaymentMethod::Cash,
+            }),
+            ..an_order(supplier, vec![line(sucre, 10_000, 9_000)])
+        },
+    )
+    .unwrap();
+
+    let open = supplier_debt::open_purchases(&mut conn, SHOP, supplier).unwrap();
+    assert_eq!(open.len(), 2);
+    // The money went to the older order, not to the one it came in with.
+    assert_eq!(open[0].purchase_id, older.purchase.id);
+    assert_eq!(open[0].remaining, Money::centimes(150_000));
+    assert_eq!(open[1].purchase_id, newer.purchase.id);
+    assert_eq!(open[1].remaining, Money::centimes(90_000));
+    assert!(
+        supplier_debt::allocations(&mut conn, SHOP, newer.purchase.id)
+            .unwrap()
+            .is_empty()
+    );
+    let placed = supplier_debt::allocations(&mut conn, SHOP, older.purchase.id).unwrap();
+    assert_eq!(placed.len(), 1);
+    assert_eq!(placed[0].amount, Money::centimes(50_000));
 }
