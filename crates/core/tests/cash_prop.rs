@@ -20,7 +20,7 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::cash;
-use dzpos_core::services::clock::Period;
+use dzpos_core::services::clock::{Month, Period};
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
 use dzpos_core::services::documents::{
     self, DocumentKind, NewDocument, NewDocumentLine, SellerBlock,
@@ -32,8 +32,12 @@ mod common;
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
-/// The day the position is asked for. Rows land on it, on the day before and
-/// on the day after, so the bounds are under test on every case.
+/// The month the position is asked for, and the day inside it. Rows land on
+/// that day, on the days on either side of it, and on the last day of the
+/// month before and the first of the month after, so both sets of bounds are
+/// under test on every case.
+const YEAR: i32 = 2026;
+const MONTH: u32 = 9;
 const THE_DAY: u32 = 15;
 
 /// One thing the shop does. The amounts are whole dinars, small enough that a
@@ -55,22 +59,40 @@ enum Event {
     Elsewhere(i64),
 }
 
-/// Where the event lands: the day asked for, the day before, or the day
-/// after. Only the first counts.
+/// Where the event lands. Five places, because the case asks the position
+/// twice: for the day, where only `OnTheDay` counts, and for the month, where
+/// the three September days count and the two rows on either side of the
+/// month do not. The last day of August and the first of October are the
+/// bounds a month query gets wrong if it works in whole months rather than in
+/// days.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum When {
-    Before,
+    MonthBefore,
+    DayBefore,
     OnTheDay,
-    After,
+    DayAfter,
+    MonthAfter,
 }
 
 impl When {
-    const fn day(self) -> u32 {
+    fn day(self) -> NaiveDate {
         match self {
-            When::Before => THE_DAY - 1,
-            When::OnTheDay => THE_DAY,
-            When::After => THE_DAY + 1,
+            When::MonthBefore => calendar_in(8, 31),
+            When::DayBefore => calendar(THE_DAY - 1),
+            When::OnTheDay => calendar(THE_DAY),
+            When::DayAfter => calendar(THE_DAY + 1),
+            When::MonthAfter => calendar_in(10, 1),
         }
+    }
+
+    /// Whether a row here reaches the day the case asks for.
+    const fn in_the_day(self) -> bool {
+        matches!(self, When::OnTheDay)
+    }
+
+    /// Whether it reaches the month the case asks for.
+    const fn in_the_month(self) -> bool {
+        matches!(self, When::DayBefore | When::OnTheDay | When::DayAfter)
     }
 }
 
@@ -85,6 +107,88 @@ struct Expected {
     expenses: i64,
     card_sales: i64,
     card_customer_payments: i64,
+}
+
+impl Expected {
+    /// Folds one row's effect in. The case keeps two of these, one per range
+    /// it asks about, and a row is added to whichever ones it falls in.
+    fn add(&mut self, other: Expected) {
+        self.cash_sales += other.cash_sales;
+        self.cash_stamp += other.cash_stamp;
+        self.cash_customer_payments += other.cash_customer_payments;
+        self.supplier_cash += other.supplier_cash;
+        self.expenses += other.expenses;
+        self.card_sales += other.card_sales;
+        self.card_customer_payments += other.card_customer_payments;
+    }
+}
+
+/// What the service answered for one range, against the tally the case kept
+/// while it was writing. Every column on its own: a total alone would pass
+/// with two filters wrong in opposite directions.
+fn agrees(
+    position: &cash::CashPosition,
+    expected: Expected,
+    range: &str,
+) -> Result<(), TestCaseError> {
+    prop_assert_eq!(
+        position.cash_in.sales.as_centimes(),
+        expected.cash_sales,
+        "{}: cash sales",
+        range
+    );
+    prop_assert_eq!(
+        position.cash_in.stamp.as_centimes(),
+        expected.cash_stamp,
+        "{}: stamp",
+        range
+    );
+    prop_assert_eq!(
+        position.cash_in.customer_payments.as_centimes(),
+        expected.cash_customer_payments,
+        "{}: cash customer payments",
+        range
+    );
+    prop_assert_eq!(position.cash_out.refunds, Money::ZERO, "{}: refunds", range);
+    prop_assert_eq!(
+        position.cash_out.supplier_payments.as_centimes(),
+        expected.supplier_cash,
+        "{}: supplier cash",
+        range
+    );
+    prop_assert_eq!(
+        position.cash_out.expenses.as_centimes(),
+        expected.expenses,
+        "{}: expenses",
+        range
+    );
+    prop_assert_eq!(
+        position.card_in.sales.as_centimes(),
+        expected.card_sales,
+        "{}: card sales",
+        range
+    );
+    // Nothing here writes a stamped card document, so the tax never reaches
+    // this side.
+    prop_assert_eq!(position.card_in.stamp, Money::ZERO, "{}: card stamp", range);
+    prop_assert_eq!(
+        position.card_in.customer_payments.as_centimes(),
+        expected.card_customer_payments,
+        "{}: card customer payments",
+        range
+    );
+    // Redundant given the columns above, and kept: it is the one line that
+    // reads the service's own subtraction rather than its filters, so a
+    // checked_sub written the wrong way round fails here and nowhere else.
+    prop_assert_eq!(
+        position.cash.as_centimes(),
+        expected.cash_sales + expected.cash_customer_payments
+            - expected.supplier_cash
+            - expected.expenses,
+        "{}: the net",
+        range
+    );
+    Ok(())
 }
 
 fn events() -> impl Strategy<Value = Vec<(When, Event)>> {
@@ -117,7 +221,13 @@ fn events() -> impl Strategy<Value = Vec<(When, Event)>> {
         amount.clone().prop_map(Event::Spend),
         amount.prop_map(Event::Elsewhere),
     ];
-    let when = prop_oneof![Just(When::Before), Just(When::OnTheDay), Just(When::After)];
+    let when = prop_oneof![
+        Just(When::MonthBefore),
+        Just(When::DayBefore),
+        Just(When::OnTheDay),
+        Just(When::DayAfter),
+        Just(When::MonthAfter),
+    ];
     prop::collection::vec((when, event), 1..=14)
 }
 
@@ -125,7 +235,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(24))]
 
     #[test]
-    fn every_column_of_the_position_is_the_sum_of_the_rows_that_belong_in_it(
+    fn every_column_of_the_day_and_of_the_month_is_the_sum_of_the_rows_that_belong_in_it(
         events in events()
     ) {
         let dir = tempfile::tempdir().unwrap();
@@ -135,7 +245,11 @@ proptest! {
         a_second_shop(&mut conn);
         a_supplier(&mut conn, SHOP, 1);
         a_supplier(&mut conn, 2, 2);
-        let mut expected = Expected::default();
+        // One tally per range the case asks about. A row is folded into
+        // whichever of them it falls in, so the two are built by the same
+        // walk and cannot drift apart.
+        let mut for_the_day = Expected::default();
+        let mut for_the_month = Expected::default();
         // Two documents can be issued inside one second and the hour only has
         // to stay on the right day, so it walks up and wraps.
         let mut hour = 0;
@@ -143,39 +257,39 @@ proptest! {
         for (when, event) in &events {
             let day = when.day();
             hour = (hour + 1) % 24;
-            let counts = *when == When::OnTheDay;
+            let mut delta = Expected::default();
             match *event {
                 Event::Sell(kind, mode, total_ttc, stamp) => {
-                    a_document(&mut conn, SHOP, kind, mode, total_ttc, stamp, at(day, hour), None);
+                    a_document(&mut conn, SHOP, kind, mode, total_ttc, stamp, moment(day, hour), None);
                     // A proforma is a quotation and no money moved for it; a
                     // credit sale is a debt, not a drawer.
                     let sold = matches!(kind, DocumentKind::Ticket | DocumentKind::Facture);
-                    if counts && sold {
+                    if sold {
                         match mode {
                             // What the drawer took is `net_to_pay`: the stamp
                             // came over the counter with the rest.
                             PaymentMode::Cash => {
-                                expected.cash_sales += total_ttc + stamp;
-                                expected.cash_stamp += stamp;
+                                delta.cash_sales = total_ttc + stamp;
+                                delta.cash_stamp = stamp;
                             }
-                            PaymentMode::Card => expected.card_sales += total_ttc,
+                            PaymentMode::Card => delta.card_sales = total_ttc,
                             PaymentMode::Credit => {}
                         }
                     }
                 }
                 Event::SellThenCancel(mode, total_ttc) => {
                     let id = a_document(
-                        &mut conn, SHOP, DocumentKind::Ticket, mode, total_ttc, 0, at(day, hour), None,
+                        &mut conn, SHOP, DocumentKind::Ticket, mode, total_ttc, 0, moment(day, hour), None,
                     );
                     documents::cancel(
-                        &mut conn, SHOP, OWNER, id, "erreur".to_string(), Some(at(day, hour)),
+                        &mut conn, SHOP, OWNER, id, "erreur".to_string(), Some(moment(day, hour)),
                     ).unwrap();
-                    // Nothing is added: an annulled ticket is money that never
-                    // stayed in the drawer.
+                    // The delta stays empty: an annulled ticket is money that
+                    // never stayed in the drawer.
                 }
                 Event::Settle(method, centimes) => {
                     // The debt first, so the payment has something to land on.
-                    // Written straight onto the ledger and dated before the
+                    // Written straight onto the ledger and dated before every
                     // range: what is under test is which payments the cash
                     // position counts, not how a credit sale gets there.
                     debt::append_at(
@@ -190,80 +304,73 @@ proptest! {
                             user_id: OWNER,
                             note: None,
                         },
-                        Some(at(THE_DAY - 2, hour)),
+                        Some(moment(calendar_in(7, 1), hour)),
                     ).unwrap();
                     debt::pay(
                         &mut conn, SHOP, OWNER, customer, Money::centimes(centimes),
-                        method, None, at(day, hour),
+                        method, None, moment(day, hour),
                     ).unwrap();
-                    if counts {
-                        match method {
-                            PaymentMethod::Cash => expected.cash_customer_payments += centimes,
-                            PaymentMethod::Card => expected.card_customer_payments += centimes,
-                        }
+                    match method {
+                        PaymentMethod::Cash => delta.cash_customer_payments = centimes,
+                        PaymentMethod::Card => delta.card_customer_payments = centimes,
                     }
                 }
                 Event::PaySupplier(method, centimes) => {
-                    pay_supplier(&mut conn, SHOP, 1, centimes, method, at(day, hour));
-                    if counts && method == PaymentMethod::Cash {
-                        expected.supplier_cash += centimes;
+                    pay_supplier(&mut conn, SHOP, 1, centimes, method, moment(day, hour));
+                    if method == PaymentMethod::Cash {
+                        delta.supplier_cash = centimes;
                     }
                 }
                 Event::Spend(centimes) => {
-                    spend(&mut conn, centimes, calendar(day));
-                    if counts {
-                        expected.expenses += centimes;
-                    }
+                    spend(&mut conn, centimes, day);
+                    delta.expenses = centimes;
                 }
                 Event::Elsewhere(centimes) => {
                     // The other shop sells, pays a supplier and spends on the
-                    // same day. None of it is this shop's cash.
+                    // same day. None of it is this shop's cash, so the delta
+                    // stays empty for both ranges.
                     a_document(
                         &mut conn, 2, DocumentKind::Ticket, PaymentMode::Cash, centimes, 0,
-                        at(day, hour), None,
+                        moment(day, hour), None,
                     );
-                    pay_supplier(&mut conn, 2, 2, centimes, PaymentMethod::Cash, at(day, hour));
+                    pay_supplier(&mut conn, 2, 2, centimes, PaymentMethod::Cash, moment(day, hour));
                 }
+            }
+            if when.in_the_day() {
+                for_the_day.add(delta);
+            }
+            if when.in_the_month() {
+                for_the_month.add(delta);
             }
         }
 
-        let position = cash::position(&mut conn, SHOP, Period::Day(calendar(THE_DAY))).unwrap();
-        prop_assert_eq!(position.cash_in.sales.as_centimes(), expected.cash_sales);
-        prop_assert_eq!(position.cash_in.stamp.as_centimes(), expected.cash_stamp);
-        prop_assert_eq!(
-            position.cash_in.customer_payments.as_centimes(),
-            expected.cash_customer_payments
-        );
-        prop_assert_eq!(position.cash_out.refunds, Money::ZERO);
-        prop_assert_eq!(
-            position.cash_out.supplier_payments.as_centimes(),
-            expected.supplier_cash
-        );
-        prop_assert_eq!(position.cash_out.expenses.as_centimes(), expected.expenses);
-        prop_assert_eq!(position.card_in.sales.as_centimes(), expected.card_sales);
-        // Nothing here writes a stamped card document, so the tax never
-        // reaches this side.
-        prop_assert_eq!(position.card_in.stamp, Money::ZERO);
-        prop_assert_eq!(
-            position.card_in.customer_payments.as_centimes(),
-            expected.card_customer_payments
-        );
-        // And the whole is its parts, to the centime.
-        prop_assert_eq!(
-            position.cash.as_centimes(),
-            expected.cash_sales + expected.cash_customer_payments
-                - expected.supplier_cash
-                - expected.expenses
-        );
+        let day = cash::position(&mut conn, SHOP, Period::Day(calendar(THE_DAY))).unwrap();
+        agrees(&day, for_the_day, "the day")?;
+
+        // The same file read over the whole of September. The rows on 31
+        // August and 1 October are what a month query gets wrong if it works
+        // in whole months rather than in the days they cover.
+        let month = cash::position(
+            &mut conn,
+            SHOP,
+            Period::Month(Month::new(YEAR, MONTH).unwrap()),
+        ).unwrap();
+        prop_assert_eq!(month.from, calendar(1));
+        prop_assert_eq!(month.to, calendar(30));
+        agrees(&month, for_the_month, "the month")?;
     }
 }
 
 fn calendar(day: u32) -> NaiveDate {
-    NaiveDate::from_ymd_opt(2026, 9, day).unwrap()
+    calendar_in(MONTH, day)
 }
 
-fn at(day: u32, hour: u32) -> NaiveDateTime {
-    calendar(day).and_hms_opt(hour, 30, 0).unwrap()
+fn calendar_in(month: u32, day: u32) -> NaiveDate {
+    NaiveDate::from_ymd_opt(YEAR, month, day).unwrap()
+}
+
+fn moment(day: NaiveDate, hour: u32) -> NaiveDateTime {
+    day.and_hms_opt(hour, 30, 0).unwrap()
 }
 
 fn a_second_shop(conn: &mut SqliteConnection) {
