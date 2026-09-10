@@ -202,7 +202,9 @@ function Figures({ customer }: { customer: CustomerDto }) {
       </Card>
       <Card>
         <CardHeader>
-          <CardDescription>{t("field_warn_threshold")}</CardDescription>
+          {/* The short form: the form's own label carries "(DA)", which a
+              card whose whole content is an amount does not need. */}
+          <CardDescription>{t("customers_warn_threshold")}</CardDescription>
         </CardHeader>
         <CardContent>
           {customer.warn_threshold_centimes === null ? (
@@ -279,7 +281,6 @@ function Ledger({ customer }: { customer: CustomerDto }) {
           rows={ledger.data.entries}
           rowKey={(entry) => entry.id}
           caption={t("customers_ledger")}
-          data-testid="customer-ledger"
           empty={<EmptyState icon={ScrollText} title={t("customers_ledger_empty")} />}
         />
       ) : null}
@@ -386,7 +387,6 @@ function PaymentsPanel({ customer }: { customer: CustomerDto }) {
         <div>
           <Button
             variant="outline"
-            data-testid="customer-pay-button"
             onClick={() => {
               setSaved(false);
               setOpen(true);

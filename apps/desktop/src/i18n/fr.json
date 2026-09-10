@@ -167,6 +167,7 @@
   "customers_open_ledger": "Voir le compte",
   "customers_identity": "Identifiants",
   "customers_no_limit": "Sans plafond",
+  "customers_warn_threshold": "Seuil d'alerte",
   "customers_search": "Rechercher un client",
   "customers_search_hint": "Nom ou téléphone",
   "customers_edit": "Ouvrir la fiche",

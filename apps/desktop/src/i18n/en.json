@@ -167,6 +167,7 @@
   "customers_open_ledger": "See the account",
   "customers_identity": "Identifiers",
   "customers_no_limit": "No limit",
+  "customers_warn_threshold": "Warning threshold",
   "customers_search": "Search a customer",
   "customers_search_hint": "Name or phone",
   "customers_edit": "Open the record",

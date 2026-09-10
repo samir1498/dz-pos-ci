@@ -65,7 +65,10 @@ export function CustomersScreen() {
   const columns: readonly Column<CustomerDto>[] = [
     {
       id: "name",
-      header: t("col_name"),
+      // `field_name`, not `col_name`: the catalogue's column is a
+      // "désignation", which is a thing on a shelf and not a person or a
+      // company.
+      header: t("field_name"),
       cell: (customer) => (
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -144,7 +147,7 @@ export function CustomersScreen() {
       </FormField>
 
       {customers.isPending ? (
-        <div data-testid="customers-loading" className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <span className="sr-only">{t("customers_loading")}</span>
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
@@ -162,7 +165,6 @@ export function CustomersScreen() {
           rows={customers.data}
           rowKey={(customer) => customer.id}
           caption={t("customers_title")}
-          data-testid="customers-table"
           // No action of its own: the one button that opens a blank fiche is
           // already in the header, a hand's width above, and a second copy of
           // it would be two places to look for one thing.
