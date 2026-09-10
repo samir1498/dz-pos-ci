@@ -36,7 +36,7 @@ tasks:
     status: 'pending'
   - id: 'T9'
     desc: 'A dev seeder (Samir, 2026-09-10 15:03: the shop starts empty, so screens and screenshots look bare): `just seed` fills a fresh shop file through the services with a realistic Algerian corner shop and thirty days of history, deterministic and idempotent; and the thirty-day series for the dashboard (per day and per week: sales, cost, margin, expenses, cash in) behind GET /dashboard/series, drawn as a chart in the screen wave'
-    status: 'in-progress'
+    status: 'done'
 acceptance: []
 ---
 # M3: stock in, expenses, reports

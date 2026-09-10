@@ -19,15 +19,19 @@ the stock re-derive, the dashboard, Excel. The two M2 refactors (T10 the
 avoir's Remaining table plus the kind rules as CHECKs, T11 the zod client
 and the till split, both approved by Samir on 2026-09-10) run first on the
 same branch. `context/loops/20260910-m3-loop.md` holds the waves and
-ports. Six of nine tasks merged by 11:28 (yearly series, tables, suppliers,
-expenses and cash, stock recount, purchases); left: Excel and labels (in
-flight), the dashboard, the closing sweep. Samir saw the dev server (tmux
-`dz-dev`, http://100.101.196.30:5173) and found the screens unstyled:
+ports. By 16:30 on 2026-09-10 every M3 task but the dashboard screen and
+the closing sweep is on the milestone branch (yearly series, tables,
+suppliers, expenses and cash, stock recount, purchases, Excel and labels,
+the seeder with the thirty-day series); the afternoon also fixed the
+shared build folder (claim step and lock in the justfile, four jobs, one
+cargo run at a time). Samir saw the dev server (tmux `dz-dev`,
+http://100.101.196.30:5173) and found the screens unstyled:
 `context/plans/20260910-design-system-and-branding.md` (four themes on
 shadcn/ui with a data-theme switcher, a bilingual logo the language switch
 swaps, vendored Plex and JetBrains Mono, Lucide, the kit and the screen
 rewrite, a Claude Design project already seeded; Astro landing later). D1
-and D2 are landing; D3 comes before the dashboard so it is born on the kit.
+and D2 are merged; D3 (the kit, then one agent per screen) is in flight
+and comes before the dashboard so it is born on the kit.
 The brand pages are on the boss site under /design/. 2026-09-10 midday: the
 WSL disk reached 125 GB from per-worktree cargo targets and the box crashed
 five times; the disk rules in CLAUDE.md and the machines process page came
