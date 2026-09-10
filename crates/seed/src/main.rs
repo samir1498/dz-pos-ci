@@ -237,7 +237,9 @@ fn with_suffix(path: &std::path::Path, suffix: &str) -> std::path::PathBuf {
     std::path::PathBuf::from(name)
 }
 
+// Tests may panic; the deny is for shipped code.
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::{admit, Refusal, Store};
     use std::path::{Path, PathBuf};
@@ -292,7 +294,13 @@ mod tests {
         // route or a flag spelled `seed`.
         for file in ["crates/api/src/main.rs", "crates/api/src/lib.rs"] {
             let text = std::fs::read_to_string(root().join(file)).unwrap();
-            for forbidden in ["dzpos_seed", "dzpos-seed", "services::seed", "\"seed\"", "/seed"] {
+            for forbidden in [
+                "dzpos_seed",
+                "dzpos-seed",
+                "services::seed",
+                "\"seed\"",
+                "/seed",
+            ] {
                 assert!(
                     !text.contains(forbidden),
                     "{file} contains {forbidden}: the API has no seed flag, no seed route and no path to the seeder"
