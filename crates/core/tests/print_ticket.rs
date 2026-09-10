@@ -16,7 +16,7 @@
 
 use std::path::PathBuf;
 
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use dzpos_core::lang::Lang;
 use dzpos_core::money::{
     compute_totals, Bps, Line, Money, PaymentMode, Regime, TotalsOptions, TvaLine,
@@ -219,7 +219,8 @@ fn fixed_sale(case: Case) -> Document {
         id: 1,
         shop_id: SHOP,
         kind: DocumentKind::Ticket,
-        series: DocumentKind::Ticket.series().to_owned(),
+        series: DocumentKind::Ticket.series_of_year(issued_at.year()),
+        series_year: issued_at.year(),
         number: 123,
         issued_at,
         user_id: OWNER,
@@ -798,14 +799,18 @@ fn a_reel_document_prints_with_an_empty_recap_and_with_a_zero_rate_one() {
     }
 }
 
-/// The number a customer quotes when they come back. `TK-000123`, not the
-/// counter's own `doc_ticket`.
+/// The number a customer quotes when they come back. `TK-2026-000123`, not
+/// the counter's own `doc_ticket:2026`. The year is in it because the series
+/// restarts every 1 January (features.md §4, Numbering), so the six digits on
+/// their own name two tickets a year apart.
 #[test]
-fn the_ticket_number_is_the_series_prefix_and_six_digits() {
+fn the_ticket_number_is_the_series_prefix_the_year_and_six_digits() {
     let doc = fixed_sale(Case::Reel);
     for lang in Lang::ALL {
         assert!(
-            render_ticket(&doc, lang).unwrap().contains("TK-000123"),
+            render_ticket(&doc, lang)
+                .unwrap()
+                .contains("TK-2026-000123"),
             "{lang:?}"
         );
     }

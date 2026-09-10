@@ -12,7 +12,7 @@
 // two fiches and the shop's own block before it has anything to credit, and
 // three earlier suites need what it would have written first: products.spec
 // wants a table nobody has touched, settings.spec wants the store block as
-// the migration seeded it, and till-facture.spec wants FA-000001 to be its
+// the migration seeded it, and till-facture.spec wants the first facture of the year to be its
 // own. That is the same reason settlement.spec and till-credit.spec sit
 // where they do.
 
@@ -20,8 +20,11 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { apiHeaders, apiUrl } from "./api";
+import { apiHeaders, apiUrl, printedNumber, seriesOf } from "./api";
 import { currentLang, t } from "./messages";
+
+
+
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -187,7 +190,7 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   expect(avoirRes.status()).toBe(201);
   const avoir: Sale = await avoirRes.json();
   expect(avoir.kind).toBe("avoir");
-  expect(avoir.series).toBe("doc_avoir");
+  expect(avoir.series).toMatch(seriesOf("doc_avoir"));
   expect(avoir.ref_document_id).toBe(facture.id);
   expect(avoir.totals.net_to_pay_centimes).toBe(50_000);
 
@@ -259,7 +262,7 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   expect(quote.status()).toBe(201);
   const proforma: Sale = await quote.json();
   expect(proforma.kind).toBe("proforma");
-  expect(proforma.series).toBe("doc_proforma");
+  expect(proforma.series).toMatch(seriesOf("doc_proforma"));
   expect(await onHand(request, product)).toBe(stockBefore);
   expect(await balance(request, buyer)).toBe(beforeSecond);
 

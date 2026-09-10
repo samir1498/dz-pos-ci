@@ -11,6 +11,10 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+mod common;
+
+use common::{printed, series_of};
+
 const SHOP: i32 = 1;
 const TOKEN: &str = "test-launch-token";
 
@@ -102,7 +106,7 @@ async fn a_cash_sale_answers_201_with_the_document_its_lines_and_its_tva_rows() 
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
     assert_eq!(body["kind"], "ticket");
-    assert_eq!(body["series"], "doc_ticket");
+    assert_eq!(body["series"], series_of("doc_ticket"));
     assert_eq!(body["number"], 1);
     assert_eq!(body["status"], "issued");
     assert_eq!(body["payment_mode"], "cash");
@@ -641,7 +645,7 @@ async fn the_kind_crosses_the_wire_and_a_facture_numbers_in_its_own_series() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{ticket}");
     assert_eq!(ticket["kind"], json!("ticket"));
-    assert_eq!(ticket["series"], json!("doc_ticket"));
+    assert_eq!(ticket["series"], json!(series_of("doc_ticket")));
     assert_eq!(ticket["number"], json!(1));
 
     let (status, facture) = call(
@@ -658,7 +662,7 @@ async fn the_kind_crosses_the_wire_and_a_facture_numbers_in_its_own_series() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{facture}");
     assert_eq!(facture["kind"], json!("facture"));
-    assert_eq!(facture["series"], json!("doc_facture"));
+    assert_eq!(facture["series"], json!(series_of("doc_facture")));
     assert_eq!(facture["number"], json!(1), "its own series starts at one");
 
     // The read back says the same: the kind is stored, not answered once.
@@ -739,7 +743,7 @@ async fn a_facture_the_party_blocks_refuse_is_422_naming_the_side_and_the_fields
     let (status, ok) = call(&app, "POST", "/sales", Some(facture)).await;
     assert_eq!(status, StatusCode::CREATED, "{ok}");
     assert_eq!(ok["number"], json!(1));
-    assert_eq!(ok["series"], json!("doc_facture"));
+    assert_eq!(ok["series"], json!(series_of("doc_facture")));
 }
 
 #[tokio::test]
@@ -854,10 +858,10 @@ async fn the_list_carries_both_kinds_newest_first_and_the_filter_narrows_it() {
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0]["id"], facture["id"]);
     assert_eq!(rows[0]["kind"], json!("facture"));
-    assert_eq!(rows[0]["printed_number"], json!("FA-000001"));
+    assert_eq!(rows[0]["printed_number"], json!(printed("FA", 1)));
     assert_eq!(rows[1]["id"], ticket["id"]);
     assert_eq!(rows[1]["kind"], json!("ticket"));
-    assert_eq!(rows[1]["printed_number"], json!("TK-000001"));
+    assert_eq!(rows[1]["printed_number"], json!(printed("TK", 1)));
 
     for (kind, expected) in [("ticket", &ticket), ("facture", &facture)] {
         let (status, only) = call(&app, "GET", &format!("/sales?kind={kind}"), None).await;

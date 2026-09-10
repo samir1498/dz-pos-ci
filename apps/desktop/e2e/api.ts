@@ -28,3 +28,17 @@ export function apiHeaders(): Record<string, string> {
   }
   return { authorization: `Bearer ${token}` };
 }
+
+/** The counter key a document of this kind is numbered in. A series carries
+ * the year it counts in (features.md §4, Numbering) and the till stamps a
+ * document with the shop's clock, so the year is matched rather than written
+ * out: a literal would go red on 1 January, and `new Date()` here would be a
+ * second clock. */
+export function seriesOf(kind: string): RegExp {
+  return new RegExp(`^${kind}:\\d{4}$`);
+}
+
+/** The same year in the number a customer quotes: `FA-2026-000001`. */
+export function printedNumber(prefix: string, n: number): RegExp {
+  return new RegExp(`^${prefix}-\\d{4}-${String(n).padStart(6, "0")}$`);
+}

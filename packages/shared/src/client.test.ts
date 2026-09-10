@@ -399,7 +399,7 @@ const sale: SaleDto = {
   kind: "ticket",
   series: "doc_ticket",
   number: 1,
-  printed_number: "TK-000001",
+  printed_number: "TK-2026-000001",
   issued_at: "2026-09-09 10:00:00",
   user_id: 1,
   regime: "reel",
@@ -591,7 +591,7 @@ describe("sales", () => {
 
   test("a sale with no printed number is refused rather than shown blank", async () => {
     // The number the paper carries comes from the server, so a body without
-    // it would put an empty string where the cashier reads FA-000001 back to
+    // it would put an empty string where the cashier reads FA-2026-000001 back to
     // the customer. The guard stops it at the door.
     const withoutNumber: Record<string, unknown> = { ...sale };
     delete withoutNumber.printed_number;

@@ -633,7 +633,7 @@ pub struct SaleDto {
     pub series: String,
     pub number: i64,
     /// The number as it is printed and as a customer quotes it back,
-    /// `FA-000001`. Built by the core beside the templates that print it
+    /// `FA-2026-000001`. Built by the core beside the templates that print it
     /// (`print::number`), so a screen naming a document and the paper in the
     /// customer's hand cannot spell it two ways.
     pub printed_number: String,

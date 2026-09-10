@@ -124,6 +124,7 @@ diesel::table! {
         cancelled_by -> Nullable<Integer>,
         cancel_reason -> Nullable<Text>,
         cancel_avoir_document_id -> Nullable<Integer>,
+        series_year -> Integer,
     }
 }
 

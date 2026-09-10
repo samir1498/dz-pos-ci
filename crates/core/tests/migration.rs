@@ -1796,8 +1796,12 @@ fn a_database_at_the_third_migration_takes_the_fourth() {
     assert_eq!(
         count(
             &mut conn,
+            // The series carries the year of issue once the ninth migration
+            // has run (features.md §4, Numbering); the number the paper in
+            // the customer's hand carries is untouched by that.
             "SELECT COUNT(*) AS n FROM documents WHERE id = 3 AND number = 12 \
-             AND series = 'doc_ticket' AND net_to_pay_centimes = 1190 \
+             AND series = 'doc_ticket:2026' AND series_year = 2026 \
+             AND net_to_pay_centimes = 1190 \
              AND buyer_name IS NULL AND old_balance_centimes IS NULL \
              AND ref_document_id IS NULL"
         ),
@@ -2134,6 +2138,122 @@ fn a_database_without_the_cancellation_columns_takes_the_migration_that_adds_the
     assert_eq!(orphan_rows(&mut conn), 0);
 }
 
+/// Three tickets and the counter that handed their numbers out, written the
+/// way the app wrote them before a series carried a year. `issued_at` is on
+/// the shop's calendar (`services::clock::now`), so the comment beside each
+/// row is the UTC instant the till was at when it wrote it.
+fn seed_three_tickets_across_the_new_year(conn: &mut SqliteConnection) {
+    for (id, number, issued_at) in [
+        // 2025-12-31T22:30:00Z, still 31 December in Algiers.
+        (30, 1, "2025-12-31 23:30:00"),
+        // 2025-12-31T23:30:00Z, already 1 January in Algiers.
+        (31, 2, "2026-01-01 00:30:00"),
+        // 2026-01-01T00:30:00Z.
+        (32, 3, "2026-01-01 01:30:00"),
+    ] {
+        diesel::sql_query(format!(
+            "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
+             regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+             subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+             net_to_pay_centimes) \
+             VALUES ({id}, 1, 'ticket', 'doc_ticket', {number}, '{issued_at}', 1, 'reel', \
+             'cash', 'Mon magasin', 10000, 0, 10000, 1900, 11900, 0, 11900)"
+        ))
+        .execute(conn)
+        .unwrap();
+    }
+    // The counter as the till left it: the next ticket would have been 4.
+    diesel::sql_query(
+        "INSERT INTO counters (shop_id, name, next_value) VALUES (1, 'doc_ticket', 4)",
+    )
+    .execute(conn)
+    .unwrap();
+    // And a series the shop has taken a number in without keeping a document,
+    // which is what a proforma the operator deleted the file of looks like.
+    // There is no year to name it after.
+    diesel::sql_query(
+        "INSERT INTO counters (shop_id, name, next_value) VALUES (1, 'doc_proforma', 2)",
+    )
+    .execute(conn)
+    .unwrap();
+}
+
+#[test]
+fn a_database_without_the_series_year_takes_the_migration_that_adds_it() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. This one adds the
+    // year a series counts in (features.md §4, Numbering), so what has to be
+    // proved is that the year comes off the shop's calendar and not the
+    // machine's, and that the counter carries on rather than starting again
+    // beside a number already printed.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_before_migration("series_year");
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('documents') \
+             WHERE name = 'series_year'"
+        ),
+        0,
+        "the file this starts from already carries series_year"
+    );
+    seed_three_tickets_across_the_new_year(&mut conn);
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    // The hour between 23:00 UTC and midnight is the whole of the question. A
+    // backfill off `created_at`, which is the column default's UTC, would put
+    // ticket 31 in 2025 and hand its number out again in the new year.
+    for (id, year) in [(30, 2025), (31, 2026), (32, 2026)] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM documents WHERE id = {id} \
+                     AND series_year = {year} AND series = 'doc_ticket:{year}'"
+                )
+            ),
+            1,
+            "ticket {id} did not land in {year}"
+        );
+    }
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE number IN (1, 2, 3) \
+             AND net_to_pay_centimes = 11900"
+        ),
+        3,
+        "the tickets the file already carried did not survive the new column"
+    );
+    // The counter carries on under the key the code now asks for, at the
+    // number it had reached. A counter starting again at 1 would print
+    // TK-2026-000002 twice.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM counters WHERE shop_id = 1 \
+             AND name = 'doc_ticket:2026' AND next_value = 4"
+        ),
+        1,
+        "the ticket counter did not carry on into the year it had reached"
+    );
+    // A series no document has used names no year, and the barcode series is
+    // not a document series at all (features.md §1): neither is renamed.
+    for name in ["doc_proforma", "in_store_barcode"] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!("SELECT COUNT(*) AS n FROM counters WHERE name = '{name}'")
+            ),
+            1,
+            "{name} was renamed and it names no year"
+        );
+    }
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
+
 #[test]
 fn the_migration_reverts_and_reapplies() {
     // architecture.md, Data: a migration ships with a test that runs it.
@@ -2146,6 +2266,45 @@ fn the_migration_reverts_and_reapplies() {
     // them across, and a facture with a buyer, a balance and a debt behind it
     // is what that copy has to carry.
     seed_a_facture_naming_a_customer(&mut conn);
+
+    // The seeder writes the row the way the file below the ninth migration
+    // spells it, because the cancellation test uses it on a file that has no
+    // `series_year` column at all. Numbered here, so the revert below has a
+    // year to take back out; without this the down's `substr` would be
+    // asserted against a string it never touches.
+    assert_eq!(
+        diesel::sql_query(
+            "UPDATE documents SET series = 'doc_facture:2026', series_year = 2026 WHERE id = 4"
+        )
+        .execute(&mut conn)
+        .unwrap(),
+        1
+    );
+
+    // The ninth is the top of the stack: the year a series counts in. Its
+    // down puts the series string back the way the file below it spells it
+    // and takes the column off, which is what the kind rules underneath it
+    // are asserted against.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('documents') \
+             WHERE name = 'series_year'"
+        ),
+        0,
+        "the series year down.sql left the column behind"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND series = 'doc_facture'"
+        ),
+        1,
+        "the series year down.sql left the year in the series string"
+    );
 
     // The suppliers migration adds ten tables and touches none of the ones
     // already there, so its down takes exactly those ten away and leaves the

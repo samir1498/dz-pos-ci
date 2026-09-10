@@ -27,7 +27,7 @@ const sale: SaleDto = {
   kind: "ticket",
   series: "doc_ticket",
   number: 1,
-  printed_number: "TK-000001",
+  printed_number: "TK-2026-000001",
   issued_at: "2026-09-09 10:00:00",
   user_id: 1,
   regime: "reel",

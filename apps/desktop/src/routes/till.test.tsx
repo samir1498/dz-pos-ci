@@ -94,9 +94,9 @@ const sale: SaleDto = {
   kind: "ticket",
   // What the API actually stores: a document kind code, not a pretty
   // series a cashier could read (crates/core/src/models/sql_types.rs).
-  series: "doc_ticket",
+  series: "doc_ticket:2026",
   number: 12,
-  printed_number: "TK-000012",
+  printed_number: "TK-2026-000012",
   issued_at: "2026-09-09 10:00:00",
   user_id: 1,
   regime: "reel",
@@ -729,7 +729,7 @@ describe("paying", () => {
     expect(done).toHaveTextContent("12");
     // The series is a code the API keys documents by, so it stays off a
     // screen where every other word is translated.
-    expect(done).not.toHaveTextContent("doc_ticket");
+    expect(done).not.toHaveTextContent("doc_ticket:2026");
     expect(done).toHaveTextContent("1 292,00");
     expect(done).toHaveTextContent("208,00");
     expect(screen.getByText("Le panier est vide.")).toBeInTheDocument();
@@ -1024,9 +1024,9 @@ describe("the facture at the till", () => {
   const issued: SaleDto = {
     ...sale,
     kind: "facture",
-    series: "doc_facture",
+    series: "doc_facture:2026",
     number: 1,
-    printed_number: "FA-000001",
+    printed_number: "FA-2026-000001",
     customer_id: amrani.id,
   };
 
@@ -1200,7 +1200,7 @@ describe("the facture at the till", () => {
     const done = await screen.findByRole("status");
     expect(within(done).getByText("Facture émise")).toBeInTheDocument();
     // The number as the paper spells it, which is what a customer quotes.
-    expect(within(done).getByTestId("till-document-number")).toHaveTextContent("FA-000001");
+    expect(within(done).getByTestId("till-document-number")).toHaveTextContent("FA-2026-000001");
 
     await user.click(within(done).getByRole("button", { name: "Imprimer" }));
     const frame = await screen.findByTestId("till-facture");

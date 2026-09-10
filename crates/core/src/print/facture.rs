@@ -125,9 +125,9 @@ struct TvaRow {
 }
 
 /// The line naming the facture an avoir is written against: a sentence and
-/// not a column, "Avoir sur facture FA-000042 du 09/09/2026". The number
-/// and the day are the referenced facture's, which is why they arrive from
-/// the caller and not from the avoir's own row.
+/// not a column, "Avoir sur facture FA-2026-000042 du 09/09/2026". The
+/// number, its year and the day are the referenced facture's, which is why
+/// they arrive from the caller and not from the avoir's own row.
 struct ReferenceView {
     label: &'static str,
     number: String,
@@ -240,7 +240,7 @@ pub fn render_facture(doc: &Document, lang: Lang, paper: Paper) -> Result<String
 
 /// The same page, given the document `doc.ref_document_id` points at.
 ///
-/// The reference is a printed number (`FA-000042`) and the row carries an
+/// The reference is a printed number (`FA-2026-000042`) and the row carries an
 /// internal id, and the two are not the same figure: ids are handed out by
 /// the table and numbers by the series. So the caller that can read the
 /// referenced document hands it over, and an avoir that names one it cannot
