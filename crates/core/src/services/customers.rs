@@ -180,7 +180,9 @@ pub fn update(
         // what the log has to carry: after the update the fiche is closed
         // either way and the figure would say nothing about the decision.
         let closing = before.active && !fields.active;
-        let account = closing.then(|| open_account(conn, shop_id, id)).transpose()?;
+        let account = closing
+            .then(|| open_account(conn, shop_id, id))
+            .transpose()?;
         let reason = match &account {
             Some(account) if account.is_open() => match &close_reason {
                 Some(reason) => Some(reason.clone()),

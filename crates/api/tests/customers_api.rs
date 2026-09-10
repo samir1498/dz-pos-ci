@@ -98,7 +98,8 @@ fn draft(name: &str) -> Value {
 /// what a PUT takes.
 fn write_body(name: &str) -> Value {
     let mut body = draft(name);
-    body.as_object_mut().map(|o| o.remove("opening_debt_centimes"));
+    body.as_object_mut()
+        .map(|o| o.remove("opening_debt_centimes"));
     body
 }
 
@@ -262,7 +263,10 @@ async fn closing_a_fiche_with_a_balance_without_a_reason_is_refused_on_the_field
     );
 
     let (_, still) = call(&h.app, "GET", &format!("/customers/{id}"), None).await;
-    assert_eq!(still["active"], true, "the refused close was written: {still}");
+    assert_eq!(
+        still["active"], true,
+        "the refused close was written: {still}"
+    );
 
     closing["close_reason"] = json!("dossier au contentieux");
     let (status, closed) = call(&h.app, "PUT", &format!("/customers/{id}"), Some(closing)).await;

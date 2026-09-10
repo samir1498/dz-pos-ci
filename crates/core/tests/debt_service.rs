@@ -2064,8 +2064,14 @@ fn a_fiche_with_a_document_still_asking_to_be_paid_is_not_closed_without_a_reaso
         },
     )
     .unwrap();
-    assert_eq!(debt::balance(&mut conn, SHOP, customer).unwrap(), Money::ZERO);
-    assert_eq!(remaining_debt(&mut conn, document), Money::centimes(100_000));
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, customer).unwrap(),
+        Money::ZERO
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, document),
+        Money::centimes(100_000)
+    );
 
     let open = customers::get(&mut conn, SHOP, customer).unwrap();
     let closed = NewCustomer {
@@ -2082,7 +2088,8 @@ fn a_fiche_with_a_document_still_asking_to_be_paid_is_not_closed_without_a_reaso
         notes: open.notes.clone(),
         active: false,
     };
-    let err = customers::update(&mut conn, SHOP, OWNER, customer, closed.clone(), None).unwrap_err();
+    let err =
+        customers::update(&mut conn, SHOP, OWNER, customer, closed.clone(), None).unwrap_err();
     assert!(
         matches!(err, CoreError::Validation { ref field, .. } if field == "reason"),
         "{err:?}"

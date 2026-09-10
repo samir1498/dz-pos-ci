@@ -201,9 +201,7 @@ fn fixed_sale(case: Case) -> Document {
     let balance = case.old_balance().map(|old| BalanceTriple {
         old_balance: Money::centimes(old),
         remaining_debt: totals.net_to_pay,
-        total_debt: Money::centimes(old)
-            .checked_add(totals.net_to_pay)
-            .unwrap(),
+        total_debt: Money::centimes(old).checked_add(totals.net_to_pay).unwrap(),
     });
     let buyer = case.old_balance().map(|_| PartyBlock {
         name: "Entreprise Amrani".to_owned(),
