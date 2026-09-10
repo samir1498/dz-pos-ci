@@ -3,6 +3,14 @@ type: 'now'
 updated: '2026-09-10'
 ---
 ## Active
+
+**Paused 2026-09-10 23:01 (Samir: "see ya next week time to rest").** The loop
+does not start anything on its own until Samir says so. Waiting on him: the
+host for the demo deploy (a container on Koyeb or Render, or Cloudflare
+Containers; the box-side tunnel pieces are stopped), Anouar's GitHub billing
+fix so CI runs again, and the M4 plan's tasks, which get written and shown
+to him before any agent starts.
+
 Roadmap `dz-pos-to-first-shop` (`just ctx roadmap show dz-pos-to-first-shop`
 from the repo root, full text `docs/roadmap.md`). M0 closed on 2026-09-09
 (PR #14). M1 merged to main on 2026-09-09 (PR #15) except T6, the real
