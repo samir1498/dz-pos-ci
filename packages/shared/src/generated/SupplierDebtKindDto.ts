@@ -2,8 +2,8 @@
 
 /**
  * Why the supplier debt moved (features.md §1). The whole union crosses from
- * the first version, the way the customer side's does: T3 writes the
- * `purchase` and `return` rows, and a screen that met an unknown kind could
+ * the first version, the way the customer side's does: the receipt path
+ * writes the `purchase` and `return` rows, and a screen that met an unknown kind could
  * only refuse the whole answer.
  */
 export type SupplierDebtKindDto = "opening" | "purchase" | "payment" | "return" | "adjustment";
