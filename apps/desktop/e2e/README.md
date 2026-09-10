@@ -7,7 +7,7 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes the eleven committed screenshots
+just screenshot                   # writes thirteen of the fourteen screenshots
 pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
@@ -21,6 +21,13 @@ observable. Under ar all twelve write: `products-ar.png`, `settings-ar.png`,
 `expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
 `stock-recount-ar.png`, and the theme pair `theme-comptoir-ar.png` and
 `theme-observe-ar.png`.
+
+`product-label-ar.png` is the fourteenth and the recipe cannot take it: its
+test needs the import test above it in the same file to have run, and
+`-g screenshot` picks tests, not files, so under the grep the product it
+photographs does not exist. It is written by a full `just e2e --project ar`
+instead. That is also why its picture carries the products every other spec
+left behind, and why retaking it means running the whole suite.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
@@ -149,14 +156,15 @@ second language on; use the looped `just e2e` or a single `--project`.
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
   rows finds the API port and the run's launch token.
-- The thirteen committed screenshots, 1280x800, full page: `products.png`
+- The fourteen committed screenshots, 1280x800, full page: `products.png`
   (fr) and, in ar, `products-ar.png`, `settings-ar.png`, `till-ar.png`,
   `customers-ar.png`, `suppliers-ar.png`, `purchases-ar.png`,
   `expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
   `stock-recount-ar.png`, `theme-comptoir-ar.png` and
-  `theme-observe-ar.png`. The last two are the settings screen in the light
-  theme and in Observe, which is what a theme is for: the same screen, two
-  palettes, one stylesheet.
+  `theme-observe-ar.png`, plus `product-label-ar.png`, which only a full run
+  writes. The theme pair is the settings screen in the light theme and in
+  Observe, which is what a theme is for: the same screen, two palettes, one
+  stylesheet.
   `en` keeps none; the two languages above are enough to show the layout
   and the RTL mirror.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
