@@ -434,8 +434,6 @@ test("shows the shop's day and month as the API answered them, and saves the das
     formatCentimes(richest.margin_centimes),
   );
 
-  // The chart is drawn, and the week view is the array the same answer already
-  // carried: switching it asks the server for nothing.
   const drawn = page.getByTestId("dashboard-chart");
   await expect(drawn).toBeVisible();
   // The three series are all drawn: a bar layer and two line layers.
