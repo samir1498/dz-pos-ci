@@ -1,7 +1,7 @@
 ---
 title: 'M2 facture customers and credit'
 slug: 'm2-facture-customers-and-credit'
-status: 'active'
+status: 'done'
 category: 'milestone'
 created: 20260908
 tldr: 'Customers, debt ledger, numbered facture with words and stamp, statement; stub'
@@ -35,12 +35,13 @@ tasks:
     desc: 'The avoir and proforma cases of facture_a4 (T5 titles all three kinds in one template): the avoir''s reference line and its own lines, the proforma wording, the annulée reprint of a cancelled facture, goldens ×3 for each with every amount parsed back; split into a second template only if the avoir needs more than a title and a reference; after T5 and T6''s model, same wave as T6'
     status: 'done'
   - id: 'T10'
-    desc: 'After the checkpoint: the avoir computes "facture minus earlier avoirs" six separate times (credited_amount, closes_the_facture, credited_by_line, left_on_line, left_at, remainder); build one Remaining table (per line qty/ht/discount, per rate base/tva/remise, totals) once at the top of avoir::issue so a partial is min(slice, remaining) and the closing avoir is remaining; about 150 lines fewer; the avoir and debt property tests with their committed seeds are the safety net and must stay green; dz-review money lens before merge; Samir said yes on 2026-09-10; the same task adds a migration with the kind-conditional CHECKs the services already enforce (proforma carries no balance and no debt, avoir has ref_document_id and ticket/facture do not, annulée iff cancelled_at, tendered only on cash) with one forged-row test per constraint, so the one-table design is a guarantee and not a convention'
-    status: 'pending'
+    desc: 'After the checkpoint: the avoir computes "facture minus earlier avoirs" six separate times (credited_amount, closes_the_facture, credited_by_line, left_on_line, left_at, remainder); build one Remaining table (per line qty/ht/discount, per rate base/tva/remise, totals) once at the top of avoir::issue so a partial is min(slice, remaining) and the closing avoir is remaining; about 150 lines fewer; the avoir and debt property tests with their committed seeds are the safety net and must stay green; dz-review money lens before merge; Samir said yes on 2026-09-10; the same task adds a migration with the kind-conditional CHECKs the services already enforce (proforma carries no balance and no debt, avoir has ref_document_id and ticket/facture do not, annulée iff cancelled_at, tendered only on cash) with one forged-row test per constraint, so the one-table design is a guarantee and not a convention; done 2026-09-10 07:40, merged into m3/2026-09-10; avoir.rs came out at 972 lines, not 150 fewer: the six passes collapsed into one but the fiscal comments moved rather than vanished'
+    status: 'done'
   - id: 'T11'
-    desc: 'Build-vs-buy for Samir: packages/shared/src/client.ts is a 600-line hand-rolled validator (five identical list guards, eight literal-array enum guards, a shape guard per DTO) with no zod or valibot in the workspace; either adopt one (schemas generated beside the ts-rs types, guards deleted) or fold the repeated guards into listOf/oneOf helpers; and the till screen (556 lines, 179 branch points) split into the cart, the payment panel and the customer panel with the same tests; Samir said yes on 2026-09-10: adopt the library, generate the schemas beside the ts-rs types, delete the hand guards, and split the till screen in the same task'
-    status: 'pending'
+    desc: 'Build-vs-buy for Samir: packages/shared/src/client.ts is a 600-line hand-rolled validator (five identical list guards, eight literal-array enum guards, a shape guard per DTO) with no zod or valibot in the workspace; either adopt one (schemas generated beside the ts-rs types, guards deleted) or fold the repeated guards into listOf/oneOf helpers; and the till screen (556 lines, 179 branch points) split into the cart, the payment panel and the customer panel with the same tests; Samir said yes on 2026-09-10: adopt the library, generate the schemas beside the ts-rs types, delete the hand guards, and split the till screen in the same task; done 2026-09-10 07:26, merged into m3/2026-09-10'
+    status: 'done'
 acceptance: []
+completed_at: '2026-09-10'
 ---
 # M2: facture, customers and credit
 

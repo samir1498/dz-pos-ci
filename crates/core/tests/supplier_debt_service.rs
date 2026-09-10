@@ -6,9 +6,11 @@
 //! is its sum, a payment settles the open orders oldest first through
 //! `supplier_allocations`, and a correction is a movement rather than an edit.
 //!
-//! A purchase writes its own ledger rows in T3. Until then the tests seed the
-//! order and the debit a receipt would write, so what a payment settles is a
-//! real order carrying real value.
+//! `services::purchases` writes the `purchase` rows a real delivery leaves.
+//! These tests seed the order and that debit themselves, in SQL beside the
+//! test: what a payment settles has to be a real order carrying real value,
+//! and going through the purchase service to get one would put the code under
+//! test behind another service's rules.
 
 use chrono::NaiveDate;
 use diesel::prelude::*;
@@ -516,9 +518,11 @@ fn credit_the_shop_holds_reaches_the_next_order_and_the_fiche_then_closes() {
     a_purchase_ledger_row(&mut conn, supplier, older, 50_000);
     // Nothing is held yet, so this places nothing: the call is what T3's
     // receipt path makes after every `purchase` row, held or not.
-    assert!(supplier_debt::place_credit_on(&mut conn, SHOP, older)
-        .unwrap()
-        .is_empty());
+    assert!(
+        supplier_debt::place_credit_on(&mut conn, SHOP, older, Money::centimes(50_000))
+            .unwrap()
+            .is_empty()
+    );
 
     // A correction past what was owed: 50 000 of it lands on the older order
     // and the rest leaves the supplier owing the shop.
@@ -538,7 +542,8 @@ fn credit_the_shop_holds_reaches_the_next_order_and_the_fiche_then_closes() {
 
     let newer = a_purchase_row(&mut conn, supplier, "2026-09-05");
     a_purchase_ledger_row(&mut conn, supplier, newer, 20_000);
-    let placed = supplier_debt::place_credit_on(&mut conn, SHOP, newer).unwrap();
+    let placed =
+        supplier_debt::place_credit_on(&mut conn, SHOP, newer, Money::centimes(20_000)).unwrap();
     // What was held and no more: the 80 000 of the correction that answered
     // the opening balance is not credit, it is a debt that was written off.
     assert_eq!(placed.len(), 1);
@@ -595,7 +600,8 @@ fn credit_is_placed_on_one_order_only_up_to_what_that_order_asks_for() {
     .unwrap();
     let order = a_purchase_row(&mut conn, supplier, "2026-09-05");
     a_purchase_ledger_row(&mut conn, supplier, order, 30_000);
-    let placed = supplier_debt::place_credit_on(&mut conn, SHOP, order).unwrap();
+    let placed =
+        supplier_debt::place_credit_on(&mut conn, SHOP, order, Money::centimes(30_000)).unwrap();
     assert_eq!(placed.len(), 1);
     assert_eq!(placed[0].amount, Money::centimes(30_000));
     assert!(supplier_debt::open_purchases(&mut conn, SHOP, supplier)
@@ -607,9 +613,11 @@ fn credit_is_placed_on_one_order_only_up_to_what_that_order_asks_for() {
         Money::centimes(-70_000)
     );
     // And it is not placed twice.
-    assert!(supplier_debt::place_credit_on(&mut conn, SHOP, order)
-        .unwrap()
-        .is_empty());
+    assert!(
+        supplier_debt::place_credit_on(&mut conn, SHOP, order, Money::centimes(30_000))
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

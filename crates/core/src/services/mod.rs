@@ -46,6 +46,7 @@ pub mod expenses;
 pub mod preferences;
 pub mod products;
 pub mod proforma;
+pub mod purchases;
 pub mod sales;
 pub mod settings;
 pub mod shops;

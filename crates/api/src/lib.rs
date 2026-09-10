@@ -469,6 +469,16 @@ pub fn router_with_origin(
             "/products/{id}",
             get(routes::products::get_one).put(routes::products::update),
         )
+        .route("/purchases", get(routes::purchases::list))
+        .route("/purchases", post(routes::purchases::create))
+        .route("/purchases/{id}", get(routes::purchases::get_one))
+        .route("/purchases/{id}/receipts", post(routes::purchases::receive))
+        .route("/purchases/{id}/returns", post(routes::purchases::returns))
+        .route("/purchases/{id}/cancel", post(routes::purchases::cancel))
+        .route(
+            "/purchases/{id}/close-short",
+            post(routes::purchases::close_short),
+        )
         .route("/sales", get(routes::sales::list))
         .route("/sales", post(routes::sales::create))
         .route("/sales/{id}", get(routes::sales::get_one))

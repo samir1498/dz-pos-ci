@@ -11,12 +11,14 @@
 
 use dzpos_api::dto::{
     AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AvoirLineDto, BackupDto, BackupsDto,
-    CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CloseSupplierDto, CustomerDto,
-    CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DatedRegimeDto, DebtEntryDto,
-    DebtKindDto, DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto,
-    HealthDto, LastStockRecountDto, NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto,
-    NewProductDto, NewSaleDto, NewSaleLineDto, NewSupplierDto, OutgoingsDto, PartyKindDto,
-    PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto,
+    CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CloseOrderDto, CloseSupplierDto,
+    CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DatedRegimeDto,
+    DebtEntryDto, DebtKindDto, DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto,
+    ExpensesDto, HealthDto, LastStockRecountDto, NewAvoirDto, NewCustomerDto, NewExpenseDto,
+    NewPaymentDto, NewProductDto, NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto,
+    NewSaleLineDto, NewSupplierDto, OutgoingsDto, PaidNowDto, PartyKindDto, PaymentAllocationDto,
+    PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto, PurchaseDetailDto, PurchaseDto,
+    PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto, PurchaseStatusDto, ReceiveLineDto,
     RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto, SaleCancelEffectDto,
     SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
     SaleWarningDto, SettingsDto, StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto,
@@ -25,7 +27,7 @@ use dzpos_api::dto::{
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 67] = [
+const FILES: [&str; 79] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -83,6 +85,18 @@ const FILES: [&str; 67] = [
     "SupplierEntryDto.ts",
     "SupplierLedgerDto.ts",
     "SupplierStatementDto.ts",
+    "PurchaseStatusDto.ts",
+    "PurchaseDto.ts",
+    "PurchaseLineDto.ts",
+    "PurchaseReceiptLineDto.ts",
+    "PurchaseReceiptDto.ts",
+    "PurchaseDetailDto.ts",
+    "NewPurchaseLineDto.ts",
+    "PaidNowDto.ts",
+    "NewPurchaseDto.ts",
+    "ReceiveLineDto.ts",
+    "NewReceiptDto.ts",
+    "CloseOrderDto.ts",
     "ExpenseCategoryDto.ts",
     "ExpenseDto.ts",
     "ExpensesDto.ts",
@@ -207,6 +221,18 @@ fn export_bindings() {
     SupplierEntryDto::export_all(&cfg).unwrap();
     SupplierLedgerDto::export_all(&cfg).unwrap();
     SupplierStatementDto::export_all(&cfg).unwrap();
+    PurchaseStatusDto::export_all(&cfg).unwrap();
+    PurchaseDto::export_all(&cfg).unwrap();
+    PurchaseLineDto::export_all(&cfg).unwrap();
+    PurchaseReceiptLineDto::export_all(&cfg).unwrap();
+    PurchaseReceiptDto::export_all(&cfg).unwrap();
+    PurchaseDetailDto::export_all(&cfg).unwrap();
+    NewPurchaseLineDto::export_all(&cfg).unwrap();
+    PaidNowDto::export_all(&cfg).unwrap();
+    NewPurchaseDto::export_all(&cfg).unwrap();
+    ReceiveLineDto::export_all(&cfg).unwrap();
+    NewReceiptDto::export_all(&cfg).unwrap();
+    CloseOrderDto::export_all(&cfg).unwrap();
     ExpenseCategoryDto::export_all(&cfg).unwrap();
     ExpenseDto::export_all(&cfg).unwrap();
     ExpensesDto::export_all(&cfg).unwrap();

@@ -549,20 +549,28 @@ pub fn credit_held(balance: Money) -> Result<Money, CoreError> {
 /// really owed settles a different order, and the first one stays open
 /// forever and keeps the fiche from closing without a reason.
 ///
-/// **T3 calls this after every `purchase` row its receipt path appends.** The
-/// row is not appended here because a receipt writes stock, a line and a
-/// ledger row in one transaction of its own, and this is the last step of
-/// that transaction rather than a second one.
+/// **`services::purchases` calls this after every `purchase` row its receipt
+/// path appends**, handing over the value of that row. The row is not
+/// appended here because a receipt writes stock, a line and a ledger row in
+/// one transaction of its own, and this is the last step of that transaction
+/// rather than a second one.
 ///
-/// What is placed is what was held before this order landed: the balance as
-/// it stands now, less this order's own value, turned round. The rest of a
+/// What is placed is what was held before that row landed: the balance as it
+/// stands now, less the row's own value, turned round. The rest of a
 /// correction, the part that answered an opening balance or an older order,
 /// is not credit at all; placing that too would show the order settled with
 /// money that never went to it.
+///
+/// `just_appended` is the row's value and not the order's, because an order
+/// received in parts carries one `purchase` row per delivery: the order's
+/// whole value would count the earlier deliveries as if they had only just
+/// been owed, and the second delivery would go looking for credit the ledger
+/// had already spent on the first.
 pub fn place_credit_on(
     conn: &mut SqliteConnection,
     shop_id: i32,
     purchase_id: i32,
+    just_appended: Money,
 ) -> Result<Vec<SupplierAllocation>, CoreError> {
     let purchase = purchases_repo::get(conn, shop_id, purchase_id)?;
     let supplier_id = purchase.supplier_id;
@@ -575,7 +583,7 @@ pub fn place_credit_on(
         return Ok(Vec::new());
     };
     let balance = repo::balance(conn, shop_id, supplier_id)?;
-    let before = balance.checked_sub(target.value)?;
+    let before = balance.checked_sub(just_appended)?;
     let take = credit_held(before)?.min(target.remaining);
     if take == Money::ZERO {
         return Ok(Vec::new());
