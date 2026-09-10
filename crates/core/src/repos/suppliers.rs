@@ -1,28 +1,65 @@
-// The callers are T2 (suppliers), T3 (purchases), T4 (expenses) and T5 (the
-// re-derive job): the tables land here before the services that read them, and
-// `repos` is crate-internal on purpose (architecture.md: nothing outside this
-// crate touches diesel), so a plain build sees no use of these yet.
-#![allow(dead_code)]
-
 //! The only place suppliers touch diesel. Every query is scoped by `shop_id`
 //! (rule 3); a function that forgets it is the bug this layer exists to make
 //! visible.
 
 use diesel::prelude::*;
+use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::supplier::{Supplier, SupplierRow, SupplierRowWrite};
+use crate::repos::contains_pattern;
 use crate::schema::suppliers;
+
+/// The one constraint a caller can trip here is `UNIQUE (shop_id, name)`, so
+/// it becomes the rule features.md §1 states rather than a SQL fault the
+/// screen would show as "storage". A `conflict` and not a `validation`: what
+/// was typed is well formed and what refuses it is a fiche the shop already
+/// has, which is a different sentence from "that name is too long for a
+/// ticket". The field is named either way, so the message lands under the
+/// input.
+fn map_write(err: DieselError) -> CoreError {
+    match &err {
+        DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => CoreError::conflict(
+            "name",
+            "this shop already buys from a supplier under that name",
+        ),
+        _ => CoreError::Query(err),
+    }
+}
 
 /// The ones the shop still buys from first, then alphabetical inside each
 /// group: the list is read by somebody looking for a supplier to order from,
 /// and a deactivated fiche is kept for its ledger rather than for that. The
 /// name is unique inside the shop, so it settles the order on its own; the id
 /// closes it anyway, the way the customers list does.
-pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<Supplier>, CoreError> {
-    let rows: Vec<SupplierRow> = suppliers::table
+/// `search` matches a piece of the name or of the phone, the way the customer
+/// list's does: it is a substring somebody typed into a box, so the wildcards
+/// SQLite reads in a LIKE pattern are escaped into characters to match.
+pub fn list(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    search: Option<&str>,
+) -> Result<Vec<Supplier>, CoreError> {
+    let mut query = suppliers::table
         .filter(suppliers::shop_id.eq(shop_id))
+        .into_boxed();
+    if let Some(text) = search {
+        let pattern = contains_pattern(text);
+        query = query.filter(
+            suppliers::name
+                .like(pattern.clone())
+                .escape('\\')
+                // A fiche with no phone is not a match, and `NULL LIKE …` is
+                // NULL, which an OR treats as no match. `assume_not_null`
+                // only says so to the type system.
+                .or(suppliers::phone
+                    .like(pattern)
+                    .escape('\\')
+                    .assume_not_null()),
+        );
+    }
+    let rows: Vec<SupplierRow> = query
         .order((
             suppliers::active.desc(),
             suppliers::name.asc(),
@@ -54,7 +91,8 @@ pub fn insert(
     let row: SupplierRow = diesel::insert_into(suppliers::table)
         .values(write)
         .returning(SupplierRow::as_returning())
-        .get_result(conn)?;
+        .get_result(conn)
+        .map_err(map_write)?;
     Ok(Supplier::from(row))
 }
 
@@ -70,7 +108,8 @@ pub fn update(
             .filter(suppliers::id.eq(id)),
     )
     .set(write)
-    .execute(conn)?;
+    .execute(conn)
+    .map_err(map_write)?;
     if changed == 0 {
         return Err(CoreError::NotFound {
             entity: "supplier",
@@ -150,8 +189,8 @@ mod tests {
         theirs.shop_id = 2;
         insert(&mut conn, &theirs).unwrap();
         assert!(get(&mut conn, 2, mine.id).is_err());
-        assert_eq!(list(&mut conn, SHOP).unwrap().len(), 1);
-        assert_eq!(list(&mut conn, 2).unwrap().len(), 1);
+        assert_eq!(list(&mut conn, SHOP, None).unwrap().len(), 1);
+        assert_eq!(list(&mut conn, 2, None).unwrap().len(), 1);
     }
 
     #[test]
@@ -164,12 +203,33 @@ mod tests {
         insert(&mut conn, &closed).unwrap();
         insert(&mut conn, &draft("Zoubir")).unwrap();
         insert(&mut conn, &draft("Bensalem")).unwrap();
-        let names: Vec<String> = list(&mut conn, SHOP)
+        let names: Vec<String> = list(&mut conn, SHOP, None)
             .unwrap()
             .into_iter()
             .map(|s| s.name)
             .collect();
         assert_eq!(names, vec!["Bensalem", "Zoubir", "Alpha"]);
+    }
+
+    #[test]
+    fn the_search_reads_a_piece_of_the_name_or_of_the_phone_and_escapes_a_wildcard() {
+        let (_dir, mut conn) = open();
+        let mut with_phone = draft("Bensalem");
+        with_phone.phone = Some("0660998877".to_string());
+        insert(&mut conn, &with_phone).unwrap();
+        insert(&mut conn, &draft("Sarl Amrani")).unwrap();
+        assert_eq!(list(&mut conn, SHOP, Some("amra")).unwrap().len(), 1);
+        assert_eq!(list(&mut conn, SHOP, Some("0660")).unwrap().len(), 1);
+        // A `%` typed by accident used to answer the whole list.
+        assert!(list(&mut conn, SHOP, Some("%")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_second_supplier_under_one_name_is_the_rule_and_not_a_sql_fault() {
+        let (_dir, mut conn) = open();
+        insert(&mut conn, &draft("Sarl Amrani")).unwrap();
+        let err = insert(&mut conn, &draft("Sarl Amrani")).unwrap_err();
+        assert_eq!(err.code(), "conflict", "{err}");
     }
 
     #[test]

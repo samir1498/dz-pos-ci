@@ -7,6 +7,7 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::customer::{Customer, CustomerRow, CustomerRowWrite};
+use crate::repos::contains_pattern;
 use crate::schema::customers;
 
 /// The ones the shop still deals with first, then alphabetical inside each
@@ -51,16 +52,6 @@ pub fn list(
         .select(CustomerRow::as_select())
         .load(conn)?;
     Ok(rows.into_iter().map(Customer::from).collect())
-}
-
-/// What was typed, as a LIKE pattern that matches it anywhere: the escape
-/// character first, so escaping it does not escape the escapes.
-fn contains_pattern(text: &str) -> String {
-    let escaped = text
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_");
-    format!("%{escaped}%")
 }
 
 pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Customer, CoreError> {

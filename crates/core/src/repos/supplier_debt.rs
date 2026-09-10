@@ -1,9 +1,3 @@
-// The callers are T2 (suppliers), T3 (purchases), T4 (expenses) and T5 (the
-// re-derive job): the tables land here before the services that read them, and
-// `repos` is crate-internal on purpose (architecture.md: nothing outside this
-// crate touches diesel), so a plain build sees no use of these yet.
-#![allow(dead_code)]
-
 //! The only place the supplier ledger touches diesel. Scoped by `shop_id`
 //! like every other query (rule 3), and append-only: there is no update and
 //! no delete here, because a mistake is corrected by an `adjustment` row
@@ -113,6 +107,64 @@ pub fn ledger(
         .select(SupplierDebtRow::as_select())
         .load(conn)?;
     Ok(rows.into_iter().map(SupplierEntry::from).collect())
+}
+
+/// Each order's two column sums, for one supplier, in one query. Only the
+/// rows that cite an order are in it: an opening balance, a payment and a
+/// correction belong to no single purchase, and what is still owed on a
+/// piece of paper is a question about the paper.
+///
+/// The subtraction happens in Rust, checked, for the reason `balance` gives.
+pub fn sums_by_purchase(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    supplier_id: i32,
+) -> Result<Vec<(i32, i64, i64)>, CoreError> {
+    let rows: Vec<(Option<i32>, Option<i64>, Option<i64>)> = supplier_ledger::table
+        .filter(supplier_ledger::shop_id.eq(shop_id))
+        .filter(supplier_ledger::supplier_id.eq(supplier_id))
+        .filter(supplier_ledger::purchase_id.is_not_null())
+        .group_by(supplier_ledger::purchase_id)
+        .select((
+            supplier_ledger::purchase_id,
+            sql::<Nullable<BigInt>>("SUM(debit_centimes)"),
+            sql::<Nullable<BigInt>>("SUM(credit_centimes)"),
+        ))
+        .load(conn)?;
+    // The filter above is what makes the id present, so a null here is a row
+    // SQLite cannot answer with and the map is never taken.
+    Ok(rows
+        .into_iter()
+        .filter_map(|(purchase_id, debit, credit)| {
+            purchase_id.map(|id| (id, debit.unwrap_or(0), credit.unwrap_or(0)))
+        })
+        .collect())
+}
+
+/// What has been placed on each of the named orders so far, in one query. An
+/// order nothing has settled is not in the answer, and the caller reads a
+/// missing one as nothing placed.
+pub fn allocated_by_purchase(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    purchase_ids: &[i32],
+) -> Result<Vec<(i32, i64)>, CoreError> {
+    if purchase_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows: Vec<(i32, Option<i64>)> = supplier_allocations::table
+        .filter(supplier_allocations::shop_id.eq(shop_id))
+        .filter(supplier_allocations::purchase_id.eq_any(purchase_ids.to_vec()))
+        .group_by(supplier_allocations::purchase_id)
+        .select((
+            supplier_allocations::purchase_id,
+            sql::<Nullable<BigInt>>("SUM(amount_centimes)"),
+        ))
+        .load(conn)?;
+    Ok(rows
+        .into_iter()
+        .map(|(purchase_id, placed)| (purchase_id, placed.unwrap_or(0)))
+        .collect())
 }
 
 /// Whether the ledger row is one of this shop's. An allocation points at a

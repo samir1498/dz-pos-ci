@@ -22,6 +22,9 @@ function RootLayout() {
           <Link to="/products" className="underline">
             {t("nav_products")}
           </Link>
+          <Link to="/suppliers" className="underline">
+            {t("nav_suppliers")}
+          </Link>
           {/* Money out that is not stock, beside the screens the shop works
               in: the cash position it carries is read from the same day. */}
           <Link to="/expenses" className="underline">

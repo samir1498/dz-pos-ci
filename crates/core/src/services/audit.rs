@@ -64,6 +64,20 @@ pub const ACTION_CREATE_EXPENSE: &str = "expense.create";
 /// ordinary update and is logged as one.
 pub const ACTION_CLOSE_CUSTOMER: &str = "customer.close";
 
+/// A supplier fiche closed while its account was still open: a balance either
+/// way, or an order still asking to be paid. The same decision the customer
+/// one records, on the side the shop owes rather than the side that owes it,
+/// and the entry carries the reason, the balance and how many orders were
+/// still open.
+pub const ACTION_CLOSE_SUPPLIER: &str = "supplier.close";
+/// Money paid to a supplier, written as a ledger movement with the orders it
+/// settled. The entry carries the balance before and after, so the log reads
+/// as the settlement it was without anyone summing the ledger again.
+pub const ACTION_PAY_SUPPLIER: &str = "supplier_debt.pay";
+/// A correction to what the shop owes a supplier, written as a ledger
+/// movement. The entry carries the balance before and after.
+pub const ACTION_ADJUST_SUPPLIER: &str = "supplier_debt.adjust";
+
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.
 #[derive(Debug, Clone, PartialEq, Eq)]

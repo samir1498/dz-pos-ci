@@ -187,7 +187,12 @@ impl ApiError {
             // out of the sentence. The name travels beside the code now, for
             // all of them.
             ApiError::Core(CoreError::Validation { field, .. })
-            | ApiError::Request(CoreError::Validation { field, .. }) => Figures {
+            | ApiError::Request(CoreError::Validation { field, .. })
+            // A conflict names its field too: the screen puts the message
+            // under the input the way it does for a validation, and only the
+            // code and the status say the two apart.
+            | ApiError::Core(CoreError::Conflict { field, .. })
+            | ApiError::Request(CoreError::Conflict { field, .. }) => Figures {
                 field: Some(field.clone()),
                 ..Figures::NONE
             },
@@ -222,7 +227,9 @@ const fn status_for(e: &CoreError) -> StatusCode {
         | CoreError::PaymentAboveDebt { .. }
         | CoreError::PartyIds { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
-        CoreError::DuplicateBarcode(_) | CoreError::Exhausted { .. } => StatusCode::CONFLICT,
+        CoreError::DuplicateBarcode(_)
+        | CoreError::Exhausted { .. }
+        | CoreError::Conflict { .. } => StatusCode::CONFLICT,
         // A template that will not render is the app's own bug: the
         // template ships in the binary and the data comes from a row the
         // core just read, so the caller has nothing to correct.
