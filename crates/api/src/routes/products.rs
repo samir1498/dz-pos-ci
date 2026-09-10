@@ -3,13 +3,14 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::Html;
 use axum::Json;
+use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
 use dzpos_core::models::product::NewProduct;
 use dzpos_core::print::{render_label, render_label_sheet};
 use dzpos_core::services::products as service;
 use serde::Deserialize;
 
-use crate::dto::{LabelSheetDto, NewProductDto, ProductDto};
+use crate::dto::{LabelSheetDto, NewProductDto, ProductDto, LABEL_SHEET_MAX};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -113,6 +114,15 @@ pub async fn label_sheet(
     let Query(LabelQuery { lang }) =
         query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let Json(LabelSheetDto { ids }) = body.map_err(ApiError::from)?;
+    // Refused here rather than after the reads: the core would render the
+    // page, but only after this handler had run one query per id, and a
+    // body naming fifty thousand of them is a request nobody typed.
+    if ids.len() > LABEL_SHEET_MAX {
+        return Err(ApiError::Request(CoreError::validation(
+            "ids",
+            "more labels than one sheet is printed at a time",
+        )));
+    }
     let shop = state.shop_id;
     let found = state
         .blocking(move |c| ids.iter().map(|id| service::get(c, shop, *id)).collect())

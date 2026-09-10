@@ -2283,6 +2283,13 @@ impl From<Applied> for ImportAppliedDto {
     }
 }
 
+/// The most labels one sheet is asked for. Eighteen fit on an A4 page
+/// (three across, six down), so two hundred is eleven pages and already
+/// more than anybody stands at a printer for. The cap is here so a body
+/// naming fifty thousand ids is refused before it becomes fifty thousand
+/// queries and a page nothing can render.
+pub const LABEL_SHEET_MAX: usize = 200;
+
 /// The products a sheet of labels is asked for. Ids and not a filter: the
 /// screen has a selection in front of it and the sheet is that selection, in
 /// the order the caller listed it.

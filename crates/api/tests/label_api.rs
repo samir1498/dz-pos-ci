@@ -134,7 +134,7 @@ async fn a_product_with_no_ean13_and_an_id_this_shop_never_gave_out_both_refuse(
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     let value: Value = serde_json::from_str(&body).unwrap();
     assert_eq!(value["error"]["code"], json!("validation"));
-    assert_eq!(value["error"]["field"], json!("barcode"));
+    assert_eq!(value["error"]["field"], json!("barcode_digits"));
 
     let (missing, _, _) = call(&h.app, "GET", "/products/4471/label?lang=fr", None).await;
     assert_eq!(missing, StatusCode::NOT_FOUND);
@@ -196,4 +196,36 @@ async fn the_sheet_is_the_selection_in_the_order_it_was_named() {
     )
     .await;
     assert_eq!(empty, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn a_selection_past_the_cap_is_refused_before_a_single_row_is_read() {
+    let h = harness();
+    let id = create(&h.app, "Café moulu 250 g", Some("2000010000074")).await;
+
+    // Two hundred is eleven A4 pages and already more than anybody stands
+    // at a printer for. The refusal comes before the reads, so a body
+    // naming fifty thousand ids is not fifty thousand queries first.
+    let at_the_cap: Vec<i32> = std::iter::repeat_n(id, 200).collect();
+    let (ok, _, body) = call(
+        &h.app,
+        "POST",
+        "/labels/sheet?lang=fr",
+        Some(json!({ "ids": at_the_cap })),
+    )
+    .await;
+    assert_eq!(ok, StatusCode::OK, "{body}");
+
+    let one_over: Vec<i32> = std::iter::repeat_n(id, 201).collect();
+    let (refused, _, over) = call(
+        &h.app,
+        "POST",
+        "/labels/sheet?lang=fr",
+        Some(json!({ "ids": one_over })),
+    )
+    .await;
+    assert_eq!(refused, StatusCode::UNPROCESSABLE_ENTITY);
+    let value: Value = serde_json::from_str(&over).unwrap();
+    assert_eq!(value["error"]["code"], json!("validation"));
+    assert_eq!(value["error"]["field"], json!("ids"));
 }

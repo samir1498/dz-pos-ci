@@ -54,7 +54,7 @@ import type { SupplierLedgerDto } from "./generated/SupplierLedgerDto";
 import type { SupplierStatementDto } from "./generated/SupplierStatementDto";
 import type { SupplierWriteDto } from "./generated/SupplierWriteDto";
 import { categorySchema, productSchema } from "./schemas/catalogue";
-import { importAppliedSchema, importDryRunSchema } from "./schemas/import";
+import { importAppliedSchema, importDryRunSchema, labelSheetSchema } from "./schemas/import";
 import {
   customerLedgerSchema,
   customerPaymentsSchema,
@@ -371,12 +371,21 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       return sendText(`/products/${id}/label?lang=${lang}`);
     },
 
-    /** A sheet of those labels on A4, in the order the ids are given. */
+    /** A sheet of those labels on A4, in the order the ids are given.
+     *
+     * The selection is checked against the same cap the API holds before
+     * the call is made: a body the server will refuse is a call not worth
+     * making, and the screen gets a `bad_request` it already translates
+     * rather than a round trip. */
     async getLabelSheet(ids: readonly number[], lang: PrintLang): Promise<string> {
+      const body = labelSheetSchema.safeParse({ ids: [...ids] });
+      if (!body.success) {
+        throw new ApiError("bad_request", "that is not a printable selection", 0);
+      }
       return sendText(`/labels/sheet?lang=${lang}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ids }),
+        body: JSON.stringify(body.data),
       });
     },
 
