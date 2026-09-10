@@ -20,18 +20,10 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { apiHeaders, apiUrl } from "./api";
+import { apiHeaders, apiUrl, printedNumber, seriesOf } from "./api";
 import { currentLang, t } from "./messages";
 
-/** The counter key a document of this kind is numbered in. A series carries
- * the year it counts in (features.md §4, Numbering) and the till stamps a
- * document with the shop's clock, so the year is matched rather than written
- * out: a literal would go red on 1 January. */
-const seriesOf = (kind: string) => new RegExp(`^${kind}:\\d{4}$`);
 
-/** The same year in the number a customer quotes: `FA-2026-000001`. */
-const printedNumber = (prefix: string, n: number) =>
-  new RegExp(`^${prefix}-\\d{4}-${String(n).padStart(6, "0")}$`);
 
 
 const here = fileURLToPath(new URL(".", import.meta.url));

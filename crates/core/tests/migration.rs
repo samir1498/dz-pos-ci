@@ -1627,6 +1627,20 @@ fn the_migration_reverts_and_reapplies() {
     // is what that copy has to carry.
     seed_a_facture_naming_a_customer(&mut conn);
 
+    // The seeder writes the row the way the file below the ninth migration
+    // spells it, because the cancellation test uses it on a file that has no
+    // `series_year` column at all. Numbered here, so the revert below has a
+    // year to take back out; without this the down's `substr` would be
+    // asserted against a string it never touches.
+    assert_eq!(
+        diesel::sql_query(
+            "UPDATE documents SET series = 'doc_facture:2026', series_year = 2026 WHERE id = 4"
+        )
+        .execute(&mut conn)
+        .unwrap(),
+        1
+    );
+
     // The ninth is the top of the stack: the year a series counts in. Its
     // down puts the series string back the way the file below it spells it
     // and takes the column off, which is what the kind rules underneath it
