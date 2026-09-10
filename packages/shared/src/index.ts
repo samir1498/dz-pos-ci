@@ -61,6 +61,9 @@ export type { ExpenseDto } from "./generated/ExpenseDto";
 export type { ExpensesDto } from "./generated/ExpensesDto";
 export type { NewExpenseDto } from "./generated/NewExpenseDto";
 export type { OutgoingsDto } from "./generated/OutgoingsDto";
+export type { LastStockRecountDto } from "./generated/LastStockRecountDto";
+export type { StockDriftDto } from "./generated/StockDriftDto";
+export type { StockRecountDto } from "./generated/StockRecountDto";
 export type { TakingsDto } from "./generated/TakingsDto";
 
 export { ApiError, createClient } from "./client";
