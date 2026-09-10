@@ -111,6 +111,40 @@ describe("the stock recount panel", () => {
     expect(screen.getByText(fr.stock_recount_corrected)).toBeInTheDocument();
   });
 
+  test("a product corrected twice on one day is two rows, not one", async () => {
+    // Two runs on a day read as one list, so the same product can appear
+    // twice. Keyed by id alone, React dropped the second row and the panel
+    // said one correction had happened where the log holds two.
+    last = {
+      last_run_day: "2026-09-10",
+      drifts: [
+        drift,
+        { ...drift, cached_milli: 50_000, ledger_milli: 24_000, difference_milli: -26_000 },
+      ],
+    };
+    // React renders both rows even when their keys clash, and only says so
+    // on the console; the reconciliation goes wrong on the next render, which
+    // is a refetch away. The warning is therefore the assertion.
+    const complaints: unknown[][] = [];
+    const consoleError = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      complaints.push(args);
+    });
+    try {
+      mount();
+      expect(await screen.findAllByTestId("stock-drift-row")).toHaveLength(2);
+      const differences = screen
+        .getAllByTestId("stock-drift-difference")
+        .map((node) => node.textContent);
+      expect(differences[0]).toContain("-75");
+      expect(differences[1]).toContain("-26");
+      expect(complaints.map((args) => args.map(String).join(" ")).join("\n")).not.toContain(
+        "same key",
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   test("the button posts once and the panel then shows what the run checked", async () => {
     mount();
     await screen.findByTestId("stock-recount-day");

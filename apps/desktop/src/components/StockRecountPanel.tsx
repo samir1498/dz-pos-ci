@@ -110,9 +110,16 @@ export function StockRecountPanel() {
                   out which number is now on the fiche. */}
               <p>{t("stock_recount_corrected")}</p>
               <ul className="flex flex-col divide-y rounded border">
-                {drifts.map((drift) => (
+                {/* Keyed by position as well as by product: a day with two
+                    runs reads as one list, and a product that drifted again
+                    after the first run put it right is two rows carrying the
+                    same id. The id alone made React drop the second one. The
+                    list is replaced whole on every answer, so nothing is
+                    carried across a render for the position to be wrong
+                    about. */}
+                {drifts.map((drift, position) => (
                   <li
-                    key={drift.product_id}
+                    key={`${drift.product_id}-${position}`}
                     data-testid="stock-drift-row"
                     className="flex items-center justify-between gap-4 px-3 py-2"
                   >

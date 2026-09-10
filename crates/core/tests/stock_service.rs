@@ -352,6 +352,51 @@ fn the_last_run_reads_its_drifts_back_out_of_the_log() {
 }
 
 #[test]
+fn two_runs_on_one_day_read_back_as_one_list_of_what_that_day_corrected() {
+    // The audit rows are the whole record and they are filed by the day the
+    // run was marked under, so a day with two runs reads as one list. That
+    // is the honest answer: both corrected the shop on the day the panel is
+    // naming. The same product may appear twice, once per run, which is a
+    // product that drifted again after being put right.
+    let (_dir, mut conn) = open_temp();
+    let sugar = products::create(&mut conn, SHOP, OWNER, draft("Sucre", 24_000)).unwrap();
+    let flour = products::create(&mut conn, SHOP, OWNER, draft("Farine", 3_000)).unwrap();
+
+    forge_cache(&mut conn, sugar.id, 99_000);
+    assert_eq!(
+        stock::recount(&mut conn, SHOP, OWNER).unwrap().drifts.len(),
+        1
+    );
+
+    // Both drift the second time, and the sugar is the one that went wrong
+    // again after the first run had already corrected it.
+    forge_cache(&mut conn, sugar.id, 50_000);
+    forge_cache(&mut conn, flour.id, 7_000);
+    assert_eq!(
+        stock::recount(&mut conn, SHOP, OWNER).unwrap().drifts.len(),
+        2
+    );
+
+    let last = stock::last_recount(&mut conn, SHOP).unwrap();
+    assert_eq!(last.last_run_day, Some(today()));
+    assert_eq!(
+        last.drifts.len(),
+        3,
+        "the day's earlier run fell out of the list"
+    );
+    // Oldest first, the way the log is read.
+    let seen: Vec<(i32, i64)> = last
+        .drifts
+        .iter()
+        .map(|d| (d.product_id, d.cached_milli))
+        .collect();
+    assert_eq!(
+        seen,
+        vec![(sugar.id, 99_000), (sugar.id, 50_000), (flour.id, 7_000),]
+    );
+}
+
+#[test]
 fn a_shop_that_has_never_recounted_has_no_day_and_no_drift() {
     let (_dir, mut conn) = open_temp();
     let last = stock::last_recount(&mut conn, SHOP).unwrap();
