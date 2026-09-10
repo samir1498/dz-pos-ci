@@ -179,7 +179,9 @@ describe("the two Tailwind blocks", () => {
   const outside = generated.replace(reference, "").replace(inline, "");
 
   const keysIn = (block: string): string[] =>
-    [...block.matchAll(/^ {2}(--[a-z0-9-]+):/gm)].map((match) => match[1]);
+    [...block.matchAll(/^ {2}(--[a-z0-9-]+):/gm)].flatMap((match) =>
+      match[1] === undefined ? [] : [match[1]],
+    );
 
   /** A key declared in both blocks would resolve to whichever came last. */
   it("declares no Tailwind key twice", () => {

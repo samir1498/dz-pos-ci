@@ -75,6 +75,11 @@ export const primitives: Readonly<Record<PrimitiveFamily, Ramp>> = {
   // borrows from it. Values from the approved direction pages (Registre and
   // the Comptoir blend), not mixed here.
   ink: {
+    // The two light steps are the sidebar's own text, not a surface: 50 is
+    // what a nav label is set in and 100 the dimmer tier under it. They come
+    // off the same direction pages as the dark steps.
+    50: "#c8d2cc",
+    100: "#9fb0a8",
     200: "#7a877f",
     300: "#4a5a53",
     400: "#3a4b44",

@@ -91,6 +91,11 @@ export const textColor = {
   disabled: ref("stone", 300),
   "on-inverse": ref("paper", 50),
   "on-sidebar": ref("paper", 50),
+  // The sidebar's second tier: a section heading, an inactive nav label, the
+  // shop name under the wordmark. `on-sidebar` is paper white and reads as
+  // "you are here"; using it for everything made every row look selected.
+  // Off the blend page, where the sidebar sits on the same ink Registre uses.
+  "on-sidebar-muted": ref("ink", 50),
   danger: ref("red", 600),
   success: ref("teal", 600),
 } satisfies TokenGroup;
@@ -214,6 +219,10 @@ export const registreText = {
   disabled: ref("ink", 200),
   "on-inverse": ref("ink", 800),
   "on-sidebar": ref("paper", 50),
+  // A step down from Comptoir's: Registre's page is ink too, so the sidebar
+  // has no lighter surface to lean against and the dim tier has to be dimmer
+  // to read as one. The value the Registre page sets its own labels in.
+  "on-sidebar-muted": ref("ink", 100),
   danger: ref("red", 300),
   success: ref("teal", 300),
 } satisfies TokenGroup;
@@ -290,6 +299,9 @@ export const observeText = {
   disabled: ref("slate", 300),
   "on-inverse": ref("slate", 50),
   "on-sidebar": ref("slate", 900),
+  // Observe's sidebar is a white panel, so the dim tier is the body's own
+  // secondary grey rather than anything lifted off an ink surface.
+  "on-sidebar-muted": ref("slate", 600),
   danger: ref("rose", 600),
   success: ref("emerald", 600),
 } satisfies TokenGroup;
@@ -360,6 +372,7 @@ export const observeDarkText = {
   disabled: ref("night", 300),
   "on-inverse": ref("night", 900),
   "on-sidebar": ref("slate", 100),
+  "on-sidebar-muted": ref("slate", 400),
   danger: ref("rose", 400),
   success: ref("emerald", 500),
 } satisfies TokenGroup;

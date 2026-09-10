@@ -110,6 +110,10 @@ const EXTRA_UTILITIES: readonly (readonly [string, string])[] = [
   ["--color-inverse", "--surface-inverse"],
   ["--color-on-inverse", "--text-on-inverse"],
   ["--color-faint", "--text-tertiary"],
+  // The sidebar's dim tier. shadcn stops at `--sidebar-foreground`, so a
+  // section heading and an inactive nav label had nothing but the bright one
+  // and every row read as selected.
+  ["--color-sidebar-muted", "--text-on-sidebar-muted"],
   ["--color-fg-disabled", "--text-disabled"],
   ["--color-fg-danger", "--text-danger"],
   ["--color-fg-success", "--text-success"],

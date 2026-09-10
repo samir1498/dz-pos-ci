@@ -60,6 +60,7 @@ const TEXT_COLOUR_ROLES: ReadonlySet<string> = new Set([
   "--text-disabled",
   "--text-on-inverse",
   "--text-on-sidebar",
+  "--text-on-sidebar-muted",
   "--text-danger",
   "--text-success",
 ]);

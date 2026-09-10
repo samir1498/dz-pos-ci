@@ -47,6 +47,8 @@
   --p-blue-500: #2f6fcf;
   --p-blue-700: #1f4c90;
   --p-blue-900: #16305c;
+  --p-ink-50: #c8d2cc;
+  --p-ink-100: #9fb0a8;
   --p-ink-200: #7a877f;
   --p-ink-300: #4a5a53;
   --p-ink-400: #3a4b44;
@@ -116,6 +118,7 @@
   --text-disabled: var(--p-stone-300);
   --text-on-inverse: var(--p-paper-50);
   --text-on-sidebar: var(--p-paper-50);
+  --text-on-sidebar-muted: var(--p-ink-50);
   --text-danger: var(--p-red-600);
   --text-success: var(--p-teal-600);
   --border-default: var(--p-stone-200);
@@ -184,6 +187,7 @@
   --text-disabled: var(--p-ink-200);
   --text-on-inverse: var(--p-ink-800);
   --text-on-sidebar: var(--p-paper-50);
+  --text-on-sidebar-muted: var(--p-ink-100);
   --text-danger: var(--p-red-300);
   --text-success: var(--p-teal-300);
   --border-default: var(--p-ink-500);
@@ -230,6 +234,7 @@
   --text-disabled: var(--p-slate-300);
   --text-on-inverse: var(--p-slate-50);
   --text-on-sidebar: var(--p-slate-900);
+  --text-on-sidebar-muted: var(--p-slate-600);
   --text-danger: var(--p-rose-600);
   --text-success: var(--p-emerald-600);
   --border-default: var(--p-slate-200);
@@ -276,6 +281,7 @@
   --text-disabled: var(--p-night-300);
   --text-on-inverse: var(--p-night-900);
   --text-on-sidebar: var(--p-slate-100);
+  --text-on-sidebar-muted: var(--p-slate-400);
   --text-danger: var(--p-rose-400);
   --text-success: var(--p-emerald-500);
   --border-default: var(--p-night-600);
