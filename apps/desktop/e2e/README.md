@@ -201,6 +201,8 @@ here. These are all of them.
 | `tiles` | `till.tsx` | The cart's −, + and ✕ buttons carry the product name too, so a name query without this scope matches four things. |
 | `cart` | `till.tsx` | The mirror image of the above, for a query that means the lines rather than the grid. |
 | `till-change` | `till.tsx` | An amount, so its text is a number in three locales. |
+| `keypad` | `Keypad.tsx` | The pad's keys are digits, which read the same in every language and appear again in the amounts around them. |
+| `till-totals` | `-till/cart.tsx` | The totals block; a few named amounts rather than a table, so there is no role and name to ask for. |
 | `total-net-to-pay` | `till.tsx` | The one totals row a test reads by value; the label beside it is translated. |
 | `till-customer-balance` | `till.tsx` | An amount, and the same figure appears on the fiche panel beside it. |
 | `till-credit-limit` | `till.tsx` | An amount, translated label. |

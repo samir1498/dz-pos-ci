@@ -537,7 +537,6 @@
   "keypad_enter": "Confirm",
   "col_total": "Total",
   "till_no_customer": "No customer matches.",
-  "till_customer_clear": "Remove the customer",
   "till_products": "Products on sale",
   "till_totals": "The total, line by line"
 }
