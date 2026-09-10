@@ -44,6 +44,10 @@ export const settingsQueryKey: readonly string[] = ["settings"];
  * one changes on its own at midnight. */
 export const clockQueryKey: readonly string[] = ["clock"];
 export const backupsQueryKey: readonly string[] = ["backups"];
+/** The last stock recount: the day it ran and what it corrected. Its own key
+ * rather than a slice of the products': a recount changes the quantities the
+ * product list carries, so running one invalidates both. */
+export const stockRecountQueryKey: readonly string[] = ["stock-recount"];
 /** The seeded expense categories. One list for the shop, so it has its own
  * key and nothing invalidates it: no screen writes one in this version. */
 export const expenseCategoriesQueryKey: readonly string[] = ["expense-categories"];

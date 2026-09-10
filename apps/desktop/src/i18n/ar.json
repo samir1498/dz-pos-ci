@@ -451,5 +451,18 @@
   "action_cancel_order": "إلغاء الطلبية",
   "action_close_short": "إقفال ناقص",
   "action_back_to_purchases": "العودة إلى قائمة المشتريات",
-  "error_amount_unreadable": "المبلغ أو الكمية غير مقروء."
+  "error_amount_unreadable": "المبلغ أو الكمية غير مقروء.",
+  "settings_stock_recount": "إعادة جرد المخزون",
+  "settings_stock_recount_hint": "تُحسب الكمية المتوفرة كل ليلة من جديد انطلاقًا من الحركات. سجل الحركات هو المرجع: تُصحَّح الكمية المسجلة على المنتج انطلاقًا منه.",
+  "stock_recount_last_run_label": "آخر إعادة جرد",
+  "stock_recount_checked_label": "المنتجات المفحوصة",
+  "stock_recount_never": "لم تُجرَ إعادة جرد بعد.",
+  "stock_recount_none": "لا يوجد أي فرق في آخر إعادة جرد.",
+  "stock_recount_corrected": "صُحِّحت الكمية المسجلة انطلاقًا من سجل الحركات.",
+  "stock_recount_cached": "المسجلة",
+  "stock_recount_ledger": "الحركات",
+  "stock_recount_difference": "الفرق",
+  "stock_recount_done": "تمت إعادة الجرد.",
+  "stock_recount_marks_today": "إعادة الجرد تحسب المخزون الآن وتسجل اليوم كيوم تم جرده: أي فرق يظهر لاحقًا اليوم ينتظر جرد الغد أو ضغطة أخرى على هذا الزر.",
+  "action_recount_now": "أعد الجرد الآن"
 }

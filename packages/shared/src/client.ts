@@ -44,6 +44,8 @@ import type { SaleKindDto } from "./generated/SaleKindDto";
 import type { SettingsDto } from "./generated/SettingsDto";
 import type { StoreDto } from "./generated/StoreDto";
 import type { CloseSupplierDto } from "./generated/CloseSupplierDto";
+import type { LastStockRecountDto } from "./generated/LastStockRecountDto";
+import type { StockRecountDto } from "./generated/StockRecountDto";
 import type { NewSupplierDto } from "./generated/NewSupplierDto";
 import type { SupplierDto } from "./generated/SupplierDto";
 import type { SupplierLedgerDto } from "./generated/SupplierLedgerDto";
@@ -69,6 +71,7 @@ import {
   supplierStatementSchema,
 } from "./schemas/supplier";
 import { saleSchema } from "./schemas/sale";
+import { lastStockRecountSchema, stockRecountSchema } from "./schemas/stock";
 import {
   backupSchema,
   backupsSchema,
@@ -680,6 +683,21 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         body: JSON.stringify(input),
       });
       return narrow(body, purchaseDetailSchema, "purchase");
+    },
+
+    /** The day the shop last recounted its stock and what that day put
+     * right. Null day means it has never run: the daily loop marks the first
+     * one on the first wake after the app is launched. */
+    async lastStockRecount(): Promise<LastStockRecountDto> {
+      return narrow(await send("/stock/recount"), lastStockRecountSchema, "last stock recount");
+    },
+
+    /** Recounts now, whatever the marker says. The server compares every
+     * product's cached quantity with its ledger and writes the ledger back
+     * over the ones that disagree, so the answer is what it corrected. */
+    async recountStock(): Promise<StockRecountDto> {
+      const body = await send("/stock/recount", { method: "POST" });
+      return narrow(body, stockRecountSchema, "stock recount");
     },
 
     async createProduct(input: NewProductDto): Promise<ProductDto> {

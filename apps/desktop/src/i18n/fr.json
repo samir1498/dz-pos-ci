@@ -451,5 +451,18 @@
   "action_cancel_order": "Annuler la commande",
   "action_close_short": "Clôturer incomplète",
   "action_back_to_purchases": "Retour à la liste des achats",
-  "error_amount_unreadable": "Montant ou quantité illisible."
+  "error_amount_unreadable": "Montant ou quantité illisible.",
+  "settings_stock_recount": "Recomptage du stock",
+  "settings_stock_recount_hint": "Chaque nuit, la quantité en stock est recalculée à partir des mouvements. Le journal des mouvements fait foi : la quantité enregistrée sur la fiche est corrigée d'après lui.",
+  "stock_recount_last_run_label": "Dernier recomptage",
+  "stock_recount_checked_label": "Produits vérifiés",
+  "stock_recount_never": "Jamais recompté.",
+  "stock_recount_none": "Aucun écart au dernier recomptage.",
+  "stock_recount_corrected": "La quantité enregistrée a été corrigée d'après le journal des mouvements.",
+  "stock_recount_cached": "Enregistré",
+  "stock_recount_ledger": "Mouvements",
+  "stock_recount_difference": "Écart",
+  "stock_recount_done": "Recomptage fait.",
+  "stock_recount_marks_today": "Un recomptage compte le stock maintenant et marque la journée comme faite : un écart qui apparaît plus tard aujourd'hui attend le recomptage de demain, ou une nouvelle pression sur ce bouton.",
+  "action_recount_now": "Recompter maintenant"
 }

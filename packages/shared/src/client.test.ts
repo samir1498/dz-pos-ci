@@ -13,7 +13,10 @@ import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { RestoreDto } from "./generated/RestoreDto";
 import type { SaleDto } from "./generated/SaleDto";
 import type { ProductDto } from "./generated/ProductDto";
+import type { LastStockRecountDto } from "./generated/LastStockRecountDto";
 import type { SettingsDto } from "./generated/SettingsDto";
+import type { StockDriftDto } from "./generated/StockDriftDto";
+import type { StockRecountDto } from "./generated/StockRecountDto";
 import type { StoreDto } from "./generated/StoreDto";
 
 const product: ProductDto = {
@@ -301,6 +304,51 @@ describe("settings", () => {
       regime: "ifu",
       valid_from: "2027-01-01",
     });
+  });
+});
+
+describe("the stock recount", () => {
+  const drift: StockDriftDto = {
+    product_id: 7,
+    name: "Sucre 1kg",
+    cached_milli: 99_000,
+    ledger_milli: 24_000,
+    difference_milli: -75_000,
+  };
+
+  const last: LastStockRecountDto = { last_run_day: "2026-09-10", drifts: [drift] };
+  const run: StockRecountDto = { day: "2026-09-10", products_checked: 42, drifts: [drift] };
+
+  test("reads the last run from /stock/recount", async () => {
+    const api = createClient("http://127.0.0.1:4317", stub(200, last));
+    await expect(api.lastStockRecount()).resolves.toEqual(last);
+  });
+
+  test("running one posts to the same address and returns the report", async () => {
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(run), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.recountStock()).resolves.toEqual(run);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/stock/recount");
+    expect(calls[0]?.init?.method).toBe("POST");
+  });
+
+  test("a report of the wrong shape is refused, never handed to the panel", async () => {
+    for (const bad of [
+      { ...run, drifts: [{ ...drift, ledger_milli: 24_000.5 }] },
+      { ...run, day: "10/09/2026" },
+      { ...run, products_checked: 1.5 },
+      { day: run.day, drifts: [] },
+    ]) {
+      const api = createClient("http://x", stub(200, bad));
+      await expect(api.recountStock()).rejects.toMatchObject({ code: "bad_response" });
+    }
   });
 });
 

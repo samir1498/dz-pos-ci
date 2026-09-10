@@ -194,8 +194,23 @@ so the facture switch has nothing to backfill.
 **Stock movements.** Append-only ledger: every change to quantity on hand
 is a row with type (purchase, sale, adjustment, return, opening), quantity,
 unit cost, reference to the source document, user, timestamp. Quantity on
-hand is derived from this ledger and cached on the product; a nightly job
-re-derives it and reports drift.
+hand is derived from this ledger and cached on the product.
+
+A recount re-derives that cache and reports what it found. It runs once per
+shop day from the daily job, after the backup, so a correction the owner
+disagrees with is recoverable from the previous copy; the recount is not
+held back when that copy fails, and the settings screen asks for one at any
+time. The ledger is the truth, so a cache the movements do not
+explain is written back to the ledger's sum rather than left for someone to
+fix, and each correction is one audit row `stock.drift` naming the product,
+the cached quantity, the ledger quantity and the difference. Those rows are
+the whole record of a recount: there is no table of runs, and the panel
+reads the drifts of the last run back out of the log by the day the run was
+marked under. A run that finds nothing still marks the day and writes no
+row. A run asked for from the settings screen counts the stock at that
+moment and marks the day like any other, so a drift that arises later the
+same day is caught by tomorrow's run or by another press of the button, and
+the panel says so.
 
 **Expense.** Category (seeded: rent, electricity, water, salaries,
 transport, maintenance, other), amount, date, note. The seven categories
@@ -714,7 +729,8 @@ Owner, manager, cashier. Login by PIN on the till, password elsewhere.
 Permissions: sell, give discount above X %, override credit block, see cost
 prices and margins, edit products, edit settings, see reports. Every
 document records the user. Audit log of sensitive actions (price change,
-discount override, delete, settings change), an ISO-27001 control we get
+discount override, delete, settings change, a quantity on hand put back to
+what its ledger sums to), an ISO-27001 control we get
 for nearly free by writing it now. An owner user exists from the first
 migration, so every document, ledger row and audit entry carries a user
 from the first sale (build-order step 2); PIN, roles and permissions

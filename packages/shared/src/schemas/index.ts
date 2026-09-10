@@ -53,6 +53,7 @@ export {
   paymentMethodSchema,
   paymentSchema,
 } from "./customer";
+export { lastStockRecountSchema, stockDriftSchema, stockRecountSchema } from "./stock";
 export {
   closeOrderSchema,
   newPurchaseLineSchema,

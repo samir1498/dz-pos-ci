@@ -490,6 +490,10 @@ pub fn router_with_origin(
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))
+        .route(
+            "/stock/recount",
+            get(routes::stock::last).post(routes::stock::recount),
+        )
         .route("/suppliers", get(routes::suppliers::list))
         .route("/suppliers", post(routes::suppliers::create))
         .route(
