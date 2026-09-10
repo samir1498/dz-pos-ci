@@ -341,6 +341,9 @@ fn a_correction_downwards_settles_the_oldest_order_first() {
     assert_eq!(written.entry.payment_mode, None);
     assert_eq!(written.allocations.len(), 1);
     assert_eq!(written.allocations[0].purchase_id, older);
+    // The amount as well as the order: a correction that named the right
+    // paper and took the wrong figure off it would pass on the id alone.
+    assert_eq!(written.allocations[0].amount, Money::centimes(30_000));
     assert_eq!(written.statement.balance, Money::centimes(130_000));
 }
 
