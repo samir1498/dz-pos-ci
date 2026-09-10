@@ -35,6 +35,11 @@ const TOMATO_SOLD_MILLI = 1_500;
 /** 1 500,00 DA handed over for a 1 292,00 DA basket. */
 const TENDERED = "1500";
 
+/** The product of the pad and F9 test: one piece at 300,00 DA, five on hand. */
+const SOAP = "Savon e2e";
+const SOAP_BARCODE = "6130009000035";
+const SOAP_STOCK_MILLI = 5_000;
+
 interface TotalsCase {
   name: string;
   expected: {
@@ -250,4 +255,48 @@ test("sells two rates for cash, matches the fixture totals, reduces the stock an
   if (currentLang() === "ar") {
     await page.screenshot({ path: path.join(here, "screenshots", "till-ar.png"), fullPage: true });
   }
+});
+
+/**
+ * The two ways a cashier's hands work that the test above does not drive: the
+ * pad, and the one function key the till has. F9 pays the way a till keyboard
+ * does, and it is asserted here rather than in a unit test because the
+ * listener is on the window and what has the focus decides whether the key
+ * ever arrives.
+ */
+test("the pad counts the notes and F9 takes the sale", async ({ page, request }) => {
+  await seed(request, {
+    name: SOAP,
+    barcode: SOAP_BARCODE,
+    price: 30_000,
+    rate: 1900,
+    unit: "piece",
+    stock: SOAP_STOCK_MILLI,
+  });
+
+  await page.goto("/");
+  const search = page.getByLabel(t("till_search"), { exact: true });
+  await search.fill(SOAP_BARCODE);
+  await search.press("Enter");
+
+  // 1 000 DA handed over, typed on the pad the way a thumb types it: the pad
+  // counts whole dinars, so four keys are four digits and not four centimes.
+  const pad = page.getByTestId("keypad");
+  for (const key of ["1", "0", "0", "0"]) {
+    await pad.getByRole("button", { name: key, exact: true }).click();
+  }
+  await expect(page.getByTestId("till-change")).toBeVisible();
+
+  const issued = page.waitForResponse(
+    (res) => res.url().endsWith("/sales") && res.request().method() === "POST",
+  );
+  await page.keyboard.press("F9");
+  const response = await issued;
+  expect(response.status()).toBe(201);
+
+  const sale: { tendered_centimes: number | null; change_centimes: number | null } =
+    await response.json();
+  expect(sale.tendered_centimes).toBe(100_000);
+  await expect(page.getByRole("status")).toBeVisible();
+  expect(await stockOf(request, SOAP_BARCODE)).toBe(SOAP_STOCK_MILLI - 1_000);
 });

@@ -184,11 +184,13 @@ async function lastTicketNumber(request: APIRequestContext): Promise<number> {
   return tickets.reduce((high, one) => Math.max(high, one.number), 0);
 }
 
+/** The search box narrows the list the server answers with, and the answer
+ * itself is what commits the choice: the picker is the box and its answers
+ * now, not a select. */
 async function pick(page: Page, name: string): Promise<void> {
   await page.getByLabel(t("till_customer_search"), { exact: true }).fill(name);
-  const select = page.getByLabel(t("till_customer"), { exact: true });
-  await expect(select.getByRole("option", { name })).toBeAttached();
-  await select.selectOption({ label: name });
+  const list = page.getByRole("group", { name: t("till_customer") });
+  await list.getByRole("button", { name }).click();
 }
 
 async function addOne(page: Page, name: string): Promise<void> {

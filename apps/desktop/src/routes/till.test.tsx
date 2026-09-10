@@ -347,6 +347,25 @@ async function findTile(p: ProductDto): Promise<HTMLElement> {
   });
 }
 
+/** The answers to the customer search box. The picked fiche sits above the
+ * list rather than inside it, and the tiles carry names too, so the answers
+ * are asked for inside their own group. */
+function customerList(): HTMLElement {
+  return screen.getByRole("group", { name: "Client" });
+}
+
+/** Picks a fiche the way a cashier does: the answers are buttons and the one
+ * with that name is clicked. The name is a pattern because the row says the
+ * balance beside it, the way a tile says its price. */
+async function pickCustomer(
+  user: ReturnType<typeof userEvent.setup>,
+  customer: CustomerDto,
+): Promise<void> {
+  const name = new RegExp(customer.name);
+  await within(customerList()).findByRole("button", { name });
+  await user.click(within(customerList()).getByRole("button", { name }));
+}
+
 /** Waits for the tiles, then rings up the fixture basket: two coffees and
  * 1,5 kg of tomatoes. */
 async function ringUpTheFixtureBasket(user: ReturnType<typeof userEvent.setup>) {
@@ -602,7 +621,9 @@ describe("the live totals", () => {
     const user = userEvent.setup();
     mount();
     await ringUpTheFixtureBasket(user);
-    const totals = screen.getByRole("table", { name: "Net à payer" });
+    // The totals are a few named amounts and not a list, so they are a
+    // description block rather than a table with a header row saying nothing.
+    const totals = screen.getByTestId("till-totals");
     expect(within(totals).getByText("1 100,00")).toBeInTheDocument();
     expect(within(totals).getByText("27,00")).toBeInTheDocument();
     expect(within(totals).getByText("152,00")).toBeInTheDocument();
@@ -616,7 +637,9 @@ describe("the live totals", () => {
     mount();
     await ringUpTheFixtureBasket(user);
     await user.click(screen.getByRole("radio", { name: "Carte" }));
-    const totals = screen.getByRole("table", { name: "Net à payer" });
+    // The totals are a few named amounts and not a list, so they are a
+    // description block rather than a table with a header row saying nothing.
+    const totals = screen.getByTestId("till-totals");
     expect(within(totals).queryByText("13,00")).not.toBeInTheDocument();
     expect(within(totals).getByText("1 279,00")).toBeInTheDocument();
   });
@@ -690,6 +713,41 @@ describe("paying", () => {
     expect(salePost()?.tendered_centimes).toBeNull();
   });
 
+  /**
+   * The pad a thumb hits. It types whole dinars, so 1, 5 then the double zero
+   * is 1 500 DA, and the box above it shows the same integer the keyboard
+   * would have put there. Its wide key does what F9 and the brass button do.
+   */
+  test("the pad types the amount handed over and its wide key takes the sale", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpTheFixtureBasket(user);
+
+    const pad = within(screen.getByTestId("keypad"));
+    for (const key of ["1", "5", "00"]) {
+      await user.click(pad.getByRole("button", { name: key }));
+    }
+    expect(screen.getByTestId("till-change")).toHaveTextContent("208,00");
+
+    await user.click(pad.getByRole("button", { name: "Valider" }));
+    await waitFor(() => expect(posted()).toBe(true));
+    expect(salePost()?.tendered_centimes).toBe(150_000);
+  });
+
+  test("the pad's backspace empties the box rather than leaving a zero in it", async () => {
+    const user = userEvent.setup();
+    mount();
+    await ringUpTheFixtureBasket(user);
+
+    const pad = within(screen.getByTestId("keypad"));
+    await user.click(pad.getByRole("button", { name: "9" }));
+    await user.click(pad.getByRole("button", { name: "Effacer un chiffre" }));
+
+    // Nothing counted yet: no change is shown and the sale waits.
+    expect(screen.queryByTestId("till-change")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Encaisser" })).toBeDisabled();
+  });
+
   test("F9 pays without touching the button", async () => {
     const user = userEvent.setup();
     mount();
@@ -713,7 +771,9 @@ describe("paying", () => {
     mount();
     const credit = await screen.findByRole("radio", { name: "Crédit" });
     expect(credit).toBeDisabled();
-    expect(credit.closest("label")).toHaveAttribute(
+    // The reason is on the control itself, so hovering the thing that
+    // refuses is what explains it.
+    expect(credit).toHaveAttribute(
       "title",
       "Choisissez un client qui peut acheter à crédit.",
     );
@@ -842,10 +902,7 @@ describe("on credit", () => {
   ): Promise<void> {
     await findTile(coffee);
     await user.click(tile(coffee));
-    await screen.findByRole("option", { name: customer.name });
-    await user.selectOptions(screen.getByLabelText("Client", { selector: "select" }), [
-      String(customer.id),
-    ]);
+    await pickCustomer(user, customer);
   }
 
   async function payOnCredit(user: ReturnType<typeof userEvent.setup>): Promise<void> {
@@ -905,8 +962,10 @@ describe("on credit", () => {
     mount();
     await findTile(coffee);
     await user.click(tile(coffee));
-    await screen.findByRole("option", { name: amrani.name });
-    expect(screen.queryByRole("option", { name: anonymous.name })).not.toBeInTheDocument();
+    await within(customerList()).findByRole("button", { name: new RegExp(amrani.name) });
+    expect(
+      within(customerList()).queryByRole("button", { name: new RegExp(anonymous.name) }),
+    ).not.toBeInTheDocument();
   });
 
   test("the refusal shows both amounts and the override resends the same basket", async () => {
@@ -1014,10 +1073,7 @@ describe("the facture at the till", () => {
   ): Promise<void> {
     await findTile(coffee);
     await user.click(tile(coffee));
-    await screen.findByRole("option", { name: customer.name });
-    await user.selectOptions(screen.getByLabelText("Client", { selector: "select" }), [
-      String(customer.id),
-    ]);
+    await pickCustomer(user, customer);
   }
 
   /** The answer the API gives for a facture: its own kind, its own series
@@ -1040,7 +1096,7 @@ describe("the facture at the till", () => {
     const facture = screen.getByRole("radio", { name: "Facture" });
     expect(facture).toBeDisabled();
     // Disabled and saying why, the way the credit choice does.
-    expect(facture.closest("label")).toHaveAttribute(
+    expect(facture).toHaveAttribute(
       "title",
       "Une facture est établie au nom d'un client.",
     );
@@ -1063,7 +1119,7 @@ describe("the facture at the till", () => {
     // offered on the same terms and says why when it is not.
     const proforma = screen.getByRole("radio", { name: "Proforma" });
     expect(proforma).toBeDisabled();
-    expect(proforma.closest("label")).toHaveAttribute(
+    expect(proforma).toHaveAttribute(
       "title",
       "Une proforma est établie au nom d'un client : choisissez-en un.",
     );
@@ -1079,18 +1135,28 @@ describe("the facture at the till", () => {
   test("a quotation is still refused when the basket itself is wrong", async () => {
     // A proforma takes no money, so the cash box and the credit limit are not
     // part of what makes it sendable. What is in the basket still is: a
-    // global discount that is not an amount is as wrong on a quotation as on
-    // a sale, and nothing may be posted while it stands.
+    // quantity that is not a number is as wrong on a quotation as on a sale,
+    // and nothing may be posted while it stands.
+    //
+    // The quantity and not the discount, which is where this test used to
+    // look: the discount is a `MoneyInput` now and an amount is the only
+    // thing it can hand back, so "abc" never becomes a discount to refuse.
+    // The quantity box is still free text, because "1," on the way to "1,5"
+    // has to survive being typed.
     const user = userEvent.setup();
     saleAnswer = () => json(201, { ...issued, kind: "proforma" });
     mount();
     await ringUpFor(user, amrani);
     await user.click(screen.getByRole("radio", { name: "Proforma" }));
-    await user.type(screen.getByLabelText("Remise globale (DA)"), "abc");
+    const qty = screen.getByLabelText(`Quantité ${coffee.name}`);
+    await user.clear(qty);
+    await user.type(qty, "abc");
 
     // Said out loud, and the button will not send it.
-    expect(screen.getByText("Remise invalide.")).toBeInTheDocument();
+    expect(screen.getByText("Quantité invalide.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Encaisser" })).toBeDisabled();
+    await user.clear(qty);
+    await user.type(qty, "1");
 
     // Corrected, and the quotation goes.
     await user.clear(screen.getByLabelText("Remise globale (DA)"));
@@ -1122,7 +1188,7 @@ describe("the facture at the till", () => {
 
     // Back to the walk-in customer: a facture is made out to somebody, so
     // the switch does not stay on a choice the server would refuse.
-    await user.selectOptions(screen.getByLabelText("Client", { selector: "select" }), [""]);
+    await user.click(screen.getByRole("button", { name: "Client de passage" }));
     expect(screen.getByRole("radio", { name: "Ticket" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "Facture" })).toBeDisabled();
 

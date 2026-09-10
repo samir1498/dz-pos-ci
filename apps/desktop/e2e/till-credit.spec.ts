@@ -99,12 +99,11 @@ async function ledger(
 }
 
 /** Picks the customer at the till: the search box narrows the list the
- * server answers with, and the select is what commits the choice. */
+ * server answers with, and the answer itself is what commits the choice. */
 async function pick(page: Page, name: string): Promise<void> {
   await page.getByLabel(t("till_customer_search"), { exact: true }).fill(name);
-  const select = page.getByLabel(t("till_customer"), { exact: true });
-  await expect(select.getByRole("option", { name })).toBeAttached();
-  await select.selectOption({ label: name });
+  const list = page.getByRole("group", { name: t("till_customer") });
+  await list.getByRole("button", { name }).click();
 }
 
 async function addAndPayOnCredit(page: Page, product: string): Promise<void> {
