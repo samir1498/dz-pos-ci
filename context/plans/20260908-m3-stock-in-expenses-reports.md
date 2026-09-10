@@ -1,7 +1,7 @@
 ---
 title: 'M3 stock in expenses reports'
 slug: 'm3-stock-in-expenses-reports'
-status: 'active'
+status: 'done'
 category: 'milestone'
 created: 20260908
 tldr: 'Yearly series reset, suppliers, purchases with partial receipt, expenses, stock re-derive, dashboard, Excel; nine tasks'
@@ -33,7 +33,7 @@ tasks:
     status: 'done'
   - id: 'T8'
     desc: 'Closing sweep: docs/features.md §1 and a new §5 (suppliers, purchases, expenses, dashboard) in the present tense, architecture.md data model paragraph, the combined dz-review over main..m3, the M4 carry-ins updated (supplier payment permission, purchase and expense permissions), the boss page, the checkpoint PR'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T9'
     desc: 'A dev seeder (Samir, 2026-09-10 15:03: the shop starts empty, so screens and screenshots look bare): `just seed` fills a fresh shop file through the services with a realistic Algerian corner shop and thirty days of history, deterministic and idempotent; and the thirty-day series for the dashboard (per day and per week: sales, cost, margin, expenses, cash in) behind GET /dashboard/series, drawn as a chart in the screen wave'
     status: 'done'
