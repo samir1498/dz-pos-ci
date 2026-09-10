@@ -138,6 +138,11 @@ fn facture(number: i64) -> Option<DocumentRef> {
     })
 }
 
+/// A document's number as the slip prints it: `FA-000042`, `AV-000003`.
+fn document_number(document: DocumentRef) -> String {
+    format!("{}-{:06}", document.kind.number_prefix(), document.number)
+}
+
 /// One fixed row: the movement's id, why the debt moved, its two columns, the
 /// document it cites, the day it landed and the balance it left behind.
 struct Row {
@@ -428,7 +433,7 @@ fn the_golden_says_what_the_slip_holds(html: &str, slip: &RecentStatement, lang:
     );
     for line in shown(slip) {
         if let Some(document) = line.document {
-            let printed = format!("{}-{:06}", document.kind.number_prefix(), document.number);
+            let printed = document_number(document);
             assert!(
                 html.contains(&printed),
                 "the row citing {printed} does not print its number"
@@ -460,21 +465,51 @@ fn the_slip_prints_the_newest_ten_movements_and_a_balance_that_counts_them_all()
 
     let page = render_debt_slip(&a_shop(), &a_company(), &slip, printed_at(), Lang::Fr).unwrap();
 
+    // The twelve are the fixture's, oldest first, and the window is the last
+    // ten of them: the two oldest are the ones that fall off.
+    let all = twelve_movements();
+    let (dropped, kept) = all.split_at(all.len() - MOVEMENTS);
     assert_eq!(
-        amounts(&page, "running").len(),
-        MOVEMENTS,
+        dropped.len(),
+        2,
+        "the fixture stopped being longer than a page"
+    );
+
+    // Named row by row rather than counted. The running column is the whole
+    // of the window in the order the slip shows it, so a page that dropped a
+    // different pair, kept eleven, or reversed them fails here; a count alone
+    // would pass on any ten rows.
+    assert_eq!(
+        amounts(&page, "running")
+            .iter()
+            .map(|printed| centimes(printed))
+            .collect::<Vec<i64>>(),
+        kept.iter()
+            .rev()
+            .map(|row| row.balance)
+            .collect::<Vec<i64>>(),
         "the slip does not print exactly the newest ten movements"
     );
-    // The two oldest of the twelve are off the page: their documents are not
-    // named and the balances they left are not printed.
-    assert!(
-        !page.contains("FA-000042"),
-        "a movement older than the newest ten reached the paper"
-    );
-    assert!(
-        !page.contains("3\u{202f}500,00"),
-        "the balance left by a movement older than the newest ten reached the paper"
-    );
+    // And the same window read off the documents: every row on the page that
+    // cites one prints its number, and neither row that fell off does.
+    for row in kept {
+        if let Some(document) = row.document {
+            let printed = document_number(document);
+            assert!(
+                page.contains(&printed),
+                "the row citing {printed} is not on the page"
+            );
+        }
+    }
+    for row in dropped {
+        if let Some(document) = row.document {
+            let printed = document_number(document);
+            assert!(
+                !page.contains(&printed),
+                "{printed} is older than the newest ten and reached the paper"
+            );
+        }
+    }
     // And the figure the customer is asked for counts all twelve, not the ten
     // shown: the newest movement's running balance and the slip's balance are
     // the same figure here only because that movement is the newest one.
