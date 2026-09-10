@@ -22,7 +22,7 @@ use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Money, PaymentMode};
 use crate::repos::counters;
 use crate::repos::documents as repo;
-use crate::services::{audit, avoir, clock, customers, debt, optional_field, products, stock};
+use crate::services::{audit, avoir, clock, customers, debt, optional_field, stock};
 
 pub use crate::models::document::{
     BalanceTriple, Cancellation, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
@@ -341,11 +341,26 @@ fn return_the_goods(
     user_id: i32,
     document: &Document,
 ) -> Result<(), CoreError> {
+    // What the goods cost when they left on this document. They go back at
+    // that cost and never at the fiche's cost today, for the same reason the
+    // avoir does it: a delivery between the sale and the cancellation moves
+    // the fiche, and a reversal that followed it would move the month's
+    // margin with every purchase.
+    let sold_at = stock::sale_costs(conn, shop_id, document.id)?;
     for line in &document.lines {
         let Some(product_id) = line.product_id else {
             continue;
         };
-        let unit_cost = products::get(conn, shop_id, product_id)?.cost;
+        // The fiche's cost is not a fallback, for the reason `avoir::issue`
+        // says: a sold line without a movement is a file that disagrees with
+        // itself, and today's cost would move a margin already earned.
+        let Some(unit_cost) = sold_at.get(&product_id).copied() else {
+            return Err(CoreError::UnpricedReversal {
+                document_id: document.id,
+                product_id,
+                reason: "the line it puts back has no sale movement",
+            });
+        };
         stock::record(
             conn,
             shop_id,

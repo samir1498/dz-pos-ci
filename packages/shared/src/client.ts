@@ -18,6 +18,7 @@ import type { CustomerDto } from "./generated/CustomerDto";
 import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
 import type { CustomerPaymentsDto } from "./generated/CustomerPaymentsDto";
 import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
+import type { DashboardDto } from "./generated/DashboardDto";
 import type { CashPositionDto } from "./generated/CashPositionDto";
 import type { ExpenseCategoryDto } from "./generated/ExpenseCategoryDto";
 import type { ExpenseDto } from "./generated/ExpenseDto";
@@ -54,6 +55,7 @@ import type { SupplierLedgerDto } from "./generated/SupplierLedgerDto";
 import type { SupplierStatementDto } from "./generated/SupplierStatementDto";
 import type { SupplierWriteDto } from "./generated/SupplierWriteDto";
 import { categorySchema, productSchema } from "./schemas/catalogue";
+import { dashboardSchema } from "./schemas/dashboard";
 import { importAppliedSchema, importDryRunSchema, labelSheetSchema } from "./schemas/import";
 import {
   customerLedgerSchema,
@@ -726,6 +728,15 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     async cashPosition(period: { day: string } | { month: string }): Promise<CashPositionDto> {
       const query = new URLSearchParams(period);
       return narrow(await send(`/cash?${query.toString()}`), cashPositionSchema, "cash position");
+    },
+
+    /** The whole dashboard for one day and the month it falls in. The day is
+     * the shop's today when the caller names none: the server reads the same
+     * clock the services date documents with, so a screen that sent nothing
+     * and one that sent what `/clock` gave it get the same answer. */
+    async dashboard(day?: string): Promise<DashboardDto> {
+      const suffix = day === undefined ? "" : `?${new URLSearchParams({ day }).toString()}`;
+      return narrow(await send(`/dashboard${suffix}`), dashboardSchema, "dashboard");
     },
 
     /** The shop's orders, newest first, narrowed to one state or one

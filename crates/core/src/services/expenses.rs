@@ -59,6 +59,18 @@ pub fn total(conn: &mut SqliteConnection, shop_id: i32, month: Month) -> Result<
     repo::total_between(conn, shop_id, &from, &to)
 }
 
+/// What one day came to, over the same column and the same format the list
+/// reads. The dashboard's day column asks for this; the month's asks for
+/// `total` above.
+pub fn total_on(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    day: chrono::NaiveDate,
+) -> Result<Money, CoreError> {
+    let text = day.format(DAY_FORMAT).to_string();
+    repo::total_between(conn, shop_id, &text, &text)
+}
+
 /// Writes the expense and the audit entry in one transaction: money the shop
 /// spent with nobody's name on it is the failure the log exists to prevent
 /// (features.md §5).

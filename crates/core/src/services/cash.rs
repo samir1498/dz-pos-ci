@@ -121,17 +121,9 @@ pub fn position(
     period: Period,
 ) -> Result<CashPosition, CoreError> {
     let (from, to) = period.days();
-    // Half open at the top: every moment of `to` counts, and the first moment
-    // of the day after does not. `succ_opt` is None only at the end of
-    // chrono's calendar, where the day itself is the honest bound.
-    let first_moment = from.and_hms_opt(0, 0, 0);
-    let after = to.succ_opt().and_then(|d| d.and_hms_opt(0, 0, 0));
-    let (Some(first_moment), Some(after)) = (first_moment, after) else {
-        return Err(CoreError::validation(
-            "day",
-            "that day is outside the calendar the shop keeps",
-        ));
-    };
+    // Half open at the top, and worked out by the period itself so the
+    // dashboard reading the same days compares against the same two moments.
+    let (first_moment, after) = period.moments()?;
     let day_format = "%Y-%m-%d";
     let (first_text, last_text) = (
         from.format(day_format).to_string(),

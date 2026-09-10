@@ -16,6 +16,13 @@ export {
   LABEL_SHEET_MAX,
 } from "./import";
 export {
+  dashboardFiguresSchema,
+  dashboardSchema,
+  lowStockSchema,
+  owedSchema,
+  topProductSchema,
+} from "./dashboard";
+export {
   backupSchema,
   backupsSchema,
   clockSchema,

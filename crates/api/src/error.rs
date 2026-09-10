@@ -241,6 +241,7 @@ const fn status_for(e: &CoreError) -> StatusCode {
         | CoreError::Query(_)
         | CoreError::Io(_)
         | CoreError::Unstamped { .. }
+        | CoreError::UnpricedReversal { .. }
         // A workbook that will not write is the same: the columns and the
         // rows are both the app's own.
         | CoreError::Render(_)

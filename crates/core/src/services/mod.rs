@@ -40,6 +40,7 @@ pub mod cash;
 pub mod categories;
 pub mod clock;
 pub mod customers;
+pub mod dashboard;
 pub mod debt;
 pub mod documents;
 pub mod expenses;

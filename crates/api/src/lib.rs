@@ -461,6 +461,7 @@ pub fn router_with_origin(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),
         )
+        .route("/dashboard", get(routes::dashboard::read))
         .route("/expense-categories", get(routes::expenses::categories))
         .route("/expenses", get(routes::expenses::list))
         .route("/expenses", post(routes::expenses::create))
