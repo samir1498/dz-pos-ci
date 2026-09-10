@@ -1,11 +1,15 @@
-use axum::extract::rejection::{JsonRejection, PathRejection};
-use axum::extract::{Path, State};
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::response::Html;
 use axum::Json;
+use dzpos_core::lang::Lang;
 use dzpos_core::models::product::NewProduct;
+use dzpos_core::print::{render_label, render_label_sheet};
 use dzpos_core::services::products as service;
+use serde::Deserialize;
 
-use crate::dto::{NewProductDto, ProductDto};
+use crate::dto::{LabelSheetDto, NewProductDto, ProductDto};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -63,4 +67,56 @@ pub async fn update(
         .blocking(move |c| service::update(c, shop, user, id, new))
         .await?;
     Ok(Json(ProductDto::from(after)))
+}
+
+/// The language on the label, named by the caller on every call the way the
+/// ticket's is.
+#[derive(Deserialize)]
+pub struct LabelQuery {
+    lang: Lang,
+}
+
+/// The 58 x 40 mm shelf label for one product, as an HTML page.
+///
+/// The core renders it (features.md §4), so this handler reads the fiche and
+/// hands the string over. A product with no EAN-13 leaves as the core's own
+/// validation refusal: there is no honest picture of a code a scanner cannot
+/// read, and a label with the digits and no bars gets stuck on a shelf and
+/// scans as nothing.
+pub async fn label(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    query: Result<Query<LabelQuery>, QueryRejection>,
+) -> Result<Html<String>, ApiError> {
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let Query(LabelQuery { lang }) =
+        query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
+    let shop = state.shop_id;
+    let found = state.blocking(move |c| service::get(c, shop, id)).await?;
+    Ok(Html(render_label(&found, lang)?))
+}
+
+/// A sheet of labels on A4 for the products the caller names, in the order
+/// it named them.
+///
+/// Every id is read in one call and every one has to be this shop's: a
+/// stranger's id answers 404 rather than being skipped, because a sheet
+/// missing one label looks complete and the product left off it is exactly
+/// the one somebody was looking for. Same reason the core refuses the whole
+/// sheet when one product has no EAN-13.
+pub async fn label_sheet(
+    State(state): State<AppState>,
+    query: Result<Query<LabelQuery>, QueryRejection>,
+    body: Result<Json<LabelSheetDto>, JsonRejection>,
+) -> Result<Html<String>, ApiError> {
+    let Query(LabelQuery { lang }) =
+        query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
+    let Json(LabelSheetDto { ids }) = body.map_err(ApiError::from)?;
+    let shop = state.shop_id;
+    let found = state
+        .blocking(move |c| ids.iter().map(|id| service::get(c, shop, *id)).collect())
+        .await?;
+    let found: Vec<_> = found;
+    Ok(Html(render_label_sheet(&found, lang)?))
 }

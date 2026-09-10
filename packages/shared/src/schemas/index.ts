@@ -8,6 +8,12 @@ export type { Assert, Covers, Equal, Matches, SameKeys } from "./drift";
 export { apiErrorPayloadSchema, apiErrorSchema } from "./error";
 export { categorySchema, productSchema, unitSchema } from "./catalogue";
 export {
+  importAppliedSchema,
+  importDryRunSchema,
+  importOutcomeSchema,
+  importRowSchema,
+} from "./import";
+export {
   backupSchema,
   backupsSchema,
   clockSchema,
