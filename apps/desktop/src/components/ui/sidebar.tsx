@@ -308,9 +308,14 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
   )
 }
 
-function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
+// A `<div>`, not shadcn's `<main>`. This wrapper holds the topbar as well as
+// the screen, and the main landmark has to be the screen alone: with the
+// landmark out here, "the heading inside main" would still find the topbar's
+// page title as well as the screen's own, which is both wrong for a screen
+// reader and ambiguous for a test. AppShell puts `<main>` around the screen.
+function SidebarInset({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <main
+    <div
       data-slot="sidebar-inset"
       className={cn(
         "relative flex w-full flex-1 flex-col bg-background",
