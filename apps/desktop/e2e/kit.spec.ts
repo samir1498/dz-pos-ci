@@ -9,8 +9,8 @@
 // three times over and the last one to finish would decide what is committed.
 //
 // This file runs before the settings and theme specs (one worker, files in
-// name order, one database), so it hands the shop back to "follow the
-// machine" before it leaves.
+// name order, one database), so it hands the shop back to Comptoir, the
+// default, before it leaves.
 
 import { expect, test } from "@playwright/test";
 import path from "node:path";
@@ -116,7 +116,7 @@ test("the topbar's theme switch repaints the page", async ({ page }) => {
   await switcher.selectOption("registre");
   await expect.poll(() => themeOf(page)).toBe("registre");
 
-  await switcher.selectOption("system");
+  await switcher.selectOption("comptoir");
   await expect.poll(() => themeOf(page)).toBe("comptoir");
 });
 
@@ -199,8 +199,8 @@ test("screenshot: the kit in each theme", async ({ page }) => {
     });
   }
 
-  // Back to following the machine, so the specs after this one photograph
-  // the shop in the theme they have always been photographed in.
-  await switcher.selectOption("system");
+  // Back to the default, so the specs after this one photograph the shop in
+  // the theme they have always been photographed in.
+  await switcher.selectOption("comptoir");
   await expect.poll(() => themeOf(page)).toBe("comptoir");
 });
