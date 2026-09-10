@@ -310,8 +310,11 @@ CREATE TABLE jobs (
 -- carries. Written as a join against `shops` rather than seven inserts under
 -- shop 1, because a file restored from a second till (M6) can hold more than
 -- one shop and each of them needs its own rows: the keys are unique per shop.
--- A shop created after this migration is seeded by the service that creates
--- it, which is where a new shop's categories belong.
+-- The seed runs once, over the shops on the file at the time. Nothing creates
+-- a shop today (`services::shops` reads and updates the one the first
+-- migration wrote and nothing else), so a shop appearing later is a case that
+-- does not exist yet; when one does, its categories are seeded where it is
+-- created, not here.
 INSERT INTO expense_categories (shop_id, key, sort_order)
 SELECT s.id, k.key, k.sort_order
 FROM shops s,

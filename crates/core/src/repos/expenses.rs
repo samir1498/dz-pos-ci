@@ -197,8 +197,8 @@ mod tests {
             .unwrap();
         assert!(list(&mut conn, 2).unwrap().is_empty());
         assert!(get(&mut conn, 2, ids[0]).is_err());
-        // A shop created after the migration is seeded by the service that
-        // creates it, so it starts with none of its own.
+        // The seed runs once, over the shops on the file at the time, so a
+        // shop the migration never saw carries none of its own.
         assert!(categories(&mut conn, 2).unwrap().is_empty());
     }
 }
