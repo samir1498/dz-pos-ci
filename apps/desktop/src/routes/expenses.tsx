@@ -193,6 +193,14 @@ function CashPanel({ position }: { position: CashPositionDto }) {
         <div className="flex flex-col gap-1">
           <h3 className="text-sm uppercase">{t("cash_in")}</h3>
           <Figure label={t("cash_sales")} centimes={position.cash_in.sales_centimes} />
+          {/* Inside the line above, not beside it: the drawer took the stamp
+              with the rest, and this says how much of what it took is tax
+              the shop is holding for the state. */}
+          <Figure
+            label={t("cash_stamp")}
+            centimes={position.cash_in.stamp_centimes}
+            testId="cash-in-stamp"
+          />
           <Figure
             label={t("cash_customer_payments")}
             centimes={position.cash_in.customer_payments_centimes}

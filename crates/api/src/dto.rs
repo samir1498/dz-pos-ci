@@ -1463,10 +1463,16 @@ impl TryFrom<NewExpenseDto> for NewExpense {
 /// Money that came in over the period, and what it adds up to. The total
 /// travels rather than being added on the screen, for the reason the month's
 /// does: one question, one answer.
+///
+/// `sales_centimes` is what the drawer took, the droit de timbre included.
+/// `stamp_centimes` is that tax on its own, a part of the figure above and
+/// never a second one to add: a screen showing the shop's own takings
+/// subtracts it, and one counting the till does not.
 #[derive(Debug, Clone, Copy, Serialize, TS)]
 #[ts(export_to = "TakingsDto.ts")]
 pub struct TakingsDto {
     pub sales_centimes: i64,
+    pub stamp_centimes: i64,
     pub customer_payments_centimes: i64,
     pub total_centimes: i64,
 }
@@ -1477,6 +1483,7 @@ impl TryFrom<Takings> for TakingsDto {
     fn try_from(t: Takings) -> Result<Self, ApiError> {
         Ok(TakingsDto {
             sales_centimes: t.sales.as_centimes(),
+            stamp_centimes: t.stamp.as_centimes(),
             customer_payments_centimes: t.customer_payments.as_centimes(),
             total_centimes: t.total().map_err(ApiError::from)?.as_centimes(),
         })

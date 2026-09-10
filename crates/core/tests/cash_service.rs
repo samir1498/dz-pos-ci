@@ -155,12 +155,14 @@ fn a_day_with_nothing_on_it_answers_zero_everywhere_rather_than_nothing() {
     let (_dir, mut conn) = open_temp();
     let empty = cash::position(&mut conn, SHOP, Period::Day(day(10))).unwrap();
     assert_eq!(empty.cash_in.sales, Money::ZERO);
+    assert_eq!(empty.cash_in.stamp, Money::ZERO);
     assert_eq!(empty.cash_in.customer_payments, Money::ZERO);
     assert_eq!(empty.cash_out.refunds, Money::ZERO);
     assert_eq!(empty.cash_out.supplier_payments, Money::ZERO);
     assert_eq!(empty.cash_out.expenses, Money::ZERO);
     assert_eq!(empty.cash, Money::ZERO);
     assert_eq!(empty.card_in.sales, Money::ZERO);
+    assert_eq!(empty.card_in.stamp, Money::ZERO);
     assert_eq!(empty.card_in.customer_payments, Money::ZERO);
     assert_eq!(empty.from, day(10));
     assert_eq!(empty.to, day(10));
@@ -172,8 +174,10 @@ fn the_day_counts_the_cash_that_moved_on_it_and_nothing_else() {
     let customer = a_customer(&mut conn, "Entreprise Benali");
     a_supplier(&mut conn, SHOP, 1);
 
-    // Money in. The cash facture carries a droit de timbre and the figure
-    // reads its `total_ttc`, so the stamp is not in the sales column.
+    // Money in. The cash facture carries a droit de timbre of 20,00, and the
+    // customer handed that over with the rest: the sales column reads
+    // `net_to_pay`, and the same 20,00 shows again on its own so a screen can
+    // take the tax back out.
     let ticket = a_document(
         &mut conn,
         SHOP,
@@ -328,15 +332,21 @@ fn the_day_counts_the_cash_that_moved_on_it_and_nothing_else() {
     pay_supplier(&mut conn, SHOP, 1, 777_000, "cash", at(11, 8));
 
     let position = cash::position(&mut conn, SHOP, Period::Day(day(10))).unwrap();
-    assert_eq!(position.cash_in.sales, Money::centimes(300_000));
+    // 1 000,00 of ticket and 2 020,00 of facture: its 2 000,00 plus the
+    // 20,00 stamp that came over the counter with it.
+    assert_eq!(position.cash_in.sales, Money::centimes(302_000));
+    assert_eq!(position.cash_in.stamp, Money::centimes(2_000));
     assert_eq!(position.cash_in.customer_payments, Money::centimes(30_000));
     // An avoir moves no cash in this app: it credits the ledger and brings
     // the goods back, and no row anywhere says the drawer opened.
     assert_eq!(position.cash_out.refunds, Money::ZERO);
     assert_eq!(position.cash_out.supplier_payments, Money::centimes(40_000));
     assert_eq!(position.cash_out.expenses, Money::centimes(30_000));
-    assert_eq!(position.cash, Money::centimes(260_000));
+    assert_eq!(position.cash, Money::centimes(262_000));
     assert_eq!(position.card_in.sales, Money::centimes(50_000));
+    // The app writes no stamp on a card document: the droit de timbre is due
+    // on a cash payment and on nothing else.
+    assert_eq!(position.card_in.stamp, Money::ZERO);
     assert_eq!(position.card_in.customer_payments, Money::centimes(7_000));
 }
 

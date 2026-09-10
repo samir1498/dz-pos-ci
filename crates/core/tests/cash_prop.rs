@@ -79,6 +79,7 @@ impl When {
 #[derive(Debug, Default, Clone, Copy)]
 struct Expected {
     cash_sales: i64,
+    cash_stamp: i64,
     cash_customer_payments: i64,
     supplier_cash: i64,
     expenses: i64,
@@ -99,9 +100,17 @@ fn events() -> impl Strategy<Value = Vec<(When, Event)>> {
         Just(DocumentKind::Facture),
         Just(DocumentKind::Proforma),
     ];
+    // A stamp only on a cash document: the droit de timbre is due on a cash
+    // payment (features.md §3), so a stamped card or credit sale is a row the
+    // app never writes and a generator that drew one would be proving the
+    // query against a file that cannot exist.
     let event = prop_oneof![
-        (kind, mode.clone(), amount.clone(), 0i64..=500)
-            .prop_map(|(k, m, a, s)| Event::Sell(k, m, a, s)),
+        (kind, mode.clone(), amount.clone(), 0i64..=500).prop_map(|(k, m, a, s)| Event::Sell(
+            k,
+            m,
+            a,
+            if matches!(m, PaymentMode::Cash) { s } else { 0 }
+        )),
         (mode, amount.clone()).prop_map(|(m, a)| Event::SellThenCancel(m, a)),
         (method.clone(), amount.clone()).prop_map(|(m, a)| Event::Settle(m, a)),
         (method, amount.clone()).prop_map(|(m, a)| Event::PaySupplier(m, a)),
@@ -143,7 +152,12 @@ proptest! {
                     let sold = matches!(kind, DocumentKind::Ticket | DocumentKind::Facture);
                     if counts && sold {
                         match mode {
-                            PaymentMode::Cash => expected.cash_sales += total_ttc,
+                            // What the drawer took is `net_to_pay`: the stamp
+                            // came over the counter with the rest.
+                            PaymentMode::Cash => {
+                                expected.cash_sales += total_ttc + stamp;
+                                expected.cash_stamp += stamp;
+                            }
                             PaymentMode::Card => expected.card_sales += total_ttc,
                             PaymentMode::Credit => {}
                         }
@@ -215,6 +229,7 @@ proptest! {
 
         let position = cash::position(&mut conn, SHOP, Period::Day(calendar(THE_DAY))).unwrap();
         prop_assert_eq!(position.cash_in.sales.as_centimes(), expected.cash_sales);
+        prop_assert_eq!(position.cash_in.stamp.as_centimes(), expected.cash_stamp);
         prop_assert_eq!(
             position.cash_in.customer_payments.as_centimes(),
             expected.cash_customer_payments
@@ -226,6 +241,9 @@ proptest! {
         );
         prop_assert_eq!(position.cash_out.expenses.as_centimes(), expected.expenses);
         prop_assert_eq!(position.card_in.sales.as_centimes(), expected.card_sales);
+        // Nothing here writes a stamped card document, so the tax never
+        // reaches this side.
+        prop_assert_eq!(position.card_in.stamp, Money::ZERO);
         prop_assert_eq!(
             position.card_in.customer_payments.as_centimes(),
             expected.card_customer_payments

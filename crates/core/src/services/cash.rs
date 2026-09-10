@@ -11,7 +11,11 @@
 //!
 //! What comes in
 //! - Cash sales: a ticket or a facture, still standing, paid cash, at its
-//!   `total_ttc`.
+//!   `net_to_pay`. That is what the customer handed over, the droit de timbre
+//!   included, and the drawer holds all of it. The stamp inside that figure
+//!   comes back beside it as `stamp`, so a screen that wants the shop's own
+//!   takings can subtract the tax it is holding for the state; it is a part of
+//!   `sales` and never a second figure to add.
 //! - Cash against a customer's debt: a `payment` row of `debt_ledger` whose
 //!   mode is cash.
 //!
@@ -21,7 +25,15 @@
 //!   says the drawer opened for it, and an avoir issued by a cancellation
 //!   reverses a sale the sales column has already dropped. The field is here
 //!   and reads zero so the day an avoir does pay somebody back in cash, there
-//!   is one place to fill in.
+//!   is one place to fill in. Until such a row exists this figure is off by
+//!   whatever cash a shop actually handed back over the counter, and no test
+//!   here can catch that: the file has nothing to compare against.
+//!
+//! A cancelled sale leaves the day it was sold on and appears on no other. A
+//! ticket rung up on Monday and annulled on Wednesday is out of Monday's
+//! takings, which is right for Monday's own figure and wrong for the drawer
+//! on Wednesday, where the money physically went back; nothing marks the day
+//! it left.
 //! - Cash to suppliers: a `payment` row of `supplier_ledger` whose mode is
 //!   cash.
 //! - Expenses: everything the month or the day was filed under, whatever the
@@ -33,13 +45,6 @@
 //! supplier by card is a movement of the bank account, and this function is
 //! about the till.
 //!
-//! An open question, and the only one: the drawer physically holds a cash
-//! facture's `net_to_pay`, which is its `total_ttc` plus the droit de timbre.
-//! A 10 000,00 cash facture with a stamp of 100,00 leaves 10 100,00 in the
-//! till and 10 000,00 in this figure. The sales column reads `total_ttc` on
-//! the task brief's instruction, which reads the position as the shop's own
-//! takings with the tax it collects for the state held out. To confirm with
-//! the comptable.
 
 use chrono::NaiveDate;
 use diesel::sqlite::SqliteConnection;
@@ -53,8 +58,14 @@ use crate::services::clock::Period;
 /// Money that came in over the period.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Takings {
-    /// Sales paid on the spot, at `total_ttc`.
+    /// Sales paid on the spot, at `net_to_pay`: what the customer handed
+    /// over, the droit de timbre included.
     pub sales: Money,
+    /// The droit de timbre inside `sales`, so a screen can show takings net
+    /// of the tax the shop collects for the state. Never added to `sales`:
+    /// it is already in it. Zero on the card side, where the app writes no
+    /// stamp at all.
+    pub stamp: Money,
     /// Money handed over against a debt.
     pub customer_payments: Money,
 }
@@ -127,8 +138,11 @@ pub fn position(
         to.format(day_format).to_string(),
     );
 
+    let (cash_sales, cash_stamp) =
+        repo::sales(conn, shop_id, first_moment, after, PaymentMode::Cash)?;
     let cash_in = Takings {
-        sales: repo::sales(conn, shop_id, first_moment, after, PaymentMode::Cash)?,
+        sales: cash_sales,
+        stamp: cash_stamp,
         customer_payments: repo::customer_payments(
             conn,
             shop_id,
@@ -149,8 +163,11 @@ pub fn position(
         )?,
         expenses: expenses_repo::total_between(conn, shop_id, &first_text, &last_text)?,
     };
+    let (card_sales, card_stamp) =
+        repo::sales(conn, shop_id, first_moment, after, PaymentMode::Card)?;
     let card_in = Takings {
-        sales: repo::sales(conn, shop_id, first_moment, after, PaymentMode::Card)?,
+        sales: card_sales,
+        stamp: card_stamp,
         customer_payments: repo::customer_payments(
             conn,
             shop_id,

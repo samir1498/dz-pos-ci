@@ -26,7 +26,8 @@ use crate::models::sql_types::{DocumentKind, DocumentStatus, SupplierDebtKind};
 use crate::money::{Money, PaymentMode};
 use crate::schema::{debt_ledger, documents, supplier_ledger};
 
-/// What the shop sold and was paid for on the spot, at `total_ttc`.
+/// What the shop sold and was paid for on the spot, and how much droit de
+/// timbre came over the counter inside it.
 ///
 /// Only a ticket and a facture: a proforma is a quotation nobody paid, an
 /// avoir is a credit note, and the papers the supply side writes are not
@@ -34,27 +35,38 @@ use crate::schema::{debt_ledger, documents, supplier_ledger};
 /// did not stay in the drawer, and the avoir a cancellation issues is not
 /// counted either, so the reversal is felt once.
 ///
-/// `total_ttc` and not `net_to_pay`: the droit de timbre a cash facture
-/// carries is money the customer hands over too, so the drawer really holds
-/// the larger figure. The tax is held out of this column on the task brief's
-/// instruction, and the open question is in `services::cash`.
+/// `net_to_pay` and not `total_ttc`: what the drawer took is what the customer
+/// handed over, and on a cash facture that is the amount plus the stamp
+/// (`net_to_pay = total_ttc + stamp`, features.md §3). The stamp is summed
+/// again on the same rows and comes back beside the takings, so a screen that
+/// wants the shop's own money can take the tax it collects for the state back
+/// out. It is a part of the first figure and never a second one to add.
+///
+/// Both sums are over one scan of the same rows, so the two can never be
+/// answered about different sets of documents.
 pub fn sales(
     conn: &mut SqliteConnection,
     shop_id: i32,
     from: NaiveDateTime,
     until: NaiveDateTime,
     mode: PaymentMode,
-) -> Result<Money, CoreError> {
-    let total: Option<i64> = documents::table
+) -> Result<(Money, Money), CoreError> {
+    let (took, stamp): (Option<i64>, Option<i64>) = documents::table
         .filter(documents::shop_id.eq(shop_id))
         .filter(documents::kind.eq_any([DocumentKind::Ticket, DocumentKind::Facture]))
         .filter(documents::status.eq(DocumentStatus::Issued))
         .filter(documents::payment_mode.eq(payment_mode_stored(mode)))
         .filter(documents::issued_at.ge(from))
         .filter(documents::issued_at.lt(until))
-        .select(sql::<Nullable<BigInt>>("SUM(total_ttc_centimes)"))
+        .select((
+            sql::<Nullable<BigInt>>("SUM(net_to_pay_centimes)"),
+            sql::<Nullable<BigInt>>("SUM(stamp_centimes)"),
+        ))
         .first(conn)?;
-    Ok(Money::centimes(total.unwrap_or(0)))
+    Ok((
+        Money::centimes(took.unwrap_or(0)),
+        Money::centimes(stamp.unwrap_or(0)),
+    ))
 }
 
 /// Money a customer handed over against what they owed. A payment lowers the

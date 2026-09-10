@@ -4,5 +4,10 @@
  * Money that came in over the period, and what it adds up to. The total
  * travels rather than being added on the screen, for the reason the month's
  * does: one question, one answer.
+ *
+ * `sales_centimes` is what the drawer took, the droit de timbre included.
+ * `stamp_centimes` is that tax on its own, a part of the figure above and
+ * never a second one to add: a screen showing the shop's own takings
+ * subtracts it, and one counting the till does not.
  */
-export type TakingsDto = { sales_centimes: number, customer_payments_centimes: number, total_centimes: number, };
+export type TakingsDto = { sales_centimes: number, stamp_centimes: number, customer_payments_centimes: number, total_centimes: number, };

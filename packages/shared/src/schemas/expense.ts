@@ -56,8 +56,12 @@ export const newExpenseSchema = z.object({
 }) satisfies z.ZodType<NewExpenseDto>;
 type _NewExpense = Assert<Matches<NewExpenseDto, typeof newExpenseSchema>>;
 
+/** `stamp_centimes` is the droit de timbre inside `sales_centimes`, not a
+ *  figure beside it: a screen showing the shop's own takings subtracts it,
+ *  and one counting the till does not. */
 export const takingsSchema = z.object({
   sales_centimes: exactInteger,
+  stamp_centimes: exactInteger,
   customer_payments_centimes: exactInteger,
   total_centimes: exactInteger,
 }) satisfies z.ZodType<TakingsDto>;

@@ -220,6 +220,9 @@ async fn the_cash_position_takes_a_day_or_a_month_and_never_both_or_neither() {
     assert_eq!(day["from"], json!("2026-09-10"));
     assert_eq!(day["to"], json!("2026-09-10"));
     assert_eq!(day["cash_in"]["sales_centimes"], json!(0));
+    // Nothing was sold, so the takings carry no droit de timbre either. The
+    // figure travels on every answer rather than only when there is one.
+    assert_eq!(day["cash_in"]["stamp_centimes"], json!(0));
     assert_eq!(day["cash_in"]["total_centimes"], json!(0));
     assert_eq!(day["cash_out"]["expenses_centimes"], json!(25_000));
     assert_eq!(day["cash_out"]["refunds_centimes"], json!(0));

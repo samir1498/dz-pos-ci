@@ -348,5 +348,6 @@
   "cash_loading": "Chargement…",
   "error_expense_amount_invalid": "Montant illisible.",
   "error_expense_amount_zero": "Une dépense est un montant au-dessus de zéro.",
-  "error_expense_category_required": "Choisissez une catégorie."
+  "error_expense_category_required": "Choisissez une catégorie.",
+  "cash_stamp": "dont droit de timbre"
 }

@@ -348,5 +348,6 @@
   "cash_loading": "جارٍ التحميل…",
   "error_expense_amount_invalid": "المبلغ غير مقروء.",
   "error_expense_amount_zero": "المصروف مبلغ أكبر من الصفر.",
-  "error_expense_category_required": "اختر فئة."
+  "error_expense_category_required": "اختر فئة.",
+  "cash_stamp": "منه رسم الطابع"
 }

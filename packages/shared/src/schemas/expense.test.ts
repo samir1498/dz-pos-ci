@@ -35,9 +35,10 @@ const position: CashPositionDto = {
   from: "2026-09-01",
   to: "2026-09-30",
   cash_in: {
-    sales_centimes: 500_000,
+    sales_centimes: 502_000,
+    stamp_centimes: 2_000,
     customer_payments_centimes: 30_000,
-    total_centimes: 530_000,
+    total_centimes: 532_000,
   },
   cash_out: {
     refunds_centimes: 0,
@@ -45,9 +46,10 @@ const position: CashPositionDto = {
     expenses_centimes: 3_000_000,
     total_centimes: 3_040_000,
   },
-  cash_centimes: -2_510_000,
+  cash_centimes: -2_508_000,
   card_in: {
     sales_centimes: 50_000,
+    stamp_centimes: 0,
     customer_payments_centimes: 0,
     total_centimes: 50_000,
   },
@@ -111,7 +113,22 @@ describe("the cash position", () => {
   });
 
   test("a day that paid out more than it took is a figure below zero", () => {
-    expect(cashPositionSchema.parse(position).cash_centimes).toBe(-2_510_000);
+    expect(cashPositionSchema.parse(position).cash_centimes).toBe(-2_508_000);
+  });
+
+  test("the stamp is inside the takings and not beside them", () => {
+    const parsed = cashPositionSchema.parse(position);
+    expect(parsed.cash_in.stamp_centimes).toBe(2_000);
+    // The total is sales plus the debt payments; adding the stamp again
+    // would count the tax twice.
+    expect(parsed.cash_in.total_centimes).toBe(
+      parsed.cash_in.sales_centimes + parsed.cash_in.customer_payments_centimes,
+    );
+  });
+
+  test("a side that arrived without the stamp figure is refused", () => {
+    const { stamp_centimes: _dropped, ...short } = position.cash_in;
+    expect(() => cashPositionSchema.parse({ ...position, cash_in: short })).toThrow();
   });
 
   test("a side that arrived short of a figure is refused rather than read as zero", () => {

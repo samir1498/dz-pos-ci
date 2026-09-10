@@ -120,11 +120,16 @@ screen lists one month at a time with the month's total.
 cost of goods sold from the ledger), expenses, cash position, low-stock
 list, top products, outstanding customer debt, outstanding supplier debt.
 
-The cash position is derived on every read and stored nowhere. Over a day
-or a month on the shop's calendar, cash in is what the tickets and factures
-still standing and paid in cash came to, at `total_ttc`, plus the cash
-payments on `debt_ledger`; cash out is the cash payments on
-`supplier_ledger` plus the expenses of those days. A cancelled document is
+The cash position is derived on every read and stored nowhere. It is what
+moved into and out of the drawer. Over a day or a month on the shop's
+calendar, cash in is what the tickets and factures still standing and paid
+in cash came to, at `net_to_pay`, which is what the customer handed over
+and so includes the droit de timbre, plus the cash payments on
+`debt_ledger`; cash out is the cash payments on `supplier_ledger` plus the
+expenses of those days. The stamp inside the sales figure is answered again
+on its own, so a screen that wants the shop's own takings can subtract the
+tax it is collecting for the state; it is a part of the sales figure and
+never a second one to add. A cancelled document is
 out of the sales figure rather than subtracted from it, and a refund counts
 nothing: an avoir credits the customer's ledger and brings the goods back
 on `return` movements, and nothing in the file says the drawer opened for
@@ -134,13 +139,13 @@ than the till. The figure is a net movement over the period and not the
 money in the drawer: there is no opening float and no count at close, so it
 goes below zero on a day that paid out more than it took.
 
-An assumption on the stamp, to confirm with the comptable (R8): a cash
-facture's drawer takes its `net_to_pay`, which is `total_ttc` plus the
-droit de timbre, and the figure above reads `total_ttc`. A 10 000,00
-facture with a stamp of 100,00 leaves 10 100,00 in the till and 10 000,00
-in the position. The reading is that the position is the shop's takings
-with the tax it collects for the state held out; the fiscal rules table
-gains no row for it, because nothing here changes what a document charges.
+Two things the figure cannot yet say. Nothing records cash handed back over
+the counter, so the position is off by any refund a shop actually paid out.
+And a cancelled sale leaves the day it was sold on and appears on no other:
+a ticket rung up on Monday and annulled on Wednesday is out of Monday's
+takings, which is right for Monday and wrong for the drawer on Wednesday.
+The fiscal rules table gains no row for any of this, because nothing here
+changes what a document charges.
 
 **Backup.** Automatic daily copy of the SQLite file, keep 30, restore from
 the settings screen. Export products, sales, customers, suppliers to Excel;

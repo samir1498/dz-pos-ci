@@ -51,9 +51,10 @@ const position: CashPositionDto = {
   from: "2027-03-01",
   to: "2027-03-31",
   cash_in: {
-    sales_centimes: 800_000,
+    sales_centimes: 802_000,
+    stamp_centimes: 2_000,
     customer_payments_centimes: 30_000,
-    total_centimes: 830_000,
+    total_centimes: 832_000,
   },
   cash_out: {
     refunds_centimes: 0,
@@ -61,9 +62,10 @@ const position: CashPositionDto = {
     expenses_centimes: 3_150_000,
     total_centimes: 3_190_000,
   },
-  cash_centimes: -2_360_000,
+  cash_centimes: -2_358_000,
   card_in: {
     sales_centimes: 50_000,
+    stamp_centimes: 0,
     customer_payments_centimes: 0,
     total_centimes: 50_000,
   },
@@ -194,10 +196,12 @@ describe("what the month shows", () => {
 
   test("the cash position box is the server's figures, the net below zero included", async () => {
     mount();
-    expect(await screen.findByTestId("cash-in-total")).toHaveTextContent("8 300,00");
+    expect(await screen.findByTestId("cash-in-total")).toHaveTextContent("8 320,00");
+    // The stamp shows on its own, inside the takings above it.
+    expect(screen.getByTestId("cash-in-stamp")).toHaveTextContent("20,00");
     expect(screen.getByTestId("cash-out-expenses")).toHaveTextContent("31 500,00");
     expect(screen.getByTestId("cash-out-total")).toHaveTextContent("31 900,00");
-    expect(screen.getByTestId("cash-net")).toHaveTextContent("-23 600,00");
+    expect(screen.getByTestId("cash-net")).toHaveTextContent("-23 580,00");
     expect(screen.getByTestId("card-in-total")).toHaveTextContent("500,00");
   });
 

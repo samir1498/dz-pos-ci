@@ -348,5 +348,6 @@
   "cash_loading": "Loading…",
   "error_expense_amount_invalid": "That amount cannot be read.",
   "error_expense_amount_zero": "An expense is an amount above zero.",
-  "error_expense_category_required": "Choose a category."
+  "error_expense_category_required": "Choose a category.",
+  "cash_stamp": "of which droit de timbre"
 }
