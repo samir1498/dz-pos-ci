@@ -86,6 +86,18 @@ describe("documentKindSchema", () => {
   test("refuses a kind the API never writes", () => {
     expect(documentKindSchema.safeParse("recu").success).toBe(false);
   });
+
+  test("carries the seven kinds the API writes and no eighth", () => {
+    expect(documentKindSchema.options).toEqual([
+      "ticket",
+      "facture",
+      "proforma",
+      "bon_de_livraison",
+      "avoir",
+      "bon_de_reception",
+      "quittance",
+    ]);
+  });
 });
 
 describe("saleKindSchema", () => {
@@ -95,6 +107,10 @@ describe("saleKindSchema", () => {
 
   test("refuses a kind that exists but is not one the till issues", () => {
     expect(saleKindSchema.safeParse("avoir").success).toBe(false);
+  });
+
+  test("carries the three the till issues and no fourth", () => {
+    expect(saleKindSchema.options).toEqual(["ticket", "facture", "proforma"]);
   });
 });
 
@@ -106,6 +122,10 @@ describe("documentStatusSchema", () => {
   test("refuses a status the API has no column for", () => {
     expect(documentStatusSchema.safeParse("draft").success).toBe(false);
   });
+
+  test("carries the two states a document can be in and no third", () => {
+    expect(documentStatusSchema.options).toEqual(["issued", "cancelled"]);
+  });
 });
 
 describe("paymentModeSchema", () => {
@@ -116,6 +136,10 @@ describe("paymentModeSchema", () => {
   test("refuses a mode nothing settles in", () => {
     expect(paymentModeSchema.safeParse("bitcoin").success).toBe(false);
   });
+
+  test("carries the three modes a sale is paid in and no fourth", () => {
+    expect(paymentModeSchema.options).toEqual(["cash", "card", "credit"]);
+  });
 });
 
 describe("saleWarningSchema", () => {
@@ -125,6 +149,12 @@ describe("saleWarningSchema", () => {
 
   test("refuses a warning the core does not raise", () => {
     expect(saleWarningSchema.safeParse("over_limit").success).toBe(false);
+  });
+
+  test("carries the one warning the core raises and no second", () => {
+    // A second one added to the Rust enum fails here and in warningKey's
+    // exhaustive switch on the till, which is where a cashier would see it.
+    expect(saleWarningSchema.options).toEqual(["near_limit"]);
   });
 });
 

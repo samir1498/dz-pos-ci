@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { ApiErrorDto } from "../generated/ApiErrorDto";
 import type { ApiErrorPayloadDto } from "../generated/ApiErrorPayloadDto";
 import { exactInteger } from "./common";
-import type { Assert, Covers } from "./drift";
+import type { Assert, Matches } from "./drift";
 
 /** The figures are optional rather than nullable: the server leaves a field
  *  out instead of sending null, and absent is an answer here. Only a credit
@@ -21,9 +21,9 @@ export const apiErrorPayloadSchema = z.object({
   party_side: z.string().optional(),
   missing_ids: z.array(z.string()).optional(),
 }) satisfies z.ZodType<ApiErrorPayloadDto>;
-type _Payload = Assert<Covers<ApiErrorPayloadDto, typeof apiErrorPayloadSchema>>;
+type _Payload = Assert<Matches<ApiErrorPayloadDto, typeof apiErrorPayloadSchema>>;
 
 export const apiErrorSchema = z.object({
   error: apiErrorPayloadSchema,
 }) satisfies z.ZodType<ApiErrorDto>;
-type _Error = Assert<Covers<ApiErrorDto, typeof apiErrorSchema>>;
+type _Error = Assert<Matches<ApiErrorDto, typeof apiErrorSchema>>;

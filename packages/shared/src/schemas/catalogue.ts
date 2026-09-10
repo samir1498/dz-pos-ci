@@ -7,10 +7,10 @@ import type { CategoryDto } from "../generated/CategoryDto";
 import type { ProductDto } from "../generated/ProductDto";
 import type { UnitDto } from "../generated/UnitDto";
 import { exactInteger } from "./common";
-import type { Assert, Covers } from "./drift";
+import type { Assert, Matches } from "./drift";
 
 export const unitSchema = z.enum(["piece", "kg", "litre", "box"]) satisfies z.ZodType<UnitDto>;
-type _Unit = Assert<Covers<UnitDto, typeof unitSchema>>;
+type _Unit = Assert<Matches<UnitDto, typeof unitSchema>>;
 
 export const categorySchema = z.object({
   id: z.number(),
@@ -18,7 +18,7 @@ export const categorySchema = z.object({
   name: z.string(),
   default_rate_bps: z.number(),
 }) satisfies z.ZodType<CategoryDto>;
-type _Category = Assert<Covers<CategoryDto, typeof categorySchema>>;
+type _Category = Assert<Matches<CategoryDto, typeof categorySchema>>;
 
 /** The prices and the quantities are exact integers, the ids and the rate are
  *  numbers the client passes through and never adds up. */
@@ -37,4 +37,4 @@ export const productSchema = z.object({
   rate_bps: z.number(),
   active: z.boolean(),
 }) satisfies z.ZodType<ProductDto>;
-type _Product = Assert<Covers<ProductDto, typeof productSchema>>;
+type _Product = Assert<Matches<ProductDto, typeof productSchema>>;

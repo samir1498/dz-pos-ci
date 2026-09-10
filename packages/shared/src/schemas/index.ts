@@ -4,7 +4,7 @@
 // matching the Rust struct fails `just types-check`.
 
 export { day, exactInteger } from "./common";
-export type { Assert, Covers } from "./drift";
+export type { Assert, Covers, Equal, Matches, SameKeys } from "./drift";
 export { apiErrorPayloadSchema, apiErrorSchema } from "./error";
 export { categorySchema, productSchema, unitSchema } from "./catalogue";
 export {

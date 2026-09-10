@@ -12,10 +12,10 @@ import type { PaymentAllocationDto } from "../generated/PaymentAllocationDto";
 import type { PaymentDto } from "../generated/PaymentDto";
 import type { PaymentMethodDto } from "../generated/PaymentMethodDto";
 import { exactInteger } from "./common";
-import type { Assert, Covers } from "./drift";
+import type { Assert, Matches } from "./drift";
 
 export const partyKindSchema = z.enum(["company", "consumer"]) satisfies z.ZodType<PartyKindDto>;
-type _PartyKind = Assert<Covers<PartyKindDto, typeof partyKindSchema>>;
+type _PartyKind = Assert<Matches<PartyKindDto, typeof partyKindSchema>>;
 
 export const debtKindSchema = z.enum([
   "opening",
@@ -24,12 +24,12 @@ export const debtKindSchema = z.enum([
   "avoir",
   "adjustment",
 ]) satisfies z.ZodType<DebtKindDto>;
-type _DebtKind = Assert<Covers<DebtKindDto, typeof debtKindSchema>>;
+type _DebtKind = Assert<Matches<DebtKindDto, typeof debtKindSchema>>;
 
 /** A payment crosses in cash or by card and never on credit, which is why
  *  this is its own enum and not the sale's payment mode. */
 export const paymentMethodSchema = z.enum(["cash", "card"]) satisfies z.ZodType<PaymentMethodDto>;
-type _PaymentMethod = Assert<Covers<PaymentMethodDto, typeof paymentMethodSchema>>;
+type _PaymentMethod = Assert<Matches<PaymentMethodDto, typeof paymentMethodSchema>>;
 
 /** Every amount is an exact integer: a debt JSON.parse had to round is
  *  refused rather than shown to a shop. */
@@ -50,7 +50,7 @@ export const customerSchema = z.object({
   active: z.boolean(),
   balance_centimes: exactInteger,
 }) satisfies z.ZodType<CustomerDto>;
-type _Customer = Assert<Covers<CustomerDto, typeof customerSchema>>;
+type _Customer = Assert<Matches<CustomerDto, typeof customerSchema>>;
 
 export const debtEntrySchema = z.object({
   id: z.number(),
@@ -64,20 +64,20 @@ export const debtEntrySchema = z.object({
   note: z.string().nullable(),
   created_at: z.string(),
 }) satisfies z.ZodType<DebtEntryDto>;
-type _DebtEntry = Assert<Covers<DebtEntryDto, typeof debtEntrySchema>>;
+type _DebtEntry = Assert<Matches<DebtEntryDto, typeof debtEntrySchema>>;
 
 export const customerLedgerSchema = z.object({
   customer_id: z.number(),
   balance_centimes: exactInteger,
   entries: z.array(debtEntrySchema),
 }) satisfies z.ZodType<CustomerLedgerDto>;
-type _CustomerLedger = Assert<Covers<CustomerLedgerDto, typeof customerLedgerSchema>>;
+type _CustomerLedger = Assert<Matches<CustomerLedgerDto, typeof customerLedgerSchema>>;
 
 export const paymentAllocationSchema = z.object({
   document_id: z.number(),
   amount_centimes: exactInteger,
 }) satisfies z.ZodType<PaymentAllocationDto>;
-type _PaymentAllocation = Assert<Covers<PaymentAllocationDto, typeof paymentAllocationSchema>>;
+type _PaymentAllocation = Assert<Matches<PaymentAllocationDto, typeof paymentAllocationSchema>>;
 
 export const paymentSchema = z.object({
   ledger_id: z.number(),
@@ -89,7 +89,7 @@ export const paymentSchema = z.object({
   allocations: z.array(paymentAllocationSchema),
   created_at: z.string(),
 }) satisfies z.ZodType<PaymentDto>;
-type _Payment = Assert<Covers<PaymentDto, typeof paymentSchema>>;
+type _Payment = Assert<Matches<PaymentDto, typeof paymentSchema>>;
 
 /** The balance in the envelope is the whole ledger's, not the newest
  *  payment's: a sale written after the last payment moved it. */
@@ -98,4 +98,4 @@ export const customerPaymentsSchema = z.object({
   balance_centimes: exactInteger,
   payments: z.array(paymentSchema),
 }) satisfies z.ZodType<CustomerPaymentsDto>;
-type _CustomerPayments = Assert<Covers<CustomerPaymentsDto, typeof customerPaymentsSchema>>;
+type _CustomerPayments = Assert<Matches<CustomerPaymentsDto, typeof customerPaymentsSchema>>;

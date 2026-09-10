@@ -13,25 +13,25 @@ import type { RestoreDto } from "../generated/RestoreDto";
 import type { SettingsDto } from "../generated/SettingsDto";
 import type { StoreDto } from "../generated/StoreDto";
 import { day, exactInteger } from "./common";
-import type { Assert, Covers } from "./drift";
+import type { Assert, Matches } from "./drift";
 
 export const healthSchema = z.object({
   status: z.string(),
   shop_id: z.number(),
 }) satisfies z.ZodType<HealthDto>;
-type _Health = Assert<Covers<HealthDto, typeof healthSchema>>;
+type _Health = Assert<Matches<HealthDto, typeof healthSchema>>;
 
 export const clockSchema = z.object({ today: day }) satisfies z.ZodType<ClockDto>;
-type _Clock = Assert<Covers<ClockDto, typeof clockSchema>>;
+type _Clock = Assert<Matches<ClockDto, typeof clockSchema>>;
 
 export const regimeSchema = z.enum(["ifu", "reel"]) satisfies z.ZodType<RegimeDto>;
-type _Regime = Assert<Covers<RegimeDto, typeof regimeSchema>>;
+type _Regime = Assert<Matches<RegimeDto, typeof regimeSchema>>;
 
 export const datedRegimeSchema = z.object({
   regime: regimeSchema,
   valid_from: day,
 }) satisfies z.ZodType<DatedRegimeDto>;
-type _DatedRegime = Assert<Covers<DatedRegimeDto, typeof datedRegimeSchema>>;
+type _DatedRegime = Assert<Matches<DatedRegimeDto, typeof datedRegimeSchema>>;
 
 export const storeSchema = z.object({
   name: z.string(),
@@ -42,14 +42,14 @@ export const storeSchema = z.object({
   address: z.string().nullable(),
   phone: z.string().nullable(),
 }) satisfies z.ZodType<StoreDto>;
-type _Store = Assert<Covers<StoreDto, typeof storeSchema>>;
+type _Store = Assert<Matches<StoreDto, typeof storeSchema>>;
 
 export const settingsSchema = z.object({
   store: storeSchema,
   regime: datedRegimeSchema,
   regime_planned: datedRegimeSchema.nullable(),
 }) satisfies z.ZodType<SettingsDto>;
-type _Settings = Assert<Covers<SettingsDto, typeof settingsSchema>>;
+type _Settings = Assert<Matches<SettingsDto, typeof settingsSchema>>;
 
 /** `bytes` is a file size, so an integer: a fractional byte count means the
  *  server is not the one this client was generated against. */
@@ -58,13 +58,13 @@ export const backupSchema = z.object({
   taken_at: z.string(),
   bytes: exactInteger,
 }) satisfies z.ZodType<BackupDto>;
-type _Backup = Assert<Covers<BackupDto, typeof backupSchema>>;
+type _Backup = Assert<Matches<BackupDto, typeof backupSchema>>;
 
 export const backupsSchema = z.object({
   backups: z.array(backupSchema),
   safety_copies: z.array(backupSchema),
 }) satisfies z.ZodType<BackupsDto>;
-type _Backups = Assert<Covers<BackupsDto, typeof backupsSchema>>;
+type _Backups = Assert<Matches<BackupsDto, typeof backupsSchema>>;
 
 export const restoreSchema = z.object({
   restored_from: z.string(),
@@ -72,4 +72,4 @@ export const restoreSchema = z.object({
   products: exactInteger,
   documents: exactInteger.nullable(),
 }) satisfies z.ZodType<RestoreDto>;
-type _Restore = Assert<Covers<RestoreDto, typeof restoreSchema>>;
+type _Restore = Assert<Matches<RestoreDto, typeof restoreSchema>>;

@@ -15,7 +15,7 @@ import type { SaleTotalsDto } from "../generated/SaleTotalsDto";
 import type { SaleTvaDto } from "../generated/SaleTvaDto";
 import type { SaleWarningDto } from "../generated/SaleWarningDto";
 import { exactInteger } from "./common";
-import type { Assert, Covers } from "./drift";
+import type { Assert, Matches } from "./drift";
 import { regimeSchema, storeSchema } from "./settings";
 
 export const documentKindSchema = z.enum([
@@ -27,7 +27,7 @@ export const documentKindSchema = z.enum([
   "bon_de_reception",
   "quittance",
 ]) satisfies z.ZodType<DocumentKindDto>;
-type _DocumentKind = Assert<Covers<DocumentKindDto, typeof documentKindSchema>>;
+type _DocumentKind = Assert<Matches<DocumentKindDto, typeof documentKindSchema>>;
 
 /** The three the till can be asked to list. A subset of the kinds above, and
  *  its own Rust enum, so it gets its own schema rather than a slice of one. */
@@ -36,23 +36,23 @@ export const saleKindSchema = z.enum([
   "facture",
   "proforma",
 ]) satisfies z.ZodType<SaleKindDto>;
-type _SaleKind = Assert<Covers<SaleKindDto, typeof saleKindSchema>>;
+type _SaleKind = Assert<Matches<SaleKindDto, typeof saleKindSchema>>;
 
 export const documentStatusSchema = z.enum([
   "issued",
   "cancelled",
 ]) satisfies z.ZodType<DocumentStatusDto>;
-type _DocumentStatus = Assert<Covers<DocumentStatusDto, typeof documentStatusSchema>>;
+type _DocumentStatus = Assert<Matches<DocumentStatusDto, typeof documentStatusSchema>>;
 
 export const paymentModeSchema = z.enum([
   "cash",
   "card",
   "credit",
 ]) satisfies z.ZodType<PaymentModeDto>;
-type _PaymentMode = Assert<Covers<PaymentModeDto, typeof paymentModeSchema>>;
+type _PaymentMode = Assert<Matches<PaymentModeDto, typeof paymentModeSchema>>;
 
 export const saleWarningSchema = z.enum(["near_limit"]) satisfies z.ZodType<SaleWarningDto>;
-type _SaleWarning = Assert<Covers<SaleWarningDto, typeof saleWarningSchema>>;
+type _SaleWarning = Assert<Matches<SaleWarningDto, typeof saleWarningSchema>>;
 
 export const saleLineSchema = z.object({
   id: z.number(),
@@ -67,7 +67,7 @@ export const saleLineSchema = z.object({
   line_total_centimes: exactInteger,
   ref_line_id: z.number().nullable(),
 }) satisfies z.ZodType<SaleLineDto>;
-type _SaleLine = Assert<Covers<SaleLineDto, typeof saleLineSchema>>;
+type _SaleLine = Assert<Matches<SaleLineDto, typeof saleLineSchema>>;
 
 /** What a cancellation left on the document it annulled. Whole or absent: a
  *  screen never has to ask whether the date is there while the reason is
@@ -78,7 +78,7 @@ export const saleCancellationSchema = z.object({
   reason: z.string(),
   avoir_document_id: z.number().nullable(),
 }) satisfies z.ZodType<SaleCancellationDto>;
-type _SaleCancellation = Assert<Covers<SaleCancellationDto, typeof saleCancellationSchema>>;
+type _SaleCancellation = Assert<Matches<SaleCancellationDto, typeof saleCancellationSchema>>;
 
 /** What cancelling this document would do. Discriminated, because the amount
  *  belongs to exactly one of the three: a screen that read an amount off
@@ -89,14 +89,14 @@ export const saleCancelEffectSchema = z.discriminatedUnion("effect", [
   z.object({ effect: z.literal("stock_back") }),
   z.object({ effect: z.literal("stock_back_and_avoir"), amount_centimes: exactInteger }),
 ]) satisfies z.ZodType<SaleCancelEffectDto>;
-type _SaleCancelEffect = Assert<Covers<SaleCancelEffectDto, typeof saleCancelEffectSchema>>;
+type _SaleCancelEffect = Assert<Matches<SaleCancelEffectDto, typeof saleCancelEffectSchema>>;
 
 export const saleTvaSchema = z.object({
   rate_bps: z.number(),
   base_centimes: exactInteger,
   amount_centimes: exactInteger,
 }) satisfies z.ZodType<SaleTvaDto>;
-type _SaleTva = Assert<Covers<SaleTvaDto, typeof saleTvaSchema>>;
+type _SaleTva = Assert<Matches<SaleTvaDto, typeof saleTvaSchema>>;
 
 /** The balance triple. Three exact integers or the whole block is null: two of
  *  three would be a closing balance its own opening balance does not
@@ -106,7 +106,7 @@ export const saleBalanceSchema = z.object({
   remaining_debt_centimes: exactInteger,
   total_debt_centimes: exactInteger,
 }) satisfies z.ZodType<SaleBalanceDto>;
-type _SaleBalance = Assert<Covers<SaleBalanceDto, typeof saleBalanceSchema>>;
+type _SaleBalance = Assert<Matches<SaleBalanceDto, typeof saleBalanceSchema>>;
 
 /** Every column of the totals table, each an exact integer of centimes: a
  *  total JSON.parse had to round is refused rather than printed. */
@@ -119,7 +119,7 @@ export const saleTotalsSchema = z.object({
   stamp_centimes: exactInteger,
   net_to_pay_centimes: exactInteger,
 }) satisfies z.ZodType<SaleTotalsDto>;
-type _SaleTotals = Assert<Covers<SaleTotalsDto, typeof saleTotalsSchema>>;
+type _SaleTotals = Assert<Matches<SaleTotalsDto, typeof saleTotalsSchema>>;
 
 export const saleSchema = z.object({
   id: z.number(),
@@ -147,4 +147,4 @@ export const saleSchema = z.object({
   cancel_effect: saleCancelEffectSchema.nullable(),
   warning: saleWarningSchema.nullable(),
 }) satisfies z.ZodType<SaleDto>;
-type _Sale = Assert<Covers<SaleDto, typeof saleSchema>>;
+type _Sale = Assert<Matches<SaleDto, typeof saleSchema>>;

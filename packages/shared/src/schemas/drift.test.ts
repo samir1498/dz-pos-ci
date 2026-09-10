@@ -1,15 +1,17 @@
 // Contract: the drift check refuses a schema that no longer answers the
-// generated DTO, in both directions. The two `@ts-expect-error` lines are the
-// test: `tsc --noEmit` runs as part of `pnpm test`, so if either direction
-// stops firing the suppression becomes unused and the gate fails. A runtime
+// generated DTO, in all three directions. The `@ts-expect-error` lines are the
+// test: `tsc --noEmit` runs as part of `pnpm test`, so if a direction stops
+// firing the suppression becomes unused and the gate fails. A runtime
 // assertion cannot see any of this, which is why the mechanism is pinned here
 // rather than left to a reviewer.
 
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
 
+import type { ApiErrorPayloadDto } from "../generated/ApiErrorPayloadDto";
 import type { StoreDto } from "../generated/StoreDto";
-import type { Assert, Covers } from "./drift";
+import type { Assert, Covers, Matches } from "./drift";
+import { apiErrorPayloadSchema } from "./error";
 import { storeSchema } from "./settings";
 
 const store: StoreDto = {
@@ -44,8 +46,28 @@ const wide = z.object({
 // @ts-expect-error StoreDto is not one of `wide`'s answers: it has no fax
 type _Wide = Assert<Covers<StoreDto, typeof wide>>;
 
-// The real schema passes both.
-type _Store = Assert<Covers<StoreDto, typeof storeSchema>>;
+// The third direction, and the one neither check above can see. This schema
+// is short of `party_side`, which the Rust payload declares optional: an
+// answer without an optional key is still assignable, so `satisfies` takes it
+// and so does `Covers`. Only the key comparison refuses it, and it has to,
+// because z.object strips a figure it has no key for and the till's refusal
+// panel would then never show the field the server sent.
+const missingOptional = z.object({
+  code: z.string(),
+  message: z.string(),
+  balance_after_centimes: z.int().optional(),
+  credit_limit_centimes: z.int().optional(),
+  field: z.string().optional(),
+  outstanding_centimes: z.int().optional(),
+  missing_ids: z.array(z.string()).optional(),
+}) satisfies z.ZodType<ApiErrorPayloadDto>;
+type _StillCovers = Assert<Covers<ApiErrorPayloadDto, typeof missingOptional>>;
+// @ts-expect-error party_side is a key of the payload and not of this schema
+type _MissingOptional = Assert<Matches<ApiErrorPayloadDto, typeof missingOptional>>;
+
+// The real schemas pass all three.
+type _Store = Assert<Matches<StoreDto, typeof storeSchema>>;
+type _Payload = Assert<Matches<ApiErrorPayloadDto, typeof apiErrorPayloadSchema>>;
 
 describe("the schema drift check", () => {
   test("the schema it guards accepts the block the API sends", () => {
@@ -59,5 +81,18 @@ describe("the schema drift check", () => {
     // refuses anything. `satisfies` and `Covers` above are what catch both.
     expect(short.safeParse(store).success).toBe(true);
     expect(wide.safeParse(store).success).toBe(false);
+  });
+
+  test("a schema short of an optional key drops the figure the server sent", () => {
+    // What the compile-time check above is protecting: the payload parses,
+    // and the amount the till would have shown is gone from the answer.
+    const refusal = {
+      code: "party_ids",
+      message: "the buyer block of a facture is missing rc",
+      party_side: "buyer",
+    };
+    const parsed = missingOptional.parse(refusal);
+    expect("party_side" in parsed).toBe(false);
+    expect(apiErrorPayloadSchema.parse(refusal)).toMatchObject({ party_side: "buyer" });
   });
 });

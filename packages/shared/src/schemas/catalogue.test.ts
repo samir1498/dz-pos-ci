@@ -35,11 +35,25 @@ describe("unitSchema", () => {
   test("refuses a unit the API does not write", () => {
     expect(unitSchema.safeParse("gramme").success).toBe(false);
   });
+
+  test("carries the four the migration's CHECK allows and no fifth", () => {
+    expect(unitSchema.options).toEqual(["piece", "kg", "litre", "box"]);
+  });
 });
 
 describe("categorySchema", () => {
   test("takes the row the add-product form reads its rate from", () => {
     expect(categorySchema.parse(category)).toEqual(category);
+  });
+
+  test("refuses a rate that is not a number at all", () => {
+    // The rate is checked as a number and not as an exact integer, the way
+    // the guard it replaced did: basis points are the core's and the client
+    // passes them through. A string or a null is still garbage, and a row
+    // carrying one would put an empty TVA column on a form.
+    for (const rate of ["1900", null, "dix-neuf"]) {
+      expect(categorySchema.safeParse({ ...category, default_rate_bps: rate }).success).toBe(false);
+    }
   });
 
   test("refuses a row with no rate", () => {

@@ -81,6 +81,10 @@ describe("regimeSchema", () => {
   test("refuses a régime that is not one of them", () => {
     expect(regimeSchema.safeParse("forfait").success).toBe(false);
   });
+
+  test("carries the two the migration's CHECK allows and no third", () => {
+    expect(regimeSchema.options).toEqual(["ifu", "reel"]);
+  });
 });
 
 describe("datedRegimeSchema", () => {

@@ -70,6 +70,10 @@ describe("partyKindSchema", () => {
   test("refuses a party kind the core has no rule for", () => {
     expect(partyKindSchema.safeParse("association").success).toBe(false);
   });
+
+  test("carries the two the Rust enum writes and no third", () => {
+    expect(partyKindSchema.options).toEqual(["company", "consumer"]);
+  });
 });
 
 describe("debtKindSchema", () => {
@@ -80,6 +84,10 @@ describe("debtKindSchema", () => {
   test("refuses a kind nothing writes", () => {
     expect(debtKindSchema.safeParse("refund").success).toBe(false);
   });
+
+  test("carries the five the ledger writes and no sixth", () => {
+    expect(debtKindSchema.options).toEqual(["opening", "sale", "payment", "avoir", "adjustment"]);
+  });
 });
 
 describe("paymentMethodSchema", () => {
@@ -89,6 +97,10 @@ describe("paymentMethodSchema", () => {
 
   test("refuses credit, which is how a debt is made and not how it is paid", () => {
     expect(paymentMethodSchema.safeParse("credit").success).toBe(false);
+  });
+
+  test("carries the two ways money crosses a counter and no third", () => {
+    expect(paymentMethodSchema.options).toEqual(["cash", "card"]);
   });
 });
 
@@ -112,12 +124,26 @@ describe("debtEntrySchema", () => {
   test("refuses a movement whose kind the ledger does not write", () => {
     expect(debtEntrySchema.safeParse({ ...entry, kind: "refund" }).success).toBe(false);
   });
+
+  test("refuses a fraction in any of the three columns", () => {
+    // One case per column. A single case would leave the other two free to
+    // be loosened to `z.number()` with the suite still green, and a debit
+    // that came back as 26 180,5 is a line a shop would read to a customer.
+    for (const column of ["debit_centimes", "credit_centimes", "balance_after_centimes"]) {
+      expect(debtEntrySchema.safeParse({ ...entry, [column]: 0.5 }).success).toBe(false);
+    }
+  });
 });
 
 describe("customerLedgerSchema", () => {
   test("takes the movements and the balance they sum to", () => {
     const ledger = { customer_id: 4, balance_centimes: 250_000, entries: [entry] };
     expect(customerLedgerSchema.parse(ledger)).toEqual(ledger);
+  });
+
+  test("refuses a balance that came back with a fraction on it", () => {
+    const ledger = { customer_id: 4, balance_centimes: 2_500.5, entries: [entry] };
+    expect(customerLedgerSchema.safeParse(ledger).success).toBe(false);
   });
 
   test("refuses a ledger carrying a movement of another shape", () => {
@@ -135,6 +161,11 @@ describe("paymentAllocationSchema", () => {
   test("refuses an allocation with no amount", () => {
     expect(paymentAllocationSchema.safeParse({ document_id: 12 }).success).toBe(false);
   });
+
+  test("refuses an amount that came back with a fraction on it", () => {
+    const allocation = { document_id: 12, amount_centimes: 261.8 };
+    expect(paymentAllocationSchema.safeParse(allocation).success).toBe(false);
+  });
 });
 
 describe("paymentSchema", () => {
@@ -146,6 +177,12 @@ describe("paymentSchema", () => {
     expect(paymentSchema.parse({ ...payment, payment_mode: null })).toMatchObject({
       payment_mode: null,
     });
+  });
+
+  test("refuses a fraction in the amount and in the balance it left", () => {
+    for (const column of ["amount_centimes", "balance_after_centimes"]) {
+      expect(paymentSchema.safeParse({ ...payment, [column]: 500.5 }).success).toBe(false);
+    }
   });
 
   test("refuses a payment with no allocations list at all", () => {
