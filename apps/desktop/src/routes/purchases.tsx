@@ -7,18 +7,45 @@
 //
 // Stock and what the shop owes move when goods arrive, never when the paper
 // is written (features.md §1): the list says which orders are still waiting.
+//
+// The state of an order is a `Badge` and not a `StatusPill`. The kit's pill
+// carries five words of its own ("payé", "ouvert", …) and an order has five
+// other ones; calling a received order "payé" would say something about the
+// money that the screen does not know. The kit needs either those five states
+// or a label a caller can hand it, and that is a kit change rather than a
+// screen one.
 
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { ClipboardList, Plus } from "lucide-react";
 import { useState } from "react";
-import { formatCentimes } from "@dzpos/shared";
 import type { PurchaseDto, PurchaseStatusDto, SupplierDto } from "@dzpos/shared";
 
+import { DataTable, type Column } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
+import { FormField } from "@/components/FormField";
+import { Icon } from "@/components/Icon";
+import { Money } from "@/components/Money";
+import { PageHeader } from "@/components/PageHeader";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api, purchasesQueryKey, suppliersQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { errorKey } from "@/lib/fields";
 
 export const Route = createFileRoute("/purchases")({ component: PurchasesScreen });
+
+/** Exported for the screen's own test, which mounts it under a memory router
+ *  rather than through the file route. */
+export { PurchasesScreen };
 
 /** The five states, in the order an order moves through them. */
 export const PURCHASE_STATES: readonly PurchaseStatusDto[] = [
@@ -37,9 +64,45 @@ export const PURCHASE_STATUS_KEY: Record<PurchaseStatusDto, Key> = {
   closed_short: "purchase_status_closed_short",
 };
 
-/** Blank is every state; the select sends the empty string for it. */
+/** The tone each state wears. An order that ended badly is the loud one; the
+ *  finished order is the filled one; the rest are quiet. */
+const PURCHASE_STATUS_TONE: Record<
+  PurchaseStatusDto,
+  "default" | "secondary" | "destructive" | "outline"
+> = {
+  ordered: "outline",
+  partially_received: "secondary",
+  received: "default",
+  closed_short: "secondary",
+  cancelled: "destructive",
+};
+
+/**
+ * The word a filter uses for "no filter at all". Radix refuses an item whose
+ * value is the empty string, since that is how it spells "nothing chosen", so
+ * the screen carries a word for it and turns it back into the blank the query
+ * key and the API have always used.
+ */
+const ANY = "any";
+
+/** Blank is every state; the filter sends the empty string for it. */
 function chosenState(value: string): PurchaseStatusDto | undefined {
   return PURCHASE_STATES.find((state) => state === value);
+}
+
+export function PurchaseStatusBadge({
+  status,
+  "data-testid": testId,
+}: {
+  status: PurchaseStatusDto;
+  "data-testid"?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Badge data-testid={testId} data-status={status} variant={PURCHASE_STATUS_TONE[status]}>
+      {t(PURCHASE_STATUS_KEY[status])}
+    </Badge>
+  );
 }
 
 function PurchasesScreen() {
@@ -63,53 +126,71 @@ function PurchasesScreen() {
 
   return (
     <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t("purchases_title")}</h1>
-        <Link to="/purchases/new" className="rounded border px-3 py-1.5">
-          {t("purchases_add")}
-        </Link>
-      </header>
+      <PageHeader
+        title={t("purchases_title")}
+        actions={
+          <Button asChild>
+            <Link to="/purchases/new">
+              <Icon as={Plus} size={18} />
+              {t("purchases_add")}
+            </Link>
+          </Button>
+        }
+      />
 
-      <div className="flex flex-wrap gap-4">
-        {/* The label points at the select by id rather than wrapping it: a
-            wrapping label's text is its whole content, options included. */}
-        <label className="flex flex-col gap-1" htmlFor="purchases-filter-status">
-          <span>{t("purchases_filter_status")}</span>
-          <select
-            id="purchases-filter-status"
-            className="rounded border px-2 py-1"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-          >
-            <option value="">{t("purchases_filter_any")}</option>
-            {PURCHASE_STATES.map((state) => (
-              <option key={state} value={state}>
-                {t(PURCHASE_STATUS_KEY[state])}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1" htmlFor="purchases-filter-supplier">
-          <span>{t("purchases_filter_supplier")}</span>
-          <select
-            id="purchases-filter-supplier"
-            className="rounded border px-2 py-1"
-            value={supplier}
-            onChange={(e) => setSupplier(e.target.value)}
-          >
-            <option value="">{t("purchases_filter_any")}</option>
-            {(suppliers.data ?? []).map((s) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="flex flex-wrap items-end gap-4">
+        <FormField label={t("purchases_filter_status")} className="min-w-48">
+          {(parts) => (
+            <Select
+              value={status === "" ? ANY : status}
+              onValueChange={(next) => setStatus(next === ANY ? "" : next)}
+            >
+              <SelectTrigger id={parts.id} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>{t("purchases_filter_any")}</SelectItem>
+                {PURCHASE_STATES.map((state) => (
+                  <SelectItem key={state} value={state}>
+                    {t(PURCHASE_STATUS_KEY[state])}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </FormField>
+        <FormField label={t("purchases_filter_supplier")} className="min-w-48">
+          {(parts) => (
+            <Select
+              value={supplier === "" ? ANY : supplier}
+              onValueChange={(next) => setSupplier(next === ANY ? "" : next)}
+            >
+              <SelectTrigger id={parts.id} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>{t("purchases_filter_any")}</SelectItem>
+                {(suppliers.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </FormField>
       </div>
 
-      {purchases.isPending ? <p>{t("purchases_loading")}</p> : null}
+      {purchases.isPending ? (
+        <div className="flex flex-col gap-2">
+          <span className="sr-only">{t("purchases_loading")}</span>
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : null}
       {purchases.isError ? (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-sm text-fg-danger">
           {t(errorKey(purchases.error))}
         </p>
       ) : null}
@@ -128,56 +209,76 @@ function PurchaseTable({
   suppliers: SupplierDto[];
 }) {
   const { t } = useTranslation();
-  if (rows.length === 0) return <p>{t("purchases_empty")}</p>;
+  const nameOf = (supplierId: number) =>
+    suppliers.find((s) => s.id === supplierId)?.name ?? "";
+
+  const columns: readonly Column<PurchaseDto>[] = [
+    {
+      id: "date",
+      header: t("col_date"),
+      // A day is read left to right with Western digits whatever the screen's
+      // language, the same decision Money takes for an amount.
+      cell: (p) => (
+        <span dir="ltr" className="font-numeric tabular-nums">
+          {p.purchase_date}
+        </span>
+      ),
+    },
+    { id: "supplier", header: t("col_supplier"), cell: (p) => nameOf(p.supplier_id) },
+    {
+      id: "document",
+      header: t("col_supplier_document"),
+      cell: (p) => (
+        <span dir="ltr" className="font-numeric tabular-nums">
+          {p.supplier_document_number ?? ""}
+        </span>
+      ),
+    },
+    {
+      id: "extra",
+      header: t("col_extra_costs"),
+      money: true,
+      cell: (p) => <Money centimes={p.transport_centimes + p.extra_costs_centimes} />,
+    },
+    {
+      id: "status",
+      header: t("col_status"),
+      cell: (p) => <PurchaseStatusBadge status={p.status} />,
+    },
+  ];
+
   return (
-    <table className="w-full text-start">
-      <caption className="sr-only">{t("purchases_title")}</caption>
-      <thead>
-        <tr>
-          <th scope="col" className="text-start pb-2 pe-3">{t("col_date")}</th>
-          <th scope="col" className="text-start pb-2 pe-3">{t("col_supplier")}</th>
-          <th scope="col" className="text-start pb-2 pe-3">{t("col_supplier_document")}</th>
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_extra_costs")}</th>
-          <th scope="col" className="text-start pb-2 ps-3">{t("col_status")}</th>
-          <th scope="col" className="pb-2">
-            <span className="sr-only">{t("purchases_open")}</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((p) => (
-          <tr key={p.id} className="border-t">
-            {/* dir="ltr" on the value itself: a day and an amount are read
-                left to right with Western digits whatever the screen's
-                language. */}
-            <td className="py-1.5 pe-3 font-mono">
-              <span dir="ltr">{p.purchase_date}</span>
-            </td>
-            <td className="py-1.5 pe-3">
-              {suppliers.find((s) => s.id === p.supplier_id)?.name ?? ""}
-            </td>
-            <td className="py-1.5 pe-3 font-mono">
-              <span dir="ltr">{p.supplier_document_number ?? ""}</span>
-            </td>
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">
-                {formatCentimes(p.transport_centimes + p.extra_costs_centimes)}
-              </span>
-            </td>
-            <td className="py-1.5 ps-3">{t(PURCHASE_STATUS_KEY[p.status])}</td>
-            <td className="py-1.5 ps-3 text-end">
-              <Link
-                to="/purchases/$id"
-                params={{ id: String(p.id) }}
-                className="rounded border px-2 py-0.5 text-sm"
-                aria-label={`${t("purchases_open")} ${p.purchase_date}`}
-              >
-                {t("purchases_open")}
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(p) => p.id}
+      caption={t("purchases_title")}
+      empty={
+        <EmptyState
+          icon={ClipboardList}
+          title={t("purchases_empty")}
+          description={t("purchases_empty_hint")}
+          action={
+            <Button asChild>
+              <Link to="/purchases/new">
+                <Icon as={Plus} size={18} />
+                {t("purchases_add")}
               </Link>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+            </Button>
+          }
+        />
+      }
+      actions={(p) => (
+        <Button asChild variant="ghost" size="sm">
+          <Link
+            to="/purchases/$id"
+            params={{ id: String(p.id) }}
+            aria-label={`${t("purchases_open")} ${p.purchase_date}`}
+          >
+            {t("purchases_open")}
+          </Link>
+        </Button>
+      )}
+    />
   );
 }

@@ -6,15 +6,41 @@
 // the goods landed at, a return lowers it, and the two ways of closing an
 // order each ask for a reason the server writes into the audit log.
 //
+// The four of them are dialogs rather than four forms stacked under the
+// lines. Each is a decision taken once about the whole order, each asks for
+// something (quantities, a reason), and the page underneath is what the
+// person is deciding from; a dialog keeps the figures in view behind it and
+// keeps the page itself readable, which four open forms did not.
+//
 // The figures are the server's. The lines carry the running totals the file
 // holds, so a screen adding the receipts up itself would be a second answer.
 
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { formatCentimes, formatQty, parseQtyToMilli } from "@dzpos/shared";
+import { ArrowLeft, Inbox } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { formatQty, parseQtyToMilli } from "@dzpos/shared";
 import type { NewReceiptDto, PurchaseDetailDto, PurchaseLineDto } from "@dzpos/shared";
 
+import { DataTable, type Column } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
+import { FormField } from "@/components/FormField";
+import { Icon } from "@/components/Icon";
+import { Money } from "@/components/Money";
+import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   api,
   productsQueryKey,
@@ -24,7 +50,7 @@ import {
 } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { errorKey } from "@/lib/fields";
-import { PURCHASE_STATUS_KEY } from "./purchases";
+import { PurchaseStatusBadge } from "./purchases";
 
 export const Route = createFileRoute("/purchases_/$id")({ component: OnePurchaseRoute });
 
@@ -37,16 +63,26 @@ function OnePurchaseRoute() {
   return <OnePurchase id={parsed} />;
 }
 
+function BackToList() {
+  const { t } = useTranslation();
+  return (
+    <Button asChild variant="outline">
+      <Link to="/purchases">
+        <Icon as={ArrowLeft} size={18} flip />
+        {t("action_back_to_purchases")}
+      </Link>
+    </Button>
+  );
+}
+
 function NotAPurchase() {
   const { t } = useTranslation();
   return (
     <section className="flex flex-col gap-4">
-      <p role="alert" className="text-red-700">
+      <PageHeader title={t("purchases_one")} actions={<BackToList />} />
+      <p role="alert" className="text-sm text-fg-danger">
         {t("error_not_found")}
       </p>
-      <Link to="/purchases" className="underline">
-        {t("action_back_to_purchases")}
-      </Link>
     </section>
   );
 }
@@ -61,19 +97,6 @@ export function OnePurchase({ id }: { id: number }) {
 
   return (
     <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t("purchases_one")}</h1>
-        <Link to="/purchases" className="underline">
-          {t("action_back_to_purchases")}
-        </Link>
-      </header>
-
-      {order.isPending ? <p>{t("purchases_loading")}</p> : null}
-      {order.isError ? (
-        <p role="alert" className="text-red-700">
-          {t(errorKey(order.error))}
-        </p>
-      ) : null}
       {order.isSuccess ? (
         <PurchaseDetail
           detail={order.data}
@@ -81,8 +104,34 @@ export function OnePurchase({ id }: { id: number }) {
             products.data?.find((p) => p.id === productId)?.name ?? String(productId)
           }
         />
+      ) : (
+        <PageHeader title={t("purchases_one")} actions={<BackToList />} />
+      )}
+
+      {order.isPending ? (
+        <div className="flex flex-col gap-2">
+          <span className="sr-only">{t("purchases_loading")}</span>
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      ) : null}
+      {order.isError ? (
+        <p role="alert" className="text-sm text-fg-danger">
+          {t(errorKey(order.error))}
+        </p>
       ) : null}
     </section>
+  );
+}
+
+/** One fact of the order's head: what it is called and what it says. */
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd>{children}</dd>
+    </div>
   );
 }
 
@@ -99,87 +148,89 @@ function PurchaseDetail({
   const anythingArrived = lines.some((l) => l.qty_received_milli > 0);
 
   return (
-    <div className="flex flex-col gap-6">
-      <dl className="flex flex-wrap gap-x-8 gap-y-2">
-        <div>
-          <dt className="text-sm opacity-70">{t("col_date")}</dt>
-          <dd className="font-mono" dir="ltr">
-            {purchase.purchase_date}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-sm opacity-70">{t("col_supplier")}</dt>
-          <dd>
-            <Link
-              to="/suppliers/$id"
-              params={{ id: String(purchase.supplier_id) }}
-              className="underline"
-            >
-              {t("purchases_supplier_fiche")}
-            </Link>
-          </dd>
-        </div>
-        <div>
-          <dt className="text-sm opacity-70">{t("col_status")}</dt>
-          {/* A test id, because the state's own word and a column header of
-              the lines table read the same in English ("Received"). */}
-          <dd data-testid="purchase-status">{t(PURCHASE_STATUS_KEY[purchase.status])}</dd>
-        </div>
-        <div>
-          <dt className="text-sm opacity-70">{t("col_extra_costs")}</dt>
-          <dd className="font-mono" dir="ltr">
-            {formatCentimes(purchase.transport_centimes + purchase.extra_costs_centimes)}
-          </dd>
-        </div>
-      </dl>
+    <>
+      <PageHeader
+        title={t("purchases_one")}
+        actions={
+          <>
+            {open ? (
+              <MovementDialog
+                detail={detail}
+                nameOf={nameOf}
+                kind="receive"
+                trigger="purchases_receive"
+                hint="purchases_receive_hint"
+                action="action_receive"
+                outstanding={(line) => line.qty_ordered_milli - line.qty_received_milli}
+              />
+            ) : null}
+            {anythingArrived ? (
+              <MovementDialog
+                detail={detail}
+                nameOf={nameOf}
+                kind="return"
+                trigger="purchases_return"
+                hint="purchases_return_hint"
+                action="action_return"
+                outstanding={(line) => line.qty_received_milli - line.qty_returned_milli}
+              />
+            ) : null}
+            {purchase.status === "ordered" ? (
+              <ReasonDialog
+                detail={detail}
+                kind="cancel"
+                title="purchases_cancel"
+                hint="purchases_cancel_hint"
+                action="action_cancel_order"
+              />
+            ) : null}
+            {purchase.status === "partially_received" ? (
+              <ReasonDialog
+                detail={detail}
+                kind="close_short"
+                title="purchases_close_short"
+                hint="purchases_close_short_hint"
+                action="action_close_short"
+              />
+            ) : null}
+            <BackToList />
+          </>
+        }
+      />
 
-      <LinesTable lines={lines} nameOf={nameOf} />
+      <div className="flex flex-col gap-6">
+        <Card>
+          <CardContent>
+            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Fact label={t("col_date")}>
+                <span dir="ltr" className="font-numeric tabular-nums">
+                  {purchase.purchase_date}
+                </span>
+              </Fact>
+              <Fact label={t("col_supplier")}>
+                <Button asChild variant="link" size="sm" className="h-auto p-0">
+                  <Link to="/suppliers/$id" params={{ id: String(purchase.supplier_id) }}>
+                    {t("purchases_supplier_fiche")}
+                  </Link>
+                </Button>
+              </Fact>
+              {/* A test id, because the state's own word and a column header of
+                  the lines table read the same in English ("Received"). */}
+              <Fact label={t("col_status")}>
+                <PurchaseStatusBadge status={purchase.status} data-testid="purchase-status" />
+              </Fact>
+              <Fact label={t("col_extra_costs")}>
+                <Money centimes={purchase.transport_centimes + purchase.extra_costs_centimes} />
+              </Fact>
+            </dl>
+          </CardContent>
+        </Card>
 
-      <ReceiptsList detail={detail} nameOf={nameOf} />
+        <LinesTable lines={lines} nameOf={nameOf} />
 
-      {open ? (
-        <MovementForm
-          detail={detail}
-          nameOf={nameOf}
-          kind="receive"
-          title="purchases_receive"
-          hint="purchases_receive_hint"
-          action="action_receive"
-          outstanding={(line) => line.qty_ordered_milli - line.qty_received_milli}
-        />
-      ) : null}
-
-      {anythingArrived ? (
-        <MovementForm
-          detail={detail}
-          nameOf={nameOf}
-          kind="return"
-          title="purchases_return"
-          hint="purchases_return_hint"
-          action="action_return"
-          outstanding={(line) => line.qty_received_milli - line.qty_returned_milli}
-        />
-      ) : null}
-
-      {purchase.status === "ordered" ? (
-        <ReasonForm
-          detail={detail}
-          kind="cancel"
-          title="purchases_cancel"
-          hint="purchases_cancel_hint"
-          action="action_cancel_order"
-        />
-      ) : null}
-      {purchase.status === "partially_received" ? (
-        <ReasonForm
-          detail={detail}
-          kind="close_short"
-          title="purchases_close_short"
-          hint="purchases_close_short_hint"
-          action="action_close_short"
-        />
-      ) : null}
-    </div>
+        <ReceiptsList detail={detail} nameOf={nameOf} />
+      </div>
+    </>
   );
 }
 
@@ -191,45 +242,59 @@ function LinesTable({
   nameOf: (productId: number) => string;
 }) {
   const { t } = useTranslation();
+  const columns: readonly Column<PurchaseLineDto>[] = [
+    { id: "product", header: t("col_product"), cell: (line) => nameOf(line.product_id) },
+    {
+      id: "ordered",
+      header: t("col_ordered"),
+      numeric: true,
+      cell: (line) => <Qty milli={line.qty_ordered_milli} />,
+    },
+    {
+      id: "received",
+      header: t("col_received"),
+      numeric: true,
+      cell: (line) => <Qty milli={line.qty_received_milli} />,
+    },
+    {
+      id: "returned",
+      header: t("col_returned"),
+      numeric: true,
+      cell: (line) => <Qty milli={line.qty_returned_milli} />,
+    },
+    // TODO(M4): a cashier does not see these two. What the shop pays for its
+    // stock is not something a till operator has any call to read, and there
+    // are no roles in the app until §5 lands.
+    {
+      id: "cost",
+      header: t("col_unit_cost"),
+      money: true,
+      cell: (line) => <Money centimes={line.unit_cost_centimes} />,
+    },
+    {
+      id: "landed",
+      header: t("col_landed_cost"),
+      money: true,
+      cell: (line) => <Money centimes={line.landed_unit_cost_centimes} />,
+    },
+  ];
   return (
-    <table className="w-full text-start">
-      <caption className="sr-only">{t("purchases_lines")}</caption>
-      <thead>
-        <tr>
-          <th scope="col" className="text-start pb-2 pe-3">{t("col_product")}</th>
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_ordered")}</th>
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_received")}</th>
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_returned")}</th>
-          {/* TODO(M4): a cashier does not see these two. What the shop pays
-              for its stock is not something a till operator has any call to
-              read, and there are no roles in the app until §5 lands. */}
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_unit_cost")}</th>
-          <th scope="col" className="text-end pb-2 ps-3">{t("col_landed_cost")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lines.map((line) => (
-          <tr key={line.id} className="border-t">
-            <td className="py-1.5 pe-3">{nameOf(line.product_id)}</td>
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">{formatQty(line.qty_ordered_milli)}</span>
-            </td>
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">{formatQty(line.qty_received_milli)}</span>
-            </td>
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">{formatQty(line.qty_returned_milli)}</span>
-            </td>
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">{formatCentimes(line.unit_cost_centimes)}</span>
-            </td>
-            <td className="py-1.5 ps-3 text-end font-mono">
-              <span dir="ltr">{formatCentimes(line.landed_unit_cost_centimes)}</span>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <DataTable
+      columns={columns}
+      rows={lines}
+      rowKey={(line) => line.id}
+      caption={t("purchases_lines")}
+    />
+  );
+}
+
+/** A quantity in thousandths, read out the way an amount is: left to right,
+ *  Western digits, on the figure face so a column lines up on the digit. */
+function Qty({ milli }: { milli: number }) {
+  return (
+    <span dir="ltr" className="font-numeric tabular-nums">
+      {formatQty(milli)}
+    </span>
   );
 }
 
@@ -244,29 +309,39 @@ function ReceiptsList({
   nameOf: (productId: number) => string;
 }) {
   const { t } = useTranslation();
-  if (detail.receipts.length === 0) return <p>{t("purchases_no_receipt")}</p>;
+  if (detail.receipts.length === 0) {
+    return (
+      <EmptyState
+        icon={Inbox}
+        title={t("purchases_no_receipt")}
+        description={t("purchases_receive_hint")}
+      />
+    );
+  }
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="font-semibold">{t("purchases_receipts")}</h2>
+      <h3 className="text-md font-semibold">{t("purchases_receipts")}</h3>
       <ul className="flex flex-col gap-2">
         {detail.receipts.map((receipt) => (
-          <li key={receipt.id} className="rounded border p-2">
-            <p className="font-mono" dir="ltr">
-              {receipt.series} / {receipt.number} · {receipt.received_at}
-            </p>
-            <ul>
-              {receipt.lines.map((line) => {
-                const ordered = detail.lines.find((l) => l.id === line.purchase_line_id);
-                return (
-                  <li key={line.purchase_line_id}>
-                    {ordered === undefined ? "" : nameOf(ordered.product_id)}{" "}
-                    <span className="font-mono" dir="ltr">
-                      {formatQty(line.qty_milli)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+          <li key={receipt.id}>
+            <Card>
+              <CardContent className="flex flex-col gap-1">
+                <p dir="ltr" className="font-numeric tabular-nums text-sm text-muted-foreground">
+                  {receipt.series} / {receipt.number} · {receipt.received_at}
+                </p>
+                <ul className="flex flex-col gap-1">
+                  {receipt.lines.map((line) => {
+                    const ordered = detail.lines.find((l) => l.id === line.purchase_line_id);
+                    return (
+                      <li key={line.purchase_line_id} className="flex items-center gap-2">
+                        <span>{ordered === undefined ? "" : nameOf(ordered.product_id)}</span>
+                        <Qty milli={line.qty_milli} />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </CardContent>
+            </Card>
           </li>
         ))}
       </ul>
@@ -274,15 +349,15 @@ function ReceiptsList({
   );
 }
 
-/** A delivery and a return are the same form: the lines that still have
+/** A delivery and a return are the same dialog: the lines that still have
  *  something to move, and how much of each. The direction is the route the
  *  button posts to, and what "outstanding" means is the only thing that
  *  differs between them. */
-function MovementForm({
+function MovementDialog({
   detail,
   nameOf,
   kind,
-  title,
+  trigger,
   hint,
   action,
   outstanding,
@@ -290,13 +365,14 @@ function MovementForm({
   detail: PurchaseDetailDto;
   nameOf: (productId: number) => string;
   kind: "receive" | "return";
-  title: Key;
+  trigger: Key;
   hint: Key;
   action: Key;
   outstanding: (line: PurchaseLineDto) => number;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [shown, setShown] = useState(false);
   const [typed, setTyped] = useState<Record<number, string>>({});
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState<Key | null>(null);
@@ -309,6 +385,7 @@ function MovementForm({
       setProblem(null);
       setTyped({});
       setNote("");
+      setShown(false);
       // The stock and what the shop owes both moved, so the product list and
       // the supplier list are stale along with this order.
       await queryClient.invalidateQueries({ queryKey: purchaseQueryKey(id) });
@@ -344,61 +421,85 @@ function MovementForm({
   };
 
   return (
-    <form
-      className="flex flex-col gap-2 rounded border p-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submit();
+    <Dialog
+      open={shown}
+      onOpenChange={(next) => {
+        setShown(next);
+        // A dialog closed with Escape or the cross is a decision not taken:
+        // what was typed and the refusal on screen both go with it.
+        if (!next) {
+          setTyped({});
+          setNote("");
+          setProblem(null);
+        }
       }}
     >
-      <h2 className="font-semibold">{t(title)}</h2>
-      <p className="text-sm opacity-70">{t(hint)}</p>
-      {movable.map((line) => (
-        <label key={line.id} className="flex items-center gap-2">
-          {/* The product and not the word "quantity": an order with two lines
-              would otherwise offer two identical boxes. */}
-          <span className="min-w-40">{nameOf(line.product_id)}</span>
-          <input
-            dir="ltr"
-            inputMode="decimal"
-            className="w-24 rounded border px-2 py-1 font-mono text-end"
-            aria-label={`${t(action)} ${String(line.id)}`}
-            value={typed[line.id] ?? ""}
-            onChange={(e) =>
-              setTyped((current) => ({ ...current, [line.id]: e.target.value }))
-            }
-          />
-          <span className="text-sm opacity-70 font-mono" dir="ltr">
-            / {formatQty(outstanding(line))}
-          </span>
-        </label>
-      ))}
-      <label className="flex flex-col gap-1">
-        <span>{t("col_note")}</span>
-        <input
-          className="rounded border px-2 py-1"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </label>
-      {problem === null ? null : (
-        <p role="alert" className="text-red-700">
-          {t(problem)}
-        </p>
-      )}
-      <div>
-        <button type="submit" className="rounded border px-3 py-1.5" disabled={send.isPending}>
-          {t(action)}
-        </button>
-      </div>
-    </form>
+      <DialogTrigger asChild>
+        <Button variant={kind === "receive" ? "default" : "outline"}>{t(trigger)}</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t(trigger)}</DialogTitle>
+            <DialogDescription>{t(hint)}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            {movable.map((line) => (
+              // The product and not the word "quantity": an order with two
+              // lines would otherwise offer two identical boxes.
+              <div key={line.id} className="flex items-center gap-2">
+                <span className="min-w-40">{nameOf(line.product_id)}</span>
+                <Input
+                  dir="ltr"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  className="w-24 text-end font-numeric tabular-nums"
+                  aria-label={`${t(action)} ${String(line.id)}`}
+                  value={typed[line.id] ?? ""}
+                  onChange={(e) =>
+                    setTyped((current) => ({ ...current, [line.id]: e.target.value }))
+                  }
+                />
+                <span dir="ltr" className="font-numeric tabular-nums text-sm text-muted-foreground">
+                  / {formatQty(outstanding(line))}
+                </span>
+              </div>
+            ))}
+            <FormField label={t("col_note")}>
+              {(parts) => (
+                <Input {...parts} value={note} onChange={(e) => setNote(e.target.value)} />
+              )}
+            </FormField>
+          </div>
+          {problem === null ? null : (
+            <p role="alert" className="text-sm text-fg-danger">
+              {t(problem)}
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setShown(false)}>
+              {t("action_cancel")}
+            </Button>
+            <Button type="submit" disabled={send.isPending}>
+              {t(action)}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-/** Cancelling and closing short are the same form: a reason, and the server
+/** Cancelling and closing short are the same dialog: a reason, and the server
  *  refuses one that is blank. Both are decisions, and the reason is what the
  *  audit log carries. */
-function ReasonForm({
+function ReasonDialog({
   detail,
   kind,
   title,
@@ -413,6 +514,7 @@ function ReasonForm({
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [shown, setShown] = useState(false);
   const [reason, setReason] = useState("");
   const [problem, setProblem] = useState<Key | null>(null);
   const id = detail.purchase.id;
@@ -425,6 +527,7 @@ function ReasonForm({
     onSuccess: async () => {
       setProblem(null);
       setReason("");
+      setShown(false);
       await queryClient.invalidateQueries({ queryKey: purchaseQueryKey(id) });
       await queryClient.invalidateQueries({ queryKey: purchasesQueryKey });
     },
@@ -432,37 +535,55 @@ function ReasonForm({
   });
 
   return (
-    <form
-      className="flex flex-col gap-2 rounded border p-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (reason.trim() === "") {
-          setProblem("purchases_reason_needed");
-          return;
+    <Dialog
+      open={shown}
+      onOpenChange={(next) => {
+        setShown(next);
+        if (!next) {
+          setReason("");
+          setProblem(null);
         }
-        void send.mutateAsync(reason).catch(() => undefined);
       }}
     >
-      <h2 className="font-semibold">{t(title)}</h2>
-      <p className="text-sm opacity-70">{t(hint)}</p>
-      <label className="flex flex-col gap-1">
-        <span>{t("purchases_reason")}</span>
-        <input
-          className="rounded border px-2 py-1"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-      </label>
-      {problem === null ? null : (
-        <p role="alert" className="text-red-700">
-          {t(problem)}
-        </p>
-      )}
-      <div>
-        <button type="submit" className="rounded border px-3 py-1.5" disabled={send.isPending}>
-          {t(action)}
-        </button>
-      </div>
-    </form>
+      <DialogTrigger asChild>
+        <Button variant="outline">{t(title)}</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (reason.trim() === "") {
+              setProblem("purchases_reason_needed");
+              return;
+            }
+            void send.mutateAsync(reason).catch(() => undefined);
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t(title)}</DialogTitle>
+            <DialogDescription>{t(hint)}</DialogDescription>
+          </DialogHeader>
+          <FormField label={t("purchases_reason")} required>
+            {(parts) => (
+              <Input {...parts} value={reason} onChange={(e) => setReason(e.target.value)} />
+            )}
+          </FormField>
+          {problem === null ? null : (
+            <p role="alert" className="text-sm text-fg-danger">
+              {t(problem)}
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setShown(false)}>
+              {t("action_cancel")}
+            </Button>
+            <Button type="submit" variant="destructive" disabled={send.isPending}>
+              {t(action)}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

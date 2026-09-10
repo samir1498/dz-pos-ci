@@ -37,18 +37,6 @@
       "screen": "documents"
     },
     {
-      "file": "src/routes/purchases.tsx",
-      "screen": "purchases"
-    },
-    {
-      "file": "src/routes/purchases_.new.tsx",
-      "screen": "a new purchase order"
-    },
-    {
-      "file": "src/routes/purchases_.$id.tsx",
-      "screen": "a purchase order"
-    },
-    {
       "file": "src/components/ExportImportPanel.tsx",
       "screen": "products, the export and import panel"
     },

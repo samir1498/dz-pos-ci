@@ -2,12 +2,12 @@
 // and for what they send. The rules (the landed cost, what a delivery does to
 // the stock and to the debt, which state takes a cancel) are the core's and
 // the API crate's tests; what these hold is the wiring: the request body the
-// order form builds, the running totals the order page shows, and the
-// delivery and return forms posting to the two routes that mean opposite
-// things.
+// order form builds, the running totals the order page shows, the delivery
+// and return dialogs posting to the two routes that mean opposite things, and
+// the dialogs themselves opening, closing and forgetting what was typed.
 
-import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { configure, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -22,8 +22,46 @@ import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
 
+import { PurchasesScreen } from "./purchases";
 import { OnePurchase } from "./purchases_.$id";
 import { NewPurchaseScreen } from "./purchases_.new";
+
+/**
+ * The kit's select, dialog and their scroll lock are Radix, and Radix drives
+ * them with pointer capture, element scrolling and a resize observer, none of
+ * which jsdom implements. Without these four stubs a click on a select opens
+ * nothing and the test reads as "the option is not there" rather than "the
+ * browser this runs in has no pointer".
+ *
+ * They live here rather than in `src/test/setup.ts` because nine screens are
+ * being rewritten at the same time and one shared file is one conflict; the
+ * report says they belong there once.
+ */
+beforeAll(() => {
+  // Nine worktrees build and test on this box at once, and the default second
+  // is not enough for a query to answer under that load: the failure then
+  // reads as "the table is not there" rather than "the machine was busy".
+  configure({ asyncUtilTimeout: 5_000 });
+  Element.prototype.scrollIntoView = () => {};
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
+
+/** Open a kit select by its accessible name and pick the option named. */
+async function pick(
+  user: ReturnType<typeof userEvent.setup>,
+  select: string,
+  option: string,
+): Promise<void> {
+  await user.click(await screen.findByRole("combobox", { name: select }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
 
 const amrani: SupplierDto = {
   id: 3,
@@ -123,13 +161,26 @@ function sent(method: string): { url: string; body: Record<string, unknown> } {
   return { url: String(last[0]), body: JSON.parse(init.body) };
 }
 
+/** Every address the fetch stub was asked for, in order. */
+function asked(): string[] {
+  return fetchMock.mock.calls.map((call) => String(call[0]));
+}
+
+function wrap(node: React.ReactNode, lang: Lang) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return render(
+    <I18nProvider lang={lang}>
+      <QueryClientProvider client={client}>{node}</QueryClientProvider>
+    </I18nProvider>,
+  );
+}
+
 /** The order page links back to the list and to the supplier's fiche, so it
  *  needs a router around it: a `<Link>` with no router is what the page would
  *  be if the route file were wrong. */
 function mountOrder(lang: Lang = "fr") {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
   const rootRoute = createRootRoute();
   const page = createRoute({
     getParentRoute: () => rootRoute,
@@ -140,21 +191,32 @@ function mountOrder(lang: Lang = "fr") {
     routeTree: rootRoute.addChildren([page]),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
-  return render(
-    <I18nProvider lang={lang}>
-      <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </I18nProvider>,
-  );
+  return wrap(<RouterProvider router={router} />, lang);
+}
+
+/** The list links to the form and to each order, so it needs a router too. */
+function mountList(lang: Lang = "fr") {
+  const rootRoute = createRootRoute();
+  const page = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/",
+    component: () => <PurchasesScreen />,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([page]),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
+  return wrap(<RouterProvider router={router} />, lang);
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let detail: PurchaseDetailDto;
+let list: PurchaseDetailDto["purchase"][] | null;
 let writeAnswer: (() => Response) | null;
 
 beforeEach(() => {
   detail = partly;
+  list = null;
   writeAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
@@ -166,10 +228,48 @@ beforeEach(() => {
     if (url.includes("/suppliers")) return Promise.resolve(json(200, [amrani]));
     if (url.includes("/clock")) return Promise.resolve(json(200, { today: "2026-09-10" }));
     if (url.includes("/purchases/8")) return Promise.resolve(json(200, detail));
-    if (url.includes("/purchases")) return Promise.resolve(json(200, [detail.purchase]));
+    if (url.includes("/purchases")) {
+      return Promise.resolve(json(200, list ?? [detail.purchase]));
+    }
     throw new Error(`no stub for ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
+});
+
+describe("the list of orders", () => {
+  test("shows the order's day, its extra costs and the state it is in", async () => {
+    mountList();
+    const table = await screen.findByRole("table", { name: fr.purchases_title });
+    const row = within(table).getAllByRole("row")[1];
+    const cells = within(row).getAllByRole("cell").map((cell) => cell.textContent);
+    // Six cells: the five columns and the one the row's own action sits in.
+    expect(cells).toEqual([
+      "2026-09-10",
+      "Sarl Amrani",
+      "BL-77",
+      "500,00",
+      fr.purchase_status_partially_received,
+      fr.purchases_open,
+    ]);
+  });
+
+  test("an empty list says so and offers the first order", async () => {
+    list = [];
+    mountList();
+    expect(await screen.findByText(fr.purchases_empty)).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: new RegExp(fr.purchases_add) }).length)
+      .toBeGreaterThan(0);
+  });
+
+  test("choosing a state asks the API for that state alone", async () => {
+    const user = userEvent.setup();
+    mountList();
+    await screen.findByRole("table", { name: fr.purchases_title });
+    await pick(user, fr.purchases_filter_status, fr.purchase_status_received);
+    await waitFor(() => {
+      expect(asked().some((url) => url.includes("status=received"))).toBe(true);
+    });
+  });
 });
 
 describe("one order", () => {
@@ -196,6 +296,7 @@ describe("one order", () => {
   test("a delivery posts to the receipts route with the quantity typed", async () => {
     const user = userEvent.setup();
     mountOrder();
+    await user.click(await screen.findByRole("button", { name: fr.purchases_receive }));
     const box = await screen.findByLabelText(`${fr.action_receive} 11`);
     await user.type(box, "3");
     await user.click(screen.getByRole("button", { name: fr.action_receive }));
@@ -207,11 +308,16 @@ describe("one order", () => {
         note: null,
       });
     });
+    // The dialog closes on its own once the server has taken it.
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
   });
 
   test("a return posts to the returns route, which is the opposite direction", async () => {
     const user = userEvent.setup();
     mountOrder();
+    await user.click(await screen.findByRole("button", { name: fr.purchases_return }));
     const box = await screen.findByLabelText(`${fr.action_return} 11`);
     await user.type(box, "2");
     await user.click(screen.getByRole("button", { name: fr.action_return }));
@@ -225,10 +331,24 @@ describe("one order", () => {
     });
   });
 
+  test("a dialog closed with Escape sends nothing and forgets what was typed", async () => {
+    const user = userEvent.setup();
+    mountOrder();
+    await user.click(await screen.findByRole("button", { name: fr.purchases_receive }));
+    await user.type(await screen.findByLabelText(`${fr.action_receive} 11`), "3");
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(() => sent("POST")).toThrow();
+    await user.click(screen.getByRole("button", { name: fr.purchases_receive }));
+    expect(await screen.findByLabelText(`${fr.action_receive} 11`)).toHaveValue("");
+  });
+
   test("a partly received order offers the close short and not the cancel", async () => {
     mountOrder();
-    expect(await screen.findByRole("button", { name: fr.action_close_short })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: fr.action_cancel_order })).toBeNull();
+    expect(await screen.findByRole("button", { name: fr.purchases_close_short })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: fr.purchases_cancel })).toBeNull();
   });
 
   test("an order nothing arrived against offers the cancel and no return", async () => {
@@ -239,18 +359,24 @@ describe("one order", () => {
       receipts: [],
     };
     mountOrder();
-    expect(await screen.findByRole("button", { name: fr.action_cancel_order })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: fr.action_close_short })).toBeNull();
-    expect(screen.queryByRole("button", { name: fr.action_return })).toBeNull();
+    expect(await screen.findByRole("button", { name: fr.purchases_cancel })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: fr.purchases_close_short })).toBeNull();
+    expect(screen.queryByRole("button", { name: fr.purchases_return })).toBeNull();
     expect(screen.getByText(fr.purchases_no_receipt)).toBeInTheDocument();
   });
 
   test("closing short sends the reason the server records", async () => {
     const user = userEvent.setup();
     mountOrder();
-    const reason = await screen.findByLabelText(fr.purchases_reason);
-    await user.type(reason, "le fournisseur ne livre plus");
-    await user.click(screen.getByRole("button", { name: fr.action_close_short }));
+    await user.click(await screen.findByRole("button", { name: fr.purchases_close_short }));
+    const dialog = await screen.findByRole("dialog");
+    // By role and not by label text: the field is required, so its label
+    // carries the star, and the star is out of the accessible name.
+    await user.type(
+      within(dialog).getByRole("textbox", { name: fr.purchases_reason }),
+      "le fournisseur ne livre plus",
+    );
+    await user.click(within(dialog).getByRole("button", { name: fr.action_close_short }));
     await waitFor(() => {
       const request = sent("POST");
       expect(request.url).toContain("/purchases/8/close-short");
@@ -258,12 +384,13 @@ describe("one order", () => {
     });
   });
 
-  test("a blank reason never leaves the screen", async () => {
+  test("a blank reason never leaves the dialog", async () => {
     const user = userEvent.setup();
     mountOrder();
-    await screen.findByLabelText(fr.purchases_reason);
-    await user.click(screen.getByRole("button", { name: fr.action_close_short }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(fr.purchases_reason_needed);
+    await user.click(await screen.findByRole("button", { name: fr.purchases_close_short }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: fr.action_close_short }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.purchases_reason_needed);
     expect(() => sent("POST")).toThrow();
   });
 
@@ -277,12 +404,12 @@ describe("one order", () => {
     expect(await screen.findByTestId("purchase-status")).toHaveTextContent(
       fr.purchase_status_received,
     );
-    expect(screen.queryByRole("button", { name: fr.action_cancel_order })).toBeNull();
-    expect(screen.queryByRole("button", { name: fr.action_close_short })).toBeNull();
-    // Nothing left to take in, so the delivery form is gone; a return is
+    expect(screen.queryByRole("button", { name: fr.purchases_cancel })).toBeNull();
+    expect(screen.queryByRole("button", { name: fr.purchases_close_short })).toBeNull();
+    // Nothing left to take in, so the delivery dialog is gone; a return is
     // still offered, because goods on the shelf can still go back.
-    expect(screen.queryByRole("button", { name: fr.action_receive })).toBeNull();
-    expect(screen.getByRole("button", { name: fr.action_return })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: fr.purchases_receive })).toBeNull();
+    expect(screen.getByRole("button", { name: fr.purchases_return })).toBeInTheDocument();
   });
 
   test("a refusal from the server is shown as the translated code", async () => {
@@ -290,10 +417,13 @@ describe("one order", () => {
     writeAnswer = () =>
       json(422, { error: { code: "validation", message: "…", field: "qty_milli" } });
     mountOrder();
-    const box = await screen.findByLabelText(`${fr.action_receive} 11`);
-    await user.type(box, "9");
-    await user.click(screen.getByRole("button", { name: fr.action_receive }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_validation);
+    await user.click(await screen.findByRole("button", { name: fr.purchases_receive }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText(`${fr.action_receive} 11`), "9");
+    await user.click(within(dialog).getByRole("button", { name: fr.action_receive }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_validation);
+    // Refused, so the dialog stays open with the figures still in it.
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   test("the Arabic screen says the same things in Arabic", async () => {
@@ -301,7 +431,7 @@ describe("one order", () => {
     expect(await screen.findByTestId("purchase-status")).toHaveTextContent(
       ar.purchase_status_partially_received,
     );
-    expect(screen.getByRole("button", { name: ar.action_receive })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: ar.purchases_receive })).toBeInTheDocument();
   });
 });
 
@@ -309,9 +439,6 @@ describe("one order", () => {
  *  both addresses: a navigate to a route the tree does not have is what the
  *  screen would do if the file name were wrong. */
 function mountForm() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
   const rootRoute = createRootRoute();
   const form = createRoute({
     getParentRoute: () => rootRoute,
@@ -327,27 +454,20 @@ function mountForm() {
     routeTree: rootRoute.addChildren([form, made]),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
-  return render(
-    <I18nProvider lang="fr">
-      <QueryClientProvider client={client}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </I18nProvider>,
-  );
+  return wrap(<RouterProvider router={router} />, "fr");
 }
 
 describe("the order form", () => {
   test("sends centimes, thousandths and the shop's own day", async () => {
     const user = userEvent.setup();
     mountForm();
-    // The options arrive with the two lists, so the test waits for the name
-    // rather than for the label the select already carries.
-    await screen.findByRole("option", { name: "Sarl Amrani" });
-    await screen.findByRole("option", { name: "Farine 5kg" });
-    await user.selectOptions(screen.getByLabelText(fr.col_supplier), "3");
-    await user.selectOptions(screen.getByLabelText(fr.col_product), "4");
-    await user.type(screen.getByLabelText(fr.col_qty), "10");
-    await user.type(screen.getByLabelText(fr.col_unit_cost), "200,00");
+    // The two lists arrive with the screen, so the option is waited for
+    // inside the select rather than in the closed markup, where Radix keeps
+    // nothing until it is opened.
+    await pick(user, fr.col_supplier, "Sarl Amrani");
+    await pick(user, fr.col_product, "Farine 5kg");
+    await user.type(screen.getByRole("textbox", { name: fr.col_qty }), "10");
+    await user.type(screen.getByRole("textbox", { name: fr.col_unit_cost }), "200,00");
     await user.type(screen.getByLabelText(fr.field_transport), "500,00");
     await user.type(screen.getByLabelText(fr.field_paid_now), "1000,00");
     await user.click(screen.getByRole("button", { name: fr.purchases_save }));
@@ -375,11 +495,9 @@ describe("the order form", () => {
   test("a half-filled line never leaves the screen", async () => {
     const user = userEvent.setup();
     mountForm();
-    await screen.findByRole("option", { name: "Sarl Amrani" });
-    await screen.findByRole("option", { name: "Farine 5kg" });
-    await user.selectOptions(screen.getByLabelText(fr.col_supplier), "3");
+    await pick(user, fr.col_supplier, "Sarl Amrani");
     // A product and nothing else: the row was started and left half typed.
-    await user.selectOptions(screen.getByLabelText(fr.col_product), "4");
+    await pick(user, fr.col_product, "Farine 5kg");
     await user.click(screen.getByRole("button", { name: fr.purchases_save }));
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.purchases_line_incomplete);
     expect(() => sent("POST")).toThrow();
@@ -388,9 +506,20 @@ describe("the order form", () => {
   test("an order with no supplier never leaves the screen", async () => {
     const user = userEvent.setup();
     mountForm();
-    await screen.findByLabelText(fr.col_supplier);
+    await screen.findByRole("combobox", { name: fr.col_supplier });
     await user.click(screen.getByRole("button", { name: fr.purchases_save }));
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.purchases_pick_supplier);
     expect(() => sent("POST")).toThrow();
+  });
+
+  test("a second line is added and taken away again", async () => {
+    const user = userEvent.setup();
+    mountForm();
+    await screen.findByRole("combobox", { name: fr.col_supplier });
+    expect(screen.getAllByRole("textbox", { name: fr.col_qty })).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: fr.purchases_add_line }));
+    expect(screen.getAllByRole("textbox", { name: fr.col_qty })).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: `${fr.purchases_remove_line} 2` }));
+    expect(screen.getAllByRole("textbox", { name: fr.col_qty })).toHaveLength(1);
   });
 });

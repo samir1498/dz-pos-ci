@@ -56,6 +56,16 @@ interface Detail {
 }
 
 type Request = import("@playwright/test").APIRequestContext;
+type Page = import("@playwright/test").Page;
+type Locator = import("@playwright/test").Locator;
+
+/** Pick a value in a kit select: open the trigger, click the option. The
+ * listbox is in a portal, so the option is looked for on the page and not
+ * inside the trigger. */
+async function choose(page: Page, trigger: Locator, option: string): Promise<void> {
+  await trigger.click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
 
 async function aProduct(request: Request, name: string, cost: number): Promise<number> {
   const res = await request.post(`${apiUrl()}/products`, {
@@ -136,21 +146,21 @@ test("orders two products with extra costs, takes them in twice, sends some back
   // where a shop states them.
   await page.goto("/purchases/new");
   await expect(page.getByRole("heading", { name: t("purchases_new") })).toBeVisible();
-  // By role and accessible name rather than by label text: a select's label
-  // element contains its options too, so a label query would be matching
-  // "Fournisseur Choisir un fournisseur Grossiste fr".
+  // By role and accessible name. The kit's select is a Radix trigger and a
+  // listbox in a portal, not a native <select>, so the value is chosen by
+  // opening it and clicking the option rather than with selectOption.
   const pickSupplier = page.getByRole("combobox", { name: t("col_supplier"), exact: true });
-  await pickSupplier.selectOption({ label: supplier });
+  await choose(page, pickSupplier, supplier);
 
   const pickProduct = page.getByRole("combobox", { name: t("col_product"), exact: true });
   const qty = page.getByRole("textbox", { name: t("col_qty"), exact: true });
   const cost = page.getByRole("textbox", { name: t("col_unit_cost"), exact: true });
-  await pickProduct.first().selectOption({ label: farineName });
+  await choose(page, pickProduct.first(), farineName);
   await qty.first().fill("10");
   await cost.first().fill("200");
 
   await page.getByRole("button", { name: t("purchases_add_line") }).click();
-  await pickProduct.nth(1).selectOption({ label: sucreName });
+  await choose(page, pickProduct.nth(1), sucreName);
   await qty.nth(1).fill("20");
   await cost.nth(1).fill("90");
 
@@ -182,9 +192,13 @@ test("orders two products with extra costs, takes them in twice, sends some back
 
   if (farineLine === undefined || sucreLine === undefined) throw new Error("a line is missing");
 
-  // The first delivery: four sacks of flour and nothing else.
-  await page.getByLabel(`${t("action_receive")} ${String(farineLine.id)}`).fill("4");
-  await page.getByRole("button", { name: t("action_receive"), exact: true }).click();
+  // The first delivery: four sacks of flour and nothing else. The delivery is
+  // a dialog now, so it is opened before anything is typed into it.
+  await page.getByRole("button", { name: t("purchases_receive"), exact: true }).click();
+  const firstDelivery = page.getByRole("dialog");
+  await firstDelivery.getByLabel(`${t("action_receive")} ${String(farineLine.id)}`).fill("4");
+  await firstDelivery.getByRole("button", { name: t("action_receive"), exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByTestId("purchase-status")).toHaveText(t("purchase_status_partially_received"));
 
   const afterFirst = await order(request, purchaseId);
@@ -195,9 +209,12 @@ test("orders two products with extra costs, takes them in twice, sends some back
   expect(await owed(request, supplierId)).toBe(4 * FARINE_LANDED);
 
   // The second: the rest of both lines, on a bon de réception of its own.
-  await page.getByLabel(`${t("action_receive")} ${String(farineLine.id)}`).fill("6");
-  await page.getByLabel(`${t("action_receive")} ${String(sucreLine.id)}`).fill("20");
-  await page.getByRole("button", { name: t("action_receive"), exact: true }).click();
+  await page.getByRole("button", { name: t("purchases_receive"), exact: true }).click();
+  const secondDelivery = page.getByRole("dialog");
+  await secondDelivery.getByLabel(`${t("action_receive")} ${String(farineLine.id)}`).fill("6");
+  await secondDelivery.getByLabel(`${t("action_receive")} ${String(sucreLine.id)}`).fill("20");
+  await secondDelivery.getByRole("button", { name: t("action_receive"), exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByTestId("purchase-status")).toHaveText(t("purchase_status_received"));
 
   const afterSecond = await order(request, purchaseId);
@@ -213,10 +230,15 @@ test("orders two products with extra costs, takes them in twice, sends some back
     10 * FARINE_COST + 20 * SUCRE_COST + TRANSPORT_CENTIMES,
   );
 
-  // Two sacks of flour go back: the stock leaves and the debt with it.
-  await page.getByLabel(`${t("action_return")} ${String(farineLine.id)}`).fill("2");
-  await page.getByRole("button", { name: t("action_return"), exact: true }).click();
-  await expect(page.getByRole("heading", { name: t("purchases_return") })).toBeVisible();
+  // Two sacks of flour go back: the stock leaves and the debt with it. The
+  // dialog closing is what says the server took it; its heading is gone with
+  // it, so the closing itself is what is waited for.
+  await page.getByRole("button", { name: t("purchases_return"), exact: true }).click();
+  const sendingBack = page.getByRole("dialog");
+  await expect(sendingBack.getByRole("heading", { name: t("purchases_return") })).toBeVisible();
+  await sendingBack.getByLabel(`${t("action_return")} ${String(farineLine.id)}`).fill("2");
+  await sendingBack.getByRole("button", { name: t("action_return"), exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await expect
     .poll(() => onHand(request, farine))
@@ -255,19 +277,30 @@ test("refuses a cancellation once goods have arrived and closes the order short 
 
   await page.goto(`/purchases/${String(made.purchase.id)}`);
   // Nothing has arrived, so the cancel is the one on offer.
-  await expect(page.getByRole("button", { name: t("action_cancel_order") })).toBeVisible();
-  await expect(page.getByRole("button", { name: t("action_close_short") })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: t("purchases_cancel"), exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: t("purchases_close_short"), exact: true })).toHaveCount(0);
 
-  await page.getByLabel(`${t("action_receive")} ${String(line.id)}`).fill("3");
-  await page.getByRole("button", { name: t("action_receive"), exact: true }).click();
+  await page.getByRole("button", { name: t("purchases_receive"), exact: true }).click();
+  const delivery = page.getByRole("dialog");
+  await delivery.getByLabel(`${t("action_receive")} ${String(line.id)}`).fill("3");
+  await delivery.getByRole("button", { name: t("action_receive"), exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByTestId("purchase-status")).toHaveText(t("purchase_status_partially_received"));
 
   // And now the other way round: goods on the shelf say the order happened.
-  await expect(page.getByRole("button", { name: t("action_cancel_order") })).toHaveCount(0);
-  await page
+  await expect(page.getByRole("button", { name: t("purchases_cancel"), exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: t("purchases_close_short"), exact: true }).click();
+  // Scoped to the dialog: in French the button that opens it and the button
+  // that confirms it read the same words.
+  const closing = page.getByRole("dialog");
+  // A blank reason is refused by the screen before the server ever hears it.
+  await closing.getByRole("button", { name: t("action_close_short"), exact: true }).click();
+  await expect(closing.getByRole("alert")).toHaveText(t("purchases_reason_needed"));
+  await closing
     .getByRole("textbox", { name: t("purchases_reason"), exact: true })
     .fill("le reste ne viendra pas");
-  await page.getByRole("button", { name: t("action_close_short"), exact: true }).click();
+  await closing.getByRole("button", { name: t("action_close_short"), exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await expect(page.getByTestId("purchase-status")).toHaveText(t("purchase_status_closed_short"));
   const closed = await order(request, made.purchase.id);

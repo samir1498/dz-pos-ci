@@ -9,13 +9,37 @@
 // The day the order is dated is the shop's, asked of the server: a browser
 // reads the machine's zone, which on a laptop set wrong is another day
 // (lib/clock.ts).
+//
+// The lines are a `DataTable` of controls rather than a stack of labelled
+// fields. A line has three columns and an order has as many lines as the
+// delivery had, so labelling every cell of every row would say "Produit,
+// Quantité, Prix d'achat" once per row; the column headings say it once and
+// each control keeps the same name for a screen reader through `aria-label`.
 
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { parseAmountToCentimes, parseQtyToMilli } from "@dzpos/shared";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { useId, useState } from "react";
+import { parseQtyToMilli } from "@dzpos/shared";
 import type { NewPurchaseDto, PaymentMethodDto } from "@dzpos/shared";
 
+import { DataTable, type Column } from "@/components/DataTable";
+import { FormField } from "@/components/FormField";
+import { Icon } from "@/components/Icon";
+import { MoneyInput } from "@/components/MoneyInput";
+import { PageHeader } from "@/components/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { api, productsQueryKey, purchasesQueryKey, suppliersQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { useShopToday } from "@/lib/clock";
@@ -34,21 +58,21 @@ const PAYMENT_METHOD_KEY: Record<PaymentMethodDto, Key> = {
   card: "payment_card",
 };
 
-/** One row of the line editor, as it is typed. Everything is text until the
- *  request is built: a half-typed quantity is not a number yet. */
+/** One row of the line editor, as it is typed. The quantity is text until
+ *  the request is built, because a half-typed quantity is not a number yet;
+ *  the cost is already centimes, because `MoneyInput` owns that reading and
+ *  no float is ever made from it. */
 interface DraftLine {
+  /** Its own identity, so a row removed in the middle takes its own values
+   *  with it rather than the ones the index used to point at. */
+  readonly key: number;
   productId: string;
   qty: string;
-  unitCost: string;
+  unitCost: number | null;
 }
 
-const BLANK_LINE: DraftLine = { productId: "", qty: "", unitCost: "" };
-
-/** Blank is nothing at all, which the core reads as no cost; anything
- *  unreadable stops the form before the request is built. */
-function centimesOrZero(text: string): number | null {
-  if (text.trim() === "") return 0;
-  return parseAmountToCentimes(text);
+function blankLine(key: number): DraftLine {
+  return { key, productId: "", qty: "", unitCost: null };
 }
 
 function NewPurchaseScreen() {
@@ -56,6 +80,7 @@ function NewPurchaseScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const today = useShopToday();
+  const receiveId = useId();
 
   const suppliers = useQuery({
     queryKey: [...suppliersQueryKey, ""],
@@ -66,11 +91,12 @@ function NewPurchaseScreen() {
   const [supplierId, setSupplierId] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [transport, setTransport] = useState("");
-  const [extra, setExtra] = useState("");
+  const [transport, setTransport] = useState<number | null>(null);
+  const [extra, setExtra] = useState<number | null>(null);
   const [note, setNote] = useState("");
-  const [lines, setLines] = useState<DraftLine[]>([BLANK_LINE]);
-  const [paidNow, setPaidNow] = useState("");
+  const [lines, setLines] = useState<DraftLine[]>([blankLine(0)]);
+  const [nextKey, setNextKey] = useState(1);
+  const [paidNow, setPaidNow] = useState<number | null>(null);
   const [paidMode, setPaidMode] = useState<PaymentMethodDto>("cash");
   const [receiveNow, setReceiveNow] = useState(true);
   const [problem, setProblem] = useState<Key | null>(null);
@@ -89,10 +115,17 @@ function NewPurchaseScreen() {
     onError: (error: unknown) => setProblem(errorKey(error)),
   });
 
-  const setLine = (index: number, field: keyof DraftLine, value: string) => {
-    setLines((current) =>
-      current.map((line, n) => (n === index ? { ...line, [field]: value } : line)),
-    );
+  const setLine = (key: number, patch: Partial<DraftLine>) => {
+    setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
+  };
+
+  const addLine = () => {
+    setLines((current) => [...current, blankLine(nextKey)]);
+    setNextKey((key) => key + 1);
+  };
+
+  const removeLine = (key: number) => {
+    setLines((current) => (current.length === 1 ? current : current.filter((l) => l.key !== key)));
   };
 
   const submit = async () => {
@@ -109,42 +142,34 @@ function NewPurchaseScreen() {
     const built: NewPurchaseDto["lines"] = [];
     for (const line of lines) {
       // A blank row is a row nobody filled in, not a line ordering nothing.
-      if (line.productId === "" && line.qty.trim() === "" && line.unitCost.trim() === "") continue;
+      if (line.productId === "" && line.qty.trim() === "" && line.unitCost === null) continue;
       const productId = Number(line.productId);
       const qty = parseQtyToMilli(line.qty);
-      const unitCost = parseAmountToCentimes(line.unitCost);
       if (!Number.isInteger(productId) || productId <= 0 || qty === null || qty <= 0) {
         setProblem("purchases_line_incomplete");
         return;
       }
-      if (unitCost === null || unitCost < 0) {
+      if (line.unitCost === null || line.unitCost < 0) {
         setProblem("purchases_line_incomplete");
         return;
       }
       built.push({
         product_id: productId,
         qty_ordered_milli: qty,
-        unit_cost_centimes: unitCost,
+        unit_cost_centimes: line.unitCost,
       });
     }
     if (built.length === 0) {
       setProblem("purchases_no_line");
       return;
     }
-    const transportCentimes = centimesOrZero(transport);
-    const extraCentimes = centimesOrZero(extra);
-    if (transportCentimes === null || extraCentimes === null) {
-      setProblem("error_amount_unreadable");
-      return;
-    }
     let paid: NewPurchaseDto["paid_now"] = null;
-    if (paidNow.trim() !== "") {
-      const amount = parseAmountToCentimes(paidNow);
-      if (amount === null || amount <= 0) {
+    if (paidNow !== null) {
+      if (paidNow <= 0) {
         setProblem("error_amount_unreadable");
         return;
       }
-      paid = { amount_centimes: amount, payment_mode: paidMode };
+      paid = { amount_centimes: paidNow, payment_mode: paidMode };
     }
     // The rejection is swallowed on purpose: onError has already turned the
     // server's code into a translated message on the form.
@@ -154,8 +179,9 @@ function NewPurchaseScreen() {
         supplier_document_number: cleared(documentNumber),
         purchase_date: day,
         due_date: cleared(dueDate),
-        transport_centimes: transportCentimes,
-        extra_costs_centimes: extraCentimes,
+        // Blank is nothing at all, which the core reads as no cost.
+        transport_centimes: transport ?? 0,
+        extra_costs_centimes: extra ?? 0,
         note: cleared(note),
         lines: built,
         paid_now: paid,
@@ -164,14 +190,72 @@ function NewPurchaseScreen() {
       .catch(() => undefined);
   };
 
+  const columns: readonly Column<DraftLine>[] = [
+    {
+      id: "product",
+      header: t("col_product"),
+      cell: (line) => (
+        <Select
+          value={line.productId}
+          onValueChange={(next) => setLine(line.key, { productId: next })}
+        >
+          <SelectTrigger aria-label={t("col_product")} className="w-full">
+            <SelectValue placeholder={t("purchases_pick_product")} />
+          </SelectTrigger>
+          <SelectContent>
+            {(products.data ?? []).map((p) => (
+              <SelectItem key={p.id} value={String(p.id)}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ),
+    },
+    {
+      id: "qty",
+      header: t("col_qty"),
+      numeric: true,
+      cell: (line) => (
+        <Input
+          dir="ltr"
+          inputMode="decimal"
+          autoComplete="off"
+          aria-label={t("col_qty")}
+          className="w-24 text-end font-numeric tabular-nums"
+          value={line.qty}
+          onChange={(event) => setLine(line.key, { qty: event.target.value })}
+        />
+      ),
+    },
+    {
+      id: "cost",
+      header: t("col_unit_cost"),
+      money: true,
+      cell: (line) => (
+        <MoneyInput
+          aria-label={t("col_unit_cost")}
+          className="w-32"
+          value={line.unitCost}
+          onChange={(centimes) => setLine(line.key, { unitCost: centimes })}
+        />
+      ),
+    },
+  ];
+
   return (
     <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">{t("purchases_new")}</h1>
-        <Link to="/purchases" className="underline">
-          {t("action_back_to_purchases")}
-        </Link>
-      </header>
+      <PageHeader
+        title={t("purchases_new")}
+        actions={
+          <Button asChild variant="outline">
+            <Link to="/purchases">
+              <Icon as={ArrowLeft} size={18} flip />
+              {t("action_back_to_purchases")}
+            </Link>
+          </Button>
+        }
+      />
 
       <form
         className="flex flex-col gap-4"
@@ -180,211 +264,177 @@ function NewPurchaseScreen() {
           void submit();
         }}
       >
-        <div className="flex flex-wrap gap-4">
-          {/* The label points at the select by id rather than wrapping it:
-              a wrapping label's text is its whole content, options included,
-              so "Fournisseur" would only match a control whose list is
-              empty. */}
-          <label className="flex flex-col gap-1" htmlFor="purchase-supplier">
-            <span>{t("col_supplier")}</span>
-            <select
-              id="purchase-supplier"
-              className="rounded border px-2 py-1"
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-            >
-              <option value="">{t("purchases_pick_supplier")}</option>
-              {(suppliers.data ?? [])
-                // A closed fiche refuses an order, so it is not offered.
-                .filter((s) => s.active)
-                .map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span>{t("col_supplier_document")}</span>
-            <input
-              dir="ltr"
-              className="rounded border px-2 py-1"
-              value={documentNumber}
-              onChange={(e) => setDocumentNumber(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span>{t("field_due_date")}</span>
-            <input
-              type="date"
-              dir="ltr"
-              className="rounded border px-2 py-1"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </label>
-        </div>
+        <Card>
+          <CardHeader>
+            <h3 className="text-md font-semibold">{t("purchases_block_supplier")}</h3>
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-3">
+            <FormField label={t("col_supplier")} required>
+              {(parts) => (
+                <Select value={supplierId} onValueChange={setSupplierId}>
+                  <SelectTrigger id={parts.id} aria-label={t("col_supplier")} className="w-full">
+                    <SelectValue placeholder={t("purchases_pick_supplier")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(suppliers.data ?? [])
+                      // A closed fiche refuses an order, so it is not offered.
+                      .filter((s) => s.active)
+                      .map((s) => (
+                        <SelectItem key={s.id} value={String(s.id)}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </FormField>
+            <FormField label={t("col_supplier_document")}>
+              {(parts) => (
+                <Input
+                  {...parts}
+                  dir="ltr"
+                  autoComplete="off"
+                  value={documentNumber}
+                  onChange={(e) => setDocumentNumber(e.target.value)}
+                />
+              )}
+            </FormField>
+            <FormField label={t("field_due_date")}>
+              {(parts) => (
+                <Input
+                  {...parts}
+                  type="date"
+                  dir="ltr"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+              )}
+            </FormField>
+          </CardContent>
+        </Card>
 
-        <fieldset className="flex flex-col gap-2 rounded border p-3">
-          <legend className="px-1">{t("purchases_lines")}</legend>
-          {lines.map((line, index) => (
-            <div key={index} className="flex flex-wrap items-end gap-3">
-              <label className="flex flex-col gap-1" htmlFor={`purchase-line-product-${index}`}>
-                <span>{t("col_product")}</span>
-                <select
-                  id={`purchase-line-product-${index}`}
-                  className="rounded border px-2 py-1"
-                  value={line.productId}
-                  onChange={(e) => setLine(index, "productId", e.target.value)}
+        <Card>
+          <CardHeader>
+            <h3 className="text-md font-semibold">{t("purchases_lines")}</h3>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <DataTable
+              columns={columns}
+              rows={lines}
+              rowKey={(line) => line.key}
+              caption={t("purchases_lines")}
+              actions={(line) => (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`${t("purchases_remove_line")} ${String(
+                    lines.findIndex((l) => l.key === line.key) + 1,
+                  )}`}
+                  onClick={() => removeLine(line.key)}
                 >
-                  <option value="">{t("purchases_pick_product")}</option>
-                  {(products.data ?? []).map((p) => (
-                    <option key={p.id} value={String(p.id)}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1" htmlFor={`purchase-line-qty-${index}`}>
-                <span>{t("col_qty")}</span>
-                <input
-                  id={`purchase-line-qty-${index}`}
-                  dir="ltr"
-                  inputMode="decimal"
-                  className="w-24 rounded border px-2 py-1 font-mono text-end"
-                  value={line.qty}
-                  onChange={(e) => setLine(index, "qty", e.target.value)}
-                />
-              </label>
-              <label className="flex flex-col gap-1" htmlFor={`purchase-line-cost-${index}`}>
-                <span>{t("col_unit_cost")}</span>
-                <input
-                  id={`purchase-line-cost-${index}`}
-                  dir="ltr"
-                  inputMode="decimal"
-                  className="w-32 rounded border px-2 py-1 font-mono text-end"
-                  value={line.unitCost}
-                  onChange={(e) => setLine(index, "unitCost", e.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="rounded border px-2 py-1"
-                aria-label={`${t("purchases_remove_line")} ${String(index + 1)}`}
-                onClick={() =>
-                  setLines((current) =>
-                    current.length === 1 ? current : current.filter((_, n) => n !== index),
-                  )
-                }
-              >
-                {t("purchases_remove_line")}
-              </button>
+                  <Icon as={Trash2} size={18} />
+                </Button>
+              )}
+            />
+            <div>
+              <Button type="button" variant="outline" onClick={addLine}>
+                <Icon as={Plus} size={18} />
+                {t("purchases_add_line")}
+              </Button>
             </div>
-          ))}
-          <div>
-            <button
-              type="button"
-              className="rounded border px-3 py-1"
-              onClick={() => setLines((current) => [...current, BLANK_LINE])}
-            >
-              {t("purchases_add_line")}
-            </button>
-          </div>
-        </fieldset>
+          </CardContent>
+        </Card>
 
-        <div className="flex flex-wrap gap-4">
-          <label className="flex flex-col gap-1">
-            <span>{t("field_transport")}</span>
-            <input
-              dir="ltr"
-              inputMode="decimal"
-              className="rounded border px-2 py-1 font-mono text-end"
-              value={transport}
-              onChange={(e) => setTransport(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span>{t("field_extra_costs")}</span>
-            <input
-              dir="ltr"
-              inputMode="decimal"
-              className="rounded border px-2 py-1 font-mono text-end"
-              value={extra}
-              onChange={(e) => setExtra(e.target.value)}
-            />
-          </label>
-        </div>
-        <p className="text-sm opacity-70">{t("purchases_landed_hint")}</p>
+        <Card>
+          <CardHeader>
+            <h3 className="text-md font-semibold">{t("purchases_block_costs")}</h3>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label={t("field_transport")}>
+                {(parts) => <MoneyInput {...parts} value={transport} onChange={setTransport} />}
+              </FormField>
+              <FormField label={t("field_extra_costs")}>
+                {(parts) => <MoneyInput {...parts} value={extra} onChange={setExtra} />}
+              </FormField>
+            </div>
+            <p className="text-sm text-muted-foreground">{t("purchases_landed_hint")}</p>
+          </CardContent>
+        </Card>
 
-        <div className="flex flex-wrap gap-4">
-          <label className="flex flex-col gap-1">
-            <span>{t("field_paid_now")}</span>
-            <input
-              dir="ltr"
-              inputMode="decimal"
-              className="rounded border px-2 py-1 font-mono text-end"
-              value={paidNow}
-              onChange={(e) => setPaidNow(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-1" htmlFor="purchase-paid-mode">
-            <span>{t("field_payment_mode")}</span>
-            <select
-              id="purchase-paid-mode"
-              className="rounded border px-2 py-1"
-              value={paidMode}
-              onChange={(e) => {
-                const chosen = PAYMENT_METHODS.find((m) => m === e.target.value);
-                if (chosen !== undefined) setPaidMode(chosen);
-              }}
-            >
-              {PAYMENT_METHODS.map((mode) => (
-                <option key={mode} value={mode}>
-                  {t(PAYMENT_METHOD_KEY[mode])}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <Card>
+          <CardHeader>
+            <h3 className="text-md font-semibold">{t("purchases_block_payment")}</h3>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label={t("field_paid_now")}>
+                {(parts) => <MoneyInput {...parts} value={paidNow} onChange={setPaidNow} />}
+              </FormField>
+              <FormField label={t("field_payment_mode")}>
+                {(parts) => (
+                  <Select
+                    value={paidMode}
+                    onValueChange={(next) => {
+                      const chosen = PAYMENT_METHODS.find((m) => m === next);
+                      if (chosen !== undefined) setPaidMode(chosen);
+                    }}
+                  >
+                    <SelectTrigger
+                      id={parts.id}
+                      aria-label={t("field_payment_mode")}
+                      className="w-full"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_METHODS.map((mode) => (
+                        <SelectItem key={mode} value={mode}>
+                          {t(PAYMENT_METHOD_KEY[mode])}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </FormField>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* The label points at the box by id: a Radix checkbox is a
+                  button, and a button is labelled by `for` and not by being
+                  wrapped. */}
+              <Checkbox
+                id={receiveId}
+                checked={receiveNow}
+                onCheckedChange={(next) => setReceiveNow(next === true)}
+              />
+              <Label htmlFor={receiveId}>{t("field_receive_now")}</Label>
+            </div>
+            <p className="text-sm text-muted-foreground">{t("purchases_receive_now_hint")}</p>
+          </CardContent>
+        </Card>
 
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={receiveNow}
-            onChange={(e) => setReceiveNow(e.target.checked)}
-          />
-          <span>{t("field_receive_now")}</span>
-        </label>
-        <p className="text-sm opacity-70">{t("purchases_receive_now_hint")}</p>
-
-        <label className="flex flex-col gap-1">
-          <span>{t("col_note")}</span>
-          <input
-            className="rounded border px-2 py-1"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </label>
+        <FormField label={t("col_note")}>
+          {(parts) => (
+            <Input {...parts} value={note} onChange={(e) => setNote(e.target.value)} />
+          )}
+        </FormField>
 
         {problem === null ? null : (
-          <p role="alert" className="text-red-700">
+          <p role="alert" className="text-sm text-fg-danger">
             {t(problem)}
           </p>
         )}
         {today.error === null ? null : (
-          <p role="alert" className="text-red-700">
+          <p role="alert" className="text-sm text-fg-danger">
             {t(errorKey(today.error))}
           </p>
         )}
 
         <div>
-          <button
-            type="submit"
-            className="rounded border px-3 py-1.5"
-            disabled={save.isPending}
-          >
+          <Button type="submit" disabled={save.isPending}>
             {t("purchases_save")}
-          </button>
+          </Button>
         </div>
       </form>
     </section>
