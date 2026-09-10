@@ -8,7 +8,7 @@
 // computed background of the page is read as well.
 //
 // This file runs before the till specs (one worker, files in name order, one
-// database), so it hands the shop back to "follow the machine" before it
+// database), so it hands the shop back to Comptoir, the default, before it
 // leaves, the way the settings spec hands the régime back.
 
 import { expect, test } from "@playwright/test";
@@ -69,8 +69,8 @@ test("each theme is kept in the shop file and survives a reload", async ({ page 
   const switcher = page.getByTestId("theme-switcher").first();
   await expect(switcher).toBeVisible();
 
-  // Nothing chosen yet, and headless chromium reports a light machine, so
-  // the app opens on the light theme.
+  // Nothing chosen yet, so the app opens on Comptoir, the default, whatever
+  // the machine says.
   await expect.poll(() => themeOf(page)).toBe("comptoir");
   const light = await pageBackground(page);
 
@@ -125,10 +125,10 @@ test("the settings screen offers the same switch, and saves the Arabic screensho
     });
   }
 
-  // Back to following the machine, so the specs after this one photograph
-  // the shop in the theme they have always been photographed in.
-  await switcher.selectOption({ label: t("theme_system") });
+  // Back to the default, so the specs after this one photograph the shop in
+  // the theme they have always been photographed in.
+  await switcher.selectOption({ label: t(LABEL.comptoir) });
   await expect.poll(() => themeOf(page)).toBe("comptoir");
   await page.reload();
-  await expect(page.getByTestId("theme-switcher").first()).toHaveValue("system");
+  await expect(page.getByTestId("theme-switcher").first()).toHaveValue("comptoir");
 });

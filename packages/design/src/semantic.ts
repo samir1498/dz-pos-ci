@@ -443,8 +443,10 @@ export const themeTokensOf = (name: ThemeName): ThemeTokens => {
   return found;
 };
 
-/** The two the OS preference chooses between. The others are picked by hand. */
-export const OS_THEME: Readonly<Record<"light" | "dark", ThemeName>> = {
-  light: "comptoir",
-  dark: "registre",
-};
+/**
+ * The theme a shop that has never chosen opens on. Comptoir (Samir,
+ * 2026-09-10 20:22: "make A the default design"). The machine's own
+ * light-or-dark setting is not consulted: a shop counter's operating
+ * system says nothing about how the owner wants the till to look.
+ */
+export const DEFAULT_THEME: ThemeName = "comptoir";

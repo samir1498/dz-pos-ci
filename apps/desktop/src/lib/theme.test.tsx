@@ -1,7 +1,7 @@
 // What the provider decides, and what it leaves on the document.
 //
-// The rules worth pinning: the shop's saved choice beats the machine, no
-// saved choice falls to the machine's light or dark preference, and whatever
+// The rules worth pinning: the shop's saved choice wins, no saved choice is
+// Comptoir whatever the machine's light or dark setting says, and whatever
 // wins ends up in two places, the `data-theme` attribute the stylesheet reads
 // and the localStorage key the blocking script in index.html reads before
 // React exists.
@@ -114,18 +114,18 @@ function renderWith(children: React.ReactNode) {
 }
 
 describe("the theme the app opens on", () => {
-  test("falls to the light theme when nothing is saved and the machine is light", async () => {
+  test("opens on Comptoir when nothing is saved and the machine is light", async () => {
     renderWith(<Reads />);
     await waitFor(() => expect(screen.getByTestId("resolved")).toHaveTextContent("comptoir"));
     expect(screen.getByTestId("choice")).toHaveTextContent("none");
     expect(document.documentElement.dataset.theme).toBe("comptoir");
   });
 
-  test("falls to the dark theme when nothing is saved and the machine is dark", async () => {
+  test("opens on Comptoir when nothing is saved and the machine is dark", async () => {
     machineSays(true);
     renderWith(<Reads />);
-    await waitFor(() => expect(screen.getByTestId("resolved")).toHaveTextContent("registre"));
-    expect(document.documentElement.dataset.theme).toBe("registre");
+    await waitFor(() => expect(screen.getByTestId("resolved")).toHaveTextContent("comptoir"));
+    expect(document.documentElement.dataset.theme).toBe("comptoir");
   });
 
   /** The shop chose; the machine's preference stops being consulted. */
@@ -164,8 +164,8 @@ describe("the switcher", () => {
     expect(puts).toEqual([{ theme: "observe-dark" }]);
   });
 
-  /** null is a choice, and it hands the shop back to the machine. */
-  test("choosing the machine sends null and follows the preference again", async () => {
+  /** Comptoir chosen on purpose is stored as Comptoir, never as "nothing". */
+  test("choosing Comptoir sends comptoir, not null, whatever the machine says", async () => {
     const user = userEvent.setup();
     machineSays(true);
     current = { ...settings, theme: "observe" };
@@ -177,16 +177,15 @@ describe("the switcher", () => {
     );
     await waitFor(() => expect(screen.getByTestId("resolved")).toHaveTextContent("observe"));
 
-    await user.selectOptions(screen.getByTestId("theme-switcher"), "system");
-    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("registre"));
-    expect(puts).toEqual([{ theme: null }]);
+    await user.selectOptions(screen.getByTestId("theme-switcher"), "comptoir");
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("comptoir"));
+    expect(puts).toEqual([{ theme: "comptoir" }]);
   });
 
   test("offers every theme the design package emits a block for", async () => {
     renderWith(<ThemeSwitcher />);
     const options = await screen.findAllByRole("option");
     expect(options.map((option) => option.getAttribute("value"))).toEqual([
-      "system",
       "comptoir",
       "registre",
       "observe",
