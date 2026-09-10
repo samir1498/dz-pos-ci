@@ -86,7 +86,11 @@ export default defineConfig({
   testDir: path.join(desktopDir, "e2e"),
   outputDir: path.join(artifactsDir, "test-results"),
   reporter: [["list"]],
-  // One browser, one worker: the two tests share one SQLite file.
+  // One browser, one worker. Every spec in the run shares one API process
+  // over one SQLite file, so two of them writing at once would each see
+  // rows the other seeded; and the suites are ordered by filename on
+  // purpose (the settings spec leaves the shop under the réel for the till
+  // specs that follow it).
   fullyParallel: false,
   workers: 1,
   retries: 0,
