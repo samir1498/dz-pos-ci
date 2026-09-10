@@ -505,5 +505,6 @@
   "action_print_label": "Imprimer l'étiquette",
   "action_print_labels": "Imprimer les étiquettes",
   "action_labels_close": "Fermer les étiquettes",
-  "error_label_no_barcode": "Ce produit n'a pas de code-barres EAN-13 : il n'y a pas d'étiquette à imprimer."
+  "error_label_no_barcode": "Ce produit n'a pas de code-barres EAN-13 : il n'y a pas d'étiquette à imprimer.",
+  "import_reason_too_many_decimals": "trop de décimales : un prix en a deux, une quantité trois"
 }

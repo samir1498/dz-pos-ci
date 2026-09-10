@@ -53,6 +53,7 @@ const REASON_KEY: Record<string, Key> = {
   negative_amount: "import_reason_negative_amount",
   negative_quantity: "import_reason_negative_quantity",
   not_a_number: "import_reason_not_a_number",
+  too_many_decimals: "import_reason_too_many_decimals",
   negative_rate: "import_reason_negative_rate",
   rate_not_allowed: "import_reason_rate_not_allowed",
   rate_missing: "import_reason_rate_missing",

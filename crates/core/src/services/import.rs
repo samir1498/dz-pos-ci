@@ -560,14 +560,24 @@ fn decimal(
     if raw.is_empty() {
         return Ok(None);
     }
-    scaled(&raw, scale).map(Some).ok_or((name, "not_a_number"))
+    scaled(&raw, scale).map(Some).map_err(|reason| (name, reason))
 }
 
-/// A decimal spelling as an integer of `10^scale`ths, rounded half away from
-/// zero. Every digit is a character here and nothing is multiplied as a
-/// float: `"80.5"` at scale 2 is 8050, and `"0.125"` is 13 rather than the
-/// 12 a binary tie would round to.
-fn scaled(raw: &str, scale: u32) -> Option<i64> {
+/// A decimal spelling as an integer of `10^scale`ths, or the reason it is
+/// not one. Every digit is a character here and nothing is multiplied as a
+/// float: `"80.5"` at scale 2 is 8050.
+///
+/// A digit past the scale that carries value is refused rather than
+/// rounded (ruling, 2026-09-10): a price the shop typed as 80.505 and the
+/// till then charged as 80.51 is a centime nobody agreed to, and a file
+/// that comes back silently changed is worse than one that comes back
+/// refused. The row says `too_many_decimals` and the shop fixes the cell.
+///
+/// Zeros past the scale are not a third decimal, they are the column's
+/// format: a spreadsheet set to three places writes 120.000 for the 120
+/// somebody typed, and refusing that would refuse the template a shop
+/// filled in without changing a number in it.
+fn scaled(raw: &str, scale: u32) -> Result<i64, &'static str> {
     let cleaned: String = raw
         .chars()
         .filter(|c| !c.is_whitespace() && *c != '\u{202f}' && *c != '\u{a0}')
@@ -588,39 +598,44 @@ fn scaled(raw: &str, scale: u32) -> Option<i64> {
     // things a spreadsheet writes, and neither may be read as a zero when
     // the other half has digits in it.
     if whole.is_empty() && fraction.is_empty() {
-        return None;
+        return Err("not_a_number");
     }
     if !whole.chars().all(|c| c.is_ascii_digit()) || !fraction.chars().all(|c| c.is_ascii_digit()) {
-        return None;
+        return Err("not_a_number");
+    }
+    // Anything past the scale that is not a zero. Checked before the value
+    // is built, so nothing is computed from a number that will not be
+    // taken.
+    if fraction
+        .chars()
+        .skip(scale as usize)
+        .any(|c| c != '0')
+    {
+        return Err("too_many_decimals");
     }
     let mut value: i64 = if whole.is_empty() {
         0
     } else {
-        whole.parse().ok()?
+        whole.parse().map_err(|_| "not_a_number")?
     };
-    let factor = 10_i64.checked_pow(scale)?;
-    value = value.checked_mul(factor)?;
+    let factor = 10_i64.checked_pow(scale).ok_or("not_a_number")?;
+    value = value.checked_mul(factor).ok_or("not_a_number")?;
     let kept: String = fraction
         .chars()
         .chain(std::iter::repeat('0'))
         .take(scale as usize)
         .collect();
     if !kept.is_empty() {
-        value = value.checked_add(kept.parse::<i64>().ok()?)?;
+        value = value
+            .checked_add(kept.parse::<i64>().map_err(|_| "not_a_number")?)
+            .ok_or("not_a_number")?;
     }
-    // Half away from zero on the first digit the scale drops, which is the
-    // rounding the money module uses everywhere else.
-    let next = fraction
-        .chars()
-        .nth(scale as usize)
-        .and_then(|c| c.to_digit(10));
-    if next.is_some_and(|d| d >= 5) {
-        value = value.checked_add(1)?;
-    }
+    // Nothing is rounded here any more: a digit past the scale that carried
+    // value was refused above, and the ones that got this far are zeros.
     if negative {
-        value = value.checked_neg()?;
+        value = value.checked_neg().ok_or("not_a_number")?;
     }
-    Some(value)
+    Ok(value)
 }
 
 /// `active` as a spreadsheet writes it: a real boolean when the cell is one,
@@ -731,34 +746,45 @@ mod tests {
 
     #[test]
     fn a_decimal_reaches_centimes_without_a_float_multiply() {
-        assert_eq!(scaled("80.5", 2), Some(8_050));
-        assert_eq!(scaled("120", 2), Some(12_000));
-        assert_eq!(scaled("1 234,56", 2), Some(123_456));
-        assert_eq!(scaled("0.5", 2), Some(50));
-        assert_eq!(scaled("-1.00", 2), Some(-100));
-        assert_eq!(scaled("12.", 2), Some(1_200));
+        assert_eq!(scaled("80.5", 2), Ok(8_050));
+        assert_eq!(scaled("120", 2), Ok(12_000));
+        assert_eq!(scaled("1 234,56", 2), Ok(123_456));
+        assert_eq!(scaled("0.5", 2), Ok(50));
+        assert_eq!(scaled("-1.00", 2), Ok(-100));
+        assert_eq!(scaled("12.", 2), Ok(1_200));
     }
 
     #[test]
-    fn a_third_decimal_rounds_half_away_from_zero() {
-        assert_eq!(scaled("0.125", 2), Some(13));
-        assert_eq!(scaled("0.124", 2), Some(12));
-        assert_eq!(scaled("-0.125", 2), Some(-13));
-        assert_eq!(scaled("0.135", 2), Some(14));
+    fn a_third_decimal_that_carries_value_is_refused_and_never_rounded() {
+        // Ruling, 2026-09-10: a price the shop typed as 0.125 and the till
+        // then charged as 0.13 is a centime nobody agreed to.
+        assert_eq!(scaled("0.125", 2), Err("too_many_decimals"));
+        assert_eq!(scaled("0.124", 2), Err("too_many_decimals"));
+        assert_eq!(scaled("-0.125", 2), Err("too_many_decimals"));
+        assert_eq!(scaled("80.505", 2), Err("too_many_decimals"));
+
+        // Zeros past the scale are the column's format and not a decimal
+        // the shop typed: 120.000 in a three-place column is the 120
+        // somebody entered, and refusing it would refuse a template filled
+        // in without a number being changed.
+        assert_eq!(scaled("120.000", 2), Ok(12_000));
+        assert_eq!(scaled("80.500", 2), Ok(8_050));
     }
 
     #[test]
     fn a_quantity_is_thousandths() {
-        assert_eq!(scaled("1.5", 3), Some(1_500));
-        assert_eq!(scaled("12", 3), Some(12_000));
-        assert_eq!(scaled("0.0005", 3), Some(1));
+        assert_eq!(scaled("1.5", 3), Ok(1_500));
+        assert_eq!(scaled("12", 3), Ok(12_000));
+        // A fourth decimal on a quantity is the same refusal one place out.
+        assert_eq!(scaled("0.0005", 3), Err("too_many_decimals"));
+        assert_eq!(scaled("0.125", 3), Ok(125));
     }
 
     #[test]
     fn anything_that_is_not_a_number_is_no_number_at_all() {
-        assert_eq!(scaled("abc", 2), None);
-        assert_eq!(scaled("", 2), None);
-        assert_eq!(scaled("1.2.3", 2), None);
-        assert_eq!(scaled("12x", 2), None);
+        assert_eq!(scaled("abc", 2), Err("not_a_number"));
+        assert_eq!(scaled("", 2), Err("not_a_number"));
+        assert_eq!(scaled("1.2.3", 2), Err("not_a_number"));
+        assert_eq!(scaled("12x", 2), Err("not_a_number"));
     }
 }

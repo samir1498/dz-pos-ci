@@ -300,6 +300,49 @@ fn an_unknown_unit_a_rate_off_the_list_and_a_price_below_zero_are_each_refused()
 }
 
 #[test]
+fn a_price_with_a_third_decimal_is_refused_and_never_rounded_into_the_shop() {
+    // Ruling, 2026-09-10. A shop that typed 80.505 and found the till
+    // charging 80.51 would have no way of knowing where the centime came
+    // from, and the file it kept would not say. The row is refused and the
+    // cell is fixed where it was typed.
+    let (_dir, mut conn) = open_temp();
+    let mut priced = a_row("Trop précis", Cell::Blank);
+    priced[5] = t("120.505");
+    let mut costed = a_row("Coût trop précis", Cell::Blank);
+    costed[4] = t("80.505");
+    // A quantity is thousandths, so a fourth decimal is the same refusal
+    // one place further out.
+    let mut counted = a_row("Compté trop précis", Cell::Blank);
+    counted[7] = t("12.0005");
+    // And the zeros a three place column writes are not a decimal anybody
+    // typed: this row stands.
+    let mut formatted = a_row("Colonne à trois décimales", Cell::Blank);
+    formatted[5] = t("120.000");
+
+    let bytes = workbook(&[priced, costed, counted, formatted]);
+    let report = import::dry_run(&mut conn, SHOP, &bytes).unwrap();
+
+    assert_eq!(
+        refusal(&report, "Trop précis"),
+        ("selling_da".to_string(), "too_many_decimals".to_string())
+    );
+    assert_eq!(
+        refusal(&report, "Coût trop précis"),
+        ("cost_da".to_string(), "too_many_decimals".to_string())
+    );
+    assert_eq!(
+        refusal(&report, "Compté trop précis"),
+        ("stock".to_string(), "too_many_decimals".to_string())
+    );
+    assert_eq!(outcome(&report, "Colonne à trois décimales"), Outcome::Created);
+    assert_eq!(report.refused, 3);
+
+    // And nothing is written, so no rounded price ever reaches a product.
+    assert!(import::apply(&mut conn, SHOP, OWNER, &bytes).is_err());
+    assert!(products::list(&mut conn, SHOP).unwrap().is_empty());
+}
+
+#[test]
 fn two_rows_carrying_the_same_barcode_refuse_each_other() {
     let (_dir, mut conn) = open_temp();
     let bytes = workbook(&[

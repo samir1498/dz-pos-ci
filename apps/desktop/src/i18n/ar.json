@@ -505,5 +505,6 @@
   "action_print_label": "طباعة الملصق",
   "action_print_labels": "طباعة الملصقات",
   "action_labels_close": "إغلاق الملصقات",
-  "error_label_no_barcode": "هذا المنتج بلا رمز EAN-13، فلا ملصق لطباعته."
+  "error_label_no_barcode": "هذا المنتج بلا رمز EAN-13، فلا ملصق لطباعته.",
+  "import_reason_too_many_decimals": "أرقام عشرية أكثر من اللازم: السعر رقمان والكمية ثلاثة"
 }

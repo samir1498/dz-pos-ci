@@ -505,5 +505,6 @@
   "action_print_label": "Print the label",
   "action_print_labels": "Print the labels",
   "action_labels_close": "Close the labels",
-  "error_label_no_barcode": "This product has no EAN-13 barcode, so there is no label to print."
+  "error_label_no_barcode": "This product has no EAN-13 barcode, so there is no label to print.",
+  "import_reason_too_many_decimals": "too many decimals: a price has two, a quantity three"
 }
