@@ -534,7 +534,7 @@
   "pill_low": "Low stock",
   "nav_dashboard": "Dashboard",
   "dashboard_title": "Dashboard",
-  "dashboard_description": "Every figure is read from the ledgers when this screen opens. No total is stored.",
+  "dashboard_description": "What the shop did today, and what it has done since the start of the month.",
   "dashboard_loading": "Loading…",
   "dashboard_today": "Today",
   "dashboard_this_month": "This month",

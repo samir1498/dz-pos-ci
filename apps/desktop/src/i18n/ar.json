@@ -534,7 +534,7 @@
   "pill_low": "مخزون منخفض",
   "nav_dashboard": "لوحة القيادة",
   "dashboard_title": "لوحة القيادة",
-  "dashboard_description": "كل رقم هنا يُحسب من السجلات عند فتح الشاشة، ولا يُخزَّن أي مجموع.",
+  "dashboard_description": "ما حققه المحل اليوم ومنذ بداية الشهر.",
   "dashboard_loading": "جارٍ التحميل…",
   "dashboard_today": "اليوم",
   "dashboard_this_month": "هذا الشهر",

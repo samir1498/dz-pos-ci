@@ -348,6 +348,12 @@ test("shows the shop's day and month as the API answered them, and saves the das
   request,
 }) => {
   const today = await shopToday(request);
+  // What the shop was already carrying. In a whole run the specs above have
+  // sold on credit, opened fiches and filed this month's expenses, so the
+  // figures below are read as differences: the seeding's own effect is what
+  // this test knows, and it is the same number on an empty database and on a
+  // full one.
+  const before = await dashboardOf(request, today);
   await aTradingShop(request, today);
 
   const answered = await dashboardOf(request, today);
@@ -356,18 +362,25 @@ test("shows the shop's day and month as the API answered them, and saves the das
   // The seeding is worth nothing if it left an empty shop, and every
   // assertion below would pass against zeros.
   expect(answered.day).toBe(today);
-  expect(answered.today.sales_count).toBeGreaterThan(0);
-  expect(answered.today.margin_centimes).toBeGreaterThan(0);
+  expect(answered.today.sales_count).toBeGreaterThan(before.today.sales_count);
+  expect(answered.today.margin_centimes).toBeGreaterThan(before.today.margin_centimes);
   expect(answered.low_stock.length).toBeGreaterThan(0);
   expect(answered.top_by_quantity.length).toBeGreaterThan(0);
   expect(answered.top_by_margin.length).toBeGreaterThan(0);
-  expect(answered.customer_debt.total_centimes).toBe(CUSTOMER_OPENING_DEBT);
-  expect(answered.supplier_debt.total_centimes).toBe(SUPPLIER_OPENING_DEBT);
-  expect(answered.open_purchases).toBe(1);
+  expect(answered.customer_debt.total_centimes - before.customer_debt.total_centimes).toBe(
+    CUSTOMER_OPENING_DEBT,
+  );
+  expect(answered.supplier_debt.total_centimes - before.supplier_debt.total_centimes).toBe(
+    SUPPLIER_OPENING_DEBT,
+  );
+  expect(answered.open_purchases - before.open_purchases).toBe(1);
   // Thirty buckets, oldest first and none skipped, and the expenses filed
-  // across them are what the chart's line traces.
+  // across them are what the chart's line traces. At least fourteen days
+  // carry one: a whole run has the expenses spec's two on top of these.
   expect(chart.days).toHaveLength(CHART_DAYS);
-  expect(chart.days.filter((d) => d.figures.expenses_centimes > 0).length).toBe(EXPENSES.length);
+  expect(chart.days.filter((d) => d.figures.expenses_centimes > 0).length).toBeGreaterThanOrEqual(
+    EXPENSES.length,
+  );
 
   await page.goto("/dashboard");
   await expect(
@@ -397,12 +410,18 @@ test("shows the shop's day and month as the API answered them, and saves the das
   await expect(page.getByTestId("figure-supplier-debt-total")).toHaveText(
     formatCentimes(answered.supplier_debt.total_centimes),
   );
-  await expect(page.getByTestId("figure-open-purchases")).toContainText("1");
+  await expect(page.getByTestId("figure-open-purchases")).toContainText(
+    String(answered.open_purchases),
+  );
 
-  // The three lists, each naming what the API put in it.
-  const low = answered.low_stock[0];
-  if (low === undefined) throw new Error("the API answered no low-stock row");
-  await expect(page.getByTestId("dashboard-low-stock")).toContainText(low.name);
+  // The three lists, each naming what the API put in it. The low-stock row
+  // looked for is this test's own product, which a whole run finds among the
+  // ones the specs above left behind.
+  const sugar = CATALOGUE.find((p) => p.key === "sucre");
+  if (sugar === undefined) throw new Error("the catalogue above has no sucre");
+  const mine = answered.low_stock.find((row) => row.name === `${sugar.name} ${suffix()}`);
+  if (mine === undefined) throw new Error("the API answered no low-stock row for the seeded sugar");
+  await expect(page.getByTestId("dashboard-low-stock")).toContainText(mine.name);
   await expect(page.getByTestId("low-stock-pill")).toHaveCount(answered.low_stock.length);
 
   const busiest = answered.top_by_quantity[0];

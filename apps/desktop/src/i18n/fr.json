@@ -534,7 +534,7 @@
   "pill_low": "Stock bas",
   "nav_dashboard": "Tableau de bord",
   "dashboard_title": "Tableau de bord",
-  "dashboard_description": "Chaque chiffre est calculé sur les journaux à l'ouverture de l'écran. Aucun total n'est stocké.",
+  "dashboard_description": "Ce que la boutique a fait aujourd'hui, et depuis le début du mois.",
   "dashboard_loading": "Chargement…",
   "dashboard_today": "Aujourd'hui",
   "dashboard_this_month": "Ce mois-ci",

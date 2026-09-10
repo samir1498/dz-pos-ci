@@ -269,7 +269,7 @@ here. These are all of them.
 | `figure-sales-count` | `dashboard.tsx` | The month's count of papers, a bare number beside two amounts. |
 | `figure-<name>-total` | `dashboard.tsx` | What is owed, on the two debt cards. |
 | `figure-<name>-parties` | `dashboard.tsx` | How many accounts are behind that debt; a bare number. |
-| `dashboard-chart` | `dashboard.tsx` | The chart's box. It is an SVG recharts drew, with no accessible name of its own. |
+| `dashboard-chart` | `dashboard.tsx` | The chart's box. It is an SVG recharts drew, with no accessible name of its own. Its `data-buckets` is how a test tells the day view from the week view: recharts draws a rectangle only for a bar with a height, so counting the bars counts the days the shop sold on rather than the days the chart covers. |
 | `dashboard-chart-card` | `dashboard.tsx` | The card around it, so the legend can be looked for inside the chart rather than anywhere on the page. |
 | `chart-grain-days` | `dashboard.tsx` | The day/week switch; both tabs are one translated word. |
 | `chart-grain-weeks` | `dashboard.tsx` | As above. |
