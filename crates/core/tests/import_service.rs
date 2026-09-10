@@ -365,7 +365,9 @@ fn an_in_store_barcode_the_till_generated_passes_the_same_check() {
         },
     )
     .unwrap();
-    let code = made.barcode.expect("the till assigns a code to a blank fiche");
+    let code = made
+        .barcode
+        .expect("the till assigns a code to a blank fiche");
 
     let row = a_row("Nom changé", t(&code));
     let report = import::dry_run(&mut conn, SHOP, &workbook(&[row])).unwrap();
