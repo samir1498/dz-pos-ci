@@ -428,3 +428,49 @@ fn the_month_covers_its_first_and_its_last_day_and_no_other_shops() {
     assert_eq!(month.cash_out.supplier_payments, Money::ZERO);
     assert_eq!(month.cash, Money::centimes(27_000));
 }
+
+#[test]
+fn the_last_second_of_a_day_and_the_first_of_the_next_are_two_days() {
+    // The bound is half open: every moment of the day counts and the first
+    // moment of the day after does not. A ticket rung up at 23:59:59 and one
+    // rung up a second later are the two rows either side of it, and a `<=`
+    // where the code has a `<` would put both on both days.
+    let (_dir, mut conn) = open_temp();
+    let last = day(10).and_hms_opt(23, 59, 59).unwrap();
+    let first = day(11).and_hms_opt(0, 0, 0).unwrap();
+    a_document(
+        &mut conn,
+        SHOP,
+        DocumentKind::Ticket,
+        PaymentMode::Cash,
+        100_000,
+        0,
+        None,
+        last,
+    );
+    a_document(
+        &mut conn,
+        SHOP,
+        DocumentKind::Ticket,
+        PaymentMode::Cash,
+        200_000,
+        0,
+        None,
+        first,
+    );
+
+    let tenth = cash::position(&mut conn, SHOP, Period::Day(day(10))).unwrap();
+    assert_eq!(tenth.cash_in.sales, Money::centimes(100_000));
+    let eleventh = cash::position(&mut conn, SHOP, Period::Day(day(11))).unwrap();
+    assert_eq!(eleventh.cash_in.sales, Money::centimes(200_000));
+    // And neither day carries the other's row: the two figures are the two
+    // documents, once each.
+    assert_eq!(
+        tenth
+            .cash_in
+            .sales
+            .checked_add(eleventh.cash_in.sales)
+            .unwrap(),
+        Money::centimes(300_000)
+    );
+}
