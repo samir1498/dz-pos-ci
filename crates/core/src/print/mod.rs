@@ -30,27 +30,35 @@ use crate::money::format::format_centimes;
 use crate::money::{Bps, Money, PaymentMode};
 use crate::print::strings::Key;
 
-/// `TK-000123`: the kind's short prefix, a hyphen, and the number in the
-/// series padded to six digits. The stored `series` is the counter's name
-/// (`doc_ticket`), which is a column and not something a customer quotes;
-/// the prefix is the printed form of the same series and lives beside it on
-/// `DocumentKind` so the two cannot drift.
+/// `TK-2026-000123`: the kind's short prefix, the year the series counts in,
+/// and the number inside that year padded to six digits. The stored `series`
+/// is the counter's name (`doc_ticket:2026`), which is a column and not
+/// something a customer quotes; the prefix is the printed form of the same
+/// series and lives beside it on `DocumentKind` so the two cannot drift.
 const NUMBER_DIGITS: usize = 6;
 
-/// The number a customer quotes, `{prefix}-{number:06}` (features.md §4).
-/// Public because the wire carries it too: a screen that says "Facture
-/// FA-000001" must read the same spelling the paper prints, not a second
-/// one built out of the kind and the integer.
+/// The number a customer quotes, `{prefix}-{year}-{number:06}`
+/// (features.md §4). Public because the wire carries it too: a screen that
+/// says "Facture FA-2026-000001" must read the same spelling the paper
+/// prints, not a second one built out of the kind, the year and the integer.
 pub fn number(doc: &Document) -> String {
-    number_of(doc.kind, doc.number)
+    number_of(doc.kind, doc.series_year, doc.number)
 }
 
-/// The same number, for a caller that has the kind and the number without the
-/// document: a statement names the document a movement cites and reads two
-/// columns of it, never the whole row.
-pub(crate) fn number_of(kind: crate::models::document::DocumentKind, number: i64) -> String {
+/// The same number, for a caller that has the kind, the year and the number
+/// without the document: a statement names the document a movement cites and
+/// reads three columns of it, never the whole row.
+///
+/// The year is the document's own and never the one being printed in, so an
+/// avoir written this year against last year's facture prints that facture's
+/// year: `FA-2025-000042` is the paper the customer is holding.
+pub(crate) fn number_of(
+    kind: crate::models::document::DocumentKind,
+    year: i32,
+    number: i64,
+) -> String {
     format!(
-        "{}-{:0width$}",
+        "{}-{year}-{:0width$}",
         kind.number_prefix(),
         number,
         width = NUMBER_DIGITS

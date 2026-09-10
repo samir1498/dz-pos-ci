@@ -23,7 +23,7 @@
 
 use std::path::PathBuf;
 
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use dzpos_core::lang::Lang;
 use dzpos_core::money::words::amount_in_words;
 use dzpos_core::money::{
@@ -370,7 +370,8 @@ fn fixed_facture(case: Case) -> Document {
         id: if matches!(case, Case::Avoir) { 2 } else { 1 },
         shop_id: SHOP,
         kind: case.kind(),
-        series: case.kind().series().to_owned(),
+        series: case.kind().series_of_year(issued_at.year()),
+        series_year: issued_at.year(),
         number: case.number(),
         issued_at,
         user_id: OWNER,
@@ -1145,7 +1146,7 @@ fn a_kind_this_template_has_no_title_for_is_refused() {
         };
         assert!(html.contains(text(title, Lang::Fr)), "{kind:?}");
         assert!(
-            html.contains(&format!("{}-000042", kind.number_prefix())),
+            html.contains(&format!("{}-2026-000042", kind.number_prefix())),
             "{kind:?} lost its printed number"
         );
     }
@@ -1161,7 +1162,7 @@ fn a_cancelled_facture_is_printed_under_the_cancelled_heading() {
     for lang in Lang::ALL {
         let html = render_facture(&doc, lang, Paper::A4).unwrap();
         assert!(html.contains(text(Key::FactureCancelled, lang)), "{lang:?}");
-        assert!(html.contains("FA-000042"), "{lang:?}");
+        assert!(html.contains("FA-2026-000042"), "{lang:?}");
     }
     // Nothing cancels an avoir or a proforma in M2 and the wording for it
     // is not written, so the printer refuses rather than invent one.
@@ -1223,8 +1224,8 @@ fn an_avoir_prints_the_number_of_the_facture_it_references() {
 
     for lang in Lang::ALL {
         let html = render_facture_with_reference(&avoir, Some(&facture), lang, Paper::A4).unwrap();
-        assert!(html.contains("AV-000003"), "{lang:?}");
-        assert!(html.contains("FA-000042"), "{lang:?}");
+        assert!(html.contains("AV-2026-000003"), "{lang:?}");
+        assert!(html.contains("FA-2026-000042"), "{lang:?}");
         assert!(html.contains(text(Key::AvoirOnFacture, lang)), "{lang:?}");
     }
 
@@ -1377,7 +1378,7 @@ fn the_words_are_the_net_to_pay_and_not_the_total_ttc() {
 }
 
 /// The avoir says which facture it is written against and when that facture
-/// was issued: "Avoir sur facture FA-000042 du 09/09/2026". The day is the
+/// was issued: "Avoir sur facture FA-2026-000042 du 09/09/2026". The day is the
 /// referenced facture's and not the avoir's own, which is three days later
 /// in the fixture, so a line built from the wrong document is red rather
 /// than plausible.
@@ -1391,7 +1392,7 @@ fn the_avoir_names_the_facture_it_is_written_against_and_the_day_of_it() {
             line.contains(text(Key::AvoirOnFacture, lang)),
             "{lang:?}: {line}"
         );
-        assert!(line.contains("FA-000042"), "{lang:?}: {line}");
+        assert!(line.contains("FA-2026-000042"), "{lang:?}: {line}");
         assert!(line.contains(text(Key::IssuedOn, lang)), "{lang:?}: {line}");
         assert!(line.contains("09/09/2026"), "{lang:?}: {line}");
         assert!(
@@ -1401,7 +1402,40 @@ fn the_avoir_names_the_facture_it_is_written_against_and_the_day_of_it() {
         // The avoir's own date is on the page all the same, under its own
         // number, where every document carries it.
         assert!(html.contains("12/09/2026"), "{lang:?}");
-        assert!(html.contains("AV-000003"), "{lang:?}");
+        assert!(html.contains("AV-2026-000003"), "{lang:?}");
+    }
+}
+
+/// A shop that credits a December facture in January prints two years on one
+/// page: the avoir's own on its number and the facture's on the reference
+/// line. The number a customer quotes belongs to the paper it names
+/// (features.md §4, Numbering), so a reference spelled with the year the
+/// reprint is happening in would send them looking for a facture that does
+/// not exist.
+#[test]
+fn an_avoir_prints_the_year_of_the_facture_it_credits_and_not_its_own() {
+    let mut facture = fixed_facture(Case::Credit);
+    facture.series_year = 2025;
+    facture.series = DocumentKind::Facture.series_of_year(2025);
+    facture.issued_at = NaiveDate::from_ymd_opt(2025, 12, 31)
+        .unwrap()
+        .and_hms_opt(23, 30, 0)
+        .unwrap();
+    let avoir = fixed_facture(Case::Avoir);
+    assert_eq!(
+        avoir.series_year, 2026,
+        "the avoir is the one of the new year"
+    );
+
+    for lang in Lang::ALL {
+        let html = render_facture_with_reference(&avoir, Some(&facture), lang, Paper::A4).unwrap();
+        let line = reference_line(&html);
+        assert!(
+            line.contains("FA-2025-000042"),
+            "{lang:?} credited a facture of the wrong year: {line}"
+        );
+        assert!(!line.contains("FA-2026-000042"), "{lang:?}: {line}");
+        assert!(html.contains("AV-2026-000003"), "{lang:?}");
     }
 }
 
@@ -1587,7 +1621,7 @@ fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
         let html = fixture.render(lang, Paper::A4);
         assert!(html.contains(text(Key::ProformaNotice, lang)), "{lang:?}");
         assert_eq!(heading(&html), text(Key::Proforma, lang), "{lang:?}");
-        assert!(html.contains("PF-000005"), "{lang:?}");
+        assert!(html.contains("PF-2026-000005"), "{lang:?}");
         for absent in ["old-balance", "this-document", "total-debt"] {
             assert!(
                 amounts(&html, absent).is_empty(),
@@ -1810,7 +1844,7 @@ fn a_cancelled_reprint_differs_from_the_live_facture_in_the_cancellation_only() 
         assert!(after.contains(text(Key::CancelledOn, lang)), "{lang:?}");
         assert!(after.contains("12/09/2026"), "{lang:?}");
         assert!(after.contains(text(Key::CancelReason, lang)), "{lang:?}");
-        assert!(after.contains("FA-000042"), "{lang:?}");
+        assert!(after.contains("FA-2026-000042"), "{lang:?}");
         // A reason typed by the shop is printed and never run, like a
         // product name.
         assert!(

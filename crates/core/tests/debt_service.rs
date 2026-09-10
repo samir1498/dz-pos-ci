@@ -230,12 +230,15 @@ fn a_note_longer_than_a_statement_prints_is_refused() {
 /// about.
 fn a_document(conn: &mut SqliteConnection, id: i32, shop_id: i32, number: i32) {
     diesel::sql_query(format!(
-        "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
-         regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+        // The year the series counts in is set here rather than left to the
+        // column default, because a statement prints this document's number
+        // and a printed number carries its year (features.md §4).
+        "INSERT INTO documents (id, shop_id, kind, series, series_year, number, issued_at, \
+         user_id, regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
          subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
-         net_to_pay_centimes) VALUES ({id}, {shop_id}, 'facture', 'doc_facture', {number}, \
-         '2026-09-09 10:00:00', 1, 'reel', 'credit', 'Magasin', 100000, 0, 100000, 19000, \
-         119000, 0, 119000)"
+         net_to_pay_centimes) VALUES ({id}, {shop_id}, 'facture', 'doc_facture:2026', 2026, \
+         {number}, '2026-09-09 10:00:00', 1, 'reel', 'credit', 'Magasin', 100000, 0, 100000, \
+         19000, 119000, 0, 119000)"
     ))
     .execute(conn)
     .unwrap();
@@ -1953,6 +1956,7 @@ fn the_recent_movements_are_the_newest_ones_and_the_balance_counts_them_all() {
         slip.entries[0].document,
         Some(DocumentRef {
             kind: DocumentKind::Facture,
+            year: 2026,
             number: 7,
         }),
         "the newest row does not name the facture it was written for"

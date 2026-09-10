@@ -14,6 +14,10 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+mod common;
+
+use common::printed;
+
 const SHOP: i32 = 1;
 
 const TOKEN: &str = "test-launch-token";
@@ -910,7 +914,7 @@ async fn the_statement_prints_the_range_with_the_closing_balance_in_words() {
     assert!(html.contains("trois-mille dinars"), "the words are missing");
     // Every movement of the range, and the facture named under the number a
     // customer quotes.
-    assert!(html.contains("FA-000001"));
+    assert!(html.contains(&printed("FA", 1)));
     assert!(html.contains("Paiement"));
 }
 
@@ -974,7 +978,7 @@ async fn the_debt_slip_prints_the_balance_the_ledger_sums_to_and_says_it_proves_
         "the balance is not on the page"
     );
     assert!(html.contains("trois-mille dinars"), "the words are missing");
-    assert!(html.contains("FA-000001"));
+    assert!(html.contains(&printed("FA", 1)));
     assert!(html.contains("Paiement"));
     // The line that keeps it out of a comptable's file.
     assert!(html.contains("Document sans valeur fiscale"), "{html}");

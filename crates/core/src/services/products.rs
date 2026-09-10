@@ -239,7 +239,9 @@ fn next_free_in_store_barcode(
     shop_id: i32,
 ) -> Result<String, CoreError> {
     for _ in 0..IN_STORE_ATTEMPTS {
-        let sequence = counters::take_next(conn, shop_id, counters::IN_STORE_BARCODE)?;
+        // The barcode series carries no year: it is not a document series and
+        // it never restarts (features.md §1).
+        let sequence = counters::take_next(conn, shop_id, counters::IN_STORE_BARCODE.to_string())?;
         let code = in_store_barcode(shop_id, sequence)?;
         if !repo::barcode_exists(conn, shop_id, &code)? {
             return Ok(code);

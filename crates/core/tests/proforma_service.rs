@@ -100,7 +100,7 @@ fn a_proforma_takes_its_own_number_and_moves_neither_stock_nor_debt() {
     let doc = issue(&mut conn, quotation(Some(c), p, PaymentMode::Credit)).unwrap();
 
     assert_eq!(doc.kind, DocumentKind::Proforma);
-    assert_eq!(doc.series, "doc_proforma");
+    assert_eq!(doc.series, "doc_proforma:2026");
     assert_eq!(doc.number, 1);
     assert_eq!(doc.customer_id, Some(c));
     assert_eq!(doc.tendered, None);

@@ -105,7 +105,7 @@ fn a_cash_sale_issues_a_numbered_ticket_with_its_totals_and_its_change() {
 
     assert_eq!(doc.kind, DocumentKind::Ticket);
     assert_eq!(doc.number, 1);
-    assert_eq!(doc.series, "doc_ticket");
+    assert_eq!(doc.series, "doc_ticket:2026");
     assert_eq!(doc.user_id, OWNER);
     assert_eq!(doc.issued_at, at(9));
     // 110,00 DA twice is 220,00 HT; 19 % of it is 41,80; the TTC is 261,80,
@@ -1510,7 +1510,7 @@ fn a_facture_to_a_company_carrying_its_identifiers_is_issued_in_the_facture_seri
     .unwrap();
 
     assert_eq!(doc.kind, DocumentKind::Facture);
-    assert_eq!(doc.series, "doc_facture");
+    assert_eq!(doc.series, "doc_facture:2026");
     assert_eq!(doc.number, 1);
     let buyer = doc.buyer.expect("a facture carries a buyer block");
     assert_eq!(buyer.name, "Entreprise Amrani");
@@ -1556,8 +1556,8 @@ fn a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number() {
     // Nothing at all happened: no document, no stock movement, and above
     // all no number taken out of either series (features.md, Numbering).
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
-    assert_eq!(counter(&mut conn, "doc_facture"), 1);
-    assert_eq!(counter(&mut conn, "doc_ticket"), 1);
+    assert_eq!(counter(&mut conn, "doc_facture:2026"), 1);
+    assert_eq!(counter(&mut conn, "doc_ticket:2026"), 1);
 
     // The same basket goes through once the fiche carries the identifier,
     // and it is FA number 1: the refusal cost the series nothing.
@@ -1591,7 +1591,7 @@ fn a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number() {
     )
     .unwrap();
     assert_eq!(doc.number, 1);
-    assert_eq!(doc.series, "doc_facture");
+    assert_eq!(doc.series, "doc_facture:2026");
 }
 
 #[test]
@@ -1643,7 +1643,7 @@ fn a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else() {
     }
     // The one facture that went through is still the only one, and the
     // refusal took no second number.
-    assert_eq!(counter(&mut conn, "doc_facture"), 2);
+    assert_eq!(counter(&mut conn, "doc_facture:2026"), 2);
 }
 
 #[test]
@@ -1680,7 +1680,7 @@ fn a_shop_whose_settings_carry_no_nis_cannot_issue_a_facture_at_all() {
         }
         other => panic!("{other:?}"),
     }
-    assert_eq!(counter(&mut conn, "doc_facture"), 1);
+    assert_eq!(counter(&mut conn, "doc_facture:2026"), 1);
 
     // The same shop still rings up tickets: the identifiers are checked when
     // a facture is issued, not when the settings are saved.
@@ -1720,7 +1720,7 @@ fn a_facture_with_no_customer_is_refused_on_the_customer_field() {
         "{err:?}"
     );
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
-    assert_eq!(counter(&mut conn, "doc_facture"), 1);
+    assert_eq!(counter(&mut conn, "doc_facture:2026"), 1);
 }
 
 #[test]
@@ -1744,7 +1744,10 @@ fn a_ticket_and_a_facture_run_two_series_that_do_not_touch() {
         cash(vec![line(p, 1_000)], 1_000_000),
     )
     .unwrap();
-    assert_eq!((ticket.series.as_str(), ticket.number), ("doc_ticket", 1));
+    assert_eq!(
+        (ticket.series.as_str(), ticket.number),
+        ("doc_ticket:2026", 1)
+    );
 
     let invoice = issue_sale(
         &mut conn,
@@ -1755,7 +1758,7 @@ fn a_ticket_and_a_facture_run_two_series_that_do_not_touch() {
     .unwrap();
     assert_eq!(
         (invoice.series.as_str(), invoice.number),
-        ("doc_facture", 1)
+        ("doc_facture:2026", 1)
     );
 
     let second_ticket = issue_sale(
@@ -1767,7 +1770,7 @@ fn a_ticket_and_a_facture_run_two_series_that_do_not_touch() {
     .unwrap();
     assert_eq!(
         (second_ticket.series.as_str(), second_ticket.number),
-        ("doc_ticket", 2)
+        ("doc_ticket:2026", 2)
     );
 }
 
@@ -1880,7 +1883,7 @@ fn a_blank_identifier_is_as_missing_as_no_identifier_at_all() {
     // Three refusals, no document, and the facture series still stands at
     // its first number.
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
-    assert_eq!(counter(&mut conn, "doc_facture"), 1);
+    assert_eq!(counter(&mut conn, "doc_facture:2026"), 1);
 }
 
 #[test]
@@ -1987,8 +1990,8 @@ fn an_override_the_party_ids_then_refuse_leaves_no_log_row_and_no_number() {
     );
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
     assert!(debt::ledger(&mut conn, SHOP, c).unwrap().is_empty());
-    assert_eq!(counter(&mut conn, "doc_facture"), 1);
-    assert_eq!(counter(&mut conn, "doc_ticket"), 1);
+    assert_eq!(counter(&mut conn, "doc_facture:2026"), 1);
+    assert_eq!(counter(&mut conn, "doc_ticket:2026"), 1);
 }
 
 #[test]
@@ -2027,7 +2030,11 @@ fn a_facture_worth_nothing_is_still_issued_and_still_takes_its_number() {
     assert_eq!(doc.totals.discount, Money::centimes(100_000));
     assert_eq!(doc.totals.tva, Money::ZERO);
     assert_eq!(doc.totals.net_to_pay, Money::ZERO);
-    assert_eq!(counter(&mut conn, "doc_facture"), 2, "the number is spent");
+    assert_eq!(
+        counter(&mut conn, "doc_facture:2026"),
+        2,
+        "the number is spent"
+    );
     assert!(
         debt::ledger(&mut conn, SHOP, c).unwrap().is_empty(),
         "a movement of zero would sit in every statement the customer is handed"

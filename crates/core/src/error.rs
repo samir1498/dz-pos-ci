@@ -48,12 +48,16 @@ pub enum CoreError {
     /// credit balance a payment quietly opened.
     #[error("a payment is never more than what the customer owes")]
     PaymentAboveDebt { outstanding_centimes: i64 },
-    /// A number series the shop hands out (in-store barcodes, later the
-    /// document numbers) has no next value. Not a validation failure: the
-    /// user did nothing wrong, and the API answers 409 so the UI can say
-    /// the series is spent rather than "check your input".
+    /// A number series the shop hands out (in-store barcodes, the document
+    /// numbers) has no next value. Not a validation failure: the user did
+    /// nothing wrong, and the API answers 409 so the UI can say the series is
+    /// spent rather than "check your input".
+    ///
+    /// Owned rather than `&'static str`: a document series is named for the
+    /// year it counts in (`doc_facture:2026`, features.md §4) and the year is
+    /// read at run time.
     #[error("the {series} series is exhausted")]
-    Exhausted { series: &'static str },
+    Exhausted { series: String },
     /// A credit sale the customer's limit will not carry (features.md §1).
     /// Not a validation failure: every field the caller sent is well formed,
     /// and what refuses the sale is what the customer already owes. The two

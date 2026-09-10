@@ -2,11 +2,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 //! Numbering and the stored document, against a real temp SQLite file.
-//! features.md §3: one uninterrupted series per kind, assigned at issue and
-//! never reused.
+//! features.md §3: one uninterrupted series per kind and per year, assigned at
+//! issue and never reused.
 
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
+use chrono::{TimeZone, Utc};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
@@ -151,9 +152,70 @@ fn two_tickets_take_the_number_after_the_last() {
     .unwrap();
     assert_eq!(first.number, 1);
     assert_eq!(second.number, 2);
-    assert_eq!(first.series, "doc_ticket");
-    assert_eq!(second.series, "doc_ticket");
+    assert_eq!(first.series, "doc_ticket:2026");
+    assert_eq!(second.series, "doc_ticket:2026");
+    assert_eq!((first.series_year, second.series_year), (2026, 2026));
     assert_eq!(first.status, DocumentStatus::Issued);
+}
+
+/// The moment the shop's till is at when UTC reads `utc` on 31 December 2026.
+/// Algeria is UTC+1 with no daylight saving, so the hour between 23:00 UTC
+/// and midnight is already the new year in the shop (`services::clock`).
+fn on_new_years_eve(hour: u32, minute: u32) -> NaiveDateTime {
+    let utc = Utc
+        .with_ymd_and_hms(2026, 12, 31, hour, minute, 0)
+        .single()
+        .unwrap();
+    dzpos_core::services::clock::shop_time(utc)
+}
+
+#[test]
+fn the_series_restarts_at_one_in_the_new_year_and_the_old_one_keeps_its_numbers() {
+    // features.md §4, Numbering: a series restarts each year and the number
+    // carries the year. The two tickets are an hour apart on the same UTC
+    // evening and the shop's clock puts them in different years, which is the
+    // case a machine-clock year would get wrong.
+    let (_dir, mut conn) = open_temp();
+    let p = a_product(&mut conn, "Sucre");
+    let last_of_the_year = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Ticket, Some(p), on_new_years_eve(22, 30)),
+    )
+    .unwrap();
+    let first_of_the_next = documents::issue(
+        &mut conn,
+        SHOP,
+        draft(DocumentKind::Ticket, Some(p), on_new_years_eve(23, 30)),
+    )
+    .unwrap();
+
+    assert_eq!(
+        (
+            last_of_the_year.number,
+            last_of_the_year.series_year,
+            last_of_the_year.series.as_str()
+        ),
+        (1, 2026, "doc_ticket:2026")
+    );
+    assert_eq!(
+        (
+            first_of_the_next.number,
+            first_of_the_next.series_year,
+            first_of_the_next.series.as_str()
+        ),
+        (1, 2027, "doc_ticket:2027"),
+        "the first ticket of the new year did not start the series again"
+    );
+    // The old year's paper is untouched: it keeps the number it was handed
+    // and the two read back as two different documents.
+    let stored = documents::get(&mut conn, SHOP, last_of_the_year.id).unwrap();
+    assert_eq!((stored.number, stored.series_year), (1, 2026));
+    assert_ne!(
+        dzpos_core::print::number(&stored),
+        dzpos_core::print::number(&first_of_the_next),
+        "two tickets numbered 1 print the same number"
+    );
 }
 
 #[test]
@@ -212,10 +274,13 @@ fn each_kind_counts_in_its_own_series() {
         draft(DocumentKind::Ticket, Some(p), at(9, 12)),
     )
     .unwrap();
-    assert_eq!((ticket.number, ticket.series.as_str()), (1, "doc_ticket"));
+    assert_eq!(
+        (ticket.number, ticket.series.as_str()),
+        (1, "doc_ticket:2026")
+    );
     assert_eq!(
         (facture.number, facture.series.as_str()),
-        (1, "doc_facture")
+        (1, "doc_facture:2026")
     );
     assert_eq!(ticket2.number, 2);
 }

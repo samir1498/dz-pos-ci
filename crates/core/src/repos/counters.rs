@@ -15,33 +15,39 @@ pub const IN_STORE_BARCODE: &str = "in_store_barcode";
 /// transaction: the caller's row and this advance have to commit together.
 ///
 /// The row is created on first use, so a shop the migration never seeded
-/// (a second till paired in M6) starts at 1 rather than failing.
+/// (a second till paired in M6) starts at 1 rather than failing. That is also
+/// what makes the first document of a new year number 1: a document series
+/// carries its year in its key (`doc_facture:2026`, features.md §4), and on
+/// 1 January the key names a row nothing has written yet.
+///
+/// The key is owned rather than `&'static str` for the same reason: a year is
+/// read off a document at run time and cannot be a literal.
 pub fn take_next(
     conn: &mut SqliteConnection,
     shop_id: i32,
-    name: &'static str,
+    name: String,
 ) -> Result<i64, CoreError> {
     diesel::insert_or_ignore_into(counters::table)
         .values((
             counters::shop_id.eq(shop_id),
-            counters::name.eq(name),
+            counters::name.eq(&name),
             counters::next_value.eq(1_i64),
         ))
         .execute(conn)?;
 
     let taken: i64 = counters::table
         .filter(counters::shop_id.eq(shop_id))
-        .filter(counters::name.eq(name))
+        .filter(counters::name.eq(&name))
         .select(counters::next_value)
         .first(conn)?;
-    let after = taken
-        .checked_add(1)
-        .ok_or(CoreError::Exhausted { series: name })?;
+    let after = taken.checked_add(1).ok_or_else(|| CoreError::Exhausted {
+        series: name.clone(),
+    })?;
 
     diesel::update(
         counters::table
             .filter(counters::shop_id.eq(shop_id))
-            .filter(counters::name.eq(name)),
+            .filter(counters::name.eq(&name)),
     )
     .set(counters::next_value.eq(after))
     .execute(conn)?;

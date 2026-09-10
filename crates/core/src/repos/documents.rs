@@ -184,21 +184,27 @@ pub fn set_cancelled(
     Ok(())
 }
 
-/// The kind and the number of the documents named, for the shop asking. A
-/// statement prints a document number beside the movement that cites it, and
-/// reading each document whole for two columns would be one query per line.
+/// The kind, the series year and the number of the documents named, for the
+/// shop asking: the three a printed number is spelled out of. A statement
+/// prints a document number beside the movement that cites it, and reading
+/// each document whole for three columns would be one query per line.
 pub fn kinds_and_numbers(
     conn: &mut SqliteConnection,
     shop_id: i32,
     ids: &[i32],
-) -> Result<Vec<(i32, DocumentKind, i64)>, CoreError> {
+) -> Result<Vec<(i32, DocumentKind, i32, i64)>, CoreError> {
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let rows: Vec<(i32, DocumentKind, i64)> = documents::table
+    let rows: Vec<(i32, DocumentKind, i32, i64)> = documents::table
         .filter(documents::shop_id.eq(shop_id))
         .filter(documents::id.eq_any(ids))
-        .select((documents::id, documents::kind, documents::number))
+        .select((
+            documents::id,
+            documents::kind,
+            documents::series_year,
+            documents::number,
+        ))
         .load(conn)?;
     Ok(rows)
 }

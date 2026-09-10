@@ -134,7 +134,7 @@ fn a_whole_avoir_credits_the_facture_takes_its_own_number_and_carries_no_stamp()
     .unwrap();
 
     assert_eq!(avoir.kind, DocumentKind::Avoir);
-    assert_eq!(avoir.series, "doc_avoir");
+    assert_eq!(avoir.series, "doc_avoir:2026");
     assert_eq!(avoir.number, 1, "the avoir took a number of its own series");
     assert_eq!(avoir.ref_document_id, Some(facture.id));
     assert_eq!(avoir.customer_id, Some(c));

@@ -114,10 +114,16 @@ pub fn statement(
 }
 
 /// The document a movement cites, as a statement prints it: the kind decides
-/// the printed prefix and the number is the one the series handed out.
+/// the printed prefix, the year is the one its series counted in, and the
+/// number is the one that series handed out.
+///
+/// The year travels with the other two because a statement covering January
+/// prints December's factures beside it, and each has to read back as the
+/// paper the customer was handed (features.md §4, Numbering).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DocumentRef {
     pub kind: DocumentKind,
+    pub year: i32,
     pub number: i64,
 }
 
@@ -196,9 +202,10 @@ pub fn statement_between(
             document: line.entry.document_id.and_then(|id| {
                 named
                     .iter()
-                    .find(|(found, _, _)| *found == id)
-                    .map(|(_, kind, number)| DocumentRef {
+                    .find(|(found, _, _, _)| *found == id)
+                    .map(|(_, kind, year, number)| DocumentRef {
                         kind: *kind,
+                        year: *year,
                         number: *number,
                     })
             }),
@@ -253,9 +260,10 @@ pub fn recent(
             document: line.entry.document_id.and_then(|id| {
                 named
                     .iter()
-                    .find(|(found, _, _)| *found == id)
-                    .map(|(_, kind, number)| DocumentRef {
+                    .find(|(found, _, _, _)| *found == id)
+                    .map(|(_, kind, year, number)| DocumentRef {
                         kind: *kind,
+                        year: *year,
                         number: *number,
                     })
             }),

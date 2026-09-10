@@ -133,6 +133,11 @@ pub struct Document {
     pub shop_id: i32,
     pub kind: DocumentKind,
     pub series: String,
+    /// The year the series counts in, off the shop clock at issue
+    /// (features.md §4, Numbering). It is in `series` too, which is the
+    /// counter's key; this is the number the paper prints, so a template
+    /// never has to parse a key to find it.
+    pub series_year: i32,
     pub number: i64,
     pub issued_at: NaiveDateTime,
     pub user_id: i32,
@@ -276,6 +281,7 @@ pub(crate) struct DocumentRow {
     pub cancelled_by: Option<i32>,
     pub cancel_reason: Option<String>,
     pub cancel_avoir_document_id: Option<i32>,
+    pub series_year: i32,
 }
 
 #[derive(Debug, Insertable)]
@@ -284,6 +290,7 @@ pub(crate) struct DocumentRowWrite {
     pub shop_id: i32,
     pub kind: DocumentKind,
     pub series: String,
+    pub series_year: i32,
     pub number: i64,
     pub issued_at: NaiveDateTime,
     pub user_id: i32,
@@ -516,6 +523,7 @@ pub(crate) fn assemble(
         shop_id: row.shop_id,
         kind: row.kind,
         series: row.series,
+        series_year: row.series_year,
         number: row.number,
         issued_at: row.issued_at,
         user_id: row.user_id,
