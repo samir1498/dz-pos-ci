@@ -53,6 +53,7 @@ export function DataTable<Row>({
   columns,
   rows,
   rowKey,
+  rowTestId,
   caption,
   empty,
   actions,
@@ -63,6 +64,8 @@ export function DataTable<Row>({
   readonly rows: readonly Row[];
   /** What makes a row itself. An index would reorder wrongly on a sort. */
   readonly rowKey: (row: Row) => string | number;
+  /** A `data-testid` per row, so a test counts rows without walking rowgroups. */
+  readonly rowTestId?: (row: Row) => string;
   /** Read by a screen reader before the table; not painted. */
   readonly caption: string;
   /** Shown in place of the body when there are no rows. */
@@ -104,7 +107,7 @@ export function DataTable<Row>({
         </TableHeader>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={rowKey(row)}>
+            <TableRow key={rowKey(row)} data-testid={rowTestId?.(row)}>
               {columns.map((column) => (
                 <TableCell key={column.id} className={cn(align(column), face(column))}>
                   {column.cell(row)}
