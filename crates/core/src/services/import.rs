@@ -683,12 +683,11 @@ fn assess(
     for draft in drafts {
         let outcome = match &draft.parsed {
             Err((field, reason)) => Outcome::Refused { field, reason },
-            Ok(fields) => match assess_row(conn, shop_id, fields) {
-                Err(refusal) => Outcome::Refused {
-                    field: refusal.0,
-                    reason: refusal.1,
-                },
-                Ok(outcome) => outcome,
+            // `?`, not a mapped refusal: a database that cannot be read
+            // is not a verdict about this row.
+            Ok(fields) => match assess_row(conn, shop_id, fields)? {
+                Verdict::Refused(field, reason) => Outcome::Refused { field, reason },
+                Verdict::Settled(outcome) => outcome,
             },
         };
         match outcome {
@@ -708,11 +707,27 @@ fn assess(
     })
 }
 
+/// What one row would do, or the refusal it earned. A refusal is a verdict
+/// about the row and belongs in the report; a database that could not be
+/// read is neither, and leaves as a `CoreError` (see `assess_row`).
+enum Verdict {
+    Settled(Outcome),
+    Refused(&'static str, &'static str),
+}
+
+/// The lookups one row needs, against this shop as it stands right now.
+///
+/// The two reads in here used to have their errors mapped onto row
+/// refusals: a locked or unreadable database came back as "this barcode is
+/// not a number" beside the shop's own product, and the file looked like
+/// the thing that was wrong. A storage failure is not a verdict about a
+/// row, so it leaves as the error it is and the whole dry run fails with
+/// the code the screen already translates.
 fn assess_row(
     conn: &mut SqliteConnection,
     shop_id: i32,
     fields: &Fields,
-) -> Result<Outcome, (&'static str, &'static str)> {
+) -> Result<Verdict, CoreError> {
     // A row with no rate of its own is only writable when the category it
     // names already carries one, and a category the file is about to open
     // takes its rate from the row: with neither there is nothing to guess
@@ -723,20 +738,18 @@ fn assess_row(
             .category
             .as_deref()
             .map(|name| categories_repo::by_name(conn, shop_id, name))
-            .transpose()
-            .map_err(|_| ("rate_percent", "rate_missing"))?
+            .transpose()?
             .flatten();
         if known.is_none() {
-            return Err(("rate_percent", "rate_missing"));
+            return Ok(Verdict::Refused("rate_percent", "rate_missing"));
         }
     }
-    let found = existing(conn, shop_id, fields.barcode.as_deref())
-        .map_err(|_| ("barcode", "not_a_number"))?;
-    Ok(if found.is_some() {
+    let found = existing(conn, shop_id, fields.barcode.as_deref())?;
+    Ok(Verdict::Settled(if found.is_some() {
         Outcome::Updated
     } else {
         Outcome::Created
-    })
+    }))
 }
 
 #[cfg(test)]
