@@ -46,7 +46,7 @@ struct LineView {
     unit_price: String,
     /// The line's TVA rate, under the réel only. Under the IFU there is no
     /// rate column at all, not a column of zeroes
-    /// (`regime_ifu_prints_no_tva`).
+    /// (`an_ifu_ticket_names_no_tax_in_any_language`).
     rate: Option<String>,
     discount: Option<String>,
     total: String,
@@ -115,7 +115,7 @@ struct TicketView {
 /// languages under the réel paid in cash, the same three under the IFU, and
 /// the same three under the réel paid by card.
 pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, CoreError> {
-    // `regime_ifu_prints_no_tva` is a rule about the document, not a layout
+    // `an_ifu_ticket_names_no_tax_in_any_language` is a rule about the document, not a layout
     // the template applies on the way past. A stored IFU document that
     // carries a TVA recap contradicts the régime it was issued under (a
     // restored file, a repaired row, an import), and there is no honest

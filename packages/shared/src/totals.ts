@@ -233,7 +233,7 @@ export function computeTotals(lines: readonly TotalsLine[], opts: TotalsOptions)
   const subtotalHt = totalHt - discount;
 
   // Under the IFU the unit price is the single price: no TVA row, no TVA.
-  // regime_ifu_prints_no_tva
+  // an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime
   const tvaByRate: TvaGroup[] = [];
   let tva = 0;
   if (opts.regime === "reel") {

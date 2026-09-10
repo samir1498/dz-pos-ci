@@ -575,7 +575,7 @@ impl From<DocumentLine> for SaleLineDto {
 }
 
 /// One row of the TVA recap, stored at issue so a reprint never recomputes
-/// it. Empty under the IFU (`regime_ifu_prints_no_tva`).
+/// it. Empty under the IFU (`an_ifu_facture_names_no_tax_in_any_language`).
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export_to = "SaleTvaDto.ts")]
 pub struct SaleTvaDto {

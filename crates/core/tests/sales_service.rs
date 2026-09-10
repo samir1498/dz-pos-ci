@@ -589,7 +589,7 @@ fn the_document_keeps_the_regime_in_force_on_the_day_it_was_issued() {
 
 #[test]
 fn an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime() {
-    // regime_ifu_prints_no_tva: under the IFU the price is a single price and
+    // Under the IFU the price is a single price and
     // the document mentions no TVA at all. If the line kept the product's
     // 19 % the stored document would not say so, and the first renderer that
     // printed a rate per line would put TVA on an IFU ticket.
@@ -1389,7 +1389,7 @@ fn a_closed_fiche_and_another_shops_fiche_cannot_be_sold_to() {
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
 }
 
-// ---- the facture at the till (features.md §3, `facture_requires_party_ids`)
+// ---- the facture at the till (features.md §3, the party identifiers rows)
 
 /// The shop's own settings as a facture needs them. `nis` is handed in so a
 /// test can take one identifier away without rewriting the whole block.

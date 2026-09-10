@@ -107,7 +107,7 @@ struct LineView {
     unit_price: String,
     /// The line's TVA rate, under the réel only. Under the IFU there is no
     /// rate column at all, not a column of zeroes
-    /// (`regime_ifu_prints_no_tva`).
+    /// (`an_ifu_facture_names_no_tax_in_any_language`).
     rate: Option<String>,
     discount: Option<String>,
     total: String,
@@ -598,7 +598,7 @@ fn seller_view(seller: &SellerBlock, lang: Lang) -> PartyView {
 }
 
 /// The buyer, by the kind of party they were on the day
-/// (`facture_requires_party_ids`). A company prints its identifiers; a
+/// (`a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else`). A company prints its identifiers; a
 /// consumer prints « ses nom, prénom(s) et adresse » and nothing else
 /// (décret 05-468 art. 3-2, last alinéa), whatever the row happens to hold:
 /// a consumer fiche that once carried an RC is not turned into a company by

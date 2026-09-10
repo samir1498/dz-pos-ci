@@ -7,7 +7,7 @@
 //!
 //! `party_kind` is asked for, never inferred from whether an RC was typed in:
 //! loi 04-02 art. 10 decides ticket against facture by who the buyer is, and
-//! `facture_requires_party_ids` asks a different set of fields of a company
+//! `a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number` and `a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else` ask a different set of fields of a company
 //! than of a consumer.
 
 use diesel::connection::Connection;

@@ -494,7 +494,7 @@ pub fn issue(
         }
 
         // Under the IFU there are no TVA rows at all, so the recap is empty
-        // and nothing is written (features.md, regime_ifu_prints_no_tva).
+        // and nothing is written (features.md §3, `an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime`).
         for row in &totals.tva_by_rate {
             repo::insert_tva(
                 conn,

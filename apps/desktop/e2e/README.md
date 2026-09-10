@@ -7,17 +7,18 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes products.png, products-ar.png, settings-ar.png, till-ar.png
+just screenshot                   # writes the seven committed screenshots
 pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes only `products.png`; the settings and till tests also match the
-grep in both runs (their titles say "... screenshot in Arabic") but only
-write a file when `currentLang()` is `ar`, so the fr run of them does
-nothing observable. Under ar all three write: `products-ar.png`,
-`settings-ar.png` and `till-ar.png`.
+writes only `products.png`; the other six say "... screenshot in Arabic"
+in their titles, so they match the grep in both runs but write a file only
+when `currentLang()` is `ar`, and the fr run of them does nothing
+observable. Under ar all six write: `products-ar.png`, `settings-ar.png`,
+`till-ar.png`, `customers-ar.png`, `till-credit-ar.png` and
+`documents-avoir-ar.png`.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
@@ -43,8 +44,8 @@ can stay up on their own ports while a suite runs.
 | `dzpos-api` | 4319, or `DZPOS_E2E_API_PORT` | `--db e2e/.artifacts/e2e.db`, deleted before every run; `DZPOS_API_TOKEN` set to a token made for the run |
 | Vite | 5174, or `DZPOS_E2E_WEB_PORT` | started with `VITE_API_URL` pointing at the API port and the same token as `VITE_API_TOKEN` |
 
-A second checkout on the same box (a worktree per task in the M1 loop)
-passes its own port pair so two suites can run at once.
+A second checkout on the same box (a worktree per task) passes its own
+port pair so two suites can run at once.
 
 The database is thrown away, so the first assertion is always the empty
 state. The API base URL reaches the app through `VITE_API_URL` and the
@@ -97,24 +98,39 @@ second language on; use the looped `just e2e` or a single `--project`.
 
 ## Files
 
-- `first-paint.spec.ts`: one test that `lang` and `dir` are correct on
-  `documentElement` before React mounts, reading the DOM directly instead
-  of through an auto-retrying matcher. `backups.spec.ts`: one test that a
-  copy taken before a product is added loses that product when it is
-  restored; it runs first (files run in name order, one worker, one
-  database) and leaves the shop empty, the state `products.spec.ts` starts
-  from. `products.spec.ts`: three tests on the products screen;
-  `settings.spec.ts`: two on the settings screen (store block, dated
-  régime); `till.spec.ts`: one whole cash sale, from `/` landing on the
-  till to the stock the sale moved. `messages.ts` is the shared loader they
-  use for `src/i18n/{fr,en,ar}.json`, keyed off the running Playwright
-  project, so a reworded message fails the test instead of quietly passing.
-  `api.ts` is where a spec that seeds its own rows finds the API port and
-  the run's launch token.
-- `screenshots/products.png` (fr), `screenshots/products-ar.png`,
-  `screenshots/settings-ar.png` and `screenshots/till-ar.png` (ar):
-  committed, 1280x800, full page. `en` keeps no screenshot; the two
-  languages above are enough to show the layout and the RTL mirror.
+- The spec files, in the order one run walks them (files run in name
+  order, one worker, one database, so a file can leave the shop in the
+  state the next one starts from):
+  `backups.spec.ts`, one test that a copy taken before a product is added
+  loses that product when it is restored, leaving the shop empty;
+  `customers.spec.ts`, a company fiche opened with an opening debt and then
+  corrected, plus a search by a piece of the name;
+  `first-paint.spec.ts`, that `lang` and `dir` are right on
+  `documentElement` before React mounts, read off the DOM rather than
+  through an auto-retrying matcher;
+  `products.spec.ts`, three tests on the products screen;
+  `settings.spec.ts`, the store block and the dated régime, and it hands
+  the shop back under the réel before it leaves;
+  `settlement.spec.ts`, two credit sales settled oldest first, a payment
+  above the debt refused, and the statement printed;
+  `till.spec.ts`, one whole cash sale from `/` landing on the till to the
+  stock it moved;
+  `till-credit.spec.ts`, a credit sale warned at the threshold, refused
+  past the limit and then overridden;
+  `till-facture.spec.ts`, a facture on credit that leaves the ticket series
+  alone, and a facture paid in cash carrying its TVA recap and its droit de
+  timbre;
+  `till-reversals-and-quotations.spec.ts`, a partial avoir, a whole
+  cancellation, the credit it leaves and a proforma.
+- `messages.ts` is the shared loader for `src/i18n/{fr,en,ar}.json`, keyed
+  off the running Playwright project, so a reworded message fails the test
+  instead of quietly passing. `api.ts` is where a spec that seeds its own
+  rows finds the API port and the run's launch token.
+- The seven committed screenshots, 1280x800, full page: `products.png`
+  (fr) and, in ar, `products-ar.png`, `settings-ar.png`, `till-ar.png`,
+  `customers-ar.png`, `till-credit-ar.png` and `documents-avoir-ar.png`.
+  `en` keeps none; the two languages above are enough to show the layout
+  and the RTL mirror.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
   A failure's trace and its Playwright report name the project (the
   language) the failing test ran under.
@@ -133,6 +149,24 @@ here. These are all of them.
 | `cart` | `till.tsx` | The mirror image of the above, for a query that means the lines rather than the grid. |
 | `till-change` | `till.tsx` | An amount, so its text is a number in three locales. |
 | `total-net-to-pay` | `till.tsx` | The one totals row a test reads by value; the label beside it is translated. |
+| `till-customer-balance` | `till.tsx` | An amount, and the same figure appears on the fiche panel beside it. |
+| `till-credit-limit` | `till.tsx` | An amount, translated label. |
+| `till-near-limit` | `till.tsx` | Absent until the basket crosses the warning threshold, so a test counts it. |
+| `till-limit-banner` | `till.tsx` | Absent until the limit refuses the sale. |
+| `till-new-balance` | `till.tsx` | An amount the basket would leave behind. |
+| `till-balance-after` | `till.tsx` | An amount the issued document left behind. |
+| `till-document-number` | `till.tsx` | The number as the paper spells it, inside a translated confirmation. |
+| `till-party-ids` | `till.tsx` | The buyer identifiers block; absent until a customer is picked. |
+| `till-party-ids-missing` | `till.tsx` | Absent until an identifier a facture needs is missing. |
+| `documents-sheet` | `documents.tsx` | The iframe holding the page the core rendered; an iframe has no accessible text. |
+| `customer-payment` | `customers.tsx` | One payment row; the amounts inside it are numbers in three locales. |
+| `customer-statement` | `customers.tsx` | The statement iframe; same reason as the sheet above. |
+| `customer-debt-slip` | `customers.tsx` | The debt slip iframe. |
+| `customer-debt-slip-button` | `customers.tsx` | The button that opens it, beside a second button with a translated label. |
+| `customer-close-reason` | `customers.tsx` | Absent until a fiche with an account behind it is being closed, so a test counts it. |
+| `backup-row` | `BackupsPanel.tsx` | One copy in the list; its text is a filename and a date. |
+| `backups-newest` | `BackupsPanel.tsx` | The one the restore button acts on. |
+| `safety-copy-row` | `BackupsPanel.tsx` | The copy a restore takes of what it is about to replace. |
 
 ## What the suite checks and where
 

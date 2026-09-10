@@ -400,7 +400,7 @@ pub fn issue(
 
 /// The customer as the document will print them. Every field the buyer block
 /// holds is a snapshot of the fiche on the day, `party_kind` included:
-/// `facture_requires_party_ids` asks a different set of fields of a company
+/// `a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number` and `a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else` ask a different set of fields of a company
 /// than of a consumer, and a reprint may not read that from a fiche somebody
 /// has since edited.
 pub(crate) fn buyer_block(customer: &Customer) -> PartyBlock {
@@ -416,7 +416,7 @@ pub(crate) fn buyer_block(customer: &Customer) -> PartyBlock {
 }
 
 /// What a facture must carry before it may take a number
-/// (`facture_requires_party_ids`, décret 05-468 art. 3 and 4).
+/// (`a_shop_whose_settings_carry_no_nis_cannot_issue_a_facture_at_all`, décret 05-468 art. 3 and 4).
 ///
 /// The seller answers with RC and NIS. NIF and AI print when the settings
 /// hold them and refuse nothing: they are on every facture in circulation,
@@ -696,7 +696,7 @@ fn price(
         unit_price,
         line_discount: line.line_discount,
         // Under the IFU the price is a single price and the document mentions
-        // no TVA at all (fixture `regime_ifu_prints_no_tva`). The line stores
+        // no TVA at all (`an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime`). The line stores
         // no rate either, so the stored document says so on its own and a
         // reprint never has to know the régime to hide one.
         rate_bps: match regime {

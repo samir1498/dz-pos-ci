@@ -8,6 +8,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import type { SaleDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
@@ -208,14 +215,27 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** The screen under the smallest router that lets its `Link` to a fiche
+ * render, the way the customers and till suites build theirs. It is not the
+ * app's router: nothing here follows the link, only reads where it points. */
 function mount(lang: Lang = "fr") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  const rootRoute = createRootRoute();
+  const screenRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/",
+    component: () => <DocumentsScreen />,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([screenRoute]),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+  });
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        <DocumentsScreen />
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </I18nProvider>,
   );
@@ -236,6 +256,18 @@ describe("the document list", () => {
     // whoever walked in.
     const till = rowOf(screen.getByText("TK-000012"));
     expect(within(till).getByText(fr.documents_kind_ticket)).toBeTruthy();
+  });
+
+  test("the buyer's name is a link to their fiche, and a ticket's blank cell is not", async () => {
+    mount();
+    await screen.findByText("FA-000004");
+    // Where a shop goes next from a document is what the customer still
+    // owes, so the name is the way there rather than a second search.
+    const link = screen.getByRole("link", { name: "Entreprise Benali" });
+    expect(link.getAttribute("href")).toBe("/customers/3");
+    // The ticket names nobody, so there is nothing to open.
+    const till = rowOf(screen.getByText("TK-000012"));
+    expect(within(till).queryByRole("link")).toBeNull();
   });
 
   test("the kind filter narrows the call rather than the rendered list", async () => {

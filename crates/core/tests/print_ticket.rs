@@ -418,7 +418,7 @@ fn the_golden_says_what_the_document_stores(html: &str, doc: &Document) {
 
     // The rate on a line is the rate the line was sold at, réel only: under
     // the IFU there is no rate column at all, not a column of zeroes
-    // (`regime_ifu_prints_no_tva`).
+    // (`an_ifu_ticket_names_no_tax_in_any_language`, below).
     let line_rates = rates(html, "line");
     let expected: Vec<u32> = match doc.regime {
         Regime::Reel => doc.lines.iter().map(|l| l.rate_bps.as_u32()).collect(),
@@ -658,7 +658,7 @@ fn a_card_ticket_carries_no_stamp_and_neither_half_of_the_change() {
     }
 }
 
-/// `regime_ifu_prints_no_tva`, read off the paper: the word is not on it,
+/// The IFU rule read off the paper: the word is not on it,
 /// in any of the three languages it could be on it in. CTCA 2026 art. 64
 /// forbids an IFU document from mentioning the tax at all, so this is the
 /// rule and not a layout preference.

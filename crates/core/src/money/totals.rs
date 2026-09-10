@@ -21,7 +21,7 @@ pub struct Line {
 }
 
 /// The shop's régime fiscal at issue time. Under the IFU a document shows
-/// no TVA at all (`regime_ifu_prints_no_tva`).
+/// no TVA at all (`an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Regime {
