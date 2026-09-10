@@ -82,7 +82,7 @@ fiche). Closing a fiche that still carries something (a balance either way, or
 an order still asking to be paid) needs a reason, and the reason goes into the
 audit log beside the balance and the number of orders left open. The fiche
 stays usable after it: payments and corrections still land on a closed fiche,
-and a purchase is what it refuses (T3). One supplier has an address of its
+and a purchase is what it refuses. One supplier has an address of its
 own, `/suppliers/$id`, and the route and the list's expanded row render one
 and the same component, so the two cannot drift. The account over a range of
 days is answered as JSON (`GET /suppliers/{id}/statement?from=&to=`): a

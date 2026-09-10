@@ -6,9 +6,11 @@
 //! is its sum, a payment settles the open orders oldest first through
 //! `supplier_allocations`, and a correction is a movement rather than an edit.
 //!
-//! A purchase writes its own ledger rows in T3. Until then the tests seed the
-//! order and the debit a receipt would write, so what a payment settles is a
-//! real order carrying real value.
+//! `services::purchases` writes the `purchase` rows a real delivery leaves.
+//! These tests seed the order and that debit themselves, in SQL beside the
+//! test: what a payment settles has to be a real order carrying real value,
+//! and going through the purchase service to get one would put the code under
+//! test behind another service's rules.
 
 use chrono::NaiveDate;
 use diesel::prelude::*;

@@ -16,7 +16,7 @@ import { useState } from "react";
 import { parseAmountToCentimes, parseQtyToMilli } from "@dzpos/shared";
 import type { NewPurchaseDto, PaymentMethodDto } from "@dzpos/shared";
 
-import { api, purchasesQueryKey, suppliersQueryKey } from "@/api";
+import { api, productsQueryKey, purchasesQueryKey, suppliersQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { useShopToday } from "@/lib/clock";
 import { cleared, errorKey } from "@/lib/fields";
@@ -61,7 +61,7 @@ function NewPurchaseScreen() {
     queryKey: [...suppliersQueryKey, ""],
     queryFn: () => api.listSuppliers(),
   });
-  const products = useQuery({ queryKey: ["products"], queryFn: () => api.listProducts() });
+  const products = useQuery({ queryKey: productsQueryKey, queryFn: () => api.listProducts() });
 
   const [supplierId, setSupplierId] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");
@@ -83,7 +83,7 @@ function NewPurchaseScreen() {
       // The delivery moved stock and what the shop owes, so the supplier
       // list and every product list are both stale.
       await queryClient.invalidateQueries({ queryKey: suppliersQueryKey });
-      await queryClient.invalidateQueries({ queryKey: ["products"] });
+      await queryClient.invalidateQueries({ queryKey: productsQueryKey });
       await navigate({ to: "/purchases/$id", params: { id: String(made.purchase.id) } });
     },
     onError: (error: unknown) => setProblem(errorKey(error)),

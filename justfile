@@ -106,7 +106,7 @@ e2e:
     done
 
 # only the tests that write a committed screenshot: fr (products.png) and
-# ar (the seven *-ar.png the e2e README lists); en keeps none.
+# ar (the eight *-ar.png the e2e README lists); en keeps none.
 screenshot:
     #!/usr/bin/env bash
     set -euo pipefail

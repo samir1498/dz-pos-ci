@@ -1003,3 +1003,45 @@ fn an_order_received_in_parts_asks_for_credit_only_once() {
         Money::centimes(10 * 20_000 - 100)
     );
 }
+
+#[test]
+fn money_handed_over_with_the_order_is_logged_the_way_any_other_payment_is() {
+    // The one path on which cash leaves the drawer while an order is being
+    // saved. It writes the same audit entry `supplier_debt::pay` writes, so a
+    // comptable reading the log finds every payment to a supplier in one
+    // place, and the order it arrived with is named beside it.
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    let farine = a_product(&mut conn, "Farine 5kg", 0);
+    let saved = purchases::save(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewPurchase {
+            receive_now: true,
+            paid_now: Some(Paid {
+                amount: Money::centimes(50_000),
+                mode: PaymentMethod::Card,
+            }),
+            ..an_order(supplier, vec![line(farine, 10_000, 20_000)])
+        },
+    )
+    .unwrap();
+    let logged = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .find(|e| e.action == audit::ACTION_PAY_SUPPLIER)
+        .unwrap();
+    assert_eq!(logged.entity, "supplier_debt");
+    assert_eq!(logged.entity_id, Some(supplier));
+    let after = logged.after.unwrap_or_default();
+    assert!(after.contains("\"amount_centimes\":50000"), "{after}");
+    assert!(after.contains("\"payment_mode\":\"card\""), "{after}");
+    assert!(after.contains("\"balance_centimes\":150000"), "{after}");
+    assert!(
+        after.contains(&format!("\"purchase_id\":{}", saved.purchase.id)),
+        "{after}"
+    );
+    // And what it settled, so the log reads against the order.
+    assert!(after.contains("\"allocations\":[{"), "{after}");
+}

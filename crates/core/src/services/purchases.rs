@@ -289,7 +289,7 @@ pub fn save(
         }
 
         if let Some(paid) = new.paid_now {
-            hand_over(conn, shop_id, user_id, new.supplier_id, paid)?;
+            hand_over(conn, shop_id, user_id, new.supplier_id, purchase.id, paid)?;
         }
 
         get(conn, shop_id, purchase.id)
@@ -712,9 +712,11 @@ fn hand_over(
     shop_id: i32,
     user_id: i32,
     supplier_id: i32,
+    purchase_id: i32,
     paid: Paid,
 ) -> Result<(), CoreError> {
     let at = clock::now();
+    let before = debt_repo::balance(conn, shop_id, supplier_id)?;
     let entry = debt_repo::append(
         conn,
         &SupplierDebtRowWrite {
@@ -732,7 +734,44 @@ fn hand_over(
             created_at: Some(at),
         },
     )?;
-    supplier_debt::settle_oldest_first(conn, shop_id, supplier_id, entry.id, paid.amount)?;
+    let allocations =
+        supplier_debt::settle_oldest_first(conn, shop_id, supplier_id, entry.id, paid.amount)?;
+    let after = debt_repo::balance(conn, shop_id, supplier_id)?;
+    // The same entry `supplier_debt::pay` writes, under the same action: this
+    // is the one path on which money leaves the drawer while an order is being
+    // saved, and a log that stayed quiet about it would be the only payment to
+    // a supplier nobody can retrace. The order it came in with is named
+    // beside it, which `pay` has nothing to name.
+    audit::record(
+        conn,
+        shop_id,
+        user_id,
+        audit::Change {
+            action: audit::ACTION_PAY_SUPPLIER,
+            entity: "supplier_debt",
+            entity_id: Some(supplier_id),
+            before: Some(
+                serde_json::json!({ "balance_centimes": before.as_centimes() }).to_string(),
+            ),
+            after: Some(
+                serde_json::json!({
+                    "balance_centimes": after.as_centimes(),
+                    "amount_centimes": paid.amount.as_centimes(),
+                    "payment_mode": paid.mode.as_str(),
+                    "ledger_id": entry.id,
+                    "purchase_id": purchase_id,
+                    "allocations": allocations
+                        .iter()
+                        .map(|a| serde_json::json!({
+                            "purchase_id": a.purchase_id,
+                            "amount_centimes": a.amount.as_centimes(),
+                        }))
+                        .collect::<Vec<_>>(),
+                })
+                .to_string(),
+            ),
+        },
+    )?;
     Ok(())
 }
 
