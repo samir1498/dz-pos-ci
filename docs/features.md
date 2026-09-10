@@ -107,11 +107,40 @@ hand is derived from this ledger and cached on the product; a nightly job
 re-derives it and reports drift.
 
 **Expense.** Category (seeded: rent, electricity, water, salaries,
-transport, maintenance, other), amount, date, note.
+transport, maintenance, other), amount, date, note. The seven categories
+are seeded per shop and a shop adds none of its own in v1; the row carries
+the category's key and the desktop holds its label in the three languages,
+so a shop switching language rewrites no row. The amount is above zero and
+the day is a day on the shop's calendar. An expense is written once: it is
+never edited and never deleted, and the table carries no cancellation
+block, so a wrong one is a row a comptable reads and asks about. The
+screen lists one month at a time with the month's total.
 
 **Dashboard.** Today's and this month's sales, gross margin (sales minus
 cost of goods sold from the ledger), expenses, cash position, low-stock
 list, top products, outstanding customer debt, outstanding supplier debt.
+
+The cash position is derived on every read and stored nowhere. Over a day
+or a month on the shop's calendar, cash in is what the tickets and factures
+still standing and paid in cash came to, at `total_ttc`, plus the cash
+payments on `debt_ledger`; cash out is the cash payments on
+`supplier_ledger` plus the expenses of those days. A cancelled document is
+out of the sales figure rather than subtracted from it, and a refund counts
+nothing: an avoir credits the customer's ledger and brings the goods back
+on `return` movements, and nothing in the file says the drawer opened for
+it. The card figure has the same shape on the way in and none on the way
+out, because money paid to a supplier by card moves the bank account rather
+than the till. The figure is a net movement over the period and not the
+money in the drawer: there is no opening float and no count at close, so it
+goes below zero on a day that paid out more than it took.
+
+An assumption on the stamp, to confirm with the comptable (R8): a cash
+facture's drawer takes its `net_to_pay`, which is `total_ttc` plus the
+droit de timbre, and the figure above reads `total_ttc`. A 10 000,00
+facture with a stamp of 100,00 leaves 10 100,00 in the till and 10 000,00
+in the position. The reading is that the position is the shop's takings
+with the tax it collects for the state held out; the fiscal rules table
+gains no row for it, because nothing here changes what a document charges.
 
 **Backup.** Automatic daily copy of the SQLite file, keep 30, restore from
 the settings screen. Export products, sales, customers, suppliers to Excel;
