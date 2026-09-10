@@ -51,6 +51,7 @@ pub mod products;
 pub mod proforma;
 pub mod purchases;
 pub mod sales;
+pub mod seed;
 pub mod settings;
 pub mod shops;
 pub mod stock;

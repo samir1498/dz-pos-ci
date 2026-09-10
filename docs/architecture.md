@@ -326,3 +326,26 @@ is done when they pass and the behaviour was driven, not when they pass.
 - Native window: `pnpm desktop tauri dev` needs a display (WSLg or
   `xvfb-run`). Windows builds come from CI.
 - Phone: Expo Go over Tailscale, EAS for builds.
+- A shop to develop against: `just seed` fills `.dev/dev.db` with a
+  catalogue, twelve customers, five suppliers and thirty days of trading, and
+  `just seed-clean` deletes the file so the next `just api` opens an empty
+  shop. Cleaning up is the whole file and never a row: the ledgers are append
+  only and the document series are gapless by rule, so there is no honest way
+  to take a seeded sale back out of a shop from the inside.
+
+The seeder is a development tool and cannot reach a shop's books. That is
+enforced in three places rather than one, because any single one of them is a
+line somebody edits:
+
+1. `dzpos-seed` is its own crate. Neither `dzpos-api` nor the desktop depends
+   on it, so no release build and no bundle can produce the binary; the API
+   has no `--seed` flag and no seed route.
+   `crates/api/tests/no_seed_entrypoint.rs` fails the moment any of that
+   changes, and CI runs it with the rest of `cargo test --workspace`.
+2. The binary refuses to run unless `DZPOS_DEV=1` is set, refuses any file
+   that is not directly inside a `.dev/` directory, and refuses one whose
+   settings carry a shop's own name and identifiers unless `--force` says
+   otherwise. `--force` means that and nothing else: it does not lift the
+   other two.
+3. `just seed` and `just seed-clean` take no path at all, so no argument a
+   caller typed can point either of them at a real database.

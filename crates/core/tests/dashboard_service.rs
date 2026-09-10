@@ -654,3 +654,221 @@ fn a_product_whose_month_came_to_nothing_is_off_the_top_lists() {
     assert_eq!(read.today.sales_ht, Money::centimes(30_000));
     assert_eq!(read.today.margin, Money::centimes(12_000));
 }
+
+// ---- the thirty day series (features.md §1, the dashboard's chart) ----
+
+/// A sale on whatever day the case wants it on, which the `sell` above cannot
+/// do: it rings everything up on the fifteenth.
+fn sell_on(
+    conn: &mut SqliteConnection,
+    product_id: i32,
+    units: i64,
+    d: u32,
+    hour: u32,
+) -> Document {
+    sales::issue(
+        conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id,
+                qty_milli: units * 1_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(10_000_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
+            issued_at: Some(at(d, hour)),
+        },
+    )
+    .unwrap()
+    .document
+}
+
+/// A month with something on most of its days: sales on nine of them, an
+/// expense on two, a credit note and a cancellation, so the sum below is over
+/// figures that go both ways.
+fn a_month_of_trading(conn: &mut SqliteConnection) {
+    let ciment = product(conn, "Ciment", 10_000, 6_000);
+    let sable = product(conn, "Sable", 4_000, 1_000);
+    let buyer = common::an_identified_customer(conn, "Entreprise Benali");
+    for d in [1u32, 3, 8, 14, 15, 21, 22, 29, 30] {
+        sell_on(conn, ciment, 2, d, 9);
+        sell_on(conn, sable, 3, d, 14);
+    }
+    // A facture credited in part, on a later day than the one it was written
+    // on: the two sides of the margin have to land on their own days.
+    let credited = sales::issue(
+        conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id: ciment,
+                qty_milli: 4_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Credit,
+            tendered: None,
+            customer_id: Some(buyer),
+            override_credit: true,
+            kind: SaleKind::Facture,
+            issued_at: Some(at(10, 10)),
+        },
+    )
+    .unwrap()
+    .document;
+    avoir::issue(
+        conn,
+        SHOP,
+        OWNER,
+        credited.id,
+        Some(vec![avoir::AvoirLine {
+            document_line_id: credited.lines[0].id,
+            qty_milli: 2_000,
+        }]),
+        None,
+        Some(at(18, 11)),
+    )
+    .unwrap();
+    // And a ticket that never happened, so a cancelled paper is inside the
+    // window on both sides.
+    let void = sell_on(conn, sable, 5, 6, 16);
+    documents::cancel(
+        conn,
+        SHOP,
+        OWNER,
+        void.id,
+        "erreur de saisie".to_string(),
+        Some(at(7, 9)),
+    )
+    .unwrap();
+    let category = dzpos_core::services::expenses::categories(conn, SHOP).unwrap()[0].id;
+    for d in [2u32, 20] {
+        dzpos_core::services::expenses::create(
+            conn,
+            SHOP,
+            OWNER,
+            dzpos_core::services::expenses::NewExpense {
+                category_id: category,
+                amount: Money::centimes(15_000),
+                expense_date: day(d),
+                note: None,
+            },
+        )
+        .unwrap();
+    }
+}
+
+/// The columns of a stretch of days, added up by the test itself.
+fn fold(points: &[dashboard::SeriesPoint]) -> (i64, i64, i64, i64, i64, i64) {
+    points.iter().fold((0, 0, 0, 0, 0, 0), |acc, p| {
+        (
+            acc.0 + p.figures.sales_ttc.as_centimes(),
+            acc.1 + p.figures.sales_ht.as_centimes(),
+            acc.2 + p.figures.cost_of_goods.as_centimes(),
+            acc.3 + p.figures.margin.as_centimes(),
+            acc.4 + p.figures.expenses.as_centimes(),
+            acc.5 + p.cash_in.as_centimes(),
+        )
+    })
+}
+
+#[test]
+fn the_thirty_days_of_the_series_add_up_to_the_month_the_dashboard_reads() {
+    let (_dir, mut conn) = open_temp();
+    a_month_of_trading(&mut conn);
+
+    // September has thirty days, so a thirty day window ending on the last of
+    // them is exactly the month the dashboard's second column reads.
+    let series = dashboard::series(&mut conn, SHOP, day(30), 30).unwrap();
+    let month = dashboard::read(&mut conn, SHOP, day(15))
+        .unwrap()
+        .this_month;
+
+    assert_eq!(series.from, day(1));
+    assert_eq!(series.to, day(30));
+    assert_eq!(series.days.len(), 30);
+
+    let (ttc, ht, cost, margin, expenses, _cash) = fold(&series.days);
+    assert_eq!(ttc, month.sales_ttc.as_centimes());
+    assert_eq!(ht, month.sales_ht.as_centimes());
+    assert_eq!(cost, month.cost_of_goods.as_centimes());
+    assert_eq!(margin, month.margin.as_centimes());
+    assert_eq!(expenses, month.expenses.as_centimes());
+    // A month that came to nothing would make the equality above vacuous.
+    assert!(margin > 0);
+}
+
+#[test]
+fn each_day_of_the_series_is_the_day_the_dashboard_reads_on_its_own() {
+    let (_dir, mut conn) = open_temp();
+    a_month_of_trading(&mut conn);
+
+    let series = dashboard::series(&mut conn, SHOP, day(30), 30).unwrap();
+    for point in &series.days {
+        assert_eq!(point.from, point.to, "a day's bucket is one day wide");
+        let one = dashboard::read(&mut conn, SHOP, point.from).unwrap();
+        assert_eq!(point.figures, one.today, "{}", point.from);
+        assert_eq!(
+            point.cash_in,
+            cash::position(&mut conn, SHOP, clock::Period::Day(point.from))
+                .unwrap()
+                .cash_in
+                .total()
+                .unwrap(),
+            "{}",
+            point.from
+        );
+    }
+}
+
+#[test]
+fn the_weeks_are_the_days_taken_seven_at_a_time_back_from_the_last() {
+    let (_dir, mut conn) = open_temp();
+    a_month_of_trading(&mut conn);
+
+    let series = dashboard::series(&mut conn, SHOP, day(30), 30).unwrap();
+    // Thirty days is four whole weeks and the two days that do not fill one.
+    // The short bucket is the oldest, because the chart is read from the
+    // right: the week the shop is in has to be a whole one.
+    assert_eq!(series.weeks.len(), 5);
+    assert_eq!((series.weeks[0].from, series.weeks[0].to), (day(1), day(2)));
+    assert_eq!((series.weeks[1].from, series.weeks[1].to), (day(3), day(9)));
+    assert_eq!(
+        (series.weeks[4].from, series.weeks[4].to),
+        (day(24), day(30))
+    );
+
+    // And each week is its own days, added up.
+    let mut start = 0usize;
+    for week in &series.weeks {
+        let span = usize::try_from((week.to - week.from).num_days() + 1).unwrap();
+        let mine = &series.days[start..start + span];
+        assert_eq!(
+            fold(mine),
+            fold(std::slice::from_ref(week)),
+            "{}",
+            week.from
+        );
+        start += span;
+    }
+    assert_eq!(start, series.days.len());
+}
+
+#[test]
+fn a_window_of_no_days_and_one_longer_than_a_year_are_both_refused() {
+    let (_dir, mut conn) = open_temp();
+    assert!(dashboard::series(&mut conn, SHOP, day(30), 0).is_err());
+    assert!(dashboard::series(&mut conn, SHOP, day(30), 367).is_err());
+    // The bounds themselves answer.
+    assert!(dashboard::series(&mut conn, SHOP, day(30), 1).is_ok());
+    assert!(dashboard::series(&mut conn, SHOP, day(30), 366).is_ok());
+}

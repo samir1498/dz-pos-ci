@@ -19,6 +19,7 @@ import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
 import type { CustomerPaymentsDto } from "./generated/CustomerPaymentsDto";
 import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
 import type { DashboardDto } from "./generated/DashboardDto";
+import type { DashboardSeriesDto } from "./generated/DashboardSeriesDto";
 import type { CashPositionDto } from "./generated/CashPositionDto";
 import type { ExpenseCategoryDto } from "./generated/ExpenseCategoryDto";
 import type { ExpenseDto } from "./generated/ExpenseDto";
@@ -56,7 +57,7 @@ import type { SupplierLedgerDto } from "./generated/SupplierLedgerDto";
 import type { SupplierStatementDto } from "./generated/SupplierStatementDto";
 import type { SupplierWriteDto } from "./generated/SupplierWriteDto";
 import { categorySchema, productSchema } from "./schemas/catalogue";
-import { dashboardSchema } from "./schemas/dashboard";
+import { dashboardSchema, dashboardSeriesSchema } from "./schemas/dashboard";
 import { importAppliedSchema, importDryRunSchema, labelSheetSchema } from "./schemas/import";
 import {
   customerLedgerSchema,
@@ -750,6 +751,22 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     async dashboard(day?: string): Promise<DashboardDto> {
       const suffix = day === undefined ? "" : `?${new URLSearchParams({ day }).toString()}`;
       return narrow(await send(`/dashboard${suffix}`), dashboardSchema, "dashboard");
+    },
+
+    /** The chart behind the dashboard: the last `days` days ending on `day`,
+     * each on its own and folded into weeks. Both default the way the screen
+     * reads them, the shop's today and thirty days, and the server refuses a
+     * window of nothing or of more than a year. */
+    async dashboardSeries(window?: { day?: string; days?: number }): Promise<DashboardSeriesDto> {
+      const query = new URLSearchParams();
+      if (window?.day !== undefined) query.set("day", window.day);
+      if (window?.days !== undefined) query.set("days", String(window.days));
+      const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
+      return narrow(
+        await send(`/dashboard/series${suffix}`),
+        dashboardSeriesSchema,
+        "dashboard series",
+      );
     },
 
     /** The shop's orders, newest first, narrowed to one state or one

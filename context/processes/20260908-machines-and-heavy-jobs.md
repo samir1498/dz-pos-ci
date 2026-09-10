@@ -87,6 +87,15 @@ you started and stop them when done; use a pid file or `fuser -k
 <port>/tcp`, never `pkill -f` in a chained command (it matches the shell
 running it).
 
+`just seed` fills `.dev/dev.db` with a catalogue, twelve customers, five
+suppliers and thirty days of trading, so a screen has something to show; it
+is deterministic, so every machine reads the same figures, and repeatable,
+because it deletes the file and fills a fresh one. `just seed-clean` deletes
+it and stops there, so the next `just api` opens an empty shop. Neither
+recipe takes a path, and both refuse a file the dev API is holding open, so
+stop `just api` first. The seeder is dev only and enforced as such in three
+places; `docs/architecture.md` (Local development) says where.
+
 ## After the 125 GB day: one build folder, one build, one session
 
 Decided with Samir on 2026-09-10 after the VHDX reached 125 GB and the host

@@ -21,7 +21,7 @@ export CARGO_BUILD_JOBS := env_var_or_default("CARGO_BUILD_JOBS", "4")
 # sources are older reuses it without a word (2026-09-10: clippy in one
 # worktree failed on a type only the other branch had). This records which
 # checkout built last and, when it changes, touches this checkout's crate
-# sources so cargo rebuilds the three members; the dependencies stay
+# sources so cargo rebuilds the workspace's own members; the dependencies stay
 # cached, they are identical in every checkout. Every cargo recipe below
 # depends on it; run a bare `cargo` in a worktree only after `just claim`.
 #
@@ -116,6 +116,56 @@ api port="4317" db=".dev/dev.db" origin="": claim
     head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > .dev/api-token
     chmod 600 .dev/api-token
     DZPOS_API_TOKEN="$(cat .dev/api-token)" cargo run -p dzpos-api -- --db {{db}} --port {{port}} {{ if origin != "" { "--allow-origin " + origin } else { "" } }}
+
+# ---- the development shop file (.dev/dev.db) ----
+#
+# Dev only, and enforced in three places, not one: `dzpos-seed` is its own
+# crate that neither the API nor the desktop depends on, so no release build
+# can produce it (crates/api/tests/no_seed_entrypoint.rs holds that); the
+# binary refuses to run without DZPOS_DEV=1, refuses any file that is not
+# directly inside .dev/, and refuses one whose settings carry a real shop's
+# name and identifiers; and these two recipes take no path at all.
+
+# fill .dev/dev.db with a catalogue, twelve customers, five suppliers and
+# thirty days of trading, so the dashboard, the statements and the exports
+# have something to show. Deterministic: the same file on every machine, and
+# repeatable, because it deletes the file first and fills a fresh one.
+seed: claim
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p .dev
+    if [ -e .dev/dev.db ] && command -v fuser >/dev/null 2>&1 && fuser .dev/dev.db >/dev/null 2>&1; then
+        echo ".dev/dev.db is open in another process (the dev API?); stop it first" >&2
+        exit 1
+    fi
+    # The binary deletes the file itself, so the run is repeatable; the guard
+    # above is here rather than in `just seed-clean` because re-entering just
+    # from a recipe body runs whatever else the recipe list has grown.
+    # Under the same lock every other cargo recipe takes: this one compiles,
+    # and a build in another checkout pulling the rlib out from under it is
+    # what the lock exists for.
+    DZPOS_DEV=1 flock "$CARGO_TARGET_DIR/.lock" cargo run -p dzpos-seed --bin dzpos-seed -- --db .dev/dev.db
+
+# delete .dev/dev.db so the next `just api` starts an empty shop.
+#
+# A whole file and never a row. The ledgers are append only and the document
+# series are gapless by rule, so there is no honest way to take a seeded sale
+# back out of a shop from the inside: cleaning up a development file is `rm`.
+# Only ever .dev/dev.db, and it takes no argument, so no path a caller typed
+# can reach a real shop's database.
+seed-clean:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p .dev
+    # Unlinking a file the API still holds open succeeds on Linux and leaves
+    # the server writing into an inode nobody else can see, so the running
+    # server is what stops us rather than the file system.
+    if [ -e .dev/dev.db ] && command -v fuser >/dev/null 2>&1 && fuser .dev/dev.db >/dev/null 2>&1; then
+        echo ".dev/dev.db is open in another process (the dev API?); stop it first" >&2
+        exit 1
+    fi
+    rm -f .dev/dev.db .dev/dev.db-wal .dev/dev.db-shm
+    echo "removed .dev/dev.db"
 
 # web UI only, reachable from the laptop over Tailscale. Needs `just api`
 # running (it made the token this reads) and started with the laptop's
