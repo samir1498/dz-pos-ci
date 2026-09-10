@@ -38,15 +38,17 @@ pub enum CoreError {
     NotFound { entity: &'static str, id: i32 },
     #[error("barcode {0} is already used in this shop")]
     DuplicateBarcode(String),
-    /// A payment for more than the customer owes. Its own variant rather than
-    /// a `Validation`, because the only useful thing to say back is a figure
-    /// the caller never sent: what is outstanding right now. The code stays
-    /// `validation`, so a screen that already translates it says the same
-    /// sentence and reads the amount out of the payload.
+    /// A payment for more than is owed, on either ledger. Its own variant
+    /// rather than a `Validation`, because the only useful thing to say back
+    /// is a figure the caller never sent: what is outstanding right now. The
+    /// code stays `validation`, so a screen that already translates it says
+    /// the same sentence and reads the amount out of the payload.
     ///
-    /// Money that came in above a debt is an avoir's business, never a
-    /// credit balance a payment quietly opened.
-    #[error("a payment is never more than what the customer owes")]
+    /// The party is not named, because both sides raise it: money over what a
+    /// customer owes is an avoir's business and never a credit balance a
+    /// payment quietly opened, and money over what the shop owes a supplier
+    /// is an advance somebody writes on purpose.
+    #[error("a payment is never more than what is owed")]
     PaymentAboveDebt { outstanding_centimes: i64 },
     /// A number series the shop hands out (in-store barcodes, the document
     /// numbers) has no next value. Not a validation failure: the user did

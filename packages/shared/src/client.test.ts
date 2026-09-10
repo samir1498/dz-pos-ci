@@ -969,7 +969,7 @@ describe("customers", () => {
       stub(422, {
         error: {
           code: "validation",
-          message: "a payment is never more than what the customer owes",
+          message: "a payment is never more than what is owed",
           field: "amount_centimes",
           outstanding_centimes: 150_000,
         },
