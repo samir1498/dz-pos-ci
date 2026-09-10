@@ -36,6 +36,7 @@ const settings: SettingsDto = {
   store,
   regime: { regime: "reel", valid_from: "2026-01-01" },
   regime_planned: null,
+  theme: null,
 };
 
 const backup: BackupDto = {

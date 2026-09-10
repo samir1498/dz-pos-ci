@@ -12,6 +12,7 @@ import type { RegimeDto } from "../generated/RegimeDto";
 import type { RestoreDto } from "../generated/RestoreDto";
 import type { SettingsDto } from "../generated/SettingsDto";
 import type { StoreDto } from "../generated/StoreDto";
+import type { ThemeDto } from "../generated/ThemeDto";
 import { day, exactInteger } from "./common";
 import type { Assert, Matches } from "./drift";
 
@@ -44,10 +45,21 @@ export const storeSchema = z.object({
 }) satisfies z.ZodType<StoreDto>;
 type _Store = Assert<Matches<StoreDto, typeof storeSchema>>;
 
+/** The four `[data-theme]` blocks packages/design emits, by their own names. */
+export const themeSchema = z.enum([
+  "comptoir",
+  "registre",
+  "observe",
+  "observe-dark",
+]) satisfies z.ZodType<ThemeDto>;
+type _Theme = Assert<Matches<ThemeDto, typeof themeSchema>>;
+
 export const settingsSchema = z.object({
   store: storeSchema,
   regime: datedRegimeSchema,
   regime_planned: datedRegimeSchema.nullable(),
+  /** `null` is the shop following the machine, not a missing answer. */
+  theme: themeSchema.nullable(),
 }) satisfies z.ZodType<SettingsDto>;
 type _Settings = Assert<Matches<SettingsDto, typeof settingsSchema>>;
 

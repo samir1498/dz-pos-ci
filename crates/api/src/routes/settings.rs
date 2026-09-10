@@ -8,9 +8,9 @@ use axum::Json;
 use chrono::{NaiveDateTime, NaiveTime};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::services::clock;
-use dzpos_core::services::{settings, shops};
+use dzpos_core::services::{preferences, settings, shops};
 
-use crate::dto::{parse_day, RegimeChangeDto, SettingsDto, StoreDto};
+use crate::dto::{parse_day, RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -30,6 +30,7 @@ fn read_all(
         store: StoreDto::from(shops::get(conn, shop)?),
         regime: settings::regime_current(conn, shop, at)?.into(),
         regime_planned: settings::regime_planned(conn, shop, at)?.map(Into::into),
+        theme: preferences::theme(conn, shop)?.map(Into::into),
     })
 }
 
@@ -51,6 +52,26 @@ pub async fn update_store(
         .blocking(move |c| shops::update_store(c, shop, user, block))
         .await?;
     Ok(Json(StoreDto::from(after)))
+}
+
+/// Records the shop's theme, or forgets it when the body carries `null`,
+/// which puts the app back on the machine's own light or dark preference.
+/// Answers the whole settings page for the reason `change_regime` does: the
+/// screen should read one shape back, not patch its own copy.
+pub async fn set_theme(
+    State(state): State<AppState>,
+    body: Result<Json<ThemeChoiceDto>, JsonRejection>,
+) -> Result<Json<SettingsDto>, ApiError> {
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let chosen = dto.theme.map(Into::into);
+    let shop = state.shop_id;
+    let all = state
+        .blocking(move |c| {
+            preferences::set_theme(c, shop, chosen, now())?;
+            read_all(c, shop)
+        })
+        .await?;
+    Ok(Json(all))
 }
 
 /// Answers the whole settings page again: the change may be current or

@@ -97,9 +97,101 @@ async fn the_seeded_shop_reads_as_its_name_reel_and_nothing_planned() {
                 "address": null, "phone": null
             },
             "regime": { "regime": "reel", "valid_from": "2026-01-01" },
-            "regime_planned": null
+            "regime_planned": null,
+            "theme": null
         })
     );
+}
+
+/// `null` is the shop following the machine, and it is what a shop that has
+/// never chosen reads as. Every name the design package emits a block for
+/// goes out and comes back under the same spelling the CSS attribute uses.
+#[tokio::test]
+async fn a_theme_is_kept_and_read_back_under_the_name_the_stylesheet_uses() {
+    let h = harness();
+    for name in ["comptoir", "registre", "observe", "observe-dark"] {
+        let (status, body) = call(
+            &h.app,
+            "PUT",
+            "/settings/theme",
+            Some(json!({ "theme": name })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["theme"], json!(name), "the answer lost the theme");
+
+        let (_, all) = call(&h.app, "GET", "/settings", None).await;
+        assert_eq!(all["theme"], json!(name), "the shop file lost the theme");
+    }
+}
+
+#[tokio::test]
+async fn choosing_nothing_puts_the_shop_back_on_the_machine() {
+    let h = harness();
+    let (_, _) = call(
+        &h.app,
+        "PUT",
+        "/settings/theme",
+        Some(json!({ "theme": "registre" })),
+    )
+    .await;
+    let (status, body) = call(&h.app, "PUT", "/settings/theme", Some(json!({ "theme": null }))).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["theme"], Value::Null);
+
+    let (_, all) = call(&h.app, "GET", "/settings", None).await;
+    assert_eq!(all["theme"], Value::Null);
+}
+
+/// The name is closed. A body naming a theme with no block would leave the
+/// screen on whatever it had, and the shop file would carry a value no build
+/// can render.
+#[tokio::test]
+async fn a_theme_with_no_stylesheet_block_is_refused() {
+    let h = harness();
+    for bad in [
+        json!({ "theme": "midnight" }),
+        json!({ "theme": "Comptoir" }),
+        json!({ "theme": "observe_dark" }),
+        json!({ "themes": "observe" }),
+    ] {
+        let (status, _) = call(&h.app, "PUT", "/settings/theme", Some(bad.clone())).await;
+        // The same 422 every refused body gets: serde never built the DTO,
+        // so no rule in the core was reached.
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{bad} was accepted as a theme"
+        );
+    }
+
+    let (_, all) = call(&h.app, "GET", "/settings", None).await;
+    assert_eq!(all["theme"], Value::Null, "a refused body still wrote a row");
+}
+
+/// The theme is not part of the fiscal series next door: choosing one does
+/// not touch the régime, and a régime change does not clear the theme.
+#[tokio::test]
+async fn the_theme_and_the_regime_do_not_reach_each_other() {
+    let h = harness();
+    let (_, _) = call(
+        &h.app,
+        "PUT",
+        "/settings/theme",
+        Some(json!({ "theme": "observe" })),
+    )
+    .await;
+    let (status, body) = call(
+        &h.app,
+        "POST",
+        "/settings/regime",
+        Some(json!({ "regime": "ifu", "valid_from": "2027-01-01" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["theme"], json!("observe"), "the régime change ate the theme");
+    assert_eq!(body["regime"]["regime"], json!("reel"));
+    assert_eq!(body["regime_planned"]["regime"], json!("ifu"));
 }
 
 #[tokio::test]
