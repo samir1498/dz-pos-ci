@@ -70,6 +70,8 @@ export type { CancelDocumentDto } from "./generated/CancelDocumentDto";
 export type { CashPositionDto } from "./generated/CashPositionDto";
 export type { DashboardDto } from "./generated/DashboardDto";
 export type { DashboardFiguresDto } from "./generated/DashboardFiguresDto";
+export type { DashboardSeriesDto } from "./generated/DashboardSeriesDto";
+export type { DashboardSeriesPointDto } from "./generated/DashboardSeriesPointDto";
 export type { LowStockDto } from "./generated/LowStockDto";
 export type { OwedDto } from "./generated/OwedDto";
 export type { TopProductDto } from "./generated/TopProductDto";

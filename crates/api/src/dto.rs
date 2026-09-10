@@ -21,7 +21,9 @@ use dzpos_core::services::backup::Backup;
 use dzpos_core::services::cash::{CashPosition, Outgoings, Takings};
 use dzpos_core::services::clock::Month;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
-use dzpos_core::services::dashboard::{Dashboard, Figures, LowStock, Owed, TopProduct};
+use dzpos_core::services::dashboard::{
+    Dashboard, Figures, LowStock, Owed, Series, SeriesPoint, TopProduct,
+};
 use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
 use dzpos_core::services::documents::CancelEffect;
 use dzpos_core::services::expenses::{Expense, ExpenseCategory, NewExpense};
@@ -2352,6 +2354,71 @@ impl TryFrom<Dashboard> for DashboardDto {
             supplier_debt: OwedDto::from(d.supplier_debt),
             open_purchases: d.open_purchases,
         })
+    }
+}
+
+/// One bucket of the dashboard's chart: a day, or the week its days were
+/// folded into. `from` and `to` are both included and they are equal on a
+/// day, so a tooltip names the range the figure covers rather than the one
+/// the screen asked for.
+///
+/// `cash_in_centimes` is the drawer's side alone, sales paid on the spot plus
+/// money handed over against a debt. The card takings are a movement of the
+/// bank and not of the till, so they are not in this line; the day's own
+/// `/cash` answer is where they are.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "DashboardSeriesPointDto.ts")]
+pub struct DashboardSeriesPointDto {
+    pub from: String,
+    pub to: String,
+    pub figures: DashboardFiguresDto,
+    pub cash_in_centimes: i64,
+}
+
+impl From<SeriesPoint> for DashboardSeriesPointDto {
+    fn from(p: SeriesPoint) -> Self {
+        DashboardSeriesPointDto {
+            from: p.from.format(DATE_FORMAT).to_string(),
+            to: p.to.format(DATE_FORMAT).to_string(),
+            figures: DashboardFiguresDto::from(p.figures),
+            cash_in_centimes: p.cash_in.as_centimes(),
+        }
+    }
+}
+
+/// The dashboard's chart: a stretch of days ending on the day the screen
+/// asked about, each on its own and folded into weeks. Both lists run oldest
+/// first, and `days` skips nothing: a day the shop sold nothing is a row of
+/// zeros, because a gap in a chart reads as a day it was shut.
+///
+/// The weeks are cut back from `to`, so the last bucket is a whole week of
+/// the days the shop is in and the odd ones fall at the far end. Thirty days
+/// is four weeks and two days.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "DashboardSeriesDto.ts")]
+pub struct DashboardSeriesDto {
+    pub from: String,
+    pub to: String,
+    pub days: Vec<DashboardSeriesPointDto>,
+    pub weeks: Vec<DashboardSeriesPointDto>,
+}
+
+impl From<Series> for DashboardSeriesDto {
+    fn from(s: Series) -> Self {
+        DashboardSeriesDto {
+            from: s.from.format(DATE_FORMAT).to_string(),
+            to: s.to.format(DATE_FORMAT).to_string(),
+            days: s
+                .days
+                .into_iter()
+                .map(DashboardSeriesPointDto::from)
+                .collect(),
+            weeks: s
+                .weeks
+                .into_iter()
+                .map(DashboardSeriesPointDto::from)
+                .collect(),
+        }
     }
 }
 

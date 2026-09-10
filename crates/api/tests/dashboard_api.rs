@@ -112,3 +112,69 @@ async fn a_day_the_calendar_has_no_room_for_is_refused_by_the_edge() {
         assert_eq!(body["error"]["field"], "day", "{day}");
     }
 }
+
+#[tokio::test]
+async fn the_series_covers_thirty_days_back_from_the_day_and_folds_them_into_weeks() {
+    let h = harness();
+    let (status, body) = get(&h.app, "/dashboard/series?day=2026-09-30&days=30").await;
+    assert_eq!(status, StatusCode::OK);
+
+    assert_eq!(body["from"], "2026-09-01");
+    assert_eq!(body["to"], "2026-09-30");
+    let days = body["days"].as_array().unwrap();
+    assert_eq!(days.len(), 30);
+    assert_eq!(days[0]["from"], "2026-09-01");
+    assert_eq!(days[0]["to"], "2026-09-01");
+    assert_eq!(days[29]["to"], "2026-09-30");
+    // A day nothing happened on is a row of zeros and not a gap.
+    assert_eq!(days[0]["figures"]["sales_ttc_centimes"], 0);
+    assert_eq!(days[0]["cash_in_centimes"], 0);
+
+    // Four whole weeks against the newest end, and the two days that do not
+    // fill one left at the far end.
+    let weeks = body["weeks"].as_array().unwrap();
+    assert_eq!(weeks.len(), 5);
+    assert_eq!(
+        (&weeks[0]["from"], &weeks[0]["to"]),
+        (&"2026-09-01".into(), &"2026-09-02".into())
+    );
+    assert_eq!(
+        (&weeks[4]["from"], &weeks[4]["to"]),
+        (&"2026-09-24".into(), &"2026-09-30".into())
+    );
+}
+
+#[tokio::test]
+async fn the_series_names_no_day_and_no_count_and_gets_the_shop_s_last_thirty() {
+    let h = harness();
+    let (_, clock) = get(&h.app, "/clock").await;
+    let today = clock["today"].as_str().unwrap().to_string();
+
+    let (status, body) = get(&h.app, "/dashboard/series").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["to"], today, "the route read a clock /clock does not");
+    assert_eq!(body["days"].as_array().unwrap().len(), 30);
+}
+
+#[tokio::test]
+async fn a_window_of_nothing_and_a_count_that_is_not_a_number_are_each_refused_for_what_they_are() {
+    let h = harness();
+    let (status, body) = get(&h.app, "/dashboard/series?days=0").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["error"]["code"], "validation");
+    assert_eq!(body["error"]["field"], "days");
+
+    let (status, _) = get(&h.app, "/dashboard/series?days=367").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // Not a number at all: the route refuses it before the core sees it, and
+    // says so about `days` rather than about the day. `bad_request` and not
+    // `validation`, because nothing about it reached a rule.
+    let (status, body) = get(&h.app, "/dashboard/series?days=beaucoup").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["error"]["code"], "bad_request");
+
+    let (status, body) = get(&h.app, "/dashboard/series?day=hier").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["error"]["field"], "day");
+}

@@ -5,6 +5,8 @@ import { z } from "zod";
 
 import type { DashboardDto } from "../generated/DashboardDto";
 import type { DashboardFiguresDto } from "../generated/DashboardFiguresDto";
+import type { DashboardSeriesDto } from "../generated/DashboardSeriesDto";
+import type { DashboardSeriesPointDto } from "../generated/DashboardSeriesPointDto";
 import type { LowStockDto } from "../generated/LowStockDto";
 import type { OwedDto } from "../generated/OwedDto";
 import type { TopProductDto } from "../generated/TopProductDto";
@@ -72,3 +74,28 @@ export const dashboardSchema = z.object({
   open_purchases: exactInteger,
 }) satisfies z.ZodType<DashboardDto>;
 type _Dashboard = Assert<Matches<DashboardDto, typeof dashboardSchema>>;
+
+/** One bucket of the chart. `from` and `to` are both included and equal on a
+ *  day, so a tooltip names the range the figure covers. `cash_in_centimes` is
+ *  the drawer's side alone and goes below zero on a day the shop paid out
+ *  more than it took. */
+export const dashboardSeriesPointSchema = z.object({
+  from: day,
+  to: day,
+  figures: dashboardFiguresSchema,
+  cash_in_centimes: exactInteger,
+}) satisfies z.ZodType<DashboardSeriesPointDto>;
+type _DashboardSeriesPoint = Assert<
+  Matches<DashboardSeriesPointDto, typeof dashboardSeriesPointSchema>
+>;
+
+/** The chart behind the two columns: every day of the window, oldest first
+ *  and none skipped, and the weeks they fold into. The weeks are cut back
+ *  from `to`, so the oldest is the short one. */
+export const dashboardSeriesSchema = z.object({
+  from: day,
+  to: day,
+  days: z.array(dashboardSeriesPointSchema),
+  weeks: z.array(dashboardSeriesPointSchema),
+}) satisfies z.ZodType<DashboardSeriesDto>;
+type _DashboardSeries = Assert<Matches<DashboardSeriesDto, typeof dashboardSeriesSchema>>;
