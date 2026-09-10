@@ -172,11 +172,38 @@ pub enum Key {
     /// The words line of a debt slip. Not the statement's, which says "le
     /// présent relevé" about a page covering a period this one has none of.
     DebtInWords,
+
+    // The Excel workbooks (features.md §1, Backup). Only the sheet name is
+    // translated: a workbook's header row and its unit and status cells are
+    // the stable key names, so a products export edited in a spreadsheet
+    // reads straight back through the import and no column has to be found
+    // again in three languages. The tab is what a person sees first, and it
+    // is the one place a word costs nothing to translate.
+    /// The tab of the products workbook, and of the import template.
+    SheetProducts,
+    SheetSales,
+    SheetCustomers,
+    SheetSuppliers,
+    /// The second tab of the import template: the units and the TVA rates a
+    /// row may name, and nothing else. It is read, never written back.
+    SheetAllowedValues,
+    /// The heading over the list of units a `unit` cell may hold.
+    TemplateUnits,
+    /// The heading over the list of TVA rates a `rate_percent` cell may hold.
+    TemplateRates,
+    /// What the example row is there to say: a code the shop already sells
+    /// under updates that product rather than opening a second one, and a
+    /// blank code is numbered by the till.
+    TemplateBarcodeNote,
+    /// What the `stock` column does, which is nothing on a product the shop
+    /// already has: quantities belong to the stock ledger and an import is
+    /// not a movement.
+    TemplateStockNote,
 }
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 68] = [
+    pub const ALL: [Key; 77] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -245,6 +272,15 @@ impl Key {
         Key::LastMovements,
         Key::NoFiscalValue,
         Key::DebtInWords,
+        Key::SheetProducts,
+        Key::SheetSales,
+        Key::SheetCustomers,
+        Key::SheetSuppliers,
+        Key::SheetAllowedValues,
+        Key::TemplateUnits,
+        Key::TemplateRates,
+        Key::TemplateBarcodeNote,
+        Key::TemplateStockNote,
     ];
 }
 
@@ -548,5 +584,55 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::DebtInWords, Lang::Fr) => "Arrêtée la présente situation à la somme de",
         (Key::DebtInWords, Lang::En) => "This slip is closed at the sum of",
         (Key::DebtInWords, Lang::Ar) => "أوقفت هذه الوضعية بمبلغ",
+
+        (Key::SheetProducts, Lang::Fr) => "Produits",
+        (Key::SheetProducts, Lang::En) => "Products",
+        (Key::SheetProducts, Lang::Ar) => "المنتجات",
+
+        (Key::SheetSales, Lang::Fr) => "Ventes",
+        (Key::SheetSales, Lang::En) => "Sales",
+        (Key::SheetSales, Lang::Ar) => "المبيعات",
+
+        (Key::SheetCustomers, Lang::Fr) => "Clients",
+        (Key::SheetCustomers, Lang::En) => "Customers",
+        (Key::SheetCustomers, Lang::Ar) => "الزبائن",
+
+        (Key::SheetSuppliers, Lang::Fr) => "Fournisseurs",
+        (Key::SheetSuppliers, Lang::En) => "Suppliers",
+        (Key::SheetSuppliers, Lang::Ar) => "الموردون",
+
+        (Key::SheetAllowedValues, Lang::Fr) => "Valeurs autorisées",
+        (Key::SheetAllowedValues, Lang::En) => "Allowed values",
+        (Key::SheetAllowedValues, Lang::Ar) => "القيم المسموح بها",
+
+        (Key::TemplateUnits, Lang::Fr) => "Unités",
+        (Key::TemplateUnits, Lang::En) => "Units",
+        (Key::TemplateUnits, Lang::Ar) => "الوحدات",
+
+        (Key::TemplateRates, Lang::Fr) => "Taux de TVA",
+        (Key::TemplateRates, Lang::En) => "VAT rates",
+        (Key::TemplateRates, Lang::Ar) => "نسب الرسم على القيمة المضافة",
+
+        (Key::TemplateStockNote, Lang::Fr) => "La colonne stock ne sert qu\u{2019}\u{e0} l\u{2019}ouverture d\u{2019}un nouveau produit. Sur un produit que la boutique a d\u{e9}j\u{e0}, elle est ignor\u{e9}e : un import ne fait jamais bouger le stock, seuls un achat, une vente et un recomptage le font.",
+        (Key::TemplateStockNote, Lang::En) => "The stock column opens a new product with that quantity. On a product the shop already has it is ignored: an import never moves stock, only a purchase, a sale and a recount do.",
+        (Key::TemplateStockNote, Lang::Ar) => "\u{639}\u{645}\u{648}\u{62f} \u{627}\u{644}\u{645}\u{62e}\u{632}\u{648}\u{646} \u{64a}\u{641}\u{62a}\u{62d} \u{645}\u{646}\u{62a}\u{648}\u{62c}\u{64b}\u{627} \u{62c}\u{62f}\u{64a}\u{62f}\u{64b}\u{627} \u{628}\u{647}\u{630}\u{647} \u{627}\u{644}\u{643}\u{645}\u{64a}\u{629}\u{60c} \u{648}\u{64a}\u{64f}\u{647}\u{645}\u{644} \u{639}\u{644}\u{649} \u{645}\u{646}\u{62a}\u{648}\u{62c} \u{645}\u{648}\u{62c}\u{648}\u{62f} \u{623}\u{635}\u{644}\u{64b}\u{627}: \u{627}\u{644}\u{627}\u{633}\u{62a}\u{64a}\u{631}\u{627}\u{62f} \u{644}\u{627} \u{64a}\u{62d}\u{631}\u{651}\u{643} \u{627}\u{644}\u{645}\u{62e}\u{632}\u{648}\u{646} \u{623}\u{628}\u{62f}\u{64b}\u{627}.",
+        (Key::TemplateBarcodeNote, Lang::Fr) => concat!(
+            "Un code-barres que la boutique utilise déjà met à jour ce produit ",
+            "(nom, prix d\u{2019}achat, prix de vente) au lieu d\u{2019}en créer un second. ",
+            "Laissez la colonne vide et la caisse attribue un code."
+        ),
+        (Key::TemplateBarcodeNote, Lang::En) => concat!(
+            "A barcode the shop already sells under updates that product ",
+            "(name, cost, price) instead of opening a second one. ",
+            "Leave the column empty and the till assigns a code."
+        ),
+        (Key::TemplateBarcodeNote, Lang::Ar) => concat!(
+            "\u{0627}\u{0644}\u{0631}\u{0645}\u{0632} \u{0627}\u{0644}\u{0634}\u{0631}\u{064a}\u{0637}\u{064a} ",
+            "\u{0627}\u{0644}\u{0645}\u{0633}\u{062a}\u{0639}\u{0645}\u{0644} \u{0645}\u{0646} \u{0642}\u{0628}\u{0644} ",
+            "\u{064a}\u{062d}\u{062f}\u{0651}\u{062b} \u{0627}\u{0644}\u{0645}\u{0646}\u{062a}\u{0648}\u{062c} ",
+            "\u{0628}\u{062f}\u{0644} \u{0625}\u{0646}\u{0634}\u{0627}\u{0621} \u{0645}\u{0646}\u{062a}\u{0648}\u{062c} \u{062b}\u{0627}\u{0646}\u{064d}. ",
+            "\u{0627}\u{062a}\u{0631}\u{0643} \u{0627}\u{0644}\u{062e}\u{0627}\u{0646}\u{0629} \u{0641}\u{0627}\u{0631}\u{063a}\u{0629} ",
+            "\u{0644}\u{062a}\u{0639}\u{064a}\u{0651}\u{0646} \u{0627}\u{0644}\u{0635}\u{0646}\u{062f}\u{0648}\u{0642} \u{0631}\u{0645}\u{0632}\u{064b}\u{0627}."
+        ),
     }
 }

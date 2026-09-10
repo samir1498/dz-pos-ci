@@ -16,6 +16,7 @@ import {
 } from "@dzpos/shared";
 import type { CategoryDto, NewProductDto, ProductDto, UnitDto } from "@dzpos/shared";
 import { api, categoriesQueryKey, productsQueryKey } from "@/api";
+import { LabelPanel, type LabelAsk } from "@/components/LabelPanel";
 import { isKey, useTranslation, type Key } from "@/i18n";
 import { RATES, rateCellLabel, rateLabel } from "@/lib/rate";
 
@@ -83,6 +84,14 @@ export function ProductsScreen() {
   // One form, two jobs: `null` is closed, "new" is the add form, a product
   // is the edit form for that row.
   const [open, setOpen] = useState<"new" | ProductDto | null>(null);
+  // The labels the screen is showing, or none. One state for the drawer's
+  // single label and for the list's sheet: they are the same page at two
+  // sizes, and only one of them is on screen at a time.
+  const [labels, setLabels] = useState<LabelAsk | null>(null);
+  // The rows ticked for a sheet of labels. Ids and not rows: a product
+  // edited while it is ticked stays ticked, and the sheet is rendered from
+  // what the server holds rather than from a copy this screen kept.
+  const [picked, setPicked] = useState<readonly number[]>([]);
   const products = useQuery({ queryKey: productsQueryKey, queryFn: () => api.listProducts() });
   // The form needs the shop's real categories before it can offer one, so
   // the query lives here and the form is rendered once it has answered.
@@ -95,14 +104,33 @@ export function ProductsScreen() {
     <section className="flex flex-col gap-4">
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">{t("products_title")}</h1>
-        <button
-          type="button"
-          className="rounded border px-3 py-1.5"
-          onClick={() => setOpen((current) => (current === null ? "new" : null))}
-        >
-          {open !== null ? t("action_cancel") : t("products_add")}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="print-selected-labels"
+            className="rounded border px-3 py-1.5 disabled:opacity-50"
+            disabled={picked.length === 0}
+            onClick={() =>
+              setLabels((current) =>
+                current !== null && current.kind === "sheet" ? null : { kind: "sheet", ids: picked },
+              )
+            }
+          >
+            {labels !== null && labels.kind === "sheet"
+              ? t("action_labels_close")
+              : t("action_print_labels")}
+          </button>
+          <button
+            type="button"
+            className="rounded border px-3 py-1.5"
+            onClick={() => setOpen((current) => (current === null ? "new" : null))}
+          >
+            {open !== null ? t("action_cancel") : t("products_add")}
+          </button>
+        </div>
       </header>
+
+      {labels !== null ? <LabelPanel ask={labels} /> : null}
 
       {open !== null && categories.isSuccess ? (
         <ProductForm
@@ -110,6 +138,13 @@ export function ProductsScreen() {
           categories={categories.data}
           initial={open === "new" ? null : open}
           onDone={() => setOpen(null)}
+          onPrintLabel={(id) =>
+            setLabels((current) =>
+              current !== null && current.kind === "one" && current.id === id
+                ? null
+                : { kind: "one", id },
+            )
+          }
         />
       ) : null}
       {open !== null && categories.isPending ? <p>{t("products_loading")}</p> : null}
@@ -126,7 +161,17 @@ export function ProductsScreen() {
         </p>
       ) : null}
       {products.isSuccess ? (
-        <ProductTable rows={products.data} onEdit={(row) => setOpen(row)} />
+        <ProductTable
+          rows={products.data}
+          onEdit={(row) => setOpen(row)}
+          picked={picked}
+          onPick={(id, on) => {
+            setLabels(null);
+            setPicked((current) =>
+              on ? [...current, id] : current.filter((other) => other !== id),
+            );
+          }}
+        />
       ) : null}
     </section>
   );
@@ -135,9 +180,13 @@ export function ProductsScreen() {
 function ProductTable({
   rows,
   onEdit,
+  picked,
+  onPick,
 }: {
   rows: ProductDto[];
   onEdit: (row: ProductDto) => void;
+  picked: readonly number[];
+  onPick: (id: number, on: boolean) => void;
 }) {
   const { t } = useTranslation();
   if (rows.length === 0) return <p>{t("products_empty")}</p>;
@@ -146,6 +195,9 @@ function ProductTable({
       <caption className="sr-only">{t("products_title")}</caption>
       <thead>
         <tr>
+          <th scope="col" className="pb-2 text-start">
+            <span className="sr-only">{t("col_pick")}</span>
+          </th>
           <th scope="col" className="text-start pb-2">{t("col_name")}</th>
           <th scope="col" className="text-start pb-2">{t("col_barcode")}</th>
           <th scope="col" className="text-start pb-2">{t("col_unit")}</th>
@@ -160,6 +212,14 @@ function ProductTable({
       <tbody>
         {rows.map((p) => (
           <tr key={p.id} className={p.active ? "border-t" : "border-t opacity-60"}>
+            <td className="py-1.5 pe-3">
+              <input
+                type="checkbox"
+                aria-label={`${t("col_pick")} ${p.name}`}
+                checked={picked.includes(p.id)}
+                onChange={(e) => onPick(p.id, e.target.checked)}
+              />
+            </td>
             <td className="py-1.5 pe-3">
               {p.name}
               {p.active ? null : (
@@ -214,10 +274,12 @@ function ProductForm({
   categories,
   initial,
   onDone,
+  onPrintLabel,
 }: {
   categories: CategoryDto[];
   initial: ProductDto | null;
   onDone: () => void;
+  onPrintLabel: (id: number) => void;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -529,6 +591,20 @@ function ProductForm({
         <button type="button" className="rounded border px-3 py-1.5" onClick={onDone}>
           {t("action_cancel")}
         </button>
+        {/* Only on a stored product: a label is a picture of a barcode, and
+            a product being typed has no id to print one for. The refusal
+            when it has no EAN-13 comes from the server, so the button is
+            offered and the reason is read rather than guessed here. */}
+        {initial === null ? null : (
+          <button
+            type="button"
+            data-testid="print-label"
+            className="rounded border px-3 py-1.5"
+            onClick={() => onPrintLabel(initial.id)}
+          >
+            {t("action_print_label")}
+          </button>
+        )}
       </div>
     </form>
   );

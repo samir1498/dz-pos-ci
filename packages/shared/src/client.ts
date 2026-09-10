@@ -25,6 +25,8 @@ import type { ExpenseDto } from "./generated/ExpenseDto";
 import type { ExpensesDto } from "./generated/ExpensesDto";
 import type { NewExpenseDto } from "./generated/NewExpenseDto";
 import type { HealthDto } from "./generated/HealthDto";
+import type { ImportAppliedDto } from "./generated/ImportAppliedDto";
+import type { ImportDryRunDto } from "./generated/ImportDryRunDto";
 import type { NewAvoirDto } from "./generated/NewAvoirDto";
 import type { CancelDocumentDto } from "./generated/CancelDocumentDto";
 import type { NewCustomerDto } from "./generated/NewCustomerDto";
@@ -54,6 +56,7 @@ import type { SupplierStatementDto } from "./generated/SupplierStatementDto";
 import type { SupplierWriteDto } from "./generated/SupplierWriteDto";
 import { categorySchema, productSchema } from "./schemas/catalogue";
 import { dashboardSchema } from "./schemas/dashboard";
+import { importAppliedSchema, importDryRunSchema, labelSheetSchema } from "./schemas/import";
 import {
   customerLedgerSchema,
   customerPaymentsSchema,
@@ -168,6 +171,11 @@ export type PrintLang = "fr" | "en" | "ar";
  * facture on a smaller sheet (features.md §4). */
 export type PrintPaper = "a4" | "a5";
 
+/** The four workbooks. Not a generated DTO either: the kind is a path
+ * segment, so `crates/api/src/lib.rs` is the other half and an unknown one
+ * answers 404. */
+export type ExportKind = "products" | "sales" | "customers" | "suppliers";
+
 /** A body that is a page, not JSON. Only the error path is JSON, and it is
  * the same envelope every other call answers with. */
 async function unwrapText(res: Response): Promise<string> {
@@ -176,6 +184,44 @@ async function unwrapText(res: Response): Promise<string> {
   let body: unknown = null;
   try {
     body = JSON.parse(text);
+  } catch {
+    body = null;
+  }
+  const refusal = apiErrorSchema.safeParse(body);
+  if (refusal.success) {
+    throw apiError(refusal.data, res.status);
+  }
+  throw new ApiError("unreachable", `HTTP ${res.status}`, res.status);
+}
+
+/** A file the shop saves: the bytes and the name the server gave them. */
+export interface Download {
+  readonly blob: Blob;
+  readonly filename: string;
+}
+
+/** The name out of `content-disposition`, or the fallback the caller gives.
+ * A filename with a quote or a path separator in it is dropped rather than
+ * cleaned: nothing this server sends has one, and a name that reached the
+ * save dialog with a `/` in it would be somebody else's bug arriving here. */
+function filenameOf(header: string | null, fallback: string): string {
+  if (header === null) return fallback;
+  const match = /filename="([^"\/\\]+)"/.exec(header);
+  return match === null ? fallback : match[1];
+}
+
+/** A body that is a file. The error path is the same JSON envelope every
+ * other call answers with, so a refusal is read out of the blob as text. */
+async function unwrapFile(res: Response): Promise<Download> {
+  if (res.ok) {
+    return {
+      blob: await res.blob(),
+      filename: filenameOf(res.headers.get("content-disposition"), "export.xlsx"),
+    };
+  }
+  let body: unknown = null;
+  try {
+    body = JSON.parse(await res.text());
   } catch {
     body = null;
   }
@@ -243,6 +289,22 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     return unwrapText(res);
   }
 
+  /** The same call again, for a route that answers a file. The name the
+   * server put on it comes back beside the bytes: the desktop saves under
+   * that name rather than inventing one, which is why the CORS layer
+   * exposes `content-disposition`. */
+  async function sendFile(path: string, init?: RequestInit): Promise<Download> {
+    const headers = new Headers(init?.headers);
+    if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
+    let res: Response;
+    try {
+      res = await send0(`${base}${path}`, { ...init, headers });
+    } catch {
+      throw new ApiError("unreachable", `cannot reach ${base}`, 0);
+    }
+    return unwrapFile(res);
+  }
+
   return {
     baseUrl: base,
 
@@ -272,6 +334,61 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         body: JSON.stringify(input),
       });
       return narrow(body, productSchema, "product");
+    },
+
+    /** The four workbooks a shop takes away. The range is the sales
+     * workbook's alone; the other three are the rows as they stand today,
+     * because a product is a current row and not an event. */
+    async exportWorkbook(
+      kind: ExportKind,
+      lang: PrintLang,
+      range?: { from?: string; to?: string },
+    ): Promise<Download> {
+      const query = new URLSearchParams({ lang });
+      if (range?.from !== undefined && range.from !== "") query.set("from", range.from);
+      if (range?.to !== undefined && range.to !== "") query.set("to", range.to);
+      return sendFile(`/export/${kind}?${query.toString()}`);
+    },
+
+    /** The empty workbook a shop fills in and posts back. */
+    async importTemplate(lang: PrintLang): Promise<Download> {
+      return sendFile(`/import/products/template?lang=${lang}`);
+    },
+
+    /** What the file would do, with nothing written. A file with refusals in
+     * it still answers 200: the refusals are the answer. */
+    async dryRunProductImport(file: Blob): Promise<ImportDryRunDto> {
+      const body = await send("/import/products/dry-run", { method: "POST", body: file });
+      return narrow(body, importDryRunSchema, "import dry run");
+    },
+
+    /** The file, written, or nothing at all. */
+    async applyProductImport(file: Blob): Promise<ImportAppliedDto> {
+      const body = await send("/import/products", { method: "POST", body: file });
+      return narrow(body, importAppliedSchema, "import result");
+    },
+
+    /** The 58 x 40 mm shelf label for one product, as a page to print. */
+    async getProductLabel(id: number, lang: PrintLang): Promise<string> {
+      return sendText(`/products/${id}/label?lang=${lang}`);
+    },
+
+    /** A sheet of those labels on A4, in the order the ids are given.
+     *
+     * The selection is checked against the same cap the API holds before
+     * the call is made: a body the server will refuse is a call not worth
+     * making, and the screen gets a `bad_request` it already translates
+     * rather than a round trip. */
+    async getLabelSheet(ids: readonly number[], lang: PrintLang): Promise<string> {
+      const body = labelSheetSchema.safeParse({ ids: [...ids] });
+      if (!body.success) {
+        throw new ApiError("bad_request", "that is not a printable selection", 0);
+      }
+      return sendText(`/labels/sheet?lang=${lang}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body.data),
+      });
     },
 
     async getSettings(): Promise<SettingsDto> {

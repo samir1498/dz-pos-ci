@@ -26,6 +26,18 @@ pub(crate) struct CategoryRow {
     pub default_rate_bps: i32,
 }
 
+/// A category as it goes into the file. Only the Excel import writes one:
+/// there is no categories screen yet, and a product import that named a
+/// category nobody had opened would otherwise refuse the whole file
+/// (features.md §1).
+#[derive(Debug, Insertable)]
+#[diesel(table_name = categories)]
+pub(crate) struct CategoryRowWrite {
+    pub shop_id: i32,
+    pub name: String,
+    pub default_rate_bps: i32,
+}
+
 impl TryFrom<CategoryRow> for Category {
     type Error = CoreError;
 

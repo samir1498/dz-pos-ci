@@ -91,7 +91,12 @@ export { ApiError, createClient } from "./client";
 export * from "./schemas";
 export type { ClientOptions } from "./client";
 export type { ApiClient } from "./client";
-export type { PrintLang, PrintPaper } from "./client";
+export type { Download, ExportKind, PrintLang, PrintPaper } from "./client";
+export type { ImportAppliedDto } from "./generated/ImportAppliedDto";
+export type { ImportDryRunDto } from "./generated/ImportDryRunDto";
+export type { ImportOutcomeDto } from "./generated/ImportOutcomeDto";
+export type { ImportRowDto } from "./generated/ImportRowDto";
+export type { LabelSheetDto } from "./generated/LabelSheetDto";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";
 export {
   BPS_PER_WHOLE,

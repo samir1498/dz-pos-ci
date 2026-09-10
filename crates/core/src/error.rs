@@ -149,6 +149,16 @@ pub enum CoreError {
     /// stays fixed, like the file one.
     #[error("the document could not be rendered for printing")]
     Render(#[from] askama::Error),
+    /// A workbook this app was writing could not be finished. Like `Render`,
+    /// the data and the layout are both the app's own, so this is a bug here
+    /// and never something a caller can correct; the message is fixed and the
+    /// writer's own text stays on the source chain for the server's log.
+    ///
+    /// Reading a workbook is not this: a file a shop uploaded is input, and a
+    /// file that is not a workbook at all comes back as a `Validation` the
+    /// import screen can put under the file picker.
+    #[error("the workbook could not be written")]
+    Workbook(#[from] rust_xlsxwriter::XlsxError),
 }
 
 impl CoreError {
@@ -169,6 +179,7 @@ impl CoreError {
             | CoreError::Unstamped { .. }
             | CoreError::UnpricedReversal { .. } => "storage",
             CoreError::Render(_) => "print",
+            CoreError::Workbook(_) => "workbook",
         }
     }
 

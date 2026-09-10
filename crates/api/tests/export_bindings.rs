@@ -14,7 +14,8 @@ use dzpos_api::dto::{
     CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CloseOrderDto, CloseSupplierDto,
     CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DashboardDto,
     DashboardFiguresDto, DatedRegimeDto, DebtEntryDto, DebtKindDto, DocumentKindDto,
-    DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto, HealthDto, LastStockRecountDto,
+    DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto, HealthDto, ImportAppliedDto,
+    ImportDryRunDto, ImportOutcomeDto, ImportRowDto, LabelSheetDto, LastStockRecountDto,
     LowStockDto, NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto, NewProductDto,
     NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto, NewSaleLineDto, NewSupplierDto,
     OutgoingsDto, OwedDto, PaidNowDto, PartyKindDto, PaymentAllocationDto, PaymentDto,
@@ -28,7 +29,7 @@ use dzpos_api::dto::{
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 82] = [
+const FILES: [&str; 87] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -111,6 +112,11 @@ const FILES: [&str; 82] = [
     "StockDriftDto.ts",
     "StockRecountDto.ts",
     "LastStockRecountDto.ts",
+    "ImportOutcomeDto.ts",
+    "ImportRowDto.ts",
+    "ImportDryRunDto.ts",
+    "ImportAppliedDto.ts",
+    "LabelSheetDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -245,6 +251,11 @@ fn export_bindings() {
     StockDriftDto::export_all(&cfg).unwrap();
     StockRecountDto::export_all(&cfg).unwrap();
     LastStockRecountDto::export_all(&cfg).unwrap();
+    ImportOutcomeDto::export_all(&cfg).unwrap();
+    ImportRowDto::export_all(&cfg).unwrap();
+    ImportDryRunDto::export_all(&cfg).unwrap();
+    ImportAppliedDto::export_all(&cfg).unwrap();
+    LabelSheetDto::export_all(&cfg).unwrap();
     DashboardFiguresDto::export_all(&cfg).unwrap();
     LowStockDto::export_all(&cfg).unwrap();
     TopProductDto::export_all(&cfg).unwrap();

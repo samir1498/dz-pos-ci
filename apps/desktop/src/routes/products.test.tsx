@@ -9,6 +9,7 @@ import type { CategoryDto, ProductDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import ar from "@/i18n/ar.json";
 import en from "@/i18n/en.json";
+import fr from "@/i18n/fr.json";
 import { ProductsScreen } from "./products";
 
 const product: ProductDto = {
@@ -34,6 +35,11 @@ const alimentaire: CategoryDto = {
   name: "Alimentaire",
   default_rate_bps: 900,
 };
+
+/** A printed page: the core renders it, so the screen only ever shows it. */
+function html(body: string): Response {
+  return new Response(body, { status: 200, headers: { "content-type": "text/html" } });
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -103,14 +109,29 @@ let rows: ProductDto[];
 let categories: CategoryDto[];
 let createAnswer: (() => Response) | null;
 let updateAnswer: (() => Response) | null;
+let labelAnswer: (() => Response) | null;
 
 beforeEach(() => {
   rows = [];
   categories = [general];
   createAnswer = null;
   updateAnswer = null;
+  labelAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
+    if (init?.method === "POST" && url.includes("/labels/sheet")) {
+      if (labelAnswer !== null) return Promise.resolve(labelAnswer());
+      const ids: unknown = JSON.parse(String(init.body));
+      const named =
+        typeof ids === "object" && ids !== null && Array.isArray(Reflect.get(ids, "ids"))
+          ? Reflect.get(ids, "ids")
+          : [];
+      return Promise.resolve(html(`<html><body>SHEET ${String(named)}</body></html>`));
+    }
+    if (url.includes("/label?lang=")) {
+      if (labelAnswer !== null) return Promise.resolve(labelAnswer());
+      return Promise.resolve(html(`<html><body>LABEL ${url.split("/products/")[1] ?? ""}</body></html>`));
+    }
     if (init?.method === "PUT") {
       if (updateAnswer !== null) return Promise.resolve(updateAnswer());
       const id = Number(url.slice(url.lastIndexOf("/") + 1));
@@ -601,12 +622,12 @@ describe("in Arabic", () => {
     const row = (await screen.findByText("Huile Elio 5L")).closest("tr");
     if (row === null) throw new Error("no row");
     const cells = within(row).getAllByRole("cell");
-    // name, barcode, unit, price, rate, stock, edit: barcode (1), price
-    // (3), rate (4) and stock (5) are the ones read left to right.
-    expect(cells[1]).toHaveAttribute("dir", "ltr");
-    expect(cells[3]).toHaveAttribute("dir", "ltr");
+    // tick, name, barcode, unit, price, rate, stock, edit: barcode (2),
+    // price (4), rate (5) and stock (6) are the ones read left to right.
+    expect(cells[2]).toHaveAttribute("dir", "ltr");
     expect(cells[4]).toHaveAttribute("dir", "ltr");
     expect(cells[5]).toHaveAttribute("dir", "ltr");
+    expect(cells[6]).toHaveAttribute("dir", "ltr");
   });
 });
 
@@ -627,5 +648,88 @@ describe("in English", () => {
       within(row).getByText(`7${en.decimal_separator}50 ${en.percent_sign}`),
     ).toBeInTheDocument();
     expect(within(row).queryByText("7.50 %")).not.toBeInTheDocument();
+  });
+});
+
+describe("the labels", () => {
+  test("the drawer prints the stored product's label and nothing before it is stored", async () => {
+    rows = [product];
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("Huile Elio 5L");
+
+    // The add form has no product to print: a label is a picture of a
+    // barcode and a product being typed has neither an id nor one.
+    await user.click(screen.getByRole("button", { name: "Ajouter un produit" }));
+    await screen.findByLabelText("Catégorie");
+    expect(screen.queryByTestId("print-label")).toBeNull();
+    // Two buttons read "Annuler" while the add form is open: the header's,
+    // which closes it, and the form's own.
+    await user.click(screen.getAllByRole("button", { name: "Annuler" })[0] ?? document.body);
+
+    await user.click(screen.getByRole("button", { name: /Huile Elio 5L/ }));
+    await screen.findByLabelText("Catégorie");
+    await user.click(screen.getByTestId("print-label"));
+
+    const frame = await screen.findByTestId("product-label");
+    expect(frame.getAttribute("srcdoc")).toContain("LABEL 1");
+    expect(frame).toHaveAttribute("sandbox", "");
+    const asked = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(asked.some((url) => url.includes("/products/1/label?lang=fr"))).toBe(true);
+  });
+
+  test("a product with no barcode at all and one whose code is not an EAN-13 read differently", async () => {
+    rows = [product];
+    labelAnswer = () =>
+      json(422, {
+        error: { code: "validation", field: "barcode_digits", message: "not thirteen digits" },
+      });
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("Huile Elio 5L");
+    await user.click(screen.getByRole("button", { name: /Huile Elio 5L/ }));
+    await screen.findByLabelText("Catégorie");
+    await user.click(screen.getByTestId("print-label"));
+
+    // A fiche that visibly carries a supplier reference must not be told
+    // it has no barcode: the shop would go looking at a filled field.
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_label_not_ean13);
+    expect(screen.queryByTestId("product-label")).toBeNull();
+  });
+
+  test("an empty barcode column says so, and the two refusals are not one message", async () => {
+    rows = [product];
+    labelAnswer = () =>
+      json(422, { error: { code: "validation", field: "barcode", message: "none at all" } });
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("Huile Elio 5L");
+    await user.click(screen.getByRole("button", { name: /Huile Elio 5L/ }));
+    await screen.findByLabelText("Catégorie");
+    await user.click(screen.getByTestId("print-label"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_label_no_barcode);
+    expect(fr.error_label_no_barcode).not.toBe(fr.error_label_not_ean13);
+  });
+
+  test("the sheet is the ticked rows, and nothing is offered while none is ticked", async () => {
+    const second: ProductDto = { ...product, id: 2, name: "Semoule 5 kg", barcode: "2000010000024" };
+    rows = [product, second];
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("Semoule 5 kg");
+    expect(screen.getByTestId("print-selected-labels")).toBeDisabled();
+
+    await user.click(screen.getByRole("checkbox", { name: /Huile Elio 5L/ }));
+    await user.click(screen.getByRole("checkbox", { name: /Semoule 5 kg/ }));
+    await user.click(screen.getByTestId("print-selected-labels"));
+
+    const frame = await screen.findByTestId("product-label");
+    expect(frame.getAttribute("srcdoc")).toContain("SHEET 1,2");
+    const posted = fetchMock.mock.calls.find((call) => String(call[0]).includes("/labels/sheet"));
+    expect(posted).toBeDefined();
+    const init: unknown = posted?.[1];
+    const body: unknown = isInit(init) ? JSON.parse(String(init.body)) : null;
+    expect(body).toEqual({ ids: [1, 2] });
   });
 });

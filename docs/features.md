@@ -298,8 +298,40 @@ The fiscal rules table gains no row for any of this, because nothing here
 changes what a document charges.
 
 **Backup.** Automatic daily copy of the SQLite file, keep 30, restore from
-the settings screen. Export products, sales, customers, suppliers to Excel;
-import products from Excel with a downloadable template.
+the settings screen.
+
+**Excel out.** Four workbooks, from the "Exports and import" block on the
+settings screen: products, sales, customers, suppliers. They are what the
+tables hold, with a bold header row and number formats and nothing else: no
+pivot, no formula, no styling. The sales workbook is one row per document
+line over a range of days, with the kind, the number the paper prints, the
+day, the customer and the totals; the other three are the rows as they
+stand, because a product is a current row and not an event. Amounts are
+decimal numbers of dinars, written from the stored centimes and their
+decimal spelling, never computed through a float on the way; days are
+dates; the sheet is named in the language the caller asks for. Written with
+`rust_xlsxwriter`, pinned by a golden test per workbook that reads the file
+back with `calamine` and checks the cells rather than the bytes
+(`crates/core/tests/export_service.rs`).
+
+**Excel in.** Products only, and in two steps. A shop downloads a template
+workbook (the columns the import matches on, one example row, and a second
+sheet naming the units and the TVA rates a row may hold), fills it, and
+sends it back. A digit past the scale that carries value is refused
+(`too_many_decimals`) rather than rounded: a price typed 80.505 that the
+till then charged as 80.51 would be a centime nobody agreed to, and zeros
+past the scale are the column's format rather than a decimal anybody typed.
+The stock column opens a new product with that quantity and is ignored on
+one the shop already has, because the ledger owns the count. The dry run
+reports every row as created, updated or refused with the field and the
+reason, and writes nothing; apply writes only when
+no row is refused, in one transaction, audited once as `product.import`
+with its counts. A barcode the shop already sells under updates that
+product rather than opening a second one, and the template's second sheet
+says so. Categories the file names are created when missing, audited; units
+and rates must match the allowed lists. Read with `calamine`; pinned by
+`crates/core/tests/import_service.rs`, which also writes the browser
+suite's committed fixture from the template itself.
 
 ## 2. Customers and debt (v1)
 
@@ -681,8 +713,17 @@ first release.**
   share with a facture is a title, the line naming the facture it corrects,
   a words line saying avoir, and the stamp row it never carries, against a
   second copy of the parties, the lines, the totals and the signatures.
-  `barcode_label` and `bon_de_livraison_a4` are parked, the second with the
-  facture récapitulative (see Later); the `kind` stays in the model.
+  `barcode_label` ships: a 58 × 40 mm shelf label carrying the product's
+  name, its selling price with the currency, its EAN-13 in bars and the
+  same thirteen digits printed under them, plus an A4 sheet variant that
+  lays a grid of those labels out for a selection of products. The bars are
+  drawn from the code the fiche stores, so a code that is not a valid
+  EAN-13 (a supplier reference, a short internal number) is a refusal and
+  never a label with the picture left off: digits with no bars scan as
+  nothing on a shelf, and bars encoding another number are worse. One
+  product the encoder refuses refuses the whole sheet, because a page
+  missing one label looks complete. `bon_de_livraison_a4` stays parked with
+  the facture récapitulative (see Later); its `kind` stays in the model.
 - Every template × language is pinned by a golden file against a fixed
   fixture, and a template change is a reviewed golden diff.
   `ticket_80mm` is one basket sold four ways, three languages each:
@@ -698,6 +739,19 @@ first release.**
   shares no code with the formatter, against the document's stored totals,
   so a golden that drifts from the money cannot be accepted by regenerating
   it. Every template below is pinned the same way.
+  `fixtures/print/barcode_label/{fr,en,ar}.html` is one label for a product
+  carrying an in-store EAN-13, `sheet-fr.html` is the A4 grid of two of
+  them, one with a name long enough to prove it wraps rather than pushing
+  the bars off the label, and `sheet-full-fr.html` is a full page of
+  eighteen: three across and six down, which the test works out from the
+  page margin, the label size and the gap read back off the golden rather
+  than from a number written down beside it. Pinned by
+  `crates/core/tests/print_barcode_label.rs`, which reads the bars back out
+  of the golden with a decoder that writes out the GS1 tables itself and
+  shares no code with the encoder, and checks that the thirteenth digit of
+  what it decoded is that number's own check digit: a label whose picture
+  and whose printed number parted company is a label that scans as another
+  product.
   `fixtures/print/facture_a4/{fr,en,ar}.html` is a réel facture on credit
   to a company, with the balance triple and no droit de timbre;
   `{fr,en,ar}-cash.html` is cash to a consumer, with the stamp and no

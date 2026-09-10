@@ -10,6 +10,7 @@ import { ApiError } from "@dzpos/shared";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
 import { api, settingsQueryKey } from "@/api";
 import { BackupsPanel } from "@/components/BackupsPanel";
+import { ExportImportPanel } from "@/components/ExportImportPanel";
 import { StockRecountPanel } from "@/components/StockRecountPanel";
 import { useShopToday } from "@/lib/clock";
 import { isKey, useTranslation, type Key } from "@/i18n";
@@ -98,6 +99,7 @@ export function SettingsScreen() {
             />
           )}
           <BackupsPanel />
+          <ExportImportPanel />
           <StockRecountPanel />
         </>
       ) : null}

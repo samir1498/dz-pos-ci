@@ -105,6 +105,27 @@ pub fn set_cost(
     Ok(())
 }
 
+/// The product this shop already sells under that barcode, if any. What the
+/// Excel import matches a row on: a code the shop knows updates the fiche it
+/// belongs to rather than opening a second one beside it (features.md §1).
+///
+/// `first` rather than a unique read: the column's uniqueness is the file's
+/// (migration 1), and a repo that assumed it would panic on a restored file
+/// that broke it.
+pub fn by_barcode(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    barcode: &str,
+) -> Result<Option<Product>, CoreError> {
+    let row: Option<ProductRow> = products::table
+        .filter(products::shop_id.eq(shop_id))
+        .filter(products::barcode.eq(barcode))
+        .select(ProductRow::as_select())
+        .first(conn)
+        .optional()?;
+    row.map(Product::try_from).transpose()
+}
+
 /// Whether this shop already uses that barcode. The auto-numbering asks
 /// before it hands a number out, so a number a user typed by hand costs one
 /// number rather than a failed insert.
