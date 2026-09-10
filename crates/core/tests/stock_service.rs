@@ -200,6 +200,37 @@ fn a_forged_cache_is_reported_corrected_and_written_into_the_log() {
 }
 
 #[test]
+fn a_run_that_fails_part_way_leaves_the_cache_and_the_marker_where_they_were() {
+    // The whole run is one transaction, so a shop is never left half
+    // repaired with a marker saying it was counted. The audit insert is what
+    // fails here: a user id with no row breaks the foreign key, which is the
+    // shape of every failure that can happen after the first correction.
+    let (_dir, mut conn) = open_temp();
+    let p = products::create(&mut conn, SHOP, OWNER, draft("Sucre", 24_000)).unwrap();
+    forge_cache(&mut conn, p.id, 99_000);
+
+    let nobody = 4_242;
+    let err = stock::recount(&mut conn, SHOP, nobody).unwrap_err();
+    // The file refused the row, which is the failure being staged: anything
+    // caught earlier would never have reached the correction below it.
+    assert!(matches!(err, CoreError::Query(_)), "{err:?}");
+
+    assert_eq!(
+        products::get(&mut conn, SHOP, p.id)
+            .unwrap()
+            .qty_on_hand_milli,
+        99_000,
+        "a failed run left the cache half corrected"
+    );
+    assert_eq!(
+        stock::last_recount(&mut conn, SHOP).unwrap().last_run_day,
+        None,
+        "a failed run marked the day as counted"
+    );
+    assert!(drift_rows(&mut conn).is_empty());
+}
+
+#[test]
 fn a_shop_with_nothing_wrong_marks_the_run_and_writes_no_row() {
     // A quiet night is the usual night. The marker still moves, or the loop
     // would recount the same shop every hour it is switched on.
