@@ -95,6 +95,31 @@ fn sell(
     .document
 }
 
+/// Moves the fiche's cost the way a delivery does, leaving the rest of the
+/// product as `product` created it.
+fn move_the_cost(conn: &mut SqliteConnection, id: i32, name: &str, selling: i64, cost: i64) {
+    products::update(
+        conn,
+        SHOP,
+        OWNER,
+        id,
+        NewProduct {
+            name: name.to_string(),
+            barcode: None,
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(cost),
+            selling: Money::centimes(selling),
+            wholesale: None,
+            qty_on_hand_milli: 0,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(0).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap();
+}
+
 /// One order in whatever state the test needs. `purchases::save` is not what
 /// is under test here; the count is.
 fn a_purchase(conn: &mut SqliteConnection, supplier_id: i32, status: &str) {
@@ -460,4 +485,172 @@ fn the_debts_are_the_parties_in_the_red_and_a_party_in_credit_is_not_netted_off(
         read.open_purchases, 2,
         "an order and a part delivery are open; a cancelled one and the received one are not"
     );
+}
+
+/// The one arm of the remise arithmetic the other tests never reach: a
+/// credit note carries its own share of the remise the facture gave, and that
+/// share has to come back off the period's remise or the reversal would give
+/// back more than the facture charged.
+///
+/// Two units at 10,00 with 1,00 off the whole facture, the cost moved from
+/// 6,00 to 7,00, then one unit credited. What is left is one unit sold: 10,00
+/// of lines, 0,50 of remise, 9,50 of revenue, 6,00 of cost at the price it
+/// left on, and 3,50 of margin.
+#[test]
+fn a_partial_avoir_gives_back_its_share_of_the_remise_and_no_more() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 1_000, 600);
+    let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
+    let facture = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id: p,
+                qty_milli: 2_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::centimes(100),
+            payment_mode: PaymentMode::Credit,
+            tendered: None,
+            customer_id: Some(c),
+            override_credit: false,
+            kind: SaleKind::Facture,
+            issued_at: Some(at(15, 9)),
+        },
+    )
+    .unwrap()
+    .document;
+    move_the_cost(&mut conn, p, "Ciment", 1_000, 700);
+    avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        Some(vec![avoir::AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 1_000,
+        }]),
+        None,
+        Some(at(15, 11)),
+    )
+    .unwrap();
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(read.today.lines_ht, Money::centimes(1_000));
+    assert_eq!(read.today.discounts, Money::centimes(50));
+    assert_eq!(read.today.sales_ht, Money::centimes(950));
+    assert_eq!(
+        read.today.cost_of_goods,
+        Money::centimes(600),
+        "the unit that came back was priced at the delivery after it left"
+    );
+    assert_eq!(read.today.margin, Money::centimes(350));
+}
+
+/// A facture credited in part and then annulled takes its own credit note
+/// with it, and leaves every other facture's alone. Reading only the
+/// cancellation's own avoir out would leave the earlier one lowering a sale
+/// the figures no longer carry.
+#[test]
+fn cancelling_a_facture_takes_the_avoirs_written_against_it_and_no_others() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
+
+    // The one that goes: two units, one credited, then annulled.
+    let doomed = sell(&mut conn, p, 2, SaleKind::Facture, Some(c), 9);
+    avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        doomed.id,
+        Some(vec![avoir::AvoirLine {
+            document_line_id: doomed.lines[0].id,
+            qty_milli: 1_000,
+        }]),
+        None,
+        Some(at(15, 10)),
+    )
+    .unwrap();
+
+    // The one that stays: two units, one credited, still standing.
+    let standing = sell(&mut conn, p, 2, SaleKind::Facture, Some(c), 11);
+    avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        standing.id,
+        Some(vec![avoir::AvoirLine {
+            document_line_id: standing.lines[0].id,
+            qty_milli: 1_000,
+        }]),
+        None,
+        Some(at(15, 12)),
+    )
+    .unwrap();
+
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        doomed.id,
+        "erreur de saisie".to_string(),
+        Some(at(15, 13)),
+    )
+    .unwrap();
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    // One facture left, one unit of it kept.
+    assert_eq!(read.today.sales_count, 1);
+    assert_eq!(read.today.sales_ht, Money::centimes(10_000));
+    assert_eq!(read.today.cost_of_goods, Money::centimes(6_000));
+    assert_eq!(read.today.margin, Money::centimes(4_000));
+}
+
+/// A product sold and credited back inside the month moved no units and
+/// brought in nothing. It stays in the month's totals, where the two cancel,
+/// and it is off the top lists: a row of zeros among the ten best reads as a
+/// product that did something.
+#[test]
+fn a_product_whose_month_came_to_nothing_is_off_the_top_lists() {
+    let (_dir, mut conn) = open_temp();
+    let sold = product(&mut conn, "Ciment", 10_000, 6_000);
+    let returned = product(&mut conn, "Sable", 4_000, 1_000);
+    let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
+    sell(&mut conn, sold, 3, SaleKind::Ticket, None, 9);
+    let credited = sell(&mut conn, returned, 2, SaleKind::Facture, Some(c), 10);
+    avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credited.id,
+        None,
+        None,
+        Some(at(15, 11)),
+    )
+    .unwrap();
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(
+        read.top_by_quantity
+            .iter()
+            .map(|p| p.product_id)
+            .collect::<Vec<i32>>(),
+        vec![sold]
+    );
+    assert_eq!(
+        read.top_by_margin
+            .iter()
+            .map(|p| p.product_id)
+            .collect::<Vec<i32>>(),
+        vec![sold]
+    );
+    // Still counted where it belongs: the facture was rung up and the credit
+    // note took both sides of its margin back off.
+    assert_eq!(read.today.sales_count, 2);
+    assert_eq!(read.today.sales_ht, Money::centimes(30_000));
+    assert_eq!(read.today.margin, Money::centimes(12_000));
 }

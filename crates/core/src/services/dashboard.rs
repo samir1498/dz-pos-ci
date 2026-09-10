@@ -192,7 +192,9 @@ fn figures(
             continue;
         }
         sales_ttc = sales_ttc.checked_add(ttc)?;
-        sales_count = sales_count.saturating_add(row.count);
+        sales_count = sales_count
+            .checked_add(row.count)
+            .ok_or(crate::money::MoneyError::Overflow)?;
         discounts = discounts.checked_add(discount)?;
     }
 
@@ -277,7 +279,10 @@ fn per_product(
             });
         // The ledger signs a sale negative; what went out the door is the
         // other way up, and a return takes it back off.
-        entry.qty_milli = entry.qty_milli.saturating_sub(movement.qty_milli);
+        entry.qty_milli = entry
+            .qty_milli
+            .checked_sub(movement.qty_milli)
+            .ok_or(crate::money::MoneyError::Overflow)?;
         entry.cost_of_goods = entry.cost_of_goods.checked_sub(cost_of(&movement)?)?;
     }
 
@@ -290,8 +295,17 @@ fn per_product(
 
 /// The ten highest by whatever the caller ranks them on, the product id
 /// breaking a tie so two runs over one file never answer different lists.
+///
+/// A product whose month came to nothing at all is left out: sold and
+/// credited back in the same month, it moved no units and brought in no
+/// money, and a row of zeros on a list of the ten best reads as a product
+/// that did something. It is still in the month's totals, where the sale and
+/// its reversal cancel each other the same way.
 fn top(products: &[TopProduct], by: impl Fn(&TopProduct) -> i128) -> Vec<TopProduct> {
-    let mut ranked: Vec<&TopProduct> = products.iter().collect();
+    let mut ranked: Vec<&TopProduct> = products
+        .iter()
+        .filter(|p| p.qty_milli != 0 || p.lines_ht != Money::ZERO)
+        .collect();
     ranked.sort_by(|a, b| by(b).cmp(&by(a)).then(a.product_id.cmp(&b.product_id)));
     ranked.into_iter().take(TOP).cloned().collect()
 }
@@ -323,7 +337,9 @@ fn owed(balances: &[(i32, i64, i64)]) -> Result<Owed, CoreError> {
             continue;
         }
         total = total.checked_add(balance)?;
-        parties = parties.saturating_add(1);
+        parties = parties
+            .checked_add(1)
+            .ok_or(crate::money::MoneyError::Overflow)?;
     }
     Ok(Owed { total, parties })
 }
