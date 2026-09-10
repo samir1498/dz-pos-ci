@@ -109,6 +109,28 @@ pub enum CoreError {
     /// this crate, so the API answers 500 and the code is the storage one.
     #[error("a row of {entity} is stamped from the shop clock, never left to the file's default")]
     Unstamped { entity: &'static str },
+    /// A reversal has no cost to write back, because the stock ledger cannot
+    /// say what the goods cost when they left. Two shapes, both of them a
+    /// file that disagrees with itself: a sold line with no movement at all,
+    /// and one product's sale movements on one document carrying two
+    /// different costs.
+    ///
+    /// Neither can arise from anything a caller sent: `unit_cost_centimes`
+    /// is NOT NULL from the first documents migration, a sale is the only
+    /// writer of a `sale` movement, and it reads the fiche once for the whole
+    /// basket. So it is this crate's bug or a row somebody wrote by hand, and
+    /// it is refused rather than papered over with the fiche's cost today:
+    /// guessing here is how a month's margin moves with a purchase, which is
+    /// the whole thing the ledger cost exists to prevent.
+    ///
+    /// Its own variant and not a `Validation`, for the reason `Unstamped` is:
+    /// the API answers 500 and the code is the storage one.
+    #[error("the stock ledger cannot price the reversal of product {product_id} on document {document_id}: {reason}")]
+    UnpricedReversal {
+        document_id: i32,
+        product_id: i32,
+        reason: &'static str,
+    },
     #[error(transparent)]
     Money(#[from] MoneyError),
     #[error(transparent)]
@@ -127,6 +149,16 @@ pub enum CoreError {
     /// stays fixed, like the file one.
     #[error("the document could not be rendered for printing")]
     Render(#[from] askama::Error),
+    /// A workbook this app was writing could not be finished. Like `Render`,
+    /// the data and the layout are both the app's own, so this is a bug here
+    /// and never something a caller can correct; the message is fixed and the
+    /// writer's own text stays on the source chain for the server's log.
+    ///
+    /// Reading a workbook is not this: a file a shop uploaded is input, and a
+    /// file that is not a workbook at all comes back as a `Validation` the
+    /// import screen can put under the file picker.
+    #[error("the workbook could not be written")]
+    Workbook(#[from] rust_xlsxwriter::XlsxError),
 }
 
 impl CoreError {
@@ -144,8 +176,10 @@ impl CoreError {
             CoreError::Db(_)
             | CoreError::Query(_)
             | CoreError::Io(_)
-            | CoreError::Unstamped { .. } => "storage",
+            | CoreError::Unstamped { .. }
+            | CoreError::UnpricedReversal { .. } => "storage",
             CoreError::Render(_) => "print",
+            CoreError::Workbook(_) => "workbook",
         }
     }
 

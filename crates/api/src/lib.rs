@@ -11,6 +11,7 @@ pub mod token;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderValue, Method};
 use axum::middleware::from_fn_with_state;
 use axum::routing::{get, post, put};
@@ -460,11 +461,29 @@ pub fn router_with_origin(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),
         )
+        .route("/dashboard", get(routes::dashboard::read))
         .route("/expense-categories", get(routes::expenses::categories))
         .route("/expenses", get(routes::expenses::list))
         .route("/expenses", post(routes::expenses::create))
+        .route("/export/products", get(routes::export::products))
+        .route("/export/sales", get(routes::export::sales))
+        .route("/export/customers", get(routes::export::customers))
+        .route("/export/suppliers", get(routes::export::suppliers))
+        .route("/import/products/template", get(routes::import::template))
+        .route(
+            "/import/products/dry-run",
+            post(routes::import::dry_run)
+                .layer(DefaultBodyLimit::max(routes::import::IMPORT_BODY_LIMIT)),
+        )
+        .route(
+            "/import/products",
+            post(routes::import::apply)
+                .layer(DefaultBodyLimit::max(routes::import::IMPORT_BODY_LIMIT)),
+        )
+        .route("/labels/sheet", post(routes::products::label_sheet))
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
+        .route("/products/{id}/label", get(routes::products::label))
         .route(
             "/products/{id}",
             get(routes::products::get_one).put(routes::products::update),
@@ -526,7 +545,12 @@ pub fn router_with_origin(
             CorsLayer::new()
                 .allow_origin(AllowOrigin::list(origins))
                 .allow_methods([Method::GET, Method::POST, Method::PUT])
-                .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]),
+                .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
+                // A browser hands a page only the few headers it is told to.
+                // Without this the desktop can read the workbook's bytes and
+                // not the name the server gave it, and every export would be
+                // saved as whatever the anchor invented.
+                .expose_headers([header::CONTENT_DISPOSITION]),
         )
         .with_state(state)
 }

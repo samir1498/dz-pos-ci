@@ -4,7 +4,10 @@
 pub mod backups;
 pub mod categories;
 pub mod customers;
+pub mod dashboard;
 pub mod expenses;
+pub mod export;
+pub mod import;
 pub mod products;
 pub mod purchases;
 pub mod sales;

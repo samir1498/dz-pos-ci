@@ -21,9 +21,11 @@ use dzpos_core::services::backup::Backup;
 use dzpos_core::services::cash::{CashPosition, Outgoings, Takings};
 use dzpos_core::services::clock::Month;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
+use dzpos_core::services::dashboard::{Dashboard, Figures, LowStock, Owed, TopProduct};
 use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
 use dzpos_core::services::documents::CancelEffect;
 use dzpos_core::services::expenses::{Expense, ExpenseCategory, NewExpense};
+use dzpos_core::services::import::{Applied, DryRun, Outcome, RowReport};
 use dzpos_core::services::preferences::Theme;
 use dzpos_core::services::purchases::{
     NewLine, NewPurchase, Paid, Purchase, PurchaseLine, PurchaseStatus, PurchaseView, ReceiveLine,
@@ -1430,8 +1432,8 @@ impl NewPaymentDto {
 }
 
 /// Why the supplier debt moved (features.md §1). The whole union crosses from
-/// the first version, the way the customer side's does: T3 writes the
-/// `purchase` and `return` rows, and a screen that met an unknown kind could
+/// the first version, the way the customer side's does: the receipt path
+/// writes the `purchase` and `return` rows, and a screen that met an unknown kind could
 /// only refuse the whole answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export_to = "SupplierDebtKindDto.ts")]
@@ -2238,4 +2240,274 @@ pub struct NewReceiptDto {
 #[serde(deny_unknown_fields)]
 pub struct CloseOrderDto {
     pub reason: String,
+}
+
+/// What one stretch of days came to (features.md §1, Dashboard). Every field
+/// is derived from the ledgers when the screen asks; no column stores any of
+/// it.
+///
+/// `sales_ttc_centimes` is what the tickets and factures of the period asked
+/// for over the counter, credit notes not taken off it. The margin is the
+/// other question: `lines_ht_centimes` less `discounts_centimes` is the
+/// revenue, `cost_of_goods_centimes` is what those goods cost at the cost
+/// they left on, and `margin_centimes` is the difference. A credit note
+/// lowers the revenue and the cost together, so what it leaves is the margin
+/// of what the customer kept.
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export_to = "DashboardFiguresDto.ts")]
+pub struct DashboardFiguresDto {
+    pub sales_ttc_centimes: i64,
+    pub sales_count: i64,
+    pub lines_ht_centimes: i64,
+    pub discounts_centimes: i64,
+    pub sales_ht_centimes: i64,
+    pub cost_of_goods_centimes: i64,
+    pub margin_centimes: i64,
+    pub expenses_centimes: i64,
+}
+
+impl From<Figures> for DashboardFiguresDto {
+    fn from(f: Figures) -> Self {
+        DashboardFiguresDto {
+            sales_ttc_centimes: f.sales_ttc.as_centimes(),
+            sales_count: f.sales_count,
+            lines_ht_centimes: f.lines_ht.as_centimes(),
+            discounts_centimes: f.discounts.as_centimes(),
+            sales_ht_centimes: f.sales_ht.as_centimes(),
+            cost_of_goods_centimes: f.cost_of_goods.as_centimes(),
+            margin_centimes: f.margin.as_centimes(),
+            expenses_centimes: f.expenses.as_centimes(),
+        }
+    }
+}
+
+/// A product the shop is short of: what the count says it has, and the
+/// threshold somebody set on the fiche. Quantities are thousandths of the
+/// unit, the way every quantity on the wire is.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "LowStockDto.ts")]
+pub struct LowStockDto {
+    pub product_id: i32,
+    pub name: String,
+    pub qty_on_hand_milli: i64,
+    pub low_stock_at_milli: i64,
+}
+
+impl From<LowStock> for LowStockDto {
+    fn from(l: LowStock) -> Self {
+        LowStockDto {
+            product_id: l.product_id,
+            name: l.name,
+            qty_on_hand_milli: l.qty_on_hand_milli,
+            low_stock_at_milli: l.low_stock_at_milli,
+        }
+    }
+}
+
+/// One product's month. `qty_milli` is net of what came back, so a product
+/// sold and credited in the same month reads as nothing moved.
+///
+/// `lines_ht_centimes` is this product's lines and not its share of a
+/// remise given off a whole document, which belongs to no line. It is
+/// therefore not the same figure as `DashboardFiguresDto::sales_ht_centimes`,
+/// and the margins of the products on a month that carried a remise do not
+/// add up to that month's margin. The ranking is what these are for.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "TopProductDto.ts")]
+pub struct TopProductDto {
+    pub product_id: i32,
+    pub name: String,
+    pub qty_milli: i64,
+    pub lines_ht_centimes: i64,
+    pub cost_of_goods_centimes: i64,
+    pub margin_centimes: i64,
+}
+
+impl From<TopProduct> for TopProductDto {
+    fn from(p: TopProduct) -> Self {
+        TopProductDto {
+            product_id: p.product_id,
+            name: p.name,
+            qty_milli: p.qty_milli,
+            lines_ht_centimes: p.lines_ht.as_centimes(),
+            cost_of_goods_centimes: p.cost_of_goods.as_centimes(),
+            margin_centimes: p.margin.as_centimes(),
+        }
+    }
+}
+
+/// One side of the outstanding money. `parties` counts only those in the red:
+/// a customer holding credit is left out rather than netted off, because
+/// money the shop owes one of them does not reduce what another one owes.
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export_to = "OwedDto.ts")]
+pub struct OwedDto {
+    pub total_centimes: i64,
+    pub parties: i64,
+}
+
+impl From<Owed> for OwedDto {
+    fn from(o: Owed) -> Self {
+        OwedDto {
+            total_centimes: o.total.as_centimes(),
+            parties: o.parties,
+        }
+    }
+}
+
+/// The whole dashboard for one day and the month it falls in on the shop's
+/// calendar. The two top lists are the month's, not the day's: a day names
+/// too few products for a ranking to say anything.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "DashboardDto.ts")]
+pub struct DashboardDto {
+    pub day: String,
+    pub month: String,
+    pub today: DashboardFiguresDto,
+    pub this_month: DashboardFiguresDto,
+    pub cash_today: CashPositionDto,
+    pub cash_this_month: CashPositionDto,
+    pub low_stock: Vec<LowStockDto>,
+    pub top_by_quantity: Vec<TopProductDto>,
+    pub top_by_margin: Vec<TopProductDto>,
+    pub customer_debt: OwedDto,
+    pub supplier_debt: OwedDto,
+    pub open_purchases: i64,
+}
+
+impl TryFrom<Dashboard> for DashboardDto {
+    type Error = ApiError;
+
+    fn try_from(d: Dashboard) -> Result<Self, ApiError> {
+        Ok(DashboardDto {
+            day: d.day.format(DATE_FORMAT).to_string(),
+            month: d.month.as_text(),
+            today: DashboardFiguresDto::from(d.today),
+            this_month: DashboardFiguresDto::from(d.this_month),
+            cash_today: CashPositionDto::try_from(d.cash_today)?,
+            cash_this_month: CashPositionDto::try_from(d.cash_this_month)?,
+            low_stock: d.low_stock.into_iter().map(LowStockDto::from).collect(),
+            top_by_quantity: d
+                .top_by_quantity
+                .into_iter()
+                .map(TopProductDto::from)
+                .collect(),
+            top_by_margin: d
+                .top_by_margin
+                .into_iter()
+                .map(TopProductDto::from)
+                .collect(),
+            customer_debt: OwedDto::from(d.customer_debt),
+            supplier_debt: OwedDto::from(d.supplier_debt),
+            open_purchases: d.open_purchases,
+        })
+    }
+}
+
+/// What the import would do with one row of the file, flattened for the
+/// wire: three words rather than a tagged union, with the field and the
+/// reason beside them.
+///
+/// `field` and `reason` are the core's stable keys, not sentences: the
+/// screen translates them, the same way it translates an error code
+/// (architecture.md, error policy). A row that is created or updated
+/// carries neither.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "ImportOutcomeDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum ImportOutcomeDto {
+    Created,
+    Updated,
+    Refused,
+}
+
+/// One line of the dry run, named the way a person reading the spreadsheet
+/// beside it would: the row number the spreadsheet shows, header counted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "ImportRowDto.ts")]
+pub struct ImportRowDto {
+    pub row: u32,
+    pub name: String,
+    pub outcome: ImportOutcomeDto,
+    /// The column the refusal is about, and why. Null on a row that stands.
+    pub field: Option<String>,
+    pub reason: Option<String>,
+}
+
+impl From<&RowReport> for ImportRowDto {
+    fn from(r: &RowReport) -> Self {
+        let (outcome, field, reason) = match r.outcome {
+            Outcome::Created => (ImportOutcomeDto::Created, None, None),
+            Outcome::Updated => (ImportOutcomeDto::Updated, None, None),
+            Outcome::Refused { field, reason } => (
+                ImportOutcomeDto::Refused,
+                Some(field.to_owned()),
+                Some(reason.to_owned()),
+            ),
+        };
+        ImportRowDto {
+            row: r.row,
+            name: r.name.clone(),
+            outcome,
+            field,
+            reason,
+        }
+    }
+}
+
+/// The whole dry run: every row with its verdict, and the two counts the
+/// screen puts above the table. Nothing was written.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "ImportDryRunDto.ts")]
+pub struct ImportDryRunDto {
+    pub rows: Vec<ImportRowDto>,
+    pub accepted: i64,
+    pub refused: i64,
+}
+
+impl From<DryRun> for ImportDryRunDto {
+    fn from(d: DryRun) -> Self {
+        ImportDryRunDto {
+            rows: d.rows.iter().map(ImportRowDto::from).collect(),
+            accepted: i64::try_from(d.accepted).unwrap_or(i64::MAX),
+            refused: i64::try_from(d.refused).unwrap_or(i64::MAX),
+        }
+    }
+}
+
+/// What an apply wrote: the counts the audit row carries, so the screen and
+/// the log say the same thing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "ImportAppliedDto.ts")]
+pub struct ImportAppliedDto {
+    pub created: i64,
+    pub updated: i64,
+    pub categories_created: i64,
+}
+
+impl From<Applied> for ImportAppliedDto {
+    fn from(a: Applied) -> Self {
+        ImportAppliedDto {
+            created: i64::try_from(a.created).unwrap_or(i64::MAX),
+            updated: i64::try_from(a.updated).unwrap_or(i64::MAX),
+            categories_created: i64::try_from(a.categories_created).unwrap_or(i64::MAX),
+        }
+    }
+}
+
+/// The most labels one sheet is asked for. Eighteen fit on an A4 page
+/// (three across, six down), so two hundred is eleven pages and already
+/// more than anybody stands at a printer for. The cap is here so a body
+/// naming fifty thousand ids is refused before it becomes fifty thousand
+/// queries and a page nothing can render.
+pub const LABEL_SHEET_MAX: usize = 200;
+
+/// The products a sheet of labels is asked for. Ids and not a filter: the
+/// screen has a selection in front of it and the sheet is that selection, in
+/// the order the caller listed it.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[ts(export_to = "LabelSheetDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct LabelSheetDto {
+    pub ids: Vec<i32>,
 }

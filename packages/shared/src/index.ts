@@ -70,6 +70,11 @@ export type { AvoirLineDto } from "./generated/AvoirLineDto";
 export type { NewAvoirDto } from "./generated/NewAvoirDto";
 export type { CancelDocumentDto } from "./generated/CancelDocumentDto";
 export type { CashPositionDto } from "./generated/CashPositionDto";
+export type { DashboardDto } from "./generated/DashboardDto";
+export type { DashboardFiguresDto } from "./generated/DashboardFiguresDto";
+export type { LowStockDto } from "./generated/LowStockDto";
+export type { OwedDto } from "./generated/OwedDto";
+export type { TopProductDto } from "./generated/TopProductDto";
 export type { ExpenseCategoryDto } from "./generated/ExpenseCategoryDto";
 export type { ExpenseDto } from "./generated/ExpenseDto";
 export type { ExpensesDto } from "./generated/ExpensesDto";
@@ -88,7 +93,12 @@ export { ApiError, createClient } from "./client";
 export * from "./schemas";
 export type { ClientOptions } from "./client";
 export type { ApiClient } from "./client";
-export type { PrintLang, PrintPaper } from "./client";
+export type { Download, ExportKind, PrintLang, PrintPaper } from "./client";
+export type { ImportAppliedDto } from "./generated/ImportAppliedDto";
+export type { ImportDryRunDto } from "./generated/ImportDryRunDto";
+export type { ImportOutcomeDto } from "./generated/ImportOutcomeDto";
+export type { ImportRowDto } from "./generated/ImportRowDto";
+export type { LabelSheetDto } from "./generated/LabelSheetDto";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";
 export {
   BPS_PER_WHOLE,

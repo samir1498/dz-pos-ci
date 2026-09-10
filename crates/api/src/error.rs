@@ -241,7 +241,11 @@ const fn status_for(e: &CoreError) -> StatusCode {
         | CoreError::Query(_)
         | CoreError::Io(_)
         | CoreError::Unstamped { .. }
-        | CoreError::Render(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        | CoreError::UnpricedReversal { .. }
+        // A workbook that will not write is the same: the columns and the
+        // rows are both the app's own.
+        | CoreError::Render(_)
+        | CoreError::Workbook(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 

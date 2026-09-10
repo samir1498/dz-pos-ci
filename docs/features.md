@@ -222,9 +222,53 @@ never edited and never deleted, and the table carries no cancellation
 block, so a wrong one is a row a comptable reads and asks about. The
 screen lists one month at a time with the month's total.
 
-**Dashboard.** Today's and this month's sales, gross margin (sales minus
-cost of goods sold from the ledger), expenses, cash position, low-stock
-list, top products, outstanding customer debt, outstanding supplier debt.
+**Dashboard.** One read answers the day it is asked for and the month that
+day falls in on the shop's calendar, and every figure on it is derived when
+the screen asks: no column stores a total, so there is nothing to keep in
+step and nothing that can be right on one screen and wrong on another. Both
+columns carry sales at `total_ttc` with the count of papers, gross margin,
+expenses and the cash position; beside them come the low-stock list, the
+month's ten busiest products and its ten most profitable, the outstanding
+customer debt and supplier debt with the count of parties in the red, and how
+many purchases are still open. A day nothing happened on answers zeros, not
+nothing.
+
+The sales figure is the tickets and factures of the period that still stand,
+at what they asked for over the counter. A cancelled one is out of it rather
+than subtracted from it, and credit notes are not taken off it: what came
+back is the margin's business.
+
+Gross margin is what those papers asked for less what the goods on them cost
+the shop. The revenue side is the lines' own HT less the remise given off the
+whole document, because a remise is revenue never collected (ruling
+2026-09-10); the two halves are answered beside the net so a screen can show
+where the difference went. It is an assumption and not a rule anybody wrote
+down: the fiscal rules table carries it, and R8 is where the comptable
+confirms it. The cost side reads the stock movements and never the fiche: a unit
+cost what it cost when it left, which the sale wrote on its movement, while
+the fiche's cost price is the last delivery's and moves with every purchase.
+
+A reversal writes that same figure back. An avoir and a cancellation put the
+goods on the shelf at the cost of the sale movement they reverse, read back
+off the document being reversed, so a delivery between the sale and the
+credit note does not move a margin that was already earned. A credit note
+therefore lowers the revenue and the cost together, and what it leaves is the
+margin of what the customer kept.
+
+Both sides of the margin read one set of papers: still standing, a ticket, a
+facture or an avoir, and not a credit note written against a paper that was
+annulled. That last clause is what makes a cancellation felt exactly once,
+because cancelling a facture on credit writes a numbered avoir of its own and
+counting both would reverse the sale twice. Both sides are dated by the
+paper's `issued_at` and never by a movement's own timestamp, so a backdated
+credit note lands on the day it belongs to and the day's figures plus the
+rest of the month are the month's.
+
+The low-stock list names the products in use whose count has fallen under the
+threshold on their fiche, furthest under first; a retired product is not on
+it, because it is not being reordered. The top lists are the month's and not
+the day's, ranked on quantity and on margin, and their quantity is net of
+what came back.
 
 The cash position is derived on every read and stored nowhere. It is what
 moved into and out of the drawer. Over a day or a month on the shop's
@@ -254,8 +298,40 @@ The fiscal rules table gains no row for any of this, because nothing here
 changes what a document charges.
 
 **Backup.** Automatic daily copy of the SQLite file, keep 30, restore from
-the settings screen. Export products, sales, customers, suppliers to Excel;
-import products from Excel with a downloadable template.
+the settings screen.
+
+**Excel out.** Four workbooks, from the "Exports and import" block on the
+settings screen: products, sales, customers, suppliers. They are what the
+tables hold, with a bold header row and number formats and nothing else: no
+pivot, no formula, no styling. The sales workbook is one row per document
+line over a range of days, with the kind, the number the paper prints, the
+day, the customer and the totals; the other three are the rows as they
+stand, because a product is a current row and not an event. Amounts are
+decimal numbers of dinars, written from the stored centimes and their
+decimal spelling, never computed through a float on the way; days are
+dates; the sheet is named in the language the caller asks for. Written with
+`rust_xlsxwriter`, pinned by a golden test per workbook that reads the file
+back with `calamine` and checks the cells rather than the bytes
+(`crates/core/tests/export_service.rs`).
+
+**Excel in.** Products only, and in two steps. A shop downloads a template
+workbook (the columns the import matches on, one example row, and a second
+sheet naming the units and the TVA rates a row may hold), fills it, and
+sends it back. A digit past the scale that carries value is refused
+(`too_many_decimals`) rather than rounded: a price typed 80.505 that the
+till then charged as 80.51 would be a centime nobody agreed to, and zeros
+past the scale are the column's format rather than a decimal anybody typed.
+The stock column opens a new product with that quantity and is ignored on
+one the shop already has, because the ledger owns the count. The dry run
+reports every row as created, updated or refused with the field and the
+reason, and writes nothing; apply writes only when
+no row is refused, in one transaction, audited once as `product.import`
+with its counts. A barcode the shop already sells under updates that
+product rather than opening a second one, and the template's second sheet
+says so. Categories the file names are created when missing, audited; units
+and rates must match the allowed lists. Read with `calamine`; pinned by
+`crates/core/tests/import_service.rs`, which also writes the browser
+suite's committed fixture from the template itself.
 
 ## 2. Customers and debt (v1)
 
@@ -622,6 +698,7 @@ first release.**
 | Closing avoir | the avoirs on one facture add up to that facture less the droit de timbre. They do not do so line by line: the tax on each is rounded once on its own base, so slices of a facture sum to a centime either side of it. The avoir that takes the last quantity off the facture is the facture minus the avoirs before it, every field and every line, and the partials are capped at the facture's `total_ttc`. A design choice, not law: no text says how a reversal in parts rounds, and it is the sum a comptable reads that decides it. Confirm with the comptable (R8) | `the_avoirs_on_a_facture_add_up_to_it`, `three_one_unit_avoirs_add_up_to_the_facture_they_credit`, `two_partials_that_finish_a_facture_reproduce_every_field_of_it`, `two_partials_never_give_back_more_tax_at_a_rate_than_was_charged` | design choice, not law |
 | Numbering | one uninterrupted chronological series per document kind and per year: each series restarts at 1 on 1 January of the shop's calendar and the printed number carries the year, `FA-2026-000001`; a cancelled document keeps its number, is marked "facture annulée" and stores when, by whom and why it was annulled; numbers never reused, and a cancelled number is never handed out again | `two_tickets_take_the_number_after_the_last`, `each_kind_counts_in_its_own_series`, `a_refused_line_burns_no_number`, `the_proforma_and_the_facture_series_do_not_touch`, `the_series_restarts_at_one_in_the_new_year_and_the_old_one_keeps_its_numbers`, `an_avoir_prints_the_year_of_the_facture_it_credits_and_not_its_own` | décret 05-468 art. 10; the yearly reset is common practice, not the decree (Samir, 2026-09-10; R8 confirms the practice) |
 | Cancellation | a document is annulled, never deleted: it keeps its number and its row and stores when, by whom and why. Only a ticket and a facture are annulled, and each once. A cash ticket or a cash facture owed nobody anything, so only the goods come back; a facture that put money on an account is undone by a whole avoir in the same transaction, and a credit ticket by a single `avoir` ledger row and no number out of the avoir series. An assumption on the ticket: décret 05-468 governs the facture and says nothing about reversing a till receipt, so undoing one without a numbered document is a reading to confirm with the comptable (R8) | `a_cash_ticket_is_cancelled_the_stock_comes_back_and_the_number_stays`, `a_facture_carrying_debt_is_cancelled_through_a_whole_avoir`, `a_credit_ticket_is_cancelled_by_a_ledger_row_and_not_by_an_avoir`, `only_a_ticket_and_a_facture_are_cancelled`, `a_facture_already_credited_in_full_is_cancelled_without_a_second_avoir` | décret 05-468 art. 10 for the kept number |
+| Cost of goods sold | what a unit cost the shop is what it cost when it left, written on the sale's stock movement, never the fiche's cost price, which is the last delivery's and moves with every purchase. An avoir and a cancellation put the goods back at the cost of the sale movement they reverse, read off the document being reversed, so a delivery in between does not move a margin already earned. The dashboard's margin reads one set of papers: still standing, a ticket, a facture or an avoir, and not a credit note written against a paper that was annulled, so a cancellation is felt exactly once. The revenue the margin is read against is the lines' HT less the remise given off the whole document: a remise is revenue never collected, so it comes off (ruling 2026-09-10). That reading is the assumption on this row and the one to put to the comptable: no text prescribes a stock valuation or a margin base for a shop keeping its own books, and a management figure read one way at the till and another way in the books is the failure to avoid | `an_avoir_returns_the_goods_at_the_cost_of_the_sale_it_reverses`, `a_cancelled_ticket_returns_the_goods_at_the_cost_of_the_sale`, `a_cancelled_facture_and_the_credit_note_it_issued_leave_together`, `a_partial_avoir_gives_back_its_share_of_the_remise_and_no_more`, `the_dashboard_folds_the_rows_that_belong_in_it_and_no_others` | assumption, confirm with the comptable (R8) |
 | Debt slip | the paper a customer is handed at the counter carries the balance and the last ten movements, no TVA recap and no droit de timbre, and says on its face in each language that it has no fiscal value. A design choice, not law: no text names such a document, and it is not one: it reports an account rather than a sale | `the_slip_says_on_its_face_that_it_proves_nothing`, `the_slip_prints_the_newest_ten_movements_and_a_balance_that_counts_them_all`, `the_slip_prints_the_identifiers_of_a_company_and_never_a_consumers` | design choice, not law |
 
 ## 4. Printing (v1)
@@ -636,8 +713,17 @@ first release.**
   share with a facture is a title, the line naming the facture it corrects,
   a words line saying avoir, and the stamp row it never carries, against a
   second copy of the parties, the lines, the totals and the signatures.
-  `barcode_label` and `bon_de_livraison_a4` are parked, the second with the
-  facture récapitulative (see Later); the `kind` stays in the model.
+  `barcode_label` ships: a 58 × 40 mm shelf label carrying the product's
+  name, its selling price with the currency, its EAN-13 in bars and the
+  same thirteen digits printed under them, plus an A4 sheet variant that
+  lays a grid of those labels out for a selection of products. The bars are
+  drawn from the code the fiche stores, so a code that is not a valid
+  EAN-13 (a supplier reference, a short internal number) is a refusal and
+  never a label with the picture left off: digits with no bars scan as
+  nothing on a shelf, and bars encoding another number are worse. One
+  product the encoder refuses refuses the whole sheet, because a page
+  missing one label looks complete. `bon_de_livraison_a4` stays parked with
+  the facture récapitulative (see Later); its `kind` stays in the model.
 - Every template × language is pinned by a golden file against a fixed
   fixture, and a template change is a reviewed golden diff.
   `ticket_80mm` is one basket sold four ways, three languages each:
@@ -653,6 +739,19 @@ first release.**
   shares no code with the formatter, against the document's stored totals,
   so a golden that drifts from the money cannot be accepted by regenerating
   it. Every template below is pinned the same way.
+  `fixtures/print/barcode_label/{fr,en,ar}.html` is one label for a product
+  carrying an in-store EAN-13, `sheet-fr.html` is the A4 grid of two of
+  them, one with a name long enough to prove it wraps rather than pushing
+  the bars off the label, and `sheet-full-fr.html` is a full page of
+  eighteen: three across and six down, which the test works out from the
+  page margin, the label size and the gap read back off the golden rather
+  than from a number written down beside it. Pinned by
+  `crates/core/tests/print_barcode_label.rs`, which reads the bars back out
+  of the golden with a decoder that writes out the GS1 tables itself and
+  shares no code with the encoder, and checks that the thirteenth digit of
+  what it decoded is that number's own check digit: a label whose picture
+  and whose printed number parted company is a label that scans as another
+  product.
   `fixtures/print/facture_a4/{fr,en,ar}.html` is a réel facture on credit
   to a company, with the balance triple and no droit de timbre;
   `{fr,en,ar}-cash.html` is cash to a consumer, with the stamp and no

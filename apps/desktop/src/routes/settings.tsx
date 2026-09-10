@@ -10,8 +10,9 @@ import { ApiError } from "@dzpos/shared";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
 import { api, settingsQueryKey } from "@/api";
 import { BackupsPanel } from "@/components/BackupsPanel";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { ExportImportPanel } from "@/components/ExportImportPanel";
 import { StockRecountPanel } from "@/components/StockRecountPanel";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { useShopToday } from "@/lib/clock";
 import { isKey, useTranslation, type Key } from "@/i18n";
 
@@ -100,6 +101,7 @@ export function SettingsScreen() {
           )}
           <ThemePanel />
           <BackupsPanel />
+          <ExportImportPanel />
           <StockRecountPanel />
         </>
       ) : null}

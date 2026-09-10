@@ -8,6 +8,7 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::stock::{Drift, Movement, StockMovement, StockMovementRowWrite};
+use crate::money::Money;
 use crate::repos::{audit as audit_repo, jobs, stock as repo};
 use crate::services::{audit, clock};
 
@@ -80,6 +81,22 @@ pub fn list_for_product(
     product_id: i32,
 ) -> Result<Vec<StockMovement>, CoreError> {
     repo::list_for_product(conn, shop_id, product_id)
+}
+
+/// What each product cost when it left on this document, per product.
+///
+/// A reversal reads this rather than the fiche. The goods a credit note puts
+/// back are worth what they were worth when they left: a delivery between
+/// the sale and the credit note moves the fiche's cost, and a reversal
+/// written at the new one would move the month's margin with every purchase
+/// (`an_avoir_returns_the_goods_at_the_cost_of_the_sale_it_reverses`). A
+/// product the map has no entry for moved no stock on that document.
+pub fn sale_costs(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+) -> Result<std::collections::HashMap<i32, Money>, CoreError> {
+    repo::sale_costs_of_document(conn, shop_id, document_id)
 }
 
 /// Compares every product's cached quantity with the sum of its movements,

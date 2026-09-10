@@ -1,0 +1,38 @@
+{#- A sheet of the same 58 x 40 mm label on A4, three across. The label
+itself is the markup of barcode_label_58mm.html repeated: one file rather
+than an include so the two goldens are each a whole page a reader can open,
+and a change to one is a diff a reviewer sees on both. -#}
+<!doctype html>
+<html lang="{{ lang_tag }}" dir="{{ dir }}">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+{%- if arabic_unreviewed %}
+<!-- The Arabic wording of this template is unreviewed by a native speaker, like words_ar (research R6). -->
+{%- endif %}
+<style>
+@page { size: A4; margin: 8mm }
+body { margin: 0; background: #fff; color: #000 }
+.sheet { display: flex; flex-wrap: wrap; gap: 2mm }
+.label { box-sizing: border-box; inline-size: 58mm; block-size: 40mm; padding: 2mm; border: 1px dotted #999; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; font: 11px/1.25 "DejaVu Sans", Arial, sans-serif; break-inside: avoid }
+.label .name { font-weight: 700; font-size: 12px; overflow-wrap: anywhere; max-block-size: 10mm; overflow: hidden }
+.label .price { font-weight: 700; font-size: 17px; white-space: nowrap }
+.label .cur { margin-inline-start: .3em; font-size: 12px }
+.label .bars { inline-size: 46mm; block-size: 12mm }
+.label .bars svg { inline-size: 100%; block-size: 100%; display: block }
+.label .code { font-size: 10px; letter-spacing: .12em; white-space: nowrap; font-family: "DejaVu Sans Mono", "Courier New", monospace }
+</style>
+</head>
+<body>
+<section class="sheet">
+{%- for label in labels %}
+<article class="label">
+<div class="name">{{ label.name }}</div>
+<div class="price"><span class="amount">{{ label.price }}</span><span class="cur">{{ label.currency }}</span></div>
+<div class="bars">{{ label.bars|safe }}</div>
+<div><span class="code">{{ label.code }}</span></div>
+</article>
+{%- endfor %}
+</section>
+</body>
+</html>
