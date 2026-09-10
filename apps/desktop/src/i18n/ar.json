@@ -164,8 +164,6 @@
   "customers_empty_hint": "افتح بطاقة لأول زبون يأخذ السلعة قبل أن يدفع.",
   "customers_fiche_hint": "الأرقام التعريفية تُكتب على الفاتورة، والسقف يحدد ما تقبله الصندوق بالدين.",
   "customers_modify": "تعديل البطاقة",
-  "customers_open_ledger": "عرض الحساب",
-  "customers_identity": "الأرقام التعريفية",
   "customers_no_limit": "بدون سقف",
   "customers_warn_threshold": "عتبة التنبيه",
   "customers_search": "ابحث عن زبون",

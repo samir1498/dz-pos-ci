@@ -164,8 +164,6 @@
   "customers_empty_hint": "Open a record for the first customer who takes goods away before paying.",
   "customers_fiche_hint": "The identifiers go on the facture. The limit decides what the till accepts on credit.",
   "customers_modify": "Edit the record",
-  "customers_open_ledger": "See the account",
-  "customers_identity": "Identifiers",
   "customers_no_limit": "No limit",
   "customers_warn_threshold": "Warning threshold",
   "customers_search": "Search a customer",

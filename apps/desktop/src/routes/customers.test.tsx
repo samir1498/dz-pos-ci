@@ -716,6 +716,22 @@ describe("payments", () => {
     expect(screen.getByLabelText(fr.field_payment_amount)).toHaveValue(formatCentimes(200_000));
   });
 
+  // The way out of the dialog, which is the state the browser's confirm box
+  // used to hold: a figure typed and then thought better of writes nothing,
+  // and the dialog closes without leaving the amount behind it.
+  test("a payment thought better of closes the dialog and posts nothing", async () => {
+    await openThePayment();
+
+    await userEvent.type(screen.getByLabelText(fr.field_payment_amount), "1000");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_cancel }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("customer-pay-dialog")).not.toBeInTheDocument();
+    });
+    expect(() => sent("POST")).toThrow();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   test("a payment of nothing is refused before it leaves the screen", async () => {
     await openThePayment();
 

@@ -103,8 +103,13 @@ export function CustomersScreen() {
       money: true,
       cell: (customer) => (
         <span className="inline-flex items-center gap-2">
+          {/* `font-sans` because the cell is a money column and the table
+              sets the figure face on the whole of it; the word beside the
+              amount is a word. */}
           {customer.balance_centimes < 0 ? (
-            <Badge variant="outline">{t("customers_credit")}</Badge>
+            <Badge variant="outline" className="font-sans">
+              {t("customers_credit")}
+            </Badge>
           ) : null}
           <Money centimes={Math.abs(customer.balance_centimes)} />
         </span>

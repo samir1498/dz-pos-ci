@@ -164,8 +164,6 @@
   "customers_empty_hint": "Ouvrez une fiche pour le premier client qui emporte sans payer tout de suite.",
   "customers_fiche_hint": "Les identifiants servent à la facture. Le plafond décide de ce que la caisse accepte à crédit.",
   "customers_modify": "Modifier la fiche",
-  "customers_open_ledger": "Voir le compte",
-  "customers_identity": "Identifiants",
   "customers_no_limit": "Sans plafond",
   "customers_warn_threshold": "Seuil d'alerte",
   "customers_search": "Rechercher un client",
