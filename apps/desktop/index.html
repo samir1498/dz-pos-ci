@@ -44,11 +44,11 @@
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
-    <!-- No font link. The three families are vendored under
-         packages/design/assets/fonts and declared in the generated
-         apps/desktop/src/theme.css: a shop counter has no internet, and a
-         face fetched from a CDN would look right on the machine that built
-         it and fall back to system-ui on the one that matters. -->
+    <!-- No font link. The three families come in as packages (the
+         @fontsource ones) and are imported at the top of src/styles.css, so
+         the woff2 files ship in the bundle: a shop counter has no internet,
+         and a face fetched from a CDN would look right on the machine that
+         built it and fall back to system-ui on the one that matters. -->
     <!-- The 24 px variant of the mark, straight out of the design package
          rather than copied into a public/ folder, so there is one drawing.
          Vite rewrites this path at build time. -->
