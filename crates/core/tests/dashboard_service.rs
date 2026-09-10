@@ -1,0 +1,463 @@
+// Tests may panic; the deny is for shipped code.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
+//! The dashboard (features.md §1), against a real temp SQLite file. What is
+//! asserted is what the service read back out of the ledgers, because that is
+//! the whole of what the screen is: nothing on it is stored anywhere.
+
+use chrono::{NaiveDate, NaiveDateTime};
+use diesel::prelude::*;
+use diesel::sql_types::{Integer, Text};
+use diesel::sqlite::SqliteConnection;
+use dzpos_core::models::product::{NewProduct, Unit};
+use dzpos_core::money::{Bps, Money, PaymentMode};
+use dzpos_core::services::dashboard;
+use dzpos_core::services::documents::Document;
+use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
+use dzpos_core::services::{avoir, cash, clock, documents, products};
+
+mod common;
+
+use common::open_temp_selling_factures as open_temp;
+
+const SHOP: i32 = 1;
+const OWNER: i32 = 1;
+
+fn day(d: u32) -> NaiveDate {
+    NaiveDate::from_ymd_opt(2026, 9, d).unwrap()
+}
+
+fn at(d: u32, hour: u32) -> NaiveDateTime {
+    day(d).and_hms_opt(hour, 0, 0).unwrap()
+}
+
+/// A product taxed at nothing, so `total_ttc` is the lines' own HT and every
+/// figure below is readable by hand.
+fn product(conn: &mut SqliteConnection, name: &str, selling: i64, cost: i64) -> i32 {
+    products::create(
+        conn,
+        SHOP,
+        OWNER,
+        NewProduct {
+            name: name.to_string(),
+            barcode: None,
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(cost),
+            selling: Money::centimes(selling),
+            wholesale: None,
+            qty_on_hand_milli: 100_000,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(0).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap()
+    .id
+}
+
+fn sell(
+    conn: &mut SqliteConnection,
+    product_id: i32,
+    units: i64,
+    kind: SaleKind,
+    customer_id: Option<i32>,
+    hour: u32,
+) -> Document {
+    let mode = match kind {
+        SaleKind::Facture => PaymentMode::Credit,
+        _ => PaymentMode::Cash,
+    };
+    sales::issue(
+        conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id,
+                qty_milli: units * 1_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: mode,
+            tendered: match mode {
+                PaymentMode::Cash => Some(Money::centimes(10_000_000)),
+                _ => None,
+            },
+            customer_id,
+            override_credit: false,
+            kind,
+            issued_at: Some(at(15, hour)),
+        },
+    )
+    .unwrap()
+    .document
+}
+
+/// One order in whatever state the test needs. `purchases::save` is not what
+/// is under test here; the count is.
+fn a_purchase(conn: &mut SqliteConnection, supplier_id: i32, status: &str) {
+    diesel::sql_query(
+        "INSERT INTO purchases (shop_id, supplier_id, purchase_date, status, user_id) \
+         VALUES (?, ?, '2026-09-15', ?, ?)",
+    )
+    .bind::<Integer, _>(SHOP)
+    .bind::<Integer, _>(supplier_id)
+    .bind::<Text, _>(status)
+    .bind::<Integer, _>(OWNER)
+    .execute(conn)
+    .unwrap();
+}
+
+#[test]
+fn a_day_nothing_happened_on_answers_zeros_and_not_nothing() {
+    let (_dir, mut conn) = open_temp();
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+
+    assert_eq!(read.today.sales_ttc, Money::ZERO);
+    assert_eq!(read.today.sales_count, 0);
+    assert_eq!(read.today.sales_ht, Money::ZERO);
+    assert_eq!(read.today.cost_of_goods, Money::ZERO);
+    assert_eq!(read.today.margin, Money::ZERO);
+    assert_eq!(read.today.expenses, Money::ZERO);
+    assert_eq!(read.this_month.sales_ttc, Money::ZERO);
+    assert_eq!(read.customer_debt.total, Money::ZERO);
+    assert_eq!(read.customer_debt.parties, 0);
+    assert_eq!(read.supplier_debt.parties, 0);
+    assert_eq!(read.open_purchases, 0);
+    assert!(read.low_stock.is_empty());
+    assert!(read.top_by_quantity.is_empty());
+    assert_eq!(read.month.as_text(), "2026-09");
+}
+
+#[test]
+fn the_margin_is_what_the_lines_asked_for_less_what_the_goods_cost() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    sell(&mut conn, p, 3, SaleKind::Ticket, None, 9);
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(read.today.sales_ttc, Money::centimes(30_000));
+    assert_eq!(read.today.sales_count, 1);
+    assert_eq!(read.today.sales_ht, Money::centimes(30_000));
+    assert_eq!(read.today.cost_of_goods, Money::centimes(18_000));
+    assert_eq!(read.today.margin, Money::centimes(12_000));
+}
+
+#[test]
+fn a_cancelled_sale_leaves_both_sides_of_the_margin_at_once() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let ticket = sell(&mut conn, p, 3, SaleKind::Ticket, None, 9);
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        ticket.id,
+        "erreur de saisie".to_string(),
+        Some(at(15, 10)),
+    )
+    .unwrap();
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(read.today.sales_count, 0, "an annulled ticket sold nothing");
+    assert_eq!(read.today.sales_ttc, Money::ZERO);
+    assert_eq!(read.today.sales_ht, Money::ZERO);
+    assert_eq!(
+        read.today.cost_of_goods,
+        Money::ZERO,
+        "the goods went back on the shelf, so they cost the day nothing"
+    );
+    assert_eq!(read.today.margin, Money::ZERO);
+}
+
+#[test]
+fn a_cancelled_facture_and_the_credit_note_it_issued_leave_together() {
+    // The trap this is here for: the cancellation of a facture on credit
+    // writes a numbered avoir. Dropping the facture for being annulled and
+    // then subtracting that avoir would reverse the sale twice, and the
+    // month would show a margin below zero for a sale that simply never
+    // happened.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
+    let facture = sell(&mut conn, p, 3, SaleKind::Facture, Some(c), 9);
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        "erreur de saisie".to_string(),
+        Some(at(15, 10)),
+    )
+    .unwrap();
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(read.today.sales_ht, Money::ZERO);
+    assert_eq!(read.today.cost_of_goods, Money::ZERO);
+    assert_eq!(read.today.margin, Money::ZERO);
+    assert_eq!(read.today.sales_count, 0);
+}
+
+#[test]
+fn an_avoir_on_a_standing_facture_lowers_the_revenue_and_the_cost_together() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
+    let facture = sell(&mut conn, p, 3, SaleKind::Facture, Some(c), 9);
+    avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        Some(vec![avoir::AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 1_000,
+        }]),
+        None,
+        Some(at(15, 11)),
+    )
+    .unwrap();
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    // Two units kept: 200,00 of revenue and 120,00 of cost.
+    assert_eq!(read.today.sales_ht, Money::centimes(20_000));
+    assert_eq!(read.today.cost_of_goods, Money::centimes(12_000));
+    assert_eq!(read.today.margin, Money::centimes(8_000));
+    assert_eq!(
+        read.today.sales_ttc,
+        Money::centimes(30_000),
+        "the facture still asked for its own amount over the counter"
+    );
+}
+
+#[test]
+fn a_remise_off_the_whole_document_comes_off_the_margin() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id: p,
+                qty_milli: 3_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::centimes(5_000),
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(10_000_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
+            issued_at: Some(at(15, 9)),
+        },
+    )
+    .unwrap();
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(read.today.lines_ht, Money::centimes(30_000));
+    assert_eq!(read.today.discounts, Money::centimes(5_000));
+    assert_eq!(
+        read.today.sales_ht,
+        Money::centimes(25_000),
+        "a remise the shop gave is money it did not collect"
+    );
+    assert_eq!(read.today.margin, Money::centimes(7_000));
+}
+
+#[test]
+fn the_day_is_a_slice_of_its_month_and_neither_reaches_the_other_month() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    sell(&mut conn, p, 1, SaleKind::Ticket, None, 9);
+    // The same shop, the day before and the day after, and the two days that
+    // sit just outside the month.
+    for (d, hour) in [(14u32, 9u32), (16, 9)] {
+        let sale = NewSale {
+            lines: vec![NewSaleLine {
+                product_id: p,
+                qty_milli: 1_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(10_000_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
+            issued_at: Some(day(d).and_hms_opt(hour, 0, 0).unwrap()),
+        };
+        sales::issue(&mut conn, SHOP, OWNER, sale).unwrap();
+    }
+    for outside in [
+        NaiveDate::from_ymd_opt(2026, 8, 31).unwrap(),
+        NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+    ] {
+        let sale = NewSale {
+            lines: vec![NewSaleLine {
+                product_id: p,
+                qty_milli: 1_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Cash,
+            tendered: Some(Money::centimes(10_000_000)),
+            customer_id: None,
+            override_credit: false,
+            kind: SaleKind::Ticket,
+            issued_at: Some(outside.and_hms_opt(23, 59, 59).unwrap()),
+        };
+        sales::issue(&mut conn, SHOP, OWNER, sale).unwrap();
+    }
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(read.today.sales_count, 1);
+    assert_eq!(
+        read.this_month.sales_count, 3,
+        "the two papers outside September are not September's"
+    );
+    assert_eq!(read.this_month.sales_ht, Money::centimes(30_000));
+}
+
+#[test]
+fn the_cash_position_is_the_one_the_cash_rule_answers() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    sell(&mut conn, p, 3, SaleKind::Ticket, None, 9);
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(
+        read.cash_today,
+        cash::position(&mut conn, SHOP, clock::Period::Day(day(15))).unwrap()
+    );
+    assert_eq!(
+        read.cash_this_month,
+        cash::position(
+            &mut conn,
+            SHOP,
+            clock::Period::Month(clock::Month::of(day(15)))
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn the_low_stock_list_names_the_products_in_use_that_have_fallen_under() {
+    let (_dir, mut conn) = open_temp();
+    let short = products::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewProduct {
+            name: "Ciment".to_string(),
+            barcode: None,
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(6_000),
+            selling: Money::centimes(10_000),
+            wholesale: None,
+            qty_on_hand_milli: 2_000,
+            low_stock_at_milli: 10_000,
+            rate_bps: Some(Bps::new(0).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap()
+    .id;
+    let retired = products::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewProduct {
+            name: "Sable".to_string(),
+            barcode: None,
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(1_000),
+            selling: Money::centimes(2_000),
+            wholesale: None,
+            qty_on_hand_milli: 0,
+            low_stock_at_milli: 10_000,
+            rate_bps: Some(Bps::new(0).unwrap()),
+            active: false,
+        },
+    )
+    .unwrap()
+    .id;
+    // Stocked above its threshold, so it is nobody's problem.
+    product(&mut conn, "Gravier", 3_000, 1_000);
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    let named: Vec<i32> = read.low_stock.iter().map(|l| l.product_id).collect();
+    assert_eq!(named, vec![short], "a retired product is not reordered");
+    assert!(!named.contains(&retired));
+    assert_eq!(read.low_stock[0].qty_on_hand_milli, 2_000);
+    assert_eq!(read.low_stock[0].low_stock_at_milli, 10_000);
+}
+
+#[test]
+fn the_top_lists_rank_by_units_and_by_margin_and_they_are_not_the_same_list() {
+    let (_dir, mut conn) = open_temp();
+    // Many units, almost nothing on each.
+    let cheap = product(&mut conn, "Sable", 1_000, 900);
+    // Few units, a great deal on each.
+    let rich = product(&mut conn, "Ciment", 50_000, 10_000);
+    sell(&mut conn, cheap, 20, SaleKind::Ticket, None, 9);
+    sell(&mut conn, rich, 2, SaleKind::Ticket, None, 10);
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(
+        read.top_by_quantity
+            .iter()
+            .map(|p| p.product_id)
+            .collect::<Vec<i32>>(),
+        vec![cheap, rich]
+    );
+    assert_eq!(
+        read.top_by_margin
+            .iter()
+            .map(|p| p.product_id)
+            .collect::<Vec<i32>>(),
+        vec![rich, cheap]
+    );
+    assert_eq!(read.top_by_quantity[0].qty_milli, 20_000);
+    assert_eq!(read.top_by_margin[0].margin, Money::centimes(80_000));
+    assert_eq!(read.top_by_margin[0].name, "Ciment");
+}
+
+#[test]
+fn the_debts_are_the_parties_in_the_red_and_a_party_in_credit_is_not_netted_off() {
+    let (_dir, mut conn) = open_temp();
+    let owing = common::an_identified_customer(&mut conn, "Benali");
+    let in_credit = common::a_customer(&mut conn, "Cherif");
+    // One customer owes; the other is holding credit the shop owes back.
+    common::a_payment_row(&mut conn, in_credit, 5_000);
+    let p = product(&mut conn, "Ciment", 10_000, 6_000);
+    sell(&mut conn, p, 3, SaleKind::Facture, Some(owing), 9);
+
+    let supplier = common::a_supplier(&mut conn, "Cimenterie");
+    let purchase = common::a_purchase_row(&mut conn, supplier, "2026-09-10");
+    common::a_purchase_ledger_row(&mut conn, supplier, purchase, 40_000);
+    a_purchase(&mut conn, supplier, "ordered");
+    a_purchase(&mut conn, supplier, "partially_received");
+    a_purchase(&mut conn, supplier, "cancelled");
+
+    let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
+    assert_eq!(read.customer_debt.total, Money::centimes(30_000));
+    assert_eq!(
+        read.customer_debt.parties, 1,
+        "the customer in credit owes nothing and is not counted"
+    );
+    assert_eq!(read.supplier_debt.total, Money::centimes(40_000));
+    assert_eq!(read.supplier_debt.parties, 1);
+    assert_eq!(
+        read.open_purchases, 2,
+        "an order and a part delivery are open; a cancelled one and the received one are not"
+    );
+}

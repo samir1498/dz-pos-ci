@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d4430f4d871aadfe2ddd363fbc7595fc3bfcdc2a8c90b52955eceb57cb0796a3 # shrinks to history = [(OnTheDay, FactureThenAvoir { product: 0, units: 1, cost_between: 100 })]

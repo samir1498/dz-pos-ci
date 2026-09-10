@@ -100,6 +100,29 @@ impl Period {
             Period::Month(month) => (month.first_day(), month.last_day()),
         }
     }
+
+    /// The half open pair of moments a timestamp column is compared against:
+    /// the first moment of the first day, and the first moment of the day
+    /// after the last. Every moment of the last day counts and the next day's
+    /// first does not.
+    ///
+    /// Here rather than once per caller: the cash position and the dashboard
+    /// ask the same question of the same columns, and two copies of the
+    /// bound are two chances for a document at 23:59 to land in one figure
+    /// and not the other. `succ_opt` is None only at the end of chrono's
+    /// calendar, where there is no day after to be the bound instead.
+    pub fn moments(&self) -> Result<(NaiveDateTime, NaiveDateTime), CoreError> {
+        let (from, to) = self.days();
+        let first = from.and_hms_opt(0, 0, 0);
+        let after = to.succ_opt().and_then(|d| d.and_hms_opt(0, 0, 0));
+        match (first, after) {
+            (Some(first), Some(after)) => Ok((first, after)),
+            _ => Err(CoreError::validation(
+                "day",
+                "that day is outside the calendar the shop keeps",
+            )),
+        }
+    }
 }
 
 #[cfg(test)]
