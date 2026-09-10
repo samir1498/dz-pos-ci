@@ -112,16 +112,23 @@ pub fn cached_and_ledger(
     )
     .bind::<diesel::sql_types::Integer, _>(shop_id)
     .load(conn)?;
+    // Indexed rather than scanned per product: the recount walks the whole
+    // catalogue, and a shop with a few thousand products was doing a few
+    // million comparisons to answer a question SQLite had already grouped.
+    let by_product: std::collections::HashMap<i32, i64> = sums
+        .into_iter()
+        .map(|s| (s.product_id, s.total_milli))
+        .collect();
     Ok(cached
         .into_iter()
         .map(|(product_id, name, cached_milli)| Counted {
             product_id,
             name,
             cached_milli,
-            ledger_milli: sums
-                .iter()
-                .find(|s| s.product_id == product_id)
-                .map_or(0, |s| s.total_milli),
+            // A product with no movement at all is not missing from the
+            // answer: its ledger explains nothing, which is a sum of zero,
+            // and a cache above that is drift like any other.
+            ledger_milli: by_product.get(&product_id).copied().unwrap_or(0),
         })
         .collect())
 }

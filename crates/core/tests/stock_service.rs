@@ -231,6 +231,32 @@ fn a_run_that_fails_part_way_leaves_the_cache_and_the_marker_where_they_were() {
 }
 
 #[test]
+fn a_product_whose_ledger_is_empty_is_corrected_down_to_nothing() {
+    // A product created empty opens no movement, so its ledger explains
+    // nothing at all. A cache above that is drift the same as any other, and
+    // reading "no rows" as "no answer" would leave the one shape of drift a
+    // restored or hand-edited file is most likely to carry.
+    let (_dir, mut conn) = open_temp();
+    let p = products::create(&mut conn, SHOP, OWNER, draft("Farine", 0)).unwrap();
+    assert!(stock::list_for_product(&mut conn, SHOP, p.id)
+        .unwrap()
+        .is_empty());
+    forge_cache(&mut conn, p.id, 5_000);
+
+    let report = stock::recount(&mut conn, SHOP, OWNER).unwrap();
+    assert_eq!(report.drifts.len(), 1);
+    assert_eq!(report.drifts[0].cached_milli, 5_000);
+    assert_eq!(report.drifts[0].ledger_milli, 0);
+    assert_eq!(report.drifts[0].difference_milli(), -5_000);
+    assert_eq!(
+        products::get(&mut conn, SHOP, p.id)
+            .unwrap()
+            .qty_on_hand_milli,
+        0
+    );
+}
+
+#[test]
 fn a_shop_with_nothing_wrong_marks_the_run_and_writes_no_row() {
     // A quiet night is the usual night. The marker still moves, or the loop
     // would recount the same shop every hour it is switched on.
