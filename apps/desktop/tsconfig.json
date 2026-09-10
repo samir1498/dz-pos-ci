@@ -5,6 +5,9 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
+    // vite/client for the ?url and asset imports, node for the two tests that
+    // read the source tree off disk (tokens.test.ts).
+    "types": ["node", "vite/client"],
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
