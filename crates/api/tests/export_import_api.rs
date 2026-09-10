@@ -162,6 +162,14 @@ async fn a_sales_export_takes_a_range_and_a_lang_it_does_not_know_is_the_callers
 
     let bad_day = call(&app, "GET", "/export/sales?lang=fr&from=le-1er", None).await;
     assert_eq!(bad_day.status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // And an empty `from=` is a day too, not an absent one: serde reads the
+    // key as a date it cannot parse. The client leaves the key out rather
+    // than sending it blank (`packages/shared/src/client.ts`), so a range
+    // nobody filled in is no range at all instead of a 422 on a screen that
+    // asked for everything.
+    let blank = call(&app, "GET", "/export/sales?lang=fr&from=&to=", None).await;
+    assert_eq!(blank.status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]

@@ -13,6 +13,7 @@ import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { RestoreDto } from "./generated/RestoreDto";
 import type { SaleDto } from "./generated/SaleDto";
 import type { ProductDto } from "./generated/ProductDto";
+import type { ImportDryRunDto } from "./generated/ImportDryRunDto";
 import type { LastStockRecountDto } from "./generated/LastStockRecountDto";
 import type { SettingsDto } from "./generated/SettingsDto";
 import type { StockDriftDto } from "./generated/StockDriftDto";
@@ -1063,5 +1064,162 @@ describe("customers", () => {
         wrong.payCustomer(3, { amount_centimes: 1, payment_mode: "cash", note: null }),
       ).rejects.toMatchObject({ code: "unreachable", status: 422 });
     }
+  });
+});
+
+describe("the exports, the product import and the labels", () => {
+  const clean: ImportDryRunDto = {
+    rows: [{ row: 2, name: "Café moulu 250 g", outcome: "created", field: null, reason: null }],
+    accepted: 1,
+    refused: 0,
+  };
+
+  function file(): Blob {
+    return new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04])]);
+  }
+
+  /** A workbook answer: the bytes, the media type and the name the server
+   * chose. `disposition` null is the header a proxy stripped. */
+  function workbook(disposition: string | null): typeof fetch {
+    return async () =>
+      new Response(new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04])]), {
+        status: 200,
+        headers:
+          disposition === null
+            ? { "content-type": "application/octet-stream" }
+            : { "content-type": "application/octet-stream", "content-disposition": disposition },
+      });
+  }
+
+  test("an export asks its kind and its language, and the range only when it is given", async () => {
+    const asked: string[] = [];
+    const fetchStub: typeof fetch = async (input) => {
+      asked.push(String(input));
+      return new Response(new Blob([new Uint8Array([0x50, 0x4b, 0x03, 0x04])]), {
+        status: 200,
+        headers: { "content-disposition": 'attachment; filename="produits-2026-09-10.xlsx"' },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+
+    const got = await api.exportWorkbook("products", "fr");
+    expect(got.filename).toBe("produits-2026-09-10.xlsx");
+    expect(await got.blob.size).toBe(4);
+    expect(asked[0]).toBe("http://127.0.0.1:4317/export/products?lang=fr");
+
+    await api.exportWorkbook("sales", "ar", { from: "2026-01-01", to: "2026-12-31" });
+    expect(asked[1]).toContain("from=2026-01-01");
+    expect(asked[1]).toContain("to=2026-12-31");
+
+    // A blank day is not sent at all. `from=` empty is a date the server
+    // cannot read, and it would answer 422 for a range nobody asked for.
+    await api.exportWorkbook("sales", "fr", { from: "", to: "" });
+    expect(asked[2]).toBe("http://127.0.0.1:4317/export/sales?lang=fr");
+  });
+
+  test("a workbook whose name the answer does not carry still saves under one", async () => {
+    const api = createClient("http://127.0.0.1:4317", workbook(null));
+    await expect(api.exportWorkbook("customers", "en")).resolves.toMatchObject({
+      filename: "export.xlsx",
+    });
+  });
+
+  test("a refused export leaves as the envelope, not as a file of the error text", async () => {
+    const api = createClient(
+      "http://127.0.0.1:4317",
+      stub(422, { error: { code: "bad_request", message: "lang must be fr, en or ar" } }),
+    );
+    await expect(api.exportWorkbook("products", "fr")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.exportWorkbook("products", "fr")).rejects.toMatchObject({
+      code: "bad_request",
+    });
+  });
+
+  test("the dry run posts the file itself and reads the report back", async () => {
+    const seen: { url: string; method: string | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      seen.push({ url: String(input), method: init?.method });
+      return new Response(JSON.stringify(clean), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.dryRunProductImport(file())).resolves.toEqual(clean);
+    expect(seen[0]).toEqual({
+      url: "http://127.0.0.1:4317/import/products/dry-run",
+      method: "POST",
+    });
+  });
+
+  test("a report the schema refuses is a bad_response and never a half-read table", async () => {
+    const api = createClient(
+      "http://127.0.0.1:4317",
+      stub(200, { rows: [{ row: 2, name: "Café", outcome: "maybe", field: null, reason: null }], accepted: 1, refused: 0 }),
+    );
+    await expect(api.dryRunProductImport(file())).rejects.toMatchObject({ code: "bad_response" });
+
+    const counted = createClient(
+      "http://127.0.0.1:4317",
+      stub(200, { rows: [], accepted: "1", refused: 0 }),
+    );
+    await expect(counted.dryRunProductImport(file())).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  test("applying reads the three counts, and a fractional one is refused", async () => {
+    const api = createClient(
+      "http://127.0.0.1:4317",
+      stub(200, { created: 2, updated: 1, categories_created: 0 }),
+    );
+    await expect(api.applyProductImport(file())).resolves.toEqual({
+      created: 2,
+      updated: 1,
+      categories_created: 0,
+    });
+
+    // The counts are exact integers: a 1.5 in a count is a server this
+    // client does not understand, not a number to round.
+    const fractional = createClient(
+      "http://127.0.0.1:4317",
+      stub(200, { created: 1.5, updated: 0, categories_created: 0 }),
+    );
+    await expect(fractional.applyProductImport(file())).rejects.toMatchObject({
+      code: "bad_response",
+    });
+  });
+
+  test("the template and the labels ask the routes the API mounts", async () => {
+    const seen: { url: string; method: string | undefined; body: unknown }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      seen.push({ url: String(input), method: init?.method, body: init?.body });
+      return new Response("<html>label</html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+
+    await expect(api.getProductLabel(7, "ar")).resolves.toBe("<html>label</html>");
+    expect(seen[0]?.url).toBe("http://127.0.0.1:4317/products/7/label?lang=ar");
+
+    await api.getLabelSheet([3, 1], "fr");
+    expect(seen[1]?.url).toBe("http://127.0.0.1:4317/labels/sheet?lang=fr");
+    expect(seen[1]?.method).toBe("POST");
+    // The order the caller named, kept: the sheet is the selection as it
+    // was ticked, not a set the client sorted.
+    expect(JSON.parse(String(seen[1]?.body))).toEqual({ ids: [3, 1] });
+  });
+
+  test("a label the server refuses raises the code the screen translates", async () => {
+    const api = createClient(
+      "http://127.0.0.1:4317",
+      stub(422, { error: { code: "validation", field: "barcode", message: "no bars" } }),
+    );
+    await expect(api.getProductLabel(7, "fr")).rejects.toMatchObject({
+      code: "validation",
+      field: "barcode",
+    });
   });
 });
