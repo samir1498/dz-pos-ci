@@ -65,8 +65,38 @@ layers, one source of values.
 | `src/primitives.ts` | 1 | the raw ramps: `stone`, `teal`, `red`, `amber`, `blue`, keyed by step. Not a component API. |
 | `src/semantic.ts` | 2 | role tokens that point at a primitive step, plus the scales: `space`, `radius`, `shadow`, `fontFamily`, `fontSize`, `layout`. This is the layer that gets edited when a role changes. |
 | `src/theme.ts` | assembly | the single `theme` object with every reference resolved to a value. What TypeScript imports. |
-| `src/css.ts` | emitter | turns the same semantic layer into the `:root` and `[dir="rtl"]` custom-property blocks. |
-| `src/index.ts` | barrel | exports `theme`, `Theme`, the semantic groups and `toCss`. It does not re-export `primitives`. |
+| `src/css.ts` | emitter | turns the same semantic layer into `:root` (Comptoir), one `[data-theme="<name>"]` block per other theme, and `[dir="rtl"]`. |
+| `src/themeCss.ts` | emitter | writes `apps/desktop/src/theme.css`: the blocks above, the shadcn/ui variable set pointing at our roles, and the Tailwind v4 `@theme` map. `just theme` runs it; `themeCss.test.ts` fails the gates on a stale file. |
+| `src/index.ts` | barrel | exports `theme`, `Theme`, `themes`, `THEMES`, `OS_THEME`, the semantic groups, `toCss` and `themeSelector`. It does not re-export `primitives`. |
+
+The theme axis. Tier 2 carries four themes, not one: `comptoir` (light,
+the default and what `:root` holds), `registre` (dark ink), `observe` (cool
+grey, emerald brand, rounder) and `observe-dark`. A theme owns colour,
+shadow and radius. Space, font size and the control heights are off the
+axis, because a theme changes what the app is made of and never how much
+room it takes. `themes` in `semantic.ts` is the map, and every theme names
+every role the others do: `css.test.ts` compares the key sets and fails on a
+role left out, which would otherwise be a light colour on a dark surface on
+the one screen nobody opened. It also holds each theme to a contrast floor,
+4.5:1 for body text on its own background and 3:1 for a status colour or
+the text on a filled control.
+
+`OS_THEME` names the two the operating system chooses between. The other
+two are picked by hand.
+
+The switch is `data-theme` on `<html>` and nothing else. Every theme is a
+block of CSS variables, so a component wears `bg-background` and
+`text-muted-foreground` and never learns which theme is on. No
+`theme === "x" ? a : b`, no theme-conditional class list, no per-theme
+component: `apps/desktop/src/theme.test.ts` greps for exactly that and
+allows a theme name in four files only (the provider, the switcher, their
+test, the generated CSS). Adding a fifth theme is an entry in `THEMES`, a
+group of role values, and a label key in the three i18n files.
+
+The kit is shadcn/ui (`apps/desktop/components.json`, style new-york,
+cssVariables, lucide), so shadcn's names are the emitted API and our roles
+are the source. D3 installs components with the CLI; it must never run
+`shadcn init`, which would rewrite `styles.css`.
 
 `design/shared/tokens.css` is the hand-written source of the values today,
 and the mockups in `design/` load it directly. `src/css.ts` emits the same
@@ -82,7 +112,11 @@ desktop.
 Where each app reads tokens, one answer per app so there are not two ways:
 
 - **Desktop reads the CSS custom properties.** Stylesheets and the Tailwind
-  `@theme` block use `var(--surface-card)`. TypeScript imports `theme` only
+  `@theme` block use `var(--surface-card)`, and a component reaches them
+  through the utility classes the generated map makes (`bg-card`,
+  `text-muted-foreground`, `font-numeric`). A literal colour is a gate
+  failure: `apps/desktop/src/tokens.test.ts` refuses `bg-[`, `text-[` and a
+  hex outside the generated file. TypeScript imports `theme` only
   where a value has to be computed in JS: a canvas, a chart, an inline
   style that depends on data.
 - **Mobile reads `theme`.** There are no custom properties in React
