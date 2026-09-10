@@ -2511,13 +2511,24 @@ fn a_database_whose_documents_take_any_block_on_any_kind_takes_the_kind_rules() 
             ", tendered_centimes, change_centimes",
             ", 120000, 1000",
         ),
+        // Every column of both party blocks carries a value of its own, and
+        // no two are the same: the rebuild copies forty-three columns by
+        // name, and two of them transposed would put the buyer's RC in the
+        // seller's box on every reprint without any count changing.
         paid(
             2,
             "facture",
             1,
             "credit",
-            ", customer_id, old_balance_centimes, remaining_debt_centimes, total_debt_centimes",
-            ", 1, 0, 119000, 119000",
+            ", customer_id, old_balance_centimes, remaining_debt_centimes, total_debt_centimes, \
+             seller_rc, seller_nif, seller_nis, seller_ai, seller_address, seller_phone, \
+             buyer_name, buyer_party_kind, buyer_rc, buyer_nif, buyer_nis, buyer_ai, \
+             buyer_address",
+            ", 1, 0, 119000, 119000, \
+             '16/00-1111111 B 21', '000216001111111', '000216002222222', '00021600333333', \
+             'Rue Didouche Mourad, Alger', '021 11 22 33', \
+             'Entreprise Benali', 'company', '16/00-4444444 B 22', '000216004444444', \
+             '000216005555555', '00021600666666', 'Cité 1200 Logements, Oran'",
         ),
         document(
             3,
@@ -2591,6 +2602,35 @@ fn a_database_whose_documents_take_any_block_on_any_kind_takes_the_kind_rules() 
         1,
         "the credit facture lost its customer or its triple"
     );
+    // Column by column, so a pair swapped in the copy goes red here and not
+    // on a reprint a year later.
+    for (column, value) in [
+        ("seller_name", "Mon magasin"),
+        ("seller_rc", "16/00-1111111 B 21"),
+        ("seller_nif", "000216001111111"),
+        ("seller_nis", "000216002222222"),
+        ("seller_ai", "00021600333333"),
+        ("seller_address", "Rue Didouche Mourad, Alger"),
+        ("seller_phone", "021 11 22 33"),
+        ("buyer_name", "Entreprise Benali"),
+        ("buyer_party_kind", "company"),
+        ("buyer_rc", "16/00-4444444 B 22"),
+        ("buyer_nif", "000216004444444"),
+        ("buyer_nis", "000216005555555"),
+        ("buyer_ai", "00021600666666"),
+        ("buyer_address", "Cité 1200 Logements, Oran"),
+    ] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM documents WHERE id = 2 AND {column} = '{value}'"
+                )
+            ),
+            1,
+            "the rebuild did not bring {column} across as it was"
+        );
+    }
     assert_eq!(
         count(
             &mut conn,
@@ -2662,4 +2702,48 @@ fn a_database_whose_documents_take_any_block_on_any_kind_takes_the_kind_rules() 
         .is_err(),
         "the rebuilt table took a negative net to pay"
     );
+}
+
+#[test]
+fn only_a_ticket_and_a_facture_are_annulled() {
+    // `documents::cancel` (services/documents.rs:119) names the two kinds it
+    // knows how to undo and refuses every other by not being on the list, so
+    // that a kind added later is refused until somebody decides what undoing
+    // it means. An annulée proforma or an annulée avoir is a row no service
+    // could have written: a quotation moved nothing to put back, and an avoir
+    // is the instrument that undoes a facture rather than something undone in
+    // turn.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    let block = [
+        ("status", "'cancelled'"),
+        ("cancelled_at", "'2026-09-10 09:15:00'"),
+        ("cancelled_by", "1"),
+        ("cancel_reason", "'erreur de saisie'"),
+    ];
+
+    for kind in [
+        "'proforma'",
+        "'avoir'",
+        "'quittance'",
+        "'bon_de_livraison'",
+        "'bon_de_reception'",
+    ] {
+        let mut row: Vec<(&str, &str)> = block.to_vec();
+        if kind == "'avoir'" {
+            row.push(("ref_document_id", "1"));
+        }
+        assert!(
+            kind_row(&mut conn, kind, &row).is_err(),
+            "an annulée {kind} was taken"
+        );
+    }
+    for kind in ["'ticket'", "'facture'"] {
+        assert_eq!(
+            kind_row(&mut conn, kind, &block).unwrap(),
+            1,
+            "an annulée {kind} was refused"
+        );
+        clear(&mut conn, "documents");
+    }
 }
