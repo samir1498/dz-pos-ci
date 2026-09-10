@@ -826,6 +826,9 @@ const write: CustomerWriteDto = {
   warn_threshold_centimes: 4_000_000,
   notes: null,
   active: true,
+  // The fiche stays open, so there is nothing to say why: the reason is
+  // asked for only when a fiche with an account behind it is closed.
+  close_reason: null,
 };
 
 /** Records what was asked for and answers `body`. */
