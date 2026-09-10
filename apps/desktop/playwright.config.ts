@@ -78,8 +78,12 @@ const home = process.env.HOME ?? "";
 const cargoEnv = {
   // Non-login shells on the WSL box do not have ~/.cargo/bin on PATH.
   PATH: `${path.join(home, ".cargo", "bin")}:${process.env.PATH ?? ""}`,
-  CARGO_TARGET_DIR: path.join(repoRoot, "target"),
-  CARGO_BUILD_JOBS: "4",
+  // `just e2e` exports both (one shared build folder for every checkout,
+  // two jobs); a bare `pnpm desktop e2e` outside just falls back to a
+  // target/ of its own, which is the per-worktree folder the disk rules
+  // forbid, so run it through just.
+  CARGO_TARGET_DIR: process.env.CARGO_TARGET_DIR ?? path.join(repoRoot, "target"),
+  CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS ?? "2",
 };
 
 export default defineConfig({
