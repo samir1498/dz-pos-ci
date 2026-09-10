@@ -19,8 +19,16 @@ the stock re-derive, the dashboard, Excel. The two M2 refactors (T10 the
 avoir's Remaining table plus the kind rules as CHECKs, T11 the zod client
 and the till split, both approved by Samir on 2026-09-10) run first on the
 same branch. `context/loops/20260910-m3-loop.md` holds the waves and
-ports. A stale-info sweep of the repo and the boss site runs alongside
-(2026-09-10 morning). The ledger on the WSL box (`~/.dz-night/ledger.md`)
+ports. Five of nine tasks merged by 11:17 (yearly series, tables, suppliers,
+expenses and cash, stock recount); purchases in its last merge-in. Samir saw
+the dev server (tmux `dz-dev`, http://100.101.196.30:5173) and found the
+screens unstyled: `context/plans/20260910-design-system-and-branding.md`
+(two themes Comptoir and Registre with a switcher, a bilingual logo the
+language switch swaps, Lucide icons, a component kit with a lint, the
+screens rewritten, a Claude Design project; Astro landing later). The
+brand pages are on the boss site under /design/. D1 and D2 run now; D3
+after purchases merges and before the dashboard. A stale-info sweep ran
+the same morning. The ledger on the WSL box (`~/.dz-night/ledger.md`)
 holds the ticks.
 
 Status site for Anouar: https://dinar-reports.pages.dev/ (progress reports
