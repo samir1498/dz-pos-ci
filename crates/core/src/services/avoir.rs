@@ -139,7 +139,7 @@ pub fn issue(
                     .unit_price
                     .checked_mul_milli(*qty_milli)?
                     .checked_sub(*line_discount)?;
-                let line_total = asked.min(remaining.on_line(line.id).money());
+                let line_total = asked.min(remaining.money_on_line(line.id));
                 slice.push(SliceLine {
                     rate: line.rate_bps,
                     ht: line_total,
@@ -158,17 +158,12 @@ pub fn issue(
             }
             let totals = slice_totals(&facture, &remaining, &slice)?;
 
-            // The safety net under the quantities: a line's remaining quantity
-            // is checked above, and this is checked against the one figure the
-            // whole facture asked for. A forged avoir carrying no line at all
-            // moves no quantity and would slip past everything else.
-            //
-            // Against `total_ttc` and not against `net_to_pay`, because the
-            // droit de timbre is the one part of a facture no avoir ever gives
-            // back: capping at the net would leave the stamp's worth of room
-            // for the partials to eat, and the closing avoir would then have
-            // to be written for a negative amount.
-            if totals.net_to_pay > remaining.left_to_credit {
+            // The safety net under the quantities: a line's remaining
+            // quantity is checked above, and this is checked against the one
+            // figure the whole facture asked for, which `Remaining::totals`
+            // says why. A forged avoir carrying no line at all moves no
+            // quantity and would slip past everything else.
+            if totals.net_to_pay > remaining.totals.total_ttc {
                 return Err(CoreError::validation(
                     "lines",
                     "the avoirs on this facture would come to more than it asked for",
@@ -359,7 +354,7 @@ pub fn anything_left(
     facture: &Document,
 ) -> Result<bool, CoreError> {
     let remaining = Remaining::of(conn, shop_id, facture)?;
-    Ok(remaining.lines.iter().any(|line| line.quantity() > 0))
+    Ok(remaining.lines.iter().any(|line| line.qty_milli > 0))
 }
 
 /// What a whole avoir on this facture would come to, without writing one.
@@ -374,7 +369,8 @@ pub fn what_is_left(
     facture: &Document,
 ) -> Result<Money, CoreError> {
     Ok(Remaining::of(conn, shop_id, facture)?
-        .left_to_credit
+        .totals
+        .total_ttc
         .max(Money::ZERO))
 }
 
@@ -399,14 +395,18 @@ struct Remaining {
     lines: Vec<RemainingLine>,
     rates: Vec<RemainingRate>,
     /// The facture's totals less every avoir's, the stamp taken off: what the
-    /// closing avoir is written for, and what the remise a partial gives back
-    /// is measured against under the IFU.
+    /// closing avoir is written for, what the remise a partial gives back is
+    /// measured against under the IFU, and, on `total_ttc`, what the running
+    /// total of every avoir is capped at.
+    ///
+    /// The cap is read on `total_ttc` and not on the net, because the droit de
+    /// timbre is the one part of a facture no avoir gives back: capping at the
+    /// net would leave the stamp's worth of room for the partials to eat, and
+    /// the closing avoir would then have to be written for a negative amount.
+    /// Subtracting each avoir's own `total_ttc` says the same thing as
+    /// subtracting its net, because an avoir never carries a stamp
+    /// (`an_avoir_prints_no_stamp_and_one_that_carries_a_stamp_is_refused`).
     totals: Totals,
-    /// What the facture has left to be credited on the one figure it asked
-    /// for. Its `total_ttc` and not its net, because the droit de timbre is
-    /// never given back: capping at the net would leave the stamp's worth of
-    /// room for the partials to eat.
-    left_to_credit: Money,
     /// An earlier avoir carries a rate in its recap that the facture's recap
     /// does not. Kept rather than raised: only the closing avoir is written
     /// from the rate rows, so only it has to refuse them.
@@ -415,7 +415,6 @@ struct Remaining {
 
 /// What one facture line still has on it: the quantity, the money and the
 /// share of the line discount that has not come back yet.
-#[derive(Clone, Copy)]
 struct RemainingLine {
     id: i32,
     qty_milli: i64,
@@ -423,24 +422,9 @@ struct RemainingLine {
     line_discount: Money,
 }
 
-impl RemainingLine {
-    /// The quantity still on the line, never below zero: a line credited past
-    /// what it held has nothing left to give.
-    fn quantity(&self) -> i64 {
-        self.qty_milli.max(0)
-    }
-
-    /// The money still on the line, never below zero: a line credited to the
-    /// centime has nothing left to give, and the quantity still on it comes
-    /// back for no money.
-    fn money(&self) -> Money {
-        self.line_total.max(Money::ZERO)
-    }
-}
-
 /// What one rate of the facture still has on it: the HT of its lines, the
-/// taxable base the facture charged there and the tax on it.
-#[derive(Clone, Copy)]
+/// taxable base the facture charged there and the tax on it. The remise still
+/// to give back at the rate is the first less the second.
 struct RemainingRate {
     rate: Bps,
     ht: Money,
@@ -450,14 +434,6 @@ struct RemainingRate {
     /// document shows no TVA at all, so every rate its lines are at is a rate
     /// with no row, and the closing avoir writes no recap either.
     on_the_recap: bool,
-}
-
-impl RemainingRate {
-    /// The remise the facture put on this group and no avoir has given back
-    /// yet: what the group's lines come to, less what was taxed.
-    fn share(&self) -> Result<Money, CoreError> {
-        Ok(self.ht.checked_sub(self.base)?)
-    }
 }
 
 impl Remaining {
@@ -523,7 +499,6 @@ impl Remaining {
             stamp: Money::ZERO,
             net_to_pay: facture.totals.total_ttc,
         };
-        let mut left_to_credit = facture.totals.total_ttc;
         let mut foreign_rate = false;
 
         for avoir in &earlier {
@@ -532,7 +507,6 @@ impl Remaining {
             totals.subtotal_ht = totals.subtotal_ht.checked_sub(avoir.totals.subtotal_ht)?;
             totals.tva = totals.tva.checked_sub(avoir.totals.tva)?;
             totals.total_ttc = totals.total_ttc.checked_sub(avoir.totals.total_ttc)?;
-            left_to_credit = left_to_credit.checked_sub(avoir.totals.net_to_pay)?;
 
             for taken in &avoir.lines {
                 if let Some(mine) = lines
@@ -583,40 +557,33 @@ impl Remaining {
             lines,
             rates,
             totals,
-            left_to_credit,
             foreign_rate,
         })
     }
 
-    /// What one facture line has left. A line id the facture does not carry
-    /// cannot reach here: every caller reads a line off the facture itself.
-    fn on_line(&self, line_id: i32) -> RemainingLine {
-        self.lines
-            .iter()
-            .find(|line| line.id == line_id)
-            .copied()
-            .unwrap_or(RemainingLine {
-                id: line_id,
-                qty_milli: 0,
-                line_total: Money::ZERO,
-                line_discount: Money::ZERO,
-            })
+    /// What one facture line has left, and what one rate has left. A line or a
+    /// rate the facture does not carry has nothing left on it, which is what
+    /// `None` says.
+    fn on_line(&self, line_id: i32) -> Option<&RemainingLine> {
+        self.lines.iter().find(|line| line.id == line_id)
     }
 
-    /// What one rate has left, as the slice's own arithmetic reads it. A rate
-    /// the facture has no lines and no recap row at has nothing left there.
-    fn at(&self, rate: Bps) -> RemainingRate {
-        self.rates
-            .iter()
-            .find(|r| r.rate == rate)
-            .copied()
-            .unwrap_or(RemainingRate {
-                rate,
-                ht: Money::ZERO,
-                base: Money::ZERO,
-                amount: Money::ZERO,
-                on_the_recap: false,
-            })
+    fn at(&self, rate: Bps) -> Option<&RemainingRate> {
+        self.rates.iter().find(|r| r.rate == rate)
+    }
+
+    /// The quantity still on one facture line, and the money still on it,
+    /// neither below zero: a line credited past what it held, or to the
+    /// centime, has nothing left to give, and the quantity still on such a
+    /// line comes back for no money.
+    fn quantity_on_line(&self, line_id: i32) -> i64 {
+        self.on_line(line_id)
+            .map_or(0, |line| line.qty_milli.max(0))
+    }
+
+    fn money_on_line(&self, line_id: i32) -> Money {
+        self.on_line(line_id)
+            .map_or(Money::ZERO, |line| line.line_total.max(Money::ZERO))
     }
 
     /// Whether this avoir takes the last quantity off the facture, which is
@@ -631,7 +598,7 @@ impl Remaining {
                 .iter()
                 .find(|(l, _, _)| l.id == line.id)
                 .map_or(0, |(_, qty, _)| *qty);
-            line.quantity().saturating_sub(now) <= 0
+            line.qty_milli.max(0).saturating_sub(now) <= 0
         })
     }
 
@@ -672,8 +639,11 @@ impl Remaining {
 
         let mut lines = Vec::new();
         let mut stray: Vec<(Bps, Money)> = Vec::new();
-        for line in &facture.lines {
-            let left = self.on_line(line.id);
+        // Zipped rather than looked up: `of` built one `RemainingLine` per
+        // facture line, in the facture's own order, so the two run together
+        // and the closing avoir prints its lines in the order the facture
+        // printed them.
+        for (line, left) in facture.lines.iter().zip(&self.lines) {
             // A quantity below zero is an avoir crediting more of a line than
             // the line ever held, which is the file disagreeing with itself
             // and not a remainder to be clamped quietly.
@@ -755,7 +725,7 @@ fn chosen<'a>(
     match asked {
         None => {
             for line in &facture.lines {
-                let qty = remaining.on_line(line.id).quantity();
+                let qty = remaining.quantity_on_line(line.id);
                 if qty > 0 {
                     coming.push((line, qty, prorated_discount(line, qty)?));
                 }
@@ -782,7 +752,7 @@ fn chosen<'a>(
                         "a credited quantity is above zero",
                     ));
                 }
-                if want.qty_milli > remaining.on_line(line.id).quantity() {
+                if want.qty_milli > remaining.quantity_on_line(line.id) {
                     return Err(CoreError::validation(
                         "qty_milli",
                         "more of this line is being credited than was sold and not yet credited",
@@ -881,19 +851,24 @@ fn slice_totals(
         });
     }
     for (rate, ht) in &groups {
-        let left = remaining.at(*rate);
-        let left_share = left.share()?;
+        // Every rate of the slice is a rate one of the facture's lines is at,
+        // and `Remaining` carries a row for each of those, so a rate with no
+        // row is a rate the facture never charged and has nothing left at.
+        let (left_ht, left_share, left_tva) = match remaining.at(*rate) {
+            Some(left) => (left.ht, left.ht.checked_sub(left.base)?, left.amount),
+            None => (Money::ZERO, Money::ZERO, Money::ZERO),
+        };
         // What this slice gives back of the facture's remise at this rate: its
         // proportional share rounded up, so a slice never leaves the rest of
         // the facture holding a remise it cannot place, and never more than
         // what is left.
-        let share = if *ht >= left.ht {
+        let share = if *ht >= left_ht {
             left_share.min(*ht)
         } else {
-            up(left_share, *ht, left.ht)?.min(left_share)
+            up(left_share, *ht, left_ht)?.min(left_share)
         };
         let base = ht.checked_sub(share)?;
-        let amount = base.pct(*rate)?.min(left.amount);
+        let amount = base.pct(*rate)?.min(left_tva);
         discount = discount.checked_add(share)?;
         tva = tva.checked_add(amount)?;
         tva_by_rate.push(TvaLine {
