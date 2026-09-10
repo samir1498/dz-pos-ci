@@ -12,6 +12,7 @@
 // Nothing runs after it, so the row it leaves is nobody's problem.
 
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentLang, t } from "./messages";
@@ -54,11 +55,13 @@ test("the four workbooks come out as spreadsheets a shop can open", async ({ pag
     expect(answer.status(), kind).toBe(200);
     expect(answer.headers()["content-type"], kind).toContain("spreadsheetml.sheet");
     expect(answer.headers()["content-disposition"], kind).toContain(".xlsx");
-    const bytes = await answer.body();
-    expect([...bytes.subarray(0, 4)], kind).toEqual(ZIP);
-    // And it really reaches the shop as a file, under the server's name.
+    // The bytes are read off the file that reached the shop rather than off
+    // the response: the page consumed that body into a blob, and Playwright
+    // hands back an empty one for a response the page already read.
     const saved = await downloading;
     expect(saved.suggestedFilename(), kind).toContain(".xlsx");
+    const file = await saved.path();
+    expect([...readFileSync(file).subarray(0, 4)], kind).toEqual(ZIP);
   }
 });
 
@@ -125,8 +128,11 @@ test("the label of the imported product carries its bars and its digits", async 
   await expect(frame.getByText(code)).toBeVisible();
   await expect(frame.getByText(IMPORTED)).toBeVisible();
 
-  // The one committed screenshot for this spec: Arabic, so the RTL panel
-  // with a barcode still read left to right has a reference image.
+  // The one committed screenshot for this spec: Arabic, so the RTL screen
+  // around the label has a reference image. The frame itself comes out
+  // white, the way the ticket does in `till-ar.png`: a sandboxed srcdoc
+  // document is not composited into a full-page capture. The label's own
+  // pixels are pinned by the goldens in dzpos-core instead.
   if (currentLang() === "ar") {
     await page.screenshot({
       path: path.join(here, "screenshots", "product-label-ar.png"),
