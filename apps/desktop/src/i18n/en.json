@@ -531,5 +531,19 @@
   "pill_cancelled": "Cancelled",
   "pill_paid": "Paid",
   "pill_open": "Open",
-  "pill_low": "Low stock"
+  "pill_low": "Low stock",
+  "products_search": "Search for a product",
+  "products_search_hint": "Name or barcode",
+  "products_filter_category": "Filter by category",
+  "products_filter_all": "All categories",
+  "products_filter_low": "Low stock only",
+  "products_filter_clear": "Show everything",
+  "products_no_match": "No product matches.",
+  "products_no_match_hint": "Change the search, the category or the stock filter.",
+  "products_empty_hint": "Add the first product, or import the catalogue from the settings.",
+  "products_fiche_hint": "Prices are in dinars. Stock is set by movements, not by this sheet.",
+  "labels_sheet_hint": "One A4 sheet for the ticked products.",
+  "field_blank_is_zero": "Blank means zero.",
+  "field_blank_is_none": "Blank means “no wholesale price”.",
+  "products_add_first": "Add the first product"
 }

@@ -6,7 +6,6 @@
     { "file": "src/routes/-till/cart.tsx", "screen": "the till's cart" },
     { "file": "src/routes/-till/customer.tsx", "screen": "the till's customer panel" },
     { "file": "src/routes/-till/payment.tsx", "screen": "the till's payment panel" },
-    { "file": "src/routes/products.tsx", "screen": "products" },
     { "file": "src/routes/customers.tsx", "screen": "customers" },
     { "file": "src/routes/documents.tsx", "screen": "documents" },
     { "file": "src/routes/suppliers.tsx", "screen": "suppliers" },

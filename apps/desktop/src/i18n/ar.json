@@ -531,5 +531,19 @@
   "pill_cancelled": "ملغاة",
   "pill_paid": "مدفوع",
   "pill_open": "قيد التسديد",
-  "pill_low": "مخزون منخفض"
+  "pill_low": "مخزون منخفض",
+  "products_search": "البحث عن منتج",
+  "products_search_hint": "الاسم أو الرمز الشريطي",
+  "products_filter_category": "تصفية حسب الفئة",
+  "products_filter_all": "كل الفئات",
+  "products_filter_low": "المخزون المنخفض فقط",
+  "products_filter_clear": "عرض الكل",
+  "products_no_match": "لا يوجد منتج مطابق.",
+  "products_no_match_hint": "غيّر البحث أو الفئة أو تصفية المخزون.",
+  "products_empty_hint": "أضف أول منتج، أو استورد الكتالوغ من الإعدادات.",
+  "products_fiche_hint": "الأسعار بالدينار. المخزون يُضبط بالحركات لا من هذه البطاقة.",
+  "labels_sheet_hint": "لوحة A4 للمنتجات المحددة.",
+  "field_blank_is_zero": "الفراغ يعني صفرا.",
+  "field_blank_is_none": "الفراغ يعني «لا سعر جملة».",
+  "products_add_first": "إضافة أول منتج"
 }

@@ -531,5 +531,19 @@
   "pill_cancelled": "Annulée",
   "pill_paid": "Payé",
   "pill_open": "En cours",
-  "pill_low": "Stock bas"
+  "pill_low": "Stock bas",
+  "products_search": "Rechercher un produit",
+  "products_search_hint": "Nom ou code-barres",
+  "products_filter_category": "Filtrer par catégorie",
+  "products_filter_all": "Toutes les catégories",
+  "products_filter_low": "Stock bas seulement",
+  "products_filter_clear": "Tout afficher",
+  "products_no_match": "Aucun produit ne correspond.",
+  "products_no_match_hint": "Changez la recherche, la catégorie ou le filtre de stock.",
+  "products_empty_hint": "Ajoutez le premier produit, ou importez le catalogue depuis les réglages.",
+  "products_fiche_hint": "Les prix sont en dinars. Le stock se règle par les mouvements, pas par la fiche.",
+  "labels_sheet_hint": "Une planche A4 pour les produits cochés.",
+  "field_blank_is_zero": "Vide vaut zéro.",
+  "field_blank_is_none": "Vide veut dire « pas de prix de gros ».",
+  "products_add_first": "Ajouter le premier produit"
 }
