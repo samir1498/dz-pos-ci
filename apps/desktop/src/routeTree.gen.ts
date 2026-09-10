@@ -13,10 +13,13 @@ import { Route as IndexRouteImport } from "./routes/index"
 import { Route as CustomersRouteImport } from "./routes/customers"
 import { Route as DocumentsRouteImport } from "./routes/documents"
 import { Route as ProductsRouteImport } from "./routes/products"
+import { Route as PurchasesRouteImport } from "./routes/purchases"
 import { Route as SettingsRouteImport } from "./routes/settings"
 import { Route as SuppliersRouteImport } from "./routes/suppliers"
 import { Route as TillRouteImport } from "./routes/till"
 import { Route as CustomersIdRouteImport } from "./routes/customers_.$id"
+import { Route as PurchasesIdRouteImport } from "./routes/purchases_.$id"
+import { Route as PurchasesNewRouteImport } from "./routes/purchases_.new"
 import { Route as SuppliersIdRouteImport } from "./routes/suppliers_.$id"
 
 const IndexRoute = IndexRouteImport.update({
@@ -39,6 +42,11 @@ const ProductsRoute = ProductsRouteImport.update({
   path: "/products",
   getParentRoute: () => rootRouteImport,
 } as any)
+const PurchasesRoute = PurchasesRouteImport.update({
+  id: "/purchases",
+  path: "/purchases",
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: "/settings",
   path: "/settings",
@@ -59,6 +67,16 @@ const CustomersIdRoute = CustomersIdRouteImport.update({
   path: "/customers/$id",
   getParentRoute: () => rootRouteImport,
 } as any)
+const PurchasesIdRoute = PurchasesIdRouteImport.update({
+  id: "/purchases_/$id",
+  path: "/purchases/$id",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PurchasesNewRoute = PurchasesNewRouteImport.update({
+  id: "/purchases_/new",
+  path: "/purchases/new",
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SuppliersIdRoute = SuppliersIdRouteImport.update({
   id: "/suppliers_/$id",
   path: "/suppliers/$id",
@@ -70,10 +88,13 @@ export interface FileRoutesByFullPath {
   "/customers": typeof CustomersRoute
   "/documents": typeof DocumentsRoute
   "/products": typeof ProductsRoute
+  "/purchases": typeof PurchasesRoute
   "/settings": typeof SettingsRoute
   "/suppliers": typeof SuppliersRoute
   "/till": typeof TillRoute
   "/customers/$id": typeof CustomersIdRoute
+  "/purchases/$id": typeof PurchasesIdRoute
+  "/purchases/new": typeof PurchasesNewRoute
   "/suppliers/$id": typeof SuppliersIdRoute
 }
 export interface FileRoutesByTo {
@@ -81,10 +102,13 @@ export interface FileRoutesByTo {
   "/customers": typeof CustomersRoute
   "/documents": typeof DocumentsRoute
   "/products": typeof ProductsRoute
+  "/purchases": typeof PurchasesRoute
   "/settings": typeof SettingsRoute
   "/suppliers": typeof SuppliersRoute
   "/till": typeof TillRoute
   "/customers/$id": typeof CustomersIdRoute
+  "/purchases/$id": typeof PurchasesIdRoute
+  "/purchases/new": typeof PurchasesNewRoute
   "/suppliers/$id": typeof SuppliersIdRoute
 }
 export interface FileRoutesById {
@@ -93,10 +117,13 @@ export interface FileRoutesById {
   "/customers": typeof CustomersRoute
   "/documents": typeof DocumentsRoute
   "/products": typeof ProductsRoute
+  "/purchases": typeof PurchasesRoute
   "/settings": typeof SettingsRoute
   "/suppliers": typeof SuppliersRoute
   "/till": typeof TillRoute
   "/customers_/$id": typeof CustomersIdRoute
+  "/purchases_/$id": typeof PurchasesIdRoute
+  "/purchases_/new": typeof PurchasesNewRoute
   "/suppliers_/$id": typeof SuppliersIdRoute
 }
 export interface FileRouteTypes {
@@ -106,10 +133,13 @@ export interface FileRouteTypes {
     | "/customers"
     | "/documents"
     | "/products"
+    | "/purchases"
     | "/settings"
     | "/suppliers"
     | "/till"
     | "/customers/$id"
+    | "/purchases/$id"
+    | "/purchases/new"
     | "/suppliers/$id"
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -117,10 +147,13 @@ export interface FileRouteTypes {
     | "/customers"
     | "/documents"
     | "/products"
+    | "/purchases"
     | "/settings"
     | "/suppliers"
     | "/till"
     | "/customers/$id"
+    | "/purchases/$id"
+    | "/purchases/new"
     | "/suppliers/$id"
   id:
     | "__root__"
@@ -128,10 +161,13 @@ export interface FileRouteTypes {
     | "/customers"
     | "/documents"
     | "/products"
+    | "/purchases"
     | "/settings"
     | "/suppliers"
     | "/till"
     | "/customers_/$id"
+    | "/purchases_/$id"
+    | "/purchases_/new"
     | "/suppliers_/$id"
   fileRoutesById: FileRoutesById
 }
@@ -140,10 +176,13 @@ export interface RootRouteChildren {
   CustomersRoute: typeof CustomersRoute
   DocumentsRoute: typeof DocumentsRoute
   ProductsRoute: typeof ProductsRoute
+  PurchasesRoute: typeof PurchasesRoute
   SettingsRoute: typeof SettingsRoute
   SuppliersRoute: typeof SuppliersRoute
   TillRoute: typeof TillRoute
   CustomersIdRoute: typeof CustomersIdRoute
+  PurchasesIdRoute: typeof PurchasesIdRoute
+  PurchasesNewRoute: typeof PurchasesNewRoute
   SuppliersIdRoute: typeof SuppliersIdRoute
 }
 
@@ -177,6 +216,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof ProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/purchases": {
+      id: "/purchases"
+      path: "/purchases"
+      fullPath: "/purchases"
+      preLoaderRoute: typeof PurchasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     "/settings": {
       id: "/settings"
       path: "/settings"
@@ -205,6 +251,20 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof CustomersIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/purchases_/$id": {
+      id: "/purchases_/$id"
+      path: "/purchases/$id"
+      fullPath: "/purchases/$id"
+      preLoaderRoute: typeof PurchasesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/purchases_/new": {
+      id: "/purchases_/new"
+      path: "/purchases/new"
+      fullPath: "/purchases/new"
+      preLoaderRoute: typeof PurchasesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     "/suppliers_/$id": {
       id: "/suppliers_/$id"
       path: "/suppliers/$id"
@@ -220,10 +280,13 @@ const rootRouteChildren: RootRouteChildren = {
   CustomersRoute: CustomersRoute,
   DocumentsRoute: DocumentsRoute,
   ProductsRoute: ProductsRoute,
+  PurchasesRoute: PurchasesRoute,
   SettingsRoute: SettingsRoute,
   SuppliersRoute: SuppliersRoute,
   TillRoute: TillRoute,
   CustomersIdRoute: CustomersIdRoute,
+  PurchasesIdRoute: PurchasesIdRoute,
+  PurchasesNewRoute: PurchasesNewRoute,
   SuppliersIdRoute: SuppliersIdRoute,
 }
 export const routeTree = rootRouteImport

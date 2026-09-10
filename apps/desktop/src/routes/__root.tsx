@@ -25,6 +25,11 @@ function RootLayout() {
           <Link to="/suppliers" className="underline">
             {t("nav_suppliers")}
           </Link>
+          {/* Beside the suppliers, because an order is what a supplier fiche
+              is for and the two screens link to each other. */}
+          <Link to="/purchases" className="underline">
+            {t("nav_purchases")}
+          </Link>
           {/* After the three screens a shop works in: a document is found
               again here, not made here. */}
           <Link to="/documents" className="underline">

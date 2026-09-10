@@ -13,12 +13,12 @@ pnpm desktop e2e --project ar     # one language, every spec file
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes only `products.png`; the other seven say "... screenshot in Arabic"
+writes only `products.png`; the other eight say "... screenshot in Arabic"
 in their titles, so they match the grep in both runs but write a file only
 when `currentLang()` is `ar`, and the fr run of them does nothing
-observable. Under ar all seven write: `products-ar.png`, `settings-ar.png`,
-`till-ar.png`, `customers-ar.png`, `suppliers-ar.png`, `till-credit-ar.png`
-and `documents-avoir-ar.png`.
+observable. Under ar all eight write: `products-ar.png`, `settings-ar.png`,
+`till-ar.png`, `customers-ar.png`, `suppliers-ar.png`, `purchases-ar.png`,
+`till-credit-ar.png` and `documents-avoir-ar.png`.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
@@ -109,6 +109,9 @@ second language on; use the looped `just e2e` or a single `--project`.
   `documentElement` before React mounts, read off the DOM rather than
   through an auto-retrying matcher;
   `products.spec.ts`, three tests on the products screen;
+  `purchases.spec.ts`, an order of two products with extra costs received in
+  two deliveries and then partly returned, and a cancellation refused once
+  goods have arrived;
   `settings.spec.ts`, the store block and the dated régime, and it hands
   the shop back under the réel before it leaves;
   `settlement.spec.ts`, two credit sales settled oldest first, a payment
@@ -126,10 +129,10 @@ second language on; use the looped `just e2e` or a single `--project`.
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
   rows finds the API port and the run's launch token.
-- The eight committed screenshots, 1280x800, full page: `products.png`
+- The nine committed screenshots, 1280x800, full page: `products.png`
   (fr) and, in ar, `products-ar.png`, `settings-ar.png`, `till-ar.png`,
-  `customers-ar.png`, `suppliers-ar.png`, `till-credit-ar.png` and
-  `documents-avoir-ar.png`.
+  `customers-ar.png`, `suppliers-ar.png`, `purchases-ar.png`,
+  `till-credit-ar.png` and `documents-avoir-ar.png`.
   `en` keeps none; the two languages above are enough to show the layout
   and the RTL mirror.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
@@ -165,6 +168,7 @@ here. These are all of them.
 | `customer-debt-slip` | `customers.tsx` | The debt slip iframe. |
 | `customer-debt-slip-button` | `customers.tsx` | The button that opens it, beside a second button with a translated label. |
 | `customer-close-reason` | `customers.tsx` | Absent until a fiche with an account behind it is being closed, so a test counts it. |
+| `purchase-status` | `purchases_.$id.tsx` | The state the order is in; its word and a column header of the lines table read the same in English ("Received"). |
 | `backup-row` | `BackupsPanel.tsx` | One copy in the list; its text is a filename and a date. |
 | `backups-newest` | `BackupsPanel.tsx` | The one the restore button acts on. |
 | `safety-copy-row` | `BackupsPanel.tsx` | The copy a restore takes of what it is about to replace. |
