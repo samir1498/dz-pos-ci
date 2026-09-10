@@ -5,12 +5,30 @@
 // Every figure here is the core's. The balance and the limit come off the
 // fiche, the side and the fields come off the refusal; the screen decides
 // none of them (architecture.md rule 2).
+//
+// The picker was a `<select>` and is now the search box with its answers
+// under it. Two reasons, one of each kind. A select on this kit is a Radix
+// popover, which needs pointer capture and `scrollIntoView` and so cannot be
+// driven in jsdom at all, and picking a customer is the first step of the
+// credit, facture and proforma flows this screen is tested on. And at a
+// counter the shop already types a name or a phone number into the box above
+// it: the answers are what the shop asked for, so showing them as the list
+// they are costs a cashier one look instead of one look and one click.
 
 import { Link } from "@tanstack/react-router";
-import { ApiError, formatCentimes } from "@dzpos/shared";
+import { ApiError } from "@dzpos/shared";
 import type { CustomerDto, SaleKindDto } from "@dzpos/shared";
+import { Search, UserRound } from "lucide-react";
 
+import { FormField } from "@/components/FormField";
+import { Icon } from "@/components/Icon";
+import { Money } from "@/components/Money";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useTranslation, type Key } from "@/i18n";
+
+import { Choice, ChoiceGroup } from "./choice";
 
 /** A facture the party blocks refuse, as the server described it: which
  * half is short and of which identifiers. Both come off the wire; the screen
@@ -91,7 +109,7 @@ export function CustomerPanel({
 }) {
   const { t } = useTranslation();
   return (
-    <>
+    <div className="flex flex-col gap-3 border-b border-border pb-3">
       <CustomerPicker
         picked={picked}
         rows={rows}
@@ -100,48 +118,49 @@ export function CustomerPanel({
         onPick={onPick}
       />
 
-      <fieldset className="flex flex-wrap gap-3 border-0 p-0">
-        <legend className="mb-1">{t("till_kind")}</legend>
-        <KindChoice kind="ticket" current={kind} label={t("till_ticket")} onPick={onKind} />
+      <ChoiceGroup label={t("till_kind")}>
+        <Choice
+          checked={kind === "ticket"}
+          label={t("till_ticket")}
+          onPick={() => onKind("ticket")}
+        />
         {/* Loi 04-02 art. 10 decides the paper by who the buyer is, and
             décret 05-468 art. 3 puts that buyer on it, so the choice is
             there once a fiche is picked and not before. */}
-        <KindChoice
-          kind="facture"
-          current={kind}
+        <Choice
+          checked={kind === "facture"}
           label={t("till_facture")}
           title={picked === null ? t("till_facture_needs_customer") : undefined}
           disabled={picked === null}
-          onPick={onKind}
+          onPick={() => onKind("facture")}
         />
         {/* A quotation is the same basket priced and nothing else: it is
             made out to a customer the way a facture is, so it appears on
             the same terms, and it moves neither stock nor debt
             (features.md §3). */}
-        <KindChoice
-          kind="proforma"
-          current={kind}
+        <Choice
+          checked={kind === "proforma"}
           label={t("till_kind_proforma")}
           title={picked === null ? t("till_proforma_needs_customer") : undefined}
           disabled={picked === null}
-          onPick={onKind}
+          onPick={() => onKind("proforma")}
         />
-      </fieldset>
-    </>
+      </ChoiceGroup>
+    </div>
   );
 }
 
-/** Who the sale is for. "Walk-in" is the default and stays the first choice:
- * most baskets at a till belong to nobody in particular, and a cashier must
- * not have to unpick a customer to sell to one.
+/** Who the sale is for. Nobody in particular is the default and stays it:
+ * most baskets at a till belong to a walk-in, and a cashier must not have to
+ * unpick a customer to sell to one.
  *
  * Only active fiches are offered. A closed fiche is one the shop has stopped
  * doing business with, and the core refuses a sale to it; offering it here
  * would be a choice that always fails.
  *
  * The picked fiche is kept whole by the parent, so narrowing the search does
- * not unpick it. It is added back to the options when the search has pushed
- * it out, or the select would show a blank row for a customer who is there.
+ * not unpick it: it is shown above the list rather than inside it, and the
+ * way back to the walk-in is the button beside it.
  */
 function CustomerPicker({
   picked,
@@ -157,93 +176,93 @@ function CustomerPicker({
   onPick: (customer: CustomerDto | null) => void;
 }) {
   const { t } = useTranslation();
-  const active = rows.filter((c) => c.active);
-  const options =
-    picked !== null && !active.some((c) => c.id === picked.id) ? [picked, ...active] : active;
+  const offered = rows.filter((c) => c.active && c.id !== picked?.id);
   const alert = standing(picked);
   return (
-    <div className="flex flex-col gap-2 border-b pb-3">
-      <label className="flex flex-col gap-1">
-        <span>{t("till_customer")}</span>
-        <input
-          type="search"
-          className="rounded border px-2 py-1"
-          aria-label={t("till_customer_search")}
-          placeholder={t("customers_search_hint")}
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-        />
-      </label>
-      <select
-        className="rounded border px-2 py-1"
-        aria-label={t("till_customer")}
-        value={picked === null ? "" : String(picked.id)}
-        onChange={(e) => {
-          const id = Number(e.target.value);
-          onPick(options.find((c) => c.id === id) ?? null);
-        }}
-      >
-        <option value="">{t("till_walk_in")}</option>
-        {options.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-      {picked !== null ? (
-        <p className="flex items-center justify-between gap-2 text-sm">
-          <span>{t("customers_balance")}</span>
-          <span data-testid="till-customer-balance" className="font-mono" dir="ltr">
-            {formatCentimes(picked.balance_centimes)}
-          </span>
-        </p>
-      ) : null}
-      {alert !== null && picked !== null ? (
-        <p
-          role="status"
-          data-testid="till-limit-banner"
-          className={alert === "over" ? "text-sm text-red-700" : "text-sm text-amber-700"}
-        >
-          {`${t(alert === "over" ? "till_over_limit" : "till_near_limit")} · ${formatCentimes(
-            picked.balance_centimes,
-          )} / ${
-            picked.credit_limit_centimes === null
-              ? t("till_no_limit")
-              : formatCentimes(picked.credit_limit_centimes)
-          }`}
-        </p>
-      ) : null}
-    </div>
-  );
-}
+    <div className="flex flex-col gap-2">
+      <FormField label={t("till_customer_search")}>
+        {(parts) => (
+          <div className="relative">
+            <Icon
+              as={Search}
+              size={18}
+              className="pointer-events-none absolute inset-y-0 start-3 my-auto text-faint"
+            />
+            <Input
+              {...parts}
+              type="search"
+              className="ps-9"
+              placeholder={t("customers_search_hint")}
+              value={search}
+              onChange={(event) => onSearch(event.target.value)}
+            />
+          </div>
+        )}
+      </FormField>
 
-function KindChoice({
-  kind,
-  current,
-  label,
-  title,
-  disabled = false,
-  onPick,
-}: {
-  kind: SaleKindDto;
-  current: SaleKindDto;
-  label: string;
-  title?: string;
-  disabled?: boolean;
-  onPick: (kind: SaleKindDto) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2" title={title}>
-      <input
-        type="radio"
-        name="sale_kind"
-        value={kind}
-        checked={current === kind}
-        disabled={disabled}
-        onChange={() => onPick(kind)}
-      />
-      <span>{label}</span>
-    </label>
+      {picked !== null ? (
+        <Card className="gap-2 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">{picked.name}</span>
+            <Button type="button" variant="ghost" size="sm" onClick={() => onPick(null)}>
+              {t("till_walk_in")}
+            </Button>
+          </div>
+          <p className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">{t("customers_balance")}</span>
+            <Money centimes={picked.balance_centimes} data-testid="till-customer-balance" />
+          </p>
+          {/* The balance against the limit, both as the fiche carries them
+              and both through `Money`, so the two amounts a cashier compares
+              are set in the same figures as every other amount on the screen.
+              A fiche with no limit says so in words rather than showing an
+              amount nobody set. */}
+          {alert !== null ? (
+            <p
+              role="status"
+              data-testid="till-limit-banner"
+              className={alert === "over" ? "text-sm text-fg-danger" : "text-sm text-warn"}
+            >
+              {`${t(alert === "over" ? "till_over_limit" : "till_near_limit")} · `}
+              <Money centimes={picked.balance_centimes} className="text-sm" />
+              {" / "}
+              {picked.credit_limit_centimes === null ? (
+                t("till_no_limit")
+              ) : (
+                <Money centimes={picked.credit_limit_centimes} className="text-sm" />
+              )}
+            </p>
+          ) : null}
+        </Card>
+      ) : null}
+
+      {/* A plain overflow rather than the kit's scroll area: the list is a
+          few rows the server already narrowed, and Radix's scroller wants a
+          ResizeObserver, which the shop's oldest webview and the test
+          environment both do without. */}
+      <div className="max-h-48 overflow-y-auto">
+        <div role="group" aria-label={t("till_customer")} className="flex flex-col gap-1">
+          {offered.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("till_no_customer")}</p>
+          ) : null}
+          {offered.map((customer) => (
+            <Button
+              key={customer.id}
+              type="button"
+              variant="ghost"
+              className="justify-between font-normal"
+              onClick={() => onPick(customer)}
+            >
+              <span className="flex items-center gap-2 truncate">
+                <Icon as={UserRound} size={18} className="text-faint" />
+                {customer.name}
+              </span>
+              <Money centimes={customer.balance_centimes} className="text-xs" />
+            </Button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -255,12 +274,8 @@ export function PartyIdsRefused({ refusal }: { refusal: PartyRefusal }) {
   const { t } = useTranslation();
   const seller = refusal.side === "seller";
   return (
-    <div
-      role="alert"
-      data-testid="till-party-ids"
-      className="flex flex-col gap-2 rounded border border-red-700 p-3"
-    >
-      <strong className="text-red-700">{t("error_party_ids")}</strong>
+    <Card role="alert" data-testid="till-party-ids" className="gap-2 border-line-danger p-3">
+      <strong className="text-fg-danger">{t("error_party_ids")}</strong>
       <p>{t(seller ? "till_party_ids_seller" : "till_party_ids_buyer")}</p>
       <ul data-testid="till-party-ids-missing" className="list-disc ps-5">
         {refusal.missing.map((field) => (
@@ -270,6 +285,6 @@ export function PartyIdsRefused({ refusal }: { refusal: PartyRefusal }) {
       <Link to={seller ? "/settings" : "/customers"} className="underline">
         {t(seller ? "till_party_ids_settings" : "till_party_ids_customer")}
       </Link>
-    </div>
+    </Card>
   );
 }

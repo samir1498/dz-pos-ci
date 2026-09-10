@@ -9,22 +9,6 @@
   ],
   "screens": [
     {
-      "file": "src/routes/till.tsx",
-      "screen": "the till"
-    },
-    {
-      "file": "src/routes/-till/cart.tsx",
-      "screen": "the till's cart"
-    },
-    {
-      "file": "src/routes/-till/customer.tsx",
-      "screen": "the till's customer panel"
-    },
-    {
-      "file": "src/routes/-till/payment.tsx",
-      "screen": "the till's payment panel"
-    },
-    {
       "file": "src/routes/products.tsx",
       "screen": "products"
     },

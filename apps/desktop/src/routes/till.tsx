@@ -2,10 +2,10 @@
 // side, the cart and the totals on the end side, one POST /sales at the end.
 //
 // This file holds the state of a basket and the one call that turns it into a
-// document. The three panels it is made of are in `-till/`: the cart, the
-// cash box and the customer. Each owns the reading of its own refusal, so the
-// server's answer is turned into something a cashier reads in the file that
-// shows it.
+// document. The panels it is made of are in `-till/`: the cart, the cash box,
+// the customer and the row of keys the three single choices are drawn with.
+// Each owns the reading of its own refusal, so the server's answer is turned
+// into something a cashier reads in the file that shows it.
 //
 // Two rules about the amounts on this screen, both from architecture.md
 // rule 2. The totals it shows while the cart is being built are a preview,
@@ -16,6 +16,11 @@
 // the piece, a discount above its own line, cash below the net to pay) are
 // there to keep a cashier from posting a basket the core would reject; the
 // core still refuses it, and its code is what the screen shows if it does.
+//
+// Every amount on the screen goes through `Money` or `MoneyInput`, so the
+// integer centimes never become a float and a column of figures lines up on
+// the digit. The one thing set in figures that is not an amount is the
+// document number, which is a name and not a sum.
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,9 +29,7 @@ import {
   ApiError,
   MoneyError,
   computeTotals,
-  formatCentimes,
   formatQty,
-  parseAmountToCentimes,
   parseQtyToMilli,
 } from "@dzpos/shared";
 import type {
@@ -43,6 +46,8 @@ import type {
   Totals,
   TotalsLine,
 } from "@dzpos/shared";
+import { PackageSearch, Printer, ScanLine, ShoppingBasket } from "lucide-react";
+
 import {
   api,
   categoriesQueryKey,
@@ -52,9 +57,21 @@ import {
   saleTicketQueryKey,
   settingsQueryKey,
 } from "@/api";
+import { EmptyState } from "@/components/EmptyState";
+import { Icon } from "@/components/Icon";
+import { Money } from "@/components/Money";
+import { PageHeader } from "@/components/PageHeader";
+import { PayButton } from "@/components/PayButton";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation, type Key } from "@/i18n";
+
 import { Cart, CartHeader, ONE_UNIT_MILLI, readLine } from "./-till/cart";
 import type { CartLine } from "./-till/cart";
+import { Choice, ChoiceGroup } from "./-till/choice";
 import { CustomerPanel, PartyIdsRefused, partyRefusal, takesCredit } from "./-till/customer";
 import type { PartyRefusal } from "./-till/customer";
 import { PaymentPanel, creditRefusal } from "./-till/payment";
@@ -127,8 +144,8 @@ export function TillScreen() {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [globalDiscountText, setGlobalDiscountText] = useState("");
-  const [tenderedText, setTenderedText] = useState("");
+  const [globalDiscount, setGlobalDiscount] = useState<number | null>(null);
+  const [tendered, setTendered] = useState<number | null>(null);
   const [mode, setMode] = useState<PaymentModeDto>("cash");
   const [done, setDone] = useState<SaleDto | null>(null);
   const [receiptId, setReceiptId] = useState<number | null>(null);
@@ -164,8 +181,8 @@ export function TillScreen() {
       setDone(issued);
       setReceiptId(null);
       setCart([]);
-      setGlobalDiscountText("");
-      setTenderedText("");
+      setGlobalDiscount(null);
+      setTendered(null);
       // The next basket starts on nobody, and the fiche the sale moved is
       // re-read: its balance is the ledger's answer and this sale changed it.
       setCustomer(null);
@@ -207,7 +224,7 @@ export function TillScreen() {
   // first keystroke.
   useEffect(() => {
     setRefusal(null);
-  }, [cart, mode, globalDiscountText, tenderedText]);
+  }, [cart, mode, globalDiscount, tendered]);
 
   const rows: ProductDto[] = products.data ?? [];
   const query = search.trim().toLowerCase();
@@ -224,7 +241,7 @@ export function TillScreen() {
     setCart((current) => {
       const found = current.find((l) => l.product.id === product.id);
       if (found === undefined) {
-        return [...current, { product, qtyText: formatQty(ONE_UNIT_MILLI), discountText: "" }];
+        return [...current, { product, qtyText: formatQty(ONE_UNIT_MILLI), discount: null }];
       }
       // A quantity being typed is not a number yet; one more of a line whose
       // box reads "1," starts again from one rather than throwing the whole
@@ -242,8 +259,8 @@ export function TillScreen() {
     setCart((current) => current.map((l) => (l.product.id === id ? { ...l, qtyText } : l)));
   }
 
-  function setDiscount(id: number, discountText: string) {
-    setCart((current) => current.map((l) => (l.product.id === id ? { ...l, discountText } : l)));
+  function setLineDiscount(id: number, discount: number | null) {
+    setCart((current) => current.map((l) => (l.product.id === id ? { ...l, discount } : l)));
   }
 
   function remove(id: number) {
@@ -273,10 +290,8 @@ export function TillScreen() {
   const read = cart.map(readLine);
   const lineProblem = read.find((r) => r.problem !== null)?.problem ?? null;
 
-  const globalDiscount =
-    globalDiscountText.trim() === "" ? 0 : parseAmountToCentimes(globalDiscountText);
-  const globalDiscountProblem: Key | null =
-    globalDiscount === null || globalDiscount < 0 ? "error_discount_invalid" : null;
+  const discount = globalDiscount ?? 0;
+  const globalDiscountProblem: Key | null = discount < 0 ? "error_discount_invalid" : null;
 
   const regime: RegimeDto = settings.data?.regime.regime ?? "reel";
   let preview: Totals | null = null;
@@ -290,7 +305,7 @@ export function TillScreen() {
     }));
     try {
       preview = computeTotals(lines, {
-        globalDiscount: globalDiscount ?? 0,
+        globalDiscount: discount,
         paymentMode: mode,
         stampEnabled: STAMP_ENABLED,
         regime,
@@ -303,17 +318,14 @@ export function TillScreen() {
   }
 
   const netToPay = preview?.netToPay ?? 0;
-  const tenderedBlank = tenderedText.trim() === "";
-  const tendered = tenderedBlank ? 0 : parseAmountToCentimes(tenderedText);
   // An empty box on a cash sale is a cashier who has not counted the notes
   // yet, not a mistake: the sale waits, and nothing turns red until an
   // amount has actually been typed.
-  const tenderedMissing =
-    mode === "cash" && cart.length > 0 && preview !== null && tenderedBlank;
+  const tenderedMissing = mode === "cash" && cart.length > 0 && preview !== null && tendered === null;
   const tenderedProblem: Key | null =
-    mode !== "cash" || preview === null || cart.length === 0 || tenderedBlank
+    mode !== "cash" || preview === null || cart.length === 0 || tendered === null
       ? null
-      : tendered === null || tendered < 0
+      : tendered < 0
         ? "error_price_invalid"
         : tendered < netToPay
           ? "error_tendered_short"
@@ -359,7 +371,7 @@ export function TillScreen() {
         unit_price_centimes: null,
         line_discount_centimes: read[i].discount,
       })),
-      global_discount_centimes: globalDiscount ?? 0,
+      global_discount_centimes: discount,
       payment_mode: mode,
       // Nothing is handed over on a quotation, because nothing has been
       // bought: the core refuses an amount on one, and the mode is still
@@ -370,7 +382,7 @@ export function TillScreen() {
       override,
       kind,
     }),
-    [cart, customer, globalDiscount, kind, mode, read, tendered],
+    [cart, customer, discount, kind, mode, read, tendered],
   );
 
   const submit = useCallback(() => {
@@ -425,80 +437,82 @@ export function TillScreen() {
   }
 
   return (
-    <section className="grid gap-4 lg:grid-cols-[1fr_24rem]">
-      <div className="flex flex-col gap-3">
-        <h1 className="sr-only">{t("till_title")}</h1>
-        <input
-          ref={searchRef}
-          type="search"
-          className="w-full rounded border px-3 py-2 text-lg"
-          aria-label={t("till_search")}
-          placeholder={t("till_search")}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={onSearchKey}
+    // The cart's table carries a name, a stepper, a discount box, a total and
+    // the way to take the line off, and every one of them has to be reachable
+    // without scrolling a panel sideways: 34rem is what those five need at
+    // the counter's smallest window, and the grid takes the rest.
+    <section className="grid gap-4 lg:grid-cols-[1fr_34rem]">
+      <div className="flex min-w-0 flex-col gap-3">
+        <PageHeader
+          title={t("till_title")}
+          className="pb-0"
+          actions={
+            <div className="relative w-80">
+              <Icon
+                as={ScanLine}
+                size={18}
+                className="pointer-events-none absolute inset-y-0 start-3 my-auto text-faint"
+              />
+              <Input
+                ref={searchRef}
+                type="search"
+                className="h-(--control-h-lg) ps-9 text-md"
+                aria-label={t("till_search")}
+                placeholder={t("till_search")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={onSearchKey}
+              />
+            </div>
+          }
         />
 
         <div className="flex flex-wrap gap-2" role="group" aria-label={t("field_category")}>
-          <button
-            type="button"
-            aria-pressed={categoryId === null}
-            className={chipClass(categoryId === null)}
-            onClick={() => setCategoryId(null)}
-          >
-            {t("till_all_categories")}
-          </button>
+          <CategoryChip
+            label={t("till_all_categories")}
+            active={categoryId === null}
+            onPick={() => setCategoryId(null)}
+          />
           {(categories.data ?? []).map((c) => (
-            <button
+            <CategoryChip
               key={c.id}
-              type="button"
-              aria-pressed={categoryId === c.id}
-              className={chipClass(categoryId === c.id)}
-              onClick={() => setCategoryId(c.id)}
-            >
-              {c.name}
-            </button>
+              label={c.name}
+              active={categoryId === c.id}
+              onPick={() => setCategoryId(c.id)}
+            />
           ))}
         </div>
 
-        {products.isPending ? <p>{t("products_loading")}</p> : null}
+        {products.isPending ? (
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(11rem,1fr))]">
+            {Array.from({ length: 8 }, (_, index) => (
+              <Skeleton key={index} className="h-24" />
+            ))}
+            <span className="sr-only">{t("products_loading")}</span>
+          </div>
+        ) : null}
         {products.isError ? (
-          <p role="alert" className="text-red-700">
+          <p role="alert" className="text-fg-danger">
             {t(errorKey(products.error))}
           </p>
         ) : null}
 
         <div
           data-testid="tiles"
+          role="group"
+          aria-label={t("till_products")}
           className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(11rem,1fr))]"
         >
           {visible.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className="flex flex-col gap-2 rounded border p-3 text-start"
-              onClick={() => add(p)}
-            >
-              <span className="font-medium">{p.name}</span>
-              <span className="flex items-center justify-between gap-2">
-                <span className="font-mono" dir="ltr">
-                  {formatCentimes(p.selling_centimes)}
-                </span>
-                {p.qty_on_hand_milli <= 0 ? (
-                  <span className="rounded border px-1 text-xs">{t("till_out_of_stock")}</span>
-                ) : (
-                  <span className="rounded border px-1 text-xs font-mono" dir="ltr">
-                    {formatQty(p.qty_on_hand_milli)}
-                  </span>
-                )}
-              </span>
-            </button>
+            <ProductTile key={p.id} product={p} onAdd={() => add(p)} />
           ))}
         </div>
-        {products.isSuccess && visible.length === 0 ? <p>{t("till_no_product")}</p> : null}
+        {products.isSuccess && visible.length === 0 ? (
+          <EmptyState icon={PackageSearch} title={t("till_no_product")} />
+        ) : null}
       </div>
 
-      <aside className="flex flex-col gap-3 rounded border p-3">
+      <aside className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-card p-3">
         <CartHeader count={cart.length} onClear={() => setCart([])} />
 
         {done !== null ? (
@@ -538,13 +552,13 @@ export function TillScreen() {
         <Cart
           lines={cart}
           read={read}
-          discountText={globalDiscountText}
-          onDiscountText={setGlobalDiscountText}
+          discount={globalDiscount}
+          onDiscount={setGlobalDiscount}
           discountProblem={globalDiscountProblem}
           totalsProblem={totalsProblem}
           totals={preview}
           onQty={setQty}
-          onDiscount={setDiscount}
+          onLineDiscount={setLineDiscount}
           onStep={step}
           onRemove={remove}
         />
@@ -553,8 +567,9 @@ export function TillScreen() {
           mode={mode}
           onMode={setMode}
           creditAllowed={takesCredit(customer)}
-          tenderedText={tenderedText}
-          onTendered={setTenderedText}
+          tendered={tendered}
+          onTendered={setTendered}
+          onEnter={submit}
           showChange={!tenderedMissing && cart.length > 0}
           change={change}
           problem={tenderedProblem}
@@ -566,19 +581,14 @@ export function TillScreen() {
         {partyProblem !== null ? <PartyIdsRefused refusal={partyProblem} /> : null}
 
         {serverError !== null ? (
-          <p role="alert" className="text-red-700">
+          <p role="alert" className="text-fg-danger">
             {t(serverError)}
           </p>
         ) : null}
 
-        <button
-          type="button"
-          className="rounded border px-3 py-2 text-lg font-semibold"
-          disabled={!canPay}
-          onClick={submit}
-        >
+        <PayButton className="w-full" disabled={!canPay} onClick={submit}>
           {pay.isPending ? t("action_paying") : t("action_pay")}
-        </button>
+        </PayButton>
 
         {receiptId !== null && done !== null ? (
           <Receipt id={receiptId} kind={done.kind} paper={paper} onPaper={setPaper} />
@@ -588,8 +598,68 @@ export function TillScreen() {
   );
 }
 
-function chipClass(active: boolean): string {
-  return active ? "rounded-full border px-3 py-1 font-semibold" : "rounded-full border px-3 py-1";
+/** One filter of the grid. A chip is a toggle and says so (`aria-pressed`),
+ * because "all categories" is not a fourth category and pressing it twice
+ * must not mean two different things. */
+function CategoryChip({
+  label,
+  active,
+  onPick,
+}: {
+  label: string;
+  active: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      aria-pressed={active}
+      className={active ? "rounded-full border-primary bg-primary-soft text-primary" : "rounded-full"}
+      onClick={onPick}
+    >
+      {label}
+    </Button>
+  );
+}
+
+/**
+ * The tile the grid is made of: a name, a price and what is left on the
+ * shelf. It is local to this screen on purpose and for a day only. The kit's
+ * `ProductTile` is being drawn on the products screen at the same hour as
+ * this file, and the two agents cannot both land it; when it merges, this
+ * function goes and the grid renders that one, which is where the tile's
+ * radius, its card surface and its shadow are pinned.
+ *
+ * A product with nothing on the shelf is still sellable. A shop sells what it
+ * has just been handed and counts it in later, and the till refusing the sale
+ * would send that customer away; the tile says the count is at zero and the
+ * stock movement goes negative, which is a truth the recount fixes.
+ */
+function ProductTile({ product, onAdd }: { product: ProductDto; onAdd: () => void }) {
+  const { t } = useTranslation();
+  const out = product.qty_on_hand_milli <= 0;
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-auto flex-col items-start gap-2 p-3 text-start whitespace-normal"
+      onClick={onAdd}
+    >
+      <span className="font-medium">{product.name}</span>
+      <span className="flex w-full items-center justify-between gap-2">
+        <Money centimes={product.selling_centimes} />
+        {out ? (
+          <Badge variant="secondary">{t("till_out_of_stock")}</Badge>
+        ) : (
+          <Badge variant="outline" className="font-numeric tabular-nums" dir="ltr">
+            {formatQty(product.qty_on_hand_milli)}
+          </Badge>
+        )}
+      </span>
+    </Button>
+  );
 }
 
 /** What the API answered, not what the screen computed. */
@@ -605,30 +675,32 @@ function Confirmation({
   const { t } = useTranslation();
   const facture = sale.kind === "facture";
   return (
-    <div role="status" className="flex flex-col gap-2 rounded border p-3">
+    <Card role="status" className="gap-2 border-primary p-3">
       <strong>{t(facture ? "till_paid_facture" : "till_paid")}</strong>
       <p className="flex items-center justify-between gap-2">
         <span>{t(facture ? "till_facture" : "till_ticket")}</span>
         {/* `printed_number` and not the integer beside it: FA-2026-000001 is what
             the paper says and what a customer quotes back, and the core
             spells it once (print::number) so the screen cannot spell it
-            differently. `series` is a column value and no word at all. */}
-        <span data-testid="till-document-number" className="font-mono" dir="ltr">
+            differently. `series` is a column value and no word at all. It is
+            not an amount, so it wears the figure face by hand rather than
+            going through `Money`. */}
+        <span
+          data-testid="till-document-number"
+          dir="ltr"
+          className="font-numeric font-medium tabular-nums"
+        >
           {sale.printed_number}
         </span>
       </p>
       <p className="flex items-center justify-between gap-2">
         <span>{t("total_net_to_pay")}</span>
-        <span className="font-mono" dir="ltr">
-          {formatCentimes(sale.totals.net_to_pay_centimes)}
-        </span>
+        <Money centimes={sale.totals.net_to_pay_centimes} />
       </p>
       {sale.change_centimes !== null ? (
         <p className="flex items-center justify-between gap-2">
           <span>{t("till_change")}</span>
-          <span className="font-mono" dir="ltr">
-            {formatCentimes(sale.change_centimes)}
-          </span>
+          <Money centimes={sale.change_centimes} />
         </p>
       ) : null}
       {/* The balance the document stores, not one the screen worked out:
@@ -636,25 +708,25 @@ function Confirmation({
       {sale.balance !== null ? (
         <p className="flex items-center justify-between gap-2">
           <span>{t("till_new_balance")}</span>
-          <span data-testid="till-new-balance" className="font-mono" dir="ltr">
-            {formatCentimes(sale.balance.total_debt_centimes)}
-          </span>
+          <Money centimes={sale.balance.total_debt_centimes} data-testid="till-new-balance" />
         </p>
       ) : null}
       {warningKey(sale.warning) !== null ? (
-        <p data-testid="till-near-limit" className="text-sm text-amber-700">
+        <p data-testid="till-near-limit" className="text-sm text-warn">
           {t(warningKey(sale.warning) ?? "error_unknown")}
         </p>
       ) : null}
       <div className="flex gap-2">
-        <button type="button" className="rounded border px-3 py-1.5" onClick={onPrint}>
+        <Button type="button" variant="outline" onClick={onPrint}>
+          <Icon as={Printer} size={18} />
           {t("till_print")}
-        </button>
-        <button type="button" className="rounded border px-3 py-1.5" onClick={onNew}>
+        </Button>
+        <Button type="button" variant="ghost" onClick={onNew}>
+          <Icon as={ShoppingBasket} size={18} />
           {t("till_new_sale")}
-        </button>
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -692,22 +764,29 @@ function Receipt({
       facture ? api.getSaleFacture(id, lang, paper) : api.getSaleTicket(id, lang),
   });
   return (
-    <section aria-label={t("till_receipt")} className="flex flex-col gap-2 rounded border p-3">
+    <section aria-label={t("till_receipt")} className="flex flex-col gap-2">
       <strong>{t("till_receipt")}</strong>
       {/* A4 is what a facture is filed on; the A5 half sheet is the one a
           counter printer is loaded with. The same page either way: the
           sheet changes the @page size the core writes and nothing else
           (features.md §4). */}
       {facture ? (
-        <fieldset className="flex flex-wrap gap-3 border-0 p-0">
-          <legend className="mb-1">{t("till_paper")}</legend>
-          <PaperChoice paper="a4" current={paper} label={t("till_paper_a4")} onPick={onPaper} />
-          <PaperChoice paper="a5" current={paper} label={t("till_paper_a5")} onPick={onPaper} />
-        </fieldset>
+        <ChoiceGroup label={t("till_paper")}>
+          <Choice
+            checked={paper === "a4"}
+            label={t("till_paper_a4")}
+            onPick={() => onPaper("a4")}
+          />
+          <Choice
+            checked={paper === "a5"}
+            label={t("till_paper_a5")}
+            onPick={() => onPaper("a5")}
+          />
+        </ChoiceGroup>
       ) : null}
-      {page.isPending ? <p>{t("products_loading")}</p> : null}
+      {page.isPending ? <Skeleton className="h-96 w-full" /> : null}
       {page.isError ? (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-fg-danger">
           {t(errorKey(page.error))}
         </p>
       ) : null}
@@ -719,35 +798,10 @@ function Receipt({
           // origin, so what it renders cannot reach this one even if a
           // product name ever slipped past the template's escaping.
           sandbox=""
-          className="h-96 w-full border-0"
+          className="h-96 w-full rounded-md border border-border bg-background"
           data-testid={facture ? "till-facture" : "till-ticket"}
         />
       ) : null}
     </section>
-  );
-}
-
-function PaperChoice({
-  paper,
-  current,
-  label,
-  onPick,
-}: {
-  paper: PrintPaper;
-  current: PrintPaper;
-  label: string;
-  onPick: (paper: PrintPaper) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2">
-      <input
-        type="radio"
-        name="facture_paper"
-        value={paper}
-        checked={current === paper}
-        onChange={() => onPick(paper)}
-      />
-      <span>{label}</span>
-    </label>
   );
 }

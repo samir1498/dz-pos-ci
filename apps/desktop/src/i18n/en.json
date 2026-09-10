@@ -584,5 +584,12 @@
   "dashboard_top_margin": "Most profitable products this month",
   "dashboard_top_empty": "Nothing has been sold this month yet.",
   "col_threshold": "Threshold",
-  "col_margin": "Margin"
+  "col_margin": "Margin",
+  "keypad_label": "Number pad",
+  "keypad_backspace": "Delete a digit",
+  "keypad_enter": "Confirm",
+  "col_total": "Total",
+  "till_no_customer": "No customer matches.",
+  "till_products": "Products on sale",
+  "till_totals": "The total, line by line"
 }

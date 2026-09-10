@@ -584,5 +584,12 @@
   "dashboard_top_margin": "Produits les plus rentables ce mois-ci",
   "dashboard_top_empty": "Rien n'a encore été vendu ce mois-ci.",
   "col_threshold": "Seuil",
-  "col_margin": "Marge"
+  "col_margin": "Marge",
+  "keypad_label": "Pavé numérique",
+  "keypad_backspace": "Effacer un chiffre",
+  "keypad_enter": "Valider",
+  "col_total": "Total",
+  "till_no_customer": "Aucun client ne correspond.",
+  "till_products": "Produits en vente",
+  "till_totals": "Détail du total"
 }

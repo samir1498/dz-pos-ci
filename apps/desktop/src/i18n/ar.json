@@ -584,5 +584,12 @@
   "dashboard_top_margin": "أكثر المنتجات ربحا هذا الشهر",
   "dashboard_top_empty": "لم يُبع شيء بعد هذا الشهر.",
   "col_threshold": "العتبة",
-  "col_margin": "الهامش"
+  "col_margin": "الهامش",
+  "keypad_label": "لوحة الأرقام",
+  "keypad_backspace": "حذف رقم",
+  "keypad_enter": "تأكيد",
+  "col_total": "المجموع",
+  "till_no_customer": "لا يوجد زبون مطابق.",
+  "till_products": "المنتجات المعروضة",
+  "till_totals": "تفصيل المجموع"
 }

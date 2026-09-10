@@ -6,13 +6,32 @@
 // (architecture.md rule 2). The route computes it; this file only lays it
 // out, so no amount is worked out twice.
 //
+// The lines are a `DataTable` like every other list in the app, and the two
+// amounts on a line are `MoneyInput` and `Money`, so the discount a cashier
+// types is integer centimes from the keystroke on and the line total lines up
+// on the digit with the totals under it.
+//
+// The totals block is not a list and is not one: it is a few named amounts,
+// so it is laid out as rows of a label and a `Money` rather than forced into a
+// table whose header row would say nothing. It keeps the accessible name the
+// tests ask it for.
+//
 // The folder is `-till` and not `till`: TanStack Router turns every file under
 // `routes/` into a route, and the `-` prefix in tsr.config.json is what says
-// these three are parts of a screen rather than screens of their own.
+// these four are parts of a screen rather than screens of their own.
 
-import { formatCentimes, formatQty, lineTotal, parseAmountToCentimes, parseQtyToMilli } from "@dzpos/shared";
+import { lineTotal, formatQty, parseQtyToMilli } from "@dzpos/shared";
 import type { ProductDto, Totals, UnitDto } from "@dzpos/shared";
+import { Minus, Plus, ShoppingCart, X } from "lucide-react";
 
+import { DataTable, type Column } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
+import { FormField } from "@/components/FormField";
+import { Icon } from "@/components/Icon";
+import { Money } from "@/components/Money";
+import { MoneyInput } from "@/components/MoneyInput";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useTranslation, type Key } from "@/i18n";
 import { rateCellLabel } from "@/lib/rate";
 
@@ -23,13 +42,14 @@ export const ONE_UNIT_MILLI = 1_000;
  * receipt can say, and the core would take the 500 without a word. */
 const WHOLE_UNITS: readonly UnitDto[] = ["piece", "box"];
 
-/** A cart line as the cashier is editing it: the quantity and the discount
- * stay the text that was typed, so "1," on the way to "1,5" is not thrown
- * away by a parse and written back as "1". */
+/** A cart line as the cashier is editing it. The quantity stays the text that
+ * was typed, so "1," on the way to "1,5" is not thrown away by a parse and
+ * written back as "1"; the discount is integer centimes, because `MoneyInput`
+ * owns that halfway state itself and hands back the integer or nothing. */
 export interface CartLine {
   readonly product: ProductDto;
   readonly qtyText: string;
-  readonly discountText: string;
+  readonly discount: number | null;
 }
 
 /** A line read: its amounts if they are readable, the field message if not. */
@@ -49,8 +69,7 @@ export function readLine(line: CartLine): ReadLine {
     return { qtyMilli, discount: 0, gross: 0, problem: "error_qty_whole" };
   }
   const gross = lineTotal(line.product.selling_centimes, qtyMilli);
-  const discount =
-    line.discountText.trim() === "" ? 0 : (parseAmountToCentimes(line.discountText) ?? -1);
+  const discount = line.discount ?? 0;
   if (discount < 0) {
     return { qtyMilli, discount: 0, gross, problem: "error_discount_invalid" };
   }
@@ -66,193 +85,206 @@ export function CartHeader({ count, onClear }: { count: number; onClear: () => v
   return (
     <header className="flex items-center justify-between gap-2">
       <strong>{`${t("till_cart")} · ${count}`}</strong>
-      <button
-        type="button"
-        className="rounded border px-2 py-1 text-sm"
-        disabled={count === 0}
-        onClick={onClear}
-      >
+      <Button type="button" variant="ghost" size="sm" disabled={count === 0} onClick={onClear}>
         {t("till_clear")}
-      </button>
+      </Button>
     </header>
   );
 }
 
+/** What one row of the table is made of, so the columns below read as a list
+ * of cells rather than as a second copy of the props. */
+interface Row {
+  readonly line: CartLine;
+  readonly read: ReadLine;
+}
+
 /** The lines, the discount on the whole basket, and the preview. `totals` is
- * null while any of the three problems stands, and the table is left out
+ * null while any of the three problems stands, and the block is left out
  * rather than shown stale. */
 export function Cart({
   lines,
   read,
-  discountText,
-  onDiscountText,
+  discount,
+  onDiscount,
   discountProblem,
   totalsProblem,
   totals,
   onQty,
-  onDiscount,
+  onLineDiscount,
   onStep,
   onRemove,
 }: {
   lines: readonly CartLine[];
   read: readonly ReadLine[];
-  discountText: string;
-  onDiscountText: (value: string) => void;
+  discount: number | null;
+  onDiscount: (centimes: number | null) => void;
   discountProblem: Key | null;
   totalsProblem: Key | null;
   totals: Totals | null;
   onQty: (id: number, value: string) => void;
-  onDiscount: (id: number, value: string) => void;
+  onLineDiscount: (id: number, centimes: number | null) => void;
   onStep: (id: number, by: number) => void;
   onRemove: (id: number) => void;
 }) {
   const { t } = useTranslation();
+  const rows: Row[] = lines.map((line, i) => ({ line, read: read[i] }));
+
+  const columns: readonly Column<Row>[] = [
+    {
+      id: "product",
+      header: t("col_product"),
+      cell: (row) => (
+        // The kit's cells hold one line and do not wrap, which is right for a
+        // figure and wrong for a product name: a long one would push the
+        // discount box and the total off the panel. This cell is the one that
+        // gives, and the rate is not repeated here because the totals under
+        // the lines already group by it.
+        <div className="flex flex-col gap-0.5 whitespace-normal">
+          <span className="font-medium">{row.line.product.name}</span>
+          <Money
+            centimes={row.line.product.selling_centimes}
+            className="text-xs font-normal text-muted-foreground"
+          />
+          {row.read.problem !== null ? (
+            <span role="alert" className="text-sm text-fg-danger">
+              {t(row.read.problem)}
+            </span>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      id: "qty",
+      header: t("field_qty"),
+      numeric: true,
+      cell: (row) => (
+        <div className="flex items-center justify-end gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            aria-label={`${t("till_qty_decrease")} ${row.line.product.name}`}
+            onClick={() => onStep(row.line.product.id, -ONE_UNIT_MILLI)}
+          >
+            <Icon as={Minus} size={18} />
+          </Button>
+          <Input
+            dir="ltr"
+            inputMode="decimal"
+            className="w-14 px-2 text-end font-numeric tabular-nums"
+            aria-label={`${t("field_qty")} ${row.line.product.name}`}
+            value={row.line.qtyText}
+            onChange={(event) => onQty(row.line.product.id, event.target.value)}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            aria-label={`${t("till_qty_increase")} ${row.line.product.name}`}
+            onClick={() => onStep(row.line.product.id, ONE_UNIT_MILLI)}
+          >
+            <Icon as={Plus} size={18} />
+          </Button>
+        </div>
+      ),
+    },
+    {
+      id: "discount",
+      header: t("total_discount"),
+      money: true,
+      cell: (row) => (
+        <MoneyInput
+          className="w-20 px-2"
+          aria-label={`${t("field_line_discount")} ${row.line.product.name}`}
+          value={row.line.discount}
+          onChange={(centimes) => onLineDiscount(row.line.product.id, centimes)}
+        />
+      ),
+    },
+    {
+      id: "total",
+      header: t("col_total"),
+      money: true,
+      cell: (row) =>
+        row.read.problem === null ? <Money centimes={row.read.gross - row.read.discount} /> : null,
+    },
+  ];
+
   return (
     <>
-      <div data-testid="cart" className="flex flex-col gap-3">
-        {lines.length === 0 ? <p>{t("till_cart_empty")}</p> : null}
-        {lines.map((line, i) => (
-          <CartRow
-            key={line.product.id}
-            line={line}
-            read={read[i]}
-            onQty={(value) => onQty(line.product.id, value)}
-            onDiscount={(value) => onDiscount(line.product.id, value)}
-            onStep={(by) => onStep(line.product.id, by)}
-            onRemove={() => onRemove(line.product.id)}
-          />
-        ))}
-      </div>
+      <DataTable
+        data-testid="cart"
+        // The panel is narrow and five cells have to fit in it side by side,
+        // the last of them a box a cashier types in. One step down in text
+        // size is what buys that room, and it is the whole table rather than
+        // a cell here and there, so the lines still read as one block.
+        className="text-sm"
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.line.product.id}
+        caption={t("till_cart")}
+        empty={<EmptyState icon={ShoppingCart} title={t("till_cart_empty")} />}
+        actions={(row) => (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`${t("till_line_remove")} ${row.line.product.name}`}
+            onClick={() => onRemove(row.line.product.id)}
+          >
+            <Icon as={X} size={18} />
+          </Button>
+        )}
+      />
 
-      <label className="flex flex-col gap-1">
-        <span>{t("field_global_discount")}</span>
-        <input
-          dir="ltr"
-          inputMode="decimal"
-          className="rounded border px-2 py-1 text-end font-mono"
-          value={discountText}
-          onChange={(e) => onDiscountText(e.target.value)}
-        />
-      </label>
-      {discountProblem !== null || totalsProblem !== null ? (
-        <p role="alert" className="text-sm text-red-700">
-          {t(discountProblem ?? totalsProblem ?? "error_unknown")}
-        </p>
-      ) : null}
+      <FormField
+        label={t("field_global_discount")}
+        error={
+          discountProblem !== null || totalsProblem !== null
+            ? t(discountProblem ?? totalsProblem ?? "error_unknown")
+            : undefined
+        }
+      >
+        {(parts) => <MoneyInput {...parts} value={discount} onChange={onDiscount} />}
+      </FormField>
 
-      {totals !== null ? <TotalsTable totals={totals} /> : null}
+      {totals !== null ? <TotalsBlock totals={totals} /> : null}
     </>
   );
 }
 
-function CartRow({
-  line,
-  read,
-  onQty,
-  onDiscount,
-  onStep,
-  onRemove,
-}: {
-  line: CartLine;
-  read: ReadLine;
-  onQty: (value: string) => void;
-  onDiscount: (value: string) => void;
-  onStep: (by: number) => void;
-  onRemove: () => void;
-}) {
+/** The preview, row for row with the totals table of features.md §3. A row
+ * worth nothing is not printed, the way the ticket does not print it. */
+function TotalsBlock({ totals }: { totals: Totals }) {
   const { t } = useTranslation();
-  const net = read.problem === null ? read.gross - read.discount : 0;
   return (
-    <div className="flex flex-col gap-1 border-t pt-2">
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-medium">{line.product.name}</span>
-        <span className="font-mono" dir="ltr">
-          {read.problem === null ? formatCentimes(net) : ""}
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className="rounded border px-2"
-          aria-label={`${t("till_qty_decrease")} ${line.product.name}`}
-          onClick={() => onStep(-ONE_UNIT_MILLI)}
-        >
-          −
-        </button>
-        <input
-          dir="ltr"
-          inputMode="decimal"
-          size={5}
-          className="w-16 rounded border px-2 py-1 text-end font-mono"
-          aria-label={`${t("field_qty")} ${line.product.name}`}
-          value={line.qtyText}
-          onChange={(e) => onQty(e.target.value)}
-        />
-        <button
-          type="button"
-          className="rounded border px-2"
-          aria-label={`${t("till_qty_increase")} ${line.product.name}`}
-          onClick={() => onStep(ONE_UNIT_MILLI)}
-        >
-          +
-        </button>
-        <span className="font-mono text-sm" dir="ltr">
-          {`× ${formatCentimes(line.product.selling_centimes)}`}
-        </span>
-        <input
-          dir="ltr"
-          inputMode="decimal"
-          size={6}
-          className="w-20 rounded border px-2 py-1 text-end font-mono"
-          aria-label={`${t("field_line_discount")} ${line.product.name}`}
-          value={line.discountText}
-          onChange={(e) => onDiscount(e.target.value)}
-        />
-        <button
-          type="button"
-          className="ms-auto rounded border px-2"
-          aria-label={`${t("till_line_remove")} ${line.product.name}`}
-          onClick={onRemove}
-        >
-          ✕
-        </button>
-      </div>
-      {read.problem !== null ? (
-        <span role="alert" className="text-sm text-red-700">
-          {t(read.problem)}
-        </span>
+    <dl
+      aria-label={t("till_totals")}
+      data-testid="till-totals"
+      className="flex flex-col gap-1 border-t border-border pt-2"
+    >
+      <TotalsRow label={t("total_ht")} centimes={totals.totalHt} />
+      {totals.discount > 0 ? (
+        <TotalsRow label={t("total_discount")} centimes={totals.discount} />
       ) : null}
-    </div>
-  );
-}
-
-/** The preview, column for column with the totals table of features.md §3.
- * A row worth nothing is not printed, the way the ticket does not print it. */
-function TotalsTable({ totals }: { totals: Totals }) {
-  const { t } = useTranslation();
-  return (
-    <table className="w-full" aria-label={t("total_net_to_pay")}>
-      <tbody>
-        <TotalsRow label={t("total_ht")} centimes={totals.totalHt} />
-        {totals.discount > 0 ? (
-          <TotalsRow label={t("total_discount")} centimes={totals.discount} />
-        ) : null}
-        {totals.tvaByRate.map((g) => (
-          <TotalsRow
-            key={g.rateBps}
-            label={`${t("total_tva")} ${rateCellLabel(g.rateBps, t)}`}
-            centimes={g.amount}
-          />
-        ))}
-        {totals.stamp > 0 ? <TotalsRow label={t("total_stamp")} centimes={totals.stamp} /> : null}
+      {totals.tvaByRate.map((group) => (
         <TotalsRow
-          label={t("total_net_to_pay")}
-          centimes={totals.netToPay}
-          testId="total-net-to-pay"
-          strong
+          key={group.rateBps}
+          label={`${t("total_tva")} ${rateCellLabel(group.rateBps, t)}`}
+          centimes={group.amount}
         />
-      </tbody>
-    </table>
+      ))}
+      {totals.stamp > 0 ? <TotalsRow label={t("total_stamp")} centimes={totals.stamp} /> : null}
+      <TotalsRow
+        label={t("total_net_to_pay")}
+        centimes={totals.netToPay}
+        testId="total-net-to-pay"
+        strong
+      />
+    </dl>
   );
 }
 
@@ -268,13 +300,15 @@ function TotalsRow({
   strong?: boolean;
 }) {
   return (
-    <tr className={strong ? "font-semibold" : undefined}>
-      <th scope="row" className="py-0.5 text-start font-normal">
-        {label}
-      </th>
-      <td data-testid={testId} className="py-0.5 text-end font-mono" dir="ltr">
-        {formatCentimes(centimes)}
-      </td>
-    </tr>
+    <div className="flex items-center justify-between gap-2">
+      <dt className={strong ? "font-semibold" : "text-muted-foreground"}>{label}</dt>
+      <dd>
+        <Money
+          centimes={centimes}
+          data-testid={testId}
+          className={strong ? "text-lg font-semibold" : undefined}
+        />
+      </dd>
+    </div>
   );
 }
