@@ -17,12 +17,9 @@ const SHOP: i32 = 1;
 /// The owner the first migration seeds.
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 fn fiche(name: &str) -> NewCustomer {
     NewCustomer {

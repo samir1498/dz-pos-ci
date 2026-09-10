@@ -17,7 +17,6 @@ use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::money::{Bps, Money, PaymentMode};
 use dzpos_core::services::avoir::{self, AvoirLine};
-use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
 use dzpos_core::services::documents::{Document, DocumentStatus};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
 use dzpos_core::services::{debt, documents, products, shops};
@@ -262,29 +261,12 @@ fn a_shop(conn: &mut SqliteConnection) {
     .unwrap();
 }
 
+mod common;
+
+/// The buyer of every facture in this file, carrying the identifiers
+/// décret 05-468 art. 3 asks of one.
 fn a_customer(conn: &mut SqliteConnection) -> i32 {
-    customers::create(
-        conn,
-        SHOP,
-        OWNER,
-        NewCustomer {
-            name: "Entreprise Benali".to_string(),
-            party_kind: PartyKind::Company,
-            phone: None,
-            address: None,
-            rc: Some("16/00-7654321 B 22".to_string()),
-            nif: None,
-            nis: Some("000216007654321 00".to_string()),
-            ai: None,
-            credit_limit: None,
-            warn_threshold: None,
-            notes: None,
-            active: true,
-        },
-        None,
-    )
-    .unwrap()
-    .id
+    common::an_identified_customer(conn, "Entreprise Benali")
 }
 
 fn a_product(conn: &mut SqliteConnection, n: usize, selling: i64, rate_bps: u32) -> i32 {

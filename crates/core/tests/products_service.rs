@@ -15,12 +15,9 @@ const SEEDED_CATEGORY: i32 = 1;
 /// The owner the first migration seeds. TODO(M4): the real user.
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 /// A second shop with a category of its own, and that category's id. There
 /// is no shops service yet (M6 pairs a second till), so the rows go in raw:

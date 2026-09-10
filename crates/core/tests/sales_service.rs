@@ -22,12 +22,9 @@ use dzpos_core::services::{audit, customers, debt, documents, products, settings
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 fn at(day: u32) -> NaiveDateTime {
     NaiveDate::from_ymd_opt(2026, 9, day)

@@ -12,7 +12,7 @@ use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::money::{Bps, Money, PaymentMode};
-use dzpos_core::services::customers::{NewCustomer, PartyKind};
+use dzpos_core::services::customers::PartyKind;
 use dzpos_core::services::documents::{Document, DocumentKind};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
 use dzpos_core::services::{customers, debt, documents, products};
@@ -20,12 +20,9 @@ use dzpos_core::services::{customers, debt, documents, products};
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::{a_customer, a_fiche, open_temp};
 
 fn at(day: u32) -> NaiveDateTime {
     NaiveDate::from_ymd_opt(2026, 9, day)
@@ -55,29 +52,6 @@ fn product(conn: &mut SqliteConnection, name: &str, selling: i64, rate_bps: u32)
     )
     .unwrap()
     .id
-}
-
-fn a_fiche(name: &str) -> NewCustomer {
-    NewCustomer {
-        name: name.to_string(),
-        party_kind: PartyKind::Company,
-        phone: None,
-        address: None,
-        rc: None,
-        nif: None,
-        nis: None,
-        ai: None,
-        credit_limit: None,
-        warn_threshold: None,
-        notes: None,
-        active: true,
-    }
-}
-
-fn a_customer(conn: &mut SqliteConnection, name: &str) -> i32 {
-    customers::create(conn, SHOP, OWNER, a_fiche(name), None)
-        .unwrap()
-        .id
 }
 
 fn quotation(customer_id: Option<i32>, product_id: i32, mode: PaymentMode) -> NewSale {

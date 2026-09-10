@@ -24,35 +24,9 @@ const SHOP: i32 = 1;
 /// The owner the first migration seeds.
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
 
-fn fiche(name: &str) -> NewCustomer {
-    NewCustomer {
-        name: name.to_string(),
-        party_kind: PartyKind::Company,
-        phone: None,
-        address: None,
-        rc: None,
-        nif: None,
-        nis: None,
-        ai: None,
-        credit_limit: None,
-        warn_threshold: None,
-        notes: None,
-        active: true,
-    }
-}
-
-fn a_customer(conn: &mut SqliteConnection, name: &str) -> i32 {
-    customers::create(conn, SHOP, OWNER, fiche(name), None)
-        .unwrap()
-        .id
-}
+use common::{a_customer, a_fiche as fiche, open_temp};
 
 fn movement(customer_id: i32, kind: DebtKind, debit: i64, credit: i64) -> NewDebtEntry {
     NewDebtEntry {

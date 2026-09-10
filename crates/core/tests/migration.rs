@@ -26,12 +26,9 @@ struct Pragma {
     foreign_keys: i32,
 }
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 /// A database carrying the first `n` migrations and nothing after them, so
 /// migration `n + 1` can be applied to a file that already holds a shop's

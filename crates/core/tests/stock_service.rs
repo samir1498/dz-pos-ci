@@ -5,7 +5,6 @@
 //! ledger is append-only and the quantity on the product is a cache of it.
 
 use diesel::prelude::*;
-use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::stock::{Movement, MovementKind};
@@ -16,12 +15,9 @@ const SHOP: i32 = 1;
 const SEEDED_CATEGORY: i32 = 1;
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 fn draft(name: &str, qty_milli: i64) -> NewProduct {
     NewProduct {

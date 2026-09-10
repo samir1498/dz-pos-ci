@@ -226,8 +226,10 @@ impl Case {
     }
 }
 
+mod common;
+
 fn goldens_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/print/facture_a4")
+    common::goldens_dir("facture_a4")
 }
 
 /// The seller as a facture prints them: the four identifiers décret 05-468

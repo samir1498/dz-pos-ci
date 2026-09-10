@@ -127,8 +127,10 @@ impl Case {
     }
 }
 
+mod common;
+
 fn goldens_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/print/ticket_80mm")
+    common::goldens_dir("ticket_80mm")
 }
 
 /// The one document every golden renders. Its totals come from

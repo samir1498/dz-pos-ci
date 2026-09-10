@@ -9,39 +9,18 @@ use chrono::{NaiveDate, NaiveDateTime};
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
-use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::models::stock::MovementKind;
 use dzpos_core::money::{Bps, Money, PaymentMode};
-use dzpos_core::services::customers::{NewCustomer, PartyKind};
+use dzpos_core::services::customers::NewCustomer;
 use dzpos_core::services::debt::{DebtKind, PaymentMethod};
 use dzpos_core::services::documents::{Document, DocumentKind, DocumentStatus};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
-use dzpos_core::services::{audit, avoir, customers, debt, documents, products, shops, stock};
+use dzpos_core::services::{audit, avoir, customers, debt, documents, products, stock};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let mut conn = dzpos_core::db::open(&path).unwrap();
-    shops::update_store(
-        &mut conn,
-        SHOP,
-        OWNER,
-        StoreBlock {
-            name: "Mon magasin".to_string(),
-            rc: Some("16/00-1234567 B 25".to_string()),
-            nif: None,
-            nis: Some("000216001234567 00".to_string()),
-            ai: None,
-            address: None,
-            phone: None,
-        },
-    )
-    .unwrap();
-    (dir, conn)
-}
+use common::open_temp_selling_factures as open_temp;
 
 fn at(day: u32) -> NaiveDateTime {
     NaiveDate::from_ymd_opt(2026, 9, day)
@@ -73,29 +52,12 @@ fn product(conn: &mut SqliteConnection, name: &str, selling: i64) -> i32 {
     .id
 }
 
+mod common;
+
+/// The buyer of every facture in this file, carrying the identifiers
+/// décret 05-468 art. 3 asks of one.
 fn a_customer(conn: &mut SqliteConnection) -> i32 {
-    customers::create(
-        conn,
-        SHOP,
-        OWNER,
-        NewCustomer {
-            name: "Entreprise Benali".to_string(),
-            party_kind: PartyKind::Company,
-            phone: None,
-            address: None,
-            rc: Some("16/00-7654321 B 22".to_string()),
-            nif: None,
-            nis: Some("000216007654321 00".to_string()),
-            ai: None,
-            credit_limit: None,
-            warn_threshold: None,
-            notes: None,
-            active: true,
-        },
-        None,
-    )
-    .unwrap()
-    .id
+    common::an_identified_customer(conn, "Entreprise Benali")
 }
 
 fn line(product_id: i32, qty_milli: i64) -> NewSaleLine {

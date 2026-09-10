@@ -3,7 +3,6 @@
 
 //! The store block: the seller a ticket prints (features.md §3).
 
-use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::services::shops;
@@ -12,12 +11,9 @@ const SHOP: i32 = 1;
 /// The owner the first migration seeds. TODO(M4): the real user.
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 fn full_block() -> StoreBlock {
     StoreBlock {

@@ -44,8 +44,10 @@ const CUSTOMER: i32 = 7;
 /// whatever produced it.
 const BALANCE: i64 = 175_000;
 
+mod common;
+
 fn goldens_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/print/debt_slip_80mm")
+    common::goldens_dir("debt_slip_80mm")
 }
 
 fn day(d: u32) -> NaiveDate {
