@@ -237,6 +237,14 @@ fn every_table_is_strict() {
 /// One INSERT per table with every constrained column at a valid value, so a
 /// probe can swap a single column for a bad literal.
 fn insert_with(table: &str, column: &str, literal: &str) -> String {
+    insert_with_all(table, &[(column, literal)])
+}
+
+/// The same row with several columns swapped at once. The kind rules of
+/// migration 7 read two and three columns together, so a row that means
+/// anything to them cannot be built one substitution at a time: an annulée
+/// document has to say when, by whom and why in the same INSERT.
+fn insert_with_all(table: &str, overrides: &[(&str, &str)]) -> String {
     let (columns, values): (&str, &[&str]) = match table {
         "products" => (
             "shop_id, name, unit, cost_centimes, selling_centimes, wholesale_centimes, \
@@ -250,7 +258,9 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
              seller_name, total_ht_centimes, discount_centimes, subtotal_ht_centimes, \
              tva_centimes, total_ttc_centimes, stamp_centimes, net_to_pay_centimes, \
              tendered_centimes, change_centimes, old_balance_centimes, \
-             remaining_debt_centimes, total_debt_centimes, buyer_party_kind, status",
+             remaining_debt_centimes, total_debt_centimes, buyer_party_kind, status, \
+             ref_document_id, cancelled_at, cancelled_by, cancel_reason, \
+             cancel_avoir_document_id",
             &[
                 "1",
                 "'ticket'",
@@ -275,6 +285,11 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
                 "NULL",
                 "NULL",
                 "'issued'",
+                "NULL",
+                "NULL",
+                "NULL",
+                "NULL",
+                "NULL",
             ],
         ),
         "document_lines" => (
@@ -310,12 +325,14 @@ fn insert_with(table: &str, column: &str, literal: &str) -> String {
     };
     let names: Vec<&str> = columns.split(',').map(str::trim).collect();
     assert_eq!(names.len(), values.len(), "template for {table} is uneven");
-    let at = names
-        .iter()
-        .position(|n| *n == column)
-        .unwrap_or_else(|| panic!("{table} template has no column {column}"));
     let mut row: Vec<&str> = values.to_vec();
-    row[at] = literal;
+    for (column, literal) in overrides {
+        let at = names
+            .iter()
+            .position(|n| n == column)
+            .unwrap_or_else(|| panic!("{table} template has no column {column}"));
+        row[at] = literal;
+    }
     format!(
         "INSERT INTO {table} ({}) VALUES ({})",
         names.join(", "),
@@ -811,10 +828,33 @@ fn a_document_only_takes_the_kinds_regimes_modes_and_states_the_spec_names() {
             vec!["'entreprise'", "''"],
         ),
     ];
+    // Since the kind rules (migration 7) some of these values do not stand on
+    // their own: an avoir names the facture it is written against, an annulée
+    // document says when and by whom and why, and a document nobody paid cash
+    // for holds neither an amount tendered nor change. The value under test is
+    // still the one being probed; what travels with it is what the file now
+    // insists on, and the row is otherwise the template's.
+    let companions = |column: &str, value: &str| -> Vec<(&'static str, &'static str)> {
+        match (column, value) {
+            ("kind", "'avoir'") => vec![("ref_document_id", "1")],
+            ("status", "'cancelled'") => vec![
+                ("cancelled_at", "'2026-09-10 09:15:00'"),
+                ("cancelled_by", "1"),
+                ("cancel_reason", "'erreur de saisie'"),
+            ],
+            ("payment_mode", "'cash'") => Vec::new(),
+            ("payment_mode", _) => vec![("tendered_centimes", "NULL"), ("change_centimes", "NULL")],
+            _ => Vec::new(),
+        }
+    };
     for (column, good, bad) in sets {
         for value in good {
+            let mut row = vec![(column, value)];
+            row.extend(companions(column, value));
             assert!(
-                probe(&mut conn, "documents", column, value).is_ok(),
+                diesel::sql_query(insert_with_all("documents", &row))
+                    .execute(&mut conn)
+                    .is_ok(),
                 "documents.{column} refused {value}"
             );
             clear(&mut conn, "documents");
@@ -1474,6 +1514,40 @@ fn the_migration_reverts_and_reapplies() {
         count(
             &mut conn,
             "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
+             AND name = 'documents' AND sql LIKE '%kind <> ''avoir''%'"
+        ),
+        1,
+        "the migrated file does not carry the kind rules this asserts are removed"
+    );
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    // The eighth one rebuilt `documents` to hang the kind rules on it, so its
+    // down rebuilds it once more without them. Every column stays: they
+    // belong to the migrations below and come off with their own downs.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
+             AND name = 'documents' AND sql LIKE '%kind <> ''avoir''%'"
+        ),
+        0,
+        "the kind rules down.sql left them behind"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND number = 7 \
+             AND series = 'doc_facture' AND net_to_pay_centimes = 119000 \
+             AND customer_id = 1 AND buyer_name = 'Entreprise Benali'"
+        ),
+        1,
+        "the kind rules down.sql took the facture or its buyer block with them"
+    );
+
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
              AND name = 'debt_ledger' AND sql LIKE '%kind <> ''payment''%'"
         ),
         1,
@@ -1954,17 +2028,14 @@ fn a_facture_naming_a_customer_goes_down_and_up_without_orphaning_itself() {
     let (_dir, mut conn) = open_temp();
     seed_a_facture_naming_a_customer(&mut conn);
 
-    // The fifth, sixth and seventh migrations sit on top of the fourth and
-    // only touch tables the fourth left standing, so all three come off
-    // first; the round trip above is where those steps are asserted.
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
+    // The fifth to the eighth migrations sit on top of the fourth and only
+    // touch tables the fourth left standing, so all four come off first and
+    // the fourth itself comes off last; the round trip above is where those
+    // steps are asserted.
+    for _ in 0..5 {
+        conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+            .unwrap();
+    }
     // Everything the fourth migration added to `documents` is off the table
     // again: the seven columns of the buyer block and the three of the
     // balance triple.
@@ -2188,5 +2259,407 @@ fn a_database_whose_ledger_lets_any_movement_carry_a_mode_takes_the_check() {
         .execute(&mut conn)
         .is_err(),
         "the rebuilt table took a mode that is not a way of paying"
+    );
+}
+
+/// A document of `kind` with `overrides` applied to the probe template, as the
+/// file answers it. The kind rules read two and three columns at once, so
+/// every one of them is asked with a whole row rather than a substitution.
+fn kind_row(
+    conn: &mut SqliteConnection,
+    kind: &str,
+    overrides: &[(&str, &str)],
+) -> QueryResult<usize> {
+    let mut row = vec![("kind", kind)];
+    row.extend_from_slice(overrides);
+    diesel::sql_query(insert_with_all("documents", &row)).execute(conn)
+}
+
+#[test]
+fn only_an_avoir_names_the_document_it_is_written_against() {
+    // features.md §3: an avoir is written against the facture it credits, and
+    // `avoir::issue` is the one writer that fills the column in. Every other
+    // paper the till writes stands on its own, so a ticket, a facture or a
+    // proforma pointing at another document is a row no service could have
+    // written and the table says so.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+
+    assert!(
+        kind_row(&mut conn, "'avoir'", &[]).is_err(),
+        "an avoir crediting nothing was taken"
+    );
+    for kind in ["'ticket'", "'facture'", "'proforma'"] {
+        assert!(
+            kind_row(&mut conn, kind, &[("ref_document_id", "1")]).is_err(),
+            "a {kind} written against another document was taken"
+        );
+    }
+
+    assert_eq!(
+        kind_row(&mut conn, "'avoir'", &[("ref_document_id", "1")]).unwrap(),
+        1,
+        "an avoir naming the facture it credits was refused"
+    );
+    clear(&mut conn, "documents");
+    assert_eq!(
+        kind_row(&mut conn, "'facture'", &[]).unwrap(),
+        1,
+        "a facture that names no other document was refused"
+    );
+}
+
+#[test]
+fn tendered_and_change_are_a_cash_document_and_travel_together() {
+    // features.md §3: the two columns are what the customer handed over and
+    // what went back over the counter, and `sales::settle` fills them in on a
+    // cash sale and refuses them anywhere else. A card facture holding change
+    // is money the shop never gave back.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+
+    for mode in ["'card'", "'credit'", "'cheque'", "'transfer'"] {
+        assert!(
+            kind_row(&mut conn, "'facture'", &[("payment_mode", mode)]).is_err(),
+            "a {mode} document held an amount tendered and change"
+        );
+    }
+    // Half the pair is the other half of the rule: what was handed over and
+    // what went back are one fact about one payment, and a row holding one of
+    // them is a write that got half way.
+    for (tendered, change) in [("5000", "NULL"), ("NULL", "0")] {
+        assert!(
+            kind_row(
+                &mut conn,
+                "'ticket'",
+                &[("tendered_centimes", tendered), ("change_centimes", change)]
+            )
+            .is_err(),
+            "a cash ticket held {tendered} tendered and {change} change"
+        );
+    }
+
+    assert_eq!(
+        kind_row(&mut conn, "'ticket'", &[]).unwrap(),
+        1,
+        "a cash ticket with both columns was refused"
+    );
+    clear(&mut conn, "documents");
+    assert_eq!(
+        kind_row(
+            &mut conn,
+            "'facture'",
+            &[
+                ("payment_mode", "'credit'"),
+                ("tendered_centimes", "NULL"),
+                ("change_centimes", "NULL"),
+            ]
+        )
+        .unwrap(),
+        1,
+        "a credit facture with neither column was refused"
+    );
+}
+
+#[test]
+fn a_document_is_annulee_exactly_when_it_says_when_by_whom_and_why() {
+    // features.md §5 and the `cancellation` reader in models::document: a
+    // document marked annulée with nobody's name on it is what the log is
+    // kept against, and a document carrying a cancellation while it still
+    // says it stands is the same write from the other side. The reader
+    // refuses both; since migration 7 so does the table.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+    let block = [
+        ("cancelled_at", "'2026-09-10 09:15:00'"),
+        ("cancelled_by", "1"),
+        ("cancel_reason", "'erreur de saisie'"),
+    ];
+
+    assert!(
+        kind_row(&mut conn, "'facture'", &[("status", "'cancelled'")]).is_err(),
+        "an annulée facture said nothing about when or by whom"
+    );
+    assert!(
+        kind_row(&mut conn, "'facture'", &block).is_err(),
+        "a facture carrying a cancellation still said it stands"
+    );
+    for missing in ["cancelled_at", "cancelled_by", "cancel_reason"] {
+        let mut row: Vec<(&str, &str)> = vec![("status", "'cancelled'")];
+        row.extend(block.iter().filter(|(c, _)| *c != missing).copied());
+        row.push((missing, "NULL"));
+        assert!(
+            kind_row(&mut conn, "'facture'", &row).is_err(),
+            "a cancellation was written without its {missing}"
+        );
+    }
+    // The avoir a cancellation issued exists only where the cancellation
+    // does: `documents::cancel` writes the four together and nothing else
+    // writes the column at all.
+    assert!(
+        kind_row(&mut conn, "'facture'", &[("cancel_avoir_document_id", "1")]).is_err(),
+        "a document that still stands named the avoir that annulled it"
+    );
+
+    let mut whole: Vec<(&str, &str)> = vec![("status", "'cancelled'")];
+    whole.extend(block);
+    assert_eq!(
+        kind_row(&mut conn, "'facture'", &whole).unwrap(),
+        1,
+        "a whole cancellation was refused"
+    );
+    clear(&mut conn, "documents");
+    whole.push(("cancel_avoir_document_id", "1"));
+    assert_eq!(
+        kind_row(&mut conn, "'facture'", &whole).unwrap(),
+        1,
+        "a cancellation naming the avoir it issued was refused"
+    );
+}
+
+#[test]
+fn a_proforma_says_nothing_is_owed() {
+    // features.md §3: a quotation moves no goods and no money. `proforma.rs`
+    // writes the triple as three zeros rather than leaving it out, so the
+    // paper says what a proforma changes, which is nothing; what it must
+    // never say is that this quotation put something on an account.
+    let (_dir, mut conn) = open_temp();
+    seed_for_probes(&mut conn);
+
+    for column in [
+        "old_balance_centimes",
+        "remaining_debt_centimes",
+        "total_debt_centimes",
+    ] {
+        assert!(
+            kind_row(&mut conn, "'proforma'", &[(column, "1000")]).is_err(),
+            "a proforma carried {column} of its own"
+        );
+    }
+
+    assert_eq!(
+        kind_row(
+            &mut conn,
+            "'proforma'",
+            &[
+                ("old_balance_centimes", "0"),
+                ("remaining_debt_centimes", "0"),
+                ("total_debt_centimes", "0"),
+            ]
+        )
+        .unwrap(),
+        1,
+        "the triple of three zeros a proforma is written with was refused"
+    );
+    clear(&mut conn, "documents");
+    // And a facture still carries what the customer owed, owes and will owe.
+    assert_eq!(
+        kind_row(
+            &mut conn,
+            "'facture'",
+            &[
+                ("old_balance_centimes", "1000"),
+                ("remaining_debt_centimes", "11900"),
+                ("total_debt_centimes", "12900"),
+            ]
+        )
+        .unwrap(),
+        1,
+        "a facture was refused its balance triple"
+    );
+}
+
+#[test]
+fn a_database_whose_documents_take_any_block_on_any_kind_takes_the_kind_rules() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it. This one rebuilds
+    // the table holding every paper the shop has issued, so what has to be
+    // proved is that each of them is still there with the id it had, that the
+    // rows pointing at those ids still point at them, and that the row the
+    // services already refuse is now refused by the file.
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_before_migration("document_kind_rules");
+    diesel::sql_query(
+        "INSERT INTO customers (id, shop_id, name, party_kind) \
+         VALUES (1, 1, 'Entreprise Benali', 'company')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    let paid = |id: i32, kind: &str, number: i64, mode: &str, columns: &str, values: &str| {
+        format!(
+            "INSERT INTO documents (id, shop_id, kind, series, number, issued_at, user_id, \
+             regime, payment_mode, seller_name, total_ht_centimes, discount_centimes, \
+             subtotal_ht_centimes, tva_centimes, total_ttc_centimes, stamp_centimes, \
+             net_to_pay_centimes{columns}) VALUES ({id}, 1, '{kind}', 'doc_{kind}', {number}, \
+             '2026-09-09 10:00:00', 1, 'reel', '{mode}', 'Mon magasin', 100000, 0, 100000, \
+             19000, 119000, 0, 119000{values})"
+        )
+    };
+    let document = |id: i32, kind: &str, number: i64, columns: &str, values: &str| -> String {
+        paid(id, kind, number, "cash", columns, values)
+    };
+    // A cash ticket with what was handed over, a credit facture on a
+    // customer's account, an annulée facture with the block a cancellation
+    // writes, the quotation with its three zeros, and the avoir that credited
+    // the facture, which copies the facture's cash mode and still holds
+    // neither an amount tendered nor change.
+    for sql in [
+        document(
+            1,
+            "ticket",
+            1,
+            ", tendered_centimes, change_centimes",
+            ", 120000, 1000",
+        ),
+        paid(
+            2,
+            "facture",
+            1,
+            "credit",
+            ", customer_id, old_balance_centimes, remaining_debt_centimes, total_debt_centimes",
+            ", 1, 0, 119000, 119000",
+        ),
+        document(
+            3,
+            "facture",
+            2,
+            ", status, cancelled_at, cancelled_by, cancel_reason",
+            ", 'cancelled', '2026-09-10 09:15:00', 1, 'erreur de saisie'",
+        ),
+        document(
+            4,
+            "proforma",
+            1,
+            ", customer_id, old_balance_centimes, remaining_debt_centimes, total_debt_centimes",
+            ", 1, 0, 0, 0",
+        ),
+        document(5, "avoir", 1, ", ref_document_id", ", 2"),
+    ] {
+        diesel::sql_query(sql).execute(&mut conn).unwrap();
+    }
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, document_id, kind, debit_centimes, \
+         credit_centimes, user_id) VALUES (1, 1, 1, 2, 'sale', 119000, 0, 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_ledger (id, shop_id, customer_id, document_id, kind, debit_centimes, \
+         credit_centimes, user_id, payment_mode) \
+         VALUES (2, 1, 1, 2, 'payment', 0, 19000, 1, 'card')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO debt_allocations (shop_id, payment_ledger_id, document_id, amount_centimes) \
+         VALUES (1, 2, 2, 19000)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    // The file this starts from takes the row the kind rules refuse, which is
+    // what makes the rebuild worth running: a facture marked annulée that
+    // says nothing about when or by whom.
+    assert_eq!(
+        diesel::sql_query(document(6, "facture", 3, ", status", ", 'cancelled'"))
+            .execute(&mut conn)
+            .unwrap(),
+        1,
+        "the file this starts from already refuses the row"
+    );
+    diesel::sql_query("DELETE FROM documents WHERE id = 6")
+        .execute(&mut conn)
+        .unwrap();
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 1 AND kind = 'ticket' \
+             AND tendered_centimes = 120000 AND change_centimes = 1000"
+        ),
+        1,
+        "the cash ticket did not survive the rebuild with what was handed over"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 2 AND customer_id = 1 \
+             AND payment_mode = 'credit' AND remaining_debt_centimes = 119000"
+        ),
+        1,
+        "the credit facture lost its customer or its triple"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 3 AND status = 'cancelled' \
+             AND cancelled_by = 1 AND cancel_reason = 'erreur de saisie'"
+        ),
+        1,
+        "the annulée facture lost the block the cancellation wrote"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 4 AND kind = 'proforma' \
+             AND old_balance_centimes = 0 AND total_debt_centimes = 0"
+        ),
+        1,
+        "the quotation lost the triple of three zeros it is written with"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM documents WHERE id = 5 AND kind = 'avoir' \
+             AND ref_document_id = 2"
+        ),
+        1,
+        "the avoir lost the facture it was written against"
+    );
+    // The ids are what the ledger, the allocations and the avoir point at, so
+    // a rebuild that reassigned them would say a facture had been settled by
+    // somebody else's payment or credited by somebody else's avoir.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM debt_allocations WHERE document_id = 2"
+        ),
+        1,
+        "the allocation lost the facture it names"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'index' \
+             AND name = 'idx_documents_shop_issued'"
+        ),
+        1,
+        "the rebuilt table lost its index"
+    );
+    // What the file now refuses on its own.
+    assert!(
+        diesel::sql_query(document(6, "facture", 3, ", status", ", 'cancelled'"))
+            .execute(&mut conn)
+            .is_err(),
+        "a facture marked annulée with nobody's name on it was taken"
+    );
+    // And the per-column checks migration 2 wrote are still on the rebuilt
+    // table: a copy that quietly relaxed one would be a hole this file opened.
+    assert!(
+        diesel::sql_query(document(7, "recu", 4, "", ""))
+            .execute(&mut conn)
+            .is_err(),
+        "the rebuilt table took a kind the spec does not name"
+    );
+    assert!(
+        diesel::sql_query(
+            document(8, "ticket", 5, "", "").replace("119000, 0, 119000", "119000, 0, -1")
+        )
+        .execute(&mut conn)
+        .is_err(),
+        "the rebuilt table took a negative net to pay"
     );
 }

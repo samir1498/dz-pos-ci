@@ -833,11 +833,17 @@ fn a_document_written_against_another_shops_document_is_refused_and_burns_no_num
         "{err:?}"
     );
 
-    let next = documents::issue(
+    // The avoir that proves the number was not burned is written against a
+    // paper of this shop, because an avoir names the document it credits
+    // (migration 7, the kind rules).
+    let mine = documents::issue(
         &mut conn,
         SHOP,
-        draft(DocumentKind::Avoir, Some(p), at(9, 11)),
+        draft(DocumentKind::Facture, Some(p), at(9, 11)),
     )
     .unwrap();
+    let mut next_avoir = draft(DocumentKind::Avoir, Some(p), at(9, 11));
+    next_avoir.ref_document_id = Some(mine.id);
+    let next = documents::issue(&mut conn, SHOP, next_avoir).unwrap();
     assert_eq!(next.number, 1, "the refused avoir burned a number");
 }
