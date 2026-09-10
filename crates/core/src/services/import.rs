@@ -60,6 +60,15 @@ pub use crate::services::export::PRODUCT_COLUMNS;
 const MONEY_SCALE: u32 = 2;
 const QTY_SCALE: u32 = 3;
 
+/// The most data rows one file is imported with. A shop's whole catalogue
+/// is a few thousand products; five thousand is already a file nobody
+/// scrolls to the bottom of by hand, and the cap is checked before a
+/// single row is parsed, matched or looked up, so a file with a stray
+/// fifty thousand rows is refused in one read rather than after fifty
+/// thousand database lookups (dz-review 2026-09-10, the same reasoning as
+/// `LABEL_SHEET_MAX` in the API crate).
+pub const IMPORT_MAX_ROWS: usize = 5_000;
+
 /// The rates a row may name, as the percentages a person types them:
 /// features.md, TVA rates row (19 % standard, 9 % reduced, 0 % exempt). A
 /// product may be stored at any rate the file allows, but nothing typed into
@@ -437,6 +446,15 @@ fn parse(bytes: &[u8]) -> Result<Vec<Draft>, CoreError> {
         .ok_or_else(|| CoreError::validation("file", "the workbook has no sheet"))?
         .map_err(|_| CoreError::validation("file", "the first sheet could not be read"))?;
     let rows: Vec<Vec<Data>> = range.rows().map(<[Data]>::to_vec).collect();
+    // Checked before the header is even matched: a row count over the cap
+    // is refused on the shape of the file alone, before a single cell is
+    // read for what it says.
+    if rows.len().saturating_sub(1) > IMPORT_MAX_ROWS {
+        return Err(CoreError::validation(
+            "rows",
+            "more rows than one import takes at a time",
+        ));
+    }
     let Some(header) = rows.first() else {
         return Err(CoreError::validation("file", "the sheet is empty"));
     };

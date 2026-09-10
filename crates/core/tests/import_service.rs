@@ -611,6 +611,32 @@ fn a_file_whose_header_row_is_not_the_templates_is_refused_whole() {
     }
 }
 
+/// `n` rows, each its own blank-barcode product: blank so none of them
+/// looks up or collides with another, which keeps this about the row count
+/// and nothing else.
+fn rows_of(n: usize) -> Vec<Vec<Cell>> {
+    (0..n)
+        .map(|i| a_row(&format!("Produit {i}"), Cell::Blank))
+        .collect()
+}
+
+#[test]
+fn a_file_one_row_over_the_cap_is_refused_and_the_cap_itself_passes() {
+    let (_dir, mut conn) = open_temp();
+
+    let over = workbook(&rows_of(import::IMPORT_MAX_ROWS + 1));
+    let refused = import::dry_run(&mut conn, SHOP, &over).unwrap_err();
+    match refused {
+        CoreError::Validation { field, .. } => assert_eq!(field, "rows"),
+        other => panic!("{other:?}"),
+    }
+
+    let at_cap = workbook(&rows_of(import::IMPORT_MAX_ROWS));
+    let report = import::dry_run(&mut conn, SHOP, &at_cap).unwrap();
+    assert_eq!(report.accepted, import::IMPORT_MAX_ROWS);
+    assert_eq!(report.refused, 0);
+}
+
 /// Where the browser suite's committed workbook lives.
 fn fixture_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
