@@ -63,22 +63,23 @@ less matters more than cleaning up after.
 One session per machine is the normal case, so branches in the checkout
 are enough and no worktree ceremony is needed. But worktrees *do* get
 created here — Claude Code's own `EnterWorktree` puts them in
-`.claude/worktrees/<name>` (gitignored). Each one carries its own Rust
-`target/`, and that is what fills the disk: on 2026-09-10 three worktrees
+`.claude/worktrees/<name>` (gitignored). Until 2026-09-10 each one carried
+its own Rust `target/`, and that is what filled the disk: three worktrees
 held 57 GB of `target/` between them (`t7` alone was 36 GB) on top of the
-main checkout's 15 GB.
+main checkout's 15 GB. Since then every worktree builds into the one shared
+`CARGO_TARGET_DIR` (next section), so there is no per-worktree `target/` to
+manage.
 
 So:
-- **Tearing down a worktree: `rm -rf` its `target/` first, then
-  `git worktree remove`, then `git worktree prune`.** Leaving the directory
-  behind is what produced the orphaned `t5` — a `.claude/worktrees/` dir
-  that `git worktree list` did not even know about.
-- Not coming back to a worktree today? Delete its `target/`. It is
-  regenerable; the disk is not.
+- **Tearing down a worktree: `just worktree-rm <name>`**, which removes a
+  leftover `target/` if one exists, then `git worktree remove` and
+  `git worktree prune`. Leaving the directory behind is what produced the
+  orphaned `t5`, a `.claude/worktrees/` dir that `git worktree list` did
+  not even know about.
 - **Never `rm -rf` a worktree directory to save space.** `design` and `t7`
   held 19 and 6 uncommitted files when they were 55 GB of build output.
-  Delete `target/`, never the tree.
-- `just clean-targets` does all of this across every worktree at once.
+  Only build output is disposable, never the tree.
+- `just clean-targets` removes every stray per-worktree `target/` at once.
 
 ## Dev servers
 Nothing runs by default. The web UI (`just api`, then `just dev`) can run on

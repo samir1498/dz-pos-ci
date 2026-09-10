@@ -4,7 +4,7 @@ slug: 'design-system-and-branding'
 status: 'active'
 category: 'milestone'
 created: 20260910
-tldr: 'Two themes (Comptoir light, Registre dark) with a switcher, a bilingual logo the language switch swaps, Lucide icons, a component kit with a lint that forbids bare HTML, every screen rewritten on it, the kit pushed to a Claude Design project; landing page in Astro later'
+tldr: 'Four themes (comptoir, registre, observe, observe-dark) switched by data-theme, a bilingual logo the language switch swaps, Lucide icons, a component kit with a lint that forbids bare HTML, every screen rewritten on it, the kit pushed to a Claude Design project; landing page in Astro later'
 priority: 45
 tasks:
   - id: 'D1'
@@ -46,8 +46,8 @@ hand-drawn; the logo is the one custom drawing.
 Anouar, 2026-09-10, after seeing the three directions and finding them all
 not good, suggested building on a hand-picked UI framework the way ObserveOne
 is (shadcn/ui) with ObserveOne's theme as the example. Samir's decision the
-same hour: shadcn/ui as the component base (it is React), our own two themes
-on it, not ObserveOne's look; a designer, if Anouar hires one later, edits the
+same hour: shadcn/ui as the component base (it is React), our own themes on it,
+with Observe borrowing ObserveOne's dashboard look as the third; a designer, if Anouar hires one later, edits the
 theme file.
 
 The Claude Design link: `/design-login` done 2026-09-10; a design-system
