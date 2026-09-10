@@ -140,7 +140,7 @@ code and shows the message to nobody.
 | `party_ids` | 422 | a facture either side of which is short of what décret 05-468 art. 3 asks | `party_side`, `missing_ids` |
 | `not_found` | 404 | a row that is not there, or is another shop's | |
 | `duplicate_barcode` | 409 | a barcode a product already holds | |
-| `exhausted` | 409 | a number series the shop hands out (in-store barcodes) has no next value | |
+| `exhausted` | 409 | a number series the shop hands out (in-store barcodes, a document kind's series for one year) has no next value | |
 | `bad_request` | 422 | a body that did not parse, before any service ran | |
 | `unauthorized` | 401 | no launch token, or the wrong one; the answer carries `WWW-Authenticate: Bearer` | |
 | `method_not_allowed` | 405 | a route that does not take that method | |
