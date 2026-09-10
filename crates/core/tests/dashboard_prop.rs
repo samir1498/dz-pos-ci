@@ -3,22 +3,28 @@
 
 //! The dashboard adds up, over months nobody wrote by hand.
 //!
-//! The case builds a random history out of the things a shop does, keeps its
-//! own tally of what each of them is worth as it writes them, and compares
-//! that tally with what `dashboard::read` reads back out of the file. The
-//! tally is kept the way a comptable would keep it: what a line asked for,
-//! and what the goods on it cost on the day they left. The service reads it
-//! back off the stock ledger, so the fiche's cost price moving between a sale
-//! and the credit note that reverses it is exactly what the two would
-//! disagree about.
+//! The case builds a random history out of the things a shop does and keeps
+//! its own tally as it writes them. The tally is the load-bearing check: it
+//! is compared with `dashboard::read` column for column, for the day the case
+//! asks about and for each of the three days of its month, so a filter that
+//! let the wrong paper through, signed it the wrong way or dated it by the
+//! wrong column shows up as a column that disagrees.
 //!
-//! Three properties, and none of them is true by construction:
-//! - the revenue less the cost of the goods is the margin, to the centime,
-//!   against a tally built from the prices and the costs of the day;
-//! - the day the case asks for, plus the other days of its month, is the
-//!   month;
-//! - the low stock list is the products a plain scan of the fiches would
-//!   name.
+//! Where the tally's figures come from, and why
+//! - The revenue side is the paper's own `total_ht` and `discount`, read off
+//!   the document the service handed back. That is not the dashboard's
+//!   arithmetic: the dashboard sums `document_lines`, so folding the header's
+//!   totals is what catches lines and header drifting apart, and it leaves
+//!   the avoir's own prorating to the file that pins it (`avoir_prop`).
+//! - The cost side the case computes itself, from the cost the fiche carried
+//!   at the moment of the sale. The dashboard never reads the fiche, so this
+//!   is the independent half: an avoir written after a delivery, or after a
+//!   purchase moved the cost price, is where the two would part.
+//!
+//! A cancelled paper takes its whole chain with it. The tally holds one
+//! posting per paper, tagged with the chain it belongs to, and a cancellation
+//! drops the chain's postings rather than posting a reversal, which is what
+//! the service does by dropping the paper and every avoir written against it.
 //!
 //! Against a real temp SQLite file, one per case, because the filters under
 //! test are SQL.
@@ -28,8 +34,9 @@ use diesel::sqlite::SqliteConnection;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::money::{Bps, Money, PaymentMode};
 use dzpos_core::services::dashboard::{self, Figures};
-use dzpos_core::services::documents::DocumentKind;
+use dzpos_core::services::documents::Document;
 use dzpos_core::services::expenses::{self, NewExpense};
+use dzpos_core::services::purchases::{self, NewLine, NewPurchase, ReceiveLine};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
 use dzpos_core::services::{avoir, documents, products};
 use proptest::prelude::*;
@@ -45,9 +52,6 @@ const MONTH: u32 = 9;
 /// before and the first of the month after, so both sets of bounds are under
 /// test on every case.
 const THE_DAY: u32 = 15;
-
-/// The three days of the month a row can land on, in order.
-const IN_THE_MONTH: [u32; 3] = [THE_DAY - 1, THE_DAY, THE_DAY + 1];
 
 /// Where a row lands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,10 +74,6 @@ impl When {
         }
     }
 
-    const fn in_the_day(self) -> bool {
-        matches!(self, When::OnTheDay)
-    }
-
     /// Which of the month's three days this is, if it is one of them.
     const fn index(self) -> Option<usize> {
         match self {
@@ -83,34 +83,74 @@ impl When {
             When::MonthBefore | When::MonthAfter => None,
         }
     }
+
+    /// The day a paper written against this one is credited on: the same day,
+    /// a later day of the month, or a day of the month after. The three are
+    /// what tell a figure dated by the paper apart from one dated by the row
+    /// the file happened to write.
+    fn later(self, steps: u8) -> Self {
+        match (self, steps) {
+            (_, 0) => self,
+            (When::MonthBefore, _) => When::DayBefore,
+            (When::DayBefore, 1) => When::OnTheDay,
+            (When::DayBefore, _) | (When::OnTheDay, 1) => When::DayAfter,
+            (When::OnTheDay, _) | (When::DayAfter, _) | (When::MonthAfter, _) => When::MonthAfter,
+        }
+    }
 }
 
-/// One thing the shop does, and the day it does it on.
+/// One thing the shop does.
 #[derive(Debug, Clone, Copy)]
 enum Event {
-    /// A cash ticket: which product, how many units, and the remise given off
-    /// the whole ticket.
-    Ticket {
+    /// A sale over the counter: which product, thousandths of the unit, the
+    /// remise off the whole paper, and how it was paid. Cash and card are
+    /// tickets; credit is a facture, because that is what a customer signs
+    /// for.
+    Sell {
         product: usize,
-        units: i64,
+        qty_milli: i64,
         discount: i64,
+        mode: PaymentMode,
     },
-    /// A credit facture, a delivery that moves the fiche's cost, and then an
-    /// avoir crediting the facture in full, all on the same day. Both papers
-    /// are in the figures and what they leave is nothing, which is only true
-    /// if the credit note put the goods back at the cost they left on: the
-    /// delivery in the middle is what tells the two apart.
-    FactureThenAvoir {
+    /// A facture, then a credit note for part or all of it, on the same day
+    /// or a later one. The remise makes the credit note prorate it.
+    SellThenAvoir {
         product: usize,
-        units: i64,
+        qty_milli: i64,
+        discount: i64,
+        back_milli: i64,
+        /// A delivery between the two: the fiche's cost moves, and the credit
+        /// note has to ignore it.
         cost_between: i64,
+        later: u8,
     },
-    /// A cash ticket rung up and annulled the same day. It leaves the figures
-    /// with its own status, and so do the goods it put back.
-    TicketThenCancel { product: usize, units: i64 },
-    /// A delivery: the fiche's cost price moves. Nothing is sold, and every
-    /// sale before it keeps the cost it left on.
-    Restock { product: usize, cost: i64 },
+    /// A facture, a credit note for part of it, and then the whole paper
+    /// annulled. Everything written on that chain leaves the figures.
+    SellAvoirThenCancel {
+        product: usize,
+        qty_milli: i64,
+        back_milli: i64,
+        later: u8,
+    },
+    /// A cash ticket rung up and annulled.
+    SellThenCancel {
+        product: usize,
+        qty_milli: i64,
+        later: u8,
+    },
+    /// An order placed and taken in, whole or in part. It moves stock and the
+    /// supplier's ledger and it moves the fiche's cost to the landed one; it
+    /// is on no sale, so no figure of the margin may feel it.
+    Buy {
+        product: usize,
+        qty_milli: i64,
+        unit_cost: i64,
+        /// Whether the delivery is the whole order or half of it, which is
+        /// what leaves an order open.
+        whole: bool,
+        /// Goods handed straight back to the supplier.
+        send_back: bool,
+    },
     /// Money out that is not stock.
     Spend { amount: i64 },
 }
@@ -127,13 +167,25 @@ struct Expected {
 }
 
 impl Expected {
-    const fn sales_ht(&self) -> i64 {
-        self.lines_ht - self.discounts
+    fn add(&mut self, other: &Expected) {
+        self.lines_ht += other.lines_ht;
+        self.discounts += other.discounts;
+        self.cost_of_goods += other.cost_of_goods;
+        self.sales_ttc += other.sales_ttc;
+        self.sales_count += other.sales_count;
+        self.expenses += other.expenses;
     }
+}
 
-    const fn margin(&self) -> i64 {
-        self.sales_ht() - self.cost_of_goods
-    }
+/// One paper's contribution, held rather than folded, so a cancellation can
+/// take a whole chain of them back out.
+#[derive(Debug, Clone, Copy)]
+struct Posting {
+    when: When,
+    /// The paper this was written against, or the paper itself: everything
+    /// on one chain leaves together.
+    chain: usize,
+    delta: Expected,
 }
 
 fn calendar(day: u32) -> NaiveDate {
@@ -150,9 +202,20 @@ fn moment(day: NaiveDate, nth: u32) -> NaiveDateTime {
     day.and_hms_opt(8 + nth % 12, nth % 60, 0).unwrap()
 }
 
-/// The two products every case sells, priced so a whole month of them still
-/// fits an i64 with room to spare and taxed at nothing, so `total_ttc` is the
-/// lines' own HT and the tally has no rounding to model.
+/// `centimes × qty_milli / 1000`, rounded half away from zero, which is how
+/// the core prices a quantity (dz-money). Written out here so the tally's
+/// cost side is the case's own arithmetic and not the code under test.
+fn mul_milli(centimes: i64, qty_milli: i64) -> i64 {
+    let raw = i128::from(centimes) * i128::from(qty_milli);
+    let magnitude = raw.abs();
+    let rounded = (magnitude + 500) / 1_000;
+    let signed = if raw < 0 { -rounded } else { rounded };
+    i64::try_from(signed).unwrap()
+}
+
+/// The two products every case sells, taxed at nothing so `total_ttc` is the
+/// paper's own HT and the tally has no tax to model. The stock is deep enough
+/// that no case runs it down to a level a low stock list would move on.
 fn a_product(conn: &mut SqliteConnection, name: &str, selling: i64, cost: i64) -> i32 {
     products::create(
         conn,
@@ -162,12 +225,12 @@ fn a_product(conn: &mut SqliteConnection, name: &str, selling: i64, cost: i64) -
             name: name.to_string(),
             barcode: None,
             category_id: None,
-            unit: Unit::Piece,
+            unit: Unit::Kg,
             cost: Money::centimes(cost),
             selling: Money::centimes(selling),
             wholesale: None,
-            qty_on_hand_milli: 1_000_000,
-            low_stock_at_milli: 20_000,
+            qty_on_hand_milli: 10_000_000,
+            low_stock_at_milli: 0,
             rate_bps: Some(Bps::new(0).unwrap()),
             active: true,
         },
@@ -187,12 +250,12 @@ fn move_the_cost(conn: &mut SqliteConnection, id: i32, name: &str, selling: i64,
             name: name.to_string(),
             barcode: None,
             category_id: None,
-            unit: Unit::Piece,
+            unit: Unit::Kg,
             cost: Money::centimes(cost),
             selling: Money::centimes(selling),
             wholesale: None,
             qty_on_hand_milli: 0,
-            low_stock_at_milli: 20_000,
+            low_stock_at_milli: 0,
             rate_bps: Some(Bps::new(0).unwrap()),
             active: true,
         },
@@ -203,15 +266,15 @@ fn move_the_cost(conn: &mut SqliteConnection, id: i32, name: &str, selling: i64,
 fn sell(
     conn: &mut SqliteConnection,
     product_id: i32,
-    units: i64,
+    qty_milli: i64,
     discount: i64,
-    kind: SaleKind,
-    customer_id: Option<i32>,
+    mode: PaymentMode,
+    customer_id: i32,
     at: NaiveDateTime,
-) -> dzpos_core::services::documents::Document {
-    let mode = match kind {
-        SaleKind::Facture => PaymentMode::Credit,
-        _ => PaymentMode::Cash,
+) -> Document {
+    let kind = match mode {
+        PaymentMode::Credit => SaleKind::Facture,
+        _ => SaleKind::Ticket,
     };
     sales::issue(
         conn,
@@ -220,7 +283,7 @@ fn sell(
         NewSale {
             lines: vec![NewSaleLine {
                 product_id,
-                qty_milli: units.saturating_mul(1_000),
+                qty_milli,
                 unit_price: None,
                 line_discount: Money::ZERO,
             }],
@@ -230,8 +293,13 @@ fn sell(
                 PaymentMode::Cash => Some(Money::centimes(100_000_000)),
                 _ => None,
             },
-            customer_id,
-            override_credit: false,
+            // A facture names its buyer; a ticket is handed to whoever is at
+            // the counter, and naming one on it changes no figure here.
+            customer_id: match kind {
+                SaleKind::Facture => Some(customer_id),
+                _ => None,
+            },
+            override_credit: true,
             kind,
             issued_at: Some(at),
         },
@@ -250,29 +318,86 @@ fn when() -> impl Strategy<Value = When> {
     ]
 }
 
+fn mode() -> impl Strategy<Value = PaymentMode> {
+    prop_oneof![
+        Just(PaymentMode::Cash),
+        Just(PaymentMode::Card),
+        Just(PaymentMode::Credit),
+    ]
+}
+
+/// Thousandths of a unit, most of them not a whole one: a product sold by
+/// weight is where a line total and a cost round on their own.
+fn qty() -> impl Strategy<Value = i64> {
+    prop_oneof![
+        Just(1_000i64),
+        Just(2_000i64),
+        Just(1_500i64),
+        Just(2_500i64),
+        Just(333i64),
+        Just(4_125i64),
+    ]
+}
+
 fn event() -> impl Strategy<Value = Event> {
     prop_oneof![
-        (0usize..2, 1i64..6, 0i64..300).prop_map(|(product, units, discount)| Event::Ticket {
-            product,
-            units,
-            discount
-        }),
-        (0usize..2, 1i64..6, 100i64..9_000).prop_map(|(product, units, cost_between)| {
-            Event::FactureThenAvoir {
+        (0usize..2, qty(), 0i64..300, mode()).prop_map(|(product, qty_milli, discount, mode)| {
+            Event::Sell {
                 product,
-                units,
-                cost_between,
+                qty_milli,
+                discount,
+                mode,
             }
         }),
-        (0usize..2, 1i64..6)
-            .prop_map(|(product, units)| Event::TicketThenCancel { product, units }),
-        (0usize..2, 100i64..9_000).prop_map(|(product, cost)| Event::Restock { product, cost }),
+        (0usize..2, qty(), 0i64..300, 100i64..9_000, 0u8..3).prop_map(
+            |(product, qty_milli, discount, cost_between, later)| Event::SellThenAvoir {
+                product,
+                qty_milli,
+                discount,
+                // Part of the line, and the whole of it when the halving
+                // lands back on the quantity.
+                back_milli: (qty_milli / 2).max(1),
+                cost_between,
+                later,
+            }
+        ),
+        (0usize..2, qty(), 0u8..3).prop_map(|(product, qty_milli, later)| {
+            Event::SellAvoirThenCancel {
+                product,
+                qty_milli,
+                back_milli: (qty_milli / 3).max(1),
+                later,
+            }
+        }),
+        (0usize..2, qty(), 0u8..3).prop_map(|(product, qty_milli, later)| Event::SellThenCancel {
+            product,
+            qty_milli,
+            later
+        }),
+        (
+            0usize..2,
+            qty(),
+            100i64..9_000,
+            any::<bool>(),
+            any::<bool>()
+        )
+            .prop_map(
+                |(product, qty_milli, unit_cost, whole, send_back)| Event::Buy {
+                    product,
+                    // An order is written in whole units of stock so the halved
+                    // delivery below is a quantity the line can carry.
+                    qty_milli: qty_milli.max(2) * 2,
+                    unit_cost,
+                    whole,
+                    send_back,
+                }
+            ),
         (10i64..5_000).prop_map(|amount| Event::Spend { amount }),
     ]
 }
 
 fn history() -> impl Strategy<Value = Vec<(When, Event)>> {
-    prop::collection::vec((when(), event()), 0..14)
+    prop::collection::vec((when(), event()), 0..12)
 }
 
 /// The figure the service answered, as the tally holds it.
@@ -288,15 +413,16 @@ fn as_expected(figures: &Figures) -> Expected {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(24))]
+    #![proptest_config(ProptestConfig::with_cases(48))]
 
     #[test]
-    fn the_margin_the_day_and_the_low_stock_list_are_what_the_rows_say(
+    fn the_dashboard_folds_the_rows_that_belong_in_it_and_no_others(
         history in history()
     ) {
         let (_dir, mut conn) = common::open_temp_selling_factures();
         let category = expenses::categories(&mut conn, SHOP).unwrap()[0].id;
         let customer = common::an_identified_customer(&mut conn, "Entreprise Benali");
+        let supplier = common::a_supplier(&mut conn, "Cimenterie de Meftah");
         let names = ["Ciment", "Sable"];
         let selling = [10_000i64, 4_000i64];
         let ids = [
@@ -304,159 +430,240 @@ proptest! {
             a_product(&mut conn, names[1], selling[1], 1_500),
         ];
         // What each product costs right now, the way the fiche holds it. A
-        // sale is tallied at this, and a delivery moves it.
+        // sale is tallied at this; a delivery and an edit both move it.
         let mut cost_now = [5_000i64, 1_500i64];
 
-        // One tally for the day the dashboard is asked for, one for each day
-        // of its month. Built by the same walk, so they cannot drift apart.
-        let mut for_the_day = Expected::default();
-        let mut per_day: [Expected; 3] = [Expected::default(); 3];
+        let mut postings: Vec<Posting> = Vec::new();
+        let mut cancelled: Vec<usize> = Vec::new();
+        let mut open_orders = 0i64;
         let mut nth = 0u32;
 
         for (when, event) in history {
             nth = nth.wrapping_add(1);
-            let day = when.day();
-            let at = moment(day, nth);
-            let in_month = when.index();
-
-            // The tally the row is folded into, if any.
-            let mut fold = |f: &mut dyn FnMut(&mut Expected)| {
-                if when.in_the_day() {
-                    f(&mut for_the_day);
-                }
-                if let Some(index) = in_month {
-                    f(&mut per_day[index]);
-                }
-            };
+            let at = moment(when.day(), nth);
+            // Every paper of one event is one chain: a facture, the credit
+            // notes written against it, and the credit note a cancellation
+            // issues all stand or fall together. Numbered by the event and
+            // never by how many postings have been made, or an event that
+            // posts nothing would hand its number to the next one.
+            let chain = usize::try_from(nth).unwrap();
 
             match event {
-                Event::Ticket { product, units, discount } => {
-                    let ht = selling[product].saturating_mul(units);
-                    // A remise never takes a paper below nothing.
-                    let discount = discount.min(ht);
-                    let cost = cost_now[product].saturating_mul(units);
-                    sell(&mut conn, ids[product], units, discount, SaleKind::Ticket, None, at);
-                    fold(&mut |e: &mut Expected| {
-                        e.lines_ht += ht;
-                        e.discounts += discount;
-                        e.cost_of_goods += cost;
-                        e.sales_ttc += ht - discount;
-                        e.sales_count += 1;
+                Event::Sell { product, qty_milli, discount, mode } => {
+                    let sold = sell(&mut conn, ids[product], qty_milli, discount, mode, customer, at);
+                    postings.push(Posting {
+                        when,
+                        chain,
+                        delta: Expected {
+                            lines_ht: sold.totals.total_ht.as_centimes(),
+                            discounts: sold.totals.discount.as_centimes(),
+                            cost_of_goods: mul_milli(cost_now[product], qty_milli),
+                            sales_ttc: sold.totals.total_ttc.as_centimes(),
+                            sales_count: 1,
+                            expenses: 0,
+                        },
                     });
                 }
-                Event::FactureThenAvoir { product, units, cost_between } => {
-                    let ht = selling[product].saturating_mul(units);
+                Event::SellThenAvoir {
+                    product, qty_milli, discount, back_milli, cost_between, later,
+                } => {
+                    let sold_at_cost = cost_now[product];
                     let facture = sell(
-                        &mut conn,
-                        ids[product],
-                        units,
-                        0,
-                        SaleKind::Facture,
-                        Some(customer),
-                        at,
+                        &mut conn, ids[product], qty_milli, discount,
+                        PaymentMode::Credit, customer, at,
                     );
+                    postings.push(Posting {
+                        when,
+                        chain,
+                        delta: Expected {
+                            lines_ht: facture.totals.total_ht.as_centimes(),
+                            discounts: facture.totals.discount.as_centimes(),
+                            cost_of_goods: mul_milli(sold_at_cost, qty_milli),
+                            sales_ttc: facture.totals.total_ttc.as_centimes(),
+                            sales_count: 1,
+                            expenses: 0,
+                        },
+                    });
                     // The delivery between the two papers. The credit note
                     // that follows has to ignore it.
                     move_the_cost(&mut conn, ids[product], names[product], selling[product], cost_between);
                     cost_now[product] = cost_between;
-                    avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at))
-                        .unwrap();
-                    // The facture is in the figures and so is the credit note
-                    // that undoes it: both sides of the margin come to
-                    // nothing, and the ttc column keeps what was rung up.
-                    fold(&mut |e: &mut Expected| {
-                        e.sales_ttc += ht;
-                        e.sales_count += 1;
+
+                    let credited = when.later(later);
+                    let back = back_milli.min(qty_milli);
+                    let note = avoir::issue(
+                        &mut conn, SHOP, OWNER, facture.id,
+                        Some(vec![avoir::AvoirLine {
+                            document_line_id: facture.lines[0].id,
+                            qty_milli: back,
+                        }]),
+                        None,
+                        Some(moment(credited.day(), nth.wrapping_add(30))),
+                    ).unwrap();
+                    postings.push(Posting {
+                        when: credited,
+                        chain,
+                        delta: Expected {
+                            lines_ht: -note.totals.total_ht.as_centimes(),
+                            discounts: -note.totals.discount.as_centimes(),
+                            cost_of_goods: -mul_milli(sold_at_cost, back),
+                            ..Expected::default()
+                        },
                     });
                 }
-                Event::TicketThenCancel { product, units } => {
-                    let ticket = sell(
-                        &mut conn,
-                        ids[product],
-                        units,
-                        0,
-                        SaleKind::Ticket,
+                Event::SellAvoirThenCancel { product, qty_milli, back_milli, later } => {
+                    let facture = sell(
+                        &mut conn, ids[product], qty_milli, 0,
+                        PaymentMode::Credit, customer, at,
+                    );
+                    let back = back_milli.min(qty_milli);
+                    avoir::issue(
+                        &mut conn, SHOP, OWNER, facture.id,
+                        Some(vec![avoir::AvoirLine {
+                            document_line_id: facture.lines[0].id,
+                            qty_milli: back,
+                        }]),
                         None,
-                        at,
+                        Some(moment(when.day(), nth.wrapping_add(30))),
+                    ).unwrap();
+                    documents::cancel(
+                        &mut conn, SHOP, OWNER, facture.id,
+                        "erreur de saisie".to_string(),
+                        Some(moment(when.later(later).day(), nth.wrapping_add(45))),
+                    ).unwrap();
+                    // Nothing is posted: the facture, the credit note written
+                    // against it and the one the cancellation issued all
+                    // leave the figures together.
+                    cancelled.push(chain);
+                }
+                Event::SellThenCancel { product, qty_milli, later } => {
+                    let ticket = sell(
+                        &mut conn, ids[product], qty_milli, 0,
+                        PaymentMode::Cash, customer, at,
                     );
                     documents::cancel(
-                        &mut conn,
-                        SHOP,
-                        OWNER,
-                        ticket.id,
+                        &mut conn, SHOP, OWNER, ticket.id,
                         "erreur de saisie".to_string(),
-                        Some(at),
-                    )
-                    .unwrap();
-                    // Nothing is folded: an annulled paper sold nothing and
-                    // cost nothing.
+                        Some(moment(when.later(later).day(), nth.wrapping_add(45))),
+                    ).unwrap();
+                    cancelled.push(chain);
                 }
-                Event::Restock { product, cost } => {
-                    move_the_cost(&mut conn, ids[product], names[product], selling[product], cost);
-                    cost_now[product] = cost;
+                Event::Buy { product, qty_milli, unit_cost, whole, send_back } => {
+                    let order = purchases::save(
+                        &mut conn, SHOP, OWNER,
+                        NewPurchase {
+                            supplier_id: supplier,
+                            supplier_document_number: None,
+                            purchase_date: when.day().format("%Y-%m-%d").to_string(),
+                            due_date: None,
+                            transport: Money::ZERO,
+                            extra_costs: Money::ZERO,
+                            note: None,
+                            lines: vec![NewLine {
+                                product_id: ids[product],
+                                qty_ordered_milli: qty_milli,
+                                unit_cost: Money::centimes(unit_cost),
+                            }],
+                            // Nothing handed over with the order: what a
+                            // payment does to the supplier's ledger is
+                            // `supplier_debt`'s business, and none of it
+                            // reaches a figure on this screen.
+                            paid_now: None,
+                            receive_now: false,
+                        },
+                    ).unwrap();
+                    let line_id = order.lines[0].id;
+                    let taken = if whole { qty_milli } else { qty_milli / 2 };
+                    purchases::receive(
+                        &mut conn, SHOP, OWNER, order.purchase.id,
+                        vec![ReceiveLine { purchase_line_id: line_id, qty_milli: taken }],
+                        None,
+                    ).unwrap();
+                    if send_back {
+                        purchases::return_to_supplier(
+                            &mut conn, SHOP, OWNER, order.purchase.id,
+                            vec![ReceiveLine { purchase_line_id: line_id, qty_milli: taken }],
+                            None,
+                        ).unwrap();
+                    }
+                    if !whole {
+                        open_orders += 1;
+                    }
+                    // A delivery moves the fiche's cost to the landed one.
+                    // Read back rather than assumed: what the landed cost is
+                    // belongs to `purchase_prop`, and what this case needs is
+                    // the figure a later sale will be written at.
+                    cost_now[product] =
+                        products::get(&mut conn, SHOP, ids[product]).unwrap().cost.as_centimes();
+                    // Nothing is posted. A purchase and a return name no
+                    // document, so no figure of the margin may feel them.
                 }
                 Event::Spend { amount } => {
                     expenses::create(
-                        &mut conn,
-                        SHOP,
-                        OWNER,
+                        &mut conn, SHOP, OWNER,
                         NewExpense {
                             category_id: category,
                             amount: Money::centimes(amount),
-                            expense_date: day,
+                            expense_date: when.day(),
                             note: None,
                         },
-                    )
-                    .unwrap();
-                    fold(&mut |e: &mut Expected| e.expenses += amount);
+                    ).unwrap();
+                    postings.push(Posting {
+                        when,
+                        chain,
+                        delta: Expected { expenses: amount, ..Expected::default() },
+                    });
                 }
             }
         }
 
+        // The tally, folded once every paper is written: a chain annulled
+        // later takes the postings it made earlier back out.
+        let mut for_the_day = Expected::default();
+        let mut per_day: [Expected; 3] = [Expected::default(); 3];
+        for posting in &postings {
+            if cancelled.contains(&posting.chain) {
+                continue;
+            }
+            if posting.when == When::OnTheDay {
+                for_the_day.add(&posting.delta);
+            }
+            if let Some(index) = posting.when.index() {
+                per_day[index].add(&posting.delta);
+            }
+        }
+        let mut for_the_month = Expected::default();
+        for one in &per_day {
+            for_the_month.add(one);
+        }
+
         let read = dashboard::read(&mut conn, SHOP, calendar(THE_DAY)).unwrap();
 
-        // The day is what the rows of that day say, column for column, and
-        // the margin is the revenue less the cost to the centime.
+        // The load-bearing check, both ranges, column for column.
         prop_assert_eq!(as_expected(&read.today), for_the_day);
-        prop_assert_eq!(read.today.sales_ht.as_centimes(), for_the_day.sales_ht());
-        prop_assert_eq!(read.today.margin.as_centimes(), for_the_day.margin());
-        prop_assert_eq!(
-            read.today.margin.as_centimes() + read.today.cost_of_goods.as_centimes(),
-            read.today.sales_ht.as_centimes()
-        );
+        prop_assert_eq!(as_expected(&read.this_month), for_the_month);
 
-        // The day the case asked for, plus the other days of its month, is
-        // the month. Read day by day out of the service rather than out of
-        // the tally, so a month bound that leaked would show here.
+        // And the month read day by day out of the service, which is what a
+        // month bound that leaked from either side would break.
         let mut summed = Expected::default();
-        for day in IN_THE_MONTH {
+        for day in [THE_DAY - 1, THE_DAY, THE_DAY + 1] {
             let one = dashboard::read(&mut conn, SHOP, calendar(day)).unwrap();
-            let e = as_expected(&one.today);
-            summed.lines_ht += e.lines_ht;
-            summed.discounts += e.discounts;
-            summed.cost_of_goods += e.cost_of_goods;
-            summed.sales_ttc += e.sales_ttc;
-            summed.sales_count += e.sales_count;
-            summed.expenses += e.expenses;
+            summed.add(&as_expected(&one.today));
         }
         prop_assert_eq!(as_expected(&read.this_month), summed);
-        // And against the tally the walk kept, day by day, so the month is
-        // checked once against the service's own days and once against the
-        // rows the case wrote.
-        let mut tallied = Expected::default();
-        for one in per_day {
-            tallied.lines_ht += one.lines_ht;
-            tallied.discounts += one.discounts;
-            tallied.cost_of_goods += one.cost_of_goods;
-            tallied.sales_ttc += one.sales_ttc;
-            tallied.sales_count += one.sales_count;
-            tallied.expenses += one.expenses;
+
+        // Orders still waiting on goods, which no sale figure feels.
+        prop_assert_eq!(read.open_purchases, open_orders);
+
+        // The top lists are the same rows read another way, and a product
+        // whose month came to nothing is off them.
+        for product in read.top_by_quantity.iter().chain(read.top_by_margin.iter()) {
+            prop_assert_eq!(
+                product.margin.as_centimes(),
+                product.lines_ht.as_centimes() - product.cost_of_goods.as_centimes()
+            );
+            prop_assert!(product.qty_milli != 0 || product.lines_ht != Money::ZERO);
         }
-        prop_assert_eq!(as_expected(&read.this_month), tallied);
-        prop_assert_eq!(
-            read.this_month.margin.as_centimes() + read.this_month.cost_of_goods.as_centimes(),
-            read.this_month.sales_ht.as_centimes()
-        );
 
         // The low stock list is what a plain scan of the fiches names.
         let mut scanned: Vec<(i32, i64, i64)> = products::list(&mut conn, SHOP)
@@ -474,24 +681,7 @@ proptest! {
         listed.sort_by_key(|row| row.0);
         prop_assert_eq!(listed, scanned);
 
-        // The month's top lists are the same rows read another way: what one
-        // product brought in less what it cost is its margin, and the two
-        // lists rank the same set.
-        for product in read.top_by_quantity.iter().chain(read.top_by_margin.iter()) {
-            prop_assert_eq!(
-                product.margin.as_centimes(),
-                product.lines_ht.as_centimes() - product.cost_of_goods.as_centimes()
-            );
-        }
-        prop_assert!(read.top_by_quantity.len() <= 2);
         prop_assert_eq!(read.month.as_text(), format!("{YEAR:04}-{MONTH:02}"));
         prop_assert_eq!(read.day, calendar(THE_DAY));
-        // Nothing on this file is a supply-side paper, so the only kind the
-        // figures ever counted is a sale.
-        prop_assert!(read.open_purchases == 0);
-        prop_assert_eq!(
-            documents::list(&mut conn, SHOP, Some(DocumentKind::Proforma)).unwrap().len(),
-            0
-        );
     }
 }

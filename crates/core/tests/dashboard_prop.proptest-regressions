@@ -5,3 +5,5 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc d4430f4d871aadfe2ddd363fbc7595fc3bfcdc2a8c90b52955eceb57cb0796a3 # shrinks to history = [(OnTheDay, FactureThenAvoir { product: 0, units: 1, cost_between: 100 })]
+cc d28abb59f5a6cbb73b7df301ab0c9471bd34ec5c420c3b01b478ab98903a5a4f # shrinks to history = [(MonthBefore, Buy { product: 0, qty_milli: 2000, unit_cost: 100, whole: false, send_back: false })]
+cc b2ba81fbbc9a42a34fcd201f8c301c1d707a96c3fc0f0c76095ec50f1510d691 # shrinks to history = [(MonthBefore, SellAvoirThenCancel { product: 0, qty_milli: 1000, back_milli: 333, later: 1 })]
