@@ -19,16 +19,21 @@ the stock re-derive, the dashboard, Excel. The two M2 refactors (T10 the
 avoir's Remaining table plus the kind rules as CHECKs, T11 the zod client
 and the till split, both approved by Samir on 2026-09-10) run first on the
 same branch. `context/loops/20260910-m3-loop.md` holds the waves and
-ports. Five of nine tasks merged by 11:17 (yearly series, tables, suppliers,
-expenses and cash, stock recount); purchases in its last merge-in. Samir saw
-the dev server (tmux `dz-dev`, http://100.101.196.30:5173) and found the
-screens unstyled: `context/plans/20260910-design-system-and-branding.md`
-(two themes Comptoir and Registre with a switcher, a bilingual logo the
-language switch swaps, Lucide icons, a component kit with a lint, the
-screens rewritten, a Claude Design project; Astro landing later). The
-brand pages are on the boss site under /design/. D1 and D2 run now; D3
-after purchases merges and before the dashboard. A stale-info sweep ran
-the same morning. The ledger on the WSL box (`~/.dz-night/ledger.md`)
+ports. Six of nine tasks merged by 11:28 (yearly series, tables, suppliers,
+expenses and cash, stock recount, purchases); left: Excel and labels (in
+flight), the dashboard, the closing sweep. Samir saw the dev server (tmux
+`dz-dev`, http://100.101.196.30:5173) and found the screens unstyled:
+`context/plans/20260910-design-system-and-branding.md` (four themes on
+shadcn/ui with a data-theme switcher, a bilingual logo the language switch
+swaps, vendored Plex and JetBrains Mono, Lucide, the kit and the screen
+rewrite, a Claude Design project already seeded; Astro landing later). D1
+and D2 are landing; D3 comes before the dashboard so it is born on the kit.
+The brand pages are on the boss site under /design/. 2026-09-10 midday: the
+WSL disk reached 125 GB from per-worktree cargo targets and the box crashed
+five times; the disk rules in CLAUDE.md and the machines process page came
+out of it (one shared build folder, one build at a time, worktree teardown
+on merge, one session per conversation). A stale-info sweep ran the same
+morning. The ledger on the WSL box (`~/.dz-night/ledger.md`)
 holds the ticks.
 
 Status site for Anouar: https://dinar-reports.pages.dev/ (progress reports
