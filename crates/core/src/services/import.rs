@@ -47,6 +47,7 @@ use crate::lang::Lang;
 use crate::models::category::CategoryRowWrite;
 use crate::models::product::{NewProduct, Unit};
 use crate::money::{Bps, Money};
+use crate::print::barcode_label::is_ean13;
 use crate::print::strings::{text as word, Key};
 use crate::repos::categories as categories_repo;
 use crate::repos::products as products_repo;
@@ -540,7 +541,18 @@ fn fields(
 
     let barcode = {
         let value = column(row, index, "barcode");
-        (!value.is_empty()).then_some(value)
+        if value.is_empty() {
+            None
+        } else if is_ean13(&value) {
+            Some(value)
+        } else {
+            // A code that is not thirteen digits with a correct check
+            // digit lands here otherwise and only fails months later at
+            // label time, on a shelf that already sold under it. The
+            // in-store codes the till generates are always this shape, so
+            // this never refuses a code a blank cell would have made.
+            return Err(("barcode", "bad_barcode"));
+        }
     };
     let category = {
         let value = column(row, index, "category");

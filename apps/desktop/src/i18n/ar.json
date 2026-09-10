@@ -535,6 +535,7 @@
   "import_reason_rate_not_allowed": "نسبة الرسم غير مسموح بها",
   "import_reason_rate_missing": "الصنف الجديد يحتاج نسبة سطره",
   "import_reason_duplicate_in_file": "هذا الرمز الشريطي على سطر آخر من الملف",
+  "import_reason_bad_barcode": "هذا الرمز الشريطي ليس من ثلاثة عشر رقمًا بمفتاح تحقق صحيح",
   "col_row": "السطر",
   "col_outcome": "النتيجة",
   "col_pick": "تحديد",
