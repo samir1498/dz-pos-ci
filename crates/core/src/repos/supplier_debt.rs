@@ -16,10 +16,22 @@ use crate::models::supplier_debt::{
 use crate::money::Money;
 use crate::schema::{supplier_allocations, supplier_ledger};
 
+/// Writes one movement. The row has to carry its own moment: the column's
+/// default is SQLite's CURRENT_TIMESTAMP, which is UTC, and every period this
+/// app answers for is a stretch of days on the shop's calendar (UTC+1). A
+/// payment taken at 00:30 in Algiers would then be stored on the day before
+/// and fall out of the day the shop counted its drawer, and out of the cash
+/// position with it (`services::cash`). The caller stamps it from
+/// `services::clock`, the way `debt::append_at` does on the customer side.
 pub fn append(
     conn: &mut SqliteConnection,
     write: &SupplierDebtRowWrite,
 ) -> Result<SupplierEntry, CoreError> {
+    if write.created_at.is_none() {
+        return Err(CoreError::Unstamped {
+            entity: "supplier_ledger",
+        });
+    }
     let row: SupplierDebtRow = diesel::insert_into(supplier_ledger::table)
         .values(write)
         .returning(SupplierDebtRow::as_returning())
@@ -262,8 +274,31 @@ mod tests {
             user_id: OWNER,
             note: None,
             payment_mode: None,
-            created_at: None,
+            // Stamped from the shop's clock, which is what `append` now asks
+            // of every caller.
+            created_at: Some(crate::services::clock::now()),
         }
+    }
+
+    #[test]
+    fn a_movement_with_no_moment_on_it_is_refused_rather_than_dated_by_the_file() {
+        // The column's default is SQLite's CURRENT_TIMESTAMP, which is UTC,
+        // and every period this app answers for is a stretch of days on the
+        // shop's calendar (UTC+1). A payment taken at 00:30 in Algiers would
+        // land on the day before in the file and fall out of the day the shop
+        // counted, so the caller stamps it from the clock or the row is
+        // refused here.
+        let (_dir, mut conn) = open();
+        let supplier = a_supplier(&mut conn, "Fournisseur Sans Heure");
+        let mut unstamped = movement(supplier, SupplierDebtKind::Payment, 0, 1_000);
+        unstamped.payment_mode = Some(PaymentMethod::Cash);
+        unstamped.created_at = None;
+        match append(&mut conn, &unstamped) {
+            Err(CoreError::Unstamped { entity }) => assert_eq!(entity, "supplier_ledger"),
+            other => panic!("expected an unstamped row to be refused, got {other:?}"),
+        }
+        // And nothing was written: a refusal leaves the ledger as it was.
+        assert!(ledger(&mut conn, SHOP, supplier).unwrap().is_empty());
     }
 
     #[test]

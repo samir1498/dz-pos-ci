@@ -33,6 +33,16 @@ export {
   saleWarningSchema,
 } from "./sale";
 export {
+  cashPositionSchema,
+  expenseCategorySchema,
+  expenseSchema,
+  expensesSchema,
+  month,
+  newExpenseSchema,
+  outgoingsSchema,
+  takingsSchema,
+} from "./expense";
+export {
   customerLedgerSchema,
   customerPaymentsSchema,
   customerSchema,

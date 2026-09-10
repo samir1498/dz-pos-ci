@@ -436,6 +436,7 @@ pub fn router_with_origin(
         .route("/backups", get(routes::backups::list))
         .route("/backups", post(routes::backups::create))
         .route("/backups/{name}/restore", post(routes::backups::restore))
+        .route("/cash", get(routes::expenses::cash))
         .route("/categories", get(routes::categories::list))
         .route("/clock", get(routes::clock))
         .route("/customers", get(routes::customers::list))
@@ -459,23 +460,9 @@ pub fn router_with_origin(
             "/customers/{id}/adjustments",
             post(routes::customers::adjust),
         )
-        .route("/suppliers", get(routes::suppliers::list))
-        .route("/suppliers", post(routes::suppliers::create))
-        .route(
-            "/suppliers/{id}",
-            get(routes::suppliers::get_one).put(routes::suppliers::update),
-        )
-        .route("/suppliers/{id}/close", post(routes::suppliers::close))
-        .route("/suppliers/{id}/ledger", get(routes::suppliers::ledger))
-        .route("/suppliers/{id}/payments", post(routes::suppliers::pay))
-        .route(
-            "/suppliers/{id}/adjustments",
-            post(routes::suppliers::adjust),
-        )
-        .route(
-            "/suppliers/{id}/statement",
-            get(routes::suppliers::statement),
-        )
+        .route("/expense-categories", get(routes::expenses::categories))
+        .route("/expenses", get(routes::expenses::list))
+        .route("/expenses", post(routes::expenses::create))
         .route("/products", get(routes::products::list))
         .route("/products", post(routes::products::create))
         .route(
@@ -493,6 +480,23 @@ pub fn router_with_origin(
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))
+        .route("/suppliers", get(routes::suppliers::list))
+        .route("/suppliers", post(routes::suppliers::create))
+        .route(
+            "/suppliers/{id}",
+            get(routes::suppliers::get_one).put(routes::suppliers::update),
+        )
+        .route("/suppliers/{id}/close", post(routes::suppliers::close))
+        .route("/suppliers/{id}/ledger", get(routes::suppliers::ledger))
+        .route("/suppliers/{id}/payments", post(routes::suppliers::pay))
+        .route(
+            "/suppliers/{id}/adjustments",
+            post(routes::suppliers::adjust),
+        )
+        .route(
+            "/suppliers/{id}/statement",
+            get(routes::suppliers::statement),
+        )
         .fallback(routes::not_found)
         .method_not_allowed_fallback(routes::method_not_allowed)
         .layer(from_fn_with_state(token.clone(), token::require));

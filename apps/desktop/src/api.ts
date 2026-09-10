@@ -44,6 +44,24 @@ export const settingsQueryKey: readonly string[] = ["settings"];
  * one changes on its own at midnight. */
 export const clockQueryKey: readonly string[] = ["clock"];
 export const backupsQueryKey: readonly string[] = ["backups"];
+/** The seeded expense categories. One list for the shop, so it has its own
+ * key and nothing invalidates it: no screen writes one in this version. */
+export const expenseCategoriesQueryKey: readonly string[] = ["expense-categories"];
+
+/** One month of expenses with its total. The month is part of the key: two
+ * months are two answers, and a row filed into one must not be read out of
+ * the cache of the other. */
+export function expensesQueryKey(month: string): readonly string[] {
+  return ["expenses", month];
+}
+
+/** The cash position over a day or a month. The range is part of the key for
+ * the reason the month's is, and the two shapes are told apart by which word
+ * is in the key rather than by the value alone: a day and a month can never
+ * be the same string, but a reader of the key should not have to know that. */
+export function cashQueryKey(period: { day: string } | { month: string }): readonly string[] {
+  return "day" in period ? ["cash", "day", period.day] : ["cash", "month", period.month];
+}
 /** The customer list. The search text is appended by the screen, so an
  * invalidation of this key refreshes every search that is in the cache. */
 export const customersQueryKey: readonly string[] = ["customers"];

@@ -11,19 +11,20 @@
 
 use dzpos_api::dto::{
     AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AvoirLineDto, BackupDto, BackupsDto,
-    CancelDocumentDto, CategoryDto, ClockDto, CloseSupplierDto, CustomerDto, CustomerLedgerDto,
-    CustomerPaymentsDto, CustomerWriteDto, DatedRegimeDto, DebtEntryDto, DebtKindDto,
-    DocumentKindDto, DocumentStatusDto, HealthDto, NewAvoirDto, NewCustomerDto, NewPaymentDto,
-    NewProductDto, NewSaleDto, NewSaleLineDto, NewSupplierDto, PartyKindDto, PaymentAllocationDto,
+    CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CloseSupplierDto, CustomerDto,
+    CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DatedRegimeDto, DebtEntryDto,
+    DebtKindDto, DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto,
+    HealthDto, NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto, NewProductDto,
+    NewSaleDto, NewSaleLineDto, NewSupplierDto, OutgoingsDto, PartyKindDto, PaymentAllocationDto,
     PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto,
     RestoreDto, SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto,
     SaleLineDto, SaleTotalsDto, SaleTvaDto, SaleWarningDto, SettingsDto, StoreDto,
     SupplierAllocationDto, SupplierDebtKindDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto,
-    SupplierStatementDto, SupplierWriteDto, UnitDto,
+    SupplierStatementDto, SupplierWriteDto, TakingsDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 55] = [
+const FILES: [&str; 62] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -79,6 +80,13 @@ const FILES: [&str; 55] = [
     "SupplierEntryDto.ts",
     "SupplierLedgerDto.ts",
     "SupplierStatementDto.ts",
+    "ExpenseCategoryDto.ts",
+    "ExpenseDto.ts",
+    "ExpensesDto.ts",
+    "NewExpenseDto.ts",
+    "TakingsDto.ts",
+    "OutgoingsDto.ts",
+    "CashPositionDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -191,6 +199,13 @@ fn export_bindings() {
     SupplierEntryDto::export_all(&cfg).unwrap();
     SupplierLedgerDto::export_all(&cfg).unwrap();
     SupplierStatementDto::export_all(&cfg).unwrap();
+    ExpenseCategoryDto::export_all(&cfg).unwrap();
+    ExpenseDto::export_all(&cfg).unwrap();
+    ExpensesDto::export_all(&cfg).unwrap();
+    NewExpenseDto::export_all(&cfg).unwrap();
+    TakingsDto::export_all(&cfg).unwrap();
+    OutgoingsDto::export_all(&cfg).unwrap();
+    CashPositionDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

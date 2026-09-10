@@ -1,7 +1,7 @@
 //! Money out that is not stock (features.md §1, Expense), and what it is
 //! filed under.
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 
 use crate::money::Money;
@@ -42,13 +42,17 @@ pub struct Expense {
     pub created_at: NaiveDateTime,
 }
 
+/// An expense as a caller asks for it. The day is a `NaiveDate` and not the
+/// text the column holds: a day that is not a day is then refused by the type
+/// at the edge that parsed it, and the service has one fewer thing to
+/// validate. The user is not here; it comes from the caller's identity, the
+/// way it does on every other write.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewExpense {
     pub category_id: i32,
     pub amount: Money,
-    pub expense_date: String,
+    pub expense_date: NaiveDate,
     pub note: Option<String>,
-    pub user_id: i32,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
