@@ -195,8 +195,9 @@ test("orders two products with extra costs, takes them in twice, sends some back
   // The first delivery: four sacks of flour and nothing else. The delivery is
   // a dialog now, so it is opened before anything is typed into it.
   await page.getByRole("button", { name: t("purchases_receive"), exact: true }).click();
-  await page.getByLabel(`${t("action_receive")} ${String(farineLine.id)}`).fill("4");
-  await page.getByRole("button", { name: t("action_receive"), exact: true }).click();
+  const firstDelivery = page.getByRole("dialog");
+  await firstDelivery.getByLabel(`${t("action_receive")} ${String(farineLine.id)}`).fill("4");
+  await firstDelivery.getByRole("button", { name: t("action_receive"), exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByTestId("purchase-status")).toHaveText(t("purchase_status_partially_received"));
 
@@ -209,9 +210,10 @@ test("orders two products with extra costs, takes them in twice, sends some back
 
   // The second: the rest of both lines, on a bon de réception of its own.
   await page.getByRole("button", { name: t("purchases_receive"), exact: true }).click();
-  await page.getByLabel(`${t("action_receive")} ${String(farineLine.id)}`).fill("6");
-  await page.getByLabel(`${t("action_receive")} ${String(sucreLine.id)}`).fill("20");
-  await page.getByRole("button", { name: t("action_receive"), exact: true }).click();
+  const secondDelivery = page.getByRole("dialog");
+  await secondDelivery.getByLabel(`${t("action_receive")} ${String(farineLine.id)}`).fill("6");
+  await secondDelivery.getByLabel(`${t("action_receive")} ${String(sucreLine.id)}`).fill("20");
+  await secondDelivery.getByRole("button", { name: t("action_receive"), exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByTestId("purchase-status")).toHaveText(t("purchase_status_received"));
 
@@ -232,9 +234,10 @@ test("orders two products with extra costs, takes them in twice, sends some back
   // dialog closing is what says the server took it; its heading is gone with
   // it, so the closing itself is what is waited for.
   await page.getByRole("button", { name: t("purchases_return"), exact: true }).click();
-  await expect(page.getByRole("heading", { name: t("purchases_return") })).toBeVisible();
-  await page.getByLabel(`${t("action_return")} ${String(farineLine.id)}`).fill("2");
-  await page.getByRole("button", { name: t("action_return"), exact: true }).click();
+  const sendingBack = page.getByRole("dialog");
+  await expect(sendingBack.getByRole("heading", { name: t("purchases_return") })).toBeVisible();
+  await sendingBack.getByLabel(`${t("action_return")} ${String(farineLine.id)}`).fill("2");
+  await sendingBack.getByRole("button", { name: t("action_return"), exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await expect
@@ -278,21 +281,25 @@ test("refuses a cancellation once goods have arrived and closes the order short 
   await expect(page.getByRole("button", { name: t("purchases_close_short"), exact: true })).toHaveCount(0);
 
   await page.getByRole("button", { name: t("purchases_receive"), exact: true }).click();
-  await page.getByLabel(`${t("action_receive")} ${String(line.id)}`).fill("3");
-  await page.getByRole("button", { name: t("action_receive"), exact: true }).click();
+  const delivery = page.getByRole("dialog");
+  await delivery.getByLabel(`${t("action_receive")} ${String(line.id)}`).fill("3");
+  await delivery.getByRole("button", { name: t("action_receive"), exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByTestId("purchase-status")).toHaveText(t("purchase_status_partially_received"));
 
   // And now the other way round: goods on the shelf say the order happened.
   await expect(page.getByRole("button", { name: t("purchases_cancel"), exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: t("purchases_close_short"), exact: true }).click();
+  // Scoped to the dialog: in French the button that opens it and the button
+  // that confirms it read the same words.
+  const closing = page.getByRole("dialog");
   // A blank reason is refused by the screen before the server ever hears it.
-  await page.getByRole("button", { name: t("action_close_short"), exact: true }).click();
-  await expect(page.getByRole("alert")).toHaveText(t("purchases_reason_needed"));
-  await page
+  await closing.getByRole("button", { name: t("action_close_short"), exact: true }).click();
+  await expect(closing.getByRole("alert")).toHaveText(t("purchases_reason_needed"));
+  await closing
     .getByRole("textbox", { name: t("purchases_reason"), exact: true })
     .fill("le reste ne viendra pas");
-  await page.getByRole("button", { name: t("action_close_short"), exact: true }).click();
+  await closing.getByRole("button", { name: t("action_close_short"), exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   await expect(page.getByTestId("purchase-status")).toHaveText(t("purchase_status_closed_short"));

@@ -109,7 +109,7 @@ export function OnePurchase({ id }: { id: number }) {
       )}
 
       {order.isPending ? (
-        <div data-testid="purchase-loading" className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <span className="sr-only">{t("purchases_loading")}</span>
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-10 w-full" />
@@ -280,7 +280,6 @@ function LinesTable({
   ];
   return (
     <DataTable
-      data-testid="purchase-lines"
       columns={columns}
       rows={lines}
       rowKey={(line) => line.id}
@@ -313,7 +312,6 @@ function ReceiptsList({
   if (detail.receipts.length === 0) {
     return (
       <EmptyState
-        data-testid="purchase-no-receipt"
         icon={Inbox}
         title={t("purchases_no_receipt")}
         description={t("purchases_receive_hint")}
@@ -439,7 +437,7 @@ function MovementDialog({
       <DialogTrigger asChild>
         <Button variant={kind === "receive" ? "default" : "outline"}>{t(trigger)}</Button>
       </DialogTrigger>
-      <DialogContent data-testid={`purchase-${kind}-dialog`}>
+      <DialogContent>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
@@ -548,11 +546,9 @@ function ReasonDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" data-testid={`purchase-${kind}-trigger`}>
-          {t(title)}
-        </Button>
+        <Button variant="outline">{t(title)}</Button>
       </DialogTrigger>
-      <DialogContent data-testid={`purchase-${kind}-dialog`}>
+      <DialogContent>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {

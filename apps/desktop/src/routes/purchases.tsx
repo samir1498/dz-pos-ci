@@ -145,7 +145,7 @@ function PurchasesScreen() {
               value={status === "" ? ANY : status}
               onValueChange={(next) => setStatus(next === ANY ? "" : next)}
             >
-              <SelectTrigger id={parts.id} className="w-full" data-testid="purchases-filter-status">
+              <SelectTrigger id={parts.id} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -165,11 +165,7 @@ function PurchasesScreen() {
               value={supplier === "" ? ANY : supplier}
               onValueChange={(next) => setSupplier(next === ANY ? "" : next)}
             >
-              <SelectTrigger
-                id={parts.id}
-                className="w-full"
-                data-testid="purchases-filter-supplier"
-              >
+              <SelectTrigger id={parts.id} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -186,7 +182,7 @@ function PurchasesScreen() {
       </div>
 
       {purchases.isPending ? (
-        <div data-testid="purchases-loading" className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <span className="sr-only">{t("purchases_loading")}</span>
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
@@ -253,7 +249,6 @@ function PurchaseTable({
 
   return (
     <DataTable
-      data-testid="purchases-table"
       columns={columns}
       rows={rows}
       rowKey={(p) => p.id}

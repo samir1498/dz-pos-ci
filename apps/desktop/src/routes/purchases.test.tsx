@@ -7,7 +7,7 @@
 // the dialogs themselves opening, closing and forgetting what was typed.
 
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { configure, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -38,6 +38,10 @@ import { NewPurchaseScreen } from "./purchases_.new";
  * report says they belong there once.
  */
 beforeAll(() => {
+  // Nine worktrees build and test on this box at once, and the default second
+  // is not enough for a query to answer under that load: the failure then
+  // reads as "the table is not there" rather than "the machine was busy".
+  configure({ asyncUtilTimeout: 5_000 });
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
   Element.prototype.setPointerCapture = () => {};

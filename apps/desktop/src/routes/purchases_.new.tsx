@@ -319,7 +319,6 @@ function NewPurchaseScreen() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <DataTable
-              data-testid="purchase-lines"
               columns={columns}
               rows={lines}
               rowKey={(line) => line.key}
