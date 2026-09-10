@@ -437,6 +437,7 @@ pub fn router_with_origin(
         .route("/backups", post(routes::backups::create))
         .route("/backups/{name}/restore", post(routes::backups::restore))
         .route("/categories", get(routes::categories::list))
+        .route("/clock", get(routes::clock))
         .route("/customers", get(routes::customers::list))
         .route("/customers", post(routes::customers::create))
         .route(

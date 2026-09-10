@@ -33,7 +33,7 @@ import {
   customersQueryKey,
 } from "@/api";
 import { isKey, useTranslation, type Key } from "@/i18n";
-import { todayAsDay } from "@/lib/day";
+import { useShopToday } from "@/lib/clock";
 
 export const Route = createFileRoute("/customers")({ component: CustomersScreen });
 
@@ -898,8 +898,27 @@ function PaymentRow({ payment }: { payment: PaymentDto }) {
  * paper rather than at a second rendering of the same balances.
  */
 function StatementPanel({ customer }: { customer: CustomerDto }) {
+  const { t } = useTranslation();
+  const today = useShopToday();
+
+  return (
+    <section className="flex flex-col gap-2 rounded border p-3">
+      <h3 className="font-semibold">{t("customers_statement")}</h3>
+      <p className="text-sm opacity-70">{t("customers_statement_hint")}</p>
+      {/* The range defaults to the shop's own day, which the server owns,
+          so the fields wait for it rather than opening on the browser's. */}
+      {today === undefined ? (
+        <p>{t("customers_loading")}</p>
+      ) : (
+        <StatementRange customer={customer} today={today} />
+      )}
+    </section>
+  );
+}
+
+/** The range and the page it asks for, once the shop's day is known. */
+function StatementRange({ customer, today }: { customer: CustomerDto; today: string }) {
   const { t, lang } = useTranslation();
-  const today = todayAsDay();
   const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
   const [to, setTo] = useState(today);
   const [asked, setAsked] = useState<{ from: string; to: string } | null>(null);
@@ -913,9 +932,7 @@ function StatementPanel({ customer }: { customer: CustomerDto }) {
   });
 
   return (
-    <section className="flex flex-col gap-2 rounded border p-3">
-      <h3 className="font-semibold">{t("customers_statement")}</h3>
-      <p className="text-sm opacity-70">{t("customers_statement_hint")}</p>
+    <>
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1">
           <span>{t("field_statement_from")}</span>
@@ -972,7 +989,7 @@ function StatementPanel({ customer }: { customer: CustomerDto }) {
           data-testid="customer-statement"
         />
       ) : null}
-    </section>
+    </>
   );
 }
 

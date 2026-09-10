@@ -10,7 +10,7 @@ import { ApiError } from "@dzpos/shared";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
 import { api, settingsQueryKey } from "@/api";
 import { BackupsPanel } from "@/components/BackupsPanel";
-import { todayAsDay } from "@/lib/day";
+import { useShopToday } from "@/lib/clock";
 import { isKey, useTranslation, type Key } from "@/i18n";
 
 export const Route = createFileRoute("/settings")({ component: SettingsScreen });
@@ -49,6 +49,10 @@ function toRegime(value: string): RegimeDto | undefined {
 export function SettingsScreen() {
   const { t } = useTranslation();
   const settings = useQuery({ queryKey: settingsQueryKey, queryFn: () => api.getSettings() });
+  // The day a régime change defaults to belongs to the shop's calendar, not
+  // to the machine's: the core reads a dated setting on Algeria's (§2, "One
+  // clock"), so the form waits for the server to say which day it is.
+  const today = useShopToday();
   // Lives here, not in the form: a save refetches the page and the form is
   // remounted on the fresh block (its key), which would drop the message.
   const [storeSaved, setStoreSaved] = useState(false);
@@ -70,7 +74,15 @@ export function SettingsScreen() {
             saved={storeSaved}
             onSaved={setStoreSaved}
           />
-          <RegimePanel current={settings.data.regime} planned={settings.data.regime_planned} />
+          {today === undefined ? (
+            <p>{t("products_loading")}</p>
+          ) : (
+            <RegimePanel
+              current={settings.data.regime}
+              planned={settings.data.regime_planned}
+              today={today}
+            />
+          )}
           <BackupsPanel />
         </>
       ) : null}
@@ -228,9 +240,11 @@ function StoreForm({
 function RegimePanel({
   current,
   planned,
+  today,
 }: {
   current: DatedRegimeDto;
   planned: DatedRegimeDto | null;
+  today: string;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -249,7 +263,7 @@ function RegimePanel({
   });
 
   const form = useForm({
-    defaultValues: { regime: String(current.regime), validFrom: todayAsDay() },
+    defaultValues: { regime: String(current.regime), validFrom: today },
     onSubmit: async ({ value }) => {
       const regime = toRegime(value.regime);
       if (regime === undefined) {

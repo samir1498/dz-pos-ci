@@ -39,6 +39,10 @@ export const api = createClient(apiBaseUrl(), { token: apiToken() });
 export const productsQueryKey: readonly string[] = ["products"];
 export const categoriesQueryKey: readonly string[] = ["categories"];
 export const settingsQueryKey: readonly string[] = ["settings"];
+/** The shop's day. Its own key and never cached (see lib/clock.ts): every
+ * other answer here is a row that changes when someone changes it, and this
+ * one changes on its own at midnight. */
+export const clockQueryKey: readonly string[] = ["clock"];
 export const backupsQueryKey: readonly string[] = ["backups"];
 /** The customer list. The search text is appended by the screen, so an
  * invalidation of this key refreshes every search that is in the cache. */

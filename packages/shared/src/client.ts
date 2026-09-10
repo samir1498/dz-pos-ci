@@ -22,6 +22,7 @@ import type { PaymentAllocationDto } from "./generated/PaymentAllocationDto";
 import type { PaymentDto } from "./generated/PaymentDto";
 import type { PaymentMethodDto } from "./generated/PaymentMethodDto";
 import type { PartyKindDto } from "./generated/PartyKindDto";
+import type { ClockDto } from "./generated/ClockDto";
 import type { HealthDto } from "./generated/HealthDto";
 import type { DocumentKindDto } from "./generated/DocumentKindDto";
 import type { DocumentStatusDto } from "./generated/DocumentStatusDto";
@@ -160,6 +161,12 @@ function isCategoryList(value: unknown): value is CategoryDto[] {
 
 export function isHealth(value: unknown): value is HealthDto {
   return isRecord(value) && typeof value.status === "string" && typeof value.shop_id === "number";
+}
+
+/** `YYYY-MM-DD` and nothing else: a day the client cannot parse is a server
+ * the client cannot date anything from. */
+export function isClock(value: unknown): value is ClockDto {
+  return isRecord(value) && typeof value.today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.today);
 }
 
 /** An amount or a quantity: an integer JSON.parse did not have to round. */
@@ -636,6 +643,13 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
 
     async health(): Promise<HealthDto> {
       return narrow(await send("/health"), isHealth, "health answer");
+    },
+
+    /** The day the shop is on. Asked for rather than read off the machine:
+     * the core dates documents on Algeria's calendar and a browser in
+     * another zone would be a day out either way. */
+    async clock(): Promise<ClockDto> {
+      return narrow(await send("/clock"), isClock, "clock answer");
     },
 
     async listCategories(): Promise<CategoryDto[]> {

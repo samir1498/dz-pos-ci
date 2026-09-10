@@ -342,3 +342,36 @@ async fn a_change_to_the_regime_in_force_on_that_day_is_refused_and_moves_nothin
         "the since date did not move"
     );
 }
+
+#[tokio::test]
+async fn the_clock_route_answers_the_day_the_shop_dates_its_documents_on() {
+    let h = harness();
+    let (status, body) = call(&h.app, "GET", "/clock", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // Algeria is UTC+1 all year, which is what `today()` above adds: the
+    // route and the test compute the same day from the same offset, and the
+    // point of the assertion is that it is not the browser's or UTC's.
+    assert_eq!(body["today"], day(today()), "{body}");
+    // A régime dated with it is the one in force, never one planned for
+    // tomorrow: this is the day a screen has to offer as its default.
+    let (status, refused) = call(
+        &h.app,
+        "POST",
+        "/settings/regime",
+        Some(json!({ "regime": "reel", "valid_from": body["today"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+}
+
+#[tokio::test]
+async fn the_clock_is_behind_the_launch_token_like_every_other_route() {
+    let h = harness();
+    let req = Request::builder()
+        .method("GET")
+        .uri("/clock")
+        .body(Body::empty())
+        .unwrap();
+    let res = h.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}

@@ -213,9 +213,15 @@ shop's calendar: Algeria is UTC+1 all year with no daylight saving, so a sale
 rung up at half past midnight is already on the new day
 (`crates/core/src/services/clock.rs`). A service that writes a dated row
 takes the moment as an argument wherever a test has to choose it, so the
-wall clock stays out of the fixtures. The desktop fills a date field
-from the machine's own calendar for the same reason: a statement asked for
-"to today" off a UTC clock would close before that evening's movements.
+wall clock stays out of the fixtures. There is one clock and the server
+holds it: `GET /clock` answers `{ "today": "YYYY-MM-DD" }` on that same
+calendar, and a screen that needs a day asks for it rather than reading the
+machine's. A browser reads the zone the machine is set to, which on a
+laptop carried across a border, or simply set wrong, is another day
+entirely: a statement asked for "to today" would then close before that
+evening's movements, and a régime change would be dated to a day the ledger
+has not reached. The answer is never cached, because a day is the one thing
+that changes without anyone changing it.
 
 **Statement.** A per-party statement over a date range, rendered by the core
 on A4 in the three languages: the opening balance the customer carried into

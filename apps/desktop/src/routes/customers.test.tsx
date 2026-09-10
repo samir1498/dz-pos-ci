@@ -192,6 +192,10 @@ const paid: CustomerPaymentsDto = {
   ],
 };
 
+/** What the server says the day is. Deliberately a day the machine is not
+ * on, so a screen that read `new Date()` would fail here. */
+const SHOP_TODAY = "2027-03-04";
+
 let fetchMock: ReturnType<typeof vi.fn>;
 let list: CustomerDto[];
 let rows: CustomerLedgerDto;
@@ -256,6 +260,9 @@ beforeEach(() => {
           : json(200, found),
       );
     }
+    // The shop's day, which the statement panel asks for before it offers a
+    // range. A fixed one so the defaults it fills in are assertable.
+    if (url.endsWith("/clock")) return Promise.resolve(json(200, { today: SHOP_TODAY }));
     if (url.includes("/ledger")) return Promise.resolve(json(200, rows));
     if (url.includes("/payments")) return Promise.resolve(json(200, payments));
     if (url.includes("/statement")) {
@@ -687,7 +694,22 @@ describe("payments", () => {
     expect(frame).toHaveAttribute("sandbox", "");
     expect(frame.getAttribute("srcdoc")).toContain("RELEVÉ");
     const asked = fetched().find((url) => url.includes("/statement"));
-    expect(asked).toMatch(/\/customers\/3\/statement\?from=\d{4}-01-01&to=\d{4}-\d{2}-\d{2}&lang=fr$/);
+    // The whole range, exactly: the year opens on 1 January and closes on
+    // the day the server calls today.
+    expect(asked?.endsWith(`/customers/3/statement?from=2027-01-01&to=${SHOP_TODAY}&lang=fr`)).toBe(
+      true,
+    );
+  });
+
+  test("the range opens on the shop's day, which the server says and the browser does not", async () => {
+    await openTheFiche();
+
+    // The stub answers a fixed `/clock`; a screen reading `new Date()` would
+    // date the range from whatever zone the machine is in, which is a day
+    // either side of the ledger for a shop open past midnight.
+    expect(screen.getByLabelText(fr.field_statement_to)).toHaveValue(SHOP_TODAY);
+    expect(screen.getByLabelText(fr.field_statement_from)).toHaveValue("2027-01-01");
+    expect(fetched().some((url) => url.endsWith("/clock"))).toBe(true);
   });
 
   test("a range that ends before it starts asks for nothing", async () => {

@@ -22,6 +22,11 @@ const store: StoreDto = {
   phone: null,
 };
 
+/** What the server says the day is. Deliberately a day the machine is not
+ * on: the shop's calendar is Algeria's, and a screen that read `new Date()`
+ * would fail here. */
+const SHOP_TODAY = "2027-03-04";
+
 const seeded: SettingsDto = {
   store,
   regime: { regime: "reel", valid_from: "2026-01-01" },
@@ -95,8 +100,9 @@ beforeEach(() => {
       if (typeof body !== "object" || body === null) throw new Error("no body");
       const regime: RegimeDto = "regime" in body && body.regime === "reel" ? "reel" : "ifu";
       const validFrom = "valid_from" in body ? String(body.valid_from) : "";
-      // The stub applies the API's rule: a day past today is planned.
-      const today = new Date().toISOString().slice(0, 10);
+      // The stub applies the API's rule: a day past today is planned, and
+      // "today" is the shop's, the same one the /clock branch answers.
+      const today = SHOP_TODAY;
       const dated: DatedRegimeDto = { regime, valid_from: validFrom };
       current =
         validFrom > today
@@ -109,6 +115,9 @@ beforeEach(() => {
     // alert on the screen these tests read.
     if (url.endsWith("/backups"))
       return Promise.resolve(json(200, { backups: [], safety_copies: [] }));
+    // The régime form dates its default from the shop's calendar, which the
+    // server owns; a fixed day here so the field is assertable.
+    if (url.endsWith("/clock")) return Promise.resolve(json(200, { today: SHOP_TODAY }));
     if (url.endsWith("/settings")) return Promise.resolve(json(200, current));
     return Promise.resolve(json(404, { error: { code: "not_found", message: "no" } }));
   });
@@ -203,6 +212,17 @@ describe("the store form", () => {
 });
 
 describe("the régime form", () => {
+  test("dates its default from the shop's calendar and not the machine's", async () => {
+    // The one thing this asserts is where the day came from. The stub
+    // answers a fixed day for `/clock`; a screen reading `new Date()` would
+    // fill in whatever the box running the suite happens to be on, which is
+    // the fork this replaced (the core dates documents on Algeria's
+    // calendar, UTC+1, and a browser reads the machine's zone).
+    mount();
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
+    expect(within(regimeForm).getByLabelText(fr.field_valid_from)).toHaveValue(SHOP_TODAY);
+  });
+
   test("posts the régime and the day, and shows the planned line the API answers", async () => {
     const user = userEvent.setup();
     mount();

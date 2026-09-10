@@ -205,6 +205,17 @@ pub struct HealthDto {
     pub shop_id: i32,
 }
 
+/// The day the shop is on, `YYYY-MM-DD`. A screen that needs "today" asks
+/// for it rather than reading the machine's calendar: the core dates every
+/// document on Algeria's, UTC+1 with no daylight saving, and a browser in
+/// another zone would date a statement a day either side of what the ledger
+/// holds (features.md §2, "One clock").
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "ClockDto.ts")]
+pub struct ClockDto {
+    pub today: String,
+}
+
 /// The shape every failure takes. Generated so the client can narrow on
 /// `code` without repeating the string list.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
