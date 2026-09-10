@@ -5,6 +5,7 @@ pub mod backups;
 pub mod categories;
 pub mod customers;
 pub mod products;
+pub mod purchases;
 pub mod sales;
 pub mod settings;
 pub mod suppliers;
