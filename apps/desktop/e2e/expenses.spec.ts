@@ -64,20 +64,32 @@ async function categoryId(
   return found.id;
 }
 
+/** The filed rows, without the heading row above them. `DataTable` draws a
+ * `rowgroup` for the head and one for the body; the rows are the second
+ * group's, and nothing here reads a class name. */
+function expenseRows(page: import("@playwright/test").Page) {
+  return page.getByTestId("expenses-table").getByRole("rowgroup").nth(1).getByRole("row");
+}
+
 async function fileOne(
   page: import("@playwright/test").Page,
   category: string,
   amount: string,
   note: string,
 ): Promise<void> {
-  await page.getByRole("button", { name: t("expenses_add") }).click();
-  // By test id and not by its label: a wrapping <label> around a <select>
-  // takes the option texts into its own accessible name, so the name is the
-  // field's word followed by all seven categories.
-  await page.getByTestId("expense-category").selectOption({ label: t(category) });
+  // By test id and not by name: the empty state offers a second button with
+  // the same words, which is the right thing on the screen and an ambiguous
+  // locator here.
+  await page.getByTestId("expenses-add").click();
+  // The category is a listbox now, not a native select: the trigger opens it
+  // and the option is clicked by the word the running language shows.
+  await page.getByTestId("expense-category").click();
+  await page.getByRole("option", { name: t(category), exact: true }).click();
   await page.getByTestId("expense-amount").fill(amount);
   await page.getByTestId("expense-note").fill(note);
   await page.getByRole("button", { name: t("action_save"), exact: true }).click();
+  // The panel closes itself once the row is filed.
+  await expect(page.getByTestId("expense-form")).toBeHidden();
 }
 
 test("files two expenses in two categories and shows the month's total and the cash position, and saves the expenses screenshot in Arabic", async ({
@@ -96,9 +108,16 @@ test("files two expenses in two categories and shows the month's total and the c
   await expect(page.getByText(t("expenses_empty"))).toBeVisible();
 
   await fileOne(page, "expense_category_rent", RENT_INPUT, "loyer");
-  await expect(page.getByTestId("expense-row")).toHaveCount(1);
+  await expect(expenseRows(page)).toHaveCount(1);
   await fileOne(page, "expense_category_electricity", ELECTRICITY_INPUT, "sonelgaz");
-  await expect(page.getByTestId("expense-row")).toHaveCount(2);
+  await expect(expenseRows(page)).toHaveCount(2);
+  // The category rides in the row as a chip, in the words of the running
+  // language rather than as the key the row stores. Which row is which is
+  // not asserted: both were filed on the same day and the order of two rows
+  // of one day is the server's business.
+  const table = page.getByTestId("expenses-table");
+  await expect(table).toContainText(t("expense_category_rent"));
+  await expect(table).toContainText(t("expense_category_electricity"));
 
   // What the screen prints.
   await expect(page.getByTestId("expenses-total")).toHaveText(TOTAL_RENDERED);

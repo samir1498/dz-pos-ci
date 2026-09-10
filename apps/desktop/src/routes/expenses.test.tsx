@@ -5,8 +5,8 @@
 // clock, the amount is posted in centimes, the category is posted as an id,
 // and the figures on the screen are the ones the server summed.
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { CashPositionDto, ExpenseCategoryDto, ExpensesDto } from "@dzpos/shared";
@@ -14,6 +14,35 @@ import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
 import { ExpensesScreen } from "./expenses";
+
+// The entry sheet and the category picker are Radix overlays, and Radix asks
+// the DOM for three things jsdom does not implement: pointer capture and
+// `scrollIntoView` on the way to opening a select, and nothing else. They are
+// stubbed here rather than in the shared setup because this is the one file
+// in the suite that opens one; the browser has all three, and e2e is what
+// proves the panel really opens.
+beforeAll(() => {
+  Element.prototype.scrollIntoView = () => {};
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+});
+
+/** The filed rows, without the heading row above them. `DataTable` draws one
+ *  `rowgroup` for the head and one for the body, and the rows are the second
+ *  group's; nothing here reads a class name. */
+function expenseRows(): HTMLElement[] {
+  const groups = within(screen.getByTestId("expenses-table")).getAllByRole("rowgroup");
+  const body = groups[1];
+  if (body === undefined) throw new Error("the table has no body");
+  return within(body).getAllByRole("row");
+}
+
+/** Opens the entry sheet and waits for the amount field to be reachable. */
+async function openSheet(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await user.click(await screen.findByTestId("expenses-add"));
+  await screen.findByTestId("expense-amount");
+}
 
 /** What the server says the day is. Deliberately a day the machine is not
  *  on, so a screen that read `new Date()` would fail here. */
@@ -184,7 +213,8 @@ describe("what the month shows", () => {
   test("the rows, their category labels and the total the server summed", async () => {
     mount();
     expect(await screen.findByTestId("expenses-total")).toHaveTextContent("31 500,00");
-    const rows = await screen.findAllByTestId("expense-row");
+    await screen.findByTestId("expenses-table");
+    const rows = expenseRows();
     expect(rows).toHaveLength(2);
     // Newest first, and the label comes from the app's own words by the
     // key the row's category carries.
@@ -208,8 +238,8 @@ describe("what the month shows", () => {
   test("the same screen in Arabic reads its own words and mirrors", async () => {
     mount("ar");
     expect(await screen.findByRole("heading", { name: ar.expenses_title })).toBeInTheDocument();
-    const rows = await screen.findAllByTestId("expense-row");
-    expect(rows[1]).toHaveTextContent(ar.expense_category_rent);
+    await screen.findByTestId("expenses-table");
+    expect(expenseRows()[1]).toHaveTextContent(ar.expense_category_rent);
   });
 });
 
@@ -217,8 +247,8 @@ describe("adding one", () => {
   test("posts the amount in centimes, the category id and the day", async () => {
     const user = userEvent.setup();
     mount();
-    await user.click(await screen.findByRole("button", { name: fr.expenses_add }));
-    await user.type(await screen.findByTestId("expense-amount"), "1250,50");
+    await openSheet(user);
+    await user.type(screen.getByTestId("expense-amount"), "1250,50");
     await user.type(screen.getByTestId("expense-note"), "  taxi  ");
     await user.click(screen.getByRole("button", { name: fr.action_save }));
     await waitFor(() => {
@@ -237,7 +267,8 @@ describe("adding one", () => {
   test("a retired category is not offered", async () => {
     const user = userEvent.setup();
     mount();
-    await user.click(await screen.findByRole("button", { name: fr.expenses_add }));
+    await openSheet(user);
+    await user.click(screen.getByTestId("expense-category"));
     const options = await screen.findAllByRole("option");
     expect(options.map((o) => o.textContent)).toEqual([
       fr.expense_category_rent,
@@ -248,8 +279,8 @@ describe("adding one", () => {
   test("an amount of nothing is refused by the form and no request goes out", async () => {
     const user = userEvent.setup();
     mount();
-    await user.click(await screen.findByRole("button", { name: fr.expenses_add }));
-    await user.type(await screen.findByTestId("expense-amount"), "0");
+    await openSheet(user);
+    await user.type(screen.getByTestId("expense-amount"), "0");
     await user.click(screen.getByRole("button", { name: fr.action_save }));
     expect(await screen.findByText(fr.error_expense_amount_zero)).toBeInTheDocument();
     expect(() => posted()).toThrow();
@@ -258,8 +289,8 @@ describe("adding one", () => {
   test("an amount nobody can read is refused before it reaches the server", async () => {
     const user = userEvent.setup();
     mount();
-    await user.click(await screen.findByRole("button", { name: fr.expenses_add }));
-    await user.type(await screen.findByTestId("expense-amount"), "douze");
+    await openSheet(user);
+    await user.type(screen.getByTestId("expense-amount"), "douze");
     await user.click(screen.getByRole("button", { name: fr.action_save }));
     expect(await screen.findByText(fr.error_expense_amount_invalid)).toBeInTheDocument();
     expect(() => posted()).toThrow();
@@ -272,8 +303,8 @@ describe("adding one", () => {
       json(422, {
         error: { code: "validation", message: "no", field: "category_id" },
       });
-    await user.click(await screen.findByRole("button", { name: fr.expenses_add }));
-    await user.type(await screen.findByTestId("expense-amount"), "10");
+    await openSheet(user);
+    await user.type(screen.getByTestId("expense-amount"), "10");
     await user.click(screen.getByRole("button", { name: fr.action_save }));
     expect(await screen.findByText(fr.error_validation)).toBeInTheDocument();
   });
@@ -281,8 +312,8 @@ describe("adding one", () => {
   test("a saved row refreshes the month and the cash position", async () => {
     const user = userEvent.setup();
     mount();
-    await user.click(await screen.findByRole("button", { name: fr.expenses_add }));
-    await user.type(await screen.findByTestId("expense-amount"), "10");
+    await openSheet(user);
+    await user.type(screen.getByTestId("expense-amount"), "10");
     const before = fetched().filter((u) => u.includes("/cash?month=")).length;
     await user.click(screen.getByRole("button", { name: fr.action_save }));
     await waitFor(() => {
@@ -291,5 +322,44 @@ describe("adding one", () => {
     expect(fetched().filter((u) => u.includes(`/expenses?month=${SHOP_MONTH}`)).length).toBeGreaterThan(
       1,
     );
+  });
+});
+
+// What the rewrite on the kit brought that the old screen did not have: a
+// month with nothing in it is a state rather than a sentence, and the form
+// lives in a panel that has to close itself.
+describe("the empty month and the entry panel", () => {
+  test("a month the shop spent nothing in offers the one thing to do about it", async () => {
+    const user = userEvent.setup();
+    listed = { month: SHOP_MONTH, total_centimes: 0, expenses: [] };
+    mount();
+    const empty = await screen.findByTestId("empty-state");
+    expect(empty).toHaveTextContent(fr.expenses_empty);
+    expect(empty).toHaveTextContent(fr.expenses_empty_hint);
+    // The total is still the server's zero, not a blank: a month that took
+    // nothing out is a fact, and the card says so.
+    expect(screen.getByTestId("expenses-total")).toHaveTextContent("0,00");
+    await user.click(within(empty).getByRole("button", { name: fr.expenses_add }));
+    expect(await screen.findByTestId("expense-amount")).toBeInTheDocument();
+  });
+
+  test("the panel closes once the row is filed, and stays open when it is refused", async () => {
+    const user = userEvent.setup();
+    mount();
+    await openSheet(user);
+    await user.type(screen.getByTestId("expense-amount"), "10");
+    await user.click(screen.getByRole("button", { name: fr.action_save }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("expense-form")).not.toBeInTheDocument();
+    });
+
+    writeAnswer = () => json(422, { error: { code: "validation", message: "no" } });
+    await openSheet(user);
+    await user.type(screen.getByTestId("expense-amount"), "10");
+    await user.click(screen.getByRole("button", { name: fr.action_save }));
+    expect(await screen.findByText(fr.error_validation)).toBeInTheDocument();
+    // Still there: a refused row is a row the shop has to correct, and a
+    // panel that closed on it would throw the typing away.
+    expect(screen.getByTestId("expense-form")).toBeInTheDocument();
   });
 });
