@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from "./routes/__root"
 import { Route as IndexRouteImport } from "./routes/index"
 import { Route as CustomersRouteImport } from "./routes/customers"
+import { Route as DashboardRouteImport } from "./routes/dashboard"
 import { Route as DocumentsRouteImport } from "./routes/documents"
 import { Route as ExpensesRouteImport } from "./routes/expenses"
 import { Route as KitRouteImport } from "./routes/kit"
@@ -32,6 +33,11 @@ const IndexRoute = IndexRouteImport.update({
 const CustomersRoute = CustomersRouteImport.update({
   id: "/customers",
   path: "/customers",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: "/dashboard",
+  path: "/dashboard",
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocumentsRoute = DocumentsRouteImport.update({
@@ -98,6 +104,7 @@ const SuppliersIdRoute = SuppliersIdRouteImport.update({
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
   "/customers": typeof CustomersRoute
+  "/dashboard": typeof DashboardRoute
   "/documents": typeof DocumentsRoute
   "/expenses": typeof ExpensesRoute
   "/kit": typeof KitRoute
@@ -114,6 +121,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
   "/customers": typeof CustomersRoute
+  "/dashboard": typeof DashboardRoute
   "/documents": typeof DocumentsRoute
   "/expenses": typeof ExpensesRoute
   "/kit": typeof KitRoute
@@ -131,6 +139,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   "/": typeof IndexRoute
   "/customers": typeof CustomersRoute
+  "/dashboard": typeof DashboardRoute
   "/documents": typeof DocumentsRoute
   "/expenses": typeof ExpensesRoute
   "/kit": typeof KitRoute
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
   fullPaths:
     | "/"
     | "/customers"
+    | "/dashboard"
     | "/documents"
     | "/expenses"
     | "/kit"
@@ -165,6 +175,7 @@ export interface FileRouteTypes {
   to:
     | "/"
     | "/customers"
+    | "/dashboard"
     | "/documents"
     | "/expenses"
     | "/kit"
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | "__root__"
     | "/"
     | "/customers"
+    | "/dashboard"
     | "/documents"
     | "/expenses"
     | "/kit"
@@ -198,6 +210,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CustomersRoute: typeof CustomersRoute
+  DashboardRoute: typeof DashboardRoute
   DocumentsRoute: typeof DocumentsRoute
   ExpensesRoute: typeof ExpensesRoute
   KitRoute: typeof KitRoute
@@ -226,6 +239,13 @@ declare module "@tanstack/react-router" {
       path: "/customers"
       fullPath: "/customers"
       preLoaderRoute: typeof CustomersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/dashboard": {
+      id: "/dashboard"
+      path: "/dashboard"
+      fullPath: "/dashboard"
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/documents": {
@@ -318,6 +338,7 @@ declare module "@tanstack/react-router" {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CustomersRoute: CustomersRoute,
+  DashboardRoute: DashboardRoute,
   DocumentsRoute: DocumentsRoute,
   ExpensesRoute: ExpensesRoute,
   KitRoute: KitRoute,

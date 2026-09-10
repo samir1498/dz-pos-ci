@@ -66,6 +66,21 @@ export function expensesQueryKey(month: string): readonly string[] {
 export function cashQueryKey(period: { day: string } | { month: string }): readonly string[] {
   return "day" in period ? ["cash", "day", period.day] : ["cash", "month", period.month];
 }
+/** The whole dashboard for one day and the month it falls in. The day is in
+ * the key: the screen asks about the shop's today, and a window left open
+ * over midnight must read the new day's answer rather than yesterday's out
+ * of the cache. */
+export function dashboardQueryKey(day: string): readonly string[] {
+  return ["dashboard", day];
+}
+
+/** The chart behind it. Its own key rather than a slice of the dashboard's,
+ * because it is a second call over a second window: the two are refetched
+ * together only because the screen asks for both. */
+export function dashboardSeriesQueryKey(day: string, days: number): readonly (string | number)[] {
+  return ["dashboard", "series", day, days];
+}
+
 /** The customer list. The search text is appended by the screen, so an
  * invalidation of this key refreshes every search that is in the cache. */
 export const customersQueryKey: readonly string[] = ["customers"];

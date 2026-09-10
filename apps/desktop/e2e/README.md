@@ -13,17 +13,23 @@ pnpm desktop e2e --project ar     # one language, every spec file
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes `products.png`, `customers.png` and the kit's four; the other twelve
+writes `products.png`, `customers.png`, `dashboard.png` and the kit's four; the other twelve
 say "... screenshot(s) in Arabic"
 in their titles, so they match the grep in both runs but write a file only
 when `currentLang()` is `ar`, and the fr run of them does nothing
-observable. Under ar all twelve write: `products-ar.png`, `settings-ar.png`,
+observable. Under ar all thirteen write: `products-ar.png`,
+`dashboard-ar.png`, `settings-ar.png`,
 `till-ar.png`, `customers-ar.png`, `suppliers-ar.png`, `purchases-ar.png`,
 `expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
 `stock-recount-ar.png`, and the theme pair `theme-comptoir-ar.png` and
 `theme-observe-ar.png`. The customers test writes two of them: the list and,
 before it walks back to it, `customer-account-ar.png`, the page one row's
 name opens.
+
+`products.spec.ts` and `zzz-dashboard.spec.ts` are the two that write under
+both languages, so their titles carry no "in Arabic": the products screen is
+the reference shot of a list, and the dashboard is the one screen whose whole
+point is a picture.
 
 The kit's four (`kit-comptoir.png`, `kit-registre.png`, `kit-observe.png`,
 `kit-observe-dark.png`) are the exception to that pattern: they are written
@@ -161,8 +167,17 @@ second language on; use the looped `just e2e` or a single `--project`.
   `zz-exports-and-labels.spec.ts`, the four workbooks read back as real
   spreadsheets, the product template downloaded, the committed fixture
   checked and applied, and the label of the product it created shown in the
-  sandboxed frame. Named to run last: it creates a product out of a file,
-  and every spec that starts from an empty catalogue has to have run first.
+  sandboxed frame. Named to run last among the `zz` files: it creates a
+  product out of a file, and every spec that starts from an empty catalogue
+  has to have run first;
+  `zzz-dashboard.spec.ts`, a shop seeded with a catalogue, a day of trading,
+  both debts, an order still open and a month of expenses, read back through
+  `GET /dashboard` and `GET /dashboard/series` and compared figure by figure
+  with what the screen paints. Named to run after everything: it fills the
+  shop, and the specs above it start from an empty catalogue and an empty
+  month. It seeds everything it reads rather than living off what they left,
+  because `just screenshot` runs it alone against a database that was just
+  deleted.
 - `messages.ts` is the shared loader for `src/i18n/{fr,en,ar}.json`, keyed
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
@@ -175,9 +190,9 @@ second language on; use the looped `just e2e` or a single `--project`.
   the shop back to "follow the machine" before it leaves. It writes the four
   kit screenshots under fr.
 - The twenty committed screenshots, 1280x800, full page: `products.png`,
-  `customers.png` and the kit's four (`kit-comptoir.png`, `kit-registre.png`,
-  `kit-observe.png`, `kit-observe-dark.png`) in fr; in ar,
-  `products-ar.png`, `settings-ar.png`, `till-ar.png`,
+  `customers.png`, `dashboard.png` and the kit's four (`kit-comptoir.png`,
+  `kit-registre.png`, `kit-observe.png`, `kit-observe-dark.png`) in fr; in ar,
+  `products-ar.png`, `dashboard-ar.png`, `settings-ar.png`, `till-ar.png`,
   `customers-ar.png`, `customer-account-ar.png`, `suppliers-ar.png`,
   `purchases-ar.png`,
   `expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
@@ -258,6 +273,20 @@ here. These are all of them.
 | `sidebar-trigger` | `sidebar.tsx` | The button that opens the sheet on a narrow window; its only text is off-screen and translated. |
 | `nav-<screen>` | `AppShell.tsx` | One per sidebar item (`nav-till`, `nav-products`, …). The link's text is translated and repeats the topbar's. |
 | `language-switcher` | `LanguageSwitcher.tsx` | The segmented control as a group; its three buttons name languages, not the group. |
+| `figure-<name>` | `dashboard.tsx` | One figure card (`figure-sales`, `figure-margin`, `figure-expenses`, `figure-cash`, `figure-customer-debt`, `figure-supplier-debt`, `figure-open-purchases`). Every card is built out of the same words, so a text query matches four of them. |
+| `figure-<name>-today` | `dashboard.tsx` | The day's amount on a card; an amount, so its text is a number in three locales. |
+| `figure-<name>-month` | `dashboard.tsx` | The month's amount on the same card, which is the same shape of number a row above. |
+| `figure-sales-count` | `dashboard.tsx` | The month's count of papers, a bare number beside two amounts. |
+| `figure-<name>-total` | `dashboard.tsx` | What is owed, on the two debt cards. |
+| `figure-<name>-parties` | `dashboard.tsx` | How many accounts are behind that debt; a bare number. |
+| `dashboard-chart` | `dashboard.tsx` | The chart's box. It is an SVG recharts drew, with no accessible name of its own. Its `data-buckets` is how a test tells the day view from the week view: recharts draws a rectangle only for a bar with a height, so counting the bars counts the days the shop sold on rather than the days the chart covers. |
+| `dashboard-chart-card` | `dashboard.tsx` | The card around it, so the legend can be looked for inside the chart rather than anywhere on the page. |
+| `chart-grain-days` | `dashboard.tsx` | The day/week switch; both tabs are one translated word. |
+| `chart-grain-weeks` | `dashboard.tsx` | As above. |
+| `dashboard-low-stock` | `dashboard.tsx` | The low-stock card; its title is the same words as the pill inside it. |
+| `low-stock-pill` | `dashboard.tsx` | One row's pill, for the same reason: `pill_low` and `dashboard_low_stock` read alike. |
+| `dashboard-top-quantity` | `dashboard.tsx` | The busiest-products card; the two top tens carry the same columns and often the same products. |
+| `dashboard-top-margin` | `dashboard.tsx` | The other one. |
 | `kit-page` | `KitPage.tsx` | The dev-only kit page's root, waited on before the screenshots. |
 | `kit-table` | `KitPage.tsx` | The kit's example table, so the money column can be measured without matching the empty one below it. |
 | `kit-dialog-trigger` | `KitPage.tsx` | The four overlay triggers sit in one row with translated-looking French labels; ids keep the spec off their text. |
