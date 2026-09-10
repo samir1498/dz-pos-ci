@@ -24,7 +24,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle, PackageSearch, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
 
 import type {
@@ -179,7 +179,8 @@ function Figures({ dashboard }: { dashboard: DashboardDto }) {
           label="dashboard_sales"
           centimes={today.sales_ttc_centimes}
           monthCentimes={month.sales_ttc_centimes}
-          note={`${month.sales_count} ${t("dashboard_documents")}`}
+          count={month.sales_count}
+          countLabel={t("dashboard_documents")}
           testId="figure-sales"
         />
         <FigureCard
@@ -225,6 +226,8 @@ function Figures({ dashboard }: { dashboard: DashboardDto }) {
               {dashboard.open_purchases}
             </p>
           </CardContent>
+          {/* No sub-line: an order is either open or it is not, and there is
+              no second period to compare it against. */}
         </Card>
       </div>
     </div>
@@ -240,13 +243,15 @@ function FigureCard({
   label,
   centimes,
   monthCentimes,
-  note,
+  count,
+  countLabel,
   testId,
 }: {
   label: Key;
   centimes: number;
   monthCentimes: number;
-  note?: string;
+  count?: number;
+  countLabel?: string;
   testId: string;
 }) {
   const { t } = useTranslation();
@@ -257,13 +262,44 @@ function FigureCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
         <Money centimes={centimes} className="text-2xl" data-testid={`${testId}-today`} />
-        <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
-          <span>{t("dashboard_this_month")}</span>
+        <SubLine label={t("dashboard_this_month")}>
           <Money centimes={monthCentimes} data-testid={`${testId}-month`} />
-        </p>
-        {note === undefined ? null : <p className="text-sm text-muted-foreground">{note}</p>}
+        </SubLine>
+        {count === undefined || countLabel === undefined ? null : (
+          <SubLine label={countLabel}>
+            <Count value={count} testId={`${testId}-count`} />
+          </SubLine>
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * A word at the start of the line and its figure at the end.
+ *
+ * The figure never sits directly after the number's noun, which is the shape
+ * that reads as "1 comptes" in French and needs a plural rule the dictionary
+ * has no way to carry. Label, then figure: the same line works for one and for
+ * a hundred, in the three languages, and it is the shape the expenses screen's
+ * cash panel already uses.
+ */
+function SubLine({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <p className="flex items-baseline justify-between gap-4 text-sm text-muted-foreground">
+      <span>{label}</span>
+      {children}
+    </p>
+  );
+}
+
+/** A count. The figure face and `dir="ltr"`, for the reason an amount has
+ *  them; it is not money, so it does not go through `Money`. */
+function Count({ value, testId }: { value: number; testId: string }) {
+  return (
+    <span dir="ltr" data-testid={testId} className="font-numeric font-medium tabular-nums">
+      {value}
+    </span>
   );
 }
 
@@ -287,12 +323,9 @@ function OwedCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
         <Money centimes={centimes} className="text-2xl" data-testid={`${testId}-total`} />
-        <p className="text-sm text-muted-foreground">
-          <span dir="ltr" className="font-numeric tabular-nums">
-            {parties}
-          </span>{" "}
-          {t("dashboard_accounts")}
-        </p>
+        <SubLine label={t("dashboard_accounts")}>
+          <Count value={parties} testId={`${testId}-parties`} />
+        </SubLine>
       </CardContent>
     </Card>
   );
@@ -382,7 +415,12 @@ function Chart({ series }: { series: DashboardSeriesDto }) {
         />
       ) : (
         // `dir="ltr"`: see the note at the top of this file.
-        <div dir="ltr" data-testid="dashboard-chart">
+        // `data-buckets` is how a test tells the day view from the week view.
+        // recharts draws a rectangle only for a bar with a height, so counting
+        // the bars counts the days the shop sold on rather than the days the
+        // chart covers, and the two views of one quiet month look identical
+        // through it.
+        <div dir="ltr" data-testid="dashboard-chart" data-buckets={buckets.length}>
           <ChartContainer config={config} className="aspect-auto h-64 w-full">
             <ComposedChart data={buckets} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
               <CartesianGrid vertical={false} />
@@ -408,13 +446,25 @@ function Chart({ series }: { series: DashboardSeriesDto }) {
                 }
               />
               <ChartLegend content={<ChartLegendContent />} />
-              <Bar dataKey="sales" fill="var(--color-sales)" radius={2} maxBarSize={24} />
+              {/* No entry animation on any of the three. recharts grows a bar
+                  out of nothing over a second and a half, which on a screen a
+                  shopkeeper opens to read a number is a second and a half of
+                  wrong numbers, and it makes a committed screenshot a picture
+                  of whichever frame the shutter caught. */}
+              <Bar
+                dataKey="sales"
+                fill="var(--color-sales)"
+                radius={2}
+                maxBarSize={24}
+                isAnimationActive={false}
+              />
               <Line
                 dataKey="margin"
                 stroke="var(--color-margin)"
                 strokeWidth={2}
                 dot={false}
                 type="monotone"
+                isAnimationActive={false}
               />
               <Line
                 dataKey="expenses"
@@ -423,6 +473,7 @@ function Chart({ series }: { series: DashboardSeriesDto }) {
                 strokeDasharray="4 3"
                 dot={false}
                 type="monotone"
+                isAnimationActive={false}
               />
             </ComposedChart>
           </ChartContainer>

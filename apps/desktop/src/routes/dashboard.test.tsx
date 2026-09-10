@@ -237,16 +237,14 @@ describe("the figure cards", () => {
 
   test("say how many papers the month wrote", async () => {
     mount();
-    const card = await screen.findByTestId("figure-sales");
-    expect(card).toHaveTextContent(`143 ${fr.dashboard_documents}`);
+    expect(await screen.findByTestId("figure-sales-count")).toHaveTextContent("143");
+    expect(screen.getByTestId("figure-sales")).toHaveTextContent(fr.dashboard_documents);
   });
 
   test("show both debts with the number of accounts behind each", async () => {
     mount();
     expect(await screen.findByTestId("figure-customer-debt-total")).toHaveTextContent("34 500,00");
-    expect(screen.getByTestId("figure-customer-debt")).toHaveTextContent(
-      `6 ${fr.dashboard_accounts}`,
-    );
+    expect(screen.getByTestId("figure-customer-debt-parties")).toHaveTextContent("6");
     expect(screen.getByTestId("figure-supplier-debt-total")).toHaveTextContent("21 000,00");
     expect(screen.getByTestId("figure-open-purchases")).toHaveTextContent("4");
   });
