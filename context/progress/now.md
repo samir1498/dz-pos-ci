@@ -11,11 +11,25 @@ facture at the till, credit notes, cancellation, proforma, payments,
 statement, debt slip) merged to main on 2026-09-10 at 03:36 (PR #19,
 79732ca): nine tasks run as a loop on `m2/2026-09-09`, each with three
 review lenses and a fix round, then a combined review of the whole diff.
-Two follow-ups sit on the M2 plan for Samir: T10 (the avoir's Remaining
-table refactor) and T11 (the client validator build-vs-buy and the till
-screen split). The loop pages hold the lessons and what the next sweep
-picks up. M3 is next once Samir says so. The ledger on the WSL box
-(`~/.dz-night/ledger.md`) holds the ticks.
+M3 (stock in, expenses, reports) runs as a loop on `m3/2026-09-10` since
+2026-09-10 06:33: nine tasks in its plan, the yearly reset of every
+document series first (Samir, 2026-09-10: the common practice, the year
+in the number), then suppliers, purchases with partial receipt, expenses,
+the stock re-derive, the dashboard, Excel. The two M2 refactors (T10 the
+avoir's Remaining table plus the kind rules as CHECKs, T11 the zod client
+and the till split, both approved by Samir on 2026-09-10) run first on the
+same branch. `context/loops/20260910-m3-loop.md` holds the waves and
+ports. Five of nine tasks merged by 11:17 (yearly series, tables, suppliers,
+expenses and cash, stock recount); purchases in its last merge-in. Samir saw
+the dev server (tmux `dz-dev`, http://100.101.196.30:5173) and found the
+screens unstyled: `context/plans/20260910-design-system-and-branding.md`
+(two themes Comptoir and Registre with a switcher, a bilingual logo the
+language switch swaps, Lucide icons, a component kit with a lint, the
+screens rewritten, a Claude Design project; Astro landing later). The
+brand pages are on the boss site under /design/. D1 and D2 run now; D3
+after purchases merges and before the dashboard. A stale-info sweep ran
+the same morning. The ledger on the WSL box (`~/.dz-night/ledger.md`)
+holds the ticks.
 
 Status site for Anouar: https://dinar-reports.pages.dev/ (progress reports
 and reference pages; generator in `~/.dz-night/report/` on the WSL box).
@@ -24,6 +38,7 @@ Run `just status` from the repo root for the ladder and the plans.
 Run `just ctx show <slug>` for plan details.
 
 ## Done recently
+- 2026-09-10 06:50: stale-info sweep of the repo and the boss site after the M2 merge: 12 prose items (roadmap headings and the merge sentence, the numbering paragraph, a process page subject, four boss reference pages), 2 justfile comments; context fixed on `main`, docs and justfile through `m3/stale-docs` into the milestone branch, the site redeployed; three new rows in `.claude/stale-homes.md`.
 - 2026-09-10: M2 merged to main (PR #19, 79732ca). Rulings taken during the build are in docs/features.md §2 to §4; the open questions for the comptable are on the status site's M2 checkpoint page; the M4 plan carries the permissions M2 leaves open (override, correction, cancel, avoir, closing a fiche).
 - 2026-09-09: M1 T3 (documents, gapless numbering, stock ledger, audit log, POST /sales; 8985d9d), T7 (three languages, RTL; 33ad612), T8 (daily backup, restore in place; dcf6f99), T4 (till screen as home; 415ade3) and T5 (80 mm ticket rendered by the core, nine goldens; 9cc9410) merged into `m1/2026-09-09` by the loop, each after dz-review lenses and a fix round. Docs sweep merged (d03ab61); code sweep on `m1/sweep-code` in flight. Checkpoint PR waits for `/dz-pr m1/2026-09-09`. T6 blocked on the printer.
 - 2026-09-09: M1 T2 merged into `m1/2026-09-09` (settings screen: store block, dated régime on the shop's UTC+1 calendar; the review moved the seller snapshot and back-dating into T3). Stale-info sweep of the repo: context fixed on main, docs on `m1/stale-docs`; the generic `stale-check` skill is user-level, `.claude/stale-homes.md` holds where each fact lives.

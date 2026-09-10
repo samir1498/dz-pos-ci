@@ -4,7 +4,7 @@ slug: 'machines-and-heavy-jobs'
 status: 'active'
 category: 'processes'
 created: 20260908
-tldr: 'WSL box vs laptop, the shared-box claim rule, no worktrees while one session per machine'
+tldr: 'WSL box vs laptop, the shared-box claim rule, the disk gate (check /mnt/c, not /), worktree teardown'
 ---
 # Machines and heavy jobs
 
@@ -26,10 +26,59 @@ every background agent with it. So on `fedora-wsl`:
   `cargo fmt`, vitest, `tsc`.
 - One heavy job at a time, foreground, and batch your own.
 
+## The disk gate on `fedora-wsl`
+
+**`df -h /` lies. Check `df -h /mnt/c`.**
+
+The distro's `/` is a dynamically expanding `ext4.vhdx` that sits on the
+Windows `C:` drive. On 2026-09-10 `df -h /` reported `845G avail` while the
+real host disk had **479 MB** free. The guest cannot see the wall it is
+about to hit.
+
+Before any heavy job, and before the first build in a session:
+
+```sh
+df -h /mnt/c        # this is the number that matters
+```
+
+- Under 20 GB free on `/mnt/c`: clean before you build (`just disk`, then
+  `just clean-targets`). Do not start a build "to see how far it gets".
+- Under 5 GB: stop and tell Samir. Nothing you delete inside the distro
+  reaches Windows without an elevated compact he has to run himself
+  (`C:\Users\Anwender\compact-wsl.ps1` on the Windows side).
+
+**Symptoms of a host disk already full**, seen from inside the distro:
+`Input/output error` exec'ing ordinary binaries (`rm`, `wc`), `Bus error`
+on `git`, segfaults on `df`. This is not a corrupt filesystem and not
+your change — it is `C:` at zero. `wsl --shutdown` and restart clears it
+enough to delete things. Say so plainly rather than debugging the repo.
+
+**The VHDX only ever grows.** Sparse mode is refused on this box ("disabled
+due to potential data corruption" — never pass `--allow-unsafe`). So every
+gigabyte written here is permanent until Samir runs the compact. Writing
+less matters more than cleaning up after.
+
 ## Sessions and worktrees
-One session per machine works this repo, so branches in the checkout are
-enough; no worktree ceremony. If two sessions ever work it on the same box,
-move to `.claude/worktrees/<name>` the way the ObserveOne repos do.
+
+One session per machine is the normal case, so branches in the checkout
+are enough and no worktree ceremony is needed. But worktrees *do* get
+created here — Claude Code's own `EnterWorktree` puts them in
+`.claude/worktrees/<name>` (gitignored). Each one carries its own Rust
+`target/`, and that is what fills the disk: on 2026-09-10 three worktrees
+held 57 GB of `target/` between them (`t7` alone was 36 GB) on top of the
+main checkout's 15 GB.
+
+So:
+- **Tearing down a worktree: `rm -rf` its `target/` first, then
+  `git worktree remove`, then `git worktree prune`.** Leaving the directory
+  behind is what produced the orphaned `t5` — a `.claude/worktrees/` dir
+  that `git worktree list` did not even know about.
+- Not coming back to a worktree today? Delete its `target/`. It is
+  regenerable; the disk is not.
+- **Never `rm -rf` a worktree directory to save space.** `design` and `t7`
+  held 19 and 6 uncommitted files when they were 55 GB of build output.
+  Delete `target/`, never the tree.
+- `just clean-targets` does all of this across every worktree at once.
 
 ## Dev servers
 Nothing runs by default. The web UI (`just api`, then `just dev`) can run on
@@ -37,4 +86,24 @@ either machine; the native window only on the laptop. Say which servers
 you started and stop them when done; use a pid file or `fuser -k
 <port>/tcp`, never `pkill -f` in a chained command (it matches the shell
 running it).
+
+## After the 125 GB day: one build folder, one build, one session
+
+Decided with Samir on 2026-09-10 after the VHDX reached 125 GB and the host
+disk hit zero five times in an hour.
+
+- Every cargo command in this repo runs with
+  `CARGO_TARGET_DIR=/home/samir/dz-pos/.cargo-target` (set in the loop
+  briefs and in the session's own gate runs). One shared build folder for
+  every worktree: ten worktrees cost one build's disk, and cargo's lock on
+  the folder makes it one build at a time, which is also the memory rule.
+- A worktree is torn down with `just worktree-rm` the moment its branch
+  merges. Moving a worktree to a new task to keep its warm cache (what the
+  loop did all morning) is what kept four `target/` folders alive.
+- `df -h /mnt/c` before any build, in every heartbeat. Under 20 GB, clean
+  before building; under 5 GB, stop and tell Samir.
+- One Claude session per conversation. The `claude-dz` service resumes the
+  session in tmux after a boot; a second `claude --continue` started by
+  hand on the same transcript makes two processes fight over it and each
+  resume kills the other's background agents.
 

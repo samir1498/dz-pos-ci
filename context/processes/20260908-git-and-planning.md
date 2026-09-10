@@ -15,7 +15,7 @@ tldr: 'Branch + PR, ctx trailer, the context store and session rituals'
   gates and a review, and the milestone branch goes to `main` by PR at
   its checkpoint tasks. Code never lands on `main` without a PR.
 - `context/` bookkeeping (plan status, progress entries, handoffs, a
-  reference page) commits straight to `main` with a `docs(context):`
+  reference page) commits straight to `main` with a `chore(context):`
   subject, the way `observeone-context` pushes to its own main. A PR per
   progress line is friction nobody reads.
 - WIP commits on a branch are fine; the laptop pulls them. Squash at merge.
