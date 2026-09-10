@@ -1,6 +1,7 @@
-// The settings screen: the store block a ticket prints as the seller and
-// the dated régime fiscal. Two forms, two routes, the same rules as every
-// screen: the API decides, this file shows and translates.
+// The settings screen: the store block a ticket prints as the seller, the
+// dated régime fiscal, the appearance, and the two maintenance panels. Every
+// block is a card, every control comes from the kit, and the API decides:
+// this file shows and translates.
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,8 +12,21 @@ import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/sh
 import { api, settingsQueryKey } from "@/api";
 import { BackupsPanel } from "@/components/BackupsPanel";
 import { ExportImportPanel } from "@/components/ExportImportPanel";
+import { PageHeader } from "@/components/PageHeader";
 import { StockRecountPanel } from "@/components/StockRecountPanel";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { FormField } from "@/components/FormField";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useShopToday } from "@/lib/clock";
 import { isKey, useTranslation, type Key } from "@/i18n";
 
@@ -61,16 +75,22 @@ export function SettingsScreen() {
   const [storeSaved, setStoreSaved] = useState(false);
 
   return (
-    <section className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">{t("settings_title")}</h1>
-      {settings.isPending ? <p>{t("settings_loading")}</p> : null}
+    <section className="flex flex-col">
+      <PageHeader title={t("settings_title")} description={t("settings_hint")} />
+      {settings.isPending ? (
+        <div className="flex flex-col gap-3" aria-busy="true">
+          <p className="text-sm text-muted-foreground">{t("settings_loading")}</p>
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      ) : null}
       {settings.isError ? (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="text-sm text-fg-danger">
           {t(errorKey(settings.error))}
         </p>
       ) : null}
       {settings.isSuccess ? (
-        <>
+        <div className="flex flex-col gap-6">
           <StoreForm
             key={JSON.stringify(settings.data.store)}
             initial={settings.data.store}
@@ -82,16 +102,18 @@ export function SettingsScreen() {
             // here rather than swallowed into the wait above: a panel that
             // showed "loading" for a refusal would never come back on its
             // own and would never say why.
-            <div className="flex flex-col items-start gap-2">
-              <p role="alert" className="text-red-700">
-                {t(errorKey(clock.error))}
-              </p>
-              <button type="button" className="rounded border px-3 py-1.5" onClick={clock.retry}>
-                {t("action_retry")}
-              </button>
-            </div>
+            <Card>
+              <CardContent className="flex flex-col items-start gap-3">
+                <p role="alert" className="text-sm text-fg-danger">
+                  {t(errorKey(clock.error))}
+                </p>
+                <Button type="button" variant="outline" onClick={clock.retry}>
+                  {t("action_retry")}
+                </Button>
+              </CardContent>
+            </Card>
           ) : clock.today === undefined ? (
-            <p>{t("regime_loading")}</p>
+            <p className="text-sm text-muted-foreground">{t("regime_loading")}</p>
           ) : (
             <RegimePanel
               current={settings.data.regime}
@@ -103,7 +125,7 @@ export function SettingsScreen() {
           <BackupsPanel />
           <ExportImportPanel />
           <StockRecountPanel />
-        </>
+        </div>
       ) : null}
     </section>
   );
@@ -125,6 +147,20 @@ const STORE_FIELDS: readonly { name: keyof Omit<StoreDto, "name">; label: Key; l
   { name: "address", label: "field_address" },
   { name: "phone", label: "field_phone", ltr: true },
 ];
+
+/**
+ * The heading of a settings card. An `h3` because `PageHeader` owns the
+ * page's `h2` and the shell owns the `h1`; the id is what the block's form
+ * or section names itself by, so a test and a screen reader find the block
+ * the same way.
+ */
+function PanelHeading({ id, children }: { id: string; children: string }) {
+  return (
+    <h3 id={id} className="font-semibold text-foreground">
+      {children}
+    </h3>
+  );
+}
 
 function StoreForm({
   initial,
@@ -182,77 +218,84 @@ function StoreForm({
   });
 
   return (
-    <form
-      noValidate
-      aria-labelledby="settings-store"
-      className="flex flex-col gap-3 rounded border p-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSaved(false);
-        void form.handleSubmit();
-      }}
-    >
-      <h2 id="settings-store" className="font-semibold">
-        {t("settings_store")}
-      </h2>
-      <p className="text-sm opacity-80">{t("settings_store_hint")}</p>
-
-      <form.Field
-        name="name"
-        validators={{
-          onSubmit: ({ value }) => (value.trim() === "" ? "error_name_required" : undefined),
+    <Card>
+      <CardHeader>
+        <PanelHeading id="settings-store">{t("settings_store")}</PanelHeading>
+        <CardDescription>{t("settings_store_hint")}</CardDescription>
+      </CardHeader>
+      <form
+        noValidate
+        aria-labelledby="settings-store"
+        className="flex flex-col gap-6"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSaved(false);
+          void form.handleSubmit();
         }}
       >
-        {(field) => (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_name")}</span>
-            <input
-              className="rounded border px-2 py-1"
-              value={field.state.value}
-              onChange={(e) => field.handleChange(e.target.value)}
-              onBlur={field.handleBlur}
-            />
-            <FieldError messages={field.state.meta.errors} />
-          </label>
-        )}
-      </form.Field>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {STORE_FIELDS.map((spec) => (
-          <form.Field key={spec.name} name={spec.name}>
+        <CardContent className="flex flex-col gap-4">
+          <form.Field
+            name="name"
+            validators={{
+              onSubmit: ({ value }) => (value.trim() === "" ? "error_name_required" : undefined),
+            }}
+          >
             {(field) => (
-              <label className="flex flex-col gap-1">
-                <span>{t(spec.label)}</span>
-                <input
-                  dir={spec.ltr === true ? "ltr" : undefined}
-                  className="rounded border px-2 py-1"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  onBlur={field.handleBlur}
-                />
-              </label>
+              <FormField
+                label={t("field_name")}
+                error={messageOf(field.state.meta.errors, t)}
+                className="sm:max-w-md"
+              >
+                {(parts) => (
+                  <Input
+                    {...parts}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    onBlur={field.handleBlur}
+                  />
+                )}
+              </FormField>
             )}
           </form.Field>
-        ))}
-      </div>
 
-      {serverError !== null ? (
-        <p role="alert" className="text-red-700">
-          {t(serverError)}
-        </p>
-      ) : null}
-      {saved && serverError === null ? <p role="status">{t("settings_saved")}</p> : null}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {STORE_FIELDS.map((spec) => (
+              <form.Field key={spec.name} name={spec.name}>
+                {(field) => (
+                  <FormField label={t(spec.label)}>
+                    {(parts) => (
+                      <Input
+                        {...parts}
+                        dir={spec.ltr === true ? "ltr" : undefined}
+                        value={field.state.value}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onBlur={field.handleBlur}
+                      />
+                    )}
+                  </FormField>
+                )}
+              </form.Field>
+            ))}
+          </div>
+        </CardContent>
 
-      <div>
-        <button
-          type="submit"
-          className="rounded border px-3 py-1.5"
-          disabled={save.isPending}
-        >
-          {save.isPending ? t("action_saving") : t("action_save")}
-        </button>
-      </div>
-    </form>
+        <CardFooter className="flex flex-wrap items-center gap-3">
+          <Button type="submit" disabled={save.isPending}>
+            {save.isPending ? t("action_saving") : t("action_save")}
+          </Button>
+          {serverError !== null ? (
+            <p role="alert" className="text-sm text-fg-danger">
+              {t(serverError)}
+            </p>
+          ) : null}
+          {saved && serverError === null ? (
+            <p role="status" className="text-sm text-fg-success">
+              {t("settings_saved")}
+            </p>
+          ) : null}
+        </CardFooter>
+      </form>
+    </Card>
   );
 }
 
@@ -289,108 +332,126 @@ function RegimePanel({
         setServerError("error_validation");
         return;
       }
-      await change
-        .mutateAsync({ regime, valid_from: value.validFrom })
-        .catch(() => undefined);
+      await change.mutateAsync({ regime, valid_from: value.validFrom }).catch(() => undefined);
     },
   });
 
   return (
-    <form
-      noValidate
-      aria-labelledby="settings-regime"
-      className="flex flex-col gap-3 rounded border p-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void form.handleSubmit();
-      }}
-    >
-      <h2 id="settings-regime" className="font-semibold">
-        {t("settings_regime")}
-      </h2>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-        <dt>{t("regime_current_label")}</dt>
-        <dd data-testid="regime-current">
-          {t(REGIME_KEY[current.regime])} · {t("regime_since")}{" "}
-          <span dir="ltr">{current.valid_from}</span>
-        </dd>
-        {planned !== null ? (
-          <>
-            <dt>{t("regime_planned_label")}</dt>
-            <dd data-testid="regime-planned">
-              {t(REGIME_KEY[planned.regime])} · {t("regime_from")}{" "}
-              <span dir="ltr">{planned.valid_from}</span>
+    <Card>
+      <CardHeader>
+        <PanelHeading id="settings-regime">{t("settings_regime")}</PanelHeading>
+        <CardDescription>{t("regime_change_hint")}</CardDescription>
+      </CardHeader>
+      <form
+        noValidate
+        aria-labelledby="settings-regime"
+        className="flex flex-col gap-6"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void form.handleSubmit();
+        }}
+      >
+        <CardContent className="flex flex-col gap-4">
+          <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1 rounded-lg bg-muted p-4">
+            <dt className="text-sm text-muted-foreground">{t("regime_current_label")}</dt>
+            <dd data-testid="regime-current" className="font-medium text-foreground">
+              {t(REGIME_KEY[current.regime])} · {t("regime_since")}{" "}
+              <span dir="ltr" className="font-numeric tabular-nums">
+                {current.valid_from}
+              </span>
             </dd>
-          </>
-        ) : null}
-      </dl>
-      <p className="text-sm opacity-80">{t("regime_change_hint")}</p>
+            {planned !== null ? (
+              <>
+                <dt className="text-sm text-muted-foreground">{t("regime_planned_label")}</dt>
+                <dd data-testid="regime-planned" className="font-medium text-foreground">
+                  {t(REGIME_KEY[planned.regime])} · {t("regime_from")}{" "}
+                  <span dir="ltr" className="font-numeric tabular-nums">
+                    {planned.valid_from}
+                  </span>
+                </dd>
+              </>
+            ) : null}
+          </dl>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <form.Field name="regime">
-          {(field) => (
-            <label className="flex flex-col gap-1">
-              <span>{t("field_regime")}</span>
-              <select
-                className="rounded border px-2 py-1"
-                value={field.state.value}
-                onChange={(e) => field.handleChange(e.target.value)}
-              >
-                {REGIMES.map((r) => (
-                  <option key={r} value={r}>
-                    {t(REGIME_KEY[r])}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </form.Field>
-        <form.Field
-          name="validFrom"
-          validators={{
-            onSubmit: ({ value }) => (DAY.test(value) ? undefined : "error_day_invalid"),
-          }}
-        >
-          {(field) => (
-            <label className="flex flex-col gap-1">
-              <span>{t("field_valid_from")}</span>
-              <input
-                type="date"
-                className="rounded border px-2 py-1"
-                value={field.state.value}
-                onChange={(e) => field.handleChange(e.target.value)}
-                onBlur={field.handleBlur}
-              />
-              <FieldError messages={field.state.meta.errors} />
-            </label>
-          )}
-        </form.Field>
-      </div>
-
-      {serverError !== null ? (
-        <p role="alert" className="text-red-700">
-          {t(serverError)}
-        </p>
-      ) : null}
-
-      <form.Subscribe selector={(state) => state.values.regime}>
-        {(regime) => (
-          <div>
-            <button
-              type="submit"
-              className="rounded border px-3 py-1.5 disabled:opacity-50"
-              // Applying the régime already in force would only move its
-              // "since" date to today (the API refuses it too). With a
-              // change planned ahead, re-applying the current régime is
-              // how that plan is cancelled, so the button stays live.
-              disabled={change.isPending || (regime === current.regime && planned === null)}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <form.Field name="regime">
+              {(field) => (
+                <FormField label={t("field_regime")}>
+                  {(parts) => (
+                    <Select
+                      value={field.state.value}
+                      onValueChange={(next) => field.handleChange(next)}
+                    >
+                      <SelectTrigger
+                        id={parts.id}
+                        aria-describedby={parts["aria-describedby"]}
+                        className="w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REGIMES.map((r) => (
+                          <SelectItem key={r} value={r}>
+                            {t(REGIME_KEY[r])}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </FormField>
+              )}
+            </form.Field>
+            <form.Field
+              name="validFrom"
+              validators={{
+                onSubmit: ({ value }) => (DAY.test(value) ? undefined : "error_day_invalid"),
+              }}
             >
-              {change.isPending ? t("action_saving") : t("action_apply")}
-            </button>
+              {(field) => (
+                <FormField
+                  label={t("field_valid_from")}
+                  error={messageOf(field.state.meta.errors, t)}
+                >
+                  {(parts) => (
+                    <Input
+                      {...parts}
+                      type="date"
+                      dir="ltr"
+                      className="font-numeric tabular-nums"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                    />
+                  )}
+                </FormField>
+              )}
+            </form.Field>
           </div>
-        )}
-      </form.Subscribe>
-    </form>
+        </CardContent>
+
+        <CardFooter className="flex flex-wrap items-center gap-3">
+          <form.Subscribe selector={(state) => state.values.regime}>
+            {(regime) => (
+              <Button
+                type="submit"
+                // Applying the régime already in force would only move its
+                // "since" date to today (the API refuses it too). With a
+                // change planned ahead, re-applying the current régime is
+                // how that plan is cancelled, so the button stays live.
+                disabled={change.isPending || (regime === current.regime && planned === null)}
+              >
+                {change.isPending ? t("action_saving") : t("action_apply")}
+              </Button>
+            )}
+          </form.Subscribe>
+          {serverError !== null ? (
+            <p role="alert" className="text-sm text-fg-danger">
+              {t(serverError)}
+            </p>
+          ) : null}
+        </CardFooter>
+      </form>
+    </Card>
   );
 }
 
@@ -402,26 +463,23 @@ function RegimePanel({
 function ThemePanel() {
   const { t } = useTranslation();
   return (
-    <section aria-labelledby="settings-theme" className="flex flex-col gap-3 rounded border p-4">
-      <h2 id="settings-theme" className="font-semibold">
-        {t("settings_theme")}
-      </h2>
-      <p className="text-sm opacity-80">{t("settings_theme_hint")}</p>
-      <div>
-        <ThemeSwitcher />
-      </div>
+    <section aria-labelledby="settings-theme">
+      <Card>
+        <CardHeader>
+          <PanelHeading id="settings-theme">{t("settings_theme")}</PanelHeading>
+          <CardDescription>{t("settings_theme_hint")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ThemeSwitcher />
+        </CardContent>
+      </Card>
     </section>
   );
 }
 
 /** Field validators return translation keys, never sentences. */
-function FieldError({ messages }: { messages: unknown[] }) {
-  const { t } = useTranslation();
+function messageOf(messages: unknown[], t: (key: Key) => string): string | undefined {
   const key = messages.find((m): m is string => typeof m === "string");
-  if (key === undefined) return null;
-  return (
-    <span role="alert" className="text-sm text-red-700">
-      {t(isKey(key) ? key : "error_unknown")}
-    </span>
-  );
+  if (key === undefined) return undefined;
+  return t(isKey(key) ? key : "error_unknown");
 }

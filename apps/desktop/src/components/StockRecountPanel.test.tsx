@@ -4,7 +4,7 @@
 // correction goes, once a day) are the core's tests and the API crate's.
 
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { LastStockRecountDto, StockDriftDto, StockRecountDto } from "@dzpos/shared";
@@ -38,6 +38,13 @@ function posts(): string[] {
       return isInit(init) && init.method === "POST";
     })
     .map((call) => String(call[0]));
+}
+
+/** The corrections the panel lists, without the table's header row. */
+function driftRows(): HTMLElement[] {
+  const table = screen.queryByTestId("stock-drift-table");
+  if (table === null) return [];
+  return within(table).queryAllByRole("row").slice(1);
 }
 
 function mount() {
@@ -84,7 +91,7 @@ describe("the stock recount panel", () => {
     expect(await screen.findByTestId("stock-recount-day")).toHaveTextContent(
       fr.stock_recount_never,
     );
-    expect(screen.queryByTestId("stock-drift-row")).toBeNull();
+    expect(driftRows()).toHaveLength(0);
     // Nothing was out is a different sentence from never having looked, and
     // a shop that has never run one must not be told its stock is right.
     expect(screen.queryByTestId("stock-recount-clean")).toBeNull();
@@ -105,13 +112,15 @@ describe("the stock recount panel", () => {
     mount();
     expect(await screen.findByTestId("stock-recount-day")).toHaveTextContent("2026-09-09");
     expect(screen.getByTestId("stock-recount-clean")).toHaveTextContent(fr.stock_recount_none);
-    expect(screen.queryByTestId("stock-drift-row")).toBeNull();
+    expect(driftRows()).toHaveLength(0);
   });
 
   test("the last run's drifts read as quantities with the correction said once", async () => {
     last = { last_run_day: "2026-09-10", drifts: [drift] };
     mount();
-    const row = await screen.findByTestId("stock-drift-row");
+    await screen.findByTestId("stock-drift-table");
+    const row = driftRows()[0];
+    if (row === undefined) throw new Error("no drift row");
     expect(row).toHaveTextContent("Sucre 1kg");
     // 99000 and 24000 thousandths are 99 and 24 on the screen, and the
     // difference keeps its sign: this one took stock off the fiche.
@@ -141,7 +150,8 @@ describe("the stock recount panel", () => {
     });
     try {
       mount();
-      expect(await screen.findAllByTestId("stock-drift-row")).toHaveLength(2);
+      await screen.findByTestId("stock-drift-table");
+      expect(driftRows()).toHaveLength(2);
       const differences = screen
         .getAllByTestId("stock-drift-difference")
         .map((node) => node.textContent);
@@ -165,7 +175,7 @@ describe("the stock recount panel", () => {
     expect(screen.getByTestId("stock-recount-checked")).toHaveTextContent("42");
     // The list is refetched from the server rather than filled in from the
     // answer: the panel shows what the file holds, not what a mutation said.
-    await waitFor(() => expect(screen.getByTestId("stock-drift-row")).toBeInTheDocument());
+    await waitFor(() => expect(driftRows()).toHaveLength(1));
     expect(screen.getByTestId("stock-recount-day")).toHaveTextContent("2026-09-10");
   });
 

@@ -49,6 +49,29 @@ function posts(): string[] {
     .map((call) => String(call[0]));
 }
 
+/** The copies the panel lists, without the table's header row. */
+function backupRows(): HTMLElement[] {
+  return within(screen.getByTestId("backups-table")).queryAllByRole("row").slice(1);
+}
+
+/** The copies kept before a restore, same shape, their own table. */
+function safetyRows(): HTMLElement[] {
+  return within(screen.getByTestId("safety-copies-table")).queryAllByRole("row").slice(1);
+}
+
+/** Presses restore on a row and answers the dialog it opens. */
+async function askToRestore(
+  user: ReturnType<typeof userEvent.setup>,
+  row: HTMLElement,
+  answer: "confirm" | "cancel",
+): Promise<void> {
+  await user.click(within(row).getByRole("button", { name: fr.action_restore }));
+  const dialog = await screen.findByRole("dialog");
+  expect(dialog).toHaveTextContent(fr.backups_confirm_restore);
+  const button = answer === "confirm" ? fr.backups_restore_confirm : fr.action_cancel;
+  await user.click(within(dialog).getByRole("button", { name: button }));
+}
+
 function mount() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -110,7 +133,7 @@ describe("the list", () => {
   test("shows the newest copy's date and one row per copy, with its size", async () => {
     mount();
     expect(await screen.findByTestId("backups-newest")).toHaveTextContent("2026-09-08 09:30");
-    const rows = screen.getAllByTestId("backup-row");
+    const rows = backupRows();
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveTextContent("2026-09-08 09:30");
     expect(rows[0]).toHaveTextContent(`2,1 ${fr.unit_mb}`);
@@ -120,26 +143,31 @@ describe("the list", () => {
   test("keeps the copies taken before a restore under their own heading", async () => {
     listed = { backups: [newest], safety_copies: [safety] };
     mount();
-    expect(await screen.findByText(fr.settings_safety_copies)).toBeInTheDocument();
-    const kept = screen.getAllByTestId("safety-copy-row");
+    expect(
+      await screen.findByRole("heading", { name: fr.settings_safety_copies }),
+    ).toBeInTheDocument();
+    const kept = safetyRows();
     expect(kept).toHaveLength(1);
     expect(kept[0]).toHaveTextContent("2026-09-09 10:15");
     // They are shown, never offered: restoring one is not one more click.
     expect(within(kept[0] ?? document.body).queryByRole("button")).toBeNull();
-    expect(screen.getAllByTestId("backup-row")).toHaveLength(1);
+    expect(backupRows()).toHaveLength(1);
   });
 
   test("shows no safety heading before anything has been restored", async () => {
     mount();
     await screen.findByTestId("backups-newest");
-    expect(screen.queryByText(fr.settings_safety_copies)).toBeNull();
+    expect(screen.queryByRole("heading", { name: fr.settings_safety_copies })).toBeNull();
   });
 
   test("says so when the shop has no copy yet", async () => {
     listed = { backups: [], safety_copies: [] };
     mount();
-    expect(await screen.findByText(fr.backups_none)).toBeInTheDocument();
-    expect(screen.queryAllByTestId("backup-row")).toHaveLength(0);
+    // Twice: the summary line above the list, and the empty state in its
+    // place, which is what a shop reads first on the first morning.
+    expect(await screen.findAllByText(fr.backups_none)).toHaveLength(2);
+    expect(backupRows()).toHaveLength(0);
+    expect(screen.getByTestId("empty-state")).toBeInTheDocument();
   });
 
   test("a refusal on load is shown translated", async () => {
@@ -159,7 +187,7 @@ describe("taking one now", () => {
     await user.click(screen.getByRole("button", { name: fr.action_backup_now }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(fr.backups_created));
     expect(posts()).toEqual([expect.stringMatching(/\/backups$/)]);
-    await waitFor(() => expect(screen.getAllByTestId("backup-row")).toHaveLength(3));
+    await waitFor(() => expect(backupRows()).toHaveLength(3));
   });
 
   test("a refusal is shown translated and nothing says it was taken", async () => {
@@ -174,45 +202,42 @@ describe("taking one now", () => {
 });
 
 describe("restoring one", () => {
-  test("asks first, and posts the copy's own name once confirmed", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  test("asks in a dialog of its own, and posts the copy's own name once confirmed", async () => {
     const user = userEvent.setup();
     mount();
-    const rows = await screen.findAllByTestId("backup-row");
-    const second = rows[1];
+    await screen.findByTestId("backups-newest");
+    const second = backupRows()[1];
     if (second === undefined) throw new Error("no second row");
+    // The dialog names the copy the press was about, not just any copy: two
+    // rows an hour apart read the same until the date is repeated.
     await user.click(within(second).getByRole("button", { name: fr.action_restore }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(fr.backups_confirm_restore);
+    expect(dialog).toHaveTextContent("2026-09-07 09:30");
+    await user.click(within(dialog).getByRole("button", { name: fr.backups_restore_confirm }));
 
-    expect(confirm).toHaveBeenCalledWith(fr.backups_confirm_restore);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(fr.backups_restored));
     expect(posts()).toEqual([
       expect.stringMatching(/\/backups\/dzpos-20260907-093000\.sqlite\/restore$/),
     ]);
   });
 
-  test("a cancelled confirmation posts nothing", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  test("a dialog closed on the way out posts nothing", async () => {
     const user = userEvent.setup();
     mount();
-    const rows = await screen.findAllByTestId("backup-row");
-    const first = rows[0];
+    await screen.findByTestId("backups-newest");
+    const first = backupRows()[0];
     if (first === undefined) throw new Error("no first row");
-    await user.click(within(first).getByRole("button", { name: fr.action_restore }));
+    await askToRestore(user, first, "cancel");
 
-    expect(confirm).toHaveBeenCalled();
     expect(posts()).toEqual([]);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   test("a copy the server refuses is reported translated", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     restoreAnswer = () => json(422, { error: { code: "validation", message: "backup" } });
-    const user = userEvent.setup();
-    mount();
-    const rows = await screen.findAllByTestId("backup-row");
-    const first = rows[0];
-    if (first === undefined) throw new Error("no first row");
-    await user.click(within(first).getByRole("button", { name: fr.action_restore }));
+    await restoreTheFirstCopy();
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_validation);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
@@ -222,7 +247,6 @@ describe("restoring one", () => {
   // them the copy is the shop file, after the other nothing was replaced.
   // Falling back to "error_unknown" would hide which one happened.
   test("a shop file the app closed and could not reopen asks for a relaunch", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     restoreAnswer = () => json(500, { error: { code: "restart_needed", message: "closed" } });
     await restoreTheFirstCopy();
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_restart_needed);
@@ -230,7 +254,6 @@ describe("restoring one", () => {
   });
 
   test("a restore that did not happen says that too, not only the relaunch", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     restoreAnswer = () =>
       json(500, { error: { code: "restore_failed_restart_needed", message: "closed" } });
     await restoreTheFirstCopy();
@@ -243,9 +266,9 @@ describe("restoring one", () => {
   async function restoreTheFirstCopy() {
     const user = userEvent.setup();
     mount();
-    const rows = await screen.findAllByTestId("backup-row");
-    const first = rows[0];
+    await screen.findByTestId("backups-newest");
+    const first = backupRows()[0];
     if (first === undefined) throw new Error("no first row");
-    await user.click(within(first).getByRole("button", { name: fr.action_restore }));
+    await askToRestore(user, first, "confirm");
   }
 });

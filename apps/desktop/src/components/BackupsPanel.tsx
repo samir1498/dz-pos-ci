@@ -2,12 +2,32 @@
 // owns the folder, the names and the thirty it keeps; this file lists what
 // the server reports, asks for one more, and asks the owner twice before it
 // puts one back.
+//
+// The second ask is the kit's dialog rather than the browser's `confirm`.
+// The native box wears the operating system's colours, cannot be read by the
+// shop in Arabic on a French Windows, and reduces the most destructive action
+// in the app to a sentence in a grey rectangle. The dialog says what is lost
+// and puts the confirmation on a destructive button of its own.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Archive, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { ApiError } from "@dzpos/shared";
 import type { BackupDto } from "@dzpos/shared";
 import { api, backupsQueryKey } from "@/api";
+import { DataTable, type Column } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
+import { Icon } from "@/components/Icon";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useTranslation, type Key } from "@/i18n";
 
 const ERROR_KEY: Record<string, Key> = {
@@ -51,6 +71,9 @@ export function BackupsPanel() {
   const backups = useQuery({ queryKey: backupsQueryKey, queryFn: () => api.listBackups() });
   const [done, setDone] = useState<Key | null>(null);
   const [serverError, setServerError] = useState<Key | null>(null);
+  // The copy the owner asked about, and the whole of the dialog's state: an
+  // open dialog with nothing in it would have nothing to restore.
+  const [asking, setAsking] = useState<BackupDto | null>(null);
 
   const create = useMutation({
     mutationFn: () => api.createBackup(),
@@ -85,118 +108,174 @@ export function BackupsPanel() {
   const safetyCopies: BackupDto[] = backups.data?.safety_copies ?? [];
   const newest = rows[0];
 
-  function askThenRestore(name: string) {
-    setDone(null);
-    setServerError(null);
-    // A confirm dialog is the answer until roles land, translated like
-    // every other string.
-    // A restore throws away everything since the copy, so it is never one
-    // click away.
-    if (!window.confirm(t("backups_confirm_restore"))) return;
-    restore.mutate(name);
-  }
+  const columns: readonly Column<BackupDto>[] = [
+    {
+      id: "taken",
+      header: t("backups_taken_header"),
+      cell: (row) => (
+        <span dir="ltr" className="font-numeric tabular-nums">
+          {readableTime(row.taken_at)}
+        </span>
+      ),
+    },
+    {
+      id: "size",
+      header: t("backups_size_header"),
+      numeric: true,
+      cell: (row) => readableSize(row.bytes, t("unit_kb"), t("unit_mb")),
+    },
+  ];
 
   return (
-    <section aria-labelledby="settings-backups" className="flex flex-col gap-3 rounded border p-4">
-      <h2 id="settings-backups" className="font-semibold">
-        {t("settings_backups")}
-      </h2>
-      <p className="text-sm opacity-80">{t("settings_backups_hint")}</p>
+    <section aria-labelledby="settings-backups">
+      <Card>
+        <CardHeader>
+          <h3 id="settings-backups" className="font-semibold text-foreground">
+            {t("settings_backups")}
+          </h3>
+          <CardDescription>{t("settings_backups_hint")}</CardDescription>
+        </CardHeader>
 
-      {backups.isPending ? <p>{t("products_loading")}</p> : null}
-      {backups.isError ? (
-        <p role="alert" className="text-red-700">
-          {t(errorKey(backups.error))}
-        </p>
-      ) : null}
+        <CardContent className="flex flex-col gap-4">
+          {backups.isPending ? (
+            <p className="text-sm text-muted-foreground">{t("settings_loading")}</p>
+          ) : null}
+          {backups.isError ? (
+            <p role="alert" className="text-sm text-fg-danger">
+              {t(errorKey(backups.error))}
+            </p>
+          ) : null}
 
-      {backups.isSuccess ? (
-        <>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-            <dt>{t("backups_newest_label")}</dt>
-            <dd data-testid="backups-newest">
-              {newest === undefined ? t("backups_none") : readableTime(newest.taken_at)}
-            </dd>
-          </dl>
+          {backups.isSuccess ? (
+            <>
+              <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1">
+                <dt className="text-sm text-muted-foreground">{t("backups_newest_label")}</dt>
+                <dd data-testid="backups-newest" className="font-medium text-foreground">
+                  {newest === undefined ? t("backups_none") : readableTime(newest.taken_at)}
+                </dd>
+              </dl>
 
-          {rows.length === 0 ? null : (
-            <ul className="flex flex-col divide-y rounded border">
-              {rows.map((row) => (
-                <li
-                  key={row.name}
-                  data-testid="backup-row"
-                  className="flex items-center justify-between gap-4 px-3 py-2"
-                >
-                  <span>{readableTime(row.taken_at)}</span>
-                  <span className="text-sm opacity-80">
-                    {readableSize(row.bytes, t("unit_kb"), t("unit_mb"))}
-                  </span>
-                  <button
+              <DataTable
+                data-testid="backups-table"
+                caption={t("settings_backups")}
+                columns={columns}
+                rows={rows}
+                rowKey={(row) => row.name}
+                empty={
+                  <EmptyState
+                    icon={Archive}
+                    title={t("backups_none")}
+                    description={t("backups_empty_hint")}
+                  />
+                }
+                actions={(row) => (
+                  <Button
                     type="button"
-                    className="rounded border px-3 py-1.5 disabled:opacity-50"
+                    variant="outline"
+                    size="sm"
                     disabled={busy}
-                    onClick={() => askThenRestore(row.name)}
+                    onClick={() => {
+                      setDone(null);
+                      setServerError(null);
+                      setAsking(row);
+                    }}
                   >
+                    <Icon as={RotateCcw} size={18} />
                     {restore.isPending && restore.variables === row.name
                       ? t("action_restoring")
                       : t("action_restore")}
-                  </button>
-                </li>
-              ))}
-            </ul>
+                  </Button>
+                )}
+              />
+
+              {/* Kept under their own heading because they are kept under their
+                  own rule: the daily copies are pruned to thirty, these are
+                  never deleted, and they are the only record of a state the
+                  owner replaced. No restore button: restoring one is a decision
+                  that needs a person who knows the file, not one more click. */}
+              {safetyCopies.length === 0 ? null : (
+                <section aria-labelledby="settings-safety-copies" className="flex flex-col gap-2">
+                  <h4 id="settings-safety-copies" className="font-semibold text-foreground">
+                    {t("settings_safety_copies")}
+                  </h4>
+                  <p className="text-sm text-muted-foreground">{t("settings_safety_copies_hint")}</p>
+                  <DataTable
+                    data-testid="safety-copies-table"
+                    caption={t("settings_safety_copies")}
+                    columns={columns}
+                    rows={safetyCopies}
+                    rowKey={(row) => row.name}
+                  />
+                </section>
+              )}
+            </>
+          ) : null}
+        </CardContent>
+
+        <CardFooter className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setDone(null);
+              setServerError(null);
+              create.mutate();
+            }}
+          >
+            {create.isPending ? t("action_saving") : t("action_backup_now")}
+          </Button>
+          {serverError !== null ? (
+            <p role="alert" className="text-sm text-fg-danger">
+              {t(serverError)}
+            </p>
+          ) : null}
+          {done !== null && serverError === null ? (
+            <p role="status" className="text-sm text-fg-success">
+              {t(done)}
+            </p>
+          ) : null}
+        </CardFooter>
+      </Card>
+
+      <Dialog
+        open={asking !== null}
+        onOpenChange={(open) => {
+          if (!open) setAsking(null);
+        }}
+      >
+        <DialogContent data-testid="backup-restore-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("backups_restore_title")}</DialogTitle>
+            <DialogDescription>{t("backups_confirm_restore")}</DialogDescription>
+          </DialogHeader>
+          {asking === null ? null : (
+            <p className="text-sm text-muted-foreground">
+              {t("backups_newest_label")}{" "}
+              <span dir="ltr" className="font-numeric tabular-nums text-foreground">
+                {readableTime(asking.taken_at)}
+              </span>
+            </p>
           )}
-
-          {/* Kept under their own heading because they are kept under their
-              own rule: the daily copies are pruned to thirty, these are
-              never deleted, and they are the only record of a state the
-              owner replaced. No restore button: restoring one is a decision
-              that needs a person who knows the file, not one more click. */}
-          {safetyCopies.length === 0 ? null : (
-            <section aria-labelledby="settings-safety-copies" className="flex flex-col gap-2">
-              <h3 id="settings-safety-copies" className="font-semibold">
-                {t("settings_safety_copies")}
-              </h3>
-              <p className="text-sm opacity-80">{t("settings_safety_copies_hint")}</p>
-              <ul className="flex flex-col divide-y rounded border">
-                {safetyCopies.map((row) => (
-                  <li
-                    key={row.name}
-                    data-testid="safety-copy-row"
-                    className="flex items-center justify-between gap-4 px-3 py-2"
-                  >
-                    <span>{readableTime(row.taken_at)}</span>
-                    <span className="text-sm opacity-80">
-                      {readableSize(row.bytes, t("unit_kb"), t("unit_mb"))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
-      ) : null}
-
-      {serverError !== null ? (
-        <p role="alert" className="text-red-700">
-          {t(serverError)}
-        </p>
-      ) : null}
-      {done !== null && serverError === null ? <p role="status">{t(done)}</p> : null}
-
-      <div>
-        <button
-          type="button"
-          className="rounded border px-3 py-1.5 disabled:opacity-50"
-          disabled={busy}
-          onClick={() => {
-            setDone(null);
-            setServerError(null);
-            create.mutate();
-          }}
-        >
-          {create.isPending ? t("action_saving") : t("action_backup_now")}
-        </button>
-      </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setAsking(null)}>
+              {t("action_cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={restore.isPending}
+              onClick={() => {
+                if (asking === null) return;
+                const name = asking.name;
+                setAsking(null);
+                restore.mutate(name);
+              }}
+            >
+              {t("backups_restore_confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

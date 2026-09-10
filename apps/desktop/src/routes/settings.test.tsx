@@ -2,7 +2,7 @@
 // from the API's answer and what it sends. The rules (a blank name, a bad
 // day) are the API crate's tests.
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -34,6 +34,30 @@ const seeded: SettingsDto = {
   regime_planned: null,
   theme: null,
 };
+
+/**
+ * The régime is chosen through the kit's select, which is Radix's, and Radix
+ * calls two DOM methods jsdom does not implement. They are stubbed rather
+ * than avoided: what these tests assert is the body that leaves the screen,
+ * and the browser path of the same control is proved in
+ * `e2e/settings.spec.ts`, which drives a real Chromium.
+ */
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+  Element.prototype.hasPointerCapture = vi.fn(() => false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
+});
+
+/** Opens the régime select of `form` and picks the option reading `label`. */
+async function chooseRegime(
+  user: ReturnType<typeof userEvent.setup>,
+  form: HTMLElement,
+  label: string,
+): Promise<void> {
+  await user.click(within(form).getByRole("combobox", { name: fr.field_regime }));
+  await user.click(await screen.findByRole("option", { name: label }));
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -274,7 +298,7 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     const day = within(regimeForm).getByLabelText(fr.field_valid_from);
     await user.clear(day);
     await user.type(day, "2099-01-01");
@@ -294,7 +318,7 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     const day = within(regimeForm).getByLabelText(fr.field_valid_from);
     await user.clear(day);
     await user.type(day, "2026-06-01");
@@ -312,7 +336,7 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     await user.clear(within(regimeForm).getByLabelText(fr.field_valid_from));
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     expect(await within(regimeForm).findByRole("alert")).toHaveTextContent(fr.error_day_invalid);
@@ -325,7 +349,7 @@ describe("the régime form", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     expect(await within(regimeForm).findByRole("alert")).toHaveTextContent(fr.error_validation);
   });
@@ -339,7 +363,7 @@ describe("the régime form", () => {
     expect(apply).toBeDisabled();
     await user.click(apply);
     expect(countOf("POST")).toBe(0);
-    await user.selectOptions(within(regimeForm).getByLabelText(fr.field_regime), "ifu");
+    await chooseRegime(user, regimeForm, fr.regime_ifu);
     expect(apply).toBeEnabled();
   });
 
