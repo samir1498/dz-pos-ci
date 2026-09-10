@@ -1,6 +1,7 @@
-//! The day a once-a-day job last ran, per shop. The stock re-derive runs at
-//! app start when this says it has not run today, so the marker has to
-//! survive a restart, which a value held in the process does not.
+//! The day a once-a-day job last ran, per shop. The stock recount runs on
+//! the first daily check that finds this saying it has not run today, so the
+//! marker has to survive a restart, which a value held in the process does
+//! not.
 
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
