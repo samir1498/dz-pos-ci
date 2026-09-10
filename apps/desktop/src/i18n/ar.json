@@ -545,5 +545,6 @@
   "labels_sheet_hint": "لوحة A4 للمنتجات المحددة.",
   "field_blank_is_zero": "الفراغ يعني صفرا.",
   "field_blank_is_none": "الفراغ يعني «لا سعر جملة».",
-  "products_add_first": "إضافة أول منتج"
+  "products_add_first": "إضافة أول منتج",
+  "products_count_one": "منتج"
 }

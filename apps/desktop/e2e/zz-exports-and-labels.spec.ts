@@ -86,7 +86,9 @@ test("the template downloads, a filled file is checked, and applying it creates 
     .setInputFiles(path.join(here, "fixtures", "products-import.xlsx"));
   await page.getByTestId("import-dry-run").click();
 
-  const rows = page.getByTestId("import-row");
+  // The report is a DataTable now: a row is a <tr> in its body rather
+  // than an element carrying its own id.
+  const rows = page.getByTestId("import-table").locator("tbody tr");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText(IMPORTED);
   await expect(rows.first()).toContainText(t("import_outcome_created"));
@@ -101,7 +103,7 @@ test("the template downloads, a filled file is checked, and applying it creates 
     .getByTestId("import-file")
     .setInputFiles(path.join(here, "fixtures", "products-import.xlsx"));
   await page.getByTestId("import-dry-run").click();
-  await expect(page.getByTestId("import-row")).toHaveCount(1);
+  await expect(page.getByTestId("import-table").locator("tbody tr")).toHaveCount(1);
   await page.getByTestId("import-apply").click();
   await expect(page.getByTestId("import-done")).toBeVisible();
 

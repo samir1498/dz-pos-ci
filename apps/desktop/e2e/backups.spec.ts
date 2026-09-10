@@ -37,12 +37,16 @@ test("a copy taken before a product is added loses it when it is restored", asyn
   // Added after the copy, so the restore has to lose it.
   await page.goto("/products");
   await page.getByRole("button", { name: t("products_add") }).click();
-  await page.getByLabel(t("field_name"), { exact: true }).fill(PRODUCT_NAME);
-  await page.getByLabel(t("field_price"), { exact: true }).fill("310");
+  // Not exact on the two required fields: the products fiche is on the
+  // kit now and FormField puts a required marker inside the label. The
+  // rate is the kit's select, a button and a listbox rather than a
+  // <select>, so the option is clicked; exact, because "9 %" is a
+  // substring of "19 %".
+  await page.getByLabel(t("field_name")).fill(PRODUCT_NAME);
+  await page.getByLabel(t("field_price")).fill("310");
   await page.getByLabel(t("field_stock"), { exact: true }).fill("6");
-  await page
-    .getByRole("combobox", { name: t("field_rate"), exact: true })
-    .selectOption({ label: t("rate_900") });
+  await page.getByRole("combobox", { name: t("field_rate"), exact: true }).click();
+  await page.getByRole("option", { name: t("rate_900"), exact: true }).click();
   await page.getByRole("button", { name: t("action_save") }).click();
   await expect(page.getByRole("row").filter({ hasText: PRODUCT_NAME })).toBeVisible();
 

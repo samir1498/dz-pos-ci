@@ -885,7 +885,7 @@ describe("the filters", () => {
     await withAll(user);
     expect(screen.getByTestId("page-header")).toHaveTextContent(`3 ${fr.products_count}`);
     await user.type(screen.getByTestId("products-search"), "semo");
-    expect(screen.getByTestId("page-header")).toHaveTextContent(`1 ${fr.products_count}`);
+    expect(screen.getByTestId("page-header")).toHaveTextContent(`1 ${fr.products_count_one}`);
   });
 
   test("a row at or under its threshold wears the low pill", async () => {

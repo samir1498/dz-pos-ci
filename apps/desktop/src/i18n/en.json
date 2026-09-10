@@ -545,5 +545,6 @@
   "labels_sheet_hint": "One A4 sheet for the ticked products.",
   "field_blank_is_zero": "Blank means zero.",
   "field_blank_is_none": "Blank means “no wholesale price”.",
-  "products_add_first": "Add the first product"
+  "products_add_first": "Add the first product",
+  "products_count_one": "product"
 }

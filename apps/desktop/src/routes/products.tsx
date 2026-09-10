@@ -232,7 +232,7 @@ export function ProductsScreen() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title={t("products_title")}
-        description={`${shown.length} ${t("products_count")}`}
+        description={`${shown.length} ${t(shown.length < 2 ? "products_count_one" : "products_count")}`}
         actions={
           <>
             <Button
@@ -257,7 +257,11 @@ export function ProductsScreen() {
 
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4">
-          <FormField label={t("products_search")} hint={t("products_search_hint")} className="min-w-64 flex-1">
+          <FormField
+            label={t("products_search")}
+            hint={t("products_search_hint")}
+            className="min-w-64 max-w-md flex-1"
+          >
             {(parts) => (
               <Input
                 {...parts}
@@ -289,7 +293,13 @@ export function ProductsScreen() {
             )}
           </FormField>
 
-          <FormField label={t("products_filter_low")}>
+          {/* A tick wants its label beside it, not over it, so the field is
+              turned into a row; the label is still the kit's and still points
+              at the control by id. */}
+          <FormField
+            label={t("products_filter_low")}
+            className="flex-row-reverse items-center justify-end gap-2"
+          >
             {(parts) => (
               <Checkbox
                 id={parts.id}
@@ -836,7 +846,10 @@ function ProductForm({
 
       <form.Field name="active">
         {(field) => (
-          <FormField label={t("field_active")}>
+          <FormField
+            label={t("field_active")}
+            className="flex-row-reverse items-center justify-end gap-2"
+          >
             {(parts) => (
               <Checkbox
                 id={parts.id}
