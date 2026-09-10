@@ -14,17 +14,18 @@ use dzpos_api::dto::{
     CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CloseSupplierDto, CustomerDto,
     CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DatedRegimeDto, DebtEntryDto,
     DebtKindDto, DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto,
-    HealthDto, NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto, NewProductDto,
-    NewSaleDto, NewSaleLineDto, NewSupplierDto, OutgoingsDto, PartyKindDto, PaymentAllocationDto,
-    PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto, RegimeChangeDto, RegimeDto,
-    RestoreDto, SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto,
-    SaleLineDto, SaleTotalsDto, SaleTvaDto, SaleWarningDto, SettingsDto, StoreDto,
-    SupplierAllocationDto, SupplierDebtKindDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto,
-    SupplierStatementDto, SupplierWriteDto, TakingsDto, UnitDto,
+    HealthDto, LastStockRecountDto, NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto,
+    NewProductDto, NewSaleDto, NewSaleLineDto, NewSupplierDto, OutgoingsDto, PartyKindDto,
+    PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto,
+    RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto, SaleCancelEffectDto,
+    SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
+    SaleWarningDto, SettingsDto, StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto,
+    SupplierDebtKindDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto,
+    SupplierWriteDto, TakingsDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 62] = [
+const FILES: [&str; 65] = [
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -87,6 +88,9 @@ const FILES: [&str; 62] = [
     "TakingsDto.ts",
     "OutgoingsDto.ts",
     "CashPositionDto.ts",
+    "StockDriftDto.ts",
+    "StockRecountDto.ts",
+    "LastStockRecountDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -206,6 +210,9 @@ fn export_bindings() {
     TakingsDto::export_all(&cfg).unwrap();
     OutgoingsDto::export_all(&cfg).unwrap();
     CashPositionDto::export_all(&cfg).unwrap();
+    StockDriftDto::export_all(&cfg).unwrap();
+    StockRecountDto::export_all(&cfg).unwrap();
+    LastStockRecountDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");
