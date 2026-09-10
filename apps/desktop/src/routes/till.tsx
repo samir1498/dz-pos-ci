@@ -1,6 +1,12 @@
 // The till: the screen a cashier lives on. Search or scan on the start
 // side, the cart and the totals on the end side, one POST /sales at the end.
 //
+// This file holds the state of a basket and the one call that turns it into a
+// document. The three panels it is made of are in `-till/`: the cart, the
+// cash box and the customer. Each owns the reading of its own refusal, so the
+// server's answer is turned into something a cashier reads in the file that
+// shows it.
+//
 // Two rules about the amounts on this screen, both from architecture.md
 // rule 2. The totals it shows while the cart is being built are a preview,
 // computed by `computeTotals` in @dzpos/shared, the same module the same
@@ -11,7 +17,7 @@
 // there to keep a cashier from posting a basket the core would reject; the
 // core still refuses it, and its code is what the screen shows if it does.
 
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -20,7 +26,6 @@ import {
   computeTotals,
   formatCentimes,
   formatQty,
-  lineTotal,
   parseAmountToCentimes,
   parseQtyToMilli,
 } from "@dzpos/shared";
@@ -37,7 +42,6 @@ import type {
   SaleWarningDto,
   Totals,
   TotalsLine,
-  UnitDto,
 } from "@dzpos/shared";
 import {
   api,
@@ -49,7 +53,12 @@ import {
   settingsQueryKey,
 } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
-import { rateCellLabel } from "@/lib/rate";
+import { Cart, CartHeader, ONE_UNIT_MILLI, readLine } from "./-till/cart";
+import type { CartLine } from "./-till/cart";
+import { CustomerPanel, PartyIdsRefused, partyRefusal, takesCredit } from "./-till/customer";
+import type { PartyRefusal } from "./-till/customer";
+import { PaymentPanel, creditRefusal } from "./-till/payment";
+import type { CreditRefusal } from "./-till/payment";
 
 export const Route = createFileRoute("/till")({ component: TillScreen });
 
@@ -58,13 +67,6 @@ export const Route = createFileRoute("/till")({ component: TillScreen });
  * setting for it yet, and a cash payment is still what makes it due. When it
  * becomes a setting, both read the setting. */
 const STAMP_ENABLED = true;
-
-/** One unit, in thousandths. What a tile adds and what the + button adds. */
-const ONE_UNIT_MILLI = 1_000;
-
-/** Units a shop cannot sell a fraction of. A half box is not a thing a
- * receipt can say, and the core would take the 500 without a word. */
-const WHOLE_UNITS: readonly UnitDto[] = ["piece", "box"];
 
 const ERROR_KEY: Record<string, Key> = {
   validation: "error_validation",
@@ -86,81 +88,6 @@ const ERROR_KEY: Record<string, Key> = {
 function errorKey(error: unknown): Key {
   if (error instanceof ApiError) return ERROR_KEY[error.code] ?? "error_unknown";
   return "error_unknown";
-}
-
-/** The credit refusal, with the two amounts the server sent. The screen
- * shows them and never works them out: what a customer owes has one answer
- * and it is the core's (architecture.md rule 2). */
-interface CreditRefusal {
-  readonly balanceAfterCentimes: number;
-  readonly creditLimitCentimes: number;
-  readonly body: NewSaleDto;
-}
-
-/** The refusal, if this error is one and carried both amounts. An error that
- * says `credit_limit` and carries neither is a server the screen does not
- * recognise, and it falls back to the plain message. */
-function creditRefusal(error: unknown, body: NewSaleDto): CreditRefusal | null {
-  if (!(error instanceof ApiError) || error.code !== "credit_limit") return null;
-  const { balanceAfterCentimes, creditLimitCentimes } = error;
-  if (balanceAfterCentimes === undefined || creditLimitCentimes === undefined) return null;
-  return { balanceAfterCentimes, creditLimitCentimes, body };
-}
-
-/** A facture the party blocks refuse, as the server described it: which
- * half is short and of which identifiers. Both come off the wire; the screen
- * decides neither, the way it decides neither credit amount. */
-interface PartyRefusal {
-  readonly side: "seller" | "buyer";
-  readonly missing: readonly Key[];
-}
-
-/** The identifiers a facture can be short of, as their own labels. The
- * server sends the field names décret 05-468 art. 3 names; anything else is
- * a server this screen does not recognise, and the refusal then falls back
- * to its one line of text rather than showing a raw key. */
-const PARTY_FIELD: Record<string, Key> = {
-  rc: "field_rc",
-  nis: "field_nis",
-  name: "field_name",
-  address: "field_address",
-};
-
-/** The refusal, if this error is one and named a side and fields the screen
- * knows. */
-function partyRefusal(error: unknown): PartyRefusal | null {
-  if (!(error instanceof ApiError) || error.code !== "party_ids") return null;
-  const { partySide, missingIds } = error;
-  if (partySide !== "seller" && partySide !== "buyer") return null;
-  if (missingIds === undefined || missingIds.length === 0) return null;
-  const missing: Key[] = [];
-  for (const field of missingIds) {
-    const key = PARTY_FIELD[field];
-    if (key === undefined) return null;
-    missing.push(key);
-  }
-  return { side: partySide, missing };
-}
-
-/** What the picked customer's own standing says, before this basket. Over
- * the limit is what the shop has already let happen; near it is the warning
- * threshold reached. A customer with no limit is never either. */
-function standing(customer: CustomerDto | null): "over" | "near" | null {
-  if (customer === null) return null;
-  const { balance_centimes: balance, credit_limit_centimes: limit } = customer;
-  if (limit !== null && balance > limit) return "over";
-  const warn = customer.warn_threshold_centimes;
-  if (warn !== null && balance >= warn) return "near";
-  return null;
-}
-
-/** Whether this customer may buy on credit at all: a limit of zero is no
- * credit, a null limit is no limit. Two different answers, and the screen
- * acts on them differently (features.md §1). */
-function takesCredit(customer: CustomerDto | null): boolean {
-  if (customer === null) return false;
-  const limit = customer.credit_limit_centimes;
-  return limit === null || limit > 0;
 }
 
 /** What the till says about a sale the server let through anyway. The switch
@@ -191,43 +118,6 @@ const MONEY_ERROR_KEY: Record<string, Key> = {
   LineDiscountAboveLine: "error_discount_above_line",
   GlobalDiscountAboveTotal: "error_discount_above_total",
 };
-
-/** A cart line as the cashier is editing it: the quantity and the discount
- * stay the text that was typed, so "1," on the way to "1,5" is not thrown
- * away by a parse and written back as "1". */
-interface CartLine {
-  readonly product: ProductDto;
-  readonly qtyText: string;
-  readonly discountText: string;
-}
-
-/** A line read: its amounts if they are readable, the field message if not. */
-interface ReadLine {
-  readonly qtyMilli: number;
-  readonly discount: number;
-  readonly gross: number;
-  readonly problem: Key | null;
-}
-
-function readLine(line: CartLine): ReadLine {
-  const qtyMilli = parseQtyToMilli(line.qtyText);
-  if (qtyMilli === null || qtyMilli <= 0) {
-    return { qtyMilli: 0, discount: 0, gross: 0, problem: "error_qty_invalid" };
-  }
-  if (WHOLE_UNITS.includes(line.product.unit) && qtyMilli % ONE_UNIT_MILLI !== 0) {
-    return { qtyMilli, discount: 0, gross: 0, problem: "error_qty_whole" };
-  }
-  const gross = lineTotal(line.product.selling_centimes, qtyMilli);
-  const discount =
-    line.discountText.trim() === "" ? 0 : (parseAmountToCentimes(line.discountText) ?? -1);
-  if (discount < 0) {
-    return { qtyMilli, discount: 0, gross, problem: "error_discount_invalid" };
-  }
-  if (discount > gross) {
-    return { qtyMilli, discount, gross, problem: "error_discount_above_line" };
-  }
-  return { qtyMilli, discount, gross, problem: null };
-}
 
 export function TillScreen() {
   const { t } = useTranslation();
@@ -350,6 +240,14 @@ export function TillScreen() {
 
   function setQty(id: number, qtyText: string) {
     setCart((current) => current.map((l) => (l.product.id === id ? { ...l, qtyText } : l)));
+  }
+
+  function setDiscount(id: number, discountText: string) {
+    setCart((current) => current.map((l) => (l.product.id === id ? { ...l, discountText } : l)));
+  }
+
+  function remove(id: number) {
+    setCart((current) => current.filter((l) => l.product.id !== id));
   }
 
   // The two buttons move a line by one whole unit. A step that lands at or
@@ -601,17 +499,7 @@ export function TillScreen() {
       </div>
 
       <aside className="flex flex-col gap-3 rounded border p-3">
-        <header className="flex items-center justify-between gap-2">
-          <strong>{`${t("till_cart")} · ${cart.length}`}</strong>
-          <button
-            type="button"
-            className="rounded border px-2 py-1 text-sm"
-            disabled={cart.length === 0}
-            onClick={() => setCart([])}
-          >
-            {t("till_clear")}
-          </button>
-        </header>
+        <CartHeader count={cart.length} onClear={() => setCart([])} />
 
         {done !== null ? (
           <Confirmation
@@ -625,7 +513,7 @@ export function TillScreen() {
           />
         ) : null}
 
-        <CustomerPicker
+        <CustomerPanel
           picked={customer}
           rows={customers.data ?? []}
           search={customerSearch}
@@ -643,123 +531,37 @@ export function TillScreen() {
             // choice the pay button silently refuses.
             if (!takesCredit(next)) setMode((m) => (m === "credit" ? "cash" : m));
           }}
+          kind={kind}
+          onKind={setKind}
         />
 
-        <fieldset className="flex flex-wrap gap-3 border-0 p-0">
-          <legend className="mb-1">{t("till_kind")}</legend>
-          <KindChoice kind="ticket" current={kind} label={t("till_ticket")} onPick={setKind} />
-          {/* Loi 04-02 art. 10 decides the paper by who the buyer is, and
-              décret 05-468 art. 3 puts that buyer on it, so the choice is
-              there once a fiche is picked and not before. */}
-          <KindChoice
-            kind="facture"
-            current={kind}
-            label={t("till_facture")}
-            title={customer === null ? t("till_facture_needs_customer") : undefined}
-            disabled={customer === null}
-            onPick={setKind}
-          />
-          {/* A quotation is the same basket priced and nothing else: it is
-              made out to a customer the way a facture is, so it appears on
-              the same terms, and it moves neither stock nor debt
-              (features.md §3). */}
-          <KindChoice
-            kind="proforma"
-            current={kind}
-            label={t("till_kind_proforma")}
-            title={customer === null ? t("till_proforma_needs_customer") : undefined}
-            disabled={customer === null}
-            onPick={setKind}
-          />
-        </fieldset>
+        <Cart
+          lines={cart}
+          read={read}
+          discountText={globalDiscountText}
+          onDiscountText={setGlobalDiscountText}
+          discountProblem={globalDiscountProblem}
+          totalsProblem={totalsProblem}
+          totals={preview}
+          onQty={setQty}
+          onDiscount={setDiscount}
+          onStep={step}
+          onRemove={remove}
+        />
 
-        <div data-testid="cart" className="flex flex-col gap-3">
-          {cart.length === 0 ? <p>{t("till_cart_empty")}</p> : null}
-          {cart.map((line, i) => (
-            <CartRow
-              key={line.product.id}
-              line={line}
-              read={read[i]}
-              onQty={(value) => setQty(line.product.id, value)}
-              onDiscount={(value) =>
-                setCart((current) =>
-                  current.map((l) =>
-                    l.product.id === line.product.id ? { ...l, discountText: value } : l,
-                  ),
-                )
-              }
-              onStep={(by) => step(line.product.id, by)}
-              onRemove={() =>
-                setCart((current) => current.filter((l) => l.product.id !== line.product.id))
-              }
-            />
-          ))}
-        </div>
-
-        <label className="flex flex-col gap-1">
-          <span>{t("field_global_discount")}</span>
-          <input
-            dir="ltr"
-            inputMode="decimal"
-            className="rounded border px-2 py-1 text-end font-mono"
-            value={globalDiscountText}
-            onChange={(e) => setGlobalDiscountText(e.target.value)}
-          />
-        </label>
-        {globalDiscountProblem !== null || totalsProblem !== null ? (
-          <p role="alert" className="text-sm text-red-700">
-            {t(globalDiscountProblem ?? totalsProblem ?? "error_unknown")}
-          </p>
-        ) : null}
-
-        {preview !== null ? <TotalsTable totals={preview} /> : null}
-
-        <fieldset className="flex flex-wrap gap-3 border-0 p-0">
-          <legend className="mb-1">{t("payment_mode")}</legend>
-          <PaymentChoice mode="cash" current={mode} label={t("pay_cash")} onPick={setMode} />
-          <PaymentChoice mode="card" current={mode} label={t("pay_card")} onPick={setMode} />
-          {/* On credit the sale goes on a customer's ledger, so the choice
-              is there once a customer who may buy on credit is picked. A
-              limit of zero is no credit at all (features.md §1). */}
-          <PaymentChoice
-            mode="credit"
-            current={mode}
-            label={t("pay_credit")}
-            title={takesCredit(customer) ? undefined : t("pay_credit_needs_customer")}
-            disabled={!takesCredit(customer)}
-            onPick={setMode}
-          />
-        </fieldset>
-
-        {mode === "cash" ? (
-          <label className="flex flex-col gap-1">
-            <span>{t("field_tendered")}</span>
-            <input
-              dir="ltr"
-              inputMode="decimal"
-              className="rounded border px-2 py-1 text-end font-mono"
-              value={tenderedText}
-              onChange={(e) => setTenderedText(e.target.value)}
-            />
-          </label>
-        ) : null}
-        {mode === "cash" && tenderedProblem === null && !tenderedMissing && cart.length > 0 ? (
-          <p className="flex items-center justify-between gap-2">
-            <span>{t("till_change")}</span>
-            <span data-testid="till-change" className="font-mono" dir="ltr">
-              {formatCentimes(change)}
-            </span>
-          </p>
-        ) : null}
-        {tenderedProblem !== null ? (
-          <p role="alert" className="text-sm text-red-700">
-            {t(tenderedProblem)}
-          </p>
-        ) : null}
-
-        {refusal !== null ? (
-          <CreditRefused refusal={refusal} onOverride={override} pending={pay.isPending} />
-        ) : null}
+        <PaymentPanel
+          mode={mode}
+          onMode={setMode}
+          creditAllowed={takesCredit(customer)}
+          tenderedText={tenderedText}
+          onTendered={setTenderedText}
+          showChange={!tenderedMissing && cart.length > 0}
+          change={change}
+          problem={tenderedProblem}
+          refusal={refusal}
+          onOverride={override}
+          pending={pay.isPending}
+        />
 
         {partyProblem !== null ? <PartyIdsRefused refusal={partyProblem} /> : null}
 
@@ -786,370 +588,8 @@ export function TillScreen() {
   );
 }
 
-/** Who the sale is for. "Walk-in" is the default and stays the first choice:
- * most baskets at a till belong to nobody in particular, and a cashier must
- * not have to unpick a customer to sell to one.
- *
- * Only active fiches are offered. A closed fiche is one the shop has stopped
- * doing business with, and the core refuses a sale to it; offering it here
- * would be a choice that always fails.
- *
- * The picked fiche is kept whole by the parent, so narrowing the search does
- * not unpick it. It is added back to the options when the search has pushed
- * it out, or the select would show a blank row for a customer who is there.
- */
-function CustomerPicker({
-  picked,
-  rows,
-  search,
-  onSearch,
-  onPick,
-}: {
-  picked: CustomerDto | null;
-  rows: CustomerDto[];
-  search: string;
-  onSearch: (value: string) => void;
-  onPick: (customer: CustomerDto | null) => void;
-}) {
-  const { t } = useTranslation();
-  const active = rows.filter((c) => c.active);
-  const options =
-    picked !== null && !active.some((c) => c.id === picked.id) ? [picked, ...active] : active;
-  const alert = standing(picked);
-  return (
-    <div className="flex flex-col gap-2 border-b pb-3">
-      <label className="flex flex-col gap-1">
-        <span>{t("till_customer")}</span>
-        <input
-          type="search"
-          className="rounded border px-2 py-1"
-          aria-label={t("till_customer_search")}
-          placeholder={t("customers_search_hint")}
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-        />
-      </label>
-      <select
-        className="rounded border px-2 py-1"
-        aria-label={t("till_customer")}
-        value={picked === null ? "" : String(picked.id)}
-        onChange={(e) => {
-          const id = Number(e.target.value);
-          onPick(options.find((c) => c.id === id) ?? null);
-        }}
-      >
-        <option value="">{t("till_walk_in")}</option>
-        {options.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-      {picked !== null ? (
-        <p className="flex items-center justify-between gap-2 text-sm">
-          <span>{t("customers_balance")}</span>
-          <span data-testid="till-customer-balance" className="font-mono" dir="ltr">
-            {formatCentimes(picked.balance_centimes)}
-          </span>
-        </p>
-      ) : null}
-      {alert !== null && picked !== null ? (
-        <p
-          role="status"
-          data-testid="till-limit-banner"
-          className={alert === "over" ? "text-sm text-red-700" : "text-sm text-amber-700"}
-        >
-          {`${t(alert === "over" ? "till_over_limit" : "till_near_limit")} · ${formatCentimes(
-            picked.balance_centimes,
-          )} / ${
-            picked.credit_limit_centimes === null
-              ? t("till_no_limit")
-              : formatCentimes(picked.credit_limit_centimes)
-          }`}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-/** The credit limit refusing the sale, in the two amounts the server sent.
- * The override button sends the same basket again with the flag on; the
- * server writes an audit row for it, and until roles arrive in M4 anyone at
- * the till may take that decision (features.md §1). */
-function CreditRefused({
-  refusal,
-  onOverride,
-  pending,
-}: {
-  refusal: CreditRefusal;
-  onOverride: () => void;
-  pending: boolean;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div role="alert" className="flex flex-col gap-2 rounded border border-red-700 p-3">
-      <strong className="text-red-700">{t("error_credit_limit")}</strong>
-      <p className="flex items-center justify-between gap-2">
-        <span>{t("till_balance_after")}</span>
-        <span data-testid="till-balance-after" className="font-mono" dir="ltr">
-          {formatCentimes(refusal.balanceAfterCentimes)}
-        </span>
-      </p>
-      <p className="flex items-center justify-between gap-2">
-        <span>{t("field_credit_limit")}</span>
-        <span data-testid="till-credit-limit" className="font-mono" dir="ltr">
-          {formatCentimes(refusal.creditLimitCentimes)}
-        </span>
-      </p>
-      <button
-        type="button"
-        className="rounded border px-3 py-1.5"
-        disabled={pending}
-        onClick={onOverride}
-      >
-        {t("till_override")}
-      </button>
-      {/* The other answer to this refusal, and the one a shop usually wants:
-          take money off what the customer already owes. The link opens that
-          customer's own fiche rather than the list, because the cashier is
-          looking at a refusal that named them and should not have to type the
-          name back into a search box. */}
-      {refusal.body.customer_id !== null ? (
-        <Link
-          to="/customers/$id"
-          params={{ id: String(refusal.body.customer_id) }}
-          className="underline"
-        >
-          {t("till_open_fiche")}
-        </Link>
-      ) : null}
-    </div>
-  );
-}
-
-/** The facture the party blocks refuse, with the side and the fields the
- * server named and a way to go and fill them in. Two screens own the two
- * halves, so the link goes to the one that can fix this refusal and not to
- * a generic "settings". */
-function PartyIdsRefused({ refusal }: { refusal: PartyRefusal }) {
-  const { t } = useTranslation();
-  const seller = refusal.side === "seller";
-  return (
-    <div
-      role="alert"
-      data-testid="till-party-ids"
-      className="flex flex-col gap-2 rounded border border-red-700 p-3"
-    >
-      <strong className="text-red-700">{t("error_party_ids")}</strong>
-      <p>{t(seller ? "till_party_ids_seller" : "till_party_ids_buyer")}</p>
-      <ul data-testid="till-party-ids-missing" className="list-disc ps-5">
-        {refusal.missing.map((field) => (
-          <li key={field}>{t(field)}</li>
-        ))}
-      </ul>
-      <Link to={seller ? "/settings" : "/customers"} className="underline">
-        {t(seller ? "till_party_ids_settings" : "till_party_ids_customer")}
-      </Link>
-    </div>
-  );
-}
-
-function KindChoice({
-  kind,
-  current,
-  label,
-  title,
-  disabled = false,
-  onPick,
-}: {
-  kind: SaleKindDto;
-  current: SaleKindDto;
-  label: string;
-  title?: string;
-  disabled?: boolean;
-  onPick: (kind: SaleKindDto) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2" title={title}>
-      <input
-        type="radio"
-        name="sale_kind"
-        value={kind}
-        checked={current === kind}
-        disabled={disabled}
-        onChange={() => onPick(kind)}
-      />
-      <span>{label}</span>
-    </label>
-  );
-}
-
 function chipClass(active: boolean): string {
   return active ? "rounded-full border px-3 py-1 font-semibold" : "rounded-full border px-3 py-1";
-}
-
-function PaymentChoice({
-  mode,
-  current,
-  label,
-  title,
-  disabled = false,
-  onPick,
-}: {
-  mode: PaymentModeDto;
-  current: PaymentModeDto;
-  label: string;
-  title?: string;
-  disabled?: boolean;
-  onPick: (mode: PaymentModeDto) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2" title={title}>
-      <input
-        type="radio"
-        name="payment_mode"
-        value={mode}
-        checked={current === mode}
-        disabled={disabled}
-        onChange={() => onPick(mode)}
-      />
-      <span>{label}</span>
-    </label>
-  );
-}
-
-function CartRow({
-  line,
-  read,
-  onQty,
-  onDiscount,
-  onStep,
-  onRemove,
-}: {
-  line: CartLine;
-  read: ReadLine;
-  onQty: (value: string) => void;
-  onDiscount: (value: string) => void;
-  onStep: (by: number) => void;
-  onRemove: () => void;
-}) {
-  const { t } = useTranslation();
-  const net = read.problem === null ? read.gross - read.discount : 0;
-  return (
-    <div className="flex flex-col gap-1 border-t pt-2">
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-medium">{line.product.name}</span>
-        <span className="font-mono" dir="ltr">
-          {read.problem === null ? formatCentimes(net) : ""}
-        </span>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className="rounded border px-2"
-          aria-label={`${t("till_qty_decrease")} ${line.product.name}`}
-          onClick={() => onStep(-1_000)}
-        >
-          −
-        </button>
-        <input
-          dir="ltr"
-          inputMode="decimal"
-          size={5}
-          className="w-16 rounded border px-2 py-1 text-end font-mono"
-          aria-label={`${t("field_qty")} ${line.product.name}`}
-          value={line.qtyText}
-          onChange={(e) => onQty(e.target.value)}
-        />
-        <button
-          type="button"
-          className="rounded border px-2"
-          aria-label={`${t("till_qty_increase")} ${line.product.name}`}
-          onClick={() => onStep(1_000)}
-        >
-          +
-        </button>
-        <span className="font-mono text-sm" dir="ltr">
-          {`× ${formatCentimes(line.product.selling_centimes)}`}
-        </span>
-        <input
-          dir="ltr"
-          inputMode="decimal"
-          size={6}
-          className="w-20 rounded border px-2 py-1 text-end font-mono"
-          aria-label={`${t("field_line_discount")} ${line.product.name}`}
-          value={line.discountText}
-          onChange={(e) => onDiscount(e.target.value)}
-        />
-        <button
-          type="button"
-          className="ms-auto rounded border px-2"
-          aria-label={`${t("till_line_remove")} ${line.product.name}`}
-          onClick={onRemove}
-        >
-          ✕
-        </button>
-      </div>
-      {read.problem !== null ? (
-        <span role="alert" className="text-sm text-red-700">
-          {t(read.problem)}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-/** The preview, column for column with the totals table of features.md §3.
- * A row worth nothing is not printed, the way the ticket does not print it. */
-function TotalsTable({ totals }: { totals: Totals }) {
-  const { t } = useTranslation();
-  return (
-    <table className="w-full" aria-label={t("total_net_to_pay")}>
-      <tbody>
-        <TotalsRow label={t("total_ht")} centimes={totals.totalHt} />
-        {totals.discount > 0 ? (
-          <TotalsRow label={t("total_discount")} centimes={totals.discount} />
-        ) : null}
-        {totals.tvaByRate.map((g) => (
-          <TotalsRow
-            key={g.rateBps}
-            label={`${t("total_tva")} ${rateCellLabel(g.rateBps, t)}`}
-            centimes={g.amount}
-          />
-        ))}
-        {totals.stamp > 0 ? <TotalsRow label={t("total_stamp")} centimes={totals.stamp} /> : null}
-        <TotalsRow
-          label={t("total_net_to_pay")}
-          centimes={totals.netToPay}
-          testId="total-net-to-pay"
-          strong
-        />
-      </tbody>
-    </table>
-  );
-}
-
-function TotalsRow({
-  label,
-  centimes,
-  testId,
-  strong = false,
-}: {
-  label: string;
-  centimes: number;
-  testId?: string;
-  strong?: boolean;
-}) {
-  return (
-    <tr className={strong ? "font-semibold" : undefined}>
-      <th scope="row" className="py-0.5 text-start font-normal">
-        {label}
-      </th>
-      <td data-testid={testId} className="py-0.5 text-end font-mono" dir="ltr">
-        {formatCentimes(centimes)}
-      </td>
-    </tr>
-  );
 }
 
 /** What the API answered, not what the screen computed. */
