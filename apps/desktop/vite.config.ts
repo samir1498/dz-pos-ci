@@ -50,7 +50,12 @@ export default defineConfig({
     // their Radix primitives are the growth. Raised, not removed, for the
     // same reason as before: it should say something again the next time the
     // bundle grows by half.
-    chunkSizeWarningLimit: 1000,
+    // Raised again from 1000 to 1400 when the dashboard's chart landed:
+    // recharts and its d3 scales are about 410 kB minified, 120 kB gzipped,
+    // and they are read off the disk beside the binary like the rest of it.
+    // The chart is one screen's, so this is the place a split would pay for
+    // itself if the desktop ever loaded over a network.
+    chunkSizeWarningLimit: 1400,
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
