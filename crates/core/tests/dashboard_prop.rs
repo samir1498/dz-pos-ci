@@ -652,6 +652,36 @@ proptest! {
         }
         prop_assert_eq!(as_expected(&read.this_month), summed);
 
+        // And the same month read as a series, which is the chart's own
+        // window: three days ending on the day after the one asked about.
+        // Every bucket has to be the day the screen reads on its own, and the
+        // three of them have to come to the month, or a chart and the figure
+        // beside it would disagree on a file neither of them wrote.
+        let series = dashboard::series(&mut conn, SHOP, calendar(THE_DAY + 1), 3).unwrap();
+        prop_assert_eq!(series.from, calendar(THE_DAY - 1));
+        prop_assert_eq!(series.to, calendar(THE_DAY + 1));
+        prop_assert_eq!(series.days.len(), 3);
+        let mut charted = Expected::default();
+        for (point, day) in series.days.iter().zip([THE_DAY - 1, THE_DAY, THE_DAY + 1]) {
+            prop_assert_eq!(point.from, calendar(day));
+            prop_assert_eq!(point.to, calendar(day));
+            let one = dashboard::read(&mut conn, SHOP, calendar(day)).unwrap();
+            prop_assert_eq!(as_expected(&point.figures), as_expected(&one.today));
+            charted.add(&as_expected(&point.figures));
+        }
+        prop_assert_eq!(as_expected(&read.this_month), charted);
+
+        // Three days do not fill a week, so the one bucket is the whole
+        // window and it is the days folded, never a second query.
+        prop_assert_eq!(series.weeks.len(), 1);
+        prop_assert_eq!(series.weeks[0].from, series.from);
+        prop_assert_eq!(series.weeks[0].to, series.to);
+        prop_assert_eq!(as_expected(&series.weeks[0].figures), charted);
+        prop_assert_eq!(
+            series.weeks[0].cash_in.as_centimes(),
+            series.days.iter().map(|p| p.cash_in.as_centimes()).sum::<i64>()
+        );
+
         // Orders still waiting on goods, which no sale figure feels.
         prop_assert_eq!(read.open_purchases, open_orders);
 

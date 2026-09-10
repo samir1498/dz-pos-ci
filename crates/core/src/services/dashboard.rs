@@ -51,6 +51,14 @@ use crate::services::expenses;
 /// the screen; a shop wanting the whole catalogue exports it (T7).
 const TOP: usize = 10;
 
+/// How many days one bucket of the week series holds.
+const WEEK: usize = 7;
+
+/// The longest window the series answers. A year and its leap day: past that
+/// the caller wants an export and not a chart, and thirty days of queries is
+/// already what one screen costs.
+const MAX_DAYS: u32 = 366;
+
 /// What one stretch of days came to. Every field is derived; nothing here is
 /// stored anywhere.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,6 +83,80 @@ pub struct Figures {
     pub margin: Money,
     /// Money out that is not stock, over the same days.
     pub expenses: Money,
+}
+
+impl Figures {
+    /// A stretch of days nothing happened on. Not `Default`, so a caller has
+    /// to name it: a `Figures` that quietly defaulted to zeros is a screen
+    /// showing a shop that sold nothing.
+    pub const ZERO: Figures = Figures {
+        sales_ttc: Money::ZERO,
+        sales_count: 0,
+        lines_ht: Money::ZERO,
+        discounts: Money::ZERO,
+        sales_ht: Money::ZERO,
+        cost_of_goods: Money::ZERO,
+        margin: Money::ZERO,
+        expenses: Money::ZERO,
+    };
+
+    /// Two stretches of days, added column by column.
+    ///
+    /// Every field is a plain sum over rows, and the two derived ones stay
+    /// derived under addition: `sales_ht` is `lines_ht` less `discounts` on
+    /// each side, so it is on the sum too, and the same holds for `margin`.
+    /// That is why a week is folded from its days rather than queried again:
+    /// the two can never disagree.
+    fn checked_add(self, other: Figures) -> Result<Figures, CoreError> {
+        Ok(Figures {
+            sales_ttc: self.sales_ttc.checked_add(other.sales_ttc)?,
+            sales_count: self
+                .sales_count
+                .checked_add(other.sales_count)
+                .ok_or(crate::money::MoneyError::Overflow)?,
+            lines_ht: self.lines_ht.checked_add(other.lines_ht)?,
+            discounts: self.discounts.checked_add(other.discounts)?,
+            sales_ht: self.sales_ht.checked_add(other.sales_ht)?,
+            cost_of_goods: self.cost_of_goods.checked_add(other.cost_of_goods)?,
+            margin: self.margin.checked_add(other.margin)?,
+            expenses: self.expenses.checked_add(other.expenses)?,
+        })
+    }
+}
+
+/// One bucket of the series: one day, or the week of days it was folded from.
+///
+/// `from` and `to` are both included and equal on a day, so a chart draws the
+/// two rows the same way and a tooltip has the range the figure covers rather
+/// than the one the caller asked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeriesPoint {
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+    pub figures: Figures,
+    /// What the drawer took over the bucket: sales paid on the spot and money
+    /// handed over against a debt, cash only. `cash::Takings::total` is the
+    /// one place that is decided; the card side is a movement of the bank and
+    /// not of the till, so it is not in this line.
+    pub cash_in: Money,
+}
+
+/// A stretch of days, each on its own and folded into weeks.
+///
+/// The weeks are cut back from `to` and not off the calendar: the shop is
+/// looking at a chart that ends today, so the last bucket has to be a whole
+/// week of it and the odd days fall at the far end where nobody reads them
+/// closely. A thirty day window is four weeks and two days.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Series {
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+    /// Oldest first, one per day of the window, none skipped: a day nothing
+    /// happened on is a row of zeros, because a chart with a gap in it reads
+    /// as a day the shop was not open.
+    pub days: Vec<SeriesPoint>,
+    /// Oldest first. Folded from `days`, never queried again.
+    pub weeks: Vec<SeriesPoint>,
 }
 
 /// A product the shop is short of.
@@ -168,6 +250,103 @@ pub fn read(
         supplier_debt: owed(&supplier_repo::balances(conn, shop_id)?)?,
         open_purchases: repo::open_purchases(conn, shop_id)?,
     })
+}
+
+/// The last `days` days ending on `day`, each read on its own and then folded
+/// into weeks.
+///
+/// Every figure comes out of `figures` and `cash::position`, the two the
+/// dashboard's own columns are read from, so a day of this chart and the same
+/// day read on the screen are one answer: a reversal is in both, a cancelled
+/// paper is in neither, and nothing here re-states a rule that lives above.
+///
+/// The window is closed at both ends and counted backwards, so `days` of 1 is
+/// `day` alone and 30 is `day` and the twenty-nine before it. A window that
+/// happens to be a whole calendar month therefore adds up to that month's
+/// column on the dashboard, which is what
+/// `the_thirty_days_of_the_series_add_up_to_the_month_the_dashboard_reads`
+/// holds.
+pub fn series(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    day: NaiveDate,
+    days: u32,
+) -> Result<Series, CoreError> {
+    if days == 0 || days > MAX_DAYS {
+        return Err(CoreError::validation(
+            "days",
+            "a chart covers between one day and a year of them",
+        ));
+    }
+    let outside =
+        || CoreError::validation("day", "that day is outside the calendar the shop keeps");
+    // Counted back from the day the caller named rather than forward from a
+    // first day it worked out itself: the last bucket has to end on `day`,
+    // and a window that started a day early would put the shop's today in a
+    // bucket of its own.
+    let first = day
+        .checked_sub_days(chrono::Days::new(u64::from(days.saturating_sub(1))))
+        .ok_or_else(outside)?;
+
+    let mut points: Vec<SeriesPoint> = Vec::with_capacity(days as usize);
+    for step in 0..days {
+        let on = first
+            .checked_add_days(chrono::Days::new(u64::from(step)))
+            .ok_or_else(outside)?;
+        points.push(SeriesPoint {
+            from: on,
+            to: on,
+            figures: figures(conn, shop_id, Period::Day(on))?,
+            cash_in: cash::position(conn, shop_id, Period::Day(on))?
+                .cash_in
+                .total()?,
+        });
+    }
+
+    // `rchunks` cuts from the newest end, so the whole weeks sit against
+    // `day` and the short one is the oldest; `rev` puts the buckets back in
+    // the order the chart draws them.
+    let mut weeks: Vec<SeriesPoint> = Vec::new();
+    for chunk in points.rchunks(WEEK).rev() {
+        weeks.push(fold(chunk)?);
+    }
+    Ok(Series {
+        from: first,
+        to: day,
+        days: points,
+        weeks,
+    })
+}
+
+/// One bucket out of the days it covers. `rchunks` never yields an empty
+/// slice, so the ends are read off the first and the last without an option
+/// to answer for; `first` and `last` still supply the day itself as the
+/// fallback rather than a panic.
+fn fold(points: &[SeriesPoint]) -> Result<SeriesPoint, CoreError> {
+    let mut figures = Figures::ZERO;
+    let mut cash_in = Money::ZERO;
+    let mut from = None;
+    let mut to = None;
+    for point in points {
+        figures = figures.checked_add(point.figures)?;
+        cash_in = cash_in.checked_add(point.cash_in)?;
+        from = Some(from.map_or(point.from, |d: NaiveDate| d.min(point.from)));
+        to = Some(to.map_or(point.to, |d: NaiveDate| d.max(point.to)));
+    }
+    match (from, to) {
+        (Some(from), Some(to)) => Ok(SeriesPoint {
+            from,
+            to,
+            figures,
+            cash_in,
+        }),
+        // No caller can reach this: every chunk of a non empty window has a
+        // day in it, and an empty window is refused above.
+        _ => Err(CoreError::validation(
+            "days",
+            "a chart covers between one day and a year of them",
+        )),
+    }
 }
 
 /// One stretch of days, summed.
