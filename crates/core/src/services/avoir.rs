@@ -550,6 +550,15 @@ impl Remaining {
                 }
                 if let Some(mine) = rates.iter_mut().find(|r| r.rate == taken.rate_bps) {
                     mine.ht = mine.ht.checked_sub(taken.line_total)?;
+                    // A rate the recap does not name was taxed on nothing and
+                    // carries no remise, so its base follows its HT down and
+                    // the two stay equal. Left behind, the base would sit
+                    // above the HT as soon as one avoir took part of the
+                    // group, and the remise still to give back there would
+                    // read as less than nothing.
+                    if !mine.on_the_recap {
+                        mine.base = mine.base.checked_sub(taken.line_total)?;
+                    }
                 }
             }
             for row in &avoir.totals.tva_by_rate {
