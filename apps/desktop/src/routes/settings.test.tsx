@@ -80,7 +80,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let current: SettingsDto;
 let storeAnswer: (() => Response) | null;
 let regimeAnswer: (() => Response) | null;
-let clockAnswer: (() => Response) | null;
+let clockAnswer: (() => Response | Promise<Response>) | null;
 
 beforeEach(() => {
   current = seeded;
@@ -226,6 +226,18 @@ describe("the régime form", () => {
     mount();
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     expect(within(regimeForm).getByLabelText(fr.field_valid_from)).toHaveValue(SHOP_TODAY);
+  });
+
+  test("says it is reading the shop's day while it waits, not that products are loading", async () => {
+    // Its own line: the settings screen has no product list on it, and a
+    // panel that borrowed the products' string would say something the
+    // screen cannot back up.
+    clockAnswer = () => new Promise<Response>(() => undefined);
+    mount();
+
+    await screen.findByLabelText(fr.field_name);
+    expect(screen.getByText(fr.regime_loading)).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: fr.settings_regime })).not.toBeInTheDocument();
   });
 
   test("a clock the server will not answer is an error line with a retry, not a wait", async () => {

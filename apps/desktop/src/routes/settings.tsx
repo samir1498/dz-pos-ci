@@ -60,7 +60,7 @@ export function SettingsScreen() {
   return (
     <section className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold">{t("settings_title")}</h1>
-      {settings.isPending ? <p>{t("products_loading")}</p> : null}
+      {settings.isPending ? <p>{t("settings_loading")}</p> : null}
       {settings.isError ? (
         <p role="alert" className="text-red-700">
           {t(errorKey(settings.error))}
@@ -88,7 +88,7 @@ export function SettingsScreen() {
               </button>
             </div>
           ) : clock.today === undefined ? (
-            <p>{t("products_loading")}</p>
+            <p>{t("regime_loading")}</p>
           ) : (
             <RegimePanel
               current={settings.data.regime}
