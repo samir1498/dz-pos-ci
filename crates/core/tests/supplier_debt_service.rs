@@ -489,3 +489,122 @@ fn a_movement_raises_the_debt_or_lowers_it_and_never_both_or_neither() {
         assert_eq!(err.code(), "validation", "{err}");
     }
 }
+
+#[test]
+fn credit_the_shop_holds_reaches_the_next_order_and_the_fiche_then_closes() {
+    // The customer side settles a document out of credit the customer already
+    // holds at the moment the document is issued (M2 ruling, features.md §3).
+    // Without the same on this side, credit left by a correction never reaches
+    // an order written after it: the order would go on asking for its whole
+    // value while the shop owed less than that, and a payment of what is owed
+    // would leave it open forever.
+    let (_dir, mut conn) = open_temp();
+    let supplier = suppliers::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        common::a_supplier_fiche("Sarl Amrani"),
+        Some(Money::centimes(80_000)),
+    )
+    .unwrap()
+    .id;
+
+    let older = a_purchase_row(&mut conn, supplier, "2026-09-01");
+    a_purchase_ledger_row(&mut conn, supplier, older, 50_000);
+    // Nothing is held yet, so this places nothing: the call is what T3's
+    // receipt path makes after every `purchase` row, held or not.
+    assert!(supplier_debt::place_credit_on(&mut conn, SHOP, older)
+        .unwrap()
+        .is_empty());
+
+    // A correction past what was owed: 50 000 of it lands on the older order
+    // and the rest leaves the supplier owing the shop.
+    supplier_debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        supplier,
+        Money::centimes(-140_000),
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::centimes(-10_000)
+    );
+
+    let newer = a_purchase_row(&mut conn, supplier, "2026-09-05");
+    a_purchase_ledger_row(&mut conn, supplier, newer, 20_000);
+    let placed = supplier_debt::place_credit_on(&mut conn, SHOP, newer).unwrap();
+    // What was held and no more: the 80 000 of the correction that answered
+    // the opening balance is not credit, it is a debt that was written off.
+    assert_eq!(placed.len(), 1);
+    assert_eq!(placed[0].purchase_id, newer);
+    assert_eq!(placed[0].amount, Money::centimes(10_000));
+
+    let open = supplier_debt::open_purchases(&mut conn, SHOP, supplier).unwrap();
+    assert_eq!(open.len(), 1);
+    assert_eq!(open[0].purchase_id, newer);
+    assert_eq!(open[0].remaining, Money::centimes(10_000));
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::centimes(10_000)
+    );
+
+    supplier_debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        supplier,
+        Money::centimes(10_000),
+        PaymentMethod::Cash,
+        None,
+        clock::now(),
+    )
+    .unwrap();
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::ZERO
+    );
+    assert!(supplier_debt::open_purchases(&mut conn, SHOP, supplier)
+        .unwrap()
+        .is_empty());
+    // Nothing is owed and no order is asking, so the fiche closes the way any
+    // settled one does.
+    let closed = suppliers::close(&mut conn, SHOP, OWNER, supplier, None).unwrap();
+    assert!(!closed.active);
+}
+
+#[test]
+fn credit_is_placed_on_one_order_only_up_to_what_that_order_asks_for() {
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    // The shop paid in advance: 100 000 sitting with the supplier and no
+    // order to put it on yet.
+    supplier_debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        supplier,
+        Money::centimes(-100_000),
+        None,
+    )
+    .unwrap();
+    let order = a_purchase_row(&mut conn, supplier, "2026-09-05");
+    a_purchase_ledger_row(&mut conn, supplier, order, 30_000);
+    let placed = supplier_debt::place_credit_on(&mut conn, SHOP, order).unwrap();
+    assert_eq!(placed.len(), 1);
+    assert_eq!(placed[0].amount, Money::centimes(30_000));
+    assert!(supplier_debt::open_purchases(&mut conn, SHOP, supplier)
+        .unwrap()
+        .is_empty());
+    // The rest is still held: the order took what it asked for and no more.
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::centimes(-70_000)
+    );
+    // And it is not placed twice.
+    assert!(supplier_debt::place_credit_on(&mut conn, SHOP, order)
+        .unwrap()
+        .is_empty());
+}

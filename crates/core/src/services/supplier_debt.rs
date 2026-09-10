@@ -517,6 +517,118 @@ pub fn settle_oldest_first(
     Ok(written)
 }
 
+/// What the supplier is holding for the shop, read off a balance: an amount
+/// below zero turned round, and nothing at all when the shop owes money.
+///
+/// Turned round through checked arithmetic, because `-balance` on the
+/// smallest i64 has no positive to negate to.
+pub fn credit_held(balance: Money) -> Result<Money, CoreError> {
+    if balance.is_negative() {
+        Ok(Money::ZERO.checked_sub(balance)?)
+    } else {
+        Ok(Money::ZERO)
+    }
+}
+
+/// Places credit the shop was already holding on one order, oldest credit
+/// first. Runs inside the caller's transaction, beside the `purchase` row
+/// that order has just been given.
+///
+/// This is the supply side of `debt::settle_from_credit`, and the reason it
+/// exists is the same: credit is consumed at issue (M2 ruling, features.md
+/// §3). An advance the shop paid, or a correction past what was owed, is
+/// money the supplier is already holding, and an order written afterwards has
+/// to be settled out of it. Without this the order goes on asking for its
+/// whole value while the shop owes less than that, a payment of what is
+/// really owed settles a different order, and the first one stays open
+/// forever and keeps the fiche from closing without a reason.
+///
+/// **T3 calls this after every `purchase` row its receipt path appends.** The
+/// row is not appended here because a receipt writes stock, a line and a
+/// ledger row in one transaction of its own, and this is the last step of
+/// that transaction rather than a second one.
+///
+/// What is placed is what was held before this order landed: the balance as
+/// it stands now, less this order's own value, turned round. The rest of a
+/// correction, the part that answered an opening balance or an older order,
+/// is not credit at all; placing that too would show the order settled with
+/// money that never went to it.
+pub fn place_credit_on(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    purchase_id: i32,
+) -> Result<Vec<SupplierAllocation>, CoreError> {
+    let purchase = purchases_repo::get(conn, shop_id, purchase_id)?;
+    let supplier_id = purchase.supplier_id;
+    // An order nothing is owed on is not in this list, and an order nothing
+    // has arrived against is not either: neither has anything to settle.
+    let Some(target) = open_purchases(conn, shop_id, supplier_id)?
+        .into_iter()
+        .find(|open| open.purchase_id == purchase_id)
+    else {
+        return Ok(Vec::new());
+    };
+    let balance = repo::balance(conn, shop_id, supplier_id)?;
+    let before = balance.checked_sub(target.value)?;
+    let take = credit_held(before)?.min(target.remaining);
+    if take == Money::ZERO {
+        return Ok(Vec::new());
+    }
+    let mut left = take;
+    let mut written = Vec::new();
+    for (ledger_id, available) in unallocated_credit(conn, shop_id, supplier_id)? {
+        if left == Money::ZERO {
+            break;
+        }
+        let amount = left.min(available);
+        written.push(allocate(
+            conn,
+            shop_id,
+            NewSupplierAllocation {
+                payment_ledger_id: ledger_id,
+                purchase_id,
+                amount,
+            },
+        )?);
+        left = left.checked_sub(amount)?;
+    }
+    if left != Money::ZERO {
+        return Err(CoreError::validation(
+            "amount",
+            "more credit was asked of this supplier's ledger than it holds",
+        ));
+    }
+    Ok(written)
+}
+
+/// Every credit movement of the supplier that no order has taken whole, with
+/// what is left on it, oldest first: the order credit is drawn on is the
+/// order it arrived in, the same reason a payment fills the oldest order
+/// first.
+fn unallocated_credit(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    supplier_id: i32,
+) -> Result<Vec<(i32, Money)>, CoreError> {
+    let mut rows = Vec::new();
+    // `ledger` answers newest first, and credit is drawn on in the order it
+    // arrived.
+    for entry in repo::ledger(conn, shop_id, supplier_id)?.into_iter().rev() {
+        if entry.credit == Money::ZERO {
+            continue;
+        }
+        let mut placed = Money::ZERO;
+        for allocation in repo::allocations_of_payment(conn, shop_id, entry.id)? {
+            placed = placed.checked_add(allocation.amount)?;
+        }
+        let left = entry.credit.checked_sub(placed)?;
+        if left != Money::ZERO {
+            rows.push((entry.id, left));
+        }
+    }
+    Ok(rows)
+}
+
 /// Writes one movement. Runs inside the caller's transaction.
 ///
 /// A movement raises the debt or lowers it, never both and never neither: the
