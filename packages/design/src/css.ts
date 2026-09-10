@@ -3,21 +3,24 @@
 // names and values in design/shared/tokens.css, so the mockups and the apps
 // cannot drift while both read tokens.
 //
-// Three blocks. `:root` is the primitives plus Comptoir, the light theme and
-// the default. `[data-theme="registre"]` re-declares every colour role with
-// the dark ones. `[dir="rtl"]` swaps the font stack. A component reads a
-// role name and never learns which theme it is in.
+// One block per theme. `:root` is the primitives plus Comptoir, the light
+// theme and the default; every other theme is a `[data-theme="<name>"]` block
+// re-declaring the whole themed set. `[dir="rtl"]` swaps the font stack.
+//
+// That is the entire theme mechanism. A component reads a role name and never
+// learns which theme it is in: no branch, no per-theme component, nothing in
+// TypeScript at all beyond the attribute the switcher writes on <html>.
 
 import { families, rampOf } from "./primitives";
-import { fontFamily, fontSize, layout, radius, rtl, space, themeColorsOf } from "./semantic";
-import type { ThemeColors, ThemeName, Token, TokenGroup } from "./semantic";
+import { THEMES, fontFamily, fontSize, layout, rtl, space, themeTokensOf } from "./semantic";
+import type { ThemeName, ThemeTokens, Token, TokenGroup } from "./semantic";
 
 /** A group whose values change with the theme; `role` picks it out of one. */
 interface ThemedSection {
   readonly kind: "themed";
   /** Prepended to every key in the group. */
   readonly prefix: string;
-  readonly role: keyof ThemeColors;
+  readonly role: keyof ThemeTokens;
 }
 
 /** A group the theme axis does not touch: a scale, a font stack, a length. */
@@ -37,7 +40,7 @@ const SECTIONS: readonly Section[] = [
   { kind: "themed", prefix: "text-", role: "text" },
   { kind: "themed", prefix: "border-", role: "border" },
   { kind: "fixed", prefix: "space-", group: space },
-  { kind: "fixed", prefix: "radius-", group: radius },
+  { kind: "themed", prefix: "radius-", role: "radius" },
   { kind: "themed", prefix: "shadow-", role: "shadow" },
   { kind: "fixed", prefix: "font-", group: fontFamily },
   { kind: "fixed", prefix: "text-", group: fontSize },
@@ -75,7 +78,7 @@ const primitiveLines = (): string[] =>
 
 /** Every section for `:root`; only the themed ones for an override block. */
 const semanticLines = (theme: ThemeName, only: "themed" | "all"): string[] => {
-  const colors = themeColorsOf(theme);
+  const colors = themeTokensOf(theme);
   return SECTIONS.flatMap((section) => {
     if (section.kind === "themed") {
       return groupLines(section.prefix, colors[section.role]);
@@ -87,7 +90,7 @@ const semanticLines = (theme: ThemeName, only: "themed" | "all"): string[] => {
 const block = (selector: string, lines: readonly string[]): string =>
   `${selector} {\n${lines.join("\n")}\n}`;
 
-/** The full stylesheet: `:root`, the theme override, and the RTL font swap. */
+/** The full stylesheet: `:root`, one block per other theme, the RTL swap. */
 export const toCss = (): string => {
   const root = block(":root", [
     "  /* Tier 1: primitives. No component reads these. */",
@@ -96,9 +99,12 @@ export const toCss = (): string => {
     "  /* Tier 2: semantic. This is the API. */",
     ...semanticLines("comptoir", "all"),
   ]);
-  const registre = block(themeSelector("registre"), semanticLines("registre", "themed"));
+  // Every theme but Comptoir, in declaration order. Comptoir is `:root`.
+  const overrides = THEMES.slice(1).map((theme) =>
+    block(themeSelector(theme), semanticLines(theme, "themed")),
+  );
   const rtlLines = Object.entries(rtl).map(([key, token]) =>
     declaration(`--font-${key}`, cssValue(token)),
   );
-  return `${root}\n\n${registre}\n\n${block('[dir="rtl"]', rtlLines)}\n`;
+  return `${[root, ...overrides].join("\n\n")}\n\n${block('[dir="rtl"]', rtlLines)}\n`;
 };

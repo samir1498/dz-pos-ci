@@ -17,13 +17,14 @@ export {
   space,
   surface,
   textColor,
-  themeColorsOf,
+  themeTokensOf,
   themes as themeTokens,
+  OS_THEME,
   THEMES,
 } from "./semantic";
 export type {
   PxGroup,
-  ThemeColors,
+  ThemeTokens,
   ThemeName,
   Token,
   TokenGroup,

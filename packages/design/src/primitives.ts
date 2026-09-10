@@ -11,7 +11,12 @@ export type PrimitiveFamily =
   | "blue"
   | "ink"
   | "brass"
-  | "paper";
+  | "paper"
+  | "slate"
+  | "night"
+  | "emerald"
+  | "rose"
+  | "gold";
 
 export type Ramp = Readonly<Record<number, string>>;
 
@@ -78,9 +83,11 @@ export const primitives: Readonly<Record<PrimitiveFamily, Ramp>> = {
     700: "#1b2c25",
     800: "#14211c",
   },
-  // Brass: the one action that moves money, in both themes.
+  // Brass: the one action that moves money, in every theme. 400 is the step
+  // Observe's dark twin lifts the accent to on an almost-black ground.
   brass: {
     300: "#e9d9b0",
+    400: "#d4a548",
     500: "#b8862b",
     700: "#8f6820",
   },
@@ -89,6 +96,45 @@ export const primitives: Readonly<Record<PrimitiveFamily, Ramp>> = {
     50: "#f4f1e8",
     100: "#d9d2c0",
     200: "#b9b3a2",
+  },
+  // The five below belong to Observe and its dark twin, lifted from the
+  // approved direction page. Cool greys where Comptoir is warm, an emerald
+  // brand where the other two are teal, and their own red and amber: the
+  // whole point of the third theme is that it is another palette, not
+  // Comptoir with the knobs turned.
+  slate: {
+    50: "#f8fafc",
+    100: "#f1f5f9",
+    200: "#e2e8f0",
+    300: "#cbd5e1",
+    400: "#94a3b8",
+    600: "#475569",
+    900: "#0f172a",
+  },
+  night: {
+    300: "#7b8b83",
+    500: "#2b3a32",
+    600: "#1f2b25",
+    700: "#17211c",
+    800: "#0e1713",
+    900: "#09090b",
+  },
+  emerald: {
+    50: "#ecfdf5",
+    400: "#34d399",
+    500: "#10b981",
+    600: "#059669",
+    950: "#04150d",
+  },
+  rose: {
+    50: "#fef2f2",
+    400: "#f87171",
+    600: "#dc2626",
+  },
+  gold: {
+    50: "#fffbeb",
+    400: "#fbbf24",
+    600: "#d97706",
   },
 };
 
@@ -102,6 +148,11 @@ export const families: readonly PrimitiveFamily[] = [
   "ink",
   "brass",
   "paper",
+  "slate",
+  "night",
+  "emerald",
+  "rose",
+  "gold",
 ];
 
 export const rampOf = (family: PrimitiveFamily): Ramp => {

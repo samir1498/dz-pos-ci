@@ -36,15 +36,15 @@ const literal = (value: string): TokenLiteral => ({ kind: "literal", value });
 const px = (value: number): TokenPx => ({ kind: "px", value });
 
 /**
- * The two themes. Comptoir is the light one and the default, so its groups
- * are the plain exports below and the ones `theme.ts` resolves; Registre
- * overrides every colour role, never a subset (see `themes` at the bottom of
- * this file and the parity test in `css.test.ts`).
+ * The four themes. Comptoir is the light one and the default, so its groups
+ * are the plain exports below and the ones `theme.ts` resolves; every other
+ * theme redeclares the whole set, never a subset (see `themes` at the bottom
+ * of this file and the parity test in `css.test.ts`).
  */
-export type ThemeName = "comptoir" | "registre";
+export type ThemeName = "comptoir" | "registre" | "observe" | "observe-dark";
 
 /** Emission order. Comptoir first: it is what `:root` carries. */
-export const THEMES: readonly ThemeName[] = ["comptoir", "registre"];
+export const THEMES: readonly ThemeName[] = ["comptoir", "registre", "observe", "observe-dark"];
 
 export const color = {
   primary: ref("teal", 600),
@@ -237,30 +237,201 @@ export const registreShadow = {
   lg: literal("0 12px 32px rgb(0 0 0 / 0.6)"),
 } satisfies TokenGroup;
 
-/** The five colour groups a theme owns, one entry per theme. */
-export interface ThemeColors {
+// ---- Observe, and its dark twin ----
+//
+// A third palette, not Comptoir with the knobs turned: cool greys where
+// Comptoir is warm, an emerald brand where the other two are teal, its own
+// red and amber, one soft shadow, and a rounder radius. Values lifted from
+// the approved direction page, whose `:root` is Observe and whose
+// `body[data-theme="dark"]` is the twin.
+//
+// Where the page names no value for a role our system has, the note beside
+// the line says what stood in for it.
+
+export const observeColor = {
+  primary: ref("emerald", 600),
+  // The page's own `--brand-glow`. It has no hover value, and the glow is the
+  // lighter accent it puts beside the brand.
+  "primary-hover": ref("emerald", 400),
+  "primary-soft": ref("emerald", 50),
+  "on-primary": ref("stone", 0),
+  money: ref("brass", 500),
+  "money-hover": ref("brass", 700),
+  "on-money": ref("ink", 800),
+  danger: ref("rose", 600),
+  "danger-soft": ref("rose", 50),
+  warn: ref("gold", 600),
+  "warn-soft": ref("gold", 50),
+  // The page carries no info colour. Ours, unchanged: a blue that reads on a
+  // near-white card either way.
+  info: ref("blue", 500),
+  "info-soft": ref("blue", 50),
+  success: ref("emerald", 500),
+} satisfies TokenGroup;
+
+export const observeSurface = {
+  bg: ref("slate", 50),
+  card: ref("stone", 0),
+  raised: ref("slate", 100),
+  hover: ref("slate", 100),
+  selected: ref("emerald", 50),
+  scrim: literal("rgb(15 23 42 / 0.45)"),
+  inverse: ref("slate", 900),
+  // Observe's sidebar is a white panel with a hairline, not an ink slab: the
+  // one place the three themes disagree about the shape of the chrome.
+  sidebar: ref("stone", 0),
+  "sidebar-active": ref("slate", 100),
+} satisfies TokenGroup;
+
+export const observeText = {
+  primary: ref("slate", 900),
+  secondary: ref("slate", 600),
+  tertiary: ref("slate", 400),
+  disabled: ref("slate", 300),
+  "on-inverse": ref("slate", 50),
+  "on-sidebar": ref("slate", 900),
+  danger: ref("rose", 600),
+  success: ref("emerald", 600),
+} satisfies TokenGroup;
+
+export const observeBorder = {
+  default: ref("slate", 200),
+  strong: ref("slate", 300),
+  focus: ref("emerald", 600),
+  danger: ref("rose", 600),
+  sidebar: ref("slate", 200),
+} satisfies TokenGroup;
+
+/**
+ * The page casts one soft shadow and uses it everywhere. `sm` is that value.
+ * A card and a dialog still cannot share one depth, so `md` and `lg` are the
+ * same slate tint carried up our scale.
+ */
+export const observeShadow = {
+  sm: literal("0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06)"),
+  md: literal("0 4px 12px rgb(15 23 42 / 0.08)"),
+  lg: literal("0 12px 32px rgb(15 23 42 / 0.14)"),
+} satisfies TokenGroup;
+
+/** Observe rounds harder than the other two: 8 px on a control, 12 on a card. */
+export const observeRadius = {
+  sm: px(6),
+  md: px(8),
+  lg: px(12),
+  full: px(999),
+} satisfies PxGroup;
+
+export const observeDarkColor = {
+  primary: ref("emerald", 500),
+  "primary-hover": ref("emerald", 400),
+  "primary-soft": literal("rgb(16 185 129 / 0.12)"),
+  "on-primary": ref("emerald", 950),
+  money: ref("brass", 400),
+  "money-hover": ref("brass", 300),
+  "on-money": ref("ink", 800),
+  danger: ref("rose", 400),
+  "danger-soft": literal("rgb(248 113 113 / 0.12)"),
+  warn: ref("gold", 400),
+  "warn-soft": literal("rgb(251 191 36 / 0.12)"),
+  info: ref("blue", 300),
+  "info-soft": ref("blue", 900),
+  success: ref("emerald", 500),
+} satisfies TokenGroup;
+
+export const observeDarkSurface = {
+  bg: ref("night", 900),
+  card: ref("night", 800),
+  raised: ref("night", 700),
+  hover: ref("night", 700),
+  selected: literal("rgb(16 185 129 / 0.12)"),
+  scrim: literal("rgb(0 0 0 / 0.6)"),
+  inverse: ref("slate", 50),
+  sidebar: ref("night", 800),
+  "sidebar-active": ref("night", 700),
+} satisfies TokenGroup;
+
+export const observeDarkText = {
+  primary: ref("slate", 100),
+  secondary: ref("slate", 300),
+  tertiary: ref("night", 300),
+  // The page gives one dim grey and its `--line-strong` is far too dark to
+  // read at any size, so the two dim tiers share the grey rather than ship a
+  // disabled label nobody can see.
+  disabled: ref("night", 300),
+  "on-inverse": ref("night", 900),
+  "on-sidebar": ref("slate", 100),
+  danger: ref("rose", 400),
+  success: ref("emerald", 500),
+} satisfies TokenGroup;
+
+export const observeDarkBorder = {
+  default: ref("night", 600),
+  strong: ref("night", 500),
+  focus: ref("emerald", 500),
+  danger: ref("rose", 400),
+  sidebar: ref("night", 600),
+} satisfies TokenGroup;
+
+/** A hairline of light rather than a shadow: the page's own answer on black. */
+export const observeDarkShadow = {
+  sm: literal("0 1px 0 rgb(255 255 255 / 0.03)"),
+  md: literal("0 4px 12px rgb(0 0 0 / 0.5)"),
+  lg: literal("0 12px 32px rgb(0 0 0 / 0.6)"),
+} satisfies TokenGroup;
+
+/**
+ * The groups a theme owns. Colour, and the two things that carry the same
+ * information as colour: the shadow it casts and how hard it rounds. The
+ * other scales (space, font, size, control heights) are not on the axis: a
+ * theme changes what the app is made of, never how much room it takes.
+ */
+export interface ThemeTokens {
   readonly color: TokenGroup;
   readonly surface: TokenGroup;
   readonly text: TokenGroup;
   readonly border: TokenGroup;
   readonly shadow: TokenGroup;
+  readonly radius: TokenGroup;
 }
 
-export const themes: Readonly<Record<ThemeName, ThemeColors>> = {
-  comptoir: { color, surface, text: textColor, border: borderColor, shadow },
+export const themes: Readonly<Record<ThemeName, ThemeTokens>> = {
+  comptoir: { color, surface, text: textColor, border: borderColor, shadow, radius },
   registre: {
     color: registreColor,
     surface: registreSurface,
     text: registreText,
     border: registreBorder,
     shadow: registreShadow,
+    radius,
+  },
+  observe: {
+    color: observeColor,
+    surface: observeSurface,
+    text: observeText,
+    border: observeBorder,
+    shadow: observeShadow,
+    radius: observeRadius,
+  },
+  "observe-dark": {
+    color: observeDarkColor,
+    surface: observeDarkSurface,
+    text: observeDarkText,
+    border: observeDarkBorder,
+    shadow: observeDarkShadow,
+    radius: observeRadius,
   },
 };
 
-export const themeColorsOf = (name: ThemeName): ThemeColors => {
+export const themeTokensOf = (name: ThemeName): ThemeTokens => {
   const found = themes[name];
   if (found === undefined) {
     throw new Error(`unknown theme: ${name}`);
   }
   return found;
+};
+
+/** The two the OS preference chooses between. The others are picked by hand. */
+export const OS_THEME: Readonly<Record<"light" | "dark", ThemeName>> = {
+  light: "comptoir",
+  dark: "registre",
 };

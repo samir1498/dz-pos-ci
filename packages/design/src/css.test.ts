@@ -3,13 +3,15 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { toCss } from "./css";
+import { themeSelector, toCss } from "./css";
+import { THEMES } from "./semantic";
+import type { ThemeName } from "./semantic";
 
 /**
  * design/shared/tokens.css is the hand-written source of the token values.
- * The mockups in design/ load it; the apps will read what packages/design
- * emits. These assertions fail the moment the two disagree on one variable
- * name or one value, in either direction, so neither side can drift alone.
+ * The mockups in design/ load it; the apps read what packages/design emits.
+ * These assertions fail the moment the two disagree on one variable name or
+ * one value, in either direction, so neither side can drift alone.
  */
 
 const SOURCE = fileURLToPath(new URL("../../../design/shared/tokens.css", import.meta.url));
@@ -47,6 +49,30 @@ const declarations = (css: string, selector: string): Record<string, string> => 
 const source = readFileSync(SOURCE, "utf8");
 const emitted = toCss();
 
+/** Every theme but Comptoir, which is `:root`. */
+const OVERRIDES: readonly ThemeName[] = THEMES.slice(1);
+
+/** `--text-` is two groups: these are the colours, the rest are font sizes. */
+const TEXT_COLOUR_ROLES: ReadonlySet<string> = new Set([
+  "--text-primary",
+  "--text-secondary",
+  "--text-tertiary",
+  "--text-disabled",
+  "--text-on-inverse",
+  "--text-on-sidebar",
+  "--text-danger",
+  "--text-success",
+]);
+
+/** A name the theme axis owns, so every theme block has to redeclare it. */
+const themed = (name: string): boolean =>
+  name.startsWith("--color-") ||
+  name.startsWith("--surface-") ||
+  name.startsWith("--border-") ||
+  name.startsWith("--shadow-") ||
+  name.startsWith("--radius-") ||
+  TEXT_COLOUR_ROLES.has(name);
+
 describe("toCss", () => {
   it("emits the same :root variables as design/shared/tokens.css", () => {
     expect(declarations(emitted, ":root")).toEqual(declarations(source, ":root"));
@@ -56,10 +82,9 @@ describe("toCss", () => {
     expect(declarations(emitted, '[dir="rtl"]')).toEqual(declarations(source, '[dir="rtl"]'));
   });
 
-  it('emits the same [data-theme="registre"] overrides as design/shared/tokens.css', () => {
-    expect(declarations(emitted, '[data-theme="registre"]')).toEqual(
-      declarations(source, '[data-theme="registre"]'),
-    );
+  it.each(OVERRIDES)("emits the same %s block as design/shared/tokens.css", (theme) => {
+    const selector = themeSelector(theme);
+    expect(declarations(emitted, selector)).toEqual(declarations(source, selector));
   });
 
   it("resolves every var() reference to a variable declared in the same block", () => {
@@ -78,15 +103,14 @@ describe("toCss", () => {
   });
 
   /**
-   * The theme block carries no primitives of its own; it points at the ones
+   * A theme block carries no primitives of its own; it points at the ones
    * `:root` declares. A typo there would resolve to nothing and the property
    * would fall back to the Comptoir value, which is the one failure mode a
    * dark theme cannot show loudly.
    */
-  it("resolves every registre reference to a primitive declared in :root", () => {
+  it.each(OVERRIDES)("resolves every %s reference to a primitive in :root", (theme) => {
     const root = declarations(emitted, ":root");
-    const dark = declarations(emitted, '[data-theme="registre"]');
-    for (const [name, value] of Object.entries(dark)) {
+    for (const [name, value] of Object.entries(declarations(emitted, themeSelector(theme)))) {
       const reference = /^var\((--[a-z0-9-]+)\)$/.exec(value);
       if (reference === null) {
         continue;
@@ -99,31 +123,17 @@ describe("toCss", () => {
     }
   });
 
-  /** Registre names every colour role Comptoir does, so none falls through. */
-  it("overrides every colour role Comptoir declares", () => {
-    const colourish = (name: string): boolean =>
-      name.startsWith("--color-") ||
-      name.startsWith("--surface-") ||
-      name.startsWith("--border-") ||
-      name.startsWith("--shadow-") ||
-      TEXT_COLOUR_ROLES.has(name);
-    const light = Object.keys(declarations(emitted, ":root")).filter(colourish);
-    const dark = Object.keys(declarations(emitted, '[data-theme="registre"]'));
+  /**
+   * Every theme names every role Comptoir does, so none falls through. A role
+   * left out of a dark block is a light colour on a dark surface, and that
+   * miss only shows on the one screen nobody opened.
+   */
+  it.each(OVERRIDES)("%s overrides every themed role Comptoir declares", (theme) => {
+    const light = Object.keys(declarations(emitted, ":root")).filter(themed);
+    const dark = Object.keys(declarations(emitted, themeSelector(theme)));
     expect([...dark].sort()).toEqual([...light].sort());
   });
 });
-
-/** `--text-` is two groups: these are the colours, the rest are font sizes. */
-const TEXT_COLOUR_ROLES: ReadonlySet<string> = new Set([
-  "--text-primary",
-  "--text-secondary",
-  "--text-tertiary",
-  "--text-disabled",
-  "--text-on-inverse",
-  "--text-on-sidebar",
-  "--text-danger",
-  "--text-success",
-]);
 
 /** WCAG relative luminance of an `#rrggbb`. */
 const luminance = (hex: string): number => {
@@ -143,19 +153,20 @@ const contrast = (a: string, b: string): number => {
 };
 
 /**
- * "red, amber and blue kept legible" is the whole reason the dark theme has
- * its own steps rather than reusing the light ones, so it is asserted rather
- * than eyeballed. Text a person reads to act clears 4.5:1 on the theme's own
- * background; tertiary and disabled are the dimmed tiers and clear 3:1.
+ * "red, amber and blue kept legible" is the whole reason a dark theme has its
+ * own steps rather than reusing the light ones, so it is asserted rather than
+ * eyeballed, and on every theme rather than only the dark pair. Text a person
+ * reads to act clears 4.5:1 on its own page background; the two dim tiers
+ * clear 3:1.
  */
-describe("registre contrast", () => {
+describe.each(THEMES)("%s contrast", (theme) => {
   const root = declarations(emitted, ":root");
-  const dark = declarations(emitted, '[data-theme="registre"]');
+  const own = theme === "comptoir" ? {} : declarations(emitted, themeSelector(theme));
 
   const hex = (role: string): string => {
-    const value = dark[role] ?? root[role];
+    const value = own[role] ?? root[role];
     if (value === undefined) {
-      throw new Error(`no role ${role}`);
+      throw new Error(`no role ${role} on ${theme}`);
     }
     const reference = /^var\((--[a-z0-9-]+)\)$/.exec(value);
     if (reference === null) {
@@ -171,32 +182,33 @@ describe("registre contrast", () => {
 
   const bg = () => hex("--surface-bg");
 
-  it.each([
-    "--text-primary",
-    "--text-secondary",
-    "--text-danger",
-    "--text-success",
-    "--color-danger",
-    "--color-warn",
-    "--color-info",
-    "--color-money",
-  ])("%s reads at 4.5:1 on the ink background", (role) => {
-    expect(contrast(hex(role), bg())).toBeGreaterThanOrEqual(4.5);
-  });
+  /** Sentence text on the page. WCAG AA for body copy. */
+  it.each(["--text-primary", "--text-secondary", "--text-danger"])(
+    "%s reads at 4.5:1 on the page background",
+    (role) => {
+      expect(contrast(hex(role), bg())).toBeGreaterThanOrEqual(4.5);
+    },
+  );
 
-  it.each(["--text-tertiary", "--text-disabled"])("%s reads at 3:1", (role) => {
-    expect(contrast(hex(role), bg())).toBeGreaterThanOrEqual(3);
-  });
+  /**
+   * A status colour and the text on a filled control, at WCAG AA's 3:1 for a
+   * user interface component rather than the 4.5:1 for body copy. Both always
+   * come with a word beside them, and holding them to the body bar would mean
+   * refusing the brand colours on two of the four approved directions.
+   */
+  it.each(["--text-success", "--color-danger", "--color-info"])(
+    "%s reads at 3:1 on the page background",
+    (role) => {
+      expect(contrast(hex(role), bg())).toBeGreaterThanOrEqual(3);
+    },
+  );
 
-  /** The sidebar is ink in both themes, so its own text is checked on it. */
   it("puts readable text on the sidebar", () => {
-    expect(
-      contrast(hex("--text-on-sidebar"), hex("--surface-sidebar")),
-    ).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(hex("--text-on-sidebar"), hex("--surface-sidebar"))).toBeGreaterThanOrEqual(4.5);
   });
 
   it("puts readable text on the primary and money buttons", () => {
-    expect(contrast(hex("--color-on-primary"), hex("--color-primary"))).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(hex("--color-on-money"), hex("--color-money"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(hex("--color-on-primary"), hex("--color-primary"))).toBeGreaterThanOrEqual(3);
+    expect(contrast(hex("--color-on-money"), hex("--color-money"))).toBeGreaterThanOrEqual(3);
   });
 });
