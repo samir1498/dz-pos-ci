@@ -71,6 +71,26 @@ pub const ACTION_PAY_SUPPLIER: &str = "supplier_debt.pay";
 /// movement. The entry carries the balance before and after.
 pub const ACTION_ADJUST_SUPPLIER: &str = "supplier_debt.adjust";
 
+/// An order placed with a supplier. The entry carries what the order is
+/// worth once the extra costs are landed on its lines, so the log says what
+/// the shop committed to before any of it arrived.
+pub const ACTION_CREATE_PURCHASE: &str = "purchase.create";
+/// A delivery taken in against an order. The entry carries the bon de
+/// réception it was written on, the value that arrived at landed cost and the
+/// state the order moved to, because this is the moment the stock and the
+/// supplier's account both move.
+pub const ACTION_RECEIVE_PURCHASE: &str = "purchase.receive";
+/// Goods handed back to the supplier. It writes no document, so the log and
+/// the two rows it names (a stock movement out and a credit on the ledger)
+/// are the whole record of it.
+pub const ACTION_RETURN_PURCHASE: &str = "purchase.return";
+/// An order cancelled before anything arrived, with the reason the caller
+/// had to give.
+pub const ACTION_CANCEL_PURCHASE: &str = "purchase.cancel";
+/// An order closed after a partial delivery: the rest will never come and is
+/// written off. A decision, so the reason is in the entry.
+pub const ACTION_CLOSE_SHORT_PURCHASE: &str = "purchase.close_short";
+
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.
 #[derive(Debug, Clone, PartialEq, Eq)]

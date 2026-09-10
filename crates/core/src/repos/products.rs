@@ -78,6 +78,33 @@ pub fn update(
     get(conn, shop_id, id)
 }
 
+/// Moves the cost the shop carries the product at, and nothing else. A
+/// receipt sets it to what the goods last landed at (`services::purchases`),
+/// and the whole-row `update` above would need the rest of the fiche to say
+/// it: a caller holding a stale copy would quietly write back a name or a
+/// price somebody had changed in between.
+pub fn set_cost(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    id: i32,
+    cost: crate::money::Money,
+) -> Result<(), CoreError> {
+    let changed = diesel::update(
+        products::table
+            .filter(products::shop_id.eq(shop_id))
+            .filter(products::id.eq(id)),
+    )
+    .set(products::cost_centimes.eq(cost.as_centimes()))
+    .execute(conn)?;
+    if changed == 0 {
+        return Err(CoreError::NotFound {
+            entity: "product",
+            id,
+        });
+    }
+    Ok(())
+}
+
 /// Whether this shop already uses that barcode. The auto-numbering asks
 /// before it hands a number out, so a number a user typed by hand costs one
 /// number rather than a failed insert.
