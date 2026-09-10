@@ -176,12 +176,16 @@ It raises the debt or lowers it, never both and never neither, and the
 balance is the sum of the table rather than a stored number. It may go below
 zero: a customer who overpays, or one an avoir credits past what they owe, is
 owed money, and the screens name that a credit. A movement carries how it was
-paid only when it is a payment: `payment_mode` is `cash` or `card` and the
-table refuses the column on any other kind (`2026-09-09-000006`), because a
-made-up `cash` on an opening balance or on a sale would read as money that
-moved. The ledger reads newest first and the row id breaks a tie inside one
-second, so two movements written in the same second read back in the order
-they were written.
+paid exactly when it is a payment: `payment_mode` is `cash` or `card` on every
+payment and null on every other kind, and the table refuses it either way
+round (`2026-09-09-000006`). A made-up `cash` on an opening balance or on a
+sale would read as money that moved, and a payment saying nothing would be
+money whose road through the drawer nobody can retrace. Settling a document
+out of credit the customer already holds writes no payment at all: it is an
+allocation against the credit rows the ledger is already carrying. The
+ledger reads newest first and the row id breaks a tie inside one second, so
+two movements written in the same second read back in the order they were
+written.
 
 **Payments.** Money handed over against the account, in cash or on a card,
 optionally noted. A payment of nothing is refused, and so is a payment above
