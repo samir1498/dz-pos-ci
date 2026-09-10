@@ -329,6 +329,15 @@ proptest! {
                 }
                 Step::Pay(amount) => {
                     let amount = Money::centimes(amount);
+                    // What the shop owed the instant before this payment was
+                    // tried, by the same three-sum formula the loop checks
+                    // against after every step: the only refusal `pay` is
+                    // allowed here is a payment above that.
+                    let owed_before = arrived
+                        .checked_sub(sent_back)
+                        .unwrap()
+                        .checked_sub(paid)
+                        .unwrap();
                     let at = dzpos_core::services::clock::now();
                     match supplier_debt::pay(
                         &mut conn,
@@ -342,8 +351,15 @@ proptest! {
                     ) {
                         Ok(_) => paid = paid.checked_add(amount).unwrap(),
                         // More than the shop owes is refused, and nothing of
-                        // it landed.
-                        Err(_) => continue,
+                        // it landed; any other refusal here would be a bug
+                        // this property is exactly placed to catch.
+                        Err(_) => {
+                            prop_assert!(
+                                amount > owed_before,
+                                "a payment of {amount:?} against a debt of {owed_before:?} was refused"
+                            );
+                            continue;
+                        }
                     }
                 }
             }
