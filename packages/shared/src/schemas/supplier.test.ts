@@ -81,6 +81,11 @@ describe("supplierSchema", () => {
     expect(supplierSchema.parse(supplier)).toEqual(supplier);
   });
 
+  test("refuses a name longer than the core will store", () => {
+    expect(supplierSchema.safeParse({ ...supplier, name: "a".repeat(201) }).success).toBe(false);
+    expect(supplierSchema.safeParse({ ...supplier, name: "a".repeat(200) }).success).toBe(true);
+  });
+
   test("refuses a balance JSON.parse had to round", () => {
     expect(supplierSchema.safeParse({ ...supplier, balance_centimes: 2_500.5 }).success).toBe(
       false,

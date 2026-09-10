@@ -349,5 +349,7 @@
   "action_reopen_supplier": "Rouvrir la fiche",
   "action_back_to_suppliers": "Retour à la liste des fournisseurs",
   "error_supplier_name_taken": "Ce nom est déjà celui d'un autre fournisseur.",
-  "error_supplier_payment_above_debt": "Le paiement dépasse la dette envers le fournisseur. Reste dû :"
+  "error_supplier_payment_above_debt": "Le paiement dépasse la dette envers le fournisseur. Reste dû :",
+  "error_conflict": "Cette valeur est déjà utilisée dans le magasin.",
+  "error_name_too_long": "Nom trop long : 200 caractères au maximum."
 }

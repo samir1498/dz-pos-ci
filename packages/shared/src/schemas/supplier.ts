@@ -30,7 +30,11 @@ type _SupplierDebtKind = Assert<Matches<SupplierDebtKindDto, typeof supplierDebt
 export const supplierSchema = z.object({
   id: z.number(),
   shop_id: z.number(),
-  name: z.string(),
+  /** The bound every stored printed field carries (`MAX_FIELD_CHARS` in the
+   *  core): a name past it is longer than a ticket or a facture can print,
+   *  so the core refuses to write one and the client refuses to believe one
+   *  came back. */
+  name: z.string().max(200),
   phone: z.string().nullable(),
   address: z.string().nullable(),
   rc: z.string().nullable(),

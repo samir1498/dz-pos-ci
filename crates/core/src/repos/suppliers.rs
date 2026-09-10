@@ -13,11 +13,14 @@ use crate::schema::suppliers;
 
 /// The one constraint a caller can trip here is `UNIQUE (shop_id, name)`, so
 /// it becomes the rule features.md §1 states rather than a SQL fault the
-/// screen would show as "storage". The field is named, because the shop fixes
-/// it by typing another name.
+/// screen would show as "storage". A `conflict` and not a `validation`: what
+/// was typed is well formed and what refuses it is a fiche the shop already
+/// has, which is a different sentence from "that name is too long for a
+/// ticket". The field is named either way, so the message lands under the
+/// input.
 fn map_write(err: DieselError) -> CoreError {
     match &err {
-        DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => CoreError::validation(
+        DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _) => CoreError::conflict(
             "name",
             "this shop already buys from a supplier under that name",
         ),
@@ -226,7 +229,7 @@ mod tests {
         let (_dir, mut conn) = open();
         insert(&mut conn, &draft("Sarl Amrani")).unwrap();
         let err = insert(&mut conn, &draft("Sarl Amrani")).unwrap_err();
-        assert_eq!(err.code(), "validation", "{err}");
+        assert_eq!(err.code(), "conflict", "{err}");
     }
 
     #[test]

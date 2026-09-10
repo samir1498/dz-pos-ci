@@ -38,6 +38,17 @@ pub enum CoreError {
     NotFound { entity: &'static str, id: i32 },
     #[error("barcode {0} is already used in this shop")]
     DuplicateBarcode(String),
+    /// A value another row of this shop already holds, where the file says
+    /// only one may. Not a `Validation`: what the caller sent is well formed
+    /// and what refuses it is a row that is already there, so the screen has
+    /// a different sentence to say and a different thing to offer. The field
+    /// travels so the message lands under the input.
+    ///
+    /// `DuplicateBarcode` predates this and keeps its own code: a barcode is
+    /// answered by offering to generate one, which is not what any other
+    /// clash offers.
+    #[error("{field} is already used in this shop: {message}")]
+    Conflict { field: String, message: String },
     /// A payment for more than is owed, on either ledger. Its own variant
     /// rather than a `Validation`, because the only useful thing to say back
     /// is a figure the caller never sent: what is outstanding right now. The
@@ -113,6 +124,7 @@ impl CoreError {
             CoreError::Validation { .. } | CoreError::PaymentAboveDebt { .. } => "validation",
             CoreError::NotFound { .. } => "not_found",
             CoreError::DuplicateBarcode(_) => "duplicate_barcode",
+            CoreError::Conflict { .. } => "conflict",
             CoreError::Exhausted { .. } => "exhausted",
             CoreError::CreditLimit { .. } => "credit_limit",
             CoreError::PartyIds { .. } => "party_ids",
@@ -131,6 +143,13 @@ impl CoreError {
 
     pub fn validation(field: &str, message: &str) -> Self {
         CoreError::Validation {
+            field: field.to_string(),
+            message: message.to_string(),
+        }
+    }
+
+    pub fn conflict(field: &str, message: &str) -> Self {
+        CoreError::Conflict {
             field: field.to_string(),
             message: message.to_string(),
         }

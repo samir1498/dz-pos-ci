@@ -272,8 +272,11 @@ function SupplierForm({
       onDone();
     },
     onError: (error: unknown) => {
+      // On the code and not on the field: a name too long is a `validation`
+      // on `name` as well, and it is the one thing this message would be
+      // wrong about.
       setServerError(
-        error instanceof ApiError && error.field === "name"
+        error instanceof ApiError && error.code === "conflict"
           ? "error_supplier_name_taken"
           : errorKey(error),
       );
@@ -363,7 +366,14 @@ function SupplierForm({
         <form.Field
           name="name"
           validators={{
-            onSubmit: ({ value }) => (value.trim() === "" ? "error_name_required" : undefined),
+            onSubmit: ({ value }) => {
+              const name = value.trim();
+              if (name === "") return "error_name_required";
+              // The bound the core stores under (`MAX_FIELD_CHARS`), held
+              // here so a paste gone wrong is said in the field's own words
+              // rather than making the round trip.
+              return name.length > 200 ? "error_name_too_long" : undefined;
+            },
           }}
         >
           {(field) => (

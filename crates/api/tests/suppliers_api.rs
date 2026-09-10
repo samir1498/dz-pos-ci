@@ -135,10 +135,21 @@ async fn a_fiche_is_created_with_its_opening_debt_and_read_back_with_the_balance
 }
 
 #[tokio::test]
-async fn a_second_fiche_under_one_name_is_a_422_naming_the_name() {
+async fn a_second_fiche_under_one_name_is_a_conflict_and_a_long_one_is_not() {
     let h = harness();
     a_supplier(&h.app, "Sarl Amrani", None).await;
     let (status, body) = call(&h.app, "POST", "/suppliers", Some(draft("Sarl Amrani"))).await;
+    // A conflict and not a validation: the name is well formed and what
+    // refuses it is a fiche the shop already has.
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["error"]["code"], "conflict");
+    assert_eq!(body["error"]["field"], "name");
+
+    // A name too long is the caller's own to shorten and stays a 422, so the
+    // two refusals a screen has to word differently are told apart.
+    let mut long = draft("x");
+    long["name"] = json!("a".repeat(201));
+    let (status, body) = call(&h.app, "POST", "/suppliers", Some(long)).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["error"]["code"], "validation");
     assert_eq!(body["error"]["field"], "name");

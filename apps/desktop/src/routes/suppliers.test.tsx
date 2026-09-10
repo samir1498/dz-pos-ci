@@ -321,12 +321,33 @@ describe("the form", () => {
     await userEvent.click(screen.getByRole("button", { name: fr.suppliers_add }));
     await userEvent.type(screen.getByLabelText(fr.field_name), "Sarl Amrani");
     writeAnswer = () =>
-      json(422, {
-        error: { code: "validation", message: "taken", field: "name" },
+      json(409, {
+        error: { code: "conflict", message: "taken", field: "name" },
       });
     await userEvent.click(screen.getByRole("button", { name: fr.action_save }));
 
     expect(await screen.findByText(fr.error_supplier_name_taken)).toBeInTheDocument();
+  });
+
+  test("a name too long is said as a length, not as a name already taken", async () => {
+    // Both refusals used to arrive as a validation on `name`, and a paste
+    // gone wrong read as "another supplier already carries that name".
+    mount();
+    await screen.findByRole("row", { name: /Sarl Amrani/ });
+    await userEvent.click(screen.getByRole("button", { name: fr.suppliers_add }));
+    await userEvent.type(screen.getByLabelText(fr.field_name), "a".repeat(201));
+    await userEvent.click(screen.getByRole("button", { name: fr.action_save }));
+
+    expect(await screen.findByText(fr.error_name_too_long)).toBeInTheDocument();
+    expect(screen.queryByText(fr.error_supplier_name_taken)).not.toBeInTheDocument();
+    // And nothing was sent: the bound is the core's, and the screen holds it
+    // too so a paste gone wrong does not make the round trip.
+    expect(
+      fetchMock.mock.calls.filter((call) => {
+        const init: unknown = call[1];
+        return isInit(init) && init.method === "POST";
+      }),
+    ).toHaveLength(0);
   });
 
   test("the opening debt is only on a new fiche", async () => {

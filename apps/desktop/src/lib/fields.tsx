@@ -15,6 +15,7 @@ import { isKey, useTranslation, type Key } from "@/i18n";
  *  never a sentence; the UI owns the wording. */
 const ERROR_KEY: Record<string, Key> = {
   validation: "error_validation",
+  conflict: "error_conflict",
   not_found: "error_not_found",
   money: "error_money",
   storage: "error_storage",

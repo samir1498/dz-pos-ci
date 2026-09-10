@@ -349,5 +349,7 @@
   "action_reopen_supplier": "Reopen the fiche",
   "action_back_to_suppliers": "Back to the supplier list",
   "error_supplier_name_taken": "Another supplier already carries that name.",
-  "error_supplier_payment_above_debt": "The payment is above what the shop owes this supplier. Still owed:"
+  "error_supplier_payment_above_debt": "The payment is above what the shop owes this supplier. Still owed:",
+  "error_conflict": "That value is already used in this shop.",
+  "error_name_too_long": "Name too long: 200 characters at most."
 }

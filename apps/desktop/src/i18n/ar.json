@@ -349,5 +349,7 @@
   "action_reopen_supplier": "إعادة فتح البطاقة",
   "action_back_to_suppliers": "العودة إلى قائمة الموردين",
   "error_supplier_name_taken": "هذا الاسم يحمله مورّد آخر.",
-  "error_supplier_payment_above_debt": "الدفع يتجاوز الدين تجاه المورّد. الباقي:"
+  "error_supplier_payment_above_debt": "الدفع يتجاوز الدين تجاه المورّد. الباقي:",
+  "error_conflict": "هذه القيمة مستعملة من قبل في المحل.",
+  "error_name_too_long": "الاسم طويل جدا: 200 حرف على الأكثر."
 }

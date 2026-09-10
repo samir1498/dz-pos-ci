@@ -69,9 +69,12 @@ fn a_second_fiche_under_the_same_name_is_refused_on_the_name() {
     let (_dir, mut conn) = open_temp();
     suppliers::create(&mut conn, SHOP, OWNER, fiche("Sarl Amrani"), None).unwrap();
     let err = suppliers::create(&mut conn, SHOP, OWNER, fiche("Sarl Amrani"), None).unwrap_err();
-    assert_eq!(err.code(), "validation", "{err}");
+    // Its own code, not `validation`: a name already taken and a name longer
+    // than a ticket can print are two different things to say, and both used
+    // to come back as a validation on `name`.
+    assert_eq!(err.code(), "conflict", "{err}");
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "name"),
+        matches!(&err, CoreError::Conflict { field, .. } if field == "name"),
         "{err}"
     );
     // Another shop is free to buy from a supplier of the same name.
@@ -87,7 +90,7 @@ fn a_rename_onto_a_name_the_shop_already_has_is_refused_the_same_way() {
     let err = suppliers::update(&mut conn, SHOP, OWNER, other.id, fiche("Sarl Amrani"), None)
         .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "name"),
+        matches!(&err, CoreError::Conflict { field, .. } if field == "name"),
         "{err}"
     );
 }
@@ -504,9 +507,12 @@ fn a_name_is_required_and_bounded() {
         "{err}"
     );
 
+    // A name too long is the caller's own to shorten, so it stays a
+    // validation: only a name another fiche already holds is a conflict.
     let mut long = fiche("Sarl Amrani");
     long.name = "a".repeat(201);
     let err = suppliers::create(&mut conn, SHOP, OWNER, long, None).unwrap_err();
+    assert_eq!(err.code(), "validation", "{err}");
     assert!(
         matches!(&err, CoreError::Validation { field, .. } if field == "name"),
         "{err}"
