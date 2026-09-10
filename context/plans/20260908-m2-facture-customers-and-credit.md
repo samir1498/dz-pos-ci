@@ -1,7 +1,7 @@
 ---
 title: 'M2 facture customers and credit'
 slug: 'm2-facture-customers-and-credit'
-status: 'active'
+status: 'done'
 category: 'milestone'
 created: 20260908
 tldr: 'Customers, debt ledger, numbered facture with words and stamp, statement; stub'
@@ -41,6 +41,7 @@ tasks:
     desc: 'Build-vs-buy for Samir: packages/shared/src/client.ts is a 600-line hand-rolled validator (five identical list guards, eight literal-array enum guards, a shape guard per DTO) with no zod or valibot in the workspace; either adopt one (schemas generated beside the ts-rs types, guards deleted) or fold the repeated guards into listOf/oneOf helpers; and the till screen (556 lines, 179 branch points) split into the cart, the payment panel and the customer panel with the same tests; Samir said yes on 2026-09-10: adopt the library, generate the schemas beside the ts-rs types, delete the hand guards, and split the till screen in the same task; done 2026-09-10 07:26, merged into m3/2026-09-10'
     status: 'done'
 acceptance: []
+completed_at: '2026-09-10'
 ---
 # M2: facture, customers and credit
 
