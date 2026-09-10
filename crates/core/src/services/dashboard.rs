@@ -96,8 +96,14 @@ pub struct TopProduct {
     pub product_id: i32,
     pub name: String,
     pub qty_milli: i64,
-    pub sales_ht: Money,
+    /// This product's lines, an avoir's counted negative. Named `lines_ht`
+    /// and not `sales_ht` on purpose: a remise given off a whole document
+    /// belongs to no line, so it is not here and the per product margins do
+    /// not add up to `Figures::margin` on a period that carried one. The
+    /// ranking is what this figure is for.
+    pub lines_ht: Money,
     pub cost_of_goods: Money,
+    /// `lines_ht` less `cost_of_goods`, before any whole document remise.
     pub margin: Money,
 }
 
@@ -244,12 +250,12 @@ fn per_product(
             product_id,
             name: line.name.clone(),
             qty_milli: 0,
-            sales_ht: Money::ZERO,
+            lines_ht: Money::ZERO,
             cost_of_goods: Money::ZERO,
             margin: Money::ZERO,
         });
-        entry.sales_ht = add_signed(
-            entry.sales_ht,
+        entry.lines_ht = add_signed(
+            entry.lines_ht,
             line.kind,
             Money::centimes(line.line_total_centimes),
         )?;
@@ -265,7 +271,7 @@ fn per_product(
                 // line was deleted from under it.
                 name: String::new(),
                 qty_milli: 0,
-                sales_ht: Money::ZERO,
+                lines_ht: Money::ZERO,
                 cost_of_goods: Money::ZERO,
                 margin: Money::ZERO,
             });
@@ -277,7 +283,7 @@ fn per_product(
 
     let mut products: Vec<TopProduct> = by_product.into_values().collect();
     for product in &mut products {
-        product.margin = product.sales_ht.checked_sub(product.cost_of_goods)?;
+        product.margin = product.lines_ht.checked_sub(product.cost_of_goods)?;
     }
     Ok(products)
 }

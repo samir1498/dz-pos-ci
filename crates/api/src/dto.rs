@@ -2256,13 +2256,19 @@ impl From<LowStock> for LowStockDto {
 
 /// One product's month. `qty_milli` is net of what came back, so a product
 /// sold and credited in the same month reads as nothing moved.
+///
+/// `lines_ht_centimes` is this product's lines and not its share of a
+/// remise given off a whole document, which belongs to no line. It is
+/// therefore not the same figure as `DashboardFiguresDto::sales_ht_centimes`,
+/// and the margins of the products on a month that carried a remise do not
+/// add up to that month's margin. The ranking is what these are for.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export_to = "TopProductDto.ts")]
 pub struct TopProductDto {
     pub product_id: i32,
     pub name: String,
     pub qty_milli: i64,
-    pub sales_ht_centimes: i64,
+    pub lines_ht_centimes: i64,
     pub cost_of_goods_centimes: i64,
     pub margin_centimes: i64,
 }
@@ -2273,7 +2279,7 @@ impl From<TopProduct> for TopProductDto {
             product_id: p.product_id,
             name: p.name,
             qty_milli: p.qty_milli,
-            sales_ht_centimes: p.sales_ht.as_centimes(),
+            lines_ht_centimes: p.lines_ht.as_centimes(),
             cost_of_goods_centimes: p.cost_of_goods.as_centimes(),
             margin_centimes: p.margin.as_centimes(),
         }

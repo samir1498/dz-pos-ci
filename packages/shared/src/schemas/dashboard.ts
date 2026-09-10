@@ -38,11 +38,14 @@ export const lowStockSchema = z.object({
 }) satisfies z.ZodType<LowStockDto>;
 type _LowStock = Assert<Matches<LowStockDto, typeof lowStockSchema>>;
 
+/** `lines_ht_centimes` is this product's lines alone: a remise given off a
+ *  whole document belongs to no line, so these margins do not add up to the
+ *  month's. The ranking is what they are for. */
 export const topProductSchema = z.object({
   product_id: z.number(),
   name: z.string(),
   qty_milli: exactInteger,
-  sales_ht_centimes: exactInteger,
+  lines_ht_centimes: exactInteger,
   cost_of_goods_centimes: exactInteger,
   margin_centimes: exactInteger,
 }) satisfies z.ZodType<TopProductDto>;

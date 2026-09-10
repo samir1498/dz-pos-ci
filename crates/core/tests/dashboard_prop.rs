@@ -440,6 +440,19 @@ proptest! {
             summed.expenses += e.expenses;
         }
         prop_assert_eq!(as_expected(&read.this_month), summed);
+        // And against the tally the walk kept, day by day, so the month is
+        // checked once against the service's own days and once against the
+        // rows the case wrote.
+        let mut tallied = Expected::default();
+        for one in per_day {
+            tallied.lines_ht += one.lines_ht;
+            tallied.discounts += one.discounts;
+            tallied.cost_of_goods += one.cost_of_goods;
+            tallied.sales_ttc += one.sales_ttc;
+            tallied.sales_count += one.sales_count;
+            tallied.expenses += one.expenses;
+        }
+        prop_assert_eq!(as_expected(&read.this_month), tallied);
         prop_assert_eq!(
             read.this_month.margin.as_centimes() + read.this_month.cost_of_goods.as_centimes(),
             read.this_month.sales_ht.as_centimes()
@@ -467,7 +480,7 @@ proptest! {
         for product in read.top_by_quantity.iter().chain(read.top_by_margin.iter()) {
             prop_assert_eq!(
                 product.margin.as_centimes(),
-                product.sales_ht.as_centimes() - product.cost_of_goods.as_centimes()
+                product.lines_ht.as_centimes() - product.cost_of_goods.as_centimes()
             );
         }
         prop_assert!(read.top_by_quantity.len() <= 2);

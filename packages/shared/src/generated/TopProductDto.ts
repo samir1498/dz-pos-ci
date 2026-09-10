@@ -3,5 +3,11 @@
 /**
  * One product's month. `qty_milli` is net of what came back, so a product
  * sold and credited in the same month reads as nothing moved.
+ *
+ * `lines_ht_centimes` is this product's lines and not its share of a
+ * remise given off a whole document, which belongs to no line. It is
+ * therefore not the same figure as `DashboardFiguresDto::sales_ht_centimes`,
+ * and the margins of the products on a month that carried a remise do not
+ * add up to that month's margin. The ranking is what these are for.
  */
-export type TopProductDto = { product_id: number, name: string, qty_milli: number, sales_ht_centimes: number, cost_of_goods_centimes: number, margin_centimes: number, };
+export type TopProductDto = { product_id: number, name: string, qty_milli: number, lines_ht_centimes: number, cost_of_goods_centimes: number, margin_centimes: number, };
