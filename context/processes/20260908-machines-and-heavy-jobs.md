@@ -92,11 +92,24 @@ running it).
 Decided with Samir on 2026-09-10 after the VHDX reached 125 GB and the host
 disk hit zero five times in an hour.
 
-- Every cargo command in this repo runs with
-  `CARGO_TARGET_DIR=/home/samir/dz-pos/.cargo-target` (set in the loop
-  briefs and in the session's own gate runs). One shared build folder for
-  every worktree: ten worktrees cost one build's disk, and cargo's lock on
-  the folder makes it one build at a time, which is also the memory rule.
+- Every cargo command in this repo runs through `just`, which exports the
+  one shared build folder (`.cargo-target` next to the main checkout's
+  `.git`, found through `git rev-parse --git-common-dir`, so the laptop
+  clone gets its own without an env var) and two build jobs. One shared
+  build folder for every worktree: ten worktrees cost one build's disk,
+  and cargo's lock on the folder makes it one build at a time, which is
+  also the memory rule.
+- The shared folder has one catch (found the same afternoon): cargo names
+  an artifact of our own crates the same in every worktree and decides
+  freshness by mtime, so after a build in worktree A, a bare `cargo` in
+  worktree B whose sources are older reuses A's `dzpos-core` without a
+  word (clippy in B failed on a type only A's branch had). `just claim`
+  keeps `.owner` in the shared folder; when the checkout changes it
+  touches that checkout's crate sources, so the three members rebuild and
+  the dependencies (identical everywhere) stay cached. Every cargo recipe
+  in the justfile depends on it; a bare `cargo` in a worktree comes after
+  `just claim`. A gate run that overlapped another worktree's build is not
+  a gate run: rerun it through `just`.
 - A worktree is torn down with `just worktree-rm` the moment its branch
   merges. Moving a worktree to a new task to keep its warm cache (what the
   loop did all morning) is what kept four `target/` folders alive.
