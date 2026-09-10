@@ -48,6 +48,13 @@ pub const ACTION_AVOIR: &str = "document.avoir";
 /// one (features.md §3).
 pub const ACTION_CANCEL: &str = "document.cancel";
 
+/// Money out that is not stock (features.md §1, Expense). An expense is
+/// never edited and never deleted in M3, so `create` is the whole of its
+/// life and this row is the only trace of who spent what on which day. The
+/// entry carries the category's key rather than its id, because the log is
+/// read by a person and an id is a number they would have to look up.
+pub const ACTION_CREATE_EXPENSE: &str = "expense.create";
+
 /// A fiche closed while it was still carrying something: a balance either
 /// way, or a document still asking to be paid. The entry carries the reason
 /// the caller had to give, the balance at the moment of the close and how

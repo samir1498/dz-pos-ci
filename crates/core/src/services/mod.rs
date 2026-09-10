@@ -41,6 +41,7 @@ pub mod clock;
 pub mod customers;
 pub mod debt;
 pub mod documents;
+pub mod expenses;
 pub mod products;
 pub mod proforma;
 pub mod sales;
