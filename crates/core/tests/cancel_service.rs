@@ -757,8 +757,12 @@ fn a_document_of_kind(conn: &mut SqliteConnection, kind: DocumentKind, customer:
 /// it in `entity_id`. The override row used to say `sale`, so the history of
 /// a facture was two queries and a reader had to know that.
 ///
-/// The story is the whole life of one facture: sold on credit past the
-/// customer's limit on purpose, credited in part, then annulled.
+/// The story is a mixed one on purpose, because a real customer's is: a
+/// facture sold on credit past the limit, money taken against it, the balance
+/// corrected by hand, the goods part-returned, the paper annulled, and the
+/// fiche closed at the end with money still on it. Six kinds of event, three
+/// entities, one read of the log, and every action name asserted — a rename
+/// that missed one of them goes red here.
 #[test]
 fn the_life_of_a_document_reads_back_from_one_query() {
     let (_dir, mut conn) = open_temp();
@@ -806,6 +810,29 @@ fn the_life_of_a_document_reads_back_from_one_query() {
     )
     .unwrap()
     .document;
+    // Money against the facture, then a correction upwards on the balance
+    // itself: one settles paper, the other does not, and they are two
+    // different action names in the log.
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(50_000),
+        PaymentMethod::Cash,
+        Some("acompte".to_string()),
+        at(10),
+    )
+    .unwrap();
+    debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(25_000),
+        Some("report du carnet".to_string()),
+    )
+    .unwrap();
     avoir::issue(
         &mut conn,
         SHOP,
@@ -829,16 +856,47 @@ fn the_life_of_a_document_reads_back_from_one_query() {
     )
     .unwrap();
 
-    let history: Vec<String> = audit::list(&mut conn, SHOP)
-        .unwrap()
-        .into_iter()
-        .filter(|e| e.entity == "document" && e.entity_id == Some(facture.id))
-        .map(|e| e.action)
-        .collect();
+    // The cancellation put the facture's own money back but left the
+    // correction and the payment where they were, so the fiche still has an
+    // account open and closing it has to say why.
+    let open = customers::get(&mut conn, SHOP, customer).unwrap();
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        NewCustomer {
+            name: open.name,
+            party_kind: open.party_kind,
+            phone: open.phone,
+            address: open.address,
+            rc: open.rc,
+            nif: open.nif,
+            nis: open.nis,
+            ai: open.ai,
+            credit_limit: open.credit_limit,
+            warn_threshold: open.warn_threshold,
+            notes: open.notes,
+            active: false,
+        },
+        Some("compte soldé au carnet".to_string()),
+    )
+    .unwrap();
+
+    // One read of the log. Everything below is that one answer, sorted by the
+    // entity each row names.
+    let log = audit::list(&mut conn, SHOP).unwrap();
+    let actions = |entity: &str, id: i32| -> Vec<String> {
+        log.iter()
+            .filter(|e| e.entity == entity && e.entity_id == Some(id))
+            .map(|e| e.action.clone())
+            .collect()
+    };
+
     // Two credit notes: the partial the shop wrote, and the closing one the
     // cancellation wrote to take back what was left.
     assert_eq!(
-        history,
+        actions("document", facture.id),
         [
             "document.issue_override",
             "document.avoir",
@@ -847,13 +905,26 @@ fn the_life_of_a_document_reads_back_from_one_query() {
         ],
         "the life of a facture is not one query away"
     );
+    // The money that moved on the account rather than on the paper.
+    assert_eq!(
+        actions("customer_debt", customer),
+        ["debt.pay", "debt.adjust"],
+        "the ledger's own events are not under the customer they belong to"
+    );
+    // And the fiche: opened, its limit set, closed over an account that was
+    // still open. The close is its own name because it is its own decision.
+    assert_eq!(
+        actions("customer", customer),
+        ["create", "update", "customer.close"],
+        "the fiche's own events are not under the customer they belong to"
+    );
 
     // The cancellation says what the paper is left asking for, so a reader can
     // tell a cancellation that moved money from one that moved none.
-    let cancelled = audit::list(&mut conn, SHOP)
-        .unwrap()
-        .into_iter()
+    let cancelled = log
+        .iter()
         .find(|e| e.action == "document.cancel")
+        .cloned()
         .expect("the cancellation is logged");
     let after: serde_json::Value =
         serde_json::from_str(&cancelled.after.unwrap_or_default()).unwrap();
