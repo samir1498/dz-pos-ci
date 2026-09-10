@@ -12,6 +12,9 @@
     "build": "tsc --noEmit",
     "test": "tsc --noEmit && vitest run"
   },
+  "dependencies": {
+    "zod": "4.5.4"
+  },
   "devDependencies": {
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"

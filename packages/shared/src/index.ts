@@ -47,23 +47,12 @@ export type { AvoirLineDto } from "./generated/AvoirLineDto";
 export type { NewAvoirDto } from "./generated/NewAvoirDto";
 export type { CancelDocumentDto } from "./generated/CancelDocumentDto";
 
-export {
-  ApiError,
-  createClient,
-  isApiErrorBody,
-  isBackup,
-  isBackups,
-  isCategory,
-  isCustomer,
-  isCustomerLedger,
-  isCustomerPayments,
-  isDebtEntry,
-  isPayment,
-  isRestore,
-  isSale,
-  isSettings,
-  isStore,
-} from "./client";
+export { ApiError, createClient } from "./client";
+// One zod schema per DTO, the check the client runs on every answer. They
+// replace the hand guards this file used to export: a caller that has a
+// payload from somewhere other than the client checks it with the same schema
+// the client would have used, rather than with a second reading of the shape.
+export * from "./schemas";
 export type { ClientOptions } from "./client";
 export type { ApiClient } from "./client";
 export type { PrintLang, PrintPaper } from "./client";

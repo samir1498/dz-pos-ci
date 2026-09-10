@@ -1,62 +1,55 @@
 // The one HTTP client. The desktop webview, the browser preview and, later,
 // the phone all use it, so none of them knows which mode it is in (rule 1).
 //
-// No `as` casts: every response is narrowed by a guard, so a server that
-// answers the wrong shape raises a translatable error instead of leaking a
-// half-typed object into the UI.
+// No `as` casts: every answer is parsed by the zod schema of its DTO
+// (`./schemas`), so a server that answers the wrong shape raises a
+// translatable error instead of leaking a half-typed object into the UI. The
+// schemas are pinned to `./generated` in both directions, so the check the
+// client runs cannot drift from the Rust struct it is checking.
 
-import type { ApiErrorDto } from "./generated/ApiErrorDto";
+import { z } from "zod";
+
+import type { AdjustmentDto } from "./generated/AdjustmentDto";
 import type { BackupDto } from "./generated/BackupDto";
 import type { BackupsDto } from "./generated/BackupsDto";
-import type { AdjustmentDto } from "./generated/AdjustmentDto";
 import type { CategoryDto } from "./generated/CategoryDto";
+import type { ClockDto } from "./generated/ClockDto";
 import type { CustomerDto } from "./generated/CustomerDto";
 import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
-import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
-import type { DebtEntryDto } from "./generated/DebtEntryDto";
-import type { DebtKindDto } from "./generated/DebtKindDto";
 import type { CustomerPaymentsDto } from "./generated/CustomerPaymentsDto";
-import type { NewCustomerDto } from "./generated/NewCustomerDto";
-import type { NewPaymentDto } from "./generated/NewPaymentDto";
-import type { PaymentAllocationDto } from "./generated/PaymentAllocationDto";
-import type { PaymentDto } from "./generated/PaymentDto";
-import type { PaymentMethodDto } from "./generated/PaymentMethodDto";
-import type { PartyKindDto } from "./generated/PartyKindDto";
-import type { ClockDto } from "./generated/ClockDto";
+import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
 import type { HealthDto } from "./generated/HealthDto";
-import type { DocumentKindDto } from "./generated/DocumentKindDto";
-import type { DocumentStatusDto } from "./generated/DocumentStatusDto";
-import type { NewProductDto } from "./generated/NewProductDto";
-import type { NewSaleDto } from "./generated/NewSaleDto";
-import type { PaymentModeDto } from "./generated/PaymentModeDto";
-import type { SaleWarningDto } from "./generated/SaleWarningDto";
-import type { SaleDto } from "./generated/SaleDto";
-import type { SaleKindDto } from "./generated/SaleKindDto";
-import type { SaleLineDto } from "./generated/SaleLineDto";
-import type { SaleCancelEffectDto } from "./generated/SaleCancelEffectDto";
-import type { SaleCancellationDto } from "./generated/SaleCancellationDto";
 import type { NewAvoirDto } from "./generated/NewAvoirDto";
 import type { CancelDocumentDto } from "./generated/CancelDocumentDto";
-import type { SaleBalanceDto } from "./generated/SaleBalanceDto";
-import type { SaleTotalsDto } from "./generated/SaleTotalsDto";
-import type { SaleTvaDto } from "./generated/SaleTvaDto";
+import type { NewCustomerDto } from "./generated/NewCustomerDto";
+import type { NewPaymentDto } from "./generated/NewPaymentDto";
+import type { NewProductDto } from "./generated/NewProductDto";
+import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { ProductDto } from "./generated/ProductDto";
 import type { RegimeChangeDto } from "./generated/RegimeChangeDto";
 import type { RestoreDto } from "./generated/RestoreDto";
-import type { DatedRegimeDto } from "./generated/DatedRegimeDto";
-import type { RegimeDto } from "./generated/RegimeDto";
+import type { SaleDto } from "./generated/SaleDto";
+import type { SaleKindDto } from "./generated/SaleKindDto";
 import type { SettingsDto } from "./generated/SettingsDto";
 import type { StoreDto } from "./generated/StoreDto";
-import type { UnitDto } from "./generated/UnitDto";
+import { categorySchema, productSchema } from "./schemas/catalogue";
+import {
+  customerLedgerSchema,
+  customerPaymentsSchema,
+  customerSchema,
+} from "./schemas/customer";
+import { apiErrorSchema } from "./schemas/error";
+import { saleSchema } from "./schemas/sale";
+import {
+  backupSchema,
+  backupsSchema,
+  clockSchema,
+  healthSchema,
+  restoreSchema,
+  settingsSchema,
+  storeSchema,
+} from "./schemas/settings";
 
-/** An error the server described. `code` is a translation key.
- *
- * `balanceAfterCentimes` and `creditLimitCentimes` are on a `credit_limit`
- * refusal and on nothing else: the till has to say by how much a limit was
- * passed, and working that out on the screen would be a second answer to
- * what a customer owes. `field` and `outstandingCentimes` are the same
- * bargain on a payment above the debt: the fiche says what is actually owed
- * because the server said it. Undefined everywhere else, never zero. */
 export class ApiError extends Error {
   readonly code: string;
   readonly status: number;
@@ -96,45 +89,10 @@ export class ApiError extends Error {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isNullableString(value: unknown): value is string | null {
-  return value === null || typeof value === "string";
-}
-
-function isNullableNumber(value: unknown): value is number | null {
-  return value === null || typeof value === "number";
-}
-
-const UNITS: readonly UnitDto[] = ["piece", "kg", "litre", "box"];
-
-function isUnit(value: unknown): value is UnitDto {
-  return typeof value === "string" && UNITS.some((u) => u === value);
-}
-
-export function isApiErrorBody(value: unknown): value is ApiErrorDto {
-  if (!isRecord(value)) return false;
-  const { error } = value;
-  return (
-    isRecord(error) &&
-    typeof error.code === "string" &&
-    typeof error.message === "string" &&
-    isOptionalExactInteger(error.balance_after_centimes) &&
-    isOptionalExactInteger(error.credit_limit_centimes) &&
-    (error.field === undefined || typeof error.field === "string") &&
-    isOptionalExactInteger(error.outstanding_centimes) &&
-    (error.party_side === undefined || typeof error.party_side === "string") &&
-    (error.missing_ids === undefined ||
-      (Array.isArray(error.missing_ids) && error.missing_ids.every((v) => typeof v === "string")))
-  );
-}
-
 /** The error the envelope described, with the figures and the party fields
  * when it carried them. One place builds it, so both callers of `unwrap`
  * read a refusal the same way. */
-function apiError(body: ApiErrorDto, status: number): ApiError {
+function apiError(body: z.output<typeof apiErrorSchema>, status: number): ApiError {
   return new ApiError(body.error.code, body.error.message, status, {
     balanceAfterCentimes: body.error.balance_after_centimes,
     creditLimitCentimes: body.error.credit_limit_centimes,
@@ -143,403 +101,6 @@ function apiError(body: ApiErrorDto, status: number): ApiError {
     partySide: body.error.party_side,
     missingIds: body.error.missing_ids,
   });
-}
-
-export function isCategory(value: unknown): value is CategoryDto {
-  return (
-    isRecord(value) &&
-    typeof value.id === "number" &&
-    typeof value.shop_id === "number" &&
-    typeof value.name === "string" &&
-    typeof value.default_rate_bps === "number"
-  );
-}
-
-function isCategoryList(value: unknown): value is CategoryDto[] {
-  return Array.isArray(value) && value.every(isCategory);
-}
-
-export function isHealth(value: unknown): value is HealthDto {
-  return isRecord(value) && typeof value.status === "string" && typeof value.shop_id === "number";
-}
-
-/** `YYYY-MM-DD` and nothing else: a day the client cannot parse is a server
- * the client cannot date anything from. */
-export function isClock(value: unknown): value is ClockDto {
-  return isRecord(value) && typeof value.today === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.today);
-}
-
-/** An amount or a quantity: an integer JSON.parse did not have to round. */
-function isExactInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value);
-}
-
-function isNullableExactInteger(value: unknown): value is number | null {
-  return value === null || isExactInteger(value);
-}
-
-/** A field the server leaves out rather than sending as null. Absent is an
- * answer here: only a credit refusal carries the two amounts. */
-function isOptionalExactInteger(value: unknown): value is number | undefined {
-  return value === undefined || isExactInteger(value);
-}
-
-export function isProduct(value: unknown): value is ProductDto {
-  return (
-    isRecord(value) &&
-    typeof value.id === "number" &&
-    typeof value.shop_id === "number" &&
-    typeof value.name === "string" &&
-    isNullableString(value.barcode) &&
-    isNullableNumber(value.category_id) &&
-    isUnit(value.unit) &&
-    isExactInteger(value.cost_centimes) &&
-    isExactInteger(value.selling_centimes) &&
-    isNullableExactInteger(value.wholesale_centimes) &&
-    isExactInteger(value.qty_on_hand_milli) &&
-    isExactInteger(value.low_stock_at_milli) &&
-    typeof value.rate_bps === "number" &&
-    typeof value.active === "boolean"
-  );
-}
-
-function isProductList(value: unknown): value is ProductDto[] {
-  return Array.isArray(value) && value.every(isProduct);
-}
-
-const REGIMES: readonly RegimeDto[] = ["ifu", "reel"];
-
-function isRegime(value: unknown): value is RegimeDto {
-  return typeof value === "string" && REGIMES.some((r) => r === value);
-}
-
-/** `YYYY-MM-DD`, the only shape the API writes a day in. */
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
-
-function isDay(value: unknown): value is string {
-  return typeof value === "string" && DAY.test(value);
-}
-
-export function isStore(value: unknown): value is StoreDto {
-  return (
-    isRecord(value) &&
-    typeof value.name === "string" &&
-    isNullableString(value.rc) &&
-    isNullableString(value.nif) &&
-    isNullableString(value.nis) &&
-    isNullableString(value.ai) &&
-    isNullableString(value.address) &&
-    isNullableString(value.phone)
-  );
-}
-
-function isDatedRegime(value: unknown): value is DatedRegimeDto {
-  return isRecord(value) && isRegime(value.regime) && isDay(value.valid_from);
-}
-
-export function isSettings(value: unknown): value is SettingsDto {
-  return (
-    isRecord(value) &&
-    isStore(value.store) &&
-    isDatedRegime(value.regime) &&
-    (value.regime_planned === null || isDatedRegime(value.regime_planned))
-  );
-}
-
-export function isBackup(value: unknown): value is BackupDto {
-  return (
-    isRecord(value) &&
-    typeof value.name === "string" &&
-    typeof value.taken_at === "string" &&
-    // A file size, so an integer: a fractional byte count means the server
-    // is not the one this client was generated against.
-    isExactInteger(value.bytes)
-  );
-}
-
-function isBackupList(value: unknown): value is BackupDto[] {
-  return Array.isArray(value) && value.every(isBackup);
-}
-
-export function isBackups(value: unknown): value is BackupsDto {
-  return (
-    isRecord(value) && isBackupList(value.backups) && isBackupList(value.safety_copies)
-  );
-}
-
-export function isRestore(value: unknown): value is RestoreDto {
-  return (
-    isRecord(value) &&
-    typeof value.restored_from === "string" &&
-    typeof value.safety_copy === "string" &&
-    isExactInteger(value.products) &&
-    isNullableExactInteger(value.documents)
-  );
-}
-
-const PAYMENT_MODES: readonly PaymentModeDto[] = ["cash", "card", "credit"];
-
-function isPaymentMode(value: unknown): value is PaymentModeDto {
-  return typeof value === "string" && PAYMENT_MODES.some((m) => m === value);
-}
-
-const SALE_WARNINGS: readonly SaleWarningDto[] = ["near_limit"];
-
-function isNullableSaleWarning(value: unknown): value is SaleWarningDto | null {
-  return value === null || (typeof value === "string" && SALE_WARNINGS.some((w) => w === value));
-}
-
-const DOCUMENT_KINDS: readonly DocumentKindDto[] = [
-  "ticket",
-  "facture",
-  "proforma",
-  "bon_de_livraison",
-  "avoir",
-  "bon_de_reception",
-  "quittance",
-];
-
-function isDocumentKind(value: unknown): value is DocumentKindDto {
-  return typeof value === "string" && DOCUMENT_KINDS.some((k) => k === value);
-}
-
-const DOCUMENT_STATUSES: readonly DocumentStatusDto[] = ["issued", "cancelled"];
-
-function isDocumentStatus(value: unknown): value is DocumentStatusDto {
-  return typeof value === "string" && DOCUMENT_STATUSES.some((s) => s === value);
-}
-
-function isSaleLine(value: unknown): value is SaleLineDto {
-  return (
-    isRecord(value) &&
-    typeof value.id === "number" &&
-    typeof value.position === "number" &&
-    isNullableNumber(value.product_id) &&
-    typeof value.name === "string" &&
-    isNullableString(value.barcode) &&
-    isExactInteger(value.qty_milli) &&
-    isExactInteger(value.unit_price_centimes) &&
-    isExactInteger(value.line_discount_centimes) &&
-    typeof value.rate_bps === "number" &&
-    isExactInteger(value.line_total_centimes) &&
-    isNullableNumber(value.ref_line_id)
-  );
-}
-
-/** What a cancellation left on the document it annulled, or nothing at all
- *  on one that still stands. Whole or absent: a screen never has to ask
- *  whether the date is there while the reason is not. */
-function isSaleCancellation(value: unknown): value is SaleCancellationDto | null {
-  return (
-    value === null ||
-    (isRecord(value) &&
-      typeof value.cancelled_at === "string" &&
-      typeof value.cancelled_by === "number" &&
-      typeof value.reason === "string" &&
-      isNullableNumber(value.avoir_document_id))
-  );
-}
-
-/** What cancelling this document would do, or nothing at all when the answer
- *  was a list rather than a read of one document. Checked shape by shape,
- *  because the amount belongs to exactly one of them: a screen that read an
- *  amount off `stock_back` would be showing a figure the server never sent. */
-function isSaleCancelEffect(value: unknown): value is SaleCancelEffectDto | null {
-  if (value === null) return true;
-  if (!isRecord(value)) return false;
-  switch (value.effect) {
-    case "nothing_to_reverse":
-    case "stock_back":
-      return true;
-    case "stock_back_and_avoir":
-      return isExactInteger(value.amount_centimes);
-    default:
-      return false;
-  }
-}
-
-function isSaleTva(value: unknown): value is SaleTvaDto {
-  return (
-    isRecord(value) &&
-    typeof value.rate_bps === "number" &&
-    isExactInteger(value.base_centimes) &&
-    isExactInteger(value.amount_centimes)
-  );
-}
-
-/** The balance triple, or null on a document that names no customer. Three
- *  exact integers or nothing: two of three would be a closing balance its
- *  own opening balance does not explain. */
-function isSaleBalance(value: unknown): value is SaleBalanceDto | null {
-  return (
-    value === null ||
-    (isRecord(value) &&
-      isExactInteger(value.old_balance_centimes) &&
-      isExactInteger(value.remaining_debt_centimes) &&
-      isExactInteger(value.total_debt_centimes))
-  );
-}
-
-/** Every column of the totals table, each an exact integer of centimes: a
- *  total JSON.parse had to round is refused rather than printed. */
-function isSaleTotals(value: unknown): value is SaleTotalsDto {
-  return (
-    isRecord(value) &&
-    isExactInteger(value.total_ht_centimes) &&
-    isExactInteger(value.discount_centimes) &&
-    isExactInteger(value.subtotal_ht_centimes) &&
-    isExactInteger(value.tva_centimes) &&
-    isExactInteger(value.total_ttc_centimes) &&
-    isExactInteger(value.stamp_centimes) &&
-    isExactInteger(value.net_to_pay_centimes)
-  );
-}
-
-export function isSale(value: unknown): value is SaleDto {
-  return (
-    isRecord(value) &&
-    typeof value.id === "number" &&
-    typeof value.shop_id === "number" &&
-    isDocumentKind(value.kind) &&
-    typeof value.series === "string" &&
-    isExactInteger(value.number) &&
-    typeof value.printed_number === "string" &&
-    typeof value.issued_at === "string" &&
-    typeof value.user_id === "number" &&
-    isRegime(value.regime) &&
-    isPaymentMode(value.payment_mode) &&
-    isStore(value.seller) &&
-    isNullableNumber(value.customer_id) &&
-    isNullableNumber(value.ref_document_id) &&
-    isNullableString(value.buyer_name) &&
-    isSaleBalance(value.balance) &&
-    isSaleTotals(value.totals) &&
-    Array.isArray(value.tva) &&
-    value.tva.every(isSaleTva) &&
-    isNullableExactInteger(value.tendered_centimes) &&
-    isNullableExactInteger(value.change_centimes) &&
-    isDocumentStatus(value.status) &&
-    isSaleCancellation(value.cancellation) &&
-    isSaleCancelEffect(value.cancel_effect) &&
-    Array.isArray(value.lines) &&
-    value.lines.every(isSaleLine) &&
-    isNullableSaleWarning(value.warning)
-  );
-}
-
-function isSaleList(value: unknown): value is SaleDto[] {
-  return Array.isArray(value) && value.every(isSale);
-}
-
-const PARTY_KINDS: readonly PartyKindDto[] = ["company", "consumer"];
-
-function isPartyKind(value: unknown): value is PartyKindDto {
-  return typeof value === "string" && PARTY_KINDS.some((k) => k === value);
-}
-
-const DEBT_KINDS: readonly DebtKindDto[] = [
-  "opening",
-  "sale",
-  "payment",
-  "avoir",
-  "adjustment",
-];
-
-function isDebtKind(value: unknown): value is DebtKindDto {
-  return typeof value === "string" && DEBT_KINDS.some((k) => k === value);
-}
-
-/** A fiche, with the balance the core summed. Every amount is checked as an
- *  exact integer: a debt JSON.parse had to round is refused rather than
- *  shown to a shop. */
-export function isCustomer(value: unknown): value is CustomerDto {
-  return (
-    isRecord(value) &&
-    typeof value.id === "number" &&
-    typeof value.shop_id === "number" &&
-    typeof value.name === "string" &&
-    isPartyKind(value.party_kind) &&
-    isNullableString(value.phone) &&
-    isNullableString(value.address) &&
-    isNullableString(value.rc) &&
-    isNullableString(value.nif) &&
-    isNullableString(value.nis) &&
-    isNullableString(value.ai) &&
-    isNullableExactInteger(value.credit_limit_centimes) &&
-    isNullableExactInteger(value.warn_threshold_centimes) &&
-    isNullableString(value.notes) &&
-    typeof value.active === "boolean" &&
-    isExactInteger(value.balance_centimes)
-  );
-}
-
-function isCustomerList(value: unknown): value is CustomerDto[] {
-  return Array.isArray(value) && value.every(isCustomer);
-}
-
-export function isDebtEntry(value: unknown): value is DebtEntryDto {
-  return (
-    isRecord(value) &&
-    typeof value.id === "number" &&
-    typeof value.customer_id === "number" &&
-    isNullableNumber(value.document_id) &&
-    isDebtKind(value.kind) &&
-    isExactInteger(value.debit_centimes) &&
-    isExactInteger(value.credit_centimes) &&
-    isExactInteger(value.balance_after_centimes) &&
-    typeof value.user_id === "number" &&
-    isNullableString(value.note) &&
-    typeof value.created_at === "string"
-  );
-}
-
-const PAYMENT_METHODS: readonly PaymentMethodDto[] = ["cash", "card"];
-
-function isPaymentMethod(value: unknown): value is PaymentMethodDto {
-  return typeof value === "string" && PAYMENT_METHODS.some((m) => m === value);
-}
-
-function isPaymentAllocation(value: unknown): value is PaymentAllocationDto {
-  return (
-    isRecord(value) &&
-    typeof value.document_id === "number" &&
-    isExactInteger(value.amount_centimes)
-  );
-}
-
-export function isPayment(value: unknown): value is PaymentDto {
-  return (
-    isRecord(value) &&
-    typeof value.ledger_id === "number" &&
-    typeof value.customer_id === "number" &&
-    isExactInteger(value.amount_centimes) &&
-    (value.payment_mode === null || isPaymentMethod(value.payment_mode)) &&
-    isNullableString(value.note) &&
-    isExactInteger(value.balance_after_centimes) &&
-    Array.isArray(value.allocations) &&
-    value.allocations.every(isPaymentAllocation) &&
-    typeof value.created_at === "string"
-  );
-}
-
-export function isCustomerPayments(value: unknown): value is CustomerPaymentsDto {
-  return (
-    isRecord(value) &&
-    typeof value.customer_id === "number" &&
-    isExactInteger(value.balance_centimes) &&
-    Array.isArray(value.payments) &&
-    value.payments.every(isPayment)
-  );
-}
-
-export function isCustomerLedger(value: unknown): value is CustomerLedgerDto {
-  return (
-    isRecord(value) &&
-    typeof value.customer_id === "number" &&
-    isExactInteger(value.balance_centimes) &&
-    Array.isArray(value.entries) &&
-    value.entries.every(isDebtEntry)
-  );
 }
 
 async function unwrap(res: Response): Promise<unknown> {
@@ -553,8 +114,9 @@ async function unwrap(res: Response): Promise<unknown> {
     }
   }
   if (res.ok) return body;
-  if (isApiErrorBody(body)) {
-    throw apiError(body, res.status);
+  const refusal = apiErrorSchema.safeParse(body);
+  if (refusal.success) {
+    throw apiError(refusal.data, res.status);
   }
   // The server always sends the shape above; anything else is the network
   // or a proxy, so the UI still gets a key it can translate.
@@ -583,14 +145,23 @@ async function unwrapText(res: Response): Promise<string> {
   } catch {
     body = null;
   }
-  if (isApiErrorBody(body)) {
-    throw apiError(body, res.status);
+  const refusal = apiErrorSchema.safeParse(body);
+  if (refusal.success) {
+    throw apiError(refusal.data, res.status);
   }
   throw new ApiError("unreachable", `HTTP ${res.status}`, res.status);
 }
 
-function narrow<T>(body: unknown, guard: (v: unknown) => v is T, what: string): T {
-  if (guard(body)) return body;
+/** The answer, parsed by the schema of the DTO the route promises. A body the
+ * schema refuses raises the same `bad_response` the hand guards raised: the
+ * screens read that code and a half-typed object never reaches them. */
+function narrow<Schema extends z.ZodType>(
+  body: unknown,
+  schema: Schema,
+  what: string,
+): z.output<Schema> {
+  const parsed = schema.safeParse(body);
+  if (parsed.success) return parsed.data;
   throw new ApiError("bad_response", `the server sent an unexpected ${what}`, 0);
 }
 
@@ -642,22 +213,22 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     baseUrl: base,
 
     async health(): Promise<HealthDto> {
-      return narrow(await send("/health"), isHealth, "health answer");
+      return narrow(await send("/health"), healthSchema, "health answer");
     },
 
     /** The day the shop is on. Asked for rather than read off the machine:
      * the core dates documents on Algeria's calendar and a browser in
      * another zone would be a day out either way. */
     async clock(): Promise<ClockDto> {
-      return narrow(await send("/clock"), isClock, "clock answer");
+      return narrow(await send("/clock"), clockSchema, "clock answer");
     },
 
     async listCategories(): Promise<CategoryDto[]> {
-      return narrow(await send("/categories"), isCategoryList, "category list");
+      return narrow(await send("/categories"), z.array(categorySchema), "category list");
     },
 
     async listProducts(): Promise<ProductDto[]> {
-      return narrow(await send("/products"), isProductList, "product list");
+      return narrow(await send("/products"), z.array(productSchema), "product list");
     },
 
     async updateProduct(id: number, input: NewProductDto): Promise<ProductDto> {
@@ -666,11 +237,11 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isProduct, "product");
+      return narrow(body, productSchema, "product");
     },
 
     async getSettings(): Promise<SettingsDto> {
-      return narrow(await send("/settings"), isSettings, "settings");
+      return narrow(await send("/settings"), settingsSchema, "settings");
     },
 
     /** The whole store block; a null clears that field. */
@@ -680,7 +251,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isStore, "store block");
+      return narrow(body, storeSchema, "store block");
     },
 
     /** Appends a dated régime change; the answer is the whole settings page
@@ -691,19 +262,19 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isSettings, "settings");
+      return narrow(body, settingsSchema, "settings");
     },
 
     /** The copies of the shop file the server keeps, newest first: the daily
      * ones, and the copies taken on the way into a restore, which are kept
      * under different rules and so travel in their own list. */
     async listBackups(): Promise<BackupsDto> {
-      return narrow(await send("/backups"), isBackups, "backup list");
+      return narrow(await send("/backups"), backupsSchema, "backup list");
     },
 
     /** One more copy, taken now. The server names it and prunes the folder. */
     async createBackup(): Promise<BackupDto> {
-      return narrow(await send("/backups", { method: "POST" }), isBackup, "backup");
+      return narrow(await send("/backups", { method: "POST" }), backupSchema, "backup");
     },
 
     /** Puts the shop file back from a copy. The name is the server's own, and
@@ -713,7 +284,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       const body = await send(`/backups/${encodeURIComponent(name)}/restore`, {
         method: "POST",
       });
-      return narrow(body, isRestore, "restore answer");
+      return narrow(body, restoreSchema, "restore answer");
     },
 
     /** Rings up the basket. The server dates the document and assigns the
@@ -724,11 +295,11 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isSale, "sale");
+      return narrow(body, saleSchema, "sale");
     },
 
     async getSale(id: number): Promise<SaleDto> {
-      return narrow(await send(`/sales/${id}`), isSale, "sale");
+      return narrow(await send(`/sales/${id}`), saleSchema, "sale");
     },
 
     /** The 80 mm ticket for a sale, as the HTML page the core rendered.
@@ -752,7 +323,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
      * `facture`, and a screen that wants both asks for neither. */
     async listSales(kind?: SaleKindDto): Promise<SaleDto[]> {
       const query = kind === undefined ? "" : `?kind=${kind}`;
-      return narrow(await send(`/sales${query}`), isSaleList, "sale list");
+      return narrow(await send(`/sales${query}`), z.array(saleSchema), "sale list");
     },
 
     /** Writes a credit note against the facture named. `lines` left out is
@@ -765,14 +336,14 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isSale, "avoir");
+      return narrow(body, saleSchema, "avoir");
     },
 
     /** Every avoir written against one facture, oldest first. A ticket's id
      * is a 404 rather than an empty list: an empty list would read as "this
      * facture has no credit notes". */
     async listAvoirs(id: number): Promise<SaleDto[]> {
-      return narrow(await send(`/sales/${id}/avoirs`), isSaleList, "avoir list");
+      return narrow(await send(`/sales/${id}/avoirs`), z.array(saleSchema), "avoir list");
     },
 
     /** Annuls a document and hands it back carrying the block that says
@@ -783,7 +354,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isSale, "sale");
+      return narrow(body, saleSchema, "sale");
     },
 
     /** The shop's customers, the active ones first. `search` is a piece of a
@@ -792,11 +363,11 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     async listCustomers(search?: string): Promise<CustomerDto[]> {
       const trimmed = search === undefined ? "" : search.trim();
       const query = trimmed === "" ? "" : `?q=${encodeURIComponent(trimmed).replace(/%20/g, "+")}`;
-      return narrow(await send(`/customers${query}`), isCustomerList, "customer list");
+      return narrow(await send(`/customers${query}`), z.array(customerSchema), "customer list");
     },
 
     async getCustomer(id: number): Promise<CustomerDto> {
-      return narrow(await send(`/customers/${id}`), isCustomer, "customer");
+      return narrow(await send(`/customers/${id}`), customerSchema, "customer");
     },
 
     /** Opens a fiche, and with it the opening debt when the shop is carrying
@@ -808,7 +379,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isCustomer, "customer");
+      return narrow(body, customerSchema, "customer");
     },
 
     /** The whole fiche; a null clears that field. */
@@ -818,14 +389,14 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isCustomer, "customer");
+      return narrow(body, customerSchema, "customer");
     },
 
     /** The movements newest first, each with the balance as of itself, and
      * the balance they sum to. Both are the core's; nothing here adds a
      * column up. */
     async customerLedger(id: number): Promise<CustomerLedgerDto> {
-      return narrow(await send(`/customers/${id}/ledger`), isCustomerLedger, "customer ledger");
+      return narrow(await send(`/customers/${id}/ledger`), customerLedgerSchema, "customer ledger");
     },
 
     /** Corrects a balance by writing a movement: positive raises the debt,
@@ -836,7 +407,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isCustomerLedger, "customer ledger");
+      return narrow(body, customerLedgerSchema, "customer ledger");
     },
 
     /** The customer's payments, newest first, each with the documents it
@@ -845,7 +416,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     async customerPayments(id: number): Promise<CustomerPaymentsDto> {
       return narrow(
         await send(`/customers/${id}/payments`),
-        isCustomerPayments,
+        customerPaymentsSchema,
         "customer payments",
       );
     },
@@ -859,7 +430,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isCustomerPayments, "customer payments");
+      return narrow(body, customerPaymentsSchema, "customer payments");
     },
 
     /** The statement of account over a range of days, as the HTML page the
@@ -890,7 +461,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
       });
-      return narrow(body, isProduct, "product");
+      return narrow(body, productSchema, "product");
     },
   };
 }
