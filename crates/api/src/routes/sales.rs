@@ -28,7 +28,7 @@ pub struct ListQuery {
 ///
 /// A facture is reachable here the moment its print panel is closed, which
 /// is the whole reason the filter is optional rather than fixed: the day's
-/// till roll asks for `ticket`, the documents screen T9 adds asks for
+/// till roll asks for `ticket`, the documents screen asks for
 /// `facture`, and a screen that wants both asks for neither. A kind this
 /// route does not know is refused rather than read as no filter: a caller
 /// asking for `avoir` and being handed everything would be showing the

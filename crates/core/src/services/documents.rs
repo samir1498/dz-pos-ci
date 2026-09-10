@@ -172,6 +172,11 @@ pub fn cancel(
             },
         )?;
 
+        // Read after the write and before the log, because it is what the
+        // cancellation left behind.
+        let left_asking = repo::get(conn, shop_id, document_id)?
+            .balance
+            .map(|b| b.remaining_debt.as_centimes());
         audit::record(
             conn,
             shop_id,
@@ -196,6 +201,11 @@ pub fn cancel(
                         // a facture stopped asking for its amount is handed
                         // the numbered paper that carried it back.
                         "avoir_document_id": avoir_document_id,
+                        // What the paper is left asking for, beside what it
+                        // asked for before: a cancellation that moved money
+                        // and one that moved none read the same otherwise,
+                        // and the difference is the whole of what happened.
+                        "remaining_debt_centimes": left_asking,
                     })
                     .to_string(),
                 ),
@@ -484,7 +494,7 @@ pub fn issue(
         }
 
         // Under the IFU there are no TVA rows at all, so the recap is empty
-        // and nothing is written (features.md, regime_ifu_prints_no_tva).
+        // and nothing is written (features.md §3, `an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime`).
         for row in &totals.tva_by_rate {
             repo::insert_tva(
                 conn,

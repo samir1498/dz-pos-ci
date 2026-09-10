@@ -27,7 +27,7 @@ const STAMP_FORMAT: &str = "%d/%m/%Y %H:%M";
 /// The seller's identifiers, in the order a ticket prints them. Only the
 /// ones the document snapshotted appear: a ticket carries the seller
 /// identity and no empty rows (features.md, party identifiers row; a
-/// facture's fuller block is M2's).
+/// facture carries the fuller block of both parties).
 struct SellerId {
     label: &'static str,
     value: String,
@@ -46,14 +46,20 @@ struct LineView {
     unit_price: String,
     /// The line's TVA rate, under the réel only. Under the IFU there is no
     /// rate column at all, not a column of zeroes
-    /// (`regime_ifu_prints_no_tva`).
+    /// (`an_ifu_ticket_names_no_tax_in_any_language`).
     rate: Option<String>,
     discount: Option<String>,
     total: String,
 }
 
+/// One line of the TVA recap. The word and the rate are two fields rather
+/// than one built string, so the golden carries the rate in a span of its own
+/// and the suite can read it back the way the facture's does: a recap row
+/// that slid onto the wrong rate is caught by the rate and not only by the
+/// amount beside it.
 struct TvaRow {
-    label: String,
+    label: &'static str,
+    rate: String,
     amount: String,
 }
 
@@ -109,7 +115,7 @@ struct TicketView {
 /// languages under the réel paid in cash, the same three under the IFU, and
 /// the same three under the réel paid by card.
 pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, CoreError> {
-    // `regime_ifu_prints_no_tva` is a rule about the document, not a layout
+    // `an_ifu_ticket_names_no_tax_in_any_language` is a rule about the document, not a layout
     // the template applies on the way past. A stored IFU document that
     // carries a TVA recap contradicts the régime it was issued under (a
     // restored file, a repaired row, an import), and there is no honest
@@ -158,7 +164,8 @@ fn view(doc: &Document, lang: Lang) -> TicketView {
             .tva_by_rate
             .iter()
             .map(|row| TvaRow {
-                label: format!("{} {}", text(Key::Tva, lang), percent(row.rate)),
+                label: text(Key::Tva, lang),
+                rate: percent(row.rate),
                 amount: format_centimes(row.amount),
             })
             .collect(),
@@ -184,14 +191,28 @@ fn view(doc: &Document, lang: Lang) -> TicketView {
 
 /// The debt block, read off the document and never recomputed: a reprint
 /// shows the balance the customer was handed, not a sum of today's ledger.
+///
+/// The closing row is named by its sign, exactly as the facture names it
+/// (`facture::balance_view`): below zero is money the shop is holding for
+/// the customer, and calling that a debt on the 80 mm paper while the A4
+/// paper calls it a credit gives one account two names. The figure keeps the
+/// sign the document stores either way; only the label moves.
 fn balance(balance: BalanceTriple, lang: Lang) -> BalanceView {
+    let in_credit = balance.total_debt.is_negative();
     BalanceView {
         title: text(Key::Balance, lang),
         old_label: text(Key::OldBalance, lang),
         old: format_centimes(balance.old_balance),
         this_label: text(Key::ThisDocument, lang),
         this: format_centimes(balance.remaining_debt),
-        total_label: text(Key::TotalDebt, lang),
+        total_label: text(
+            if in_credit {
+                Key::TotalCredit
+            } else {
+                Key::TotalDebt
+            },
+            lang,
+        ),
         total: format_centimes(balance.total_debt),
     }
 }

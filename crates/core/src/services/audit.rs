@@ -17,20 +17,26 @@ pub const ACTION_CREATE: &str = "create";
 pub const ACTION_UPDATE: &str = "update";
 /// A régime change appended to the dated series.
 pub const ACTION_SET_REGIME: &str = "set_regime";
+/// The actions below are named `<thing>.<what happened>`, and the thing is
+/// what the row's `entity` says: a document, a debt, a customer. `create`,
+/// `update` and `set_regime` predate the scheme and are left as they are,
+/// because a log is read for what it holds and renaming a row that is
+/// already written is not something a migration can do honestly.
+///
 /// Money against a customer's debt, written as a ledger movement with the
 /// documents it settled. The entry carries the balance before and after and
 /// the documents the money landed on, so the log reads as the settlement it
 /// was without anyone summing the ledger again.
-pub const ACTION_PAY_DEBT: &str = "pay_debt";
+pub const ACTION_PAY_DEBT: &str = "debt.pay";
 /// A correction to what a customer owes, written as a ledger movement. The
 /// entry carries the balance before and after, so the log reads as the
 /// change it was without anyone summing the ledger again.
-pub const ACTION_ADJUST_DEBT: &str = "adjust_debt";
+pub const ACTION_ADJUST_DEBT: &str = "debt.adjust";
 /// A credit sale taken past the customer's credit limit on purpose. The
 /// entry carries the balance and the limit the rule refused on, and the
 /// document the decision produced, so the log reads as the decision it was.
 /// Until M4 there are no roles and anyone may take it (features.md §1).
-pub const ACTION_CREDIT_OVERRIDE: &str = "sale.credit_override";
+pub const ACTION_CREDIT_OVERRIDE: &str = "document.issue_override";
 
 /// A credit note written against a facture. The entry names the facture that
 /// changed, because that is the paper a reader is holding when they ask why it
@@ -41,6 +47,15 @@ pub const ACTION_AVOIR: &str = "document.avoir";
 /// is when, by whom, why, and the avoir the cancellation issued when it issued
 /// one (features.md §3).
 pub const ACTION_CANCEL: &str = "document.cancel";
+
+/// A fiche closed while it was still carrying something: a balance either
+/// way, or a document still asking to be paid. The entry carries the reason
+/// the caller had to give, the balance at the moment of the close and how
+/// many documents were still open, because a shop that stops trading with a
+/// customer who owes it money has taken a decision and the log is where it
+/// is written down. A close over an account that was already settled is an
+/// ordinary update and is logged as one.
+pub const ACTION_CLOSE_CUSTOMER: &str = "customer.close";
 
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.

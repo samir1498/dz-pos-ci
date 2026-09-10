@@ -38,8 +38,10 @@ const CUSTOMER: i32 = 7;
 /// What the customer owed on the morning of the first day: 1 500,00 DA.
 const OPENING: i64 = 150_000;
 
+mod common;
+
 fn goldens_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/print/statement_a4")
+    common::goldens_dir("statement_a4")
 }
 
 fn day(d: u32) -> NaiveDate {

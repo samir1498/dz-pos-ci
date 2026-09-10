@@ -45,7 +45,7 @@ impl From<Shop> for SellerBlock {
 /// The buyer as the document printed them (features.md §3). Snapshotted for
 /// the same reason the seller block is: the fiche is edited in place and a
 /// reprint has to show the facture the customer was handed. `party_kind`
-/// travels with it because `facture_requires_party_ids` asks a different set
+/// travels with it because `a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number` and `a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else` ask a different set
 /// of fields of a company than of a consumer, and which one this buyer was on
 /// the day is not something a later reader can work out.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,8 +144,9 @@ pub struct Document {
     /// whoever walked in; a facture always carries one, because it is made
     /// out to somebody (décret 05-468 art. 3).
     pub buyer: Option<PartyBlock>,
-    /// The facture an avoir is written against. T4 owns the rule about which
-    /// factures may be named; here it is only carried.
+    /// The facture an avoir is written against. The rule about which
+    /// factures may be named lives in `services::avoir`; here it is only
+    /// carried.
     pub ref_document_id: Option<i32>,
     /// `None` when the document has no customer and so no balance to print.
     pub balance: Option<BalanceTriple>,
@@ -420,7 +421,7 @@ impl TryFrom<DocumentTvaRow> for TvaLine {
 /// The stored row plus the lines and TVA rows read with it.
 /// The buyer block, which is there whole or not at all. A row holding an RC
 /// and no name is a write that got half way; reading it back as "no buyer"
-/// would print a facture missing the identifiers `facture_requires_party_ids`
+/// would print a facture missing the identifiers `a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number`
 /// asks for and say nothing about it.
 fn buyer_block(row: &DocumentRow) -> Result<Option<PartyBlock>, CoreError> {
     match (row.buyer_name.as_deref(), row.buyer_party_kind) {

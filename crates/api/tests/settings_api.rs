@@ -149,6 +149,38 @@ async fn a_missing_field_is_a_null_and_an_unknown_one_is_refused() {
     );
 }
 
+/// A validation refusal names the field it is about, and the name travels
+/// beside the code rather than only inside the sentence: the screen puts the
+/// message under the input the person is looking at, and reading a field name
+/// out of a sentence is how a screen ends up parsing prose.
+///
+/// Two different refusals from two different services, because one of them
+/// used to be the only error that said so on the wire and a fix that had
+/// stayed special to it would pass a test that asked only once.
+#[tokio::test]
+async fn a_validation_refusal_names_its_field_on_the_wire() {
+    let h = harness();
+    let mut blank = full_store();
+    blank["name"] = json!("   ");
+    let (status, body) = call(&h.app, "PUT", "/settings/store", Some(blank)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["error"]["code"], "validation");
+    assert_eq!(body["error"]["field"], "name", "{body}");
+
+    // The shop ships under the réel régime, so setting it again from today is
+    // the service's own refusal and not the edge's.
+    let (status, body) = call(
+        &h.app,
+        "POST",
+        "/settings/regime",
+        Some(json!({ "regime": "reel", "valid_from": "2026-01-01" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["error"]["code"], "validation");
+    assert_eq!(body["error"]["field"], "regime_fiscal", "{body}");
+}
+
 #[tokio::test]
 async fn a_blank_name_is_422_naming_the_field_and_changes_nothing() {
     let h = harness();
@@ -309,4 +341,37 @@ async fn a_change_to_the_regime_in_force_on_that_day_is_refused_and_moves_nothin
         all["regime"]["valid_from"], "2026-01-01",
         "the since date did not move"
     );
+}
+
+#[tokio::test]
+async fn the_clock_route_answers_the_day_the_shop_dates_its_documents_on() {
+    let h = harness();
+    let (status, body) = call(&h.app, "GET", "/clock", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // Algeria is UTC+1 all year, which is what `today()` above adds: the
+    // route and the test compute the same day from the same offset, and the
+    // point of the assertion is that it is not the browser's or UTC's.
+    assert_eq!(body["today"], day(today()), "{body}");
+    // A régime dated with it is the one in force, never one planned for
+    // tomorrow: this is the day a screen has to offer as its default.
+    let (status, refused) = call(
+        &h.app,
+        "POST",
+        "/settings/regime",
+        Some(json!({ "regime": "reel", "valid_from": body["today"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+}
+
+#[tokio::test]
+async fn the_clock_is_behind_the_launch_token_like_every_other_route() {
+    let h = harness();
+    let req = Request::builder()
+        .method("GET")
+        .uri("/clock")
+        .body(Body::empty())
+        .unwrap();
+    let res = h.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 }

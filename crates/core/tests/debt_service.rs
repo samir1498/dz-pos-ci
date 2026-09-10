@@ -13,7 +13,9 @@ use dzpos_core::error::CoreError;
 use dzpos_core::money::{Money, PaymentMode, Regime, Totals};
 use dzpos_core::services::audit;
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
-use dzpos_core::services::debt::{self, DebtKind, NewDebtAllocation, NewDebtEntry, PaymentMethod};
+use dzpos_core::services::debt::{
+    self, DebtKind, DocumentRef, NewDebtAllocation, NewDebtEntry, PaymentMethod,
+};
 use dzpos_core::services::documents::{
     self, BalanceTriple, DocumentKind, NewDocument, PartyBlock, SellerBlock,
 };
@@ -22,35 +24,9 @@ const SHOP: i32 = 1;
 /// The owner the first migration seeds.
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
 
-fn fiche(name: &str) -> NewCustomer {
-    NewCustomer {
-        name: name.to_string(),
-        party_kind: PartyKind::Company,
-        phone: None,
-        address: None,
-        rc: None,
-        nif: None,
-        nis: None,
-        ai: None,
-        credit_limit: None,
-        warn_threshold: None,
-        notes: None,
-        active: true,
-    }
-}
-
-fn a_customer(conn: &mut SqliteConnection, name: &str) -> i32 {
-    customers::create(conn, SHOP, OWNER, fiche(name), None)
-        .unwrap()
-        .id
-}
+use common::{a_customer, a_fiche as fiche, a_payment_row, open_temp};
 
 fn movement(customer_id: i32, kind: DebtKind, debit: i64, credit: i64) -> NewDebtEntry {
     NewDebtEntry {
@@ -80,12 +56,7 @@ fn a_balance_is_the_sum_of_what_was_appended() {
         movement(customer, DebtKind::Sale, 250_000, 0),
     )
     .unwrap();
-    debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 100_000),
-    )
-    .unwrap();
+    a_payment_row(&mut conn, customer, 100_000);
     assert_eq!(
         debt::balance(&mut conn, SHOP, customer).unwrap(),
         Money::centimes(150_000)
@@ -104,12 +75,7 @@ fn a_customer_who_overpays_is_owed_money() {
         movement(customer, DebtKind::Sale, 100_000, 0),
     )
     .unwrap();
-    debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 150_000),
-    )
-    .unwrap();
+    a_payment_row(&mut conn, customer, 150_000);
     assert_eq!(
         debt::balance(&mut conn, SHOP, customer).unwrap(),
         Money::centimes(-50_000)
@@ -280,18 +246,13 @@ fn an_allocation_says_which_document_a_payment_settled() {
     let (_dir, mut conn) = open_temp();
     let customer = a_customer(&mut conn, "Entreprise Benali");
     a_document(&mut conn, 1, SHOP, 1);
-    let payment = debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 50_000),
-    )
-    .unwrap();
+    let payment = a_payment_row(&mut conn, customer, 50_000);
 
     let made = debt::allocate(
         &mut conn,
         SHOP,
         NewDebtAllocation {
-            payment_ledger_id: payment.id,
+            payment_ledger_id: payment,
             document_id: 1,
             amount: Money::centimes(50_000),
         },
@@ -307,19 +268,14 @@ fn an_allocation_of_nothing_is_refused() {
     let (_dir, mut conn) = open_temp();
     let customer = a_customer(&mut conn, "Entreprise Benali");
     a_document(&mut conn, 1, SHOP, 1);
-    let payment = debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 50_000),
-    )
-    .unwrap();
+    let payment = a_payment_row(&mut conn, customer, 50_000);
 
     for amount in [Money::ZERO, Money::centimes(-1)] {
         let err = debt::allocate(
             &mut conn,
             SHOP,
             NewDebtAllocation {
-                payment_ledger_id: payment.id,
+                payment_ledger_id: payment,
                 document_id: 1,
                 amount,
             },
@@ -344,18 +300,13 @@ fn an_allocation_never_reaches_across_shops() {
     let customer = a_customer(&mut conn, "Entreprise Benali");
     a_document(&mut conn, 1, SHOP, 1);
     a_document(&mut conn, 2, 2, 1);
-    let payment = debt::append(
-        &mut conn,
-        SHOP,
-        movement(customer, DebtKind::Payment, 0, 50_000),
-    )
-    .unwrap();
+    let payment = a_payment_row(&mut conn, customer, 50_000);
 
     let stolen_document = debt::allocate(
         &mut conn,
         SHOP,
         NewDebtAllocation {
-            payment_ledger_id: payment.id,
+            payment_ledger_id: payment,
             document_id: 2,
             amount: Money::centimes(50_000),
         },
@@ -376,7 +327,7 @@ fn an_allocation_never_reaches_across_shops() {
         &mut conn,
         2,
         NewDebtAllocation {
-            payment_ledger_id: payment.id,
+            payment_ledger_id: payment,
             document_id: 2,
             amount: Money::centimes(50_000),
         },
@@ -449,7 +400,7 @@ fn the_statement_runs_the_balance_up_from_the_oldest_movement() {
     let id = a_customer(&mut conn, "Brahim");
     debt::append(&mut conn, SHOP, movement(id, DebtKind::Opening, 150_000, 0)).unwrap();
     debt::append(&mut conn, SHOP, movement(id, DebtKind::Sale, 50_000, 0)).unwrap();
-    debt::append(&mut conn, SHOP, movement(id, DebtKind::Payment, 0, 70_000)).unwrap();
+    a_payment_row(&mut conn, id, 70_000);
 
     let statement = debt::statement(&mut conn, SHOP, id).unwrap();
     assert_eq!(
@@ -581,7 +532,7 @@ fn an_adjustment_is_audited_with_the_balance_before_and_after() {
         .iter()
         .find(|e| e.entity == "customer_debt")
         .expect("the adjustment left no audit entry");
-    assert_eq!(entry.action, "adjust_debt");
+    assert_eq!(entry.action, "debt.adjust");
     assert_eq!(entry.entity_id, Some(id));
     assert_eq!(entry.user_id, OWNER);
     let before: serde_json::Value =
@@ -1042,25 +993,12 @@ fn a_document_already_settled_by_an_allocation_nobody_wrote_a_payment_for_refuse
     // An allocation written straight into the table moves no column, so the
     // document still reads as unpaid while it has already been settled in
     // full. Σ of the allocations is the only thing that catches it.
-    let payment = debt::append(
-        &mut conn,
-        SHOP,
-        NewDebtEntry {
-            customer_id: customer,
-            document_id: None,
-            kind: DebtKind::Payment,
-            debit: Money::ZERO,
-            credit: Money::centimes(100_000),
-            user_id: OWNER,
-            note: None,
-        },
-    )
-    .unwrap();
+    let payment = a_payment_row(&mut conn, customer, 100_000);
     debt::allocate(
         &mut conn,
         SHOP,
         NewDebtAllocation {
-            payment_ledger_id: payment.id,
+            payment_ledger_id: payment,
             document_id: document,
             amount: Money::centimes(100_000),
         },
@@ -1112,11 +1050,13 @@ fn a_document_already_settled_by_an_allocation_nobody_wrote_a_payment_for_refuse
     );
 }
 
-/// The same guard on the other half of the settlement. `settle_oldest_first`
-/// has money and looks for paper; `settle_document` is handed the paper, which
-/// is what an avoir uses to reach the facture it was written against. Both
-/// have to sum the allocations already on a document, because the remaining
-/// column alone cannot see a row written straight into the table.
+/// The same guard reached down the other road. `settle_oldest_first` has
+/// money and looks for paper; `settle_document` is handed the paper, which is
+/// what an avoir uses to reach the facture it was written against. They pick
+/// the documents differently and then hand them to one `settle`, where the
+/// guard is written once: Σ of the allocations already on a document, because
+/// the remaining column alone cannot see a row written straight into the
+/// table. Removing that one `if` fails this test and its twin above.
 #[test]
 fn a_named_document_cannot_be_settled_past_what_it_asked_for() {
     let (_dir, mut conn) = open_temp();
@@ -1125,25 +1065,12 @@ fn a_named_document_cannot_be_settled_past_what_it_asked_for() {
 
     // Settled in full by a row that moved no column, so the document still
     // reads as asking for its whole amount.
-    let forged = debt::append(
-        &mut conn,
-        SHOP,
-        NewDebtEntry {
-            customer_id: customer,
-            document_id: None,
-            kind: DebtKind::Payment,
-            debit: Money::ZERO,
-            credit: Money::centimes(100_000),
-            user_id: OWNER,
-            note: None,
-        },
-    )
-    .unwrap();
+    let forged = a_payment_row(&mut conn, customer, 100_000);
     debt::allocate(
         &mut conn,
         SHOP,
         NewDebtAllocation {
-            payment_ledger_id: forged.id,
+            payment_ledger_id: forged,
             document_id: document,
             amount: Money::centimes(100_000),
         },
@@ -1235,7 +1162,7 @@ fn a_payment_leaves_an_audit_entry_carrying_the_balance_on_both_sides() {
     let log = audit::list(&mut conn, SHOP).unwrap();
     let entry = log
         .iter()
-        .find(|e| e.action == "pay_debt")
+        .find(|e| e.action == "debt.pay")
         .expect("the payment left no audit entry");
     let before: serde_json::Value =
         serde_json::from_str(entry.before.as_deref().unwrap_or("null")).unwrap();
@@ -1559,6 +1486,56 @@ fn a_cancelled_document_takes_none_of_a_payment() {
 }
 
 #[test]
+fn a_cancelled_document_takes_none_of_a_correction_downwards_either() {
+    // A correction downwards settles paper through the same read as a
+    // payment (`allocate_oldest_first`), so it inherits the `status =
+    // issued` filter. Asserted on its own path rather than trusted to the
+    // payment's: the two callers are the whole of what that filter protects,
+    // and a rewrite that gave one of them a query of its own would otherwise
+    // go through green.
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let cancelled = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    let standing = a_document_on_credit(&mut conn, customer, 200_000, 11);
+    // Forged the same way as above, block and all: a document reads back as
+    // annulée only when it says when and by whom (features.md §3).
+    diesel::sql_query(format!(
+        "UPDATE documents SET status = 'cancelled', cancelled_at = '2026-09-11 09:00:00', \
+         cancelled_by = {OWNER}, cancel_reason = 'erreur de saisie' WHERE id = {cancelled}"
+    ))
+    .execute(&mut conn)
+    .unwrap();
+
+    let corrected = debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(-50_000),
+        Some("erreur de saisie".to_string()),
+    )
+    .unwrap();
+
+    assert_eq!(
+        corrected
+            .allocations
+            .iter()
+            .map(|a| a.document_id)
+            .collect::<Vec<i32>>(),
+        [standing],
+        "the correction came off a cancelled document"
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, cancelled),
+        Money::centimes(100_000)
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, standing),
+        Money::centimes(150_000)
+    );
+}
+
+#[test]
 fn the_oldest_document_is_the_one_issued_first_and_not_the_one_written_first() {
     // The two orders are made to disagree: the newer facture is written into
     // the file first and carries the lower id. Oldest-first means the day the
@@ -1763,7 +1740,7 @@ fn a_correction_downwards_is_audited_with_what_it_took_off_each_document() {
     let log = audit::list(&mut conn, SHOP).unwrap();
     let entry = log
         .iter()
-        .find(|e| e.action == "adjust_debt")
+        .find(|e| e.action == "debt.adjust")
         .expect("the correction left no audit entry");
     let after: serde_json::Value =
         serde_json::from_str(entry.after.as_deref().unwrap_or("null")).unwrap();
@@ -1844,7 +1821,17 @@ fn a_closed_fiche_still_takes_a_payment() {
     let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
     let mut closed = fiche("Entreprise Benali");
     closed.active = false;
-    customers::update(&mut conn, SHOP, OWNER, customer, closed).unwrap();
+    // Closed over an open account, which is the whole point of the fixture,
+    // so the reason the rule asks for travels with it.
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        closed,
+        Some("le client a fermé".to_string()),
+    )
+    .unwrap();
 
     let paid = debt::pay(
         &mut conn,
@@ -1877,7 +1864,17 @@ fn a_closed_fiche_still_takes_a_correction() {
     .unwrap();
     let mut closed = fiche("Entreprise Benali");
     closed.active = false;
-    customers::update(&mut conn, SHOP, OWNER, customer, closed).unwrap();
+    // Closed over an open account, which is the whole point of the fixture,
+    // so the reason the rule asks for travels with it.
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        closed,
+        Some("le client a fermé".to_string()),
+    )
+    .unwrap();
 
     let corrected = debt::adjust(
         &mut conn,
@@ -1890,4 +1887,154 @@ fn a_closed_fiche_still_takes_a_correction() {
     .unwrap();
 
     assert_eq!(corrected.statement.balance, Money::centimes(100_000));
+}
+
+#[test]
+fn the_recent_movements_are_the_newest_ones_and_the_balance_counts_them_all() {
+    // What the debt slip prints (features.md §2). The window is the newest
+    // few movements; the figure under the customer's name is the whole
+    // ledger, so a shop handing over the slip is not quoting a smaller debt
+    // than the one it is owed.
+    let (_dir, mut conn) = open_temp();
+    let id = a_customer(&mut conn, "Brahim");
+    a_document(&mut conn, 1, SHOP, 7);
+    debt::append(&mut conn, SHOP, movement(id, DebtKind::Opening, 150_000, 0)).unwrap();
+    for _ in 0..11 {
+        debt::append(&mut conn, SHOP, movement(id, DebtKind::Sale, 10_000, 0)).unwrap();
+    }
+    let newest = debt::append(
+        &mut conn,
+        SHOP,
+        NewDebtEntry {
+            document_id: Some(1),
+            ..movement(id, DebtKind::Sale, 5_000, 0)
+        },
+    )
+    .unwrap();
+
+    let slip = debt::recent(&mut conn, SHOP, id, 10).unwrap();
+
+    assert_eq!(
+        slip.balance,
+        Money::centimes(265_000),
+        "the balance is not what the whole ledger sums to"
+    );
+    assert_eq!(
+        slip.balance,
+        debt::balance(&mut conn, SHOP, id).unwrap(),
+        "the slip and the balance query disagree"
+    );
+    assert_eq!(
+        slip.entries.len(),
+        10,
+        "the window is not the size asked for"
+    );
+    assert_eq!(
+        slip.entries[0].entry.id, newest.id,
+        "the rows do not read newest first"
+    );
+    assert_eq!(
+        slip.entries[0].balance_after,
+        Money::centimes(265_000),
+        "the newest row does not carry the balance as of itself"
+    );
+    // The oldest movement of all is outside the window, which is the whole
+    // point of it: the opening row is the thirteenth from the end.
+    assert!(
+        !slip
+            .entries
+            .iter()
+            .any(|line| line.entry.kind == DebtKind::Opening),
+        "a movement older than the window reached the slip"
+    );
+    // The document a row cites is named by the kind and number a customer
+    // quotes, read off the document rather than off the ledger row.
+    assert_eq!(
+        slip.entries[0].document,
+        Some(DocumentRef {
+            kind: DocumentKind::Facture,
+            number: 7,
+        }),
+        "the newest row does not name the facture it was written for"
+    );
+    assert!(
+        slip.entries[1].document.is_none(),
+        "a movement citing no document was given one"
+    );
+}
+
+/// The third leg of the close rule (features.md §2): the paper the customer
+/// is holding. A balance of zero is not the whole answer, because a facture
+/// that still asks for its amount is still asking for it whatever the ledger
+/// nets out to. The fixture makes the two disagree on purpose: the credit
+/// sale's movement is cancelled out by a correction written straight into the
+/// ledger, which settles nothing, so the balance closes at zero with the
+/// facture still open.
+#[test]
+fn a_fiche_with_a_document_still_asking_to_be_paid_is_not_closed_without_a_reason() {
+    let (_dir, mut conn) = open_temp();
+    let customer = a_customer(&mut conn, "Entreprise Benali");
+    let document = a_document_on_credit(&mut conn, customer, 100_000, 10);
+    debt::append(
+        &mut conn,
+        SHOP,
+        NewDebtEntry {
+            customer_id: customer,
+            document_id: None,
+            kind: DebtKind::Adjustment,
+            debit: Money::ZERO,
+            credit: Money::centimes(100_000),
+            user_id: OWNER,
+            note: Some("écriture de contrepartie".to_string()),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, customer).unwrap(),
+        Money::ZERO
+    );
+    assert_eq!(
+        remaining_debt(&mut conn, document),
+        Money::centimes(100_000)
+    );
+
+    let open = customers::get(&mut conn, SHOP, customer).unwrap();
+    let closed = NewCustomer {
+        name: open.name.clone(),
+        party_kind: open.party_kind,
+        phone: open.phone.clone(),
+        address: open.address.clone(),
+        rc: open.rc.clone(),
+        nif: open.nif.clone(),
+        nis: open.nis.clone(),
+        ai: open.ai.clone(),
+        credit_limit: open.credit_limit,
+        warn_threshold: open.warn_threshold,
+        notes: open.notes.clone(),
+        active: false,
+    };
+    let err =
+        customers::update(&mut conn, SHOP, OWNER, customer, closed.clone(), None).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "reason"),
+        "{err:?}"
+    );
+
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        closed,
+        Some("le client a fermé".to_string()),
+    )
+    .unwrap();
+    let entry = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .find(|e| e.action == "customer.close")
+        .expect("the close is logged");
+    let after: serde_json::Value = serde_json::from_str(&entry.after.unwrap_or_default()).unwrap();
+    assert_eq!(after["balance_centimes"], 0);
+    assert_eq!(after["open_documents"], 1);
 }

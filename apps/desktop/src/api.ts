@@ -39,10 +39,22 @@ export const api = createClient(apiBaseUrl(), { token: apiToken() });
 export const productsQueryKey: readonly string[] = ["products"];
 export const categoriesQueryKey: readonly string[] = ["categories"];
 export const settingsQueryKey: readonly string[] = ["settings"];
+/** The shop's day. Its own key and never cached (see lib/clock.ts): every
+ * other answer here is a row that changes when someone changes it, and this
+ * one changes on its own at midnight. */
+export const clockQueryKey: readonly string[] = ["clock"];
 export const backupsQueryKey: readonly string[] = ["backups"];
 /** The customer list. The search text is appended by the screen, so an
  * invalidation of this key refreshes every search that is in the cache. */
 export const customersQueryKey: readonly string[] = ["customers"];
+
+/** One customer's fiche, read on its own by the route that opens a fiche by
+ * id. Under the list's key on purpose: a payment or a correction invalidates
+ * `customersQueryKey` and this refetches with it, so the balance the page
+ * shows and the balance the list shows are never two answers. */
+export function customerQueryKey(id: number): readonly (string | number)[] {
+  return [...customersQueryKey, id];
+}
 
 /** One customer's movements. A factory rather than a literal at the call
  * site, so the id is always the second element and never a template string. */
@@ -68,6 +80,25 @@ export function customerStatementQueryKey(
   lang: PrintLang,
 ): readonly (string | number)[] {
   return ["customer-statement", id, from, to, lang];
+}
+
+/** The rendered debt slip of one customer. The language is part of the key
+ * for the reason the statement's is; the balance is not, because a slip asked
+ * for again after a payment is a new call and the payment invalidated this
+ * key along with the ledger's. */
+export function customerDebtSlipQueryKey(
+  id: number,
+  lang: PrintLang,
+): readonly (string | number)[] {
+  return [...customerDebtSlipKeyPrefix(id), lang];
+}
+
+/** Every language's slip for one customer, which is what a payment or a
+ * correction has just made stale: the shop may have printed the French one
+ * and the Arabic one, and both now say a balance the ledger no longer sums
+ * to. */
+export function customerDebtSlipKeyPrefix(id: number): readonly (string | number)[] {
+  return ["customer-debt-slip", id];
 }
 
 /** The rendered ticket of one stored sale. A factory rather than a literal
@@ -105,6 +136,13 @@ export function saleSheetPrefixes(id: number): readonly (readonly (string | numb
     ["sale-ticket", id],
     ["sale-facture", id],
   ];
+}
+
+/** One document read on its own, which is what the documents screen opens a
+ * row into. A factory beside the list's, so the id is always the second
+ * element and no call site spells the key out. */
+export function saleQueryKey(id: number): readonly (string | number)[] {
+  return ["sale", id];
 }
 
 /** The document list, keyed by the kind filter so the narrowed list and the

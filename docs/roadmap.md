@@ -29,7 +29,7 @@ seeded so every later row has an author; `crates/api` with GET/POST
 reading the API, which is also where the Anthropic `webapp-testing` and
 `frontend-design` skills get their trial (R9, first half).
 
-Fixtures: `money_no_float`, `tva_rounding_once_per_rate`, `tva_rates_table`,
+Fixtures: `money_no_float`, `tva_rounding_once_per_rate`,
 `stamp_progressive_tranches`, `words_{fr,ar,en}_golden`.
 
 Blocks: nothing. The half-dinar case at the 1,5 DA band stays an open
@@ -55,9 +55,10 @@ ESC/POS over USB from the desktop; three languages on every screen, RTL
 from the first one; daily backup, keep 30, restore from settings. The
 first native window on the laptop is where the Tauri MCP trial (R9) runs.
 
-Fixtures: `numbering_gapless` for the ticket series;
-`regime_ifu_prints_no_tva`; the ticket branch of
-`facture_requires_party_ids` (seller identity only).
+Tests: `two_tickets_take_the_number_after_the_last` and
+`a_refused_line_burns_no_number` for the ticket series;
+`an_ifu_ticket_names_no_tax_in_any_language`; `a_shop_whose_settings_carry_no_nis_cannot_issue_a_facture_at_all`
+(seller identity only).
 
 Blocks: R3. The rule that picks facture or ticket at the till exists only
 in the mockup today and its legal source (loi 04-02 art. 10 as amended in
@@ -79,8 +80,9 @@ facture A4 and A5; avoir as its own kind with its own series; a cancelled
 facture keeps its number and reprints with the mention "facture annulée",
 as a golden file; proforma; numbering per kind, gapless; `statement_a4`.
 
-Fixtures: `numbering_gapless` for every kind, `facture_requires_party_ids`,
-the three words golden files.
+Tests: `each_kind_counts_in_its_own_series` and
+`the_proforma_and_the_facture_series_do_not_touch` for the series;
+`a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number`; the three words golden files.
 
 Blocks: a real printed facture from an Algerian shop before the golden
 files freeze (open decision 4); a native speaker's review of the Arabic

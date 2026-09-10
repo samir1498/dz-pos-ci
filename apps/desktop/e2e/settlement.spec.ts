@@ -7,8 +7,9 @@
 // What the run proves end to end: two credit sales leave two documents each
 // carrying its own unpaid part, a payment typed on the screen settles the
 // older one in full and part of the newer, the allocations the API stored say
-// exactly that, a payment above what is left is refused, and the statement
-// page the core renders shows the closing balance.
+// exactly that, a payment above what is left is refused, and the two papers
+// the core renders from that ledger, the A4 statement and the 80 mm debt
+// slip, both close on the same figure.
 //
 // The sale is posted through the API rather than rung up at the till: this
 // spec is about the settlement, and the till's own credit flow has its own.
@@ -237,4 +238,15 @@ test("settles two credit sales oldest first, refuses more than is owed, and prin
     new RegExp(BALANCE_RENDERED.replace(/\s/g, "\\s")),
   );
   await expect(statement.locator(".in-words")).not.toBeEmpty();
+
+  // The debt slip is the other paper the same ledger renders, and it closes
+  // on the same figure with the three movements behind it: the two sales and
+  // the payment. Its figure and the statement's are one balance read once.
+  await page.getByRole("button", { name: t("action_debt_slip"), exact: true }).click();
+  const slip = page.frameLocator("[data-testid='customer-debt-slip']");
+  await expect(slip.locator(".amount-balance")).toHaveText(
+    new RegExp(BALANCE_RENDERED.replace(/\s/g, "\\s")),
+  );
+  await expect(slip.locator(".amount-running")).toHaveCount(3);
+  await expect(slip.locator(".in-words")).not.toBeEmpty();
 });

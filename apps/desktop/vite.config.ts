@@ -8,7 +8,16 @@ const host = process.env.TAURI_DEV_HOST || "127.0.0.1";
 
 export default defineConfig({
   plugins: [
-    tanstackRouter({ target: "react", autoCodeSplitting: true }),
+    // No automatic code splitting. It exists to keep a first paint over a
+    // network small, and this app has no network in front of it: Tauri loads
+    // one bundle off the disk beside the binary, so a split screen is a
+    // second local file read and nothing saved. Splitting also warned on
+    // every build about the screens the route files export, which the
+    // component tests render directly (`customers.test.tsx` and the three
+    // beside it); the choice was between exporting the screens and keeping a
+    // warning nobody was going to act on, and the exports are what the tests
+    // need.
+    tanstackRouter({ target: "react", autoCodeSplitting: false }),
     tailwindcss(),
     react(),
   ],
@@ -32,6 +41,11 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
     target: "esnext",
+    // The 500 kB default warns about a first paint over a network, which is
+    // the same thing the splitting above was turned off for: the bundle is
+    // read off the disk beside the binary. Raised rather than silenced, so it
+    // still says something when the bundle grows by half again.
+    chunkSizeWarningLimit: 750,
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },

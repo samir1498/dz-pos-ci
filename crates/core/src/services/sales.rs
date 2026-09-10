@@ -1,12 +1,12 @@
 //! The till's one write: a sale becomes a fiscal document, its stock leaves
 //! the ledger, and both commit together (features.md §1, Sale).
 //!
-//! M2 adds the sale on credit. It names a customer, it snapshots the buyer
-//! block onto the document, it writes one `sale` movement on that customer's
-//! ledger and it stores the balance triple the paper prints, all inside the
-//! same transaction as the document and the stock.
+//! A sale on credit names a customer. It snapshots the buyer block onto the
+//! document, writes one `sale` movement on that customer's ledger and stores
+//! the balance triple the paper prints, all inside the same transaction as
+//! the document and the stock.
 //!
-//! M2 also adds the choice of paper (features.md §3). Loi 04-02 art. 10, as
+//! The caller also chooses the paper (features.md §3). Loi 04-02 art. 10, as
 //! rewritten by loi 10-06 art. 3, decides ticket against facture by who the
 //! buyer is and never by an amount or by how the sale is paid, so the
 //! operator names the kind on the request and a facture is refused unless
@@ -306,8 +306,15 @@ pub fn issue(
         // the account, and a movement of zero would sit in every statement the
         // customer is ever handed (the same rule `customers::create` applies to
         // an opening debt).
+        //
+        // Stamped with the document's own `issued_at` and not with the clock
+        // at the moment of the write: the paper and the movement are one
+        // event, and a sale rung up in the last second of a day would
+        // otherwise put its facture on one day and its debt on the next, so
+        // the statement of the day the customer was handed the paper would
+        // close without the movement that paper made.
         if credit.added != Money::ZERO {
-            debt::append(
+            debt::append_at(
                 conn,
                 shop_id,
                 NewDebtEntry {
@@ -319,6 +326,7 @@ pub fn issue(
                     user_id,
                     note: None,
                 },
+                Some(issued_at),
             )?;
         }
 
@@ -344,7 +352,11 @@ pub fn issue(
                 user_id,
                 audit::Change {
                     action: audit::ACTION_CREDIT_OVERRIDE,
-                    entity: "sale",
+                    // The row is about the document the decision produced,
+                    // which is what `entity_id` names, so it says `document`
+                    // like every other row about one. A reader after the
+                    // history of a facture asks for one entity, not three.
+                    entity: "document",
                     entity_id: Some(document.id),
                     // `before` is the state the decision was taken against
                     // and nothing else: what the customer owed and what
@@ -388,7 +400,7 @@ pub fn issue(
 
 /// The customer as the document will print them. Every field the buyer block
 /// holds is a snapshot of the fiche on the day, `party_kind` included:
-/// `facture_requires_party_ids` asks a different set of fields of a company
+/// `a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number` and `a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else` ask a different set of fields of a company
 /// than of a consumer, and a reprint may not read that from a fiche somebody
 /// has since edited.
 pub(crate) fn buyer_block(customer: &Customer) -> PartyBlock {
@@ -404,7 +416,7 @@ pub(crate) fn buyer_block(customer: &Customer) -> PartyBlock {
 }
 
 /// What a facture must carry before it may take a number
-/// (`facture_requires_party_ids`, décret 05-468 art. 3 and 4).
+/// (`a_shop_whose_settings_carry_no_nis_cannot_issue_a_facture_at_all`, décret 05-468 art. 3 and 4).
 ///
 /// The seller answers with RC and NIS. NIF and AI print when the settings
 /// hold them and refuse nothing: they are on every facture in circulation,
@@ -684,7 +696,7 @@ fn price(
         unit_price,
         line_discount: line.line_discount,
         // Under the IFU the price is a single price and the document mentions
-        // no TVA at all (fixture `regime_ifu_prints_no_tva`). The line stores
+        // no TVA at all (`an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime`). The line stores
         // no rate either, so the stored document says so on its own and a
         // reprint never has to know the régime to hide one.
         rate_bps: match regime {

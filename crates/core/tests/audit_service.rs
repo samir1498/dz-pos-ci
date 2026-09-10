@@ -6,7 +6,6 @@
 //! asserted too: a log that records everything hides the one that matters.
 
 use chrono::NaiveDate;
-use diesel::sqlite::SqliteConnection;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::money::{Bps, Money, Regime};
@@ -15,12 +14,9 @@ use dzpos_core::services::{audit, products, settings, shops};
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 fn block(name: &str) -> StoreBlock {
     StoreBlock {

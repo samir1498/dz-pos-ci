@@ -16,6 +16,7 @@ export type { DebtEntryDto } from "./generated/DebtEntryDto";
 export type { DebtKindDto } from "./generated/DebtKindDto";
 export type { NewCustomerDto } from "./generated/NewCustomerDto";
 export type { PartyKindDto } from "./generated/PartyKindDto";
+export type { ClockDto } from "./generated/ClockDto";
 export type { HealthDto } from "./generated/HealthDto";
 export type { NewProductDto } from "./generated/NewProductDto";
 export type { ProductDto } from "./generated/ProductDto";

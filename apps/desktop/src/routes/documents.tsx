@@ -13,7 +13,7 @@
 // it are all the core's answers; this screen collects a quantity and a
 // reason and shows what came back.
 
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -36,6 +36,7 @@ import {
   saleFactureQueryKey,
   saleSheetPrefixes,
   saleTicketQueryKey,
+  saleQueryKey,
   salesQueryKey,
   salesQueryPrefix,
 } from "@/api";
@@ -177,8 +178,24 @@ export function DocumentsScreen() {
                   <td>{t(KIND_KEY[d.kind])}</td>
                   {/* The buyer's name is on the document, snapshotted at
                       issue: a reprint has to show the block the customer was
-                      handed, so the fiche is never read live for it. */}
-                  <td>{d.buyer_name ?? ""}</td>
+                      handed, so the fiche is never read live for it. The link
+                      beside it goes to the fiche as it stands today, which is
+                      where a shop goes next from a document: to what the
+                      customer still owes. A ticket sold to whoever walked in
+                      names nobody and gets no link. */}
+                  <td>
+                    {d.customer_id === null ? (
+                      (d.buyer_name ?? "")
+                    ) : (
+                      <Link
+                        to="/customers/$id"
+                        params={{ id: String(d.customer_id) }}
+                        className="underline"
+                      >
+                        {d.buyer_name ?? ""}
+                      </Link>
+                    )}
+                  </td>
                   {/* dir="ltr" on the amount: an amount reads left to right
                       in Arabic too. */}
                   <td dir="ltr">{formatCentimes(d.totals.net_to_pay_centimes)}</td>
@@ -200,7 +217,7 @@ export function DocumentsScreen() {
 function DocumentDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const { t } = useTranslation();
   const [paper, setPaper] = useState<PrintPaper>("a4");
-  const document = useQuery({ queryKey: ["sale", id], queryFn: () => api.getSale(id) });
+  const document = useQuery({ queryKey: saleQueryKey(id), queryFn: () => api.getSale(id) });
 
   if (document.isPending) return <p>{t("products_loading")}</p>;
   if (document.isError) {
@@ -455,7 +472,7 @@ async function everythingItTouched(
   customerId: number | null,
 ): Promise<void> {
   const keys: readonly (readonly (string | number | undefined)[])[] = [
-    ["sale", documentId],
+    saleQueryKey(documentId),
     saleAvoirsQueryKey(documentId),
     salesQueryPrefix(),
     ...saleSheetPrefixes(documentId),

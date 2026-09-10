@@ -205,6 +205,17 @@ pub struct HealthDto {
     pub shop_id: i32,
 }
 
+/// The day the shop is on, `YYYY-MM-DD`. A screen that needs "today" asks
+/// for it rather than reading the machine's calendar: the core dates every
+/// document on Algeria's, UTC+1 with no daylight saving, and a browser in
+/// another zone would date a statement a day either side of what the ledger
+/// holds (features.md §2, "One clock").
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "ClockDto.ts")]
+pub struct ClockDto {
+    pub today: String,
+}
+
 /// The shape every failure takes. Generated so the client can narrow on
 /// `code` without repeating the string list.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -564,7 +575,7 @@ impl From<DocumentLine> for SaleLineDto {
 }
 
 /// One row of the TVA recap, stored at issue so a reprint never recomputes
-/// it. Empty under the IFU (`regime_ifu_prints_no_tva`).
+/// it. Empty under the IFU (`an_ifu_facture_names_no_tax_in_any_language`).
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export_to = "SaleTvaDto.ts")]
 pub struct SaleTvaDto {
@@ -901,9 +912,9 @@ impl From<PartyKindDto> for PartyKind {
 }
 
 /// Why the debt moved (features.md §2). The whole union crosses from the
-/// first version: the ledger already holds `sale` and `payment` rows that T3
-/// writes, and a screen that met an unknown kind could only refuse the whole
-/// answer.
+/// first version: the ledger already holds the `sale` and `payment` rows the
+/// till writes, and a screen that met an unknown kind could only refuse the
+/// whole answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export_to = "DebtKindDto.ts")]
 #[serde(rename_all = "lowercase")]
@@ -1009,7 +1020,7 @@ pub struct CustomerDto {
     pub nis: Option<String>,
     pub ai: Option<String>,
     /// Null is no limit at all, zero is no credit at all: two different
-    /// answers, and the till acts on them differently (T3).
+    /// answers, and the till acts on them differently.
     pub credit_limit_centimes: Option<i64>,
     pub warn_threshold_centimes: Option<i64>,
     pub notes: Option<String>,
@@ -1061,6 +1072,11 @@ pub struct CustomerWriteDto {
     pub warn_threshold_centimes: Option<i64>,
     pub notes: Option<String>,
     pub active: bool,
+    /// Why a fiche is being closed. Asked for only when the update closes one
+    /// that still carries a balance either way or a document still asking to
+    /// be paid, and ignored on every other update.
+    #[serde(default)]
+    pub close_reason: Option<String>,
 }
 
 /// A new fiche: the same fields, plus the debt the shop was already carrying
@@ -1127,6 +1143,8 @@ impl TryFrom<NewCustomerDto> for NewCustomer {
             warn_threshold_centimes: d.warn_threshold_centimes,
             notes: d.notes,
             active: d.active,
+            // A fiche being created closes nothing.
+            close_reason: None,
         })
     }
 }

@@ -1,0 +1,6 @@
+# `debt_ledger` is rebuilt here, and the twelve-step SQLite table rebuild
+# needs `PRAGMA foreign_keys = OFF` around it. A pragma inside a transaction
+# is a no-op, so diesel must not wrap this migration in one; up.sql and
+# down.sql each open their own BEGIN after the pragma and close it before
+# turning the foreign keys back on.
+run_in_transaction = false

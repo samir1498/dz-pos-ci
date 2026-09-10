@@ -15,7 +15,7 @@ use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::avoir::{self, AvoirLine};
-use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
+use dzpos_core::services::customers::PartyKind;
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
 use dzpos_core::services::documents::{
     self, BalanceTriple, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, PartyBlock,
@@ -259,29 +259,12 @@ fn issued_documents(conn: &mut SqliteConnection, customer: i32) -> Vec<(i32, i64
     .collect()
 }
 
+mod common;
+
+/// The one customer these properties need. No identifiers: nothing here
+/// issues a facture.
 fn a_customer(conn: &mut SqliteConnection) -> i32 {
-    customers::create(
-        conn,
-        SHOP,
-        OWNER,
-        NewCustomer {
-            name: "Entreprise Benali".to_string(),
-            party_kind: PartyKind::Company,
-            phone: None,
-            address: None,
-            rc: None,
-            nif: None,
-            nis: None,
-            ai: None,
-            credit_limit: None,
-            warn_threshold: None,
-            notes: None,
-            active: true,
-        },
-        None,
-    )
-    .unwrap()
-    .id
+    common::a_customer(conn, "Entreprise Benali")
 }
 
 /// A facture on credit and the ledger row beside it, written by hand rather

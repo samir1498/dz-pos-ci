@@ -142,7 +142,7 @@ impl Money {
 impl Bps {
     /// No rate at all: an exempt line under the réel, and every line under
     /// the IFU, where the price is a single price and the document mentions
-    /// no TVA (fixture `regime_ifu_prints_no_tva`).
+    /// no TVA (`an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime`).
     pub const ZERO: Bps = Bps(0);
 
     /// A rate is at most one whole; 19 typed as 190 000 must not become

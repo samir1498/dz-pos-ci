@@ -12,6 +12,8 @@ import type { PaymentModeDto } from "./generated/PaymentModeDto";
 import type { RegimeDto } from "./generated/RegimeDto";
 import {
   MoneyError,
+  STAMP_RATE_HIGH,
+  STAMP_RATE_MID,
   computeTotals,
   lineTotal,
   pct,
@@ -229,5 +231,32 @@ describe("stamp: the progressive tranches", () => {
 
   it.each(stampFixture.cases)("$name", (c) => {
     expect(stamp(c.input.total_ttc, c.input.mode)).toBe(c.expected.stamp);
+  });
+
+  // The tranche count divided in floating point, which is the one place in
+  // this file where an amount left the integers. The core cuts the same
+  // tranches with i64 and answers `Overflow` when a total will not fit, so a
+  // total a Number cannot hold has to be refused here too rather than
+  // answered from digits that were already lost.
+  it("refuses a total a Number can no longer hold", () => {
+    expect(() => stamp(Number.MAX_SAFE_INTEGER + 2, "cash")).toThrowError(MoneyError);
+    expect(() => stamp(Number.MAX_SAFE_INTEGER + 2, "cash")).toThrowError(/Overflow/);
+  });
+
+  // A total at the top of the safe range still has an exact answer, and the
+  // whole of it is asserted here rather than left to the fixture: 90 071
+  // 992 547 409,91 DA is 900 719 925 475 tranches, rounded up, in the band
+  // above 100 000,00 DA, so 2,00 DA on each of them.
+  it("counts the tranches of the largest total that is still exact", () => {
+    const tranches = 900_719_925_475;
+    expect(stamp(Number.MAX_SAFE_INTEGER, "cash")).toBe(tranches * STAMP_RATE_HIGH);
+  });
+
+  // The band is read off the total and the tranches are counted off the same
+  // total, so a total one centime over a band boundary charges every one of
+  // its tranches at the higher rate: 30 000,01 DA is 301 tranches at 1,50 DA
+  // and not 300 at 1,00 with one at 1,50.
+  it("charges the whole amount at the band the total falls in", () => {
+    expect(stamp(3_000_001, "cash")).toBe(301 * STAMP_RATE_MID);
   });
 });

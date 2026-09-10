@@ -6,7 +6,6 @@
 //! the shop changes régime (features.md, Régime fiscal row).
 
 use chrono::NaiveDate;
-use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::money::Regime;
 use dzpos_core::services::settings;
@@ -15,12 +14,9 @@ const SHOP: i32 = 1;
 /// The owner the first migration seeds. TODO(M4): the real user.
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 fn at(y: i32, m: u32, d: u32) -> chrono::NaiveDateTime {
     NaiveDate::from_ymd_opt(y, m, d)

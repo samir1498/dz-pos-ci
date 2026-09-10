@@ -8,7 +8,7 @@
 //!
 //! `crates/core/tests/print_strings.rs` walks `Key::ALL × Lang::ALL`, so a
 //! key added without its Arabic is a failing test, not a French word on an
-//! Arabic ticket. T6 renders the same keys to ESC/POS.
+//! Arabic ticket.
 //!
 //! The Arabic is unreviewed by a native speaker, like `words_ar`
 //! (research R6). It is taken from the mockup's `design/shared/i18n.js`
@@ -57,13 +57,13 @@ pub enum Key {
     /// read at arm's length, across the sheet.
     CancelledMark,
     /// The day the shop cancelled it, and why. Both are stored beside the
-    /// document (T6's `cancelled_at` and `cancel_reason`).
+    /// document, in `cancelled_at` and `cancel_reason`.
     CancelledOn,
     CancelReason,
     Avoir,
     Proforma,
     /// What a proforma says about itself, in a line of its own: it is a
-    /// quote and not a facture, it books nothing and it owes nothing (T6).
+    /// quote and not a facture, it books nothing and it owes nothing.
     /// A customer handed one must not file it as a facture.
     ProformaNotice,
     /// The opening of the line naming the facture an avoir is written
@@ -154,11 +154,29 @@ pub enum Key {
     /// A range with nothing in it. An empty table is a page that looks broken;
     /// a sentence saying nothing moved is an answer.
     NoMovement,
+
+    // The 80 mm debt slip (features.md §2 and §4). What a credit customer is
+    // handed at the counter when they ask what they owe: the balance, the
+    // movements behind it, and nothing a comptable would file.
+    /// The heading. Sentence case like the ticket's and not the facture's
+    /// capitals: it is a counter paper, not a document with a series.
+    DebtSlip,
+    /// The heading of the movement block. The slip carries the newest ten and
+    /// says so in the word it uses, because a customer counting four rows
+    /// against a year of buying has to know the page is not the whole ledger.
+    LastMovements,
+    /// The line that keeps the slip out of a comptable's file: it carries no
+    /// number, no stamp and no TVA, so it says on its face that it proves
+    /// nothing. The statement and the facture are the papers that do.
+    NoFiscalValue,
+    /// The words line of a debt slip. Not the statement's, which says "le
+    /// présent relevé" about a page covering a period this one has none of.
+    DebtInWords,
 }
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 64] = [
+    pub const ALL: [Key; 68] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
@@ -223,6 +241,10 @@ impl Key {
         Key::StatementInWords,
         Key::InFavourOfCustomer,
         Key::NoMovement,
+        Key::DebtSlip,
+        Key::LastMovements,
+        Key::NoFiscalValue,
+        Key::DebtInWords,
     ];
 }
 
@@ -399,10 +421,11 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::TotalTtc, Lang::En) => "Total incl. tax",
         (Key::TotalTtc, Lang::Ar) => "المجموع مع الرسم",
 
-        // The décret's own wording, for the paper it is written on. T9 split
-        // the sentence per kind rather than have an avoir call itself a
-        // facture on the line a comptable reads first; the two new sentences
-        // are unreviewed wording, like this dictionary's Arabic.
+        // The décret's own wording, for the paper it is written on. The
+        // sentence is split per kind rather than have an avoir call itself a
+        // facture on the line a comptable reads first; the two sentences that
+        // are not the décret's are unreviewed wording, like this
+        // dictionary's Arabic.
         (Key::InWords, Lang::Fr) => "Arrêtée la présente facture à la somme de",
         (Key::InWords, Lang::En) => "This invoice is closed at the sum of",
         (Key::InWords, Lang::Ar) => "أوقفت هذه الفاتورة بمبلغ",
@@ -509,5 +532,21 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::NoMovement, Lang::Fr) => "Aucun mouvement sur la période",
         (Key::NoMovement, Lang::En) => "No movement in this period",
         (Key::NoMovement, Lang::Ar) => "لا توجد حركة في هذه الفترة",
+
+        (Key::DebtSlip, Lang::Fr) => "Situation de compte",
+        (Key::DebtSlip, Lang::En) => "Account balance slip",
+        (Key::DebtSlip, Lang::Ar) => "وضعية الحساب",
+
+        (Key::LastMovements, Lang::Fr) => "Derniers mouvements",
+        (Key::LastMovements, Lang::En) => "Latest movements",
+        (Key::LastMovements, Lang::Ar) => "آخر الحركات",
+
+        (Key::NoFiscalValue, Lang::Fr) => "Document sans valeur fiscale",
+        (Key::NoFiscalValue, Lang::En) => "This slip has no fiscal value",
+        (Key::NoFiscalValue, Lang::Ar) => "وثيقة بدون قيمة جبائية",
+
+        (Key::DebtInWords, Lang::Fr) => "Arrêtée la présente situation à la somme de",
+        (Key::DebtInWords, Lang::En) => "This slip is closed at the sum of",
+        (Key::DebtInWords, Lang::Ar) => "أوقفت هذه الوضعية بمبلغ",
     }
 }

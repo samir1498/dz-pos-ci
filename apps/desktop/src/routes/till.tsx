@@ -909,6 +909,20 @@ function CreditRefused({
       >
         {t("till_override")}
       </button>
+      {/* The other answer to this refusal, and the one a shop usually wants:
+          take money off what the customer already owes. The link opens that
+          customer's own fiche rather than the list, because the cashier is
+          looking at a refusal that named them and should not have to type the
+          name back into a search box. */}
+      {refusal.body.customer_id !== null ? (
+        <Link
+          to="/customers/$id"
+          params={{ id: String(refusal.body.customer_id) }}
+          className="underline"
+        >
+          {t("till_open_fiche")}
+        </Link>
+      ) : null}
     </div>
   );
 }

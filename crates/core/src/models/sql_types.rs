@@ -122,7 +122,7 @@ text_enum! {
     /// Whether a party is a company or a private consumer. A field on the
     /// fiche, never inferred from whether an RC was typed in: loi 04-02
     /// art. 10 decides ticket against facture by who the buyer is, and
-    /// `facture_requires_party_ids` asks a different set of fields of each,
+    /// `a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number` and `a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else` ask a different set of fields of each,
     /// so an inference would flip the rule the moment a field is cleared.
     PartyKind {
         Company => "company",

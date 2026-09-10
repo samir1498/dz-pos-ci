@@ -226,8 +226,10 @@ impl Case {
     }
 }
 
+mod common;
+
 fn goldens_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/print/facture_a4")
+    common::goldens_dir("facture_a4")
 }
 
 /// The seller as a facture prints them: the four identifiers décret 05-468
@@ -934,7 +936,7 @@ fn the_a5_facture_differs_from_the_a4_in_the_page_size_line_only() {
     }
 }
 
-/// `regime_ifu_prints_no_tva`, read off the paper: an IFU document must not
+/// The IFU rule read off the paper: an IFU document must not
 /// mention the tax at all (CTCA 2026 art. 64), so neither the word, nor its
 /// abbreviations, nor "HT", nor "TTC", nor the per-cent sign of a rate
 /// column is anywhere in the file. The réel facture is checked in the same

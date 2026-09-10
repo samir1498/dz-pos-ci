@@ -22,12 +22,9 @@ use dzpos_core::services::{audit, customers, debt, documents, products, settings
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::open_temp;
 
 fn at(day: u32) -> NaiveDateTime {
     NaiveDate::from_ymd_opt(2026, 9, day)
@@ -592,7 +589,7 @@ fn the_document_keeps_the_regime_in_force_on_the_day_it_was_issued() {
 
 #[test]
 fn an_ifu_line_stores_no_rate_so_a_reprint_never_needs_the_regime() {
-    // regime_ifu_prints_no_tva: under the IFU the price is a single price and
+    // Under the IFU the price is a single price and
     // the document mentions no TVA at all. If the line kept the product's
     // 19 % the stored document would not say so, and the first renderer that
     // printed a rate per line would put TVA on an IFU ticket.
@@ -736,6 +733,8 @@ fn close(conn: &mut SqliteConnection, id: i32) {
             notes: open.notes,
             active: false,
         },
+        // Nothing on the account, so no reason is asked for.
+        None,
     )
     .unwrap();
 }
@@ -840,6 +839,49 @@ fn a_credit_sale_writes_the_document_its_debt_row_and_the_balance_triple() {
         8_000
     );
     assert_eq!(documents::get(&mut conn, SHOP, doc.id).unwrap(), doc);
+}
+
+/// The document and the movement it writes are one event, so they are
+/// stamped with one moment. They used to be stamped with two: the document
+/// took the `issued_at` the caller gave, and the ledger row was written with
+/// no moment at all and fell back on the clock at the moment of the write.
+/// A sale rung up at 23:59:59 and saved a second later then had its paper on
+/// one day and its debt on the next, and a statement asked for the first day
+/// closed without the movement its own facture put there.
+///
+/// The last second of the day is the fixture because it is the one second
+/// where the wall clock cannot agree with it by accident.
+#[test]
+fn the_debt_row_of_a_credit_sale_is_stamped_with_the_day_the_paper_was() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 1900, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(1_000_000), None);
+    let midnight = NaiveDate::from_ymd_opt(2026, 9, 9)
+        .unwrap()
+        .and_hms_opt(23, 59, 59)
+        .unwrap();
+    let mut new = credit(c, vec![line(p, 2_000)], false);
+    new.issued_at = Some(midnight);
+
+    let sale = sales::issue(&mut conn, SHOP, OWNER, new).unwrap();
+    assert_eq!(sale.document.issued_at, midnight);
+
+    let ledger = debt::ledger(&mut conn, SHOP, c).unwrap();
+    assert_eq!(ledger.len(), 1);
+    assert_eq!(
+        ledger[0].created_at, midnight,
+        "the document and its debt row straddle midnight"
+    );
+
+    // Read the way the statement reads it: the movement is inside the day the
+    // paper was issued on, which is the whole point of stamping it once.
+    let day = midnight.date();
+    let statement = debt::statement_between(&mut conn, SHOP, c, day, day).unwrap();
+    assert_eq!(
+        statement.entries.len(),
+        1,
+        "the day the facture was issued on closed without its own movement"
+    );
 }
 
 #[test]
@@ -1177,9 +1219,9 @@ fn an_override_takes_the_sale_past_the_limit_and_the_log_says_who() {
     let entries = audit::list(&mut conn, SHOP).unwrap();
     let entry = entries
         .iter()
-        .find(|e| e.action == "sale.credit_override")
+        .find(|e| e.action == "document.issue_override")
         .expect("an override past a rule is logged");
-    assert_eq!(entry.entity, "sale");
+    assert_eq!(entry.entity, "document");
     assert_eq!(entry.entity_id, Some(doc.id));
     assert_eq!(entry.user_id, OWNER);
     // `before` is the state the decision was taken against: what the
@@ -1231,7 +1273,7 @@ fn an_override_on_a_fiche_that_was_also_warning_says_so_in_the_log() {
     let entries = audit::list(&mut conn, SHOP).unwrap();
     let entry = entries
         .iter()
-        .find(|e| e.action == "sale.credit_override")
+        .find(|e| e.action == "document.issue_override")
         .expect("an override past a rule is logged");
     assert_eq!(entry.entity_id, Some(doc.id));
     let after = entry.after.clone().unwrap_or_default();
@@ -1256,7 +1298,7 @@ fn an_override_on_a_sale_the_limit_would_have_taken_writes_no_log_row() {
         !audit::list(&mut conn, SHOP)
             .unwrap()
             .iter()
-            .any(|e| e.action == "sale.credit_override"),
+            .any(|e| e.action == "document.issue_override"),
         "a sale inside the limit logged an override nobody took"
     );
 }
@@ -1347,7 +1389,7 @@ fn a_closed_fiche_and_another_shops_fiche_cannot_be_sold_to() {
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
 }
 
-// ---- the facture at the till (features.md §3, `facture_requires_party_ids`)
+// ---- the facture at the till (features.md §3, the party identifiers rows)
 
 /// The shop's own settings as a facture needs them. `nis` is handed in so a
 /// test can take one identifier away without rewriting the whole block.
@@ -1538,6 +1580,7 @@ fn a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number() {
             notes: None,
             active: true,
         },
+        None,
     )
     .unwrap();
     let doc = issue_sale(
@@ -1939,7 +1982,7 @@ fn an_override_the_party_ids_then_refuse_leaves_no_log_row_and_no_number() {
         !audit::list(&mut conn, SHOP)
             .unwrap()
             .iter()
-            .any(|e| e.action == "sale.credit_override"),
+            .any(|e| e.action == "document.issue_override"),
         "an override was logged for a sale that was refused"
     );
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());

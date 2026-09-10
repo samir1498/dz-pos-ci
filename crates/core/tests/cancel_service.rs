@@ -9,39 +9,18 @@ use chrono::{NaiveDate, NaiveDateTime};
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
-use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::models::stock::MovementKind;
 use dzpos_core::money::{Bps, Money, PaymentMode};
-use dzpos_core::services::customers::{NewCustomer, PartyKind};
+use dzpos_core::services::customers::NewCustomer;
 use dzpos_core::services::debt::{DebtKind, PaymentMethod};
 use dzpos_core::services::documents::{Document, DocumentKind, DocumentStatus};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
-use dzpos_core::services::{audit, avoir, customers, debt, documents, products, shops, stock};
+use dzpos_core::services::{audit, avoir, customers, debt, documents, products, stock};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let mut conn = dzpos_core::db::open(&path).unwrap();
-    shops::update_store(
-        &mut conn,
-        SHOP,
-        OWNER,
-        StoreBlock {
-            name: "Mon magasin".to_string(),
-            rc: Some("16/00-1234567 B 25".to_string()),
-            nif: None,
-            nis: Some("000216001234567 00".to_string()),
-            ai: None,
-            address: None,
-            phone: None,
-        },
-    )
-    .unwrap();
-    (dir, conn)
-}
+use common::open_temp_selling_factures as open_temp;
 
 fn at(day: u32) -> NaiveDateTime {
     NaiveDate::from_ymd_opt(2026, 9, day)
@@ -73,29 +52,12 @@ fn product(conn: &mut SqliteConnection, name: &str, selling: i64) -> i32 {
     .id
 }
 
+mod common;
+
+/// The buyer of every facture in this file, carrying the identifiers
+/// décret 05-468 art. 3 asks of one.
 fn a_customer(conn: &mut SqliteConnection) -> i32 {
-    customers::create(
-        conn,
-        SHOP,
-        OWNER,
-        NewCustomer {
-            name: "Entreprise Benali".to_string(),
-            party_kind: PartyKind::Company,
-            phone: None,
-            address: None,
-            rc: Some("16/00-7654321 B 22".to_string()),
-            nif: None,
-            nis: Some("000216007654321 00".to_string()),
-            ai: None,
-            credit_limit: None,
-            warn_threshold: None,
-            notes: None,
-            active: true,
-        },
-        None,
-    )
-    .unwrap()
-    .id
+    common::an_identified_customer(conn, "Entreprise Benali")
 }
 
 fn line(product_id: i32, qty_milli: i64) -> NewSaleLine {
@@ -788,4 +750,184 @@ fn a_document_of_kind(conn: &mut SqliteConnection, kind: DocumentKind, customer:
     .execute(conn)
     .unwrap();
     documents::list(conn, SHOP, Some(kind)).unwrap()[0].id
+}
+
+/// Everything the log holds about one document comes back from one query,
+/// because every row about a document says `document` in `entity` and names
+/// it in `entity_id`. The override row used to say `sale`, so the history of
+/// a facture was two queries and a reader had to know that.
+///
+/// The story is a mixed one on purpose, because a real customer's is: a
+/// facture sold on credit past the limit, money taken against it, the balance
+/// corrected by hand, the goods part-returned, the paper annulled, and the
+/// fiche closed at the end with money still on it. Six kinds of event, three
+/// entities, one read of the log, and every action name asserted — a rename
+/// that missed one of them goes red here.
+#[test]
+fn the_life_of_a_document_reads_back_from_one_query() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000);
+    let customer = a_customer(&mut conn);
+    // A limit of nothing, so the sale needs the override to go through.
+    let open = customers::get(&mut conn, SHOP, customer).unwrap();
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        NewCustomer {
+            name: open.name,
+            party_kind: open.party_kind,
+            phone: open.phone,
+            address: open.address,
+            rc: open.rc,
+            nif: open.nif,
+            nis: open.nis,
+            ai: open.ai,
+            credit_limit: Some(Money::ZERO),
+            warn_threshold: None,
+            notes: open.notes,
+            active: true,
+        },
+        None,
+    )
+    .unwrap();
+
+    let facture = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![line(p, 2_000)],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Credit,
+            tendered: None,
+            customer_id: Some(customer),
+            override_credit: true,
+            kind: SaleKind::Facture,
+            issued_at: Some(at(10)),
+        },
+    )
+    .unwrap()
+    .document;
+    // Money against the facture, then a correction upwards on the balance
+    // itself: one settles paper, the other does not, and they are two
+    // different action names in the log.
+    debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(50_000),
+        PaymentMethod::Cash,
+        Some("acompte".to_string()),
+        at(10),
+    )
+    .unwrap();
+    debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        Money::centimes(25_000),
+        Some("report du carnet".to_string()),
+    )
+    .unwrap();
+    avoir::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        Some(vec![dzpos_core::services::avoir::AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 1_000,
+        }]),
+        None,
+        Some(at(11)),
+    )
+    .unwrap();
+    documents::cancel(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        "erreur de saisie".to_string(),
+        Some(at(12)),
+    )
+    .unwrap();
+
+    // The cancellation put the facture's own money back but left the
+    // correction and the payment where they were, so the fiche still has an
+    // account open and closing it has to say why.
+    let open = customers::get(&mut conn, SHOP, customer).unwrap();
+    customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        customer,
+        NewCustomer {
+            name: open.name,
+            party_kind: open.party_kind,
+            phone: open.phone,
+            address: open.address,
+            rc: open.rc,
+            nif: open.nif,
+            nis: open.nis,
+            ai: open.ai,
+            credit_limit: open.credit_limit,
+            warn_threshold: open.warn_threshold,
+            notes: open.notes,
+            active: false,
+        },
+        Some("compte soldé au carnet".to_string()),
+    )
+    .unwrap();
+
+    // One read of the log. Everything below is that one answer, sorted by the
+    // entity each row names.
+    let log = audit::list(&mut conn, SHOP).unwrap();
+    let actions = |entity: &str, id: i32| -> Vec<String> {
+        log.iter()
+            .filter(|e| e.entity == entity && e.entity_id == Some(id))
+            .map(|e| e.action.clone())
+            .collect()
+    };
+
+    // Two credit notes: the partial the shop wrote, and the closing one the
+    // cancellation wrote to take back what was left.
+    assert_eq!(
+        actions("document", facture.id),
+        [
+            "document.issue_override",
+            "document.avoir",
+            "document.avoir",
+            "document.cancel"
+        ],
+        "the life of a facture is not one query away"
+    );
+    // The money that moved on the account rather than on the paper.
+    assert_eq!(
+        actions("customer_debt", customer),
+        ["debt.pay", "debt.adjust"],
+        "the ledger's own events are not under the customer they belong to"
+    );
+    // And the fiche: opened, its limit set, closed over an account that was
+    // still open. The close is its own name because it is its own decision.
+    assert_eq!(
+        actions("customer", customer),
+        ["create", "update", "customer.close"],
+        "the fiche's own events are not under the customer they belong to"
+    );
+
+    // The cancellation says what the paper is left asking for, so a reader can
+    // tell a cancellation that moved money from one that moved none.
+    let cancelled = log
+        .iter()
+        .find(|e| e.action == "document.cancel")
+        .cloned()
+        .expect("the cancellation is logged");
+    let after: serde_json::Value =
+        serde_json::from_str(&cancelled.after.unwrap_or_default()).unwrap();
+    assert_eq!(after["remaining_debt_centimes"], 0);
+    assert_eq!(after["reason"], "erreur de saisie");
 }

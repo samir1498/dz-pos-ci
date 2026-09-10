@@ -7,7 +7,7 @@
 //!
 //! `party_kind` is asked for, never inferred from whether an RC was typed in:
 //! loi 04-02 art. 10 decides ticket against facture by who the buyer is, and
-//! `facture_requires_party_ids` asks a different set of fields of a company
+//! `a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number` and `a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else` ask a different set of fields of a company
 //! than of a consumer.
 
 use diesel::connection::Connection;
@@ -18,6 +18,7 @@ use crate::models::customer::CustomerRowWrite;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::money::Money;
 use crate::repos::customers as repo;
+use crate::repos::documents as documents_repo;
 use crate::services::{audit, bounded_field, debt, optional_field};
 
 pub use crate::models::customer::{Customer, NewCustomer, PartyKind};
@@ -157,31 +158,114 @@ pub fn create(
 
 /// Replaces the fiche. The ledger is untouched: a wrong opening debt is
 /// corrected by an `adjustment` movement, never by editing the fiche.
+/// `close_reason` is asked for only when the update closes a fiche that is
+/// still carrying something: a balance either way, or a document still asking
+/// to be paid. Closing says the shop has stopped trading with that customer
+/// (features.md §2), and doing it over an open account is either a mistake or
+/// a decision somebody took, so the log has to say which. On every other
+/// update it is ignored.
 pub fn update(
     conn: &mut SqliteConnection,
     shop_id: i32,
     user_id: i32,
     id: i32,
     fields: NewCustomer,
+    close_reason: Option<String>,
 ) -> Result<Customer, CoreError> {
     let write = validate(shop_id, &fields)?;
+    let close_reason = optional_field("reason", close_reason.as_deref())?;
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
+        // Read before the write, because it is what the refusal is about and
+        // what the log has to carry: after the update the fiche is closed
+        // either way and the figure would say nothing about the decision.
+        let closing = before.active && !fields.active;
+        let account = closing
+            .then(|| open_account(conn, shop_id, id))
+            .transpose()?;
+        let reason = match &account {
+            Some(account) if account.is_open() => match &close_reason {
+                Some(reason) => Some(reason.clone()),
+                None => {
+                    return Err(CoreError::validation(
+                        "reason",
+                        "this customer still has an account open; say why it is being closed",
+                    ))
+                }
+            },
+            _ => None,
+        };
         let after = repo::update(conn, shop_id, id, &write)?;
+        // One row per call, named for what happened: a close over an open
+        // account is not the same event as a change of phone number, and a
+        // comptable reading the log for a written-off balance wants to find
+        // it by the action rather than by diffing two fiches.
+        let (action, extra) = match (&account, &reason) {
+            (Some(account), Some(reason)) => (
+                audit::ACTION_CLOSE_CUSTOMER,
+                Some(serde_json::json!({
+                    "close_reason": reason,
+                    "balance_centimes": account.balance.as_centimes(),
+                    "open_documents": account.open_documents,
+                })),
+            ),
+            _ => (audit::ACTION_UPDATE, None),
+        };
         audit::record(
             conn,
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_UPDATE,
+                action,
                 entity: "customer",
                 entity_id: Some(id),
                 before: Some(as_json(&before, None)),
-                after: Some(as_json(&after, None)),
+                after: Some(with_extra(as_json(&after, None), extra)),
             },
         )?;
         Ok(after)
     })
+}
+
+/// What a fiche is still carrying: the balance either way, and how many of
+/// its documents are still asking to be paid.
+struct OpenAccount {
+    balance: Money,
+    open_documents: usize,
+}
+
+impl OpenAccount {
+    /// Money owed, money held, or paper outstanding. A balance of zero with a
+    /// document still open is possible and counts: the paper is what the
+    /// customer holds in their hand.
+    const fn is_open(&self) -> bool {
+        !matches!(self.balance.as_centimes(), 0) || self.open_documents > 0
+    }
+}
+
+fn open_account(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+) -> Result<OpenAccount, CoreError> {
+    Ok(OpenAccount {
+        balance: debt::balance(conn, shop_id, customer_id)?,
+        open_documents: documents_repo::unpaid_of_customer(conn, shop_id, customer_id)?.len(),
+    })
+}
+
+/// The audited fiche with the close block merged in beside it, so the row
+/// reads as one object rather than as a fiche and a note that have to be
+/// lined up by whoever opens the log.
+fn with_extra(fiche: String, extra: Option<serde_json::Value>) -> String {
+    let Some(extra) = extra else { return fiche };
+    let (Ok(serde_json::Value::Object(mut fiche)), serde_json::Value::Object(extra)) =
+        (serde_json::from_str::<serde_json::Value>(&fiche), extra)
+    else {
+        return fiche;
+    };
+    fiche.extend(extra);
+    serde_json::Value::Object(fiche).to_string()
 }
 
 /// The fiche as the audit log stores it. `opening_debt` is only on a create,

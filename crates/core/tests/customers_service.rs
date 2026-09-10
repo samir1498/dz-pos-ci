@@ -17,12 +17,9 @@ const SHOP: i32 = 1;
 /// The owner the first migration seeds.
 const OWNER: i32 = 1;
 
-fn open_temp() -> (tempfile::TempDir, SqliteConnection) {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("t.db");
-    let conn = dzpos_core::db::open(&path).unwrap();
-    (dir, conn)
-}
+mod common;
+
+use common::{a_payment_row, open_temp};
 
 fn fiche(name: &str) -> NewCustomer {
     NewCustomer {
@@ -143,7 +140,7 @@ fn an_update_replaces_the_fiche_and_never_touches_the_ledger() {
     let mut changed = fiche("Entreprise Benali et fils");
     changed.credit_limit = None;
     changed.party_kind = PartyKind::Consumer;
-    let after = customers::update(&mut conn, SHOP, OWNER, made.id, changed).unwrap();
+    let after = customers::update(&mut conn, SHOP, OWNER, made.id, changed, None).unwrap();
 
     assert_eq!(after.name, "Entreprise Benali et fils");
     assert_eq!(after.credit_limit, None, "no limit is not a limit of zero");
@@ -165,7 +162,7 @@ fn another_shop_gets_not_found_on_a_read_and_on_an_update() {
 
     for err in [
         customers::get(&mut conn, 2, made.id).unwrap_err(),
-        customers::update(&mut conn, 2, OWNER, made.id, fiche("Volé")).unwrap_err(),
+        customers::update(&mut conn, 2, OWNER, made.id, fiche("Volé"), None).unwrap_err(),
     ] {
         assert!(
             matches!(
@@ -236,7 +233,7 @@ fn a_create_and_an_update_each_leave_an_audit_entry_with_before_and_after() {
     .unwrap();
     let mut changed = fiche("Entreprise Benali");
     changed.credit_limit = Some(Money::centimes(9_000_000));
-    customers::update(&mut conn, SHOP, OWNER, made.id, changed).unwrap();
+    customers::update(&mut conn, SHOP, OWNER, made.id, changed, None).unwrap();
 
     let log = audit::list(&mut conn, SHOP).unwrap();
     assert_eq!(log.len(), 2, "{log:?}");
@@ -325,6 +322,7 @@ fn an_update_that_fails_at_the_audit_entry_leaves_the_fiche_as_it_was() {
         NO_SUCH_USER,
         made.id,
         fiche("Entreprise Benali et fils"),
+        None,
     )
     .unwrap_err();
     assert_eq!(err.code(), "storage", "{err}");
@@ -480,20 +478,7 @@ fn the_list_and_the_fiche_carry_the_balance_the_ledger_sums_to() {
     )
     .unwrap();
     let clear = customers::create(&mut conn, SHOP, OWNER, fiche("Zoubir"), None).unwrap();
-    debt::append(
-        &mut conn,
-        SHOP,
-        debt::NewDebtEntry {
-            customer_id: owing.id,
-            document_id: None,
-            kind: debt::DebtKind::Payment,
-            debit: Money::ZERO,
-            credit: Money::centimes(50_000),
-            user_id: OWNER,
-            note: None,
-        },
-    )
-    .unwrap();
+    a_payment_row(&mut conn, owing.id, 50_000);
 
     let rows = customers::list_with_balance(&mut conn, SHOP, None).unwrap();
     let balances: Vec<(String, Money)> = rows
@@ -546,4 +531,136 @@ fn another_shops_fiche_is_not_found_with_its_balance_either() {
     assert!(customers::list_with_balance(&mut conn, 2, None)
         .unwrap()
         .is_empty());
+}
+
+/// Closing a fiche says the shop has stopped trading with that customer
+/// (features.md §2), and a shop that stops trading with somebody who still
+/// owes it money has taken a decision rather than tidied a list. The rule is
+/// the same the other way round: a customer the shop is holding credit for is
+/// owed that money whether or not their fiche is open.
+#[test]
+fn a_fiche_with_a_balance_is_not_closed_without_a_reason() {
+    let (_dir, mut conn) = open_temp();
+    let made = customers::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        fiche("Entreprise Benali"),
+        Some(Money::centimes(150_000)),
+    )
+    .unwrap();
+    let mut closed = fiche("Entreprise Benali");
+    closed.active = false;
+
+    let err = customers::update(&mut conn, SHOP, OWNER, made.id, closed.clone(), None).unwrap_err();
+    assert_eq!(err.code(), "validation", "{err}");
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "reason"),
+        "{err:?}"
+    );
+    assert!(
+        customers::get(&mut conn, SHOP, made.id).unwrap().active,
+        "the refused close was written anyway"
+    );
+
+    // A blank reason is no reason: a form that sent a space would otherwise
+    // buy its way past the rule.
+    let err = customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        made.id,
+        closed.clone(),
+        Some("   ".to_string()),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "reason"),
+        "{err:?}"
+    );
+
+    let after = customers::update(
+        &mut conn,
+        SHOP,
+        OWNER,
+        made.id,
+        closed,
+        Some("dossier au contentieux".to_string()),
+    )
+    .unwrap();
+    assert!(!after.active);
+
+    // The log carries the decision: the reason, what was owed at the moment
+    // it was taken, and how many papers were left open.
+    let entry = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .find(|e| e.action == "customer.close")
+        .expect("a close over an open account is logged as one");
+    assert_eq!(entry.entity_id, Some(made.id));
+    let after_json: serde_json::Value =
+        serde_json::from_str(&entry.after.unwrap_or_default()).unwrap();
+    assert_eq!(after_json["close_reason"], "dossier au contentieux");
+    assert_eq!(after_json["balance_centimes"], 150_000);
+    assert_eq!(after_json["open_documents"], 0);
+    assert_eq!(after_json["active"], false);
+    assert_eq!(after_json["name"], "Entreprise Benali");
+}
+
+/// The rule is about the account and not about the fiche: a customer who owes
+/// nothing and holds nothing is closed the way any field is changed, and the
+/// log says `update` because that is what it was.
+#[test]
+fn a_settled_fiche_is_closed_without_a_reason_and_logged_as_an_update() {
+    let (_dir, mut conn) = open_temp();
+    let made = customers::create(&mut conn, SHOP, OWNER, fiche("Entreprise Benali"), None).unwrap();
+    let mut closed = fiche("Entreprise Benali");
+    closed.active = false;
+
+    let after = customers::update(&mut conn, SHOP, OWNER, made.id, closed, None).unwrap();
+    assert!(!after.active);
+
+    let actions: Vec<String> = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .map(|e| e.action)
+        .collect();
+    assert!(
+        actions.contains(&"update".to_string()),
+        "an ordinary close is not an ordinary update: {actions:?}"
+    );
+    assert!(
+        !actions.contains(&"customer.close".to_string()),
+        "a settled account was logged as a decision: {actions:?}"
+    );
+}
+
+/// A balance the shop owes is an open account too. The fixture takes the
+/// customer into credit with a correction upwards on the shop's side, which
+/// is the movement a deposit or an over-credited avoir leaves behind.
+#[test]
+fn a_fiche_the_shop_owes_money_on_is_not_closed_without_a_reason_either() {
+    let (_dir, mut conn) = open_temp();
+    let made = customers::create(&mut conn, SHOP, OWNER, fiche("Entreprise Benali"), None).unwrap();
+    debt::adjust(
+        &mut conn,
+        SHOP,
+        OWNER,
+        made.id,
+        Money::centimes(-40_000),
+        Some("acompte".to_string()),
+    )
+    .unwrap();
+    assert_eq!(
+        debt::balance(&mut conn, SHOP, made.id).unwrap(),
+        Money::centimes(-40_000)
+    );
+
+    let mut closed = fiche("Entreprise Benali");
+    closed.active = false;
+    let err = customers::update(&mut conn, SHOP, OWNER, made.id, closed, None).unwrap_err();
+    assert!(
+        matches!(err, CoreError::Validation { ref field, .. } if field == "reason"),
+        "{err:?}"
+    );
 }

@@ -4,9 +4,9 @@
 //
 // Nothing on this screen deletes a customer: the ledger holds the fiche, so a
 // shop that has stopped dealing with somebody clears the active box instead,
-// and the till's picker (T3) then leaves them out.
+// and the till's picker then leaves them out.
 
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
@@ -24,13 +24,16 @@ import type {
 } from "@dzpos/shared";
 import {
   api,
+  customerDebtSlipKeyPrefix,
+  customerDebtSlipQueryKey,
   customerLedgerQueryKey,
+  customerQueryKey,
   customerPaymentsQueryKey,
   customerStatementQueryKey,
   customersQueryKey,
 } from "@/api";
 import { isKey, useTranslation, type Key } from "@/i18n";
-import { todayAsDay } from "@/lib/day";
+import { useShopToday } from "@/lib/clock";
 
 export const Route = createFileRoute("/customers")({ component: CustomersScreen });
 
@@ -180,6 +183,51 @@ export function CustomersScreen() {
   );
 }
 
+/**
+ * One fiche on a page of its own, which is what `/customers/$id` opens. The
+ * till's credit refusal names a customer whose balance stopped a sale, and
+ * the documents screen names the customer a facture was made out to; neither
+ * can reach into the list screen's state to open the panel there, and a link
+ * that dropped the cashier on the list with a search box to retype would be
+ * the shop doing the app's work.
+ *
+ * The same two components the panel uses, so a fiche reads the same whichever
+ * way it was opened.
+ */
+export function CustomerFiche({ id }: { id: number }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const customer = useQuery({
+    queryKey: customerQueryKey(id),
+    queryFn: () => api.getCustomer(id),
+  });
+  const back = () => void navigate({ to: "/customers" });
+
+  return (
+    <section className="flex flex-col gap-4">
+      <header className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold">{t("customers_title")}</h1>
+        <Link to="/customers" className="underline">
+          {t("action_back_to_customers")}
+        </Link>
+      </header>
+
+      {customer.isPending ? <p>{t("customers_loading")}</p> : null}
+      {customer.isError ? (
+        <p role="alert" className="text-red-700">
+          {t(errorKey(customer.error))}
+        </p>
+      ) : null}
+      {customer.isSuccess ? (
+        <div className="flex flex-col gap-4 rounded border p-4">
+          <CustomerForm key={customer.data.id} initial={customer.data} onDone={back} />
+          <CustomerLedger customer={customer.data} />
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function CustomerTable({
   rows,
   onEdit,
@@ -274,18 +322,33 @@ function CustomerForm({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<Key | null>(null);
+  // The server refuses a close over an open account without a reason
+  // (features.md §2). The screen asks for one whenever it can see the account
+  // is open, and this flag is for when it cannot: a fiche whose balance is
+  // nil can still have a document asking to be paid, and the refusal is what
+  // says so.
+  const [reasonRefused, setReasonRefused] = useState(false);
 
   const save = useMutation({
-    mutationFn: (input: NewCustomerDto) =>
+    mutationFn: ({
+      close_reason,
+      ...fiche
+    }: NewCustomerDto & { close_reason: string | null }) =>
+      // A blank fiche closes nothing, and `POST /customers` refuses a field
+      // it does not know, so the reason only travels on the update.
       initial === null
-        ? api.createCustomer(input)
-        : api.updateCustomer(initial.id, whole(input)),
+        ? api.createCustomer(fiche)
+        : api.updateCustomer(initial.id, whole({ ...fiche, close_reason })),
     onSuccess: async () => {
       setServerError(null);
+      setReasonRefused(false);
       await queryClient.invalidateQueries({ queryKey: customersQueryKey });
       onDone();
     },
-    onError: (error: unknown) => setServerError(errorKey(error)),
+    onError: (error: unknown) => {
+      setServerError(errorKey(error));
+      setReasonRefused(error instanceof ApiError && error.field === "reason");
+    },
   });
 
   const form = useForm({
@@ -305,6 +368,7 @@ function CustomerForm({
             openingDebt: "",
             notes: "",
             active: true,
+            closeReason: "",
           }
         : {
             name: initial.name,
@@ -326,6 +390,7 @@ function CustomerForm({
             openingDebt: "",
             notes: initial.notes ?? "",
             active: initial.active,
+            closeReason: "",
           },
     onSubmit: async ({ value }) => {
       // The rejection is swallowed on purpose: onError has already turned the
@@ -342,12 +407,13 @@ function CustomerForm({
           ai: cleared(value.ai),
           // A blank limit is "no limit at all", which is not a limit of
           // nothing: the two are different answers and the till acts on them
-          // differently (T3).
+          // differently.
           credit_limit_centimes: amount(value.creditLimit),
           warn_threshold_centimes: amount(value.warnThreshold),
           notes: cleared(value.notes),
           active: value.active,
           opening_debt_centimes: initial === null ? amount(value.openingDebt) : null,
+          close_reason: cleared(value.closeReason),
         })
         .catch(() => undefined);
     },
@@ -507,6 +573,40 @@ function CustomerForm({
         )}
       </form.Field>
 
+      {/* Closing a fiche says the shop has stopped trading with that customer,
+          and doing it over an account that is still open is a decision rather
+          than a tidy-up: the reason goes in the audit log beside the balance
+          (features.md §2). The block appears when the balance says the account
+          is open, and when the server says so about a document the screen
+          cannot see. */}
+      <form.Subscribe selector={(state) => state.values.active}>
+        {(active) =>
+          initial !== null &&
+          initial.active &&
+          !active &&
+          (initial.balance_centimes !== 0 || reasonRefused) ? (
+            <form.Field name="closeReason">
+              {(field) => (
+                <label className="flex flex-col gap-1 rounded border border-amber-600 p-2">
+                  <span>{t("customers_close_reason")}</span>
+                  <span className="text-sm">
+                    {t("customers_close_reason_hint")}{" "}
+                    {t(balanceLabel(initial.balance_centimes))}{" "}
+                    {balanceShown(initial.balance_centimes)}
+                  </span>
+                  <input
+                    data-testid="customer-close-reason"
+                    className="rounded border px-2 py-1"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                </label>
+              )}
+            </form.Field>
+          ) : null
+        }
+      </form.Subscribe>
+
       {serverError !== null ? (
         <p role="alert" className="text-red-700">
           {t(serverError)}
@@ -554,6 +654,7 @@ function CustomerLedger({ customer }: { customer: CustomerDto }) {
       <PaymentForm customer={customer} />
       <PaymentsList customer={customer} />
       <StatementPanel customer={customer} />
+      <DebtSlipPanel customer={customer} />
       <AdjustForm customer={customer} />
     </section>
   );
@@ -586,9 +687,11 @@ function PaymentForm({ customer }: { customer: CustomerDto }) {
       setSaved(true);
       queryClient.setQueryData(customerPaymentsQueryKey(customer.id), answer);
       // The movement is on the ledger too, and the balance on the list above
-      // came from the customers query.
+      // came from the customers query. The slip is a rendered page carrying
+      // the old balance, in whichever languages it has been asked for.
       await queryClient.invalidateQueries({ queryKey: customerLedgerQueryKey(customer.id) });
       await queryClient.invalidateQueries({ queryKey: customersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: customerDebtSlipKeyPrefix(customer.id) });
     },
     onError: (error: unknown) => {
       setSaved(false);
@@ -795,8 +898,42 @@ function PaymentRow({ payment }: { payment: PaymentDto }) {
  * paper rather than at a second rendering of the same balances.
  */
 function StatementPanel({ customer }: { customer: CustomerDto }) {
+  const { t } = useTranslation();
+  const clock = useShopToday();
+
+  return (
+    <section className="flex flex-col gap-2 rounded border p-3">
+      <h3 className="font-semibold">{t("customers_statement")}</h3>
+      <p className="text-sm opacity-70">{t("customers_statement_hint")}</p>
+      {/* The range defaults to the shop's own day, which the server owns,
+          so the fields wait for it rather than opening on the browser's.
+          A refusal is said out loud with a way to ask again: waiting is
+          what a call in flight looks like, not what a failed one does. */}
+      {clock.error !== null ? (
+        <>
+          <p role="alert" className="text-red-700">
+            {t(errorKey(clock.error))}
+          </p>
+          <button
+            type="button"
+            className="self-start rounded border px-3 py-1.5"
+            onClick={clock.retry}
+          >
+            {t("action_retry")}
+          </button>
+        </>
+      ) : clock.today === undefined ? (
+        <p>{t("customers_loading")}</p>
+      ) : (
+        <StatementRange customer={customer} today={clock.today} />
+      )}
+    </section>
+  );
+}
+
+/** The range and the page it asks for, once the shop's day is known. */
+function StatementRange({ customer, today }: { customer: CustomerDto; today: string }) {
   const { t, lang } = useTranslation();
-  const today = todayAsDay();
   const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
   const [to, setTo] = useState(today);
   const [asked, setAsked] = useState<{ from: string; to: string } | null>(null);
@@ -810,9 +947,7 @@ function StatementPanel({ customer }: { customer: CustomerDto }) {
   });
 
   return (
-    <section className="flex flex-col gap-2 rounded border p-3">
-      <h3 className="font-semibold">{t("customers_statement")}</h3>
-      <p className="text-sm opacity-70">{t("customers_statement_hint")}</p>
+    <>
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1">
           <span>{t("field_statement_from")}</span>
@@ -867,6 +1002,60 @@ function StatementPanel({ customer }: { customer: CustomerDto }) {
           sandbox=""
           className="h-96 w-full border-0"
           data-testid="customer-statement"
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The debt slip itself, the way the statement panel above shows the
+ * statement: the core renders the 80 mm page and it goes into an iframe as it
+ * came, so the shop is looking at what the printer will put on paper.
+ *
+ * One button and no fields. The slip is about what the customer owes now, so
+ * there is no range to pick, and the newest ten movements are the paper's
+ * length rather than a choice the screen offers.
+ */
+function DebtSlipPanel({ customer }: { customer: CustomerDto }) {
+  const { t, lang } = useTranslation();
+  const [open, setOpen] = useState(false);
+
+  const slip = useQuery({
+    queryKey: customerDebtSlipQueryKey(customer.id, lang),
+    queryFn: () => api.customerDebtSlip(customer.id, lang),
+    enabled: open,
+  });
+
+  return (
+    <section className="flex flex-col gap-2 rounded border p-3">
+      <h3 className="font-semibold">{t("customers_debt_slip")}</h3>
+      <p className="text-sm opacity-70">{t("customers_debt_slip_hint")}</p>
+      <div>
+        <button
+          type="button"
+          className="rounded border px-3 py-1.5"
+          onClick={() => setOpen(!open)}
+          data-testid="customer-debt-slip-button"
+        >
+          {open ? t("action_debt_slip_close") : t("action_debt_slip")}
+        </button>
+      </div>
+      {slip.isPending && open ? <p>{t("customers_loading")}</p> : null}
+      {slip.isError ? (
+        <p role="alert" className="text-red-700">
+          {t(errorKey(slip.error))}
+        </p>
+      ) : null}
+      {open && slip.isSuccess ? (
+        <iframe
+          title={t("customers_debt_slip_title")}
+          srcDoc={slip.data}
+          // An empty sandbox, for the reason the statement's carries one: the
+          // page has no script and needs no origin.
+          sandbox=""
+          className="h-96 w-full border-0"
+          data-testid="customer-debt-slip"
         />
       ) : null}
     </section>
@@ -936,8 +1125,10 @@ function AdjustForm({ customer }: { customer: CustomerDto }) {
       setSaved(true);
       queryClient.setQueryData(customerLedgerQueryKey(customer.id), answer);
       // The balance on the list and on the fiche above it comes from the
-      // customers query, which the movement has just changed.
+      // customers query, which the movement has just changed, and so is the
+      // balance on any slip already rendered.
       await queryClient.invalidateQueries({ queryKey: customersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: customerDebtSlipKeyPrefix(customer.id) });
     },
     onError: (error: unknown) => {
       setSaved(false);
@@ -1096,7 +1287,9 @@ function readable(text: string): boolean {
 
 /** The update takes the fiche without the opening debt: the create type
  *  carries it and the ledger is never edited. */
-function whole(input: NewCustomerDto): CustomerWriteDto {
+/** The update body: the whole fiche without the opening debt, which is a
+ *  create-only field, plus the reason a close over an open account needs. */
+function whole(input: NewCustomerDto & { close_reason: string | null }): CustomerWriteDto {
   const { opening_debt_centimes: _opening, ...fiche } = input;
   return fiche;
 }

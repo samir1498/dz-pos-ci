@@ -44,7 +44,7 @@ pub enum CoreError {
     /// `validation`, so a screen that already translates it says the same
     /// sentence and reads the amount out of the payload.
     ///
-    /// Money that came in above a debt is an avoir's business (T6), never a
+    /// Money that came in above a debt is an avoir's business, never a
     /// credit balance a payment quietly opened.
     #[error("a payment is never more than what the customer owes")]
     PaymentAboveDebt { outstanding_centimes: i64 },
@@ -69,7 +69,7 @@ pub enum CoreError {
         credit_limit: Money,
     },
     /// A facture whose party blocks do not carry what décret 05-468 art. 3
-    /// asks of them (`facture_requires_party_ids`). Not a validation failure
+    /// asks of them (`a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number`). Not a validation failure
     /// on a field the caller sent: the basket is well formed and what
     /// refuses the paper sits on the settings page or on the customer's
     /// fiche. The side and the identifiers travel with the code because the

@@ -8,11 +8,18 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import type { CustomerDto, CustomerLedgerDto, CustomerPaymentsDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
-import { CustomersScreen } from "./customers";
+import { CustomerFiche, CustomersScreen } from "./customers";
 
 const benali: CustomerDto = {
   id: 3,
@@ -185,17 +192,23 @@ const paid: CustomerPaymentsDto = {
   ],
 };
 
+/** What the server says the day is. Deliberately a day the machine is not
+ * on, so a screen that read `new Date()` would fail here. */
+const SHOP_TODAY = "2027-03-04";
+
 let fetchMock: ReturnType<typeof vi.fn>;
 let list: CustomerDto[];
 let rows: CustomerLedgerDto;
 let payments: CustomerPaymentsDto;
 let writeAnswer: (() => Response) | null;
+let clockAnswer: (() => Response) | null;
 
 beforeEach(() => {
   list = [benali];
   rows = ledger;
   payments = noPayments;
   writeAnswer = null;
+  clockAnswer = null;
   vi.spyOn(window, "confirm").mockReturnValue(true);
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
@@ -237,11 +250,37 @@ beforeEach(() => {
       }
       return Promise.resolve(json(init.method === "POST" ? 201 : 200, benali));
     }
+    // One fiche by id, which is what the `/customers/$id` route reads. Before
+    // the list branch below: `/customers/3` has no `q` and would otherwise
+    // come back as the whole list.
+    const one = /\/customers\/(\d+)$/.exec(url);
+    if (one !== null) {
+      const found = list.find((c) => c.id === Number(one[1]));
+      return Promise.resolve(
+        found === undefined
+          ? json(404, { error: { code: "not_found", message: "no" } })
+          : json(200, found),
+      );
+    }
+    // The shop's day, which the statement panel asks for before it offers a
+    // range. A fixed one so the defaults it fills in are assertable.
+    if (url.endsWith("/clock")) {
+      if (clockAnswer !== null) return Promise.resolve(clockAnswer());
+      return Promise.resolve(json(200, { today: SHOP_TODAY }));
+    }
     if (url.includes("/ledger")) return Promise.resolve(json(200, rows));
     if (url.includes("/payments")) return Promise.resolve(json(200, payments));
     if (url.includes("/statement")) {
       return Promise.resolve(
         new Response("<html><body>RELEVÉ</body></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      );
+    }
+    if (url.includes("/debt-slip")) {
+      return Promise.resolve(
+        new Response("<html><body>SITUATION</body></html>", {
           status: 200,
           headers: { "content-type": "text/html" },
         }),
@@ -373,8 +412,68 @@ describe("the fiche", () => {
       warn_threshold_centimes: 150_000,
       notes: null,
       active: false,
+      // Nothing on this fiche's account, so no reason was asked for and none
+      // is sent: the field travels as a null the way every empty one does.
+      close_reason: null,
     });
     expect(sent("PUT").body).not.toHaveProperty("opening_debt_centimes");
+  });
+
+  // features.md §2: closing a fiche over an account that is still open is a
+  // decision, and the reason goes into the log beside the balance. The screen
+  // asks for it the moment the box comes off; the core is what refuses
+  // without it, so the rule is written once.
+  test("closing a fiche that still carries a balance asks why", async () => {
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${fr.customers_edit} Entreprise Benali` }),
+    );
+    expect(screen.queryByTestId("customer-close-reason")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText(fr.field_customer_active));
+    const reason = await screen.findByTestId("customer-close-reason");
+    expect(screen.getByText(fr.customers_close_reason)).toBeInTheDocument();
+
+    await userEvent.type(reason, "dossier au contentieux");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_save }));
+
+    await waitFor(() => expect(sent("PUT").url).toMatch(/\/customers\/3$/));
+    expect(sent("PUT").body.active).toBe(false);
+    expect(sent("PUT").body.close_reason).toBe("dossier au contentieux");
+  });
+
+  test("closing a settled fiche asks nothing", async () => {
+    list = [noCredit];
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${fr.customers_edit} Ali Cash` }),
+    );
+    await userEvent.click(screen.getByLabelText(fr.field_customer_active));
+    expect(screen.queryByTestId("customer-close-reason")).not.toBeInTheDocument();
+  });
+
+  // A fiche whose balance nets to nothing can still have a facture asking to
+  // be paid, and the screen cannot see that document. The server's refusal
+  // names the field, and that is what opens the box.
+  test("a refusal naming the reason opens the box the screen could not know to open", async () => {
+    list = [noCredit];
+    writeAnswer = () =>
+      json(422, {
+        error: {
+          code: "validation",
+          message: "this customer still has an account open",
+          field: "reason",
+        },
+      });
+    mount();
+    await userEvent.click(
+      await screen.findByRole("button", { name: `${fr.customers_edit} Ali Cash` }),
+    );
+    await userEvent.click(screen.getByLabelText(fr.field_customer_active));
+    expect(screen.queryByTestId("customer-close-reason")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: fr.action_save }));
+    expect(await screen.findByTestId("customer-close-reason")).toBeInTheDocument();
   });
 
   test("the opening debt is asked for once and never on an existing fiche", async () => {
@@ -600,7 +699,39 @@ describe("payments", () => {
     expect(frame).toHaveAttribute("sandbox", "");
     expect(frame.getAttribute("srcdoc")).toContain("RELEVÉ");
     const asked = fetched().find((url) => url.includes("/statement"));
-    expect(asked).toMatch(/\/customers\/3\/statement\?from=\d{4}-01-01&to=\d{4}-\d{2}-\d{2}&lang=fr$/);
+    // The whole range, exactly: the year opens on 1 January and closes on
+    // the day the server calls today.
+    expect(asked?.endsWith(`/customers/3/statement?from=2027-01-01&to=${SHOP_TODAY}&lang=fr`)).toBe(
+      true,
+    );
+  });
+
+  test("the range opens on the shop's day, which the server says and the browser does not", async () => {
+    await openTheFiche();
+
+    // The stub answers a fixed `/clock`; a screen reading `new Date()` would
+    // date the range from whatever zone the machine is in, which is a day
+    // either side of the ledger for a shop open past midnight.
+    expect(screen.getByLabelText(fr.field_statement_to)).toHaveValue(SHOP_TODAY);
+    expect(screen.getByLabelText(fr.field_statement_from)).toHaveValue("2027-01-01");
+    expect(fetched().some((url) => url.endsWith("/clock"))).toBe(true);
+  });
+
+  test("a clock the server will not answer is an error line with a retry, not a wait", async () => {
+    // The range waits for the shop's day, and the day is a call that can
+    // fail. Read as "not here yet", a refusal would leave the panel on its
+    // loading line for as long as the fiche stayed open and say nothing.
+    clockAnswer = () => json(500, { error: { code: "storage", message: "no" } });
+    await openTheFiche();
+
+    const failed = await screen.findByText(fr.error_storage);
+    expect(failed).toHaveAttribute("role", "alert");
+    expect(screen.queryByLabelText(fr.field_statement_to)).not.toBeInTheDocument();
+
+    clockAnswer = null;
+    await userEvent.click(screen.getByRole("button", { name: fr.action_retry }));
+
+    expect(await screen.findByLabelText(fr.field_statement_to)).toHaveValue(SHOP_TODAY);
   });
 
   test("a range that ends before it starts asks for nothing", async () => {
@@ -614,6 +745,21 @@ describe("payments", () => {
     expect(screen.getByRole("button", { name: fr.action_statement })).toBeDisabled();
     expect(fetched().some((url) => url.includes("/statement"))).toBe(false);
   });
+
+  test("the debt slip is asked for on the button and shown as the page the core rendered", async () => {
+    await openTheFiche();
+    // Nothing is fetched before the button: a slip nobody asked for is a
+    // render of a page nobody is going to print.
+    expect(fetched().some((url) => url.includes("/debt-slip"))).toBe(false);
+
+    await userEvent.click(screen.getByRole("button", { name: fr.action_debt_slip }));
+
+    const frame = await screen.findByTestId("customer-debt-slip");
+    expect(frame).toHaveAttribute("sandbox", "");
+    expect(frame.getAttribute("srcdoc")).toContain("SITUATION");
+    const asked = fetched().find((url) => url.includes("/debt-slip"));
+    expect(asked).toMatch(/\/customers\/3\/debt-slip\?lang=fr$/);
+  });
 });
 
 describe("Arabic", () => {
@@ -625,5 +771,55 @@ describe("Arabic", () => {
     // the groups and the sign inside a right-to-left row.
     const amount = within(row).getByText("1 500,00");
     expect(amount).toHaveAttribute("dir", "ltr");
+  });
+});
+
+/** The fiche on a page of its own, which is what `/customers/$id` opens. The
+ * router here is not the app's; it is the smallest one that lets the fiche's
+ * own `Link` render, the way the till's tests build theirs. */
+describe("one customer by id", () => {
+  function mountFiche(id: number) {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const rootRoute = createRootRoute();
+    const ficheRoute = createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/",
+      component: () => <CustomerFiche id={id} />,
+    });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([ficheRoute]),
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+    });
+    return render(
+      <I18nProvider lang="fr">
+        <QueryClientProvider client={client}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </I18nProvider>,
+    );
+  }
+
+  test("reads the one fiche by id and shows the ledger under it", async () => {
+    mountFiche(3);
+
+    expect(await screen.findByDisplayValue("Entreprise Benali")).toBeInTheDocument();
+    // The fiche it shows came from the customer's own route, not from the
+    // list: a page addressed by id must not depend on a list being loaded.
+    expect(fetched().some((url) => /\/customers\/3$/.test(url))).toBe(true);
+    expect(fetched().some((url) => url.endsWith("/customers"))).toBe(false);
+    expect(
+      await screen.findByRole("heading", { name: fr.customers_ledger }),
+    ).toBeInTheDocument();
+    // And the same two papers the panel offers.
+    expect(screen.getByRole("button", { name: fr.action_debt_slip })).toBeInTheDocument();
+  });
+
+  test("a customer this shop does not have says so instead of showing a blank fiche", async () => {
+    mountFiche(4242);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_not_found);
+    expect(screen.queryByRole("heading", { name: fr.customers_ledger })).toBeNull();
   });
 });

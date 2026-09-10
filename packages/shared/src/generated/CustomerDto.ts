@@ -9,7 +9,7 @@ import type { PartyKindDto } from "./PartyKindDto";
 export type CustomerDto = { id: number, shop_id: number, name: string, party_kind: PartyKindDto, phone: string | null, address: string | null, rc: string | null, nif: string | null, nis: string | null, ai: string | null, 
 /**
  * Null is no limit at all, zero is no credit at all: two different
- * answers, and the till acts on them differently (T3).
+ * answers, and the till acts on them differently.
  */
 credit_limit_centimes: number | null, warn_threshold_centimes: number | null, notes: string | null, active: boolean, 
 /**
