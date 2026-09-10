@@ -657,3 +657,52 @@ fn a_closed_fiche_is_what_a_purchase_is_refused_on() {
     let err = supplier_debt::ensure_active(&mut conn, 2, supplier).unwrap_err();
     assert_eq!(err.code(), "not_found", "{err}");
 }
+
+#[test]
+fn every_row_a_service_writes_is_stamped_by_the_shop_clock() {
+    // The cash position (T4) filters `created_at` on the shop's day, and the
+    // column's own default is CURRENT_TIMESTAMP, which is UTC: one hour a day
+    // the two disagree about which day the money moved. Every writer here
+    // hands the column a value rather than leaving it to the file.
+    let (_dir, mut conn) = open_temp();
+    let supplier = suppliers::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        common::a_supplier_fiche("Sarl Amrani"),
+        Some(Money::centimes(80_000)),
+    )
+    .unwrap()
+    .id;
+    let at = clock::now();
+    let paid = supplier_debt::pay(
+        &mut conn,
+        SHOP,
+        OWNER,
+        supplier,
+        Money::centimes(10_000),
+        PaymentMethod::Cash,
+        None,
+        at,
+    )
+    .unwrap();
+    assert_eq!(paid.entry.created_at, at);
+
+    // Read back off the file rather than off the answer: what the cash
+    // position will filter is the stored column.
+    let rows = supplier_debt::ledger(&mut conn, SHOP, supplier).unwrap();
+    assert_eq!(rows[0].created_at, at);
+
+    // And it is the shop's calendar and not the file's UTC. The two are an
+    // hour apart all year (services::clock), so the stamp reads ahead of a
+    // UTC clock taken just after it.
+    let utc = chrono::Utc::now().naive_utc();
+    for row in rows {
+        let ahead = (row.created_at - utc).num_seconds();
+        assert!(
+            (3500..=3600).contains(&ahead),
+            "{} is not an Algerian hour ahead of {utc}",
+            row.created_at
+        );
+    }
+}

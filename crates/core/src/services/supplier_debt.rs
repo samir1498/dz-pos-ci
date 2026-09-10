@@ -313,6 +313,12 @@ pub fn pay(
                 user_id,
                 note,
                 payment_mode: Some(mode),
+                // Never left to the column's own default, which is
+                // CURRENT_TIMESTAMP and so UTC: the cash position reads the
+                // cash payments of one day off this column on the shop's
+                // calendar, and one hour a day the two disagree about which
+                // day the money left the drawer. `append_at` does the same
+                // for every other kind.
                 created_at: Some(at),
             },
         )?;
