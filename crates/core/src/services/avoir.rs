@@ -219,6 +219,13 @@ pub fn issue(
             },
         )?;
 
+        // What the goods cost when they left on the facture, read once for
+        // the whole loop. The credit note puts them back at that cost and
+        // never at the fiche's cost today: a delivery between the sale and
+        // the credit note moves the fiche, and a reversal that followed it
+        // would move the month's margin with every purchase.
+        let sold_at = stock::sale_costs(conn, shop_id, facture_id)?;
+
         // The goods come back after the document exists, so every movement
         // names the avoir that brought them back. A line whose product has
         // gone moves nothing: there is no count left to move.
@@ -226,10 +233,13 @@ pub fn issue(
             let Some(product_id) = line.product_id else {
                 continue;
             };
-            // The cost the product carries now, which is what the goods are
-            // worth back on the shelf. Read before the movement so the two
-            // borrows do not overlap.
-            let unit_cost = products::get(conn, shop_id, product_id)?.cost;
+            // The fiche's cost is the fallback and not the rule: a facture
+            // from before the ledger carried this movement has no sale row to
+            // read, and today's cost is the only figure the file still holds.
+            let unit_cost = match sold_at.get(&product_id) {
+                Some(cost) => *cost,
+                None => products::get(conn, shop_id, product_id)?.cost,
+            };
             stock::record(
                 conn,
                 shop_id,

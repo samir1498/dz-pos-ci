@@ -1564,3 +1564,59 @@ fn a_partial_avoir_at_a_rate_the_recap_does_not_carry_gives_back_no_remise() {
         );
     }
 }
+
+/// Moves the fiche's cost the way a delivery does, leaving the rest of the
+/// product as `product` created it. The quantity on hand is the ledger's and
+/// `products::update` keeps the stored one whatever this passes.
+fn move_the_cost(conn: &mut SqliteConnection, id: i32, name: &str, selling: i64, cost: i64) {
+    products::update(
+        conn,
+        SHOP,
+        OWNER,
+        id,
+        NewProduct {
+            name: name.to_string(),
+            barcode: None,
+            category_id: None,
+            unit: Unit::Piece,
+            cost: Money::centimes(cost),
+            selling: Money::centimes(selling),
+            wholesale: None,
+            qty_on_hand_milli: 0,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(0).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap();
+}
+
+/// What a credit note puts back on the shelf is worth what it was worth when
+/// it left, not what the fiche says today. A delivery between the sale and
+/// the avoir moves the fiche's cost, and a reversal that read the fiche would
+/// hand the month a margin that moves with every purchase.
+#[test]
+fn an_avoir_returns_the_goods_at_the_cost_of_the_sale_it_reverses() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let sold_at = products::get(&mut conn, SHOP, p).unwrap().cost;
+    let c = a_customer(&mut conn);
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Credit, 10);
+
+    let now_worth = Money::centimes(90_000);
+    move_the_cost(&mut conn, p, "Ciment", 100_000, now_worth.as_centimes());
+    assert_ne!(sold_at, now_worth, "the fiche has to have moved");
+
+    let avoir = avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(11))).unwrap();
+
+    let back = stock::list_for_product(&mut conn, SHOP, p)
+        .unwrap()
+        .into_iter()
+        .find(|m| m.kind == MovementKind::Return)
+        .expect("the goods came back on a return movement");
+    assert_eq!(back.document_id, Some(avoir.id));
+    assert_eq!(
+        back.unit_cost, sold_at,
+        "the reversal carried today's cost instead of the one the goods left on"
+    );
+}

@@ -4,8 +4,13 @@
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
+use std::collections::HashMap;
+
 use crate::error::CoreError;
-use crate::models::stock::{Counted, StockMovement, StockMovementRow, StockMovementRowWrite};
+use crate::models::stock::{
+    Counted, MovementKind, StockMovement, StockMovementRow, StockMovementRowWrite,
+};
+use crate::money::Money;
 use crate::schema::{products, stock_movements};
 
 pub fn insert(
@@ -83,6 +88,34 @@ pub fn set_cached_quantity(
         });
     }
     Ok(())
+}
+
+/// What the units of each product cost when they left the shop on this
+/// document, read back off the sale movements the document wrote.
+///
+/// One entry per product and not per line: a sale reads the fiche's cost
+/// once and writes it on every line it moves, so two lines of one product
+/// left on the same cost and a map keyed by the product loses nothing. An
+/// empty map is a document that moved no stock, which is what a reversal of
+/// a line whose product has gone reads.
+pub fn sale_costs_of_document(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+) -> Result<HashMap<i32, Money>, CoreError> {
+    let rows: Vec<(i32, i64)> = stock_movements::table
+        .filter(stock_movements::shop_id.eq(shop_id))
+        .filter(stock_movements::document_id.eq(document_id))
+        .filter(stock_movements::kind.eq(MovementKind::Sale))
+        .select((
+            stock_movements::product_id,
+            stock_movements::unit_cost_centimes,
+        ))
+        .load(conn)?;
+    Ok(rows
+        .into_iter()
+        .map(|(product_id, centimes)| (product_id, Money::centimes(centimes)))
+        .collect())
 }
 
 /// Every product of the shop with its cached quantity and the sum its ledger

@@ -341,11 +341,22 @@ fn return_the_goods(
     user_id: i32,
     document: &Document,
 ) -> Result<(), CoreError> {
+    // What the goods cost when they left on this document. They go back at
+    // that cost and never at the fiche's cost today, for the same reason the
+    // avoir does it: a delivery between the sale and the cancellation moves
+    // the fiche, and a reversal that followed it would move the month's
+    // margin with every purchase.
+    let sold_at = stock::sale_costs(conn, shop_id, document.id)?;
     for line in &document.lines {
         let Some(product_id) = line.product_id else {
             continue;
         };
-        let unit_cost = products::get(conn, shop_id, product_id)?.cost;
+        // The fiche's cost is the fallback and not the rule: a document from
+        // before the ledger carried this movement has no sale row to read.
+        let unit_cost = match sold_at.get(&product_id) {
+            Some(cost) => *cost,
+            None => products::get(conn, shop_id, product_id)?.cost,
+        };
         stock::record(
             conn,
             shop_id,
