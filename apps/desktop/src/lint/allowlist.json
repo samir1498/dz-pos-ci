@@ -1,0 +1,24 @@
+{
+  "note": "Read by eslint.config.js and by allowlist.test.ts. See src/lint/README.md.",
+  "elements": ["input", "button", "select", "textarea", "table"],
+  "screens": [
+    { "file": "src/routes/till.tsx", "screen": "the till" },
+    { "file": "src/routes/-till/cart.tsx", "screen": "the till's cart" },
+    { "file": "src/routes/-till/customer.tsx", "screen": "the till's customer panel" },
+    { "file": "src/routes/-till/payment.tsx", "screen": "the till's payment panel" },
+    { "file": "src/routes/products.tsx", "screen": "products" },
+    { "file": "src/routes/customers.tsx", "screen": "customers" },
+    { "file": "src/routes/documents.tsx", "screen": "documents" },
+    { "file": "src/routes/suppliers.tsx", "screen": "suppliers" },
+    { "file": "src/routes/purchases.tsx", "screen": "purchases" },
+    { "file": "src/routes/purchases_.new.tsx", "screen": "a new purchase order" },
+    { "file": "src/routes/purchases_.$id.tsx", "screen": "a purchase order" },
+    { "file": "src/routes/expenses.tsx", "screen": "expenses" },
+    { "file": "src/routes/settings.tsx", "screen": "settings" },
+    { "file": "src/components/BackupsPanel.tsx", "screen": "settings, the backups panel" },
+    { "file": "src/components/StockRecountPanel.tsx", "screen": "settings, the stock recount panel" },
+    { "file": "src/components/ExportImportPanel.tsx", "screen": "products, the export and import panel" },
+    { "file": "src/components/ThemeSwitcher.tsx", "screen": "the topbar's theme switch" },
+    { "file": "src/lib/fields.tsx", "screen": "the shared money field the forms use" }
+  ]
+}

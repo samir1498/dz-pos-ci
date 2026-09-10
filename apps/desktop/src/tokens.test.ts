@@ -37,16 +37,58 @@ const files = (dir: string): string[] =>
     return /\.(ts|tsx|css)$/.test(entry.name) ? [full] : [];
   });
 
+const hits = (pattern: RegExp, sources: readonly string[]): string[] =>
+  sources
+    .flatMap((file) =>
+      readFileSync(file, "utf8")
+        .split("\n")
+        .map((text, index) => ({ file: relative(SRC, file), line: index + 1, text }))
+        .filter((row) => pattern.test(row.text)),
+    )
+    .map((row) => `${row.file}:${row.line}: ${row.text.trim()}`);
+
 describe("no raw colours outside the design package", () => {
   it.each(BANNED)("finds no $why", ({ pattern }) => {
-    const offenders = files(SRC)
-      .flatMap((file) =>
-        readFileSync(file, "utf8")
-          .split("\n")
-          .map((text, index) => ({ file: relative(SRC, file), line: index + 1, text }))
-          .filter((row) => pattern.test(row.text)),
-      )
-      .map((row) => `${row.file}:${row.line}: ${row.text.trim()}`);
-    expect(offenders).toEqual([]);
+    expect(hits(pattern, files(SRC))).toEqual([]);
+  });
+});
+
+/**
+ * The same idea one step further, and only on the screens.
+ *
+ * A number in a class list is the other half of the leak the three patterns
+ * above catch: `p-[13px]`, `w-[240px]`, `gap-[0.375rem]` all render, none of
+ * them is on the scale, and nothing fails. Screens are held to it and the kit
+ * is not, because the kit is where a size that the scale has no name for is
+ * allowed to exist once, with a comment, rather than a hundred times across
+ * the screens.
+ *
+ * `dark:` is banned everywhere. Tailwind's own dark variant answers to the
+ * machine's preference, so a `dark:` utility fires on a dark laptop whose
+ * shop chose the light theme and paints one element from the wrong theme.
+ * A theme here is a block of variables and the switch is one attribute; a
+ * second way to say "dark" is the theme-conditional code `theme.test.ts`
+ * already refuses in its other forms.
+ */
+const SCREEN_BANNED: readonly { readonly pattern: RegExp; readonly why: string }[] = [
+  {
+    pattern: /-\[[0-9.]+(px|rem|em)\]/,
+    why: "a hardcoded size; widen the scale in packages/design or use a spacing utility",
+  },
+];
+
+describe("no hardcoded sizes on a screen", () => {
+  const screens = files(join(SRC, "routes"));
+
+  it.each(SCREEN_BANNED)("finds no $why", ({ pattern }) => {
+    expect(hits(pattern, screens)).toEqual([]);
+  });
+});
+
+describe("no second way to say dark", () => {
+  it("uses no dark: variant anywhere", () => {
+    // Preceded by a quote, a space or a backtick so the word "dark" in a
+    // sentence cannot report, and followed by the start of a utility.
+    expect(hits(/["'`\s]dark:[a-z[-]/, files(SRC))).toEqual([]);
   });
 });
