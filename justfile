@@ -116,8 +116,9 @@ screenshot:
 # ---- worktrees (one per task when the milestone loop runs tasks in parallel) ----
 
 # a checkout of <branch> under .claude/worktrees/<name> with its own
-# node_modules and its own cargo target (a shared target dir rebuilds
-# everything on every switch between checkouts, so each keeps its own).
+# node_modules; cargo builds into the one shared
+# CARGO_TARGET_DIR=/home/samir/dz-pos/.cargo-target for every worktree (a
+# per-worktree target is what filled the disk on 2026-09-10).
 # The e2e ports are per worktree: pass DZPOS_E2E_API_PORT and
 # DZPOS_E2E_WEB_PORT when running `just e2e` there (4319/5174 are the main
 # checkout's).
@@ -128,7 +129,7 @@ worktree name branch:
     if [ -e "$dir" ]; then echo "$dir exists" >&2; exit 1; fi
     git worktree add -b "{{branch}}" "$dir" HEAD
     (cd "$dir" && pnpm install --frozen-lockfile --silent)
-    echo "worktree $dir on {{branch}}; run cargo there with CARGO_TARGET_DIR=$dir/target"
+    echo "worktree $dir on {{branch}}; run cargo there with CARGO_TARGET_DIR=/home/samir/dz-pos/.cargo-target"
 
 # remove a worktree once its branch is merged.
 # target/ goes first: it is gitignored, so `git worktree remove` refuses to
