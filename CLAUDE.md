@@ -45,9 +45,13 @@ where each duplicated fact lives and how a fix is routed.
   a worktree means `just worktree-rm <name>`, never a bare `rm -rf` of the
   tree — worktrees hold uncommitted work; only `target/` is disposable.
 - Disk, after the 125 GB day (2026-09-10): every cargo command in this repo
-  runs with `CARGO_TARGET_DIR=/home/samir/dz-pos/.cargo-target` (one shared
-  build folder for every worktree, cargo's lock makes it one build at a
-  time); never a per-worktree `target/`. A worktree is torn down with
+  runs through `just` (`just clippy`, `just test`, `just types`, `just api`,
+  `just e2e`), which exports the one shared build folder
+  (`<main checkout>/.cargo-target`, two build jobs) and first runs
+  `just claim`: cargo names our three crates' artifacts the same in every
+  worktree and trusts mtimes, so a bare `cargo` in a worktree after another
+  worktree built silently reuses the other branch's crates. `just claim`
+  before any bare `cargo`. Never a per-worktree `target/`. A worktree is torn down with
   `just worktree-rm` the moment its branch merges, never moved around to
   keep a warm cache. `df -h /mnt/c` before any build; under 20 GB free,
   clean first. One Claude session per conversation: a second
