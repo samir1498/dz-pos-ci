@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from "./routes/index"
 import { Route as CustomersRouteImport } from "./routes/customers"
 import { Route as DocumentsRouteImport } from "./routes/documents"
 import { Route as ExpensesRouteImport } from "./routes/expenses"
+import { Route as KitRouteImport } from "./routes/kit"
 import { Route as ProductsRouteImport } from "./routes/products"
 import { Route as PurchasesRouteImport } from "./routes/purchases"
 import { Route as SettingsRouteImport } from "./routes/settings"
@@ -41,6 +42,11 @@ const DocumentsRoute = DocumentsRouteImport.update({
 const ExpensesRoute = ExpensesRouteImport.update({
   id: "/expenses",
   path: "/expenses",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KitRoute = KitRouteImport.update({
+  id: "/kit",
+  path: "/kit",
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProductsRoute = ProductsRouteImport.update({
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   "/customers": typeof CustomersRoute
   "/documents": typeof DocumentsRoute
   "/expenses": typeof ExpensesRoute
+  "/kit": typeof KitRoute
   "/products": typeof ProductsRoute
   "/purchases": typeof PurchasesRoute
   "/settings": typeof SettingsRoute
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   "/customers": typeof CustomersRoute
   "/documents": typeof DocumentsRoute
   "/expenses": typeof ExpensesRoute
+  "/kit": typeof KitRoute
   "/products": typeof ProductsRoute
   "/purchases": typeof PurchasesRoute
   "/settings": typeof SettingsRoute
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   "/customers": typeof CustomersRoute
   "/documents": typeof DocumentsRoute
   "/expenses": typeof ExpensesRoute
+  "/kit": typeof KitRoute
   "/products": typeof ProductsRoute
   "/purchases": typeof PurchasesRoute
   "/settings": typeof SettingsRoute
@@ -142,6 +151,7 @@ export interface FileRouteTypes {
     | "/customers"
     | "/documents"
     | "/expenses"
+    | "/kit"
     | "/products"
     | "/purchases"
     | "/settings"
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | "/customers"
     | "/documents"
     | "/expenses"
+    | "/kit"
     | "/products"
     | "/purchases"
     | "/settings"
@@ -172,6 +183,7 @@ export interface FileRouteTypes {
     | "/customers"
     | "/documents"
     | "/expenses"
+    | "/kit"
     | "/products"
     | "/purchases"
     | "/settings"
@@ -188,6 +200,7 @@ export interface RootRouteChildren {
   CustomersRoute: typeof CustomersRoute
   DocumentsRoute: typeof DocumentsRoute
   ExpensesRoute: typeof ExpensesRoute
+  KitRoute: typeof KitRoute
   ProductsRoute: typeof ProductsRoute
   PurchasesRoute: typeof PurchasesRoute
   SettingsRoute: typeof SettingsRoute
@@ -227,6 +240,13 @@ declare module "@tanstack/react-router" {
       path: "/expenses"
       fullPath: "/expenses"
       preLoaderRoute: typeof ExpensesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/kit": {
+      id: "/kit"
+      path: "/kit"
+      fullPath: "/kit"
+      preLoaderRoute: typeof KitRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/products": {
@@ -300,6 +320,7 @@ const rootRouteChildren: RootRouteChildren = {
   CustomersRoute: CustomersRoute,
   DocumentsRoute: DocumentsRoute,
   ExpensesRoute: ExpensesRoute,
+  KitRoute: KitRoute,
   ProductsRoute: ProductsRoute,
   PurchasesRoute: PurchasesRoute,
   SettingsRoute: SettingsRoute,
