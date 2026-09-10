@@ -87,7 +87,14 @@ api port="4317" db=".dev/dev.db" origin="":
 seed:
     #!/usr/bin/env bash
     set -euo pipefail
-    just seed-clean
+    mkdir -p .dev
+    if [ -e .dev/dev.db ] && command -v fuser >/dev/null 2>&1 && fuser .dev/dev.db >/dev/null 2>&1; then
+        echo ".dev/dev.db is open in another process (the dev API?); stop it first" >&2
+        exit 1
+    fi
+    # The binary deletes the file itself, so the run is repeatable; the guard
+    # above is here rather than in `just seed-clean` because re-entering just
+    # from a recipe body runs whatever else the recipe list has grown.
     DZPOS_DEV=1 cargo run -p dzpos-seed --bin dzpos-seed -- --db .dev/dev.db
 
 # delete .dev/dev.db so the next `just api` starts an empty shop.

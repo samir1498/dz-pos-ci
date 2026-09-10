@@ -8,8 +8,9 @@
 //! build it, and "the shipped app cannot contain the seeder" would rest on
 //! nobody adding a dependency by accident. A package apart means the desktop
 //! and the API depend on `dzpos-core` and not on this, so no release build of
-//! either can produce it. `crates/api/tests/no_seed_entrypoint.rs` is what
-//! holds that.
+//! either can produce it. The tests at the foot of this file are what hold
+//! that, and `crates/api/tests/no_seed_entrypoint.rs` holds the other half of
+//! it: the API answers no seed route.
 //!
 //! Dev only, in three places, and this file is the second of them:
 //! 1. the crate boundary above, which a release build cannot cross;
@@ -239,7 +240,66 @@ fn with_suffix(path: &std::path::Path, suffix: &str) -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::{admit, Refusal, Store};
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
+
+    /// The repository root, from this crate's own directory.
+    fn root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .canonicalize()
+            .unwrap()
+    }
+
+    #[test]
+    fn nothing_the_shop_installs_can_build_the_seeder() {
+        // A `src/bin/` inside the API is a binary the API's own build
+        // produces, which is how the seeder shipped for about an hour before
+        // this test existed. It also breaks `cargo run -p dzpos-api`, which
+        // is what `just api` and the playwright harness both run: cargo
+        // cannot pick between two binaries.
+        assert!(
+            !root().join("crates/api/src/bin").exists(),
+            "crates/api/src/bin exists: a second binary there ships with the API and breaks `cargo run -p dzpos-api`"
+        );
+        // And neither of the two packages a shop installs may name this one.
+        // Not `dzpos-core`: the core depending on the seeder would be a
+        // cycle, which cargo refuses on its own, and a check that restates
+        // what the compiler already enforces is a check that teaches nothing.
+        for manifest in ["crates/api/Cargo.toml", "apps/desktop/src-tauri/Cargo.toml"] {
+            let text = std::fs::read_to_string(root().join(manifest)).unwrap();
+            assert!(
+                !text.contains("dzpos-seed"),
+                "{manifest} depends on the seeder, which puts it in what the shop installs"
+            );
+        }
+        // The bundle carries no sidecar binary at all: `externalBin` is the
+        // Tauri key that copies one in beside the app.
+        let tauri =
+            std::fs::read_to_string(root().join("apps/desktop/src-tauri/tauri.conf.json")).unwrap();
+        assert!(
+            !tauri.contains("externalBin"),
+            "the desktop bundle carries a sidecar binary; check it is not the seeder"
+        );
+    }
+
+    #[test]
+    fn the_api_source_reaches_the_seeder_nowhere() {
+        // Not a search for the word: `SEEDED_OWNER_USER_ID` is the owner the
+        // first migration writes, which has nothing to do with this and would
+        // make the check a thing people learn to work around. What is looked
+        // for is a way in: the crate by name, the service by path, and a
+        // route or a flag spelled `seed`.
+        for file in ["crates/api/src/main.rs", "crates/api/src/lib.rs"] {
+            let text = std::fs::read_to_string(root().join(file)).unwrap();
+            for forbidden in ["dzpos_seed", "dzpos-seed", "services::seed", "\"seed\"", "/seed"] {
+                assert!(
+                    !text.contains(forbidden),
+                    "{file} contains {forbidden}: the API has no seed flag, no seed route and no path to the seeder"
+                );
+            }
+        }
+    }
 
     fn dev_file() -> &'static Path {
         Path::new(".dev/dev.db")
