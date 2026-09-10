@@ -332,9 +332,11 @@ function DocumentDetail({ id, onClose }: { id: number; onClose: () => void }) {
             caption={t("documents_lines")}
           />
 
+          {/* At the end of the row, so the figures land under the table's own
+              money column, which is the last one in both directions. */}
           <dl
             aria-label={t("documents_totals")}
-            className="grid grid-cols-2 gap-1 text-sm sm:max-w-sm"
+            className="grid w-full grid-cols-2 gap-1 text-sm sm:ms-auto sm:w-80"
           >
             <dt className="text-muted-foreground">{t("documents_total_ht")}</dt>
             <dd className="text-end">
@@ -357,7 +359,7 @@ function DocumentDetail({ id, onClose }: { id: number; onClose: () => void }) {
           {doc.balance === null ? null : (
             <dl
               aria-label={t("documents_balance")}
-              className="grid grid-cols-2 gap-1 text-sm sm:max-w-sm"
+              className="grid w-full grid-cols-2 gap-1 text-sm sm:ms-auto sm:w-80"
             >
               <dt className="text-muted-foreground">{t("documents_old_balance")}</dt>
               <dd className="text-end">
@@ -605,15 +607,18 @@ function CancelPanel({ document }: { document: SaleDto }) {
   const effect = document.cancel_effect;
 
   return (
+    // No heading of its own: it would say the same words as the button under
+    // it. What the row carries instead is the sentence that says what the
+    // button costs, because this is the one act on the screen nobody undoes.
     <section
       aria-label={t("documents_cancel")}
-      className="flex flex-col gap-3 rounded-lg border border-border p-3"
+      className="flex flex-wrap items-center gap-3 border-t border-border pt-4"
     >
-      <h3 className="text-sm font-semibold text-foreground">{t("documents_cancel")}</h3>
+      <p className="text-sm text-muted-foreground">{t("documents_cancel_hint")}</p>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm" className="self-start">
+          <Button variant="outline" size="sm" className="ms-auto">
             <Icon as={Ban} size={18} />
             {t("documents_cancel")}
           </Button>
