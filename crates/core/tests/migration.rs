@@ -3877,7 +3877,10 @@ fn a_database_without_preferences_takes_the_migration_that_adds_them() {
         .execute(&mut conn)
         .unwrap();
     assert_eq!(
-        count(&mut conn, "SELECT COUNT(*) AS n FROM preferences WHERE shop_id = 2"),
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM preferences WHERE shop_id = 2"
+        ),
         0,
         "a deleted shop left its preferences behind"
     );

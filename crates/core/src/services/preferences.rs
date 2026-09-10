@@ -60,7 +60,9 @@ impl Theme {
 /// because a newer build once wrote a theme this one has never heard of, and
 /// the cost of being wrong is one screen in the wrong colours.
 pub fn theme(conn: &mut SqliteConnection, shop_id: i32) -> Result<Option<Theme>, CoreError> {
-    Ok(repo::value(conn, shop_id, THEME)?.as_deref().and_then(Theme::parse))
+    Ok(repo::value(conn, shop_id, THEME)?
+        .as_deref()
+        .and_then(Theme::parse))
 }
 
 /// Records the shop's theme, or forgets it when `theme` is `None`, which puts

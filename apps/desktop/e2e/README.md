@@ -13,12 +13,13 @@ pnpm desktop e2e --project ar     # one language, every spec file
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes only `products.png`; the other nine say "... screenshot in Arabic"
+writes only `products.png`; the other ten say "... screenshot(s) in Arabic"
 in their titles, so they match the grep in both runs but write a file only
 when `currentLang()` is `ar`, and the fr run of them does nothing
-observable. Under ar all nine write: `products-ar.png`, `settings-ar.png`,
+observable. Under ar all ten write: `products-ar.png`, `settings-ar.png`,
 `till-ar.png`, `customers-ar.png`, `suppliers-ar.png`, `expenses-ar.png`,
-`till-credit-ar.png`, `documents-avoir-ar.png` and `stock-recount-ar.png`.
+`till-credit-ar.png`, `documents-avoir-ar.png`, `stock-recount-ar.png`, and
+the theme pair `theme-comptoir-ar.png` and `theme-observe-ar.png`.
 
 `just e2e` and `just screenshot` are loops in the `justfile`: each language
 is a separate `pnpm desktop e2e --project <lang>` invocation, not three
@@ -120,6 +121,12 @@ second language on; use the looped `just e2e` or a single `--project`.
   the recount run from the settings panel finding nothing to correct;
   `suppliers.spec.ts`, a supplier fiche opened with an opening debt, money
   paid against it and the movements it leaves;
+  `theme.spec.ts`, each of the four themes chosen, kept in the shop file and
+  still there after a reload, with the painted background read off the
+  document element rather than only the attribute; it hands the shop back to
+  "follow the machine" before it leaves, the way the settings spec hands the
+  régime back, because it runs before the till specs and their screenshots
+  are taken in the light theme;
   `till.spec.ts`, one whole cash sale from `/` landing on the till to the
   stock it moved;
   `till-credit.spec.ts`, a credit sale warned at the threshold, refused
@@ -133,11 +140,14 @@ second language on; use the looped `just e2e` or a single `--project`.
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
   rows finds the API port and the run's launch token.
-- The ten committed screenshots, 1280x800, full page: `products.png`
+- The twelve committed screenshots, 1280x800, full page: `products.png`
   (fr) and, in ar, `products-ar.png`, `settings-ar.png`, `till-ar.png`,
   `customers-ar.png`, `suppliers-ar.png`, `expenses-ar.png`,
-  `till-credit-ar.png`, `documents-avoir-ar.png` and
-  `stock-recount-ar.png`.
+  `till-credit-ar.png`, `documents-avoir-ar.png`,
+  `stock-recount-ar.png`, `theme-comptoir-ar.png` and
+  `theme-observe-ar.png`. The last two are the settings screen in the light
+  theme and in Observe, which is what a theme is for: the same screen, two
+  palettes, one stylesheet.
   `en` keeps none; the two languages above are enough to show the layout
   and the RTL mirror.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
@@ -189,6 +199,7 @@ here. These are all of them.
 | `backup-row` | `BackupsPanel.tsx` | One copy in the list; its text is a filename and a date. |
 | `backups-newest` | `BackupsPanel.tsx` | The one the restore button acts on. |
 | `safety-copy-row` | `BackupsPanel.tsx` | The copy a restore takes of what it is about to replace. |
+| `theme-switcher` | `ThemeSwitcher.tsx` | The select is rendered twice (topbar and settings panel) with the same translated label, so a label query matches two things. |
 | `stock-recount-day` | `StockRecountPanel.tsx` | A day, or the translated sentence for a shop that has never recounted. |
 | `stock-recount-checked` | `StockRecountPanel.tsx` | Absent until a run answers, so a test counts it; its text is a bare number. |
 | `stock-recount-clean` | `StockRecountPanel.tsx` | Absent until a run has happened, and the sentence it holds is translated. |

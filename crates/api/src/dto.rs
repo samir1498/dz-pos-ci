@@ -24,8 +24,8 @@ use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKin
 use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
 use dzpos_core::services::documents::CancelEffect;
 use dzpos_core::services::expenses::{Expense, ExpenseCategory, NewExpense};
-use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, SaleKind, Warning};
 use dzpos_core::services::preferences::Theme;
+use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, SaleKind, Warning};
 use dzpos_core::services::settings::DatedRegime;
 use dzpos_core::services::stock::{LastRecount, Report};
 use dzpos_core::services::supplier_debt::{SupplierAllocation, SupplierDebtKind};

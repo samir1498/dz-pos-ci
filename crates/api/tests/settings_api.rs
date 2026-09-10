@@ -135,7 +135,13 @@ async fn choosing_nothing_puts_the_shop_back_on_the_machine() {
         Some(json!({ "theme": "registre" })),
     )
     .await;
-    let (status, body) = call(&h.app, "PUT", "/settings/theme", Some(json!({ "theme": null }))).await;
+    let (status, body) = call(
+        &h.app,
+        "PUT",
+        "/settings/theme",
+        Some(json!({ "theme": null })),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["theme"], Value::Null);
 
@@ -166,7 +172,11 @@ async fn a_theme_with_no_stylesheet_block_is_refused() {
     }
 
     let (_, all) = call(&h.app, "GET", "/settings", None).await;
-    assert_eq!(all["theme"], Value::Null, "a refused body still wrote a row");
+    assert_eq!(
+        all["theme"],
+        Value::Null,
+        "a refused body still wrote a row"
+    );
 }
 
 /// The theme is not part of the fiscal series next door: choosing one does
@@ -189,7 +199,11 @@ async fn the_theme_and_the_regime_do_not_reach_each_other() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["theme"], json!("observe"), "the régime change ate the theme");
+    assert_eq!(
+        body["theme"],
+        json!("observe"),
+        "the régime change ate the theme"
+    );
     assert_eq!(body["regime"]["regime"], json!("reel"));
     assert_eq!(body["regime_planned"]["regime"], json!("ifu"));
 }
