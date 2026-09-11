@@ -24,7 +24,7 @@ tasks:
     status: 'done'
   - id: 'L5'
     desc: 'Publish: the Cloudflare Pages project, the domain Anouar picks (or a pages.dev address until then), the sitemap and the Open Graph card drawn from the branding, the analytics question answered (Cloudflare Web Analytics is free and cookieless; nothing else goes on the page), and a line in the README and on the boss site saying where the page lives and how to change it.'
-    status: 'pending'
+    status: 'done'
 acceptance: []
 ---
 # The landing page
