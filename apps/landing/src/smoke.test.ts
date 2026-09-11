@@ -147,21 +147,25 @@ describe("the three routes render", () => {
     // viewport 390x844, DPR 3) over the built routes, after shots.ts
     // stopped encoding every tile lossless and started choosing lossy
     // webp for a tile that is a genuine rescale of its 1280px source (see
-    // isNearOriginalScale in lib/shots.ts): fr 290836 B, en 290653 B,
-    // ar 388012 B -- ar includes one Latin woff2 (fonts-arabic.css: the
-    // Western digits in fiscal.tva) that is declared but not preloaded, so
-    // it is discovered from the inline @font-face rule, not a <link>; see
-    // routeWeight below for how that is still counted. DPR 3 is the worst
-    // case this page has: the same Chromium capture at DPR 2 (the common
-    // phone case) measured fr 201096 B, en 200913 B, ar 304564 B, well
-    // under this budget already, and nothing this page serves picks a
-    // heavier candidate than DPR 3 already does. fr was re-measured after
-    // HERO_WIDTHS dropped its 720/1440w tier (lib/shots.ts); both numbers
-    // held, because no candidate a 390px phone ever requests came from
-    // that tier -- it fell back to hero-1344w, same as before the tier
-    // existed. en/ar were not re-measured for the same reason: neither
-    // route's phone-width picks touch the hero's dropped tier either.
-    const BUDGET_BYTES = 446_214; // ~436 KiB, ~15% over ar's 388012 B
+    // isNearOriginalScale in lib/shots.ts), and after HERO_WIDTHS dropped
+    // its 720/1440w tier for being an upscale of the 1280px source (same
+    // file): fr 290836 B, en 290593 B, ar 387946 B -- ar includes one
+    // Latin woff2 (fonts-arabic.css: the Western digits in fiscal.tva)
+    // that is declared but not preloaded, so it is discovered from the
+    // inline @font-face rule, not a <link>; see routeWeight below for how
+    // that is still counted. DPR 3 is the worst case this page has: the
+    // same Chromium capture at DPR 2 (the common phone case) measured fr
+    // 201096 B, en 200853 B, ar 304498 B, well under this budget already,
+    // and nothing this page serves picks a heavier candidate than DPR 3
+    // already does. Every route dropped by exactly 60 B (fr/en) or 66 B
+    // (ar, "-ar-" is three characters longer) from the number measured
+    // before HERO_WIDTHS lost its 1440w tier: that is the rendered
+    // srcset/imagesrcset markup shrinking by one `, .../hero(-ar)-1440w.webp
+    // 1440w` entry, twice per route (the <img> and its preload <link>) --
+    // not an image byte changing. No candidate a 390px phone requests, in
+    // any locale, ever came from that tier; it already fell back to the
+    // 1344w file before the tier was dropped.
+    const BUDGET_BYTES = 446_214; // ~436 KiB, ~15% over ar's 387946 B
 
     const VIEWPORT_WIDTH = 390;
     const DPR = 3;
