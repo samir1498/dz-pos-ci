@@ -53,6 +53,17 @@ on `git`, segfaults on `df`. This is not a corrupt filesystem and not
 your change — it is `C:` at zero. `wsl --shutdown` and restart clears it
 enough to delete things. Say so plainly rather than debugging the repo.
 
+**What cleaning actually buys, because the number will not move.** After
+`just clean-targets` frees ten gigabytes, `df -h /mnt/c` reads exactly what
+it read before. That is correct and not a failed clean: the space comes back
+inside the VHDX, and the VHDX does not shrink. What you have bought is
+headroom the *next* build reuses instead of growing the file, which is the
+whole point. So read both numbers after a clean: `df -h /mnt/c` says how
+much the VHDX may still grow, and `df -h /` says how much the next build can
+write without growing it at all. Seen on 2026-09-11, when `/mnt/c` sat at
+18 GB before and after freeing 12.5 GB and it would have been easy to
+conclude the clean had done nothing.
+
 **The VHDX only ever grows.** Sparse mode is refused on this box ("disabled
 due to potential data corruption" — never pass `--allow-unsafe`). So every
 gigabyte written here is permanent until Samir runs the compact. Writing
