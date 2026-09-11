@@ -394,3 +394,33 @@ through `page.getByRole("main")`, which is the screen and not the frame.
   wrong preview and an API that agreed with it would still fail. It states
   the réel régime itself rather than depending on the settings suite having
   run before it, because a ticket under the IFU carries no TVA row.
+
+## The screenshots are not byte-reproducible
+
+Measured on 2026-09-11: reset every committed screenshot, run `just
+screenshot` twice, compare the two runs against each other. Nine of the
+nineteen files differ between two runs of *identical code*
+(`customer-account-ar`, `dashboard`, the four `kit-*`, `purchases-ar`,
+`supplier-statement-ar`, `theme-observe-ar`). The differences are tens of
+bytes: font rasterisation and anti-aliasing, not layout.
+
+So a byte diff on a screenshot is not evidence a screen changed, and two
+agents plus one session have now spent real time treating it as if it were.
+How to tell the two apart:
+
+- **Tens or a few hundred bytes**: noise. Commit it or do not, it does not
+  matter, but do not go looking for the change that caused it.
+- **A kilobyte or more**: look at the picture. It is usually real. On
+  2026-09-11 a `+1693` on `dashboard.png` was the audit log's new menu
+  entry, and a `-24165` on `till.png` was the cashier spec inserting a sale
+  ahead of `till.spec.ts` and moving the ticket number.
+
+The second of those is the thing to remember about this suite: every spec
+shares one API process over one SQLite file, in filename order, so adding a
+spec changes what every spec after it sees. That is by design (the README
+above says why) and it means a new spec legitimately redraws other screens.
+
+Whenever any file under `screenshots/` changes, run
+`pnpm --filter dzpos-landing shots` and commit `apps/landing/public/shots/`
+with it: the landing page's product shots are cut from these exact files and
+`apps/landing/src/shots.test.ts` compares them byte for byte.
