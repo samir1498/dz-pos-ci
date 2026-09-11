@@ -308,11 +308,18 @@ ci branch="":
     git remote get-url ci >/dev/null 2>&1 || git remote add ci git@github.com:samir1498/dz-pos-ci.git
     git push -q --force ci "$b:$b"
     echo "pushed $b to the mirror; starting the run"
+    # The id of the newest run on this branch BEFORE we start one, so the
+    # wait below can tell the new run from an old one. Without this the
+    # poll happily returns a run that finished an hour ago and reports its
+    # result as if it were this push's, which it did on 2026-09-11.
+    was="$(gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
     gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
-    # The run takes a moment to exist; ask for it until it does.
-    for _ in $(seq 1 10); do
-        id="$(gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
-        [ -n "${id:-}" ] && break
+    # The run takes a moment to exist; ask for it until it does, and keep
+    # asking while the answer is still the run that was there before.
+    id=""
+    for _ in $(seq 1 20); do
+        got="$(gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
+        if [ -n "${got:-}" ] && [ "$got" != "$was" ]; then id="$got"; break; fi
         sleep 3
     done
     [ -n "${id:-}" ] || { echo "no run appeared; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
