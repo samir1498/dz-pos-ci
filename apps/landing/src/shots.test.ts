@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { buildShots, type Locale, type ShotsManifest } from "./lib/shots";
+import { buildShots, RETINA_FACTOR, type Locale, type ShotsManifest } from "./lib/shots";
 
 const PUBLIC_SHOTS = fileURLToPath(new URL("../public/shots/", import.meta.url));
 const MANIFEST_PATH = fileURLToPath(new URL("./lib/shots.json", import.meta.url));
@@ -64,12 +64,37 @@ describe("the committed shots", () => {
   const LOCALES: readonly Locale[] = ["fr", "en", "ar"];
 
   it.each(KEYS.flatMap((key) => LOCALES.map((locale) => [key, locale] as const)))(
-    "%s/%s points at a file this run also produced",
+    "%s/%s's every source, and its src fallback, points at a file this run also produced",
     (key, locale) => {
       const files = new Set(built.files.map((f) => f.file));
       const entry = built.manifest[key][locale];
-      expect(files.has(entry.src1x)).toBe(true);
-      expect(files.has(entry.src2x)).toBe(true);
+      expect(entry.sources.length).toBeGreaterThan(0);
+      for (const source of entry.sources) {
+        expect(files.has(source.url)).toBe(true);
+      }
+      expect(files.has(entry.src)).toBe(true);
+    },
+  );
+
+  it.each(KEYS.flatMap((key) => LOCALES.map((locale) => [key, locale] as const)))(
+    "%s/%s's sources are ascending by width, and src is the smallest",
+    (key, locale) => {
+      const entry = built.manifest[key][locale];
+      const widths = entry.sources.map((source) => source.width);
+      expect(widths).toEqual([...widths].sort((a, b) => a - b));
+      expect(entry.src).toBe(entry.sources[0]?.url);
+      // entry.width is CSS pixels (the width/height attributes); it comes
+      // from one of the rendered sources (the smallest, unless a spec
+      // overrides attrWidthIndex -- see shots.ts), so RETINA_FACTOR times
+      // it must land on exactly one of the source widths.
+      expect(entry.sources.map((source) => source.width)).toContain(entry.width * RETINA_FACTOR);
+    },
+  );
+
+  it.each(KEYS.flatMap((key) => LOCALES.map((locale) => [key, locale] as const)))(
+    "%s/%s's sizes attribute is not empty",
+    (key, locale) => {
+      expect(built.manifest[key][locale].sizes.length).toBeGreaterThan(0);
     },
   );
 });

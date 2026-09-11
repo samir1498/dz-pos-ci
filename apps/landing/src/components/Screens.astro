@@ -13,6 +13,7 @@ interface Props {
 
 const { locale, screens } = Astro.props;
 const shot = shots.collage[locale];
+const srcset = shot.sources.map((source) => `/shots/${source.url} ${source.width}w`).join(", ");
 ---
 
 <section class="screens" aria-labelledby="screens-heading">
@@ -20,8 +21,9 @@ const shot = shots.collage[locale];
     <h2 id="screens-heading">{screens.heading}</h2>
     <img
       class="screens-shot"
-      src={`/shots/${shot.src1x}`}
-      srcset={`/shots/${shot.src1x} 1x, /shots/${shot.src2x} 2x`}
+      src={`/shots/${shot.src}`}
+      srcset={srcset}
+      sizes={shot.sizes}
       width={shot.width}
       height={shot.height}
       alt=""

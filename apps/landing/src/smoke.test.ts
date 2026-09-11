@@ -57,6 +57,19 @@ describe("the three routes render", () => {
   let outDir: string;
   let build: { code: number; output: string };
 
+  // A real `astro build`, not an assertion: it runs in well under 4s alone,
+  // but `astro build` is CPU- and IO-bound the same way `cargo build` is,
+  // and this box runs both kinds side by side across worktrees with no
+  // lock between them (context/processes/20260908-machines-and-heavy-jobs.md
+  // -- the shared lock there is cargo's own `just claim`, which this build
+  // never takes; the contention is the box's CPU and disk, not a lock this
+  // build waits on). A cargo build running in another worktree at the same
+  // time is enough to push this well past vitest's default hook timeout
+  // (10s), which is exactly what happened: it timed out under `just test`
+  // while another worktree was mid-build, and passed in 3.7s run alone. 30s
+  // is comfortably over the longest contended run seen so far; trimming it
+  // back to "what a build normally takes alone" reintroduces the same flake
+  // on a busy box.
   beforeAll(() => {
     // Under node_modules (gitignored, same filesystem as the project) rather
     // than os.tmpdir(): Astro moves prerendered assets into outDir with a
@@ -74,7 +87,7 @@ describe("the three routes render", () => {
       const output = error instanceof Error ? error.message : String(error);
       build = { code: 1, output };
     }
-  });
+  }, 30_000);
 
   afterAll(() => {
     rmSync(outDir, { recursive: true, force: true });
@@ -109,8 +122,8 @@ describe("the three routes render", () => {
     // An image with no intrinsic size reserved in the markup lets the
     // browser lay it out at zero height until the file arrives, which is
     // exactly the layout shift a Lighthouse mobile pass marks down (CLS);
-    // src/lib/shots.json carries the real pixel size for every shot for
-    // this reason. Checked against the built HTML, not the source
+    // src/lib/shots.json carries each shot's CSS pixel size (shots.ts's
+    // toCssPixels) for this reason. Checked against the built HTML, not the source
     // components, so this catches a width/height dropped anywhere in the
     // chain, not only in a .astro file this test happens to read.
     it.each(ROUTES)("%s has no <img> missing width or height", (file) => {
@@ -131,12 +144,79 @@ describe("the three routes render", () => {
     // nobody trims, a whole extra family) trips it well before it reaches
     // a visitor, while normal copy or shot changes still fit.
     // Measured 2026-09-11 with a real Chromium network capture (mobile
-    // viewport, DPR 3) over the built routes: fr 532840 B, en 532567 B,
-    // ar 602830 B -- ar includes one Latin woff2 (fonts-arabic.css: the
-    // Western digits in fiscal.tva) that is declared but not preloaded, so
-    // it is discovered from the inline @font-face rule, not a <link>; see
-    // routeWeight below for how that is still counted.
-    const BUDGET_BYTES = 694_272; // 678 KiB, ~15% over ar's 602830 B
+    // viewport 390x844, DPR 3) over the built routes, after the shots
+    // moved from a 1x/2x pair to a three-width srcset: fr 495560 B,
+    // en 495317 B, ar 570856 B -- ar includes one Latin woff2
+    // (fonts-arabic.css: the Western digits in fiscal.tva) that is
+    // declared but not preloaded, so it is discovered from the inline
+    // @font-face rule, not a <link>; see routeWeight below for how that is
+    // still counted. DPR 3 is the worst case this page has: the same
+    // Chromium capture at DPR 2 (the common phone case) measured fr
+    // 339790 B, en 339547 B, ar 431490 B, well under this budget already,
+    // and nothing this page serves picks a heavier candidate than DPR 3
+    // already does.
+    const BUDGET_BYTES = 656_485; // ~641 KiB, ~15% over ar's 570856 B
+
+    const VIEWPORT_WIDTH = 390;
+    const DPR = 3;
+
+    /**
+     * `sizes` is a comma-separated list of `<media-condition> <length>`
+     * entries with one bare `<length>` default at the end (the shapes
+     * shots.ts's HERO_SIZES/PIECE_SIZES/SCREENS_SIZES actually use); this
+     * evaluates it the way a browser does: first matching condition wins,
+     * falling through to the default.
+     */
+    const evalLength = (length: string, viewportWidth: number): number => {
+      const px = /^(-?\d+(?:\.\d+)?)px$/.exec(length);
+      if (px?.[1] !== undefined) return Number(px[1]);
+      const vwMinus = /^calc\(\s*100vw\s*-\s*(\d+(?:\.\d+)?)px\s*\)$/.exec(length);
+      if (vwMinus?.[1] !== undefined) return viewportWidth - Number(vwMinus[1]);
+      const halfVwMinus = /^calc\(\s*50vw\s*-\s*(\d+(?:\.\d+)?)px\s*\)$/.exec(length);
+      if (halfVwMinus?.[1] !== undefined) return viewportWidth / 2 - Number(halfVwMinus[1]);
+      throw new Error(`routeWeight: cannot evaluate sizes length "${length}"`);
+    };
+
+    const evalSizes = (sizes: string, viewportWidth: number): number => {
+      for (const entry of sizes.split(",").map((s) => s.trim())) {
+        const minWidth = /^\(min-width:\s*(\d+(?:\.\d+)?)px\)\s+(.+)$/.exec(entry);
+        if (minWidth?.[1] !== undefined && minWidth[2] !== undefined) {
+          if (viewportWidth >= Number(minWidth[1])) return evalLength(minWidth[2], viewportWidth);
+          continue;
+        }
+        const maxWidth = /^\(max-width:\s*(\d+(?:\.\d+)?)px\)\s+(.+)$/.exec(entry);
+        if (maxWidth?.[1] !== undefined && maxWidth[2] !== undefined) {
+          if (viewportWidth <= Number(maxWidth[1])) return evalLength(maxWidth[2], viewportWidth);
+          continue;
+        }
+        // No media condition: the trailing default entry always matches.
+        return evalLength(entry, viewportWidth);
+      }
+      throw new Error(`routeWeight: sizes "${sizes}" matched nothing at viewport ${viewportWidth}`);
+    };
+
+    /**
+     * The candidate a browser with a `sizes`-aware `srcset` (`w`
+     * descriptors) actually fetches: the smallest source whose width is at
+     * least the slot width times the device pixel ratio, or the largest
+     * source if none is big enough. `src` is not a separate fallback here
+     * -- every browser this page targets (and Lighthouse mobile emulates)
+     * parses `w`-descriptor srcset and never falls back to it.
+     */
+    const pickCandidate = (srcset: string, sizes: string): string => {
+      const slotWidth = evalSizes(sizes, VIEWPORT_WIDTH);
+      const target = slotWidth * DPR;
+      const candidates = srcset
+        .split(",")
+        .map((s) => s.trim().split(/\s+/))
+        .map(([url, width]) => ({ url: url ?? "", width: Number((width ?? "").replace(/w$/, "")) }))
+        .sort((a, b) => a.width - b.width);
+      const picked = candidates.find((c) => c.width >= target) ?? candidates[candidates.length - 1];
+      if (picked === undefined) {
+        throw new Error(`routeWeight: srcset "${srcset}" has no candidates`);
+      }
+      return picked.url;
+    };
 
     /**
      * The bytes a real browser downloads for this route: the document
@@ -145,13 +225,13 @@ describe("the three routes render", () => {
      * unicode-range, so the browser cannot rule out needing a declared
      * fallback face from the CSS alone and fetches it the moment a text run
      * falls through to it -- the ar route's fiscal digits do this for its
-     * one Latin weight; see fonts-arabic.css), and for each <img> only the
-     * heaviest srcset candidate (the 2x file a high-DPR phone actually
-     * fetches; the plain `src=` on the same tag is the same 1x file
-     * srcset's 1x descriptor already lists, so it is not double-counted).
-     * Verified against a real Chromium run over these exact routes before
-     * this budget was set (mobile viewport, DPR 3): the totals matched byte
-     * for byte.
+     * one Latin weight; see fonts-arabic.css), and for each <img> (and the
+     * hero's matching <link rel=preload>) only the one srcset candidate a
+     * 390 CSS px wide, DPR 3 phone actually picks, per pickCandidate above.
+     * Verified against a real Chromium run over these exact routes at that
+     * viewport and DPR before this budget was set: the totals matched byte
+     * for byte, and each route fetched exactly one file per shot (the
+     * preload and the <img> always agreed).
      */
     const routeWeight = (file: string): { total: number; assets: readonly { url: string; bytes: number }[] } => {
       const html = read(file);
@@ -171,20 +251,14 @@ describe("the three routes render", () => {
       const cssText = cssHrefs.map((href) => read(href)).join("\n");
       for (const m of (html + cssText).matchAll(/url\(([^)"]+\.woff2)\)/g)) assetUrls.add(m[1]);
 
-      const dropped1x = new Set<string>();
-      for (const m of html.matchAll(/srcset="([^"]+)"/g)) {
-        const candidates = m[1].split(",").map((s) => s.trim().split(" "));
-        const has2x = candidates.some(([, density]) => density === "2x");
-        for (const [url, density] of candidates) {
-          if (has2x && density === "1x") {
-            dropped1x.add(url);
-            continue;
-          }
-          assetUrls.add(url);
-        }
-      }
-      for (const m of html.matchAll(/\ssrc="(\/shots\/[^"]+)"/g)) {
-        if (!dropped1x.has(m[1])) assetUrls.add(m[1]);
+      // Every <img srcset=... sizes=...>, and the hero's <link rel=preload
+      // as=image imagesrcset=... imagesizes=...>: "srcset=" and "sizes="
+      // both occur as trailing substrings of "imagesrcset=" and
+      // "imagesizes=", so one pattern matches the value in either
+      // attribute name without needing to spell out both.
+      for (const m of html.matchAll(/srcset="([^"]+)"[^>]*sizes="([^"]+)"/g)) {
+        const [, srcset, sizes] = m;
+        if (srcset !== undefined && sizes !== undefined) assetUrls.add(pickCandidate(srcset, sizes));
       }
 
       const assets = [...assetUrls].map((url) => ({
@@ -194,7 +268,7 @@ describe("the three routes render", () => {
       return { total: assets.reduce((sum, a) => sum + a.bytes, 0), assets };
     };
 
-    it.each(ROUTES)("%s stays under the 678 KiB budget", (file) => {
+    it.each(ROUTES)("%s stays under the 641 KiB budget", (file) => {
       const { total, assets } = routeWeight(file);
       const heaviest = [...assets]
         .sort((a, b) => b.bytes - a.bytes)
@@ -283,22 +357,31 @@ describe("the three routes render", () => {
       }
     });
 
-    it("setting the token adds exactly the Cloudflare beacon script, nothing else", () => {
-      const tokenOutDir = mkdtempSync(join(ROOT, "node_modules", ".smoke-token-"));
-      try {
-        const astroBin = join(ROOT, "node_modules", ".bin", process.platform === "win32" ? "astro.cmd" : "astro");
-        execFileSync(astroBin, ["build", "--outDir", tokenOutDir], {
-          cwd: ROOT,
-          encoding: "utf8",
-          env: { ...process.env, DZPOS_CF_BEACON_TOKEN: "smoke-test-token" },
-        });
-        const html = readFileSync(join(tokenOutDir, "index.html"), "utf8");
-        expect(html).toContain(
-          '<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="{&quot;token&quot;: &quot;smoke-test-token&quot;}"></script>',
-        );
-      } finally {
-        rmSync(tokenOutDir, { recursive: true, force: true });
-      }
-    });
+    // Same reasoning as the outer beforeAll's 30s: this runs its own full
+    // `astro build` (a second one, with the token env var set, since the
+    // token changes what gets built rather than what gets read from the
+    // outer build), not an assertion, and the default 5s test timeout is
+    // only enough when no other worktree is building at the same time.
+    it(
+      "setting the token adds exactly the Cloudflare beacon script, nothing else",
+      () => {
+        const tokenOutDir = mkdtempSync(join(ROOT, "node_modules", ".smoke-token-"));
+        try {
+          const astroBin = join(ROOT, "node_modules", ".bin", process.platform === "win32" ? "astro.cmd" : "astro");
+          execFileSync(astroBin, ["build", "--outDir", tokenOutDir], {
+            cwd: ROOT,
+            encoding: "utf8",
+            env: { ...process.env, DZPOS_CF_BEACON_TOKEN: "smoke-test-token" },
+          });
+          const html = readFileSync(join(tokenOutDir, "index.html"), "utf8");
+          expect(html).toContain(
+            '<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="{&quot;token&quot;: &quot;smoke-test-token&quot;}"></script>',
+          );
+        } finally {
+          rmSync(tokenOutDir, { recursive: true, force: true });
+        }
+      },
+      30_000,
+    );
   });
 });
