@@ -55,7 +55,17 @@ default:
 fmt:
     cargo fmt --all --check
 
-clippy: claim
+# `dzpos-desktop`'s `generate_context!()` embeds `apps/desktop/dist/index.html`
+# at compile time (M5 T0's `custom-protocol` dev-dependency feature made a
+# plain `cargo test`/`cargo clippy` exercise the real asset-embedding path
+# instead of Tauri's dev bypass, which is the point of that feature, but it
+# means the crate no longer compiles with no `dist/` at all). A fresh
+# checkout has none yet: `gates` only produces one in the `build` step,
+# which runs after `clippy` and `test`. Both need it built first now.
+desktop-dist:
+    pnpm --filter dzpos-desktop build
+
+clippy: claim desktop-dist
     flock "$CARGO_TARGET_DIR/.lock" cargo clippy --workspace --all-targets -- -D warnings
 
 # the desktop's one eslint rule: no bare input, button, select, textarea or
@@ -66,7 +76,7 @@ clippy: claim
 lint:
     pnpm --filter dzpos-desktop lint
 
-test: claim
+test: claim desktop-dist
     flock "$CARGO_TARGET_DIR/.lock" cargo test --workspace
     pnpm -r test
 
