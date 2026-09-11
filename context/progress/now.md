@@ -10,9 +10,9 @@ the landing page. This morning: M4's plan gained its ten tasks
 (`context/plans/20260908-m4-team.md`, users and PINs through the closing
 sweep) and a new `landing-page` plan was written, replacing D5 of the
 design plan; the organisation's GitHub Actions budget is still capped, but
-`just ci` (branch `ci/lean-and-mirror`, not yet merged to main) now pushes a
-branch to the mirror `samir1498/dz-pos-ci` so gates run on Samir's own
-minutes without waiting on Anouar. Still open: the host for the demo
+`just ci` now pushes a branch to the mirror `samir1498/dz-pos-ci` (merged to
+main as PR #22) so gates run on Samir's own minutes without waiting on
+Anouar. Still open: the host for the demo
 deploy (a container on Koyeb or Render, or Cloudflare Containers — the
 box-side tunnel pieces are stopped; unverified whether Cloudflare was
 ruled out for the app itself, as opposed to the landing page's static
@@ -67,8 +67,9 @@ shortcut that pays refuses while it is up, and the app underneath stops
 asking the server for anything, so the session finally times out on the
 server as well as on the glass.
 
-A cashier cannot see what the shop paid. The purchase and dashboard routes
-refuse them outright; the product list, which they need to ring a sale up,
+A cashier cannot see what the shop paid. The purchase, dashboard, expense,
+cash and supplier routes refuse them outright; the product list, which they
+need to ring a sale up,
 hands back its cost and wholesale fields empty instead of being closed. That
 second half is what the closing review found missing: the two permissions
 about seeing cost and seeing reports were written down, tested, and enforced
