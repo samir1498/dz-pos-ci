@@ -26,6 +26,11 @@ import type { ExpenseDto } from "./generated/ExpenseDto";
 import type { ExpensesDto } from "./generated/ExpensesDto";
 import type { NewExpenseDto } from "./generated/NewExpenseDto";
 import type { HealthDto } from "./generated/HealthDto";
+import type { LoginDto } from "./generated/LoginDto";
+import type { MeDto } from "./generated/MeDto";
+import type { PermissionDto } from "./generated/PermissionDto";
+import type { SessionDto } from "./generated/SessionDto";
+import type { SessionIdleDto } from "./generated/SessionIdleDto";
 import type { ImportAppliedDto } from "./generated/ImportAppliedDto";
 import type { ImportDryRunDto } from "./generated/ImportDryRunDto";
 import type { NewAvoirDto } from "./generated/NewAvoirDto";
@@ -78,6 +83,7 @@ import {
   supplierStatementSchema,
 } from "./schemas/supplier";
 import { saleSchema } from "./schemas/sale";
+import { meSchema, sessionIdleSchema, sessionSchema } from "./schemas/session";
 import { lastStockRecountSchema, stockRecountSchema } from "./schemas/stock";
 import {
   backupSchema,
@@ -101,6 +107,13 @@ export class ApiError extends Error {
    * neither (architecture.md rule 2). */
   readonly partySide?: string;
   readonly missingIds?: readonly string[];
+  /** Only on `locked_out`: how long before the till will look at a PIN
+   * again. The sign-in screen counts it down rather than working it out. */
+  readonly retryAfterSeconds?: number;
+  /** Only on `forbidden`: the permission the route wanted. The screen says
+   * which thing this role may not do without deciding that for itself
+   * (architecture.md rule 2). */
+  readonly permission?: PermissionDto;
 
   constructor(
     code: string,
@@ -113,6 +126,8 @@ export class ApiError extends Error {
       outstandingCentimes?: number;
       partySide?: string;
       missingIds?: readonly string[];
+      retryAfterSeconds?: number;
+      permission?: PermissionDto;
     },
   ) {
     super(message);
@@ -125,6 +140,8 @@ export class ApiError extends Error {
     this.outstandingCentimes = figures?.outstandingCentimes;
     this.partySide = figures?.partySide;
     this.missingIds = figures?.missingIds;
+    this.retryAfterSeconds = figures?.retryAfterSeconds;
+    this.permission = figures?.permission;
   }
 }
 
@@ -139,6 +156,8 @@ function apiError(body: z.output<typeof apiErrorSchema>, status: number): ApiErr
     outstandingCentimes: body.error.outstanding_centimes,
     partySide: body.error.party_side,
     missingIds: body.error.missing_ids,
+    retryAfterSeconds: body.error.retry_after_seconds,
+    permission: body.error.permission,
   });
 }
 
@@ -254,9 +273,23 @@ export interface ClientOptions {
    * every call. The desktop injects it, the browser preview reads
    * VITE_API_TOKEN. Without it every route but /health answers 401. */
   readonly token?: string;
+  /** The session token, if one is already in hand. Two different things
+   * (M4 T2): the launch token above says the caller is this machine's own
+   * screen, this says which person is at it. A browser leaves this alone and
+   * lets the httpOnly cookie the sign-in set travel by itself; the desktop
+   * cannot read that cookie, so it holds the token and `setSession` puts it
+   * here. Without one every route but /health and the auth ones answers 401
+   * `session_required`. */
+  readonly session?: string;
   /** A fetch to use instead of the global one (tests). */
   readonly fetch?: typeof fetch;
 }
+
+/** The header the session token travels in. Not `Authorization`, which
+ * already carries the launch token: one header cannot carry two credentials,
+ * and the two gates are separate on purpose
+ * (`docs/architecture.md` § Transport and auth). */
+export const SESSION_HEADER = "x-dzpos-session";
 
 export function createClient(baseUrl: string, options: ClientOptions | typeof fetch = {}) {
   const base = baseUrl.replace(/\/+$/, "");
@@ -265,13 +298,26 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
   // globalThis.fetch after importing this module must still be seen.
   const send0: typeof fetch = opts.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const token = opts.token;
+  // Mutable, unlike the launch token: a sign-in hands one over and a sign-out
+  // takes it away, both while the same client object is in use.
+  let session = opts.session;
 
-  async function send(path: string, init?: RequestInit): Promise<unknown> {
+  /** Puts the launch token and the session, if there is one, on a request.
+   * One place, so a call added later cannot forget either. `credentials` is
+   * what makes a browser attach the httpOnly cookie across the preview's
+   * origin; the desktop sends the header instead and the server takes the
+   * header first. */
+  function authorised(init?: RequestInit): RequestInit {
     const headers = new Headers(init?.headers);
     if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
+    if (session !== undefined && session !== "") headers.set(SESSION_HEADER, session);
+    return { ...init, headers, credentials: "include" };
+  }
+
+  async function send(path: string, init?: RequestInit): Promise<unknown> {
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, { ...init, headers });
+      res = await send0(`${base}${path}`, authorised(init));
     } catch (cause) {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
@@ -280,11 +326,9 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
 
   /** The same call, for a route that answers a document instead of JSON. */
   async function sendText(path: string, init?: RequestInit): Promise<string> {
-    const headers = new Headers(init?.headers);
-    if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, { ...init, headers });
+      res = await send0(`${base}${path}`, authorised(init));
     } catch {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
@@ -296,11 +340,9 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
    * that name rather than inventing one, which is why the CORS layer
    * exposes `content-disposition`. */
   async function sendFile(path: string, init?: RequestInit): Promise<Download> {
-    const headers = new Headers(init?.headers);
-    if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, { ...init, headers });
+      res = await send0(`${base}${path}`, authorised(init));
     } catch {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
@@ -309,6 +351,51 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
 
   return {
     baseUrl: base,
+
+    /** The session token this client shows from now on, or `null` to stop
+     * showing one. The desktop calls it after a sign-in and after a sign-out
+     * (T4); a browser never needs to, because its cookie travels on its own. */
+    setSession(next: string | null): void {
+      session = next ?? undefined;
+    },
+
+    /** Signs in with a user id and a PIN, or a name and a password. The
+     * token is remembered here as well as returned, so the very next call
+     * carries it. */
+    async login(body: LoginDto): Promise<SessionDto> {
+      const answer = narrow(
+        await send("/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        sessionSchema,
+        "sign-in answer",
+      );
+      session = answer.token;
+      return answer;
+    },
+
+    /** Ends the session and forgets the token, whether or not the server had
+     * one to end. */
+    async logout(): Promise<void> {
+      try {
+        await send("/auth/logout", { method: "POST" });
+      } finally {
+        session = undefined;
+      }
+    },
+
+    /** Who is signed in. Raises `session_required` when nobody is, which is
+     * what the desktop revalidates on focus against. */
+    async me(): Promise<MeDto> {
+      return narrow(await send("/auth/me"), meSchema, "session answer");
+    },
+
+    /** How long a session survives with nothing happening on it. */
+    async sessionIdle(): Promise<SessionIdleDto> {
+      return narrow(await send("/auth/idle"), sessionIdleSchema, "idle answer");
+    },
 
     async health(): Promise<HealthDto> {
       return narrow(await send("/health"), healthSchema, "health answer");

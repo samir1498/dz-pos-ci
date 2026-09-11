@@ -48,7 +48,9 @@ fn declared_routes() -> Vec<(String, String)> {
 
         // The path is the first string literal in the call, whether it is on
         // the same line as `.route(` or on the next.
-        let Some(start) = call.find('"') else { continue };
+        let Some(start) = call.find('"') else {
+            continue;
+        };
         let Some(end) = call[start + 1..].find('"') else {
             continue;
         };

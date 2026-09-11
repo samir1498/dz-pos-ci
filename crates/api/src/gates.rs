@@ -298,14 +298,21 @@ mod tests {
             "/sales/{id}/cancel",
             "/sales/{id}/avoir",
         ] {
-            assert_eq!(wants("POST", path), Some(Permission::CorrectLedger), "{path}");
+            assert_eq!(
+                wants("POST", path),
+                Some(Permission::CorrectLedger),
+                "{path}"
+            );
         }
         // The supplier fiche, both ways into closing it.
         assert_eq!(
             wants("POST", "/suppliers/{id}/close"),
             Some(Permission::EditFiches)
         );
-        assert_eq!(wants("PUT", "/suppliers/{id}"), Some(Permission::EditFiches));
+        assert_eq!(
+            wants("PUT", "/suppliers/{id}"),
+            Some(Permission::EditFiches)
+        );
         // The theme stays open.
         assert_eq!(wants("PUT", "/settings/theme"), None);
     }

@@ -96,9 +96,11 @@ fn a_right_password_opens_a_session_the_same_way() {
             .unwrap();
     assert_eq!(signed_in.actor.user_id, OWNER);
     assert_eq!(signed_in.actor.role, Role::Owner);
-    assert!(sessions::resolve(&mut conn, SHOP, signed_in.token.expose(), noon())
-        .unwrap()
-        .is_some());
+    assert!(
+        sessions::resolve(&mut conn, SHOP, signed_in.token.expose(), noon())
+            .unwrap()
+            .is_some()
+    );
 }
 
 /// The rule the brief calls out by name: a session token is a credential, so
@@ -247,9 +249,11 @@ fn the_idle_time_runs_from_the_last_request_and_not_from_the_sign_in() {
         );
     }
     // And it still dies twenty-one minutes after the last one.
-    assert!(sessions::resolve(&mut conn, SHOP, token, noon() + Duration::minutes(78))
-        .unwrap()
-        .is_none());
+    assert!(
+        sessions::resolve(&mut conn, SHOP, token, noon() + Duration::minutes(78))
+            .unwrap()
+            .is_none()
+    );
 }
 
 /// `describe` is what `/auth/me` reads, and it does not keep a session alive:
@@ -264,9 +268,10 @@ fn reading_who_is_signed_in_does_not_itself_hold_the_session_open() {
     let token = signed_in.token.expose();
 
     for minutes in [5, 10, 15] {
-        let (actor, name) = sessions::describe(&mut conn, SHOP, token, noon() + Duration::minutes(minutes))
-            .unwrap()
-            .expect("the session should still be there");
+        let (actor, name) =
+            sessions::describe(&mut conn, SHOP, token, noon() + Duration::minutes(minutes))
+                .unwrap()
+                .expect("the session should still be there");
         assert_eq!(actor.user_id, cashier);
         assert_eq!(name, "Karim");
     }
@@ -305,12 +310,16 @@ fn two_sessions_of_one_user_are_independent() {
     assert_ne!(till.token.expose(), office.token.expose());
 
     sessions::sign_out(&mut conn, SHOP, till.token.expose(), at(12, 1)).unwrap();
-    assert!(sessions::resolve(&mut conn, SHOP, till.token.expose(), at(12, 2))
-        .unwrap()
-        .is_none());
-    assert!(sessions::resolve(&mut conn, SHOP, office.token.expose(), at(12, 2))
-        .unwrap()
-        .is_some());
+    assert!(
+        sessions::resolve(&mut conn, SHOP, till.token.expose(), at(12, 2))
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        sessions::resolve(&mut conn, SHOP, office.token.expose(), at(12, 2))
+            .unwrap()
+            .is_some()
+    );
 }
 
 /// A fiche switched off refuses the session it is holding, on the next
@@ -351,13 +360,17 @@ fn ending_every_session_of_a_user_closes_them_all_and_leaves_other_users_alone()
         2
     );
     for dead in [&a, &b] {
-        assert!(sessions::resolve(&mut conn, SHOP, dead.token.expose(), at(12, 6))
-            .unwrap()
-            .is_none());
+        assert!(
+            sessions::resolve(&mut conn, SHOP, dead.token.expose(), at(12, 6))
+                .unwrap()
+                .is_none()
+        );
     }
-    assert!(sessions::resolve(&mut conn, SHOP, other.token.expose(), at(12, 6))
-        .unwrap()
-        .is_some());
+    assert!(
+        sessions::resolve(&mut conn, SHOP, other.token.expose(), at(12, 6))
+            .unwrap()
+            .is_some()
+    );
     // Ending twice moves nothing.
     assert_eq!(
         sessions::end_all_for_user(&mut conn, SHOP, karim, at(12, 7)).unwrap(),
@@ -393,8 +406,14 @@ fn a_sign_in_sweeps_rows_that_went_cold_a_fortnight_ago() {
     assert_eq!(cold.len(), 1);
 
     // Ten days on: nothing is a fortnight cold yet, so both rows stand.
-    sessions::sign_in_with_pin(&mut conn, SHOP, cashier, "2580", noon() + Duration::days(10))
-        .unwrap();
+    sessions::sign_in_with_pin(
+        &mut conn,
+        SHOP,
+        cashier,
+        "2580",
+        noon() + Duration::days(10),
+    )
+    .unwrap();
     let two = every_stored_hash(&mut conn);
     assert_eq!(two.len(), 2, "a row nothing had finished with was swept");
     let warm = two
@@ -405,10 +424,26 @@ fn a_sign_in_sweeps_rows_that_went_cold_a_fortnight_ago() {
 
     // Twenty days on: the first row has been untouched for twenty days and
     // goes; the second for ten and stays.
-    sessions::sign_in_with_pin(&mut conn, SHOP, cashier, "2580", noon() + Duration::days(20))
-        .unwrap();
+    sessions::sign_in_with_pin(
+        &mut conn,
+        SHOP,
+        cashier,
+        "2580",
+        noon() + Duration::days(20),
+    )
+    .unwrap();
     let left = every_stored_hash(&mut conn);
-    assert_eq!(left.len(), 2, "the cold row was not swept, or the warm one was");
-    assert!(!left.contains(&cold[0]), "the fortnight-cold row is still there");
-    assert!(left.contains(&warm), "the ten-day-old row was swept with it");
+    assert_eq!(
+        left.len(),
+        2,
+        "the cold row was not swept, or the warm one was"
+    );
+    assert!(
+        !left.contains(&cold[0]),
+        "the fortnight-cold row is still there"
+    );
+    assert!(
+        left.contains(&warm),
+        "the ten-day-old row was swept with it"
+    );
 }

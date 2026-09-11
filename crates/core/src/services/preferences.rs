@@ -225,7 +225,10 @@ mod tests {
     fn an_idle_time_the_owner_sets_survives_a_round_trip() {
         let (_dir, mut conn) = open();
         set_session_idle(&mut conn, SHOP, 1, 45, at()).unwrap();
-        assert_eq!(session_idle(&mut conn, SHOP).unwrap(), Duration::minutes(45));
+        assert_eq!(
+            session_idle(&mut conn, SHOP).unwrap(),
+            Duration::minutes(45)
+        );
     }
 
     /// Both ends, and the row is not written when the figure is refused.
@@ -233,9 +236,15 @@ mod tests {
     fn an_idle_time_outside_the_bounds_is_refused_and_nothing_is_stored() {
         let (_dir, mut conn) = open();
         for bad in [0, -5, MAX_SESSION_IDLE_MINUTES + 1] {
-            assert!(set_session_idle(&mut conn, SHOP, 1, bad, at()).is_err(), "{bad}");
+            assert!(
+                set_session_idle(&mut conn, SHOP, 1, bad, at()).is_err(),
+                "{bad}"
+            );
         }
-        assert_eq!(repo::value(&mut conn, SHOP, SESSION_IDLE_MINUTES).unwrap(), None);
+        assert_eq!(
+            repo::value(&mut conn, SHOP, SESSION_IDLE_MINUTES).unwrap(),
+            None
+        );
         for ok in [MIN_SESSION_IDLE_MINUTES, MAX_SESSION_IDLE_MINUTES] {
             set_session_idle(&mut conn, SHOP, 1, ok, at()).unwrap();
         }

@@ -127,7 +127,10 @@ async fn a_pin_signs_the_till_in_and_the_answer_says_who_is_acting() {
     assert_eq!(token.len(), 64);
     assert!(token.bytes().all(|c| c.is_ascii_hexdigit()));
     let cookie = cookies.first().expect("no cookie was set");
-    assert!(cookie.contains(&format!("dzpos_session={token}")), "{cookie}");
+    assert!(
+        cookie.contains(&format!("dzpos_session={token}")),
+        "{cookie}"
+    );
     assert!(cookie.contains("HttpOnly"), "{cookie}");
     assert!(cookie.contains("SameSite=Lax"), "{cookie}");
     assert!(!cookie.contains("Secure"), "{cookie}");
@@ -343,10 +346,7 @@ async fn a_write_names_the_user_the_session_says_is_acting() {
     dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, cashier.id, "3690").unwrap();
     drop(conn);
 
-    let app = dzpos_api::router(
-        dzpos_api::AppState::open(&path, SHOP).unwrap(),
-        &token(),
-    );
+    let app = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap(), &token());
     let (_, signed_in, _) = login(&app, json!({ "user_id": cashier.id, "pin": "3690" })).await;
     let session = signed_in["token"].as_str().unwrap().to_owned();
     assert_eq!(signed_in["me"]["role"], "cashier");
@@ -488,7 +488,12 @@ async fn health_still_answers_with_no_session() {
     let res = h
         .app
         .clone()
-        .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
@@ -514,10 +519,7 @@ async fn switching_a_user_off_ends_the_session_they_were_holding() {
     dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, cashier.id, "3690").unwrap();
     drop(conn);
 
-    let app = dzpos_api::router(
-        dzpos_api::AppState::open(&path, SHOP).unwrap(),
-        &token(),
-    );
+    let app = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap(), &token());
     let (_, signed_in, _) = login(&app, json!({ "user_id": cashier.id, "pin": "3690" })).await;
     let session = signed_in["token"].as_str().unwrap().to_owned();
     let (status, _, _) = call(

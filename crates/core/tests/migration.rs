@@ -4165,9 +4165,11 @@ fn a_database_without_sessions_takes_the_migration_that_adds_them() {
     diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième')")
         .execute(&mut conn)
         .unwrap();
-    diesel::sql_query("INSERT INTO users (id, shop_id, name, role) VALUES (7, 2, 'Karim', 'cashier')")
-        .execute(&mut conn)
-        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO users (id, shop_id, name, role) VALUES (7, 2, 'Karim', 'cashier')",
+    )
+    .execute(&mut conn)
+    .unwrap();
     diesel::sql_query(
         "INSERT INTO sessions (shop_id, user_id, token_hash, created_at, last_seen_at) \
          VALUES (2, 7, 'dd', '2026-09-11 12:00:00', '2026-09-11 12:00:00')",
@@ -4181,7 +4183,10 @@ fn a_database_without_sessions_takes_the_migration_that_adds_them() {
         .execute(&mut conn)
         .unwrap();
     assert_eq!(
-        count(&mut conn, "SELECT COUNT(*) AS n FROM sessions WHERE shop_id = 2"),
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sessions WHERE shop_id = 2"
+        ),
         0,
         "a deleted shop left its sessions behind"
     );

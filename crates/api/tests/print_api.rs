@@ -47,7 +47,7 @@ async fn call_text(
     let req = Request::builder().method("GET").uri(uri);
     let req = if bearer {
         req.header("authorization", format!("Bearer {TOKEN}"))
-        .header(common::SESSION_HEADER, common::OWNER_SESSION)
+            .header(common::SESSION_HEADER, common::OWNER_SESSION)
     } else {
         req
     };
@@ -230,7 +230,7 @@ async fn a_facture(app: &axum::Router) -> i64 {
                 })
                 .uri(uri)
                 .header("authorization", format!("Bearer {TOKEN}"))
-        .header(common::SESSION_HEADER, common::OWNER_SESSION)
+                .header(common::SESSION_HEADER, common::OWNER_SESSION)
                 .header("content-type", "application/json")
                 .body(Body::from(body.to_string()))
                 .unwrap();
