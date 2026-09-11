@@ -117,7 +117,7 @@ async function addAndPayOnCredit(page: Page, product: string): Promise<void> {
 // "screenshot" in the title on purpose: `just screenshot` greps for it, and
 // till-credit-ar.png is committed, so the file has to be regenerable by that
 // recipe.
-test("sells on credit, warns at the threshold, is refused past the limit, overrides, and saves the screenshot in Arabic", async ({
+test("sells on credit, warns at the threshold, is refused past the limit, overrides, and saves the screenshot", async ({
   page,
   request,
 }) => {
@@ -189,11 +189,13 @@ test("sells on credit, warns at the threshold, is refused past the limit, overri
   // Nothing was written: the refusal cost the customer nothing.
   expect((await ledger(request, customerId)).balance_centimes).toBe(BIG_PRICE);
 
-  if (currentLang() === "ar") {
-    // The one committed picture of this flow: the refusal with its two
-    // amounts, in the mirrored layout, with the figures still left to right.
+  if (currentLang() === "fr" || currentLang() === "ar") {
+    // The refusal with its two amounts, in the two languages the committed
+    // shots cover: fr is the reference shot, ar is the mirrored layout,
+    // with the figures still left to right.
+    const shot = currentLang() === "ar" ? "till-credit-ar.png" : "till-credit.png";
     await page.screenshot({
-      path: path.join(here, "screenshots", "till-credit-ar.png"),
+      path: path.join(here, "screenshots", shot),
       fullPage: true,
     });
   }

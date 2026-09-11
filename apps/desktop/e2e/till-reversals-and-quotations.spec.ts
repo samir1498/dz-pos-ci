@@ -160,7 +160,7 @@ async function onHand(request: APIRequestContext, productId: number): Promise<nu
 // "screenshot" in the title on purpose: `just screenshot` greps for it, and
 // documents-avoir-ar.png is committed, so the file has to be regenerable by
 // that recipe.
-test("credits a facture in part, cancels another whole, leaves a credit, quotes a proforma, and saves the screenshot in Arabic", async ({
+test("credits a facture in part, cancels another whole, leaves a credit, quotes a proforma, and saves the documents screenshot", async ({
   page,
   request,
 }) => {
@@ -288,12 +288,13 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
   await expect(detail.getByText(avoir.printed_number)).toBeVisible();
   await expect(page.getByTestId("documents-sheet")).toBeVisible();
 
-  if (currentLang() === "ar") {
-    // The one committed picture of this screen: the document list and an
-    // open facture with its credit note under it, in the mirrored layout,
-    // with the figures still left to right.
+  if (currentLang() === "fr" || currentLang() === "ar") {
+    // The document list and an open facture with its credit note under it,
+    // in the two languages the committed shots cover: fr is the reference
+    // shot, ar is the mirrored layout, with the figures still left to right.
+    const shot = currentLang() === "ar" ? "documents-avoir-ar.png" : "documents-avoir.png";
     await page.screenshot({
-      path: path.join(here, "screenshots", "documents-avoir-ar.png"),
+      path: path.join(here, "screenshots", shot),
       fullPage: true,
     });
   }

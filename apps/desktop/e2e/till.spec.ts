@@ -143,7 +143,7 @@ function qtyBox(page: Page, name: string) {
 
 // "screenshot" in the title on purpose: `just screenshot` greps for it, and
 // till-ar.png is committed, so the file has to be regenerable by that recipe.
-test("sells two rates for cash, matches the fixture totals, reduces the stock and saves the till screenshot in Arabic", async ({
+test("sells two rates for cash, matches the fixture totals, reduces the stock and saves the till screenshot", async ({
   page,
   request,
 }) => {
@@ -251,11 +251,13 @@ test("sells two rates for cash, matches the fixture totals, reduces the stock an
   expect(await stockOf(request, COFFEE_BARCODE)).toBe(COFFEE_STOCK_MILLI - COFFEE_SOLD_MILLI);
   expect(await stockOf(request, TOMATO_BARCODE)).toBe(TOMATO_STOCK_MILLI - TOMATO_SOLD_MILLI);
 
-  // The one committed till screenshot: Arabic, so the mirrored cart, the
-  // numeric cells still read left to right, and the totals block have a
-  // picture a reviewer can look at.
-  if (currentLang() === "ar") {
-    await page.screenshot({ path: path.join(here, "screenshots", "till-ar.png"), fullPage: true });
+  // The till screenshot, in the two languages the committed shots cover:
+  // fr is the reference shot, ar is the one RTL screenshot the brief asks
+  // for, so the mirrored cart, the numeric cells still read left to right,
+  // and the totals block have a picture a reviewer can look at.
+  if (currentLang() === "fr" || currentLang() === "ar") {
+    const shot = currentLang() === "ar" ? "till-ar.png" : "till.png";
+    await page.screenshot({ path: path.join(here, "screenshots", shot), fullPage: true });
   }
 });
 
