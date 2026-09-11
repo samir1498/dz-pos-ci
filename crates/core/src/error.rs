@@ -4,6 +4,7 @@
 
 use crate::db::DbError;
 use crate::money::{Money, MoneyError};
+use crate::services::permissions::Permission;
 
 /// Which half of a facture a `PartyIds` refusal is about. The two blocks are
 /// filled in from two different screens, so the side is what tells the till
@@ -160,6 +161,12 @@ pub enum CoreError {
     /// refusal, so the file fails closed rather than 500ing its way open.
     #[error("the credential could not be hashed")]
     Hash(#[source] argon2::password_hash::Error),
+    /// A role asked for something `services::permissions::can` refuses. The
+    /// permission travels so the caller can say which one was missing
+    /// instead of a bare "forbidden" (M4 T2 puts this on the wire as the
+    /// `forbidden` code and the permission's name).
+    #[error("this role does not have the {permission} permission")]
+    Forbidden { permission: Permission },
     #[error(transparent)]
     Money(#[from] MoneyError),
     #[error(transparent)]
@@ -203,6 +210,7 @@ impl CoreError {
             CoreError::PartyIds { .. } => "party_ids",
             CoreError::AuthRefused => "auth_refused",
             CoreError::LockedOut { .. } => "locked_out",
+            CoreError::Forbidden { .. } => "forbidden",
             CoreError::Money(_) => "money",
             CoreError::Db(_)
             | CoreError::Query(_)
@@ -234,5 +242,9 @@ impl CoreError {
             field: field.to_string(),
             message: message.to_string(),
         }
+    }
+
+    pub const fn forbidden(permission: Permission) -> Self {
+        CoreError::Forbidden { permission }
     }
 }

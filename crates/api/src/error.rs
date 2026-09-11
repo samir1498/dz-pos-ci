@@ -253,6 +253,11 @@ const fn status_for(e: &CoreError) -> StatusCode {
         // the caller can act on it, by waiting, and working it out on the
         // screen would be a second reading of a rule that lives in the core.
         CoreError::LockedOut { .. } => StatusCode::TOO_MANY_REQUESTS,
+        // A role's own refusal (M4 T1, `services::permissions::can`). The
+        // request is well formed; a different user is what would carry it
+        // out. T2 is what actually asks a session for a role; this arm only
+        // keeps `status_for` exhaustive now that `CoreError` has the variant.
+        CoreError::Forbidden { .. } => StatusCode::FORBIDDEN,
         CoreError::DuplicateBarcode(_)
         | CoreError::Exhausted { .. }
         | CoreError::Conflict { .. } => StatusCode::CONFLICT,
