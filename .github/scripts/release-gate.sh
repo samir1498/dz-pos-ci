@@ -58,13 +58,25 @@ emit() {
     fi
 }
 
+# Reads exactly one `version = "..."` line out of a file, refusing rather
+# than silently taking the first match if there turn out to be more than
+# one: a `[dependencies.foo]\nversion = "..."` table in Cargo.toml, or a
+# nested "version" key some future tauri.conf.json plugin block adds, would
+# both match the pattern below. A script that took the first line would
+# read a stranger's version instead of the workspace's and never say so.
+read_one_version() {
+    local path="$1" pattern="$2" what="$3" matches n
+    [ -f "$path" ] || fail "cannot read '$path' to check the $what version"
+    matches="$(sed -n "$pattern" "$path")"
+    n="$(printf '%s\n' "$matches" | grep -c .)" || true
+    [ "$n" -ge 1 ] || fail "no $what version found in '$path'"
+    [ "$n" -eq 1 ] || fail "found $n lines matching a $what version in '$path', not 1; make the match specific or remove the extra one before this script can trust either"
+    printf '%s' "$matches"
+}
+
 read_versions() {
-    [ -f "$cargo_toml" ] || fail "cannot read '$cargo_toml' to check the workspace version"
-    [ -f "$tauri_conf" ] || fail "cannot read '$tauri_conf' to check the bundle version"
-    cargo_version="$(sed -n 's/^version *= *"\([^"]*\)".*/\1/p' "$cargo_toml" | head -n1)"
-    [ -n "$cargo_version" ] || fail "no [workspace.package] version found in '$cargo_toml'"
-    tauri_version="$(sed -n 's/.*"version" *: *"\([^"]*\)".*/\1/p' "$tauri_conf" | head -n1)"
-    [ -n "$tauri_version" ] || fail "no \"version\" found in '$tauri_conf'"
+    cargo_version="$(read_one_version "$cargo_toml" 's/^version *= *"\([^"]*\)".*/\1/p' "workspace")"
+    tauri_version="$(read_one_version "$tauri_conf" 's/.*"version" *: *"\([^"]*\)".*/\1/p' "bundle")"
 }
 
 if [ "$event_name" = "workflow_dispatch" ]; then

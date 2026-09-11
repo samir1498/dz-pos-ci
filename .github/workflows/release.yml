@@ -46,12 +46,23 @@ jobs:
       # Only meaningful for a tag push. `github.sha` is reliable for an
       # annotated or lightweight tag alike because we dereference the ref
       # ourselves with `^{commit}` rather than trust the event payload.
+      #
+      # REF goes through `env:` rather than being pasted into the script
+      # text: a tag name is allowed to contain `$`, a backtick, `"`, `;`
+      # and parentheses, and Actions substitutes `${{ github.ref }}` into
+      # this `run:` block before bash ever parses it. A tag crafted with
+      # those characters would run as shell commands inside this job,
+      # which could then write anything it likes to $GITHUB_OUTPUT,
+      # including a forged `on_main=true`. Binding through `env:` and
+      # reading `$REF` hands bash a plain string instead of script text.
       - name: Is the tagged commit on main
         id: onmain
         if: github.event_name == 'push'
+        env:
+          REF: ${{ github.ref }}
         run: |
           git fetch origin main --quiet
-          sha="$(git rev-parse "${{ github.ref }}^{commit}")"
+          sha="$(git rev-parse "$REF^{commit}")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           if git merge-base --is-ancestor "$sha" origin/main; then
             echo "on_main=true" >> "$GITHUB_OUTPUT"
@@ -59,14 +70,26 @@ jobs:
             echo "on_main=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Same reasoning as the step above: REF is the tag name on a push and
+      # is not trusted text, so both it and EVENT_NAME go through `env:`
+      # and reach the gate script as argv, never spliced into the `run:`
+      # text. The script only ever sees them as plain argv strings; the
+      # vulnerable point was always this YAML boundary, one layer above
+      # the script, which is why a test that only calls the script
+      # directly cannot see this class of bug.
       - name: Gate
         id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ steps.onmain.outputs.sha || github.sha }}
+          ON_MAIN: ${{ steps.onmain.outputs.on_main }}
         run: |
           .github/scripts/release-gate.sh \
-            "${{ github.event_name }}" \
-            "${{ github.ref }}" \
-            "${{ steps.onmain.outputs.sha || github.sha }}" \
-            "${{ steps.onmain.outputs.on_main }}" \
+            "$EVENT_NAME" \
+            "$REF" \
+            "$SHA" \
+            "$ON_MAIN" \
             "Cargo.toml" \
             "apps/desktop/src-tauri/tauri.conf.json"
 

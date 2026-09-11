@@ -92,11 +92,48 @@ check "'1.0.0' (no v prefix) is refused" 1 \
     "$GATE" push refs/tags/1.0.0 deadbeef true "$cargo_toml" "$tauri_conf"
 check "'v1.0.0-' (trailing dash, empty pre-release) is refused" 1 \
     "$GATE" push refs/tags/v1.0.0- deadbeef true "$cargo_toml" "$tauri_conf"
+check "'v1.0.0+' (bare trailing plus, empty build metadata) is refused" 1 \
+    "$GATE" push refs/tags/v1.0.0+ deadbeef true "$cargo_toml" "$tauri_conf"
+echo
+
+echo "=== 5b. build metadata and no pre-release: accepted, not flagged prerelease ==="
+# Cargo.toml and tauri.conf.json carry the build metadata too, matching
+# the tag literally: the gate compares strings, it does not normalise
+# build metadata away, so all three have to spell the version identically.
+cat > "$tauri_conf.build" <<'EOF'
+{ "productName": "dz-pos", "version": "1.0.0+build.5" }
+EOF
+cat > "$cargo_toml.build" <<'EOF'
+[workspace.package]
+version = "1.0.0+build.5"
+EOF
+out="$("$GATE" push refs/tags/v1.0.0+build.5 deadbeef true "$cargo_toml.build" "$tauri_conf.build" 2>&1)"
+rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^mode=release$" && echo "$out" | grep -q "^prerelease=false$"; then
+    echo "ok   - v1.0.0+build.5 releases and is not treated as a prerelease"
+    pass=$((pass+1))
+else
+    echo "FAIL - v1.0.0+build.5 ($rc): $out"
+    fail=$((fail+1))
+fi
 echo
 
 echo "=== 6. tag version disagrees with Cargo.toml / tauri.conf.json: refused ==="
 check "v9.9.9 on main but files say 0.1.0 is refused" 1 \
     "$GATE" push refs/tags/v9.9.9 deadbeef true "$cargo_toml" "$tauri_conf"
+echo
+
+echo "=== 6b. a second 'version = \"...\"' line in Cargo.toml: refused, not silently first-matched ==="
+cat > "$cargo_toml.dup" <<'EOF'
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.somecrate]
+version = "9.9.9"
+EOF
+check "two version lines in Cargo.toml is refused" 1 \
+    "$GATE" push refs/tags/v0.1.0 deadbeef true "$cargo_toml.dup" "$tauri_conf"
 echo
 
 echo "=== 7. prerelease tag shape is accepted and flagged ==="
