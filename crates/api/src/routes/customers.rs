@@ -75,7 +75,6 @@ pub async fn create(
     let opening = money_field("opening_debt_centimes", dto.opening_debt_centimes)?;
     let new = NewCustomer::try_from(dto)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     let made = state
         .blocking(move |c| {
@@ -171,7 +170,6 @@ pub async fn pay(
     let mode = dto.payment_mode.into();
     let note = dto.note;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     // The moment is the server's, not the till's: a machine whose clock is
     // wrong must not decide which side of a statement's date range a payment

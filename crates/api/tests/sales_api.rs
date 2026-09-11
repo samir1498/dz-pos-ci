@@ -26,6 +26,11 @@ fn app() -> (tempfile::TempDir, axum::Router) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
     common::sign_in(&path, SHOP);
+    // A cashier and a manager beside the owner every other test here signs in
+    // as: the till's two decisions that answer to a permission (M4 T6) are
+    // about which of the three is at the keyboard.
+    common::sign_in_as(&path, SHOP, "cashier", common::CASHIER_SESSION);
+    common::sign_in_as(&path, SHOP, "manager", common::MANAGER_SESSION);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     (dir, dzpos_api::router(state, &token()))
 }
@@ -36,11 +41,21 @@ async fn call(
     uri: &str,
     body: Option<Value>,
 ) -> (StatusCode, Value) {
+    call_as(app, method, uri, body, common::OWNER_SESSION).await
+}
+
+async fn call_as(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+    session: &str,
+) -> (StatusCode, Value) {
     let req = Request::builder()
         .method(method)
         .uri(uri)
         .header("authorization", format!("Bearer {TOKEN}"))
-        .header(common::SESSION_HEADER, common::OWNER_SESSION);
+        .header(common::SESSION_HEADER, session);
     let req = match body {
         Some(v) => req
             .header("content-type", "application/json")
@@ -492,6 +507,89 @@ async fn a_sale_past_the_credit_limit_is_422_carrying_both_amounts_and_the_overr
     assert_eq!(status, StatusCode::CREATED, "{sale}");
     assert_eq!(sale["number"], 1, "the refusal burned no number");
     assert_eq!(sale["balance"]["total_debt_centimes"], 100_000);
+}
+
+/// The override is not a flag anyone may send any more (M4 T6): the route is
+/// gated on `sell`, which a cashier holds, and the decision inside it asks
+/// for one they do not.
+#[tokio::test]
+async fn a_cashiers_override_is_403_and_a_managers_takes_the_sale() {
+    let (_dir, app) = app();
+    let p = product(&app, "Ciment", 100_000, 0).await;
+    let c = customer(&app, "Entreprise Amrani", Some(50_000), None).await;
+    let body = json!({
+        "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+        "payment_mode": "credit",
+        "customer_id": c,
+        "override": true,
+    });
+
+    let (status, refused) = call_as(
+        &app,
+        "POST",
+        "/sales",
+        Some(body.clone()),
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{refused}");
+    assert_eq!(code(&refused), "forbidden");
+    // The permission travels on the envelope, so the till says which one
+    // without restating the table.
+    assert_eq!(refused["error"]["permission"], "override_credit_block");
+    let (_, sales) = call(&app, "GET", "/sales", None).await;
+    assert_eq!(
+        sales.as_array().map(Vec::len),
+        Some(0),
+        "nothing was written"
+    );
+
+    let (status, sale) = call_as(&app, "POST", "/sales", Some(body), common::MANAGER_SESSION).await;
+    assert_eq!(status, StatusCode::CREATED, "{sale}");
+    assert_eq!(sale["number"], 1, "the refusal burned no number");
+}
+
+/// The other decision the same milestone gates. A shop that has never set a
+/// threshold reads `Bps::ZERO`, so on day one any discount at all is above it.
+#[tokio::test]
+async fn a_cashiers_discount_past_the_threshold_is_403_and_a_managers_takes_the_sale() {
+    let (_dir, app) = app();
+    let p = product(&app, "Sucre", 10_000, 0).await;
+    let body = json!({
+        "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+        "payment_mode": "cash",
+        "tendered_centimes": 20_000,
+        "global_discount_centimes": 1_000,
+    });
+
+    let (status, refused) = call_as(
+        &app,
+        "POST",
+        "/sales",
+        Some(body.clone()),
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{refused}");
+    assert_eq!(code(&refused), "forbidden");
+    assert_eq!(refused["error"]["permission"], "discount_above_threshold");
+    let (_, sales) = call(&app, "GET", "/sales", None).await;
+    assert_eq!(
+        sales.as_array().map(Vec::len),
+        Some(0),
+        "nothing was written"
+    );
+
+    // The same basket with nothing off it is the cashier's ordinary sale.
+    let mut plain = body.clone();
+    plain["global_discount_centimes"] = json!(0);
+    let (status, sale) =
+        call_as(&app, "POST", "/sales", Some(plain), common::CASHIER_SESSION).await;
+    assert_eq!(status, StatusCode::CREATED, "{sale}");
+
+    let (status, sale) = call_as(&app, "POST", "/sales", Some(body), common::MANAGER_SESSION).await;
+    assert_eq!(status, StatusCode::CREATED, "{sale}");
+    assert_eq!(sale["totals"]["discount_centimes"], 1_000);
 }
 
 #[tokio::test]

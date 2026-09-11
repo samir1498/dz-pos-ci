@@ -76,7 +76,6 @@ pub async fn create(
     let opening = money_field("opening_debt_centimes", dto.opening_debt_centimes)?;
     let new = NewSupplier::from(dto);
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     let made = state
         .blocking(move |c| {
@@ -104,8 +103,6 @@ pub async fn update(
     let close_reason = dto.close_reason.clone();
     let fields = NewSupplier::from(dto);
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state,
-    // and a body carrying `active: false` closes a fiche, so this route needs
     // the same permission the close route does.
     let user = who.id;
     let after = state
@@ -128,7 +125,6 @@ pub async fn close(
     let id = path_id(id)?;
     let Json(dto) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // Closing a fiche the shop still owes money to is a decision, and the log
     // is what carries the accountability until a permission does.
     let user = who.id;
@@ -170,7 +166,6 @@ pub async fn pay(
     let mode = dto.payment_mode.into();
     let note = dto.note;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     // The moment is the server's, not the till's: a machine whose clock is
     // wrong must not decide which side of a statement's date range a payment
@@ -199,7 +194,6 @@ pub async fn adjust(
     let amount = dto.amount()?;
     let note = dto.note;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // A correction moves what the shop owes with nobody's name on it but the
     // seeded owner's, which is what the audit row stands in for meanwhile.
     let user = who.id;

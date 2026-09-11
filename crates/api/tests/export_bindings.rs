@@ -14,23 +14,24 @@ use dzpos_api::dto::{
     CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CloseOrderDto, CloseSupplierDto,
     CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DashboardDto,
     DashboardFiguresDto, DashboardSeriesDto, DashboardSeriesPointDto, DatedRegimeDto, DebtEntryDto,
-    DebtKindDto, DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto,
-    HealthDto, ImportAppliedDto, ImportDryRunDto, ImportOutcomeDto, ImportRowDto, LabelSheetDto,
-    LastStockRecountDto, LoginDto, LowStockDto, MeDto, NewAvoirDto, NewCustomerDto, NewExpenseDto,
-    NewPaymentDto, NewProductDto, NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto,
-    NewSaleLineDto, NewSupplierDto, OutgoingsDto, OwedDto, PaidNowDto, PartyKindDto,
-    PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, PermissionDto, ProductDto,
-    PurchaseDetailDto, PurchaseDto, PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto,
-    PurchaseStatusDto, ReceiveLineDto, RegimeChangeDto, RegimeDto, RestoreDto, RoleDto,
-    SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto,
-    SaleTotalsDto, SaleTvaDto, SaleWarningDto, SessionDto, SessionIdleDto, SettingsDto,
-    StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto, SupplierDebtKindDto,
-    SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto,
-    TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto,
+    DebtKindDto, DiscountThresholdChangeDto, DocumentKindDto, DocumentStatusDto,
+    ExpenseCategoryDto, ExpenseDto, ExpensesDto, HealthDto, ImportAppliedDto, ImportDryRunDto,
+    ImportOutcomeDto, ImportRowDto, LabelSheetDto, LastStockRecountDto, LoginDto, LowStockDto,
+    MeDto, NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto, NewProductDto,
+    NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto, NewSaleLineDto, NewSupplierDto,
+    OutgoingsDto, OwedDto, PaidNowDto, PartyKindDto, PaymentAllocationDto, PaymentDto,
+    PaymentMethodDto, PaymentModeDto, PermissionDto, ProductDto, PurchaseDetailDto, PurchaseDto,
+    PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto, PurchaseStatusDto, ReceiveLineDto,
+    RegimeChangeDto, RegimeDto, RestoreDto, RoleDto, SaleBalanceDto, SaleCancelEffectDto,
+    SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
+    SaleWarningDto, SessionDto, SessionIdleDto, SettingsDto, StockDriftDto, StockRecountDto,
+    StoreDto, SupplierAllocationDto, SupplierDebtKindDto, SupplierDto, SupplierEntryDto,
+    SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto, TakingsDto, ThemeChoiceDto,
+    ThemeDto, TopProductDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 97] = [
+const FILES: [&str; 98] = [
     "LoginDto.ts",
     "MeDto.ts",
     "SessionDto.ts",
@@ -74,6 +75,7 @@ const FILES: [&str; 97] = [
     "CancelDocumentDto.ts",
     "PartyKindDto.ts",
     "DebtKindDto.ts",
+    "DiscountThresholdChangeDto.ts",
     "CustomerDto.ts",
     "CustomerWriteDto.ts",
     "NewCustomerDto.ts",
@@ -206,6 +208,7 @@ fn export_bindings() {
     ThemeChoiceDto::export_all(&cfg).unwrap();
     SettingsDto::export_all(&cfg).unwrap();
     RegimeChangeDto::export_all(&cfg).unwrap();
+    DiscountThresholdChangeDto::export_all(&cfg).unwrap();
     BackupDto::export_all(&cfg).unwrap();
     BackupsDto::export_all(&cfg).unwrap();
     RestoreDto::export_all(&cfg).unwrap();

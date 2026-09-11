@@ -227,6 +227,12 @@ pub const ROUTE_GATES: &[Gate] = &[
     },
     Gate {
         method: "POST",
+        path: "/settings/discount-threshold",
+        permission: Some(Permission::EditSettings),
+        why: "how much a cashier may take off a basket before a manager has to say yes; raising it quietly is the same as handing out the discount permission (M4 T6, 2026-09-11)",
+    },
+    Gate {
+        method: "POST",
         path: "/settings/regime",
         permission: Some(Permission::EditSettings),
         why: "the régime fiscal sits inside EditSettings, which a manager holds; splitting it out is the next question if Samir wants it owner-only (services::permissions says so too)",

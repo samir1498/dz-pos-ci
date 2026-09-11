@@ -46,6 +46,7 @@ import type { ProductDto } from "./generated/ProductDto";
 import type { PurchaseDetailDto } from "./generated/PurchaseDetailDto";
 import type { PurchaseDto } from "./generated/PurchaseDto";
 import type { PurchaseStatusDto } from "./generated/PurchaseStatusDto";
+import type { DiscountThresholdChangeDto } from "./generated/DiscountThresholdChangeDto";
 import type { RegimeChangeDto } from "./generated/RegimeChangeDto";
 import type { RestoreDto } from "./generated/RestoreDto";
 import type { SaleDto } from "./generated/SaleDto";
@@ -500,6 +501,18 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
      * again, since the change is current or planned depending on its day. */
     async changeRegime(input: RegimeChangeDto): Promise<SettingsDto> {
       const body = await send("/settings/regime", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, settingsSchema, "settings");
+    },
+
+    /** Appends a dated change to the discount a cashier may give without
+     * asking anyone, in basis points of the basket. Answers the whole
+     * settings page, like the régime change it rides beside. */
+    async setDiscountThreshold(input: DiscountThresholdChangeDto): Promise<SettingsDto> {
+      const body = await send("/settings/discount-threshold", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),

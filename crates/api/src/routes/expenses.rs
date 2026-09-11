@@ -75,7 +75,6 @@ pub async fn create(
     let Json(dto) = body.map_err(ApiError::from)?;
     let fields = NewExpense::try_from(dto)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     let made = state
         .blocking(move |c| service::create(c, shop, user, fields))

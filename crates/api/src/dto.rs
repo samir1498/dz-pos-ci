@@ -436,6 +436,13 @@ pub struct SettingsDto {
     pub regime_planned: Option<DatedRegimeDto>,
     /// `null` when the shop has never chosen one.
     pub theme: Option<ThemeDto>,
+    /// How much a cashier may take off a basket before the sale needs
+    /// someone holding `discount_above_threshold`, in basis points of the
+    /// basket before any discount (250 is 2,5 %). Zero on a shop that has
+    /// never set one, which refuses a cashier every discount: the screen
+    /// should say so rather than leave an owner wondering why the till
+    /// refuses a round number off.
+    pub discount_threshold_bps: u32,
 }
 
 /// A régime change: the régime and the day it applies from. Appended to
@@ -445,6 +452,18 @@ pub struct SettingsDto {
 #[serde(deny_unknown_fields)]
 pub struct RegimeChangeDto {
     pub regime: RegimeDto,
+    pub valid_from: String,
+}
+
+/// A change to the discount a cashier may give without asking anyone: the
+/// threshold in basis points and the day it applies from. Dated and appended
+/// like the régime, never written over, so a sale refused last month can
+/// still be read against the threshold that refused it.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "DiscountThresholdChangeDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct DiscountThresholdChangeDto {
+    pub threshold_bps: u32,
     pub valid_from: String,
 }
 
