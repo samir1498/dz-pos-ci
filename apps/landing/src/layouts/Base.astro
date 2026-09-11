@@ -1,12 +1,20 @@
 ---
-// The page shell L0 owns. L3 (context/plans/20260911-landing-page.md) fills
-// <main> with the real sections; this only sets the document up so that work
-// can start without touching routing, tokens or the font stack.
+// The page shell: the document, the brand row, and the sections in the order
+// context/plans/20260911-landing-page.md sets. The brand appears once, in the
+// header; the hero carries the page's only <h1>. `dict.tagline` is the
+// document's one-line description and is not printed twice on the page.
 import "../styles/base.css";
 
 import markUrl from "@dzpos/design/assets/mark.svg?url";
 import { dictionaries } from "../i18n";
 import type { Locale } from "../i18n";
+import Hero from "../components/Hero.astro";
+import Pieces from "../components/Pieces.astro";
+import Fiscal from "../components/Fiscal.astro";
+import Languages from "../components/Languages.astro";
+import Screens from "../components/Screens.astro";
+import Audience from "../components/Audience.astro";
+import Pricing from "../components/Pricing.astro";
 
 interface Props {
   readonly locale: Locale;
@@ -22,22 +30,23 @@ const dict = dictionaries[locale];
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{dict.title}</title>
+    <meta name="description" content={dict.tagline} />
   </head>
   <body>
-    <header>
+    <header class="site-header">
       {/* alt="" for the same reason as Wordmark.tsx: the word beside the
           coin is already the accessible name. */}
       <img src={markUrl} width="28" height="28" alt="" />
       <span>{dict.brandWord} <strong>{dict.brandSuffix}</strong></span>
     </header>
     <main>
-      <h1>{dict.title}</h1>
-      <p>{dict.tagline}</p>
-      <!--
-        L3: hero, the four pieces (sell, invoice, stock, know), the fiscal
-        block, a band of screens, who it is for, and the price/form section
-        attach here, in that order. L1 supplies the product shots they use.
-      -->
+      <Hero locale={locale} hero={dict.hero} />
+      <Pieces locale={locale} pieces={dict.pieces} />
+      <Fiscal fiscal={dict.fiscal} />
+      <Languages languages={dict.languages} />
+      <Screens locale={locale} screens={dict.screens} />
+      <Audience audience={dict.audience} />
+      <Pricing pricing={dict.pricing} />
     </main>
   </body>
 </html>

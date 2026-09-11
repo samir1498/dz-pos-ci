@@ -1,0 +1,82 @@
+---
+// The hero: the till shot and the one-line answer to "what does it do"
+// (context/plans/20260911-landing-page.md, L3). It carries the page's only
+// <h1>: the brand is in the header row above and is not a heading.
+import shots from "../lib/shots.json";
+import type { Dict, Locale } from "../i18n";
+
+interface Props {
+  readonly locale: Locale;
+  readonly hero: Dict["hero"];
+}
+
+const { locale, hero } = Astro.props;
+const shot = shots.hero[locale];
+---
+
+<section class="hero" aria-labelledby="hero-heading">
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <h1 id="hero-heading">{hero.heading}</h1>
+      <p>{hero.body}</p>
+      {/* Points at the pricing section below: the form is the only place on
+          the page that collects contact details (L3 brief, "how to get
+          it"). No mailto, no endpoint: see Pricing.astro. */}
+      <a class="btn-primary" href="#pricing">{hero.cta}</a>
+    </div>
+    {/* alt="" as in Base.astro's mark.svg: the heading and body beside it
+        already say what the screen shows. */}
+    <img
+      class="hero-shot"
+      src={`/shots/${shot.src1x}`}
+      srcset={`/shots/${shot.src1x} 1x, /shots/${shot.src2x} 2x`}
+      width={shot.width}
+      height={shot.height}
+      alt=""
+    />
+  </div>
+</section>
+
+<style>
+  .hero {
+    padding-block: var(--space-12);
+  }
+
+  .hero-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    flex-wrap: wrap;
+  }
+
+  .hero-copy {
+    flex: 1 1 320px;
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .hero-copy h1 {
+    font-size: var(--text-3xl);
+    font-weight: 600;
+    line-height: 1.15;
+  }
+
+  .hero-copy p {
+    font-size: var(--text-lg);
+    color: var(--text-secondary);
+    max-width: 48ch;
+  }
+
+  .hero-shot {
+    flex: 1 1 320px;
+    max-width: 100%;
+    height: auto;
+    /* frameTile bakes rounded, transparent corners into the shot itself
+       (src/lib/shots.ts); box-shadow casts from the rectangular border box
+       regardless of alpha, which squares the shadow off at those corners.
+       drop-shadow follows the alpha channel, and --shadow-lg is already an
+       offset/offset/blur/colour triple with no spread, so it parses as a
+       drop-shadow argument unchanged. */
+    filter: drop-shadow(var(--shadow-lg));
+  }
+</style>

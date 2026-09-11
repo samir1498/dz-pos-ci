@@ -64,6 +64,10 @@ export const en: Dict = {
     body: "The screen, the ticket and the invoice exist in French, Arabic and English, and each is chosen freely: the language to work in and the language to print in.",
   },
 
+  screens: {
+    heading: "The app, in pictures",
+  },
+
   audience: {
     heading: "Who it's for",
     body: "For a shop in Algeria still keeping its books by hand or in a spreadsheet, wanting its invoices, its stock and its suppliers in one place.",
@@ -71,10 +75,11 @@ export const en: Dict = {
 
   pricing: {
     heading: "Price",
-    body: "The price isn't set yet. Leave your details and we'll get back to you as soon as it is.",
+    body: "The price is not set yet, and until it is this form stays closed. It will open here, on this page.",
     formNameLabel: "Name",
     formPhoneLabel: "Phone",
     formWilayaLabel: "Wilaya",
     formSubmit: "Ask to be contacted",
+    formDisabledNote: "Closed until the price is set.",
   },
 };

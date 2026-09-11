@@ -1,0 +1,65 @@
+---
+// The fiscal answers an Algerian owner asks first. Every line is one
+// docs/features.md already carries; fr.ts's comments name the row. No
+// image: this section is the words, not a screen.
+import type { Dict } from "../i18n";
+
+interface Props {
+  readonly fiscal: Dict["fiscal"];
+}
+
+const { fiscal } = Astro.props;
+const rows = [fiscal.numbering, fiscal.stamp, fiscal.tva, fiscal.words, fiscal.regime];
+---
+
+<section class="fiscal" aria-labelledby="fiscal-heading">
+  <div class="wrap">
+    <h2 id="fiscal-heading">{fiscal.heading}</h2>
+    <p class="fiscal-intro">{fiscal.intro}</p>
+    <ul class="fiscal-list">
+      {rows.map((row) => <li>{row}</li>)}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .fiscal {
+    padding-block: var(--space-12);
+  }
+
+  .fiscal h2 {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+  }
+
+  .fiscal-intro {
+    color: var(--text-secondary);
+    margin-block: var(--space-3) var(--space-6);
+    max-width: 60ch;
+  }
+
+  .fiscal-list {
+    display: grid;
+    gap: var(--space-3);
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    max-width: 70ch;
+  }
+
+  .fiscal-list li {
+    position: relative;
+    padding-inline-start: var(--space-5);
+  }
+
+  .fiscal-list li::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0.6em;
+    width: var(--space-2);
+    height: var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--color-primary);
+  }
+</style>

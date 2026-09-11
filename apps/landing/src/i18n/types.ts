@@ -69,6 +69,13 @@ export interface Dict {
     readonly body: string;
   };
 
+  /** L3: heading for the band of real screens (L1's collage shot). Added by
+   * L3 because the dictionary had no words for this section; see the L3
+   * report for why. */
+  readonly screens: {
+    readonly heading: string;
+  };
+
   readonly audience: {
     readonly heading: string;
     readonly body: string;
@@ -83,5 +90,9 @@ export interface Dict {
     readonly formPhoneLabel: string;
     readonly formWilayaLabel: string;
     readonly formSubmit: string;
+    /** L3: the reason shown beside the disabled submit button, since the
+     * form posts nowhere until Anouar names an address (see the L3 report).
+     */
+    readonly formDisabledNote: string;
   };
 }

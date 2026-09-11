@@ -1,0 +1,99 @@
+---
+// The price and how to get it. Anouar has not set a price or picked where
+// this form's answers go (docs/features.md, open decision 1), so the form
+// posts nowhere: no action, no script, a permanently disabled submit with
+// the reason stated beside it. Wiring it later is one line: give the
+// <form> a method and action (or an endpoint to fetch to) and drop
+// `disabled` from the button.
+import type { Dict } from "../i18n";
+
+interface Props {
+  readonly pricing: Dict["pricing"];
+}
+
+const { pricing } = Astro.props;
+---
+
+<section class="pricing" id="pricing" aria-labelledby="pricing-heading">
+  <div class="wrap pricing-inner">
+    <h2 id="pricing-heading">{pricing.heading}</h2>
+    <p>{pricing.body}</p>
+    <form class="pricing-form">
+      <div class="field">
+        <label for="pricing-name">{pricing.formNameLabel}</label>
+        <input id="pricing-name" name="name" type="text" autocomplete="name" />
+      </div>
+      <div class="field">
+        <label for="pricing-phone">{pricing.formPhoneLabel}</label>
+        <input id="pricing-phone" name="phone" type="tel" autocomplete="tel" />
+      </div>
+      <div class="field">
+        <label for="pricing-wilaya">{pricing.formWilayaLabel}</label>
+        <input id="pricing-wilaya" name="wilaya" type="text" autocomplete="address-level1" />
+      </div>
+      <button type="submit" class="btn-primary" disabled aria-describedby="pricing-form-note">
+        {pricing.formSubmit}
+      </button>
+      <p id="pricing-form-note" class="pricing-form-note">{pricing.formDisabledNote}</p>
+    </form>
+  </div>
+</section>
+
+<style>
+  .pricing {
+    padding-block: var(--space-12);
+    background: var(--surface-raised);
+  }
+
+  .pricing-inner {
+    max-width: 480px;
+  }
+
+  .pricing h2 {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+  }
+
+  .pricing p {
+    color: var(--text-secondary);
+    margin-block-start: var(--space-2);
+  }
+
+  .pricing-form {
+    margin-block-start: var(--space-6);
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .field {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .field label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  .field input {
+    min-height: var(--control-h);
+    padding-inline: var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    font: inherit;
+  }
+
+  .field input:focus-visible {
+    outline: 2px solid var(--border-focus);
+    outline-offset: -1px;
+    border-color: var(--border-focus);
+  }
+
+  .pricing-form-note {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--text-tertiary);
+  }
+</style>
