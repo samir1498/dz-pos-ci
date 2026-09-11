@@ -7,10 +7,10 @@
 //! of named cases a human would check by eye, plus `require`'s typed
 //! refusal and the discount-threshold helper `discount_needs_permission`.
 //! What it deliberately does not do: assert `can(Owner, X) == can(Manager,
-//! X)` for all eleven permissions as if that equality were the rule being
-//! tested. It is today's answer, not a guarantee this table makes; the
-//! "manager a superset of cashier" and "owner a superset of manager"
-//! assertions below hold whether or not a future ruling splits the two.
+//! X)` as if that equality were the rule. The two split on 2026-09-11: the
+//! staff list and the audit log are the owner's alone, and the "manager a
+//! superset of cashier" and "owner a superset of manager" assertions below
+//! hold whichever way a later ruling moves a single permission.
 
 use std::collections::HashSet;
 
@@ -88,10 +88,24 @@ fn named_cases_a_human_would_check_by_eye() {
     assert!(can(Role::Manager, Permission::CommitMoney));
     assert!(can(Role::Manager, Permission::CorrectLedger));
     assert!(can(Role::Manager, Permission::ExportAndImport));
-    assert!(can(Role::Manager, Permission::ManageUsers));
+    assert!(can(Role::Manager, Permission::ChangePriceAtTheTill));
+
+    // The two the manager does not hold. A log the people it watches can
+    // read, and a staff list they can add themselves to, are not controls
+    // (review ruling, 2026-09-11).
+    assert!(!can(Role::Manager, Permission::ManageUsers));
+    assert!(!can(Role::Manager, Permission::SeeAuditLog));
 
     assert!(can(Role::Owner, Permission::EditSettings));
     assert!(can(Role::Owner, Permission::ManageUsers));
+    assert!(can(Role::Owner, Permission::SeeAuditLog));
+}
+
+#[test]
+fn the_owner_holds_every_permission_there_is() {
+    // Nothing on the list is refused to the owner: if a later ruling adds a
+    // permission and forgets the owner, this is what says so.
+    assert_eq!(granted(Role::Owner).len(), Permission::ALL.len());
 }
 
 #[test]
@@ -102,7 +116,7 @@ fn require_lets_a_granted_role_through() {
 
 #[test]
 fn require_refuses_a_role_without_the_permission_and_names_it() {
-    let err = require(Role::Cashier, Permission::ManageUsers).unwrap_err();
+    let err = require(Role::Manager, Permission::ManageUsers).unwrap_err();
     assert!(matches!(
         err,
         CoreError::Forbidden {

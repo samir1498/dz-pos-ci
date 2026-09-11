@@ -109,10 +109,21 @@ pub enum Permission {
     /// name, a price and a barcode a customer can already read off the
     /// shelf need nobody's permission.
     ExportAndImport,
+    /// Sell a line at a price that is not the product's own: the till's
+    /// negotiated price (`NewSaleLine.unit_price`). M1 shipped it ungated
+    /// because the till had one user; this is the gate that ruling asked for
+    /// (M1 carry-in, 2026-09-09), and T3 writes the audit row beside it with
+    /// the stored price next to the one used.
+    ChangePriceAtTheTill,
+    /// Read the audit log: who changed a price, who passed a credit block,
+    /// who put a quantity back to what its ledger sums to. The owner's, and
+    /// only the owner's, because a log that the people it watches can also
+    /// read is not a control (T7 writes the screen "for the owner").
+    SeeAuditLog,
 }
 
 impl Permission {
-    pub const ALL: [Permission; 11] = [
+    pub const ALL: [Permission; 13] = [
         Permission::Sell,
         Permission::DiscountAboveThreshold,
         Permission::OverrideCreditBlock,
@@ -124,6 +135,8 @@ impl Permission {
         Permission::CommitMoney,
         Permission::CorrectLedger,
         Permission::ExportAndImport,
+        Permission::ChangePriceAtTheTill,
+        Permission::SeeAuditLog,
     ];
 
     /// The stable key the UI translates and the wire carries (T2: 403 with
@@ -141,6 +154,8 @@ impl Permission {
             Permission::CommitMoney => "commit_money",
             Permission::CorrectLedger => "correct_ledger",
             Permission::ExportAndImport => "export_and_import",
+            Permission::ChangePriceAtTheTill => "change_price_at_the_till",
+            Permission::SeeAuditLog => "see_audit_log",
         }
     }
 }
@@ -154,13 +169,15 @@ impl std::fmt::Display for Permission {
 /// The one statement of who may do what. Every place in the codebase that
 /// would otherwise compare a role asks this, or `require` below, instead.
 ///
-/// A cashier rings sales up and nothing else on this list; a manager and an
-/// owner answer alike on every permission today. Nothing read for this
-/// milestone (features.md §5, the M4 team plan and its M1-M3 carry-ins)
-/// draws a line between owner and manager: T7's audit log screen is written
-/// "for the owner" and T8 refuses only "a cashier" on user management, so a
-/// split between the two, if the review wants one, is a later ruling and not
-/// a permission this table already holds.
+/// A cashier rings sales up and nothing else on this list. A manager runs the
+/// shop and answers like an owner on everything except two: who the staff are,
+/// and the log of what the staff did. A log the people it watches can read,
+/// and a staff list they can add themselves to, are not controls, and the
+/// milestone's own demo line is "the owner sees the audit log of a price
+/// change" (review ruling, 2026-09-11; features.md §5 names neither way, so
+/// this table is the statement of it). The régime fiscal still sits inside
+/// `EditSettings`, which a manager holds; splitting that out is the next
+/// question if Samir wants the fiscal setting owner-only.
 ///
 /// The match is on `permission` first and not on the `(role, permission)`
 /// pair, so a twelfth `Permission` variant fails to compile here until it is
@@ -174,10 +191,11 @@ pub const fn can(role: Role, permission: Permission) -> bool {
         | Permission::EditProducts
         | Permission::EditSettings
         | Permission::SeeReports
-        | Permission::ManageUsers
         | Permission::CommitMoney
         | Permission::CorrectLedger
-        | Permission::ExportAndImport => matches!(role, Role::Owner | Role::Manager),
+        | Permission::ExportAndImport
+        | Permission::ChangePriceAtTheTill => matches!(role, Role::Owner | Role::Manager),
+        Permission::ManageUsers | Permission::SeeAuditLog => matches!(role, Role::Owner),
     }
 }
 
