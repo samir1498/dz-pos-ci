@@ -10,7 +10,7 @@
 // database) and leaves the shop empty again, which is the state the products
 // spec starts from.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import type { Locator } from "@playwright/test";
 import { t } from "./messages";
 

@@ -10,7 +10,7 @@
 // figure is read through the API as well as off the screen, so a screen that
 // agreed with a server that stored the wrong thing would still fail.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { apiHeaders, apiUrl } from "./api";

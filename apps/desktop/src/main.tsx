@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { I18nProvider } from "@/i18n";
+import { SessionProvider } from "@/lib/session";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "./routeTree.gen";
 import "./styles.css";
@@ -28,7 +29,13 @@ ReactDOM.createRoot(root).render(
         {/* Inside the query client: the theme lives on the settings page and
             is read with the query the settings screen already makes. */}
         <ThemeProvider>
-          <RouterProvider router={router} />
+          {/* Inside the theme provider so a screen shown before anyone is
+              signed in (the PIN pad, the password form) still themes
+              itself; inside the query client for the same reason
+              ThemeProvider is, it asks the API through the query cache. */}
+          <SessionProvider>
+            <RouterProvider router={router} />
+          </SessionProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </I18nProvider>

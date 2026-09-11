@@ -3,6 +3,13 @@
 ObserveOne is the recorded e2e tool for this product (decision 2026-09-08);
 Playwright here is the interim local driver.
 
+Every route sits behind a sign-in screen since M4 T4 (PIN pad or password,
+`src/components/SignInScreen.tsx`). Every spec but `signin.spec.ts` gets
+past it through `./auth`, which signs the fixed development owner in over
+the API before a test's `context` or `request` fixture is handed to it;
+`globalSetup.ts` is what makes that owner's credential real on a fresh
+database. See "Files" below for both.
+
 ## Run it
 
 ```
@@ -150,6 +157,13 @@ second language on; use the looped `just e2e` or a single `--project`.
   the shop back under the réel before it leaves;
   `settlement.spec.ts`, two credit sales settled oldest first, a payment
   above the debt refused, and the statement printed;
+  `signin.spec.ts`, the sign-in screen itself, signed out on purpose (plain
+  `@playwright/test`, not `./auth`): the PIN pad's two stages with a wrong
+  PIN refused and the right one signing the owner in, backspace on an
+  empty PIN returning to the id stage, the password form the same way, and
+  a locked-out wait counted down on screen from a `retry_after_seconds` an
+  intercepted `/auth/login` answers, never the real owner's row (five
+  wrong PINs against it would lock it out for the rest of the run);
   `stock-recount.spec.ts`, a product opened with stock and sold from, then
   the recount run from the settings panel finding nothing to correct;
   `suppliers.spec.ts`, a supplier fiche opened with an opening debt, money
@@ -167,6 +181,17 @@ second language on; use the looped `just e2e` or a single `--project`.
   `till-facture.spec.ts`, a facture on credit that leaves the ticket series
   alone, and a facture paid in cash carrying its TVA recap and its droit de
   timbre;
+  `till-lock.spec.ts`, the brief's own proof for M4 T4, in three parts: a
+  product scanned into the cart survives being locked from the topbar's
+  user menu and read back after unlocking with the owner's password
+  (what a session resumed from the `./auth` fixture's cookie unlocks with,
+  no `AuthMethod` remembered on a window that never made a sign-in call of
+  its own); the covered till answers to nothing while it is locked — a
+  forced `.focus()` on the search box is a no-op, a scanned barcode lands
+  nowhere, and F9 does not pay, even though the basket it would have paid
+  is a real one; and a session with no remembered method offers both
+  unlock doors rather than stranding a PIN-only cashier behind the
+  password form;
   `till-reversals-and-quotations.spec.ts`, a partial avoir, a whole
   cancellation, the credit it leaves and a proforma;
   `zz-exports-and-labels.spec.ts`, the four workbooks read back as real
@@ -187,6 +212,18 @@ second language on; use the looped `just e2e` or a single `--project`.
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
   rows finds the API port and the run's launch token.
+- `auth.ts` is the door every spec but `signin.spec.ts` goes through: its
+  `test` overrides both the `context` and the standalone `request`
+  fixtures to sign the fixed development owner in through the API before
+  either is handed to a test, so a same-site httpOnly cookie is already on
+  the jar before the first `page.goto` and before the first seeding call a
+  spec makes with `request`. `globalSetup.ts` is what makes that owner
+  signable-in at all: a fresh e2e database seeds the owner with no usable
+  credential (`pin_hash = '!unset'`, `password_hash = NULL`), so this
+  writes a real argon2id hash for the fixed PIN and password onto that row
+  once `webServer` has migrated `tempDb`, before any spec runs. The hash
+  strings are not computed there; see the file's own header for where they
+  came from and why `dzpos-seed` is not run against the real e2e database.
 - `kit.spec.ts` drives the shell and the component kit: the sidebar reaching
   every screen with the topbar naming it, the sidebar's side read off its
   geometry rather than its class list, a narrow window folding it into a
@@ -312,6 +349,19 @@ here. These are all of them.
 | `kit-menu-trigger` | `KitPage.tsx` | As above. |
 | `kit-tooltip-trigger` | `KitPage.tsx` | As above. |
 | `kit-toast-trigger` | `KitPage.tsx` | As above. |
+| `signin-screen` | `SignInScreen.tsx` | The whole sign-in screen, so a test can wait for the door itself before reaching for a mode inside it. |
+| `signin-pin-display` | `SignInScreen.tsx` | The typed id or PIN; masked in the PIN stage, so its own text cannot be asked for. |
+| `signin-mode-switch` | `SignInScreen.tsx` | Toggles between the PIN pad and the password form; its own label changes with the mode. |
+| `signin-name`, `signin-password` | `SignInScreen.tsx` | The password form's two fields. |
+| `signin-submit` | `SignInScreen.tsx` | The password form's button; its translated label is "Sign in" like the screen's own title. |
+| `signin-error`, `signin-retry` | `SignInScreen.tsx` | The refusal and the counted-down wait, mutually exclusive so a test reads whichever is on screen without a role query matching both a message and a countdown. |
+| `lock-screen` | `LockScreen.tsx` | The overlay; a test asserts it covers the shell without asserting the shell is gone, which is the whole point of it. |
+| `lock-pin-display`, `lock-password`, `lock-unlock` | `LockScreen.tsx` | The unlock control, one of a PIN pad or a password field depending on how the session was opened (`AuthMethod`). |
+| `lock-mode-switch` | `LockScreen.tsx` | Only present when the session carries no remembered `AuthMethod` (resumed from a cookie): switches between the two unlock doors, so a cashier who only has a PIN is never stranded behind the password form. |
+| `lock-error`, `lock-retry` | `LockScreen.tsx` | As `signin-error` / `signin-retry`, for the same reason. |
+| `lock-switch-user` | `LockScreen.tsx` | Ends the session instead of unlocking it; a link beside a button, so a role query by name is not enough on its own. |
+| `user-menu-trigger`, `user-menu` | `UserMenu.tsx` | The topbar's signed-in user; the trigger carries the name, which is data and not a translated word a test can ask for by text. |
+| `user-menu-lock`, `user-menu-signout` | `UserMenu.tsx` | The two actions inside it. |
 
 ## Headings are queried inside `main`
 

@@ -25,7 +25,7 @@
 // today and the sales bars are one bar. An expense carries its own
 // `expense_date`, so the expenses line is the one that runs across the window.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatCentimes } from "@dzpos/shared";

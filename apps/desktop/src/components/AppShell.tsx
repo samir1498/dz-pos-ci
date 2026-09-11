@@ -42,6 +42,7 @@ import type { ComponentType, ReactNode } from "react";
 import { Icon } from "@/components/Icon";
 import { Wordmark } from "@/components/Wordmark";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { UserMenu } from "@/components/UserMenu";
 import { Toaster } from "@/components/ui/sonner";
 import {
   Sidebar,
@@ -140,10 +141,11 @@ function SidebarNav() {
 }
 
 /**
- * The shop at the foot of the sidebar. It stands where the signed-in user
- * will stand once there are users; until then the thing the shop identifies
- * with is its own name, which the settings screen already keeps and which
- * this reads from the same cache the theme provider fills.
+ * The shop at the foot of the sidebar. The brief that added sign-in
+ * (M4 T4) put the signed-in user in the topbar instead (`UserMenu`, in the
+ * `ms-auto` group below) rather than here: this reads the store's own name
+ * from the same cache the theme provider fills, and stays the sidebar's
+ * identity regardless of who is signed in.
  */
 function ShopFooter() {
   const { t } = useTranslation();
@@ -216,6 +218,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <ShopDay />
               <LanguageSwitcher />
               <ThemeSwitcher />
+              <UserMenu />
             </div>
           </header>
           <main className="min-w-0 flex-1 p-4">{children}</main>

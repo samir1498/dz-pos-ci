@@ -9,7 +9,7 @@
 // position box is the figure `GET /cash?month=` computes from the ledgers
 // rather than a sum the screen made.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { apiHeaders, apiUrl } from "./api";

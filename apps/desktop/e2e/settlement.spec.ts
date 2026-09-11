@@ -19,7 +19,7 @@
 // a time in the order their names sort, and products.spec is the one that
 // asserts the empty list. Anything that adds a product comes after it.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import type { APIRequestContext } from "@playwright/test";
 import { apiHeaders, apiUrl } from "./api";
 import { currentLang, t } from "./messages";
