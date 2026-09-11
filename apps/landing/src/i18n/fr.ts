@@ -64,6 +64,10 @@ export const fr: Dict = {
     body: "L'écran, le ticket et la facture existent en français, en arabe et en anglais, et chacun choisit librement dans quelle langue il travaille et dans quelle langue il imprime.",
   },
 
+  screens: {
+    heading: "L'application en images",
+  },
+
   audience: {
     heading: "Pour qui",
     body: "Pour un commerce en Algérie qui tient encore sa caisse à la main ou sur un tableur, et qui veut garder ses factures, son stock et ses fournisseurs au même endroit.",
@@ -76,5 +80,6 @@ export const fr: Dict = {
     formPhoneLabel: "Téléphone",
     formWilayaLabel: "Wilaya",
     formSubmit: "Être recontacté",
+    formDisabledNote: "Le formulaire n'est pas encore branché.",
   },
 };

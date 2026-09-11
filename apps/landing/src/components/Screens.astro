@@ -1,0 +1,55 @@
+---
+// The band of screens: L1's collage, three real screens side by side. This
+// is the one dark band the L0 task description names (L0: "the page is
+// Comptoir with one dark band"); shots.ts leaves the soft shadow to this
+// component's CSS and bakes only the crisp ring into the image itself.
+import shots from "../lib/shots.json";
+import type { Dict, Locale } from "../i18n";
+
+interface Props {
+  readonly locale: Locale;
+  readonly screens: Dict["screens"];
+}
+
+const { locale, screens } = Astro.props;
+const shot = shots.collage[locale];
+---
+
+<section class="screens" aria-labelledby="screens-heading">
+  <div class="wrap">
+    <h2 id="screens-heading">{screens.heading}</h2>
+    <img
+      class="screens-shot"
+      src={`/shots/${shot.src1x}`}
+      srcset={`/shots/${shot.src1x} 1x, /shots/${shot.src2x} 2x`}
+      width={shot.width}
+      height={shot.height}
+      alt=""
+      loading="lazy"
+    />
+  </div>
+</section>
+
+<style>
+  .screens {
+    padding-block: var(--space-12);
+    background: var(--surface-inverse);
+    color: var(--text-on-inverse);
+  }
+
+  .screens h2 {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    text-align: center;
+    margin-block-end: var(--space-6);
+  }
+
+  .screens-shot {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    margin-inline: auto;
+    box-shadow: var(--shadow-lg);
+  }
+</style>

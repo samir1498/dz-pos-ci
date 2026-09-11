@@ -64,6 +64,10 @@ export const en: Dict = {
     body: "The screen, the ticket and the invoice exist in French, Arabic and English, and each is chosen freely: the language to work in and the language to print in.",
   },
 
+  screens: {
+    heading: "The app, in pictures",
+  },
+
   audience: {
     heading: "Who it's for",
     body: "For a shop in Algeria still keeping its books by hand or in a spreadsheet, wanting its invoices, its stock and its suppliers in one place.",
@@ -76,5 +80,6 @@ export const en: Dict = {
     formPhoneLabel: "Phone",
     formWilayaLabel: "Wilaya",
     formSubmit: "Ask to be contacted",
+    formDisabledNote: "This form isn't wired up yet.",
   },
 };

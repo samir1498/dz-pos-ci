@@ -1,0 +1,76 @@
+---
+// The hero: the till shot and the one-line answer to "what does it do"
+// (context/plans/20260911-landing-page.md, L3). The brand title and the
+// tagline above it are L0's; this is the section that follows.
+import shots from "../lib/shots.json";
+import type { Dict, Locale } from "../i18n";
+
+interface Props {
+  readonly locale: Locale;
+  readonly hero: Dict["hero"];
+}
+
+const { locale, hero } = Astro.props;
+const shot = shots.hero[locale];
+---
+
+<section class="hero" aria-labelledby="hero-heading">
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <h2 id="hero-heading">{hero.heading}</h2>
+      <p>{hero.body}</p>
+      {/* Points at the pricing section below: the form is the only place on
+          the page that collects contact details (L3 brief, "how to get
+          it"). No mailto, no endpoint: see Pricing.astro. */}
+      <a class="btn-primary" href="#pricing">{hero.cta}</a>
+    </div>
+    {/* alt="" as in Base.astro's mark.svg: the heading and body beside it
+        already say what the screen shows. */}
+    <img
+      class="hero-shot"
+      src={`/shots/${shot.src1x}`}
+      srcset={`/shots/${shot.src1x} 1x, /shots/${shot.src2x} 2x`}
+      width={shot.width}
+      height={shot.height}
+      alt=""
+    />
+  </div>
+</section>
+
+<style>
+  .hero {
+    padding-block: var(--space-12);
+  }
+
+  .hero-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    flex-wrap: wrap;
+  }
+
+  .hero-copy {
+    flex: 1 1 320px;
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .hero-copy h2 {
+    font-size: var(--text-3xl);
+    font-weight: 600;
+    line-height: 1.15;
+  }
+
+  .hero-copy p {
+    font-size: var(--text-lg);
+    color: var(--text-secondary);
+    max-width: 48ch;
+  }
+
+  .hero-shot {
+    flex: 1 1 320px;
+    max-width: 100%;
+    height: auto;
+    box-shadow: var(--shadow-lg);
+  }
+</style>

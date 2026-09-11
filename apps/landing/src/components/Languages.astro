@@ -1,0 +1,39 @@
+---
+// Three languages as a feature, not a footnote (docs/features.md, Scope).
+// A slim band between the fiscal facts and the screens that follow, since
+// the screens shown are themselves in more than one of these languages.
+import type { Dict } from "../i18n";
+
+interface Props {
+  readonly languages: Dict["languages"];
+}
+
+const { languages } = Astro.props;
+---
+
+<section class="languages" aria-labelledby="languages-heading">
+  <div class="wrap">
+    <h2 id="languages-heading">{languages.heading}</h2>
+    <p>{languages.body}</p>
+  </div>
+</section>
+
+<style>
+  .languages {
+    padding-block: var(--space-10);
+    background: var(--surface-raised);
+    text-align: center;
+  }
+
+  .languages h2 {
+    font-size: var(--text-xl);
+    font-weight: 600;
+  }
+
+  .languages p {
+    color: var(--text-secondary);
+    margin-block-start: var(--space-2);
+    margin-inline: auto;
+    max-width: 60ch;
+  }
+</style>

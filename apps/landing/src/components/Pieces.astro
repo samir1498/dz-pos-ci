@@ -1,0 +1,96 @@
+---
+// The four pieces: sell, invoice, stock, know. Each pairs its own shot
+// (L1's manifest key shares the piece's name) with the one sentence a shop
+// owner would recognise doing.
+import shots from "../lib/shots.json";
+import type { Dict, Locale } from "../i18n";
+
+interface Props {
+  readonly locale: Locale;
+  readonly pieces: Dict["pieces"];
+}
+
+const { locale, pieces } = Astro.props;
+
+const items = [
+  { title: pieces.sell.title, body: pieces.sell.body, shot: shots.selling[locale] },
+  { title: pieces.invoice.title, body: pieces.invoice.body, shot: shots.invoicing[locale] },
+  { title: pieces.stock.title, body: pieces.stock.body, shot: shots.stock[locale] },
+  { title: pieces.know.title, body: pieces.know.body, shot: shots.knowing[locale] },
+];
+---
+
+<section class="pieces" aria-labelledby="pieces-heading">
+  <div class="wrap">
+    <h2 id="pieces-heading">{pieces.heading}</h2>
+    <div class="pieces-grid">
+      {
+        items.map((item) => (
+          <article class="piece">
+            <img
+              src={`/shots/${item.shot.src1x}`}
+              srcset={`/shots/${item.shot.src1x} 1x, /shots/${item.shot.src2x} 2x`}
+              width={item.shot.width}
+              height={item.shot.height}
+              alt=""
+              loading="lazy"
+            />
+            <h3>{item.title}</h3>
+            <p>{item.body}</p>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .pieces {
+    padding-block: var(--space-12);
+    background: var(--surface-raised);
+  }
+
+  .pieces h2 {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    margin-block-end: var(--space-6);
+  }
+
+  .pieces-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-6);
+  }
+
+  .piece {
+    background: var(--surface-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-4);
+    display: grid;
+    gap: var(--space-3);
+    align-content: start;
+  }
+
+  .piece img {
+    width: 100%;
+    height: auto;
+    box-shadow: var(--shadow-md);
+  }
+
+  .piece h3 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+  }
+
+  .piece p {
+    color: var(--text-secondary);
+  }
+
+  @media (max-width: 720px) {
+    .pieces-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
