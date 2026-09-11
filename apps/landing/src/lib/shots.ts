@@ -209,9 +209,9 @@ const toWebp = async (image: Sharp, file: string): Promise<RenderedShot> => {
 };
 
 /**
- * `fileKey` defaults to the spec's own key; the Arabic crop of "stock" and
- * "knowing" passes a distinct one so its file does not collide with the
- * French render of the same spec.
+ * `fileKey` defaults to the spec's own key; every spec's Arabic crop passes
+ * a distinct one (`<key>-ar`) so its file does not collide with the French
+ * render of the same spec.
  */
 const renderSingle = async (
   spec: SingleSpec,
@@ -288,10 +288,9 @@ export const buildShots = async (): Promise<ShotsBuild> => {
   };
 
   // Every single shot now has both a French and an Arabic source screenshot,
-  // so every one of them renders twice: the French file for fr and en, and
-  // a second, Arabic-suffixed file for ar. fr and en are never a French
-  // visitor's or an English visitor's own language, but neither should see
-  // the Arabic build of the app on a page that leads with French.
+  // so each renders twice: the French file for fr and en (English keeps no
+  // committed screens of its own; French is the nearer language), and a
+  // second, Arabic-suffixed file for ar.
   const heroFr = await single(HERO, HERO.crop);
   const heroAr = await single(HERO, HERO_AR_CROP, "hero-ar");
   const sellingFr = await single(SELLING, SELLING.crop);
