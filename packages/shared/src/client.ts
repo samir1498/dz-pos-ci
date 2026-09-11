@@ -13,6 +13,7 @@ import type { AdjustmentDto } from "./generated/AdjustmentDto";
 import type { AuditLogDto } from "./generated/AuditLogDto";
 import type { BackupDto } from "./generated/BackupDto";
 import type { BackupsDto } from "./generated/BackupsDto";
+import type { BuildInfoDto } from "./generated/BuildInfoDto";
 import type { CategoryDto } from "./generated/CategoryDto";
 import type { ClockDto } from "./generated/ClockDto";
 import type { CustomerDto } from "./generated/CustomerDto";
@@ -96,6 +97,7 @@ import { lastStockRecountSchema, stockRecountSchema } from "./schemas/stock";
 import {
   backupSchema,
   backupsSchema,
+  buildInfoSchema,
   clockSchema,
   healthSchema,
   restoreSchema,
@@ -445,6 +447,13 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
 
     async health(): Promise<HealthDto> {
       return narrow(await send("/health"), healthSchema, "health answer");
+    },
+
+    /** The version, the git short hash and the build date this server was
+     * built with, and whether it is a debug build. The About screen's only
+     * source: it never keeps its own copy of any of the three. */
+    async getBuildInfo(): Promise<BuildInfoDto> {
+      return narrow(await send("/build-info"), buildInfoSchema, "build info");
     },
 
     /** The day the shop is on. Asked for rather than read off the machine:
