@@ -209,6 +209,35 @@ fn a_session_dies_a_settings_held_idle_time_after_its_last_request() {
     );
 }
 
+/// The edge itself, and a session of its own for each case: `resolve` slides
+/// `last_seen_at` every time it counts, so two edge checks against one session
+/// would measure the second from the first. The shop's setting means "idle
+/// this long and you are out", so the instant it names is already out, and
+/// without this the comparison could be either way round unnoticed.
+#[test]
+fn the_idle_time_is_out_at_the_instant_it_names() {
+    for (offset, counts) in [
+        (-Duration::seconds(1), true),
+        (Duration::zero(), false),
+        (Duration::seconds(1), false),
+    ] {
+        let (_dir, mut conn) = open_temp();
+        let cashier = a_cashier(&mut conn, "Karim", "2580");
+        let idle = preferences::session_idle(&mut conn, SHOP).unwrap();
+        let signed_in =
+            sessions::sign_in_with_pin(&mut conn, SHOP, cashier, "2580", noon()).unwrap();
+        let token = signed_in.token.expose();
+
+        assert_eq!(
+            sessions::resolve(&mut conn, SHOP, token, noon() + idle + offset)
+                .unwrap()
+                .is_some(),
+            counts,
+            "at the idle time {offset} the session should count={counts}"
+        );
+    }
+}
+
 #[test]
 fn a_session_idle_past_the_setting_is_nobody() {
     let (_dir, mut conn) = open_temp();
@@ -446,4 +475,31 @@ fn a_sign_in_sweeps_rows_that_went_cold_a_fortnight_ago() {
         left.contains(&warm),
         "the ten-day-old row was swept with it"
     );
+}
+
+/// The fortnight is a fortnight and not "somewhere between ten and twenty
+/// days": a day under it stays, a day over it goes. The test above proves the
+/// sweep happens; this one pins the number it happens at.
+#[test]
+fn the_sweep_waits_exactly_the_fortnight_the_constant_names() {
+    let keep = Duration::days(sessions::KEEP_ENDED_FOR_DAYS);
+
+    for (age, survives) in [
+        (keep - Duration::days(1), true),
+        (keep + Duration::days(1), false),
+    ] {
+        let (_dir, mut conn) = open_temp();
+        let cashier = a_cashier(&mut conn, "Karim", "2580");
+        sessions::sign_in_with_pin(&mut conn, SHOP, cashier, "2580", noon()).unwrap();
+        let first = every_stored_hash(&mut conn);
+        assert_eq!(first.len(), 1);
+
+        sessions::sign_in_with_pin(&mut conn, SHOP, cashier, "2580", noon() + age).unwrap();
+        let left = every_stored_hash(&mut conn);
+        assert_eq!(
+            left.contains(&first[0]),
+            survives,
+            "a row {age} old: expected it to survive={survives}"
+        );
+    }
 }

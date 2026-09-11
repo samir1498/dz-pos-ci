@@ -60,7 +60,7 @@ const TOKEN_BYTES: usize = 32;
 /// sign-in sweeps it. A fortnight past the last thing it did: long enough
 /// that nobody loses a row somebody was about to ask about, short enough that
 /// a till signing in twice a day does not grow a table forever.
-const KEEP_ENDED_FOR_DAYS: i64 = 14;
+pub const KEEP_ENDED_FOR_DAYS: i64 = 14;
 
 /// Signs a user in with their PIN. The user is picked off the list by id,
 /// which is what the till's PIN pad does, so nothing here tells a stranger
