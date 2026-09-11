@@ -121,6 +121,7 @@ export function SettingsScreen() {
           <BackupsPanel />
           {exportAndImport ? <ExportImportPanel /> : null}
           <StockRecountPanel />
+          <AboutPanel />
         </div>
       ) : null}
     </section>
@@ -495,6 +496,31 @@ function StaffPanel() {
         <CardFooter>
           <Button variant="outline" asChild>
             <Link to="/settings/users">{t("users_manage_link")}</Link>
+          </Button>
+        </CardFooter>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * The link out to the About screen (M5 T1), the same shape `StaffPanel`
+ * uses for the users screen: the version, the git hash and the build date
+ * are their own page because a screen reader announcing them belongs on a
+ * heading of its own, not folded into a settings card's description.
+ */
+function AboutPanel() {
+  const { t } = useTranslation();
+  return (
+    <section aria-labelledby="settings-about">
+      <Card>
+        <CardHeader>
+          <PanelHeading id="settings-about">{t("settings_about")}</PanelHeading>
+          <CardDescription>{t("settings_about_hint")}</CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Button variant="outline" asChild>
+            <Link to="/settings/about">{t("about_open_link")}</Link>
           </Button>
         </CardFooter>
       </Card>

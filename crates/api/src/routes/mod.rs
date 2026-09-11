@@ -21,7 +21,7 @@ pub mod users;
 use axum::extract::State;
 use axum::Json;
 
-use crate::dto::{ClockDto, HealthDto};
+use crate::dto::{BuildInfoDto, ClockDto, HealthDto};
 use crate::error::ApiError;
 use crate::AppState;
 
@@ -30,6 +30,13 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthDto> {
         status: "ok".to_string(),
         shop_id: state.shop_id,
     })
+}
+
+/// The About screen's one source (M5 T1): the version, the git short hash
+/// and the build date `crates/core::build_info` baked in at compile time,
+/// read back here rather than a second copy kept in `apps/desktop`.
+pub async fn build_info() -> Json<BuildInfoDto> {
+    Json(BuildInfoDto::from(dzpos_core::build_info::BUILD_INFO))
 }
 
 /// The shop's calendar. Read from the same `clock` the services date

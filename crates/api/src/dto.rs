@@ -456,6 +456,30 @@ pub struct SettingsDto {
     pub discount_threshold_bps: u32,
 }
 
+/// The version, the git short hash and the build date the running binary
+/// was built with (M5 T1, docs/architecture.md § Release), plus whether it
+/// is a debug build. The About screen's only source for the three: there is
+/// no second, hand-typed copy in `apps/desktop`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "BuildInfoDto.ts")]
+pub struct BuildInfoDto {
+    pub version: String,
+    pub git_hash: String,
+    pub build_date: String,
+    pub debug: bool,
+}
+
+impl From<dzpos_core::build_info::BuildInfo> for BuildInfoDto {
+    fn from(info: dzpos_core::build_info::BuildInfo) -> Self {
+        BuildInfoDto {
+            version: info.version.to_string(),
+            git_hash: info.git_hash.to_string(),
+            build_date: info.build_date.to_string(),
+            debug: info.is_debug,
+        }
+    }
+}
+
 /// A régime change: the régime and the day it applies from. Appended to
 /// the dated series, never written over the row a past document read.
 #[derive(Debug, Clone, Deserialize, TS)]

@@ -71,6 +71,15 @@ impl AppState {
         backup_dir: impl AsRef<Path>,
     ) -> Result<Self, CoreError> {
         let conn = dzpos_core::db::open(db.as_ref())?;
+        // Every process that opens a shop file is a session (the standalone
+        // binary and the desktop both call through here), so this is the one
+        // place that heads the log rather than a line duplicated at each of
+        // their two `main`/`run` functions. Best effort: a log line that
+        // could not be written is not a reason to refuse the till.
+        let log_path = default_log_path(db.as_ref());
+        if let Err(e) = dzpos_core::log::head_session(&log_path) {
+            eprintln!("dz-pos: could not write to {}: {e}", log_path.display());
+        }
         Ok(AppState {
             conn: Arc::new(Mutex::new(Some(conn))),
             db_path: Arc::new(db.as_ref().to_path_buf()),
@@ -325,6 +334,18 @@ pub fn default_backup_dir(db: &Path) -> PathBuf {
     }
 }
 
+/// `dzpos.log` beside the shop file, the same convention `default_backup_dir`
+/// uses for its own folder: a shop file with no parent keeps the log in the
+/// working directory instead of losing it to a path nothing else reads.
+pub const LOG_FILE_NAME: &str = "dzpos.log";
+
+pub fn default_log_path(db: &Path) -> PathBuf {
+    match db.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent.join(LOG_FILE_NAME),
+        _ => PathBuf::from(LOG_FILE_NAME),
+    }
+}
+
 /// `<db>` with `suffix` appended to the whole file name, not to its
 /// extension: `shop.db` becomes `shop.db.restoring.tmp`, which no backup
 /// name pattern matches and no `db::open` will ever be handed.
@@ -469,6 +490,7 @@ pub fn router_with_origin(
         .route("/backups", get(routes::backups::list))
         .route("/backups", post(routes::backups::create))
         .route("/backups/{name}/restore", post(routes::backups::restore))
+        .route("/build-info", get(routes::build_info))
         .route("/cash", get(routes::expenses::cash))
         .route("/categories", get(routes::categories::list))
         .route("/clock", get(routes::clock))
@@ -657,6 +679,28 @@ mod origin_tests {
         ] {
             assert!(origin_from_flag(bad).is_err(), "{bad} was accepted");
         }
+    }
+}
+
+#[cfg(test)]
+mod log_path_tests {
+    use super::default_log_path;
+    use std::path::Path;
+
+    #[test]
+    fn the_log_sits_beside_the_shop_file() {
+        assert_eq!(
+            default_log_path(Path::new("/data/dzpos/shop.db")),
+            Path::new("/data/dzpos/dzpos.log")
+        );
+    }
+
+    #[test]
+    fn a_shop_file_with_no_parent_keeps_the_log_in_the_working_directory() {
+        assert_eq!(
+            default_log_path(Path::new("shop.db")),
+            Path::new("dzpos.log")
+        );
     }
 }
 

@@ -39,6 +39,10 @@ export const api = createClient(apiBaseUrl(), { token: apiToken() });
 export const productsQueryKey: readonly string[] = ["products"];
 export const categoriesQueryKey: readonly string[] = ["categories"];
 export const settingsQueryKey: readonly string[] = ["settings"];
+/** The version, git hash and build date the running server was built with.
+ * Its own key: it never changes while the app is open, so nothing ever
+ * invalidates it. */
+export const buildInfoQueryKey: readonly string[] = ["build-info"];
 /** The shop's day. Its own key and never cached (see lib/clock.ts): every
  * other answer here is a row that changes when someone changes it, and this
  * one changes on its own at midnight. */

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { BackupDto } from "../generated/BackupDto";
 import type { BackupsDto } from "../generated/BackupsDto";
+import type { BuildInfoDto } from "../generated/BuildInfoDto";
 import type { ClockDto } from "../generated/ClockDto";
 import type { DatedRegimeDto } from "../generated/DatedRegimeDto";
 import type { HealthDto } from "../generated/HealthDto";
@@ -24,6 +25,18 @@ type _Health = Assert<Matches<HealthDto, typeof healthSchema>>;
 
 export const clockSchema = z.object({ today: day }) satisfies z.ZodType<ClockDto>;
 type _Clock = Assert<Matches<ClockDto, typeof clockSchema>>;
+
+/** The About screen's whole source: the version, the git short hash and the
+ *  build date `crates/core::build_info` baked in, plus whether this is a
+ *  debug build. No field here is ever read from a second, hand-typed
+ *  constant (`apps/desktop/src/routes/settings_.about.test.tsx` checks it). */
+export const buildInfoSchema = z.object({
+  version: z.string(),
+  git_hash: z.string(),
+  build_date: z.string(),
+  debug: z.boolean(),
+}) satisfies z.ZodType<BuildInfoDto>;
+type _BuildInfo = Assert<Matches<BuildInfoDto, typeof buildInfoSchema>>;
 
 export const regimeSchema = z.enum(["ifu", "reel"]) satisfies z.ZodType<RegimeDto>;
 type _Regime = Assert<Matches<RegimeDto, typeof regimeSchema>>;

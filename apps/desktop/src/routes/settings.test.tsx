@@ -246,6 +246,14 @@ describe("the page", () => {
     expect(screen.getByText(fr.settings_users_hint)).toBeInTheDocument();
   });
 
+  test("carries a link out to the about screen (M5 T1)", async () => {
+    mount();
+    await screen.findByLabelText(fr.field_name);
+    const link = screen.getByRole("link", { name: fr.about_open_link });
+    expect(link).toHaveAttribute("href", "/settings/about");
+    expect(screen.getByText(fr.settings_about)).toBeInTheDocument();
+  });
+
   test("hides the staff panel and the export/import block from a cashier", async () => {
     me = ME_CASHIER;
     mount();
