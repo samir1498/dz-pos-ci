@@ -346,6 +346,12 @@ social, and the settlement date.
 Written by the research track, to be applied by whoever owns the spec. Each
 item names the row and gives the replacement text verbatim.
 
+Status, 2026-09-11: some of these landed in `docs/features.md` in substance
+rather than verbatim. `docs/features.md` is the law; this section is the
+provenance for it, not a mirror of its current wording. Where a
+recommendation below is still open or only partly applied, a dated line
+under it says so.
+
 **Row "Amount in words", Source cell.** Replace
 
 > décret 05-468: total TTC "en chiffres et en lettres"; Arabic wording not yet sourced
@@ -369,6 +375,13 @@ with
 with
 
 > décret 05-468 art. 10, "une série ininterrompue et chronologique de factures", a new facturier only after the previous one is exhausted, and « La facture régulièrement annulée doit faire l'objet d'une mention "facture annulée" inscrite clairement en diagonale » (Arabic "فاتورة ملغاة", JO n° 80/2005 Arabic edition). That a cancelled facture keeps its number is an inference from the série ininterrompue, not a sentence of the décret; décret 16-66 art. 5 says the same for the bon de transaction commerciale with the mention « ANNULE » in capitals; whether the inference holds in practice and whether the series restarts each year are question 4 of `research/legal-fiscal/2026-09-08-questions-comptable.md`
+
+Status, 2026-09-11: the series-restarts-each-year half of question 4 is
+decided (Samir, 2026-09-10; R8 confirms the practice) — see
+`docs/features.md`, row "Numbering", and the dated line added to question 4
+of `2026-09-08-questions-comptable.md`. Whether a cancelled number is ever
+reused in practice stays open; `docs/features.md`'s "Cancellation" row still
+marks it R8.
 
 **Row "Droit de timbre", Source cell.** Append at the end, after the circular
 reference:
@@ -396,6 +409,12 @@ rule the spec relies on and never states with a source:
 payment is itself a title constating a payment under Code du timbre art. 100-I,
 and the DGI circular 14/2025 names the quittance first. Question 6 of the
 comptable page decides whether the kind is needed.
+
+Status, 2026-09-11: `docs/features.md` §3 now admits a seventh document
+`kind`, `quittance`, alongside `bon_de_reception`; nothing issues one yet.
+Whether it is needed at all is still question 6 of the comptable page and
+is unanswered (R8) — `docs/features.md` says so in the same place ("the
+`quittance` kind waits on that answer").
 
 **§4, Printing.** Add the cancellation overlay to the template requirements: a
 cancelled facture prints "facture annulée" (ar "فاتورة ملغاة") written

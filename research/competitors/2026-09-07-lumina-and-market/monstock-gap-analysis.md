@@ -1,5 +1,12 @@
 # MonStock ↔ Lumina POS — gap analysis
 
+Written 2026-09-07, while the plan was still to extend MonStock. Reversed the
+same day: `README.md` § Decisions taken so far records that dz-pos starts from
+scratch instead, with MonStock kept as a read-only reference. The gap findings
+below are still accurate readings of both codebases as they stood that day;
+the closing line's "not a rewrite, an extension" recommendation is the part
+that no longer holds.
+
 Sources: `github.com/samir1498/MonStock` @ HEAD (8,394 LOC Rust + TSX, 3
 migrations) and the extracted Lumina desktop source at `/home/samir/lumina/src`.
 Feature claims about Lumina come from its shipped code and templates, not from

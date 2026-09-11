@@ -53,6 +53,12 @@ réutilisés après annulation ? Et le texte ne dit pas si la série repart à 1
 1er janvier : la numérotation est-elle continue d'une année sur l'autre, ou
 remise à zéro avec l'année dans le numéro ?
 
+**Décidé le 2026-09-10 :** la série repart à 1 chaque 1er janvier (Samir,
+2026-09-10 ; le comptable confirme que c'est la pratique courante, R8). Voir
+`docs/features.md`, ligne « Numbering ». La réutilisation d'un numéro après
+annulation reste ouverte : la ligne « Cancellation » de `docs/features.md`
+la marque toujours R8.
+
 ## 5. Le timbre sur une facture à crédit réglée plus tard en espèces
 
 Règle lue : le droit de timbre frappe les titres qui constatent des paiements ou

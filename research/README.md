@@ -12,7 +12,7 @@ and `docs/` (the spec). pc-ctx's research domain is bound here through
 | `legal-fiscal/` | what the law says: droit de timbre, TVA, facture mentions, IFU, numbering, amount in words. Each doc cites code + article + year. `sources/` holds the official PDFs the docs quote (DGI codes fiscaux, Journal Officiel). |
 | `tooling/` | official skills, MCP servers and plugins evaluated for the stack (Tauri, Expo, Rust, Playwright), with install commands and a verdict. Also conventions read out of another codebase before adopting them here. |
 | `competitors/` | Lumina POS teardown, MonStock gap analysis, market landscape, brief for Anouar. |
-| `market/` | pricing, distribution, shop interviews when they happen. |
+| `market/` | pricing, distribution, shop interviews when they happen (checked 2026-09-11: no folder yet, no pages gathered; the market pass done so far is `competitors/2026-09-07-lumina-and-market/market-landscape.md`). |
 
 Name a dated doc `YYYY-MM-DD-slug.md`. One topic per file.
 

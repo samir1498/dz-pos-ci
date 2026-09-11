@@ -376,3 +376,41 @@ dz-pos version: the folder shape for `apps/desktop` and `apps/mobile`, the
 three-tier `packages/design` with the CSS custom properties generated from
 the same source as the TypeScript theme, the import restrictions as ESLint
 rules rather than prose, and the testing table.
+
+## Adopted and not, as of 2026-09-11
+
+The desktop app has since shipped. Checked against the repo rather than
+against the plan above:
+
+Adopted:
+
+- The three-tier token layering this page describes, but built on shadcn/ui
+  rather than a Figma export: `apps/desktop/components.json` wires shadcn
+  onto dz-pos's own tokens (`design/shared/tokens.css`).
+- Tailwind v4 (`apps/desktop/package.json`: `tailwindcss@^4.3.1`,
+  `@tailwindcss/vite`) — the opposite of the brainqraft-mobile stack, which
+  runs on `StyleSheet` with no Tailwind at all. Both are correct for their
+  own platform; this page's "no Tailwind, no NativeWind" line describes the
+  mobile client only and never applied to the desktop webview.
+- Vendored Fontsource families (`@fontsource/ibm-plex-sans`,
+  `@fontsource/ibm-plex-sans-arabic`, `@fontsource/jetbrains-mono`) rather
+  than the named-face loading this page describes for React Native.
+- The import-restriction rule this page flags as brainqraft-mobile's one
+  gap ("There is no `no-restricted-imports` rule... exactly what
+  `no-restricted-imports` exists for") was implemented for dz-pos, but as
+  `no-restricted-syntax` in `apps/desktop/eslint.config.js`, banning a bare
+  HTML element outside the design kit rather than a raw import path.
+
+Not adopted, or superseded by a later decision:
+
+- "What not to copy" § dark-only, single mode: dz-pos's theme layer is not
+  single-mode any more. `packages/shared/src/generated/ThemeDto.ts` names
+  four themes (`comptoir`, `registre`, `observe`, `observe-dark`), one of
+  them dark; Comptoir is the default (2026-09-10, PR #21), not a
+  light-or-dark pick off the machine's setting.
+- "What not to copy" § `components/ui/colors.ts`, the shadcn slot-name
+  adapter: the note that "dz-pos has no such import, so a second naming
+  scheme over the same tokens would be pure cost" no longer holds — dz-pos
+  did later adopt shadcn/ui (`apps/desktop/components.json`), on its own
+  tokens rather than a client's, which is the outcome this note was
+  guarding against for the wrong reason.

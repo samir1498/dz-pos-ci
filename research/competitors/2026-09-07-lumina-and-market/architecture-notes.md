@@ -1,9 +1,16 @@
 # dz-pos — architecture notes
 
 Working notes from the 2026-09-07 discussion. These are decisions and rules,
-not a design doc. The SaaS-vs-offline question is still open with Anouar; the
-point of these rules is that the answer becomes a deployment choice rather than
-a rewrite.
+not a design doc; the current version of them lives in `docs/architecture.md`.
+The SaaS-vs-offline question is still open with Anouar (checked 2026-09-11
+against `docs/architecture.md`, which parks it as "open decision 1, after
+M6"); the point of these rules is that the answer becomes a deployment choice
+rather than a rewrite.
+
+The stack row below ("Core: `monstock-core`, already exists") was superseded
+the same day: `README.md` § Decisions taken so far reverses the
+extend-MonStock plan to a greenfield build, and the core crate that shipped
+is `dzpos-core` (`crates/core/Cargo.toml`), not a carry-over of MonStock's.
 
 ## Stack
 

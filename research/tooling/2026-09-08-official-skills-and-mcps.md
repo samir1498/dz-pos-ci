@@ -1,7 +1,9 @@
 # Official skills and MCP servers for the dz-pos stack (2026-09-08)
 
-Nothing here is installed. Installing into Claude Code is Samir's call;
-each row has the command.
+Nothing here was installed on 2026-09-08. Installing into Claude Code is
+Samir's call; each row has the command. Checked again 2026-09-11: `skill-creator`
+was already a plugin at the time this page was written (noted in its own row
+below); `frontend-design` has since been installed too, see its row.
 
 ## Anthropic (`anthropics/skills`, plugin marketplace `anthropic-agent-skills`)
 
@@ -13,7 +15,7 @@ webapp-testing, xlsx.
 
 | Skill | Use for dz-pos | Verdict |
 |---|---|---|
-| `frontend-design` | the Tauri screens once real code replaces the mockups | try on the first real screen; compare with the mockup's tokens |
+| `frontend-design` | the Tauri screens once real code replaces the mockups | try on the first real screen; compare with the mockup's tokens. Installed 2026-09-11 (`~/.claude/plugins/installed_plugins.json`), currently disabled in `~/.claude/settings.json`; the trial itself is still R9, unrecorded |
 | `webapp-testing` | Playwright discipline for the desktop webview and the mockups | yes; our `dz-mockup` drive scripts do this by hand today |
 | `pdf` | reading the DGI code PDFs (`legal-fiscal/sources/`) | useful for research sessions |
 | `mcp-builder` | only if we expose the localhost API to agents later | not now |

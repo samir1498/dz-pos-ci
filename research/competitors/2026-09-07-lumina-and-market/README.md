@@ -3,9 +3,10 @@
 New product line, separate from ObserveOne. Anouar asked for an inventory
 management product for the Algerian market, built against an incumbent that is
 selling well. Working codename **dz-pos** — placeholder, not the product name.
-No GitHub org decided yet. Code: [Dinar-dz/dz-pos](https://github.com/Dinar-dz/dz-pos)
-(private, scaffolded 2026-09-07 from MonStock `33d2ab0`, to be transferred to
-the org once it exists).
+Code: [Dinar-dz/dz-pos](https://github.com/Dinar-dz/dz-pos) (private,
+scaffolded 2026-09-07 from MonStock `33d2ab0`). Decided 2026-09-08: the org
+was created and the repo transferred into it (Anouar, `context/progress/now.md`);
+the product name itself is still open, see below.
 
 Started 2026-09-07.
 
@@ -51,10 +52,15 @@ Started 2026-09-07.
 ## Open, waiting on Anouar
 
 - SaaS/cloud vs offline-first licence, and the pricing model that follows.
-  Lumina is 12,000 DZD one-time, lifetime, sold over the phone.
-- Product name and whether a new GitHub org gets created.
+  Lumina is 12,000 DZD one-time, lifetime, sold over the phone. Still open:
+  `docs/architecture.md` parks the SaaS-vs-offline choice as "open decision 1,
+  after M6" (checked 2026-09-11).
+- Product name and whether a new GitHub org gets created. Decided 2026-09-08:
+  the org question is closed (`context/progress/now.md`). The name is not:
+  Anouar proposed "Dinar" the same day, but the repo is still
+  placeholder-named (`CLAUDE.md`, "Placeholder-named product").
 - Who sells it and to whom. MonStock shipped five releases and got no feedback;
-  Lumina's moat is a phone number in Oum El Bouaghi, not its code.
+  Lumina's moat is a phone number in Oum El Bouaghi, not its code. Still open.
 
 ## Not yet researched
 

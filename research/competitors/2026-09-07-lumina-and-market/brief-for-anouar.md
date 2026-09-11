@@ -117,3 +117,10 @@ a second round of ideas from both of us. Until then the working name is dz-pos.
    have the field list; I'd like to see a real one on paper.
 
 Questions 1 and 2 are blocking. The rest can wait a week.
+
+Status, 2026-09-11: question 3 (org) is decided — a new GitHub org was
+created 2026-09-08 and the repo already lives there (`context/progress/now.md`,
+`README.md`). Question 2 (name) has a proposal, "Dinar", from the same
+conversation, but it is not final: the repo is still placeholder-named
+(`CLAUDE.md`). Questions 1, 4, 5 and 6 are still open; `docs/architecture.md`
+parks question 1 (SaaS vs offline) explicitly as "open decision 1, after M6".
