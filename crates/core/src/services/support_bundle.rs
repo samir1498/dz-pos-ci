@@ -194,9 +194,9 @@ fn count_rows(conn: &mut Conn, table: &str) -> Result<i64, CoreError> {
 /// The first of `LC_ALL`, `LC_MESSAGES`, `LANG` and `LANGUAGE` that is set
 /// and not blank; the order glibc itself resolves a locale in. `"not set"`
 /// is the answer a bundle can carry and a reader can trust rather than a
-/// guess this module never made: the Windows shipped binary reads its
-/// locale a different way, which is one of the things this task could not
-/// prove here (see the PR).
+/// guess this module never made: Windows sets none of these, so the
+/// shipped Windows binary reports `"not set"` here too, not its actual
+/// locale — a real Windows-API lookup is not implemented.
 fn machine_language() -> String {
     for var in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
         if let Ok(value) = std::env::var(var) {
