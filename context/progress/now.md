@@ -12,12 +12,24 @@ sweep) and a new `landing-page` plan was written, replacing D5 of the
 design plan; the organisation's GitHub Actions budget is still capped, but
 `just ci` now pushes a branch to the mirror `samir1498/dz-pos-ci` (merged to
 main as PR #22) so gates run on Samir's own minutes without waiting on
-Anouar. Still open: the host for the demo
-deploy (a container on Koyeb or Render, or Cloudflare Containers — the
-box-side tunnel pieces are stopped; unverified whether Cloudflare was
-ruled out for the app itself, as opposed to the landing page's static
-Cloudflare Pages), and Anouar's GitHub billing fix itself, which the
-mirror works around but does not close.
+Anouar. Still open: Anouar's GitHub billing fix itself, which the mirror works
+around but does not close.
+
+The demo host was open and is now answered, on 2026-09-11, with the question
+that had been marked unverified: Cloudflare is not ruled out for the app
+itself, and it is the best fit. Cloudflare Containers reached general
+availability in April 2026, and their disk is ephemeral: a container sleeps
+after ten minutes of inactivity by default and wakes with a fresh disk from
+its image. For a shop's real data that would be disqualifying. For a demo it
+is the behaviour to want, because the seeded SQLite file ships inside the
+image, every visitor gets the same shop with its thirty days of trading, and
+nothing a visitor does survives them. `just seed` is deterministic and
+repeatable, which is what makes that work. The cost is a cold start for the
+first visitor after a quiet spell, which a Rust binary opening a SQLite file
+pays quickly. The other argument for it is that the landing page is already
+on Cloudflare Pages, so it is one account and one domain rather than two.
+Not deployed: putting the app on a public address is Samir's call, not the
+session's.
 
 The landing page is finished, all six tasks on main: the site (PR #25), the
 copy with every fiscal claim carrying the `docs/features.md` row it rests on
