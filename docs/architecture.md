@@ -367,14 +367,23 @@ only caller; `crates/api/tests/upgrade_from_a_previous_version.rs` builds a
 file at the previous version and opens it. Restoring one is a file swap by
 hand today: the restore route takes a daily copy's name and no other kind.
 
+Decided (2026-09-11, M5 T6): a tag matching `v<semver>` on `main` is
+the only thing that publishes the GitHub release
+(`.github/workflows/release.yml`); an off-main tag or a malformed one
+refuses and says why, and a plain push never triggers the workflow at all.
+The tag's version, `Cargo.toml`'s and `tauri.conf.json`'s must all agree,
+since the first is what `build_info.rs` bakes into the binary and About
+shows. A manual dispatch builds the same installer as a run artifact for
+exercising the pipeline early; it can never publish. No certificate yet
+means the release is cut unsigned and left as a draft, not presented as
+finished.
+
 Raised in the 2026-09-08 handoff, still open, each settled before
 `docs/roadmap.md` M5 closes:
 
 - Tauri updater signing key: who generates it and who holds it; it never
   enters the repo, CI signs with a secret.
 - Windows code-signing certificate: cost and lead time, for Anouar.
-- Whether a tag on `main` is the only thing that builds the installer and
-  publishes the GitHub release.
 - A content security policy on the webview (`tauri.conf.json` has
   `csp: null`): the launch token sits in a page global, so one link that
   navigates the main frame to a remote page would hand it over. No screen
