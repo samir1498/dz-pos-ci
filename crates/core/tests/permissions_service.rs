@@ -175,3 +175,25 @@ fn as_str_and_the_wire_spelling_never_drift() {
         );
     }
 }
+
+#[test]
+fn the_two_ways_money_comes_off_a_price_are_held_by_the_same_roles() {
+    // Two doors onto the same money, and the review on 2026-09-11 found the
+    // coupling between them by accident. The discount threshold is measured
+    // against what the basket is being charged, not against what the product
+    // cards say, so a role that could type a lower price but could not give
+    // a discount would take the same money off by the other door and never
+    // meet the threshold at all.
+    //
+    // That is not a defect today, because no role holds one without the
+    // other, and this is what says so out loud. If somebody ever splits
+    // them, this test goes red first, and the thing to fix then is the base
+    // the threshold is measured on, not this assertion.
+    for role in ROLES {
+        assert_eq!(
+            can(role, Permission::DiscountAboveThreshold),
+            can(role, Permission::ChangePriceAtTheTill),
+            "{role:?} holds one of the two ways money comes off a price and not the other"
+        );
+    }
+}
