@@ -131,6 +131,9 @@ pub const ACTION_REACTIVATE_USER: &str = "user.reactivate";
 /// nobody can see afterwards is a shop owner asking why the till would not
 /// open and getting no answer.
 pub const ACTION_LOCK_OUT_USER: &str = "user.locked_out";
+/// A discount threshold change appended to the dated series, the same shape
+/// as `ACTION_SET_REGIME` (M4 T1, features.md §5).
+pub const ACTION_SET_DISCOUNT_THRESHOLD: &str = "set_discount_threshold";
 
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.
