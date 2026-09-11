@@ -44,6 +44,31 @@ pub const ACTION_ADJUST_DEBT: &str = "debt.adjust";
 /// the row's `user_id` is that person.
 pub const ACTION_CREDIT_OVERRIDE: &str = "document.issue_override";
 
+/// A credit sale the customer's limit refused. Written after the sale's
+/// transaction has rolled back, on the same connection, because a row written
+/// inside a transaction that unwinds unwinds with it: that is why the M2
+/// review found a cashier could probe a customer's limit as many times as
+/// they liked and leave nothing behind (M2 carry-in, 2026-09-09). The entry
+/// carries the customer, what they would have owed and what they are allowed
+/// to owe. There is no document to name: the refusal produced none, which is
+/// the point of it.
+///
+/// The window this leaves is one process death wide, between the rollback and
+/// this write. The alternative the M2 ruling proposed, a second connection,
+/// leaves the same window and opens a second writer on the same SQLite file.
+pub const ACTION_CREDIT_BLOCKED: &str = "sale.credit_blocked";
+
+/// A credit sale that landed at or past the customer's warn threshold. Not a
+/// refusal and not a decision anybody took: the sale went through, and this
+/// says the account crossed the line the shop asked to hear about. Written
+/// inside the sale's transaction, unlike the blocked row, because a sale that
+/// warns is a sale that happened.
+///
+/// An overridden sale writes `ACTION_CREDIT_OVERRIDE` instead and not both:
+/// that row already carries the warning in its `after`, and a shop reading
+/// its log wants one row per sale, not one per rule the sale touched.
+pub const ACTION_CREDIT_WARNED: &str = "sale.credit_warned";
+
 /// A sale discounted past the shop's dated threshold on purpose
 /// (features.md §5 names "discount override" as its own audited action, so
 /// it is not the credit override's row under another name). The entry

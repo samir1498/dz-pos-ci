@@ -1263,6 +1263,155 @@ fn an_override_takes_the_sale_past_the_limit_and_the_log_says_who() {
 }
 
 #[test]
+fn a_refused_credit_sale_is_still_in_the_log_after_the_sale_unwound() {
+    // The M2 review's finding: the refusal rolls the sale's transaction back,
+    // so a row written inside it rolls back with it and a cashier can try a
+    // customer's limit over and over leaving nothing behind. The row is
+    // written after the rollback, on the same connection, and this is what
+    // proves it survived one.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), None);
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "credit_limit", "{err:?}");
+
+    // The sale really did unwind: this is the same connection the row was
+    // written on, so a row that survived is not a transaction that stayed.
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+    assert!(debt::ledger(&mut conn, SHOP, c).unwrap().is_empty());
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "sale.credit_blocked")
+        .expect("a refused credit sale leaves a row");
+    assert_eq!(entry.user_id, OWNER);
+    // The customer, not a document: the refusal produced none.
+    assert_eq!(entry.entity, "customer");
+    assert_eq!(entry.entity_id, Some(c));
+    let before = entry.before.clone().unwrap_or_default();
+    assert!(
+        before.contains("\"credit_limit_centimes\":50000"),
+        "{before}"
+    );
+    let after = entry.after.clone().unwrap_or_default();
+    assert!(
+        after.contains("\"balance_would_be_centimes\":100000"),
+        "{after}"
+    );
+
+    // Three tries, three rows: the whole point is that a shop can see the
+    // probing, not that it can see one of them.
+    for _ in 0..2 {
+        issue_sale(
+            &mut conn,
+            SHOP,
+            OWNER,
+            credit(c, vec![line(p, 1_000)], false),
+        )
+        .unwrap_err();
+    }
+    assert_eq!(
+        audit::list(&mut conn, SHOP)
+            .unwrap()
+            .iter()
+            .filter(|e| e.action == "sale.credit_blocked")
+            .count(),
+        3
+    );
+}
+
+#[test]
+fn a_credit_sale_that_crossed_the_warn_threshold_leaves_a_row() {
+    // Not a refusal and not a decision anybody took: the sale went through
+    // and the account crossed the line the shop asked to hear about.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Sac", 10_000, 0, Unit::Piece);
+    // Warns at 200,00 and does not block: no limit at all, so nothing here
+    // can be the refusal path wearing another name.
+    let c = customer(&mut conn, "Entreprise Amrani", None, Some(20_000));
+
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 3_000)], false),
+    )
+    .unwrap();
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "sale.credit_warned")
+        .expect("a sale past the warn threshold leaves a row");
+    assert_eq!(entry.entity, "document");
+    assert_eq!(entry.entity_id, Some(doc.id));
+    let before = entry.before.clone().unwrap_or_default();
+    assert!(
+        before.contains("\"warn_threshold_centimes\":20000"),
+        "{before}"
+    );
+    let after = entry.after.clone().unwrap_or_default();
+    assert!(after.contains("\"warning\":\"near_limit\""), "{after}");
+}
+
+#[test]
+fn a_credit_sale_inside_the_warn_threshold_leaves_no_row() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Sac", 10_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", None, Some(20_000));
+    issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap();
+    assert!(
+        !audit::list(&mut conn, SHOP)
+            .unwrap()
+            .iter()
+            .any(|e| e.action == "sale.credit_warned"),
+        "a sale nowhere near the threshold said it crossed it"
+    );
+}
+
+#[test]
+fn an_overridden_sale_that_also_warned_writes_one_row_and_not_two() {
+    // The override row already carries the warning in its `after`. A shop
+    // reading its log wants one row per sale, not one per rule it touched.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), Some(20_000));
+    issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], true),
+    )
+    .unwrap();
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|e| e.action == "document.issue_override")
+            .count(),
+        1
+    );
+    assert!(
+        !entries.iter().any(|e| e.action == "sale.credit_warned"),
+        "an overridden sale wrote a second row for the same warning"
+    );
+}
+
+#[test]
 fn an_override_on_a_fiche_that_was_also_warning_says_so_in_the_log() {
     // The two rules are separate: this fiche blocks at 500,00 and warns at
     // 200,00, so the sale is both overridden and warned, and a comptable

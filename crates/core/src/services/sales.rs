@@ -177,7 +177,12 @@ pub fn issue(
         ));
     }
 
-    conn.transaction(|conn| {
+    // Read off `new` before the closure takes it: the blocked row below is
+    // written after the transaction has gone, and it names the customer the
+    // limit belongs to.
+    let customer_id = new.customer_id;
+
+    let issued = conn.transaction(|conn| {
         let issued_at = new.issued_at.unwrap_or_else(clock::now);
         let regime = settings::regime_as_of(conn, shop_id, issued_at)?;
         let seller = SellerBlock::from(shops::get(conn, shop_id)?);
@@ -512,11 +517,90 @@ pub fn issue(
             )?;
         }
 
+        // A sale that crossed the customer's warn threshold and was not an
+        // override. An override already carries the warning in its own row,
+        // and the log is read one row per sale (M2 carry-in, 2026-09-09).
+        // Inside the transaction, unlike the blocked row below, because a
+        // sale that warns is a sale that happened.
+        if credit.warning.is_some() && !credit.overridden {
+            audit::record(
+                conn,
+                shop_id,
+                user_id,
+                audit::Change {
+                    action: audit::ACTION_CREDIT_WARNED,
+                    entity: "document",
+                    entity_id: Some(document.id),
+                    before: Some(
+                        serde_json::json!({
+                            "customer_id": credit.customer.id,
+                            "balance_centimes": credit.balance.old_balance.as_centimes(),
+                            "warn_threshold_centimes":
+                                credit.customer.warn_threshold.map(Money::as_centimes),
+                            "credit_limit_centimes":
+                                credit.customer.credit_limit.map(Money::as_centimes),
+                        })
+                        .to_string(),
+                    ),
+                    after: Some(
+                        serde_json::json!({
+                            "document_id": document.id,
+                            "balance_after_centimes": credit.balance.total_debt.as_centimes(),
+                            "warning": credit.warning.map(Warning::code),
+                        })
+                        .to_string(),
+                    ),
+                },
+            )?;
+        }
+
         Ok(Sale {
             document,
             warning: credit.warning,
         })
-    })
+    });
+
+    // The refusal the credit limit raised unwound everything the closure
+    // wrote, a row about the refusal included, which is why one was never
+    // written there. A shop that cannot see a cashier trying a customer's
+    // limit over and over has no control at all (M2 carry-in, 2026-09-09),
+    // so the row goes down here, on the same connection, after the rollback.
+    //
+    // The refusal wins if this write fails. A lost row is a lost row; a till
+    // told "the database is unwell" when what actually happened is that the
+    // customer is over their limit sends the cashier to the wrong person.
+    if let Err(CoreError::CreditLimit {
+        balance_after,
+        credit_limit,
+    }) = &issued
+    {
+        let _ = audit::record(
+            conn,
+            shop_id,
+            user_id,
+            audit::Change {
+                action: audit::ACTION_CREDIT_BLOCKED,
+                // The customer, not a document: the refusal produced none.
+                entity: "customer",
+                entity_id: customer_id,
+                before: Some(
+                    serde_json::json!({
+                        "customer_id": customer_id,
+                        "credit_limit_centimes": credit_limit.as_centimes(),
+                    })
+                    .to_string(),
+                ),
+                after: Some(
+                    serde_json::json!({
+                        "balance_would_be_centimes": balance_after.as_centimes(),
+                    })
+                    .to_string(),
+                ),
+            },
+        );
+    }
+
+    issued
 }
 
 /// The customer as the document will print them. Every field the buyer block
