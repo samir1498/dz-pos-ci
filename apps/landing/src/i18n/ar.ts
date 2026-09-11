@@ -8,7 +8,7 @@ import type { Dict } from "./types";
 export const ar: Dict = {
   lang: "ar",
   dir: "rtl",
-  title: "dz-pos",
+  title: "Dinar POS",
   brandWord: "دينار",
   brandSuffix: "بوس",
   tagline: "الصندوق والفاتورة والمخزون والموردون لمحل جزائري، بلا اشتراك عند الطاولة.",
@@ -27,7 +27,7 @@ export const ar: Dict = {
     },
     invoice: {
       title: "الفوترة",
-      body: "بلمسة واحدة تتحول التذكرة إلى فاتورة مرقّمة عندما يطلبها الزبون، برقمها وبياناتها القانونية جاهزة.",
+      body: "يطلب الزبون فاتورة؟ زر واحد وقت البيع، فتخرج مرقّمة ضمن سلسلة السنة، ببياناتها الإلزامية واسم الزبون.",
     },
     stock: {
       title: "المخزون",
@@ -55,6 +55,10 @@ export const ar: Dict = {
     // docs/features.md §3, fiscal rules table, row "Amount in words":
     // "French, Arabic and English generators, dinars and centimes".
     words: "المبلغ المستحق مكتوب أيضًا بالحروف، بالفرنسية والعربية والإنجليزية.",
+    // docs/features.md §3, fiscal rules table, row "Régime fiscal": a dated
+    // shop setting, `ifu` or `réel`; under IFU no document names a tax, and
+    // every document keeps the regime it was issued under.
+    regime: "النظام الجزافي أو النظام الحقيقي: تحت النظام الجزافي لا تذكر أي وثيقة ضريبة، وكل وثيقة تحتفظ بالنظام الذي صدرت تحته.",
   },
 
   languages: {

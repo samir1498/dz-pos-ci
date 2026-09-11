@@ -3,7 +3,7 @@ import type { Dict } from "./types";
 export const fr: Dict = {
   lang: "fr",
   dir: "ltr",
-  title: "dz-pos",
+  title: "Dinar POS",
   brandWord: "Dinar",
   brandSuffix: "POS",
   tagline: "La caisse, la facture, le stock et les fournisseurs d'un commerce algérien, sans abonnement au comptoir.",
@@ -22,7 +22,7 @@ export const fr: Dict = {
     },
     invoice: {
       title: "Facturer",
-      body: "D'un geste, le ticket devient une facture numérotée quand le client la réclame, avec son numéro et les mentions légales déjà en place.",
+      body: "Le client demande une facture ? Un bouton au moment de la vente, et elle sort numérotée dans la série de l'année, avec les mentions obligatoires et le nom du client.",
     },
     stock: {
       title: "Stock",
@@ -50,6 +50,10 @@ export const fr: Dict = {
     // docs/features.md §3, fiscal rules table, row "Amount in words":
     // "French, Arabic and English generators, dinars and centimes".
     words: "Le montant à payer est aussi écrit en toutes lettres, en français, en arabe et en anglais.",
+    // docs/features.md §3, fiscal rules table, row "Régime fiscal": a dated
+    // shop setting, `ifu` or `réel`; under IFU no document names a tax, and
+    // every document keeps the regime it was issued under.
+    regime: "Au forfait comme au réel : sous l'IFU aucun document ne mentionne de TVA, et chaque document garde le régime sous lequel il a été émis.",
   },
 
   languages: {

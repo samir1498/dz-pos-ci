@@ -3,7 +3,7 @@ import type { Dict } from "./types";
 export const en: Dict = {
   lang: "en",
   dir: "ltr",
-  title: "dz-pos",
+  title: "Dinar POS",
   brandWord: "Dinar",
   brandSuffix: "POS",
   tagline: "The till, the invoice, the stock and the suppliers for an Algerian shop, with nothing to subscribe to at the counter.",
@@ -22,7 +22,7 @@ export const en: Dict = {
     },
     invoice: {
       title: "Invoice",
-      body: "One tap turns the ticket into a numbered invoice when the customer asks for one, with its number and the legal details already in place.",
+      body: "The customer asks for an invoice? One button at the moment of the sale, and it comes out numbered in the year's series, with the required details and the customer's name.",
     },
     stock: {
       title: "Stock",
@@ -50,6 +50,10 @@ export const en: Dict = {
     // docs/features.md §3, fiscal rules table, row "Amount in words":
     // "French, Arabic and English generators, dinars and centimes".
     words: "The amount due is also spelled out in words, in French, Arabic and English.",
+    // docs/features.md §3, fiscal rules table, row "Régime fiscal": a dated
+    // shop setting, `ifu` or `réel`; under IFU no document names a tax, and
+    // every document keeps the regime it was issued under.
+    regime: "Flat-rate or standard regime: under IFU no document names a tax, and every document keeps the regime it was issued under.",
   },
 
   languages: {

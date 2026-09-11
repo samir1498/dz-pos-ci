@@ -55,6 +55,10 @@ export interface Dict {
     /** docs/features.md §3, "Amount in words" row: French, Arabic and
      * English generators. */
     readonly words: string;
+    /** docs/features.md §3, "Régime fiscal" row: a dated shop setting, `ifu`
+     * or `réel`; under IFU no document names a tax, and a document keeps the
+     * regime it was issued under. */
+    readonly regime: string;
   };
 
   /** Three languages as a feature (docs/features.md, Scope: "Arabic (RTL),
