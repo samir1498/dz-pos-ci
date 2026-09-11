@@ -1,7 +1,8 @@
 ---
-// The page shell L0 owns. L3 (context/plans/20260911-landing-page.md) fills
-// <main> with the real sections; this only sets the document up so that work
-// can start without touching routing, tokens or the font stack.
+// The page shell: the document, the brand row, and the sections in the order
+// context/plans/20260911-landing-page.md sets. The brand appears once, in the
+// header; the hero carries the page's only <h1>. `dict.tagline` is the
+// document's one-line description and is not printed twice on the page.
 import "../styles/base.css";
 
 import markUrl from "@dzpos/design/assets/mark.svg?url";
@@ -29,6 +30,7 @@ const dict = dictionaries[locale];
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{dict.title}</title>
+    <meta name="description" content={dict.tagline} />
   </head>
   <body>
     <header class="site-header">
@@ -38,15 +40,6 @@ const dict = dictionaries[locale];
       <span>{dict.brandWord} <strong>{dict.brandSuffix}</strong></span>
     </header>
     <main>
-      <div class="wrap site-intro">
-        <h1>{dict.title}</h1>
-        <p>{dict.tagline}</p>
-      </div>
-      <!--
-        L3: hero, the four pieces (sell, invoice, stock, know), the fiscal
-        block, a band of screens, who it is for, and the price/form section,
-        in that order. L1 supplies the product shots they use.
-      -->
       <Hero locale={locale} hero={dict.hero} />
       <Pieces locale={locale} pieces={dict.pieces} />
       <Fiscal fiscal={dict.fiscal} />

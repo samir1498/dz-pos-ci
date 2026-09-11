@@ -1,7 +1,7 @@
 ---
 // The hero: the till shot and the one-line answer to "what does it do"
-// (context/plans/20260911-landing-page.md, L3). The brand title and the
-// tagline above it are L0's; this is the section that follows.
+// (context/plans/20260911-landing-page.md, L3). It carries the page's only
+// <h1>: the brand is in the header row above and is not a heading.
 import shots from "../lib/shots.json";
 import type { Dict, Locale } from "../i18n";
 
@@ -17,7 +17,7 @@ const shot = shots.hero[locale];
 <section class="hero" aria-labelledby="hero-heading">
   <div class="wrap hero-inner">
     <div class="hero-copy">
-      <h2 id="hero-heading">{hero.heading}</h2>
+      <h1 id="hero-heading">{hero.heading}</h1>
       <p>{hero.body}</p>
       {/* Points at the pricing section below: the form is the only place on
           the page that collects contact details (L3 brief, "how to get
@@ -55,7 +55,7 @@ const shot = shots.hero[locale];
     gap: var(--space-4);
   }
 
-  .hero-copy h2 {
+  .hero-copy h1 {
     font-size: var(--text-3xl);
     font-weight: 600;
     line-height: 1.15;

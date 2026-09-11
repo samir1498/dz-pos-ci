@@ -75,11 +75,11 @@ export const fr: Dict = {
 
   pricing: {
     heading: "Le prix",
-    body: "Le prix n'est pas encore fixé. Laissez vos coordonnées, nous vous recontactons dès qu'il l'est.",
+    body: "Le prix n'est pas encore fixé, et tant qu'il ne l'est pas ce formulaire reste fermé. Il ouvrira ici même, sur cette page.",
     formNameLabel: "Nom",
     formPhoneLabel: "Téléphone",
     formWilayaLabel: "Wilaya",
     formSubmit: "Être recontacté",
-    formDisabledNote: "Le formulaire n'est pas encore branché.",
+    formDisabledNote: "Fermé jusqu'à ce que le prix soit fixé.",
   },
 };

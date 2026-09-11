@@ -80,11 +80,11 @@ export const ar: Dict = {
 
   pricing: {
     heading: "السعر",
-    body: "السعر لم يُحدَّد بعد. اترك بياناتك وسنتواصل معك فور تحديده.",
+    body: "السعر لم يُحدَّد بعد، وما دام كذلك يبقى هذا النموذج مغلقًا. سيُفتح هنا، في هذه الصفحة.",
     formNameLabel: "الاسم",
     formPhoneLabel: "الهاتف",
     formWilayaLabel: "الولاية",
     formSubmit: "طلب التواصل",
-    formDisabledNote: "النموذج غير مفعّل بعد.",
+    formDisabledNote: "مغلق حتى يُحدَّد السعر.",
   },
 };

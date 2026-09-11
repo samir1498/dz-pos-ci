@@ -43,22 +43,6 @@ html {
   font-size: var(--text-lg);
 }
 
-.site-intro {
-  padding-block: var(--space-8) var(--space-2);
-}
-
-.site-intro h1 {
-  font-size: var(--text-xl);
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.site-intro p {
-  color: var(--text-secondary);
-  max-width: 60ch;
-  margin-block-start: var(--space-2);
-}
-
 /* One button style, used by the hero's call to contact and the (disabled)
    pricing form submit: same shape, same tokens, an anchor or a button. */
 .btn-primary {

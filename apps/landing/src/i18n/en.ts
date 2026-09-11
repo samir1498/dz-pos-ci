@@ -75,11 +75,11 @@ export const en: Dict = {
 
   pricing: {
     heading: "Price",
-    body: "The price isn't set yet. Leave your details and we'll get back to you as soon as it is.",
+    body: "The price is not set yet, and until it is this form stays closed. It will open here, on this page.",
     formNameLabel: "Name",
     formPhoneLabel: "Phone",
     formWilayaLabel: "Wilaya",
     formSubmit: "Ask to be contacted",
-    formDisabledNote: "This form isn't wired up yet.",
+    formDisabledNote: "Closed until the price is set.",
   },
 };
