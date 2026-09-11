@@ -305,24 +305,43 @@ ci branch="":
     set -euo pipefail
     b="{{branch}}"
     [ -n "$b" ] || b="$(git rev-parse --abbrev-ref HEAD)"
+    sha="$(git rev-parse "$b")"
     git remote get-url ci >/dev/null 2>&1 || git remote add ci git@github.com:samir1498/dz-pos-ci.git
     git push -q --force ci "$b:$b"
-    echo "pushed $b to the mirror; starting the run"
-    # The id of the newest run on this branch BEFORE we start one, so the
-    # wait below can tell the new run from an old one. Without this the
-    # poll happily returns a run that finished an hour ago and reports its
-    # result as if it were this push's, which it did on 2026-09-11.
-    was="$(gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
-    gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
-    # The run takes a moment to exist; ask for it until it does, and keep
-    # asking while the answer is still the run that was there before.
+    echo "pushed $b to the mirror"
+    # The run is found by the commit it is testing, never by "the newest run
+    # on this branch": that answer was once an hour old and was reported as
+    # this push's result. A push to main starts a run by itself (the
+    # workflow's `push` trigger names main), so asking for one as well
+    # started two runs a second apart and the concurrency group killed one,
+    # which then looked like a failure. So: wait for a run on this commit,
+    # and only start one by hand if none appears, which is the case on every
+    # branch that is not main and on a main push whose paths were all
+    # ignored.
+    find_run() {
+        gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 20 \
+            --json databaseId,headSha \
+            --jq "[.[] | select(.headSha == \"$sha\")] | .[0].databaseId" 2>/dev/null
+    }
     id=""
-    for _ in $(seq 1 20); do
-        got="$(gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
-        if [ -n "${got:-}" ] && [ "$got" != "$was" ]; then id="$got"; break; fi
-        sleep 3
+    for _ in $(seq 1 6); do
+        id="$(find_run || true)"
+        [ -n "${id:-}" ] && [ "$id" != "null" ] && break
+        id=""
+        sleep 5
     done
-    [ -n "${id:-}" ] || { echo "no run appeared; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
+    if [ -z "$id" ]; then
+        echo "no run started itself; asking for one"
+        gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
+        for _ in $(seq 1 12); do
+            id="$(find_run || true)"
+            [ -n "${id:-}" ] && [ "$id" != "null" ] && break
+            id=""
+            sleep 5
+        done
+    fi
+    [ -n "$id" ] || { echo "no run appeared for $sha; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
+    echo "watching run $id on $sha"
     gh run watch "$id" --repo samir1498/dz-pos-ci --exit-status
 
 # ---- mockups (design/) ----
