@@ -278,9 +278,13 @@ export type ApiClient = ReturnType<typeof createClient>;
 
 export interface ClientOptions {
   /** The launch token the server was started with; sent as a bearer on
-   * every call. The desktop injects it, the browser preview reads
-   * VITE_API_TOKEN. Without it every route but /health answers 401. */
-  readonly token?: string;
+   * every call. The browser preview reads VITE_API_TOKEN and passes it as a
+   * plain string. The desktop never holds the token in a variable of its
+   * own: it passes a function that asks the Tauri side for it, awaited here
+   * on the request that needs it, so a call this client never makes is a
+   * call the token is never fetched for. Without it every route but
+   * /health answers 401. */
+  readonly token?: string | (() => Promise<string | undefined>);
   /** The session token, if one is already in hand. Two different things
    * (M4 T2): the launch token above says the caller is this machine's own
    * screen, this says which person is at it. A browser leaves this alone and
@@ -314,10 +318,14 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
    * One place, so a call added later cannot forget either. `credentials` is
    * what makes a browser attach the httpOnly cookie across the preview's
    * origin; the desktop sends the header instead and the server takes the
-   * header first. */
-  function authorised(init?: RequestInit): RequestInit {
+   * header first.
+   *
+   * Async because the desktop's token is: `token` there is a function, not
+   * a string, and it is only called here, on the request that needs it. */
+  async function authorised(init?: RequestInit): Promise<RequestInit> {
     const headers = new Headers(init?.headers);
-    if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
+    const shown = typeof token === "function" ? await token() : token;
+    if (shown !== undefined && shown !== "") headers.set("authorization", `Bearer ${shown}`);
     if (session !== undefined && session !== "") headers.set(SESSION_HEADER, session);
     return { ...init, headers, credentials: "include" };
   }
@@ -325,7 +333,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
   async function send(path: string, init?: RequestInit): Promise<unknown> {
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, authorised(init));
+      res = await send0(`${base}${path}`, await authorised(init));
     } catch (cause) {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
@@ -336,7 +344,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
   async function sendText(path: string, init?: RequestInit): Promise<string> {
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, authorised(init));
+      res = await send0(`${base}${path}`, await authorised(init));
     } catch {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
@@ -350,7 +358,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
   async function sendFile(path: string, init?: RequestInit): Promise<Download> {
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, authorised(init));
+      res = await send0(`${base}${path}`, await authorised(init));
     } catch {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }

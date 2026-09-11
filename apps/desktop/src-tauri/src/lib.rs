@@ -5,7 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use tauri::Manager;
+use tauri::{Manager, Url};
 
 /// The task serving the API, shared between `setup` and the run handler that
 /// stops it.
@@ -26,6 +26,181 @@ pub struct DbState {
 /// Where the webview reaches the API. Injected into the page rather than
 /// fetched over IPC: it is configuration, not data.
 pub struct ApiPort(pub u16);
+
+/// The launch token, held for exactly one hand-over. `take_launch_token`
+/// gives it to the first caller and an error to every caller after, so the
+/// secret never sits somewhere a script running later in the page — or one
+/// running in whatever document the window was navigated to — can go back
+/// and read (docs/architecture.md § Release).
+struct TokenHandoff(Mutex<Option<String>>);
+
+fn take(handoff: &TokenHandoff) -> Result<String, String> {
+    handoff
+        .0
+        .lock()
+        .map_err(|_| "the launch token handoff is poisoned".to_owned())?
+        .take()
+        .ok_or_else(|| "the launch token was already taken".to_owned())
+}
+
+#[tauri::command]
+fn take_launch_token(state: tauri::State<TokenHandoff>) -> Result<String, String> {
+    take(&state)
+}
+
+#[cfg(test)]
+mod token_tests {
+    use super::{take, TokenHandoff};
+    use std::sync::Mutex;
+
+    #[test]
+    fn the_first_caller_gets_the_token_and_every_caller_after_is_refused() {
+        let handoff = TokenHandoff(Mutex::new(Some("the-token".to_owned())));
+        assert_eq!(take(&handoff).as_deref(), Ok("the-token"));
+        assert!(take(&handoff).is_err());
+        assert!(take(&handoff).is_err());
+    }
+}
+
+/// Where the main window may navigate. Every screen reaches the API over
+/// `fetch`, never by loading a new document (rule 2), so this list is the
+/// app's own origins and, in a debug build, the Vite dev server the window
+/// loads from. Nothing here names the API's own loopback origin: no screen
+/// links to it today, and refusing every origin but these is what keeps
+/// that true for a screen added later, per the CSP note in
+/// docs/architecture.md § Release.
+///
+/// `lib/download.ts` clicks an `<a download href="blob:...">`; a `blob:`
+/// URL is scoped to the document that created it, so it never names a
+/// remote origin either way. It is not in this match because `download`
+/// anchors are not expected to reach a navigation handler at all in
+/// WebView2 or webkitgtk -- they are handed to the platform's download
+/// flow before a navigation would start. Not verified against a real
+/// webview from here; see the report.
+fn allowed_navigation(url: &Url) -> bool {
+    match (url.scheme(), url.host_str(), url.port()) {
+        ("tauri", Some("localhost"), None) => true,
+        ("http", Some("tauri.localhost"), None) => true,
+        #[cfg(debug_assertions)]
+        ("http", Some("127.0.0.1" | "localhost"), Some(5173)) => true,
+        _ => false,
+    }
+}
+
+// Reads the policy off the page Tauri actually serves, the way a real
+// launch would get it: `get_asset` (tauri's own manager) rewrites the CSP
+// into `index.html` and returns the same string as a header value at serve
+// time, which is what `dist/index.html` on disk never carries — the
+// directive is added when the asset is handed out, not baked into the
+// build. `pnpm --filter dzpos-desktop build` has to have run first, the
+// same requirement `generate_context!()` already has for `cargo run`.
+//
+// Getting there needs the `custom-protocol` feature on, which Cargo.toml
+// turns on for this dev-dependency only. Two things ride on it: it is what
+// `tauri::is_dev()` is (`!cfg!(feature = "custom-protocol")`), and,
+// separately, `AssetResolver` reads `dist/index.html` straight off disk
+// with `csp_header: None` — the whole CSP mechanism skipped — whenever
+// `devUrl` is configured (it always is here) and `is_dev()` is true, which
+// is every plain `cargo test` otherwise. Without the feature this test
+// would pass for the wrong reason: `csp_header` would be `None` because
+// the policy was never reached, not because it was absent.
+#[cfg(test)]
+mod csp_tests {
+    // A test may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use tauri::test::mock_builder;
+
+    fn served_index_html_csp() -> String {
+        let app = mock_builder()
+            .build(tauri::generate_context!())
+            .expect("the mock app must build; run `pnpm --filter dzpos-desktop build` first");
+        app.asset_resolver()
+            .get("index.html".to_owned())
+            .expect("index.html must be an embedded asset")
+            .csp_header
+            .expect("index.html must carry a Content-Security-Policy")
+    }
+
+    #[test]
+    fn the_served_page_carries_the_policy_and_allows_no_eval_or_remote_origin() {
+        let csp = served_index_html_csp();
+        assert!(csp.contains("default-src 'self'"), "{csp}");
+        assert!(!csp.contains("unsafe-eval"), "{csp}");
+        assert!(
+            !csp.contains("https://"),
+            "no directive names a remote origin: {csp}"
+        );
+        assert!(csp.contains("frame-ancestors 'none'"), "{csp}");
+        assert!(csp.contains("object-src 'none'"), "{csp}");
+        assert!(csp.contains("form-action 'self'"), "{csp}");
+        assert!(csp.contains("base-uri 'self'"), "{csp}");
+        assert!(
+            csp.contains(
+                "connect-src 'self' http://127.0.0.1:* ipc://localhost http://ipc.localhost"
+            ),
+            "connect-src must allow both shapes invoke() actually fetches: \
+             `ipc://localhost/<cmd>` on Linux and macOS, `http://ipc.localhost/<cmd>` \
+             on Windows and Android (wry's custom-protocol workaround, \
+             use_https_scheme defaults to false) -- without both, the very \
+             first take_launch_token() call is a CSP violation on whichever \
+             platform is missing: {csp}"
+        );
+        // Tauri hashes every inline <script>/<style> found in the built
+        // index.html at compile time and appends the hash here (`csp_hashes`)
+        // instead of `'unsafe-inline'`; this is what lets the lang/theme
+        // flash-prevention IIFE in index.html run at all under this policy.
+        // Asserting the hash is present, not just that the assertion above
+        // passed, is the difference between "the script runs" and "the
+        // script silently never ran because the hash never landed".
+        assert!(
+            csp.contains("script-src 'self' 'sha256-"),
+            "the inline lang/theme script must be hash-allowed: {csp}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod navigation_tests {
+    // A test may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::allowed_navigation;
+    use tauri::Url;
+
+    fn url(s: &str) -> Url {
+        Url::parse(s).expect("test URL must parse")
+    }
+
+    #[test]
+    fn the_apps_own_origins_are_allowed() {
+        assert!(allowed_navigation(&url("tauri://localhost/")));
+        assert!(allowed_navigation(&url("tauri://localhost/settings")));
+        assert!(allowed_navigation(&url("http://tauri.localhost/")));
+    }
+
+    #[test]
+    fn a_remote_origin_is_refused() {
+        assert!(!allowed_navigation(&url("https://evil.example/")));
+        assert!(!allowed_navigation(&url("http://evil.example/")));
+    }
+
+    #[test]
+    fn the_apis_own_loopback_origin_is_refused() {
+        // No screen navigates the main frame there today (every call is a
+        // `fetch`); this is what keeps a future one from working.
+        assert!(!allowed_navigation(&url("http://127.0.0.1:4317/")));
+    }
+
+    #[test]
+    fn a_look_alike_host_is_refused() {
+        // `.localhost` as a suffix, not an exact host, would let
+        // `tauri.localhost.evil.example` through.
+        assert!(!allowed_navigation(&url(
+            "http://tauri.localhost.evil.example/"
+        )));
+    }
+}
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = db_path()?;
@@ -65,6 +240,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = window.set_focus();
             }
         }))
+        .invoke_handler(tauri::generate_handler![take_launch_token])
         .setup({
             let token = token.clone();
             move |app| {
@@ -87,19 +263,35 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 app.manage(DbState { db_path });
                 app.manage(ApiPort(port));
+                app.manage(TokenHandoff(Mutex::new(Some(token.expose().to_owned()))));
+
+                // `tauri.conf.json` sets `create: false` on this window so it
+                // is built here instead of by the builder: `on_navigation`
+                // has to be wired before the first document loads, and a
+                // window built from the config alone has no way to carry it.
+                // This is the CSP note's `navigate-to` equivalent
+                // (docs/architecture.md § Release) — there is no such CSP
+                // directive, `navigate-to` was dropped from the spec before
+                // any engine shipped it, so the refusal lives here in Rust
+                // rather than in the policy string.
+                tauri::WebviewWindowBuilder::from_config(
+                    app.handle(),
+                    &app.config().app.windows[0],
+                )?
+                .on_navigation(allowed_navigation)
+                .build()?;
+
                 Ok(())
             }
         })
         // The window comes from tauri.conf.json, so the script that tells
-        // the page its port and its token is injected by a plugin rather
-        // than a window builder. It runs before any of the app's own
-        // scripts. The token is hex, so it needs no escaping.
+        // the page its port is injected by a plugin rather than a window
+        // builder. It runs before any of the app's own scripts. The launch
+        // token does not travel this way: see `take_launch_token`.
         .plugin(
             tauri::plugin::Builder::<tauri::Wry, ()>::new("dzpos-api-url")
                 .js_init_script(format!(
-                    "globalThis.__DZPOS_API_URL__ = \"http://127.0.0.1:{port}\";\
-                     globalThis.__DZPOS_API_TOKEN__ = \"{}\";",
-                    token.expose()
+                    "globalThis.__DZPOS_API_URL__ = \"http://127.0.0.1:{port}\";"
                 ))
                 .build(),
         )

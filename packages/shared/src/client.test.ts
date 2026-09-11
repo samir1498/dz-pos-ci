@@ -160,6 +160,41 @@ describe("createClient", () => {
     expect(seen).toEqual(["Bearer abc123", "Bearer abc123", "Bearer abc123"]);
   });
 
+  test("a token given as a function is awaited and shown as a bearer on every request", async () => {
+    // The desktop passes a function (apps/desktop/src/api.ts): the launch
+    // token never sits in a variable of the client's own, only behind a
+    // call that asks the Tauri side for it.
+    let calls = 0;
+    const seen: Array<string | undefined> = [];
+    const api = createClient("http://x", {
+      token: async () => {
+        calls += 1;
+        return "abc123";
+      },
+      fetch: async (_url, init) => {
+        seen.push(new Headers(init?.headers).get("authorization") ?? undefined);
+        return new Response("[]", { status: 200 });
+      },
+    });
+    await api.listProducts();
+    await api.listCategories();
+    expect(seen).toEqual(["Bearer abc123", "Bearer abc123"]);
+    expect(calls).toBe(2);
+  });
+
+  test("a token function answering undefined sends no authorization header", async () => {
+    let seen: string | null = "unset";
+    const api = createClient("http://x", {
+      token: async () => undefined,
+      fetch: async (_url, init) => {
+        seen = new Headers(init?.headers).get("authorization");
+        return new Response("[]", { status: 200 });
+      },
+    });
+    await api.listProducts();
+    expect(seen).toBeNull();
+  });
+
   test("a client built without a token sends no authorization header", async () => {
     let seen: string | null = "unset";
     const api = createClient("http://x", {

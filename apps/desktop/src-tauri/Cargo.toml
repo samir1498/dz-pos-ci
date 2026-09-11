@@ -19,5 +19,23 @@ tauri-plugin-single-instance = "2.4.4"
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[dev-dependencies]
+# `tauri::test` (mock_builder, asset_resolver) so the CSP test can read the
+# policy off the served page instead of the config file. Cargo unifies this
+# with the plain `tauri` dependency above for any build that includes tests.
+#
+# `custom-protocol` too, on purpose: it is what `tauri::is_dev()` is (`!cfg!
+# (feature = "custom-protocol")`), and it also gates a second thing that
+# matters more here — `AssetResolver` reads `dist/index.html` straight off
+# disk with no CSP at all whenever `devUrl` is configured and `is_dev()` is
+# true, which describes every plain `cargo run`/`cargo test` in this repo
+# otherwise (`tauri.conf.json` always sets `devUrl`). Only the Tauri CLI's
+# own `build`/`bundle` step turns this feature on for the shipped binary;
+# turning it on here is what lets `cargo test` (`just test`) exercise the
+# same asset-embedding, CSP-injecting path that binary runs, instead of the
+# disk-read shortcut. It is a dev-dependency only, so a plain `cargo run`
+# is unaffected and still gets the live Vite dev server.
+tauri = { version = "2", features = ["test", "custom-protocol"] }
+
 [lints]
 workspace = true
