@@ -37,8 +37,8 @@ fn harness() -> Harness {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
     let mut conn = dzpos_core::db::open(&path).unwrap();
-    dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, OWNER, OWNER_PIN).unwrap();
-    dzpos_core::services::users::set_password(&mut conn, SHOP, OWNER, OWNER, OWNER_PASSWORD)
+    dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, OWNER, OWNER_PIN, None).unwrap();
+    dzpos_core::services::users::set_password(&mut conn, SHOP, OWNER, OWNER, OWNER_PASSWORD, None)
         .unwrap();
     let owner_name = dzpos_core::services::users::get(&mut conn, SHOP, OWNER)
         .unwrap()
@@ -350,7 +350,7 @@ async fn a_write_names_the_user_the_session_says_is_acting() {
         },
     )
     .unwrap();
-    dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, manager.id, "3690").unwrap();
+    dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, manager.id, "3690", None).unwrap();
     drop(conn);
 
     let app = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap(), &token());
@@ -553,7 +553,7 @@ async fn switching_a_user_off_ends_the_session_they_were_holding() {
         },
     )
     .unwrap();
-    dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, cashier.id, "3690").unwrap();
+    dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, cashier.id, "3690", None).unwrap();
     drop(conn);
 
     let app = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap(), &token());

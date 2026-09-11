@@ -47,10 +47,16 @@ pub const SESSION_COOKIE: &str = "dzpos_session";
 /// Who is acting, taken off the request by the middleware below. Every route
 /// that used to read `AppState::user_id` takes one of these instead, and a
 /// route that forgets it will not compile against a service that wants a user.
+///
+/// `session_id` is the row this very request is standing on, not the only
+/// session the user holds. `routes::users::set_pin` is the one handler that
+/// reads it, to pass down to `services::users::set_pin` as the session a
+/// self-reset must not end.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CurrentUser {
     pub id: i32,
     pub role: Role,
+    pub session_id: i32,
 }
 
 impl From<Actor> for CurrentUser {
@@ -58,6 +64,7 @@ impl From<Actor> for CurrentUser {
         CurrentUser {
             id: a.user_id,
             role: a.role,
+            session_id: a.session_id,
         }
     }
 }
@@ -119,7 +126,28 @@ pub async fn require(
         match gates::gate_for(method, matched.as_str()) {
             Some(gate) => {
                 if let Some(permission) = gate.permission {
-                    permissions::require(current.role, permission)?;
+                    if let Err(refused) = permissions::require(current.role, permission) {
+                        // The one row a refusal writes, in
+                        // the same seam that just decided to refuse and
+                        // before the handler's own transaction, if this route
+                        // has one, has opened: `permissions::record_refusal`'s
+                        // own doc says why this is the only place it is
+                        // called from and what is deliberately not recorded
+                        // (a 401 with no actor, `ungated_write`, which names
+                        // no permission).
+                        let shop = state.shop_id;
+                        let actor_id = current.id;
+                        let route = matched.as_str().to_owned();
+                        let method = method.to_owned();
+                        state
+                            .blocking(move |c| {
+                                permissions::record_refusal(
+                                    c, shop, actor_id, permission, &method, &route,
+                                )
+                            })
+                            .await?;
+                        return Err(refused.into());
+                    }
                 }
             }
             // No row. For a read that is the ordinary case and the answer is

@@ -34,7 +34,7 @@ use crate::print::number;
 use crate::print::strings::{text, Key};
 use crate::repos::categories as categories_repo;
 use crate::repos::documents as documents_repo;
-use crate::services::{customers, products, suppliers};
+use crate::services::{audit, customers, products, suppliers};
 
 /// Two decimals and a thousands separator: what a shop reads an amount as,
 /// and what keeps a column summable.
@@ -217,12 +217,45 @@ fn optional(value: Option<&str>) -> &str {
     value.unwrap_or("")
 }
 
+/// The row every export writes: an export used to leave
+/// nothing in the log. `which` is the stable name a reader of the log can
+/// tell apart from the other three, and `rows` is how much of the shop left
+/// with it, when the caller already counted them building the sheet: no
+/// second pass over the data just to answer this.
+///
+/// Called after the workbook is built and before it is handed back, so a row
+/// that fails to write fails the export instead of letting data walk out the
+/// door with nothing behind it: the whole point of this row is that it is
+/// there, and a caller that got the bytes anyway despite the log call failing
+/// would have the control this milestone is about in name only.
+fn record_export(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    actor_id: i32,
+    which: &'static str,
+    rows: usize,
+) -> Result<(), CoreError> {
+    audit::record(
+        conn,
+        shop_id,
+        actor_id,
+        audit::Change {
+            action: audit::ACTION_EXPORT,
+            entity: "export",
+            entity_id: None,
+            before: None,
+            after: Some(serde_json::json!({ "which": which, "rows": rows }).to_string()),
+        },
+    )
+}
+
 /// The shop's products, one row each, active and inactive alike: a workbook
 /// that dropped the inactive ones would come back through the import as a
 /// catalogue with holes in it.
 pub fn products(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    actor_id: i32,
     lang: Lang,
 ) -> Result<Vec<u8>, CoreError> {
     let rows = products::list(conn, shop_id)?;
@@ -247,6 +280,7 @@ pub fn products(
             .map_err(|_| CoreError::validation("row", "more products than a sheet holds"))?;
         write_product_row(sheet, row, product, &name_of(product.category_id), &formats)?;
     }
+    record_export(conn, shop_id, actor_id, "products", rows.len())?;
     Ok(workbook.save_to_buffer()?)
 }
 
@@ -326,6 +360,7 @@ fn write_product_row(
 pub fn sales(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    actor_id: i32,
     lang: Lang,
     range: DayRange,
 ) -> Result<Vec<u8>, CoreError> {
@@ -394,6 +429,7 @@ pub fn sales(
             )?;
         }
     }
+    record_export(conn, shop_id, actor_id, "sales", row as usize)?;
     Ok(workbook.save_to_buffer()?)
 }
 
@@ -414,6 +450,7 @@ fn write_day(
 pub fn customers(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    actor_id: i32,
     lang: Lang,
 ) -> Result<Vec<u8>, CoreError> {
     let rows = customers::list_with_balance(conn, shop_id, None)?;
@@ -464,6 +501,7 @@ pub fn customers(
             &formats.money,
         )?;
     }
+    record_export(conn, shop_id, actor_id, "customers", rows.len())?;
     Ok(workbook.save_to_buffer()?)
 }
 
@@ -492,6 +530,7 @@ fn write_optional_amount(
 pub fn suppliers(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    actor_id: i32,
     lang: Lang,
 ) -> Result<Vec<u8>, CoreError> {
     let rows = suppliers::list_with_balance(conn, shop_id, None)?;
@@ -525,6 +564,7 @@ pub fn suppliers(
             &formats.money,
         )?;
     }
+    record_export(conn, shop_id, actor_id, "suppliers", rows.len())?;
     Ok(workbook.save_to_buffer()?)
 }
 

@@ -199,6 +199,27 @@ pub const ACTION_SET_DISCOUNT_THRESHOLD: &str = "set_discount_threshold";
 /// writes no row for the reason this one does.
 pub const ACTION_SET_SESSION_IDLE: &str = "set_session_idle";
 
+/// A role was asked for something `services::permissions::can` refuses, on a
+/// route the permission table names. Written once, by the
+/// one seam every gated request passes through
+/// (`crates/api/src/session.rs::require`), and never by a handler: a route
+/// that forgot to ask would forget to log too, which is the same bug twice.
+/// The entry carries the permission that was wanted and the route and method
+/// that wanted it, in `after`; there is no `before` and no `entity_id`,
+/// because a refusal changed no row.
+pub const ACTION_PERMISSION_REFUSED: &str = "permission.refused";
+/// The shop's data walked out on a USB stick: one of the four workbooks
+/// (features.md §5, "walking out on a USB stick" is `Permission::
+/// ExportAndImport`'s own doc). The entry carries which of the four and, when
+/// the route already knows it, how many rows left with it.
+pub const ACTION_EXPORT: &str = "export.download";
+/// The shop file was replaced by one of its own copies. The entry carries the
+/// copy's name, the safety copy taken of what it replaced, and what the
+/// restored file holds; it is written to the file that copy became, after
+/// the swap, because a row written before it would not survive being the
+/// thing overwritten (`services::backup::record_restore`'s own doc says why).
+pub const ACTION_RESTORE_BACKUP: &str = "backup.restore";
+
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.
 #[derive(Debug, Clone, PartialEq, Eq)]

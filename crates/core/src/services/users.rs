@@ -27,7 +27,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::user::{Credentials, UserRowWrite};
 use crate::repos::users as repo;
-use crate::services::{audit, bounded_field};
+use crate::services::{audit, bounded_field, sessions};
 
 pub use crate::models::user::{NewUser, Role, User};
 
@@ -144,6 +144,20 @@ pub fn rename(
 /// could do it, and would not be locked out by it the way a self-deactivate
 /// would, but the shop would still be down to one less owner than it meant
 /// to give up.
+///
+/// Deliberately does not end any session, unlike `set_pin`, `set_password`
+/// and `deactivate`. Those three each invalidate something
+/// `by_token_hash`'s live join does not itself re-check on every request: a
+/// credential a session was opened on, or the `active` flag the join reads
+/// straight off the row. A role is not in that list: the join reads
+/// `users.role` fresh on every single request a session makes, so a role
+/// lowered here is already in force on the very next thing that session
+/// tries to do, and there is nothing left for ending the session to buy.
+/// Ending it anyway would cost something real for no such gain: a role
+/// change is routine shop administration and not a response to a suspected
+/// leak, and signing a manager out mid-sale because their `CommitMoney`
+/// permission was turned off would be a worse shop for a control this table
+/// already gives for free.
 pub fn set_role(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -172,18 +186,37 @@ pub fn set_role(
 
 /// Sets or resets the PIN, and clears any lockout with it: an owner resetting
 /// a PIN is how a locked-out cashier gets back to the till.
+///
+/// Also ends every session the fiche is holding, because a PIN reset is
+/// exactly the moment a session must stop trusting the credential it was
+/// opened on: an owner who suspects a cashier's PIN was watched resets it so
+/// the till that cashier is standing at stops working, not just so the next
+/// sign-in wants the new one. `active` does not change here, so the live join
+/// `by_token_hash` runs on every request has nothing to catch on its own
+/// (unlike `deactivate`, below); ending the rows is the only thing that does.
+///
+/// `acting_session_id` is the session this call itself came in on, if any.
+/// `None` when nothing is asking through a session (a seed script, a
+/// migration). When it is `Some` and the owner is resetting their own PIN,
+/// that one session is kept alive and every other one of theirs is ended: the
+/// alternative, ending all of them unconditionally, would sign the owner out
+/// of the very screen they used to fix the credential, mid-task, for no
+/// security gain the "the rest of the shop's PINs might be watched too"
+/// reasoning above does not already cover for that session too.
 pub fn set_pin(
     conn: &mut SqliteConnection,
     shop_id: i32,
     actor_id: i32,
     id: i32,
     pin: &str,
+    acting_session_id: Option<i32>,
 ) -> Result<User, CoreError> {
     validate_pin(pin)?;
     let hash = hash(pin)?;
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
         let after = repo::set_pin_hash(conn, shop_id, id, &hash, stamp())?;
+        end_sessions_after_credential_change(conn, shop_id, actor_id, id, acting_session_id)?;
         record(
             conn,
             shop_id,
@@ -250,18 +283,26 @@ pub fn claim_first_pin(
     })
 }
 
+/// The same reasoning as `set_pin`'s, on the other credential: a password
+/// reset ends every session the fiche holds, except the caller's own when the
+/// caller is resetting their own password. No route calls this yet
+/// (`crates/api/src/routes/users.rs` only wires the PIN), but the rule is the
+/// same fiche and the same finding, so it is fixed here too rather than left
+/// for whoever wires the route to rediscover.
 pub fn set_password(
     conn: &mut SqliteConnection,
     shop_id: i32,
     actor_id: i32,
     id: i32,
     password: &str,
+    acting_session_id: Option<i32>,
 ) -> Result<User, CoreError> {
     validate_password(password)?;
     let hash = hash(password)?;
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
         let after = repo::set_password_hash(conn, shop_id, id, &hash, stamp())?;
+        end_sessions_after_credential_change(conn, shop_id, actor_id, id, acting_session_id)?;
         record(
             conn,
             shop_id,
@@ -273,6 +314,26 @@ pub fn set_password(
         )?;
         Ok(after)
     })
+}
+
+/// The one rule `set_pin` and `set_password` share: end every session the
+/// target fiche holds, except the caller's own current one when the caller is
+/// resetting their own credential. `acting_session_id` is `None` when nothing
+/// is asking through a session at all, in which case there is no "own
+/// session" to spare and every session ends.
+fn end_sessions_after_credential_change(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    actor_id: i32,
+    target_id: i32,
+    acting_session_id: Option<i32>,
+) -> Result<(), CoreError> {
+    let now = stamp();
+    match acting_session_id.filter(|_| actor_id == target_id) {
+        Some(keep) => sessions::end_all_for_user_except(conn, shop_id, target_id, keep, now)?,
+        None => sessions::end_all_for_user(conn, shop_id, target_id, now)?,
+    };
+    Ok(())
 }
 
 /// Switches a user off. Nothing is deleted: every document, ledger row and
@@ -299,6 +360,14 @@ pub fn deactivate(
         }
         refuse_last_owner(conn, shop_id, &before, "active")?;
         let after = write_fiche(conn, shop_id, id, before.name.clone(), before.role, false)?;
+        // Unconditional: the refusal three lines up means `actor_id != id`
+        // whenever this line runs, so there is no "own session" to spare the
+        // way `set_pin` spares one. Without this, a fiche switched off and
+        // switched back on inside the idle window would hand its old token
+        // back to whoever was still holding it, with no new sign-in: `active`
+        // flips back to true before the row that should have ended the
+        // session ever gets written.
+        sessions::end_all_for_user(conn, shop_id, id, stamp())?;
         record(
             conn,
             shop_id,

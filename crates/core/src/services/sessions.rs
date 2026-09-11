@@ -49,7 +49,7 @@ use crate::repos::sessions as repo;
 use crate::services::{preferences, users};
 
 pub use crate::models::session::{Actor, SignedIn};
-pub use crate::repos::sessions::end_all_for_user;
+pub use crate::repos::sessions::{end_all_for_user, end_all_for_user_except};
 
 /// Bytes of randomness in a session token; shown as 64 hex characters. The
 /// same figure the launch token uses, for the same reason: 256 bits is past
@@ -110,7 +110,7 @@ fn open(
     let _ = repo::delete_ended_before(conn, shop_id, now - Duration::days(KEEP_ENDED_FOR_DAYS));
 
     let token = mint()?;
-    repo::insert(
+    let row = repo::insert(
         conn,
         &SessionRowWrite {
             shop_id,
@@ -126,6 +126,7 @@ fn open(
             user_id: user.id,
             shop_id,
             role: user.role,
+            session_id: row.id,
         },
         name: user.name,
     })
@@ -152,6 +153,7 @@ pub fn resolve(
         user_id: found.row.user_id,
         shop_id,
         role: found.role,
+        session_id: found.row.id,
     }))
 }
 
@@ -169,6 +171,7 @@ pub fn describe(
                 user_id: found.row.user_id,
                 shop_id,
                 role: found.role,
+                session_id: found.row.id,
             },
             found.name,
         )

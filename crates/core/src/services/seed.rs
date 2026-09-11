@@ -269,8 +269,8 @@ struct Fiche {
 /// to. Through `users`, so the hashes are argon2id and the audit rows are the
 /// ones a reset leaves: the seeder writes nothing by hand here either.
 fn the_way_in(conn: &mut SqliteConnection, shop_id: i32, user_id: i32) -> Result<(), CoreError> {
-    users::set_pin(conn, shop_id, user_id, user_id, OWNER_PIN)?;
-    users::set_password(conn, shop_id, user_id, user_id, OWNER_PASSWORD)?;
+    users::set_pin(conn, shop_id, user_id, user_id, OWNER_PIN, None)?;
+    users::set_password(conn, shop_id, user_id, user_id, OWNER_PASSWORD, None)?;
     Ok(())
 }
 

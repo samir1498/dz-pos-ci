@@ -245,7 +245,7 @@ mod read {
             },
         )
         .unwrap();
-        users::set_pin(&mut conn, SHOP, OWNER, clerk.id, "1357").unwrap();
+        users::set_pin(&mut conn, SHOP, OWNER, clerk.id, "1357", None).unwrap();
 
         let now = dzpos_core::services::clock::now();
         for _ in 0..users::FAILURES_BEFORE_LOCKOUT {

@@ -105,10 +105,18 @@ pub(crate) fn end(
     Ok(())
 }
 
-/// Ends every live session a user is holding. What T8 calls when a fiche is
-/// switched off, so somebody already signed in does not keep working until
-/// their idle time runs out. The join in `by_token_hash` refuses them anyway;
-/// this is the row saying so rather than the check happening to.
+/// Ends every live session a user is holding. `services::users::deactivate`
+/// calls this when a fiche is switched off: the join in `by_token_hash` would
+/// refuse the same session on its next request anyway, once `active` reads
+/// false, but this is what makes the refusal immediate instead of whatever
+/// request the session happens to make next.
+///
+/// A credential reset is the other caller that needs a session ended, and it
+/// cannot use this one: `active` never changes when a PIN or a password is
+/// reset, so `by_token_hash` would go on saying yes to the old session
+/// forever. `set_pin` and `set_password` call `end_all_for_user_except`
+/// below instead, for that reason and to leave the screen doing the reset
+/// signed in when it is resetting its own.
 pub fn end_all_for_user(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -119,6 +127,30 @@ pub fn end_all_for_user(
         sessions::table
             .filter(sessions::shop_id.eq(shop_id))
             .filter(sessions::user_id.eq(user_id))
+            .filter(sessions::ended_at.is_null()),
+    )
+    .set(sessions::ended_at.eq(Some(now)))
+    .execute(conn)?)
+}
+
+/// The same, except the one session named. `services::users::set_pin` and
+/// `set_password` call this when the person resetting a credential is
+/// resetting their own: every other open till under that name is signed out,
+/// and the screen finishing the reset is not, because ending it too would be
+/// a self-inflicted lockout for doing the thing that just fixed the
+/// credential.
+pub fn end_all_for_user_except(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    keep_session_id: i32,
+    now: NaiveDateTime,
+) -> Result<usize, CoreError> {
+    Ok(diesel::update(
+        sessions::table
+            .filter(sessions::shop_id.eq(shop_id))
+            .filter(sessions::user_id.eq(user_id))
+            .filter(sessions::id.ne(keep_session_id))
             .filter(sessions::ended_at.is_null()),
     )
     .set(sessions::ended_at.eq(Some(now)))

@@ -12,6 +12,7 @@ use dzpos_core::services::backup;
 
 use crate::dto::{BackupDto, BackupsDto, RestoreDto};
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 // The shop's clock lives in `routes::settings` (Algeria, UTC+1, no daylight
@@ -47,6 +48,7 @@ pub async fn create(
 /// backup name, and the join never happens.
 pub async fn restore(
     State(state): State<AppState>,
+    who: CurrentUser,
     Path(name): Path<String>,
 ) -> Result<Json<RestoreDto>, ApiError> {
     if backup::taken_at(&name).is_none() {
@@ -57,7 +59,8 @@ pub async fn restore(
     }
     let path = state.backup_dir().join(&name);
     let restored_from = name;
-    let done = tokio::task::spawn_blocking(move || state.restore(&path))
+    let actor = who.id;
+    let done = tokio::task::spawn_blocking(move || state.restore(&path, actor))
         .await
         .map_err(|_| ApiError::Unavailable)??;
     Ok(Json(RestoreDto {

@@ -71,8 +71,9 @@ pub async fn set_pin(
     let Json(dto) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
     let actor = who.id;
+    let acting_session_id = who.session_id;
     let after = state
-        .blocking(move |c| service::set_pin(c, shop, actor, id, &dto.pin))
+        .blocking(move |c| service::set_pin(c, shop, actor, id, &dto.pin, Some(acting_session_id)))
         .await?;
     Ok(Json(UserDto::from(after)))
 }

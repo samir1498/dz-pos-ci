@@ -9,10 +9,12 @@
 //! This module carried its own copy while the users table was being written
 //! on another branch; the two met on 2026-09-11 and the copy went.
 
+use diesel::sqlite::SqliteConnection;
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
 use crate::money::{Bps, Money};
+use crate::services::audit;
 
 pub use crate::models::sql_types::Role;
 
@@ -184,6 +186,58 @@ pub fn require(role: Role, permission: Permission) -> Result<(), CoreError> {
     } else {
         Err(CoreError::forbidden(permission))
     }
+}
+
+/// The row `crates/api/src/session.rs::require` writes when `require` above
+/// refuses somebody: a refusal used to leave nothing behind.
+/// That is the only caller, and on purpose: it is the one seam every gated
+/// request already passes through, so the row is written once and a handler
+/// never has to remember to.
+///
+/// What is not a row here, decided at that one seam and not restated: a 401
+/// with no session, because there is no person yet to write one about; and
+/// `ungated_write`, a route the permission table forgot rather than a role
+/// asking for something it may not, which names no permission to record.
+/// Everything this function is actually called on is a route
+/// `crates/api/src/gates.rs` deliberately names a permission for, a read as
+/// much as a write — `ExportAndImport` on `GET /export/*` is exactly the case
+/// the finding was written about, a cashier trying the export route and
+/// leaving nothing behind — so the method is carried on the row rather than
+/// used to decide whether there is one.
+///
+/// The API layer calls this rather than building the row itself
+/// (`docs/architecture.md` § Transport and auth: an audit row is business,
+/// never transport), and it is a single `INSERT` that commits on its own, the
+/// way `services::users::settle`'s failure counter does: the refusal that
+/// triggers it happens before any handler transaction has opened, so there is
+/// nothing here for a later rollback to undo.
+pub fn record_refusal(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    actor_id: i32,
+    permission: Permission,
+    method: &str,
+    route: &str,
+) -> Result<(), CoreError> {
+    audit::record(
+        conn,
+        shop_id,
+        actor_id,
+        audit::Change {
+            action: audit::ACTION_PERMISSION_REFUSED,
+            entity: "permission",
+            entity_id: None,
+            before: None,
+            after: Some(
+                serde_json::json!({
+                    "permission": permission.as_str(),
+                    "method": method,
+                    "route": route,
+                })
+                .to_string(),
+            ),
+        },
+    )
 }
 
 /// Whether a discount needs `Permission::DiscountAboveThreshold`: strictly
