@@ -12,7 +12,7 @@
 // list, the fiche panel that opens over it, then the account page a row's
 // name links to, then back to the list.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { apiHeaders, apiUrl } from "./api";

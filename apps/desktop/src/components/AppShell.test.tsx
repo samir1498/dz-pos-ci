@@ -20,6 +20,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { I18nProvider, type Lang } from "@/i18n";
+import { SessionProvider } from "@/lib/session";
 import { ThemeProvider } from "@/lib/theme";
 import ar from "@/i18n/ar.json";
 import fr from "@/i18n/fr.json";
@@ -83,9 +84,13 @@ async function mount(path: string, lang: Lang = "fr") {
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
         {/* The same nesting main.tsx uses: the theme rides on the settings
-            query, so the provider sits inside the query client. */}
+            query, so the provider sits inside the query client, and
+            `UserMenu` in the topbar reads `useSession` so the shell needs
+            one even though none of these tests signs in. */}
         <ThemeProvider>
-          <RouterProvider router={router} />
+          <SessionProvider>
+            <RouterProvider router={router} />
+          </SessionProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </I18nProvider>,

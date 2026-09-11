@@ -4,7 +4,7 @@
 // instead of silently passing a hardcoded sentence, and the same test
 // proves the screen in all three languages.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentLang, t } from "./messages";

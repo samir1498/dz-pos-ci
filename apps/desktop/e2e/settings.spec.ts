@@ -4,7 +4,7 @@
 // test (fr, en or ar), so a reworded label fails here rather than passing
 // a hardcoded sentence, in every language.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import type { Locator, Page } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

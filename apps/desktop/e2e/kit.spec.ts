@@ -12,7 +12,7 @@
 // name order, one database), so it hands the shop back to Comptoir, the
 // default, before it leaves.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 

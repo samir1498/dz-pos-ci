@@ -16,8 +16,11 @@ const desktopDir = fileURLToPath(new URL(".", import.meta.url));
 const repoRoot = path.resolve(desktopDir, "..", "..");
 const artifactsDir = path.join(desktopDir, "e2e", ".artifacts");
 
-/** Deleted before every run, so the first screen is always the empty state. */
-const tempDb = path.join(artifactsDir, "e2e.db");
+/** Deleted before every run, so the first screen is always the empty state.
+ * Exported so `e2e/globalSetup.ts` opens the same file this config's own
+ * `webServer` command just migrated, rather than working the path out a
+ * second time and drifting from it. */
+export const tempDb = path.join(artifactsDir, "e2e.db");
 /** The API puts its copies beside the database. Deleted with it: the backups
  * spec starts from "no copy at all", and a folder left by the last run would
  * make that first assertion pass or fail on history. */
@@ -90,6 +93,18 @@ export default defineConfig({
   testDir: path.join(desktopDir, "e2e"),
   outputDir: path.join(artifactsDir, "test-results"),
   reporter: [["list"]],
+  // Runs after `webServer` below is confirmed healthy (Playwright's own
+  // order), so the API has already migrated `tempDb` into an empty shop by
+  // the time this opens it. M4 T2 gave every user a real row but no usable
+  // credential (`crates/core/migrations/.../up.sql`'s seeded owner carries
+  // the sentinel `pin_hash='!unset'` and a `NULL` password_hash), so every
+  // spec now meets a sign-in screen it cannot get past. This writes the one
+  // fixed development credential (`e2e/auth.ts`'s `OWNER_*` constants, the
+  // same PIN and password `dzpos-seed` prints) onto the seeded owner row,
+  // and nothing else: the products suite's first assertion still wants an
+  // empty catalogue, so this must not be `dzpos-seed`, which also fills a
+  // month of trading.
+  globalSetup: path.join(desktopDir, "e2e", "globalSetup.ts"),
   // One browser, one worker. Every spec in the run shares one API process
   // over one SQLite file, so two of them writing at once would each see
   // rows the other seeded; and the suites are ordered by filename on
