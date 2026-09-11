@@ -1,4 +1,4 @@
-//! One table naming the permission each mutating route wants (M4 T2).
+//! One table naming the permission each route that needs one wants (M4 T2).
 //!
 //! The permission enum is one table so a role is never compared twice
 //! (`services::permissions`); this is the same idea one layer up, so a route
@@ -6,6 +6,13 @@
 //! walks it against the router's own `.route(` lines, in both directions: a
 //! mutating route with no row here fails, and a row naming a route that is not
 //! there fails.
+//!
+//! **Five reads are in it.** The table is otherwise about writes, because a
+//! read of a list a cashier is already looking at needs no permission. The
+//! four exports and the import template are the exception the M3 carry-in
+//! named in words: an export is the whole customer list, the whole supplier
+//! list and every sale the shop ever rang up, walking out on a USB stick.
+//! They carry the same permission as the import that reads the template back.
 //!
 //! **What T2 ships and what T3 does.** T2 is the mechanism, the table's shape
 //! and the actor. What T2 deliberately does not do is apply it: no handler
@@ -34,7 +41,8 @@ use dzpos_core::services::permissions::Permission;
 /// took, not a row nobody filled in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Gate {
-    /// Upper case, as the router spells it: `POST`, `PUT`.
+    /// Upper case, as the router spells it: `POST`, `PUT`, and `GET` for the
+    /// five reads the module doc names.
     pub method: &'static str,
     /// The path exactly as `crates/api/src/lib.rs` writes it, `{id}`
     /// placeholders and all, so the walking test can match the two by string.
@@ -43,7 +51,8 @@ pub struct Gate {
     pub why: &'static str,
 }
 
-/// Every mutating route this API answers, and what it will want.
+/// Every mutating route this API answers, and the five reads that carry the
+/// shop's lists out of it, with what each will want.
 ///
 /// Sorted by path, which is how `lib.rs` lists its routes, so the two read
 /// side by side.
@@ -113,6 +122,36 @@ pub const ROUTE_GATES: &[Gate] = &[
         path: "/import/products",
         permission: Some(Permission::ExportAndImport),
         why: "the same workbook as the dry run, and this is the call that actually rewrites the prices",
+    },
+    Gate {
+        method: "GET",
+        path: "/import/products/template",
+        permission: Some(Permission::ExportAndImport),
+        why: "the template carries the shop's own products and their prices, so it walks out the same list an export does (M3 carry-in, 2026-09-10)",
+    },
+    Gate {
+        method: "GET",
+        path: "/export/customers",
+        permission: Some(Permission::ExportAndImport),
+        why: "the whole customer list on a USB stick, names and debts included (M3 carry-in, 2026-09-10)",
+    },
+    Gate {
+        method: "GET",
+        path: "/export/products",
+        permission: Some(Permission::ExportAndImport),
+        why: "the whole catalogue with its cost prices (M3 carry-in, 2026-09-10)",
+    },
+    Gate {
+        method: "GET",
+        path: "/export/sales",
+        permission: Some(Permission::ExportAndImport),
+        why: "every sale the shop ever rang up (M3 carry-in, 2026-09-10)",
+    },
+    Gate {
+        method: "GET",
+        path: "/export/suppliers",
+        permission: Some(Permission::ExportAndImport),
+        why: "the whole supplier list and what is owed to each (M3 carry-in, 2026-09-10)",
     },
     Gate {
         method: "POST",
@@ -257,10 +296,25 @@ mod tests {
         let mut seen: Vec<(&str, &str)> = Vec::new();
         for gate in ROUTE_GATES {
             assert!(
-                matches!(gate.method, "POST" | "PUT"),
-                "{} is not a mutating method",
+                matches!(gate.method, "POST" | "PUT" | "GET"),
+                "{} is not a method this table carries",
                 gate.method
             );
+            // A read in here is one of the five the module doc names and
+            // never a sixth added in passing: an open read is open by having
+            // no row at all, not by a row with no permission.
+            if gate.method == "GET" {
+                assert!(
+                    gate.permission.is_some(),
+                    "{} is a read with no permission; leave it out of the table instead",
+                    gate.path
+                );
+                assert!(
+                    gate.path.starts_with("/export/") || gate.path == "/import/products/template",
+                    "{} is a read this table was not opened for",
+                    gate.path
+                );
+            }
             assert!(gate.path.starts_with('/'), "{} is not a path", gate.path);
             assert!(
                 gate.why.len() > 20,
@@ -290,10 +344,21 @@ mod tests {
         let wants = |method, path| gate_for(method, path).and_then(|g| g.permission);
         // The exports and imports, and the labels that are deliberately not
         // with them.
-        assert_eq!(
-            wants("POST", "/import/products"),
-            Some(Permission::ExportAndImport)
-        );
+        for (method, path) in [
+            ("POST", "/import/products"),
+            ("POST", "/import/products/dry-run"),
+            ("GET", "/import/products/template"),
+            ("GET", "/export/products"),
+            ("GET", "/export/sales"),
+            ("GET", "/export/customers"),
+            ("GET", "/export/suppliers"),
+        ] {
+            assert_eq!(
+                wants(method, path),
+                Some(Permission::ExportAndImport),
+                "{method} {path}"
+            );
+        }
         assert_eq!(wants("POST", "/labels/sheet"), None);
         // Money out, and the ledger corrections beside it.
         for path in ["/expenses", "/purchases", "/suppliers/{id}/payments"] {

@@ -96,8 +96,9 @@ async fn login(app: &axum::Router, body: Value) -> (StatusCode, Value, Vec<Strin
     call(app, "POST", "/auth/login", Some(body), &[]).await
 }
 
-fn header(token: &str) -> Vec<(&'static str, String)> {
-    vec![("x-dzpos-session", token.to_owned())]
+/// The desktop's way of carrying the token, as `call` wants its headers.
+fn header_pairs(token: &str) -> [(&'static str, &str); 1] {
+    [(dzpos_api::session::SESSION_HEADER, token)]
 }
 
 /// The till's way in: a user id off the list and a PIN. The answer names who
@@ -398,22 +399,52 @@ async fn a_write_names_the_user_the_session_says_is_acting() {
 
 /// A session opened against one shop is nobody on a router answering for
 /// another, so a second till's token is not a way into this shop's rows.
+/// Two shops here are two files behind two routers, which is what two tills
+/// on one counter are; the same token is offered to the other one both ways
+/// it can travel.
 #[tokio::test]
 async fn a_session_of_one_shop_does_not_open_another() {
-    let h = harness();
-    let (_, signed_in, _) = login(&h.app, json!({ "user_id": OWNER, "pin": OWNER_PIN })).await;
+    let mine = harness();
+    let theirs = harness();
+    let (_, signed_in, _) = login(&mine.app, json!({ "user_id": OWNER, "pin": OWNER_PIN })).await;
     let session = signed_in["token"].as_str().unwrap().to_owned();
 
-    let _ = header(&session);
+    // It opens the shop it was made for. Without this the refusal below could
+    // be a token that never worked anywhere.
+    let (status, body, _) =
+        call(&mine.app, "GET", "/products", None, &header_pairs(&session)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
     let (status, body, _) = call(
-        &h.app,
+        &theirs.app,
         "GET",
         "/products",
         None,
-        &[("x-dzpos-session", &session)],
+        &header_pairs(&session),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "the other shop answered a token it never issued: {body}"
+    );
+    assert_eq!(body["error"]["code"], "session_required", "{body}");
+
+    let cookie = format!("dzpos_session={session}");
+    let (status, body, _) = call(
+        &theirs.app,
+        "GET",
+        "/products",
+        None,
+        &[("cookie", cookie.as_str())],
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "the cookie got in where the header did not: {body}"
+    );
+    assert_eq!(body["error"]["code"], "session_required", "{body}");
 }
 
 /// The lockout reaches the wire with the wait beside the code, so the sign-in

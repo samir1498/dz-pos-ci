@@ -155,25 +155,34 @@ fn every_row_of_the_table_names_a_route_that_is_there() {
 /// The two reads the carry-ins do name (`GET /stock/recount` and the label
 /// routes, both of which a cashier keeps) are open, so no row is wanted.
 #[test]
-fn the_table_is_about_writes_and_says_nothing_about_reads() {
+fn the_table_is_about_writes_and_the_five_reads_that_carry_the_lists_out() {
     for gate in ROUTE_GATES {
         assert!(
-            matches!(gate.method, "POST" | "PUT"),
-            "{} {} is a read and does not belong in this table",
+            matches!(gate.method, "POST" | "PUT" | "GET"),
+            "{} {} is a method this table does not carry",
             gate.method,
             gate.path
         );
     }
-    for read in [
-        "/products",
-        "/stock/recount",
-        "/export/products",
-        "/dashboard",
-        "/settings",
-    ] {
+    // An ordinary read is open: a cashier is already looking at the list.
+    for read in ["/products", "/stock/recount", "/dashboard", "/settings"] {
         assert!(
             gate_for("GET", read).is_none(),
-            "GET {read} has a row; reads are not this table's business"
+            "GET {read} has a row; an ordinary read is not this table's business"
+        );
+    }
+    // The exception the M3 carry-in named in words: a whole list on a USB
+    // stick. If one of these loses its row, a cashier walks out with it.
+    for read in [
+        "/export/products",
+        "/export/sales",
+        "/export/customers",
+        "/export/suppliers",
+        "/import/products/template",
+    ] {
+        assert!(
+            gate_for("GET", read).is_some(),
+            "GET {read} carries a whole list out and has no row"
         );
     }
 }
