@@ -12,3 +12,5 @@ apps/desktop/e2e/.artifacts/
 .env
 .dev/
 .claude/worktrees/
+apps/landing/.astro/
+apps/landing/src/styles/tokens.css
