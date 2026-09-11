@@ -1074,7 +1074,10 @@ the rule is enforced.
 - Bon de livraison and facture récapitulative together (décret 05-468
   art. 14–17 allow the first only with the second and a wilaya
   authorisation). The `bon_de_livraison` kind exists in the model; no
-  template or screen until then.
+  template or screen until then. `docs/roadmap.md` § M5 listed the delivery
+  note as release work until 2026-09-11 and now points back here instead;
+  the two pages disagreed for three days and this line is the one that
+  holds.
 
 ## Open decisions
 
