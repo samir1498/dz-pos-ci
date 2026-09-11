@@ -88,6 +88,12 @@ struct Payload {
     party_side: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     missing_ids: Option<Vec<&'static str>>,
+    /// How long a locked-out user has to wait, in seconds. The same
+    /// exception, for the same reason: the sign-in screen counts it down and
+    /// the wait is a figure the caller never sent. Absent from every other
+    /// error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retry_after_seconds: Option<i64>,
 }
 
 /// What an error carries besides its code and its sentence. One value per
@@ -101,6 +107,7 @@ struct Figures {
     outstanding_centimes: Option<i64>,
     party_side: Option<&'static str>,
     missing_ids: Option<Vec<&'static str>>,
+    retry_after_seconds: Option<i64>,
 }
 
 impl Figures {
@@ -111,6 +118,7 @@ impl Figures {
         outstanding_centimes: None,
         party_side: None,
         missing_ids: None,
+        retry_after_seconds: None,
     };
 }
 
@@ -196,6 +204,15 @@ impl ApiError {
                 field: Some(field.clone()),
                 ..Figures::NONE
             },
+            ApiError::Core(CoreError::LockedOut {
+                retry_after_seconds,
+            })
+            | ApiError::Request(CoreError::LockedOut {
+                retry_after_seconds,
+            }) => Figures {
+                retry_after_seconds: Some(*retry_after_seconds),
+                ..Figures::NONE
+            },
             ApiError::Core(CoreError::PartyIds { side, missing })
             | ApiError::Request(CoreError::PartyIds { side, missing }) => Figures {
                 party_side: Some(side.as_str()),
@@ -227,6 +244,15 @@ const fn status_for(e: &CoreError) -> StatusCode {
         | CoreError::PaymentAboveDebt { .. }
         | CoreError::PartyIds { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
+        // A credential that did not match. 401 and not 422: nothing in the
+        // request is malformed, and what is missing is an identity the caller
+        // has to establish before the route will answer at all.
+        CoreError::AuthRefused => StatusCode::UNAUTHORIZED,
+        // Too many wrong credentials. 429 is what a screen counting a wait
+        // down reads, and the wait itself is in the payload beside the code:
+        // the caller can act on it, by waiting, and working it out on the
+        // screen would be a second reading of a rule that lives in the core.
+        CoreError::LockedOut { .. } => StatusCode::TOO_MANY_REQUESTS,
         CoreError::DuplicateBarcode(_)
         | CoreError::Exhausted { .. }
         | CoreError::Conflict { .. } => StatusCode::CONFLICT,
@@ -242,6 +268,9 @@ const fn status_for(e: &CoreError) -> StatusCode {
         | CoreError::Io(_)
         | CoreError::Unstamped { .. }
         | CoreError::UnpricedReversal { .. }
+        // A credential this app could not hash, with parameters and input
+        // shapes it chose itself: its own bug, like the two above.
+        | CoreError::Hash(_)
         // A workbook that will not write is the same: the columns and the
         // rows are both the app's own.
         | CoreError::Render(_)
@@ -291,6 +320,7 @@ impl IntoResponse for ApiError {
             outstanding_centimes,
             party_side,
             missing_ids,
+            retry_after_seconds,
         } = self.figures();
         let mut res = (
             status,
@@ -304,12 +334,19 @@ impl IntoResponse for ApiError {
                     outstanding_centimes,
                     party_side,
                     missing_ids,
+                    retry_after_seconds,
                 },
             }),
         )
             .into_response();
-        if let ApiError::Unauthorized = self {
-            // RFC 7235: a 401 names the scheme it wants.
+        // RFC 7235: a 401 names the scheme it wants. Both of this API's 401s
+        // do, and the two are told apart by the code in the body: `unauthorized`
+        // is the launch token the process was started with, `auth_refused` is
+        // the person standing at the till.
+        if matches!(
+            self,
+            ApiError::Unauthorized | ApiError::Core(CoreError::AuthRefused)
+        ) {
             res.headers_mut()
                 .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
         }

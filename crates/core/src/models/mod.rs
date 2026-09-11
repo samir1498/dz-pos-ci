@@ -13,3 +13,4 @@ pub mod sql_types;
 pub mod stock;
 pub mod supplier;
 pub mod supplier_debt;
+pub mod user;

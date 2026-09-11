@@ -21,6 +21,9 @@ serde = { workspace = true, features = ["derive"] }
 # The audit log stores the row before and after as JSON text (features.md §5).
 serde_json = { workspace = true }
 thiserror = "2"
+# argon2id for the PIN and the password (features.md §5). Version and
+# features are pinned at the workspace level.
+argon2 = { workspace = true }
 # Printed templates (features.md §4). Compiled into the binary, checked at
 # compile time and HTML-escaped by default, so a shop name with an "&" in it
 # cannot break a ticket and no template file ships beside the app.

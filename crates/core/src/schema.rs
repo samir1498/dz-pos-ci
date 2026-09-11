@@ -84,6 +84,12 @@ diesel::table! {
         role -> Text,
         pin_hash -> Text,
         created_at -> Timestamp,
+        // migrations/2026-09-11-000011_users_auth
+        password_hash -> Nullable<Text>,
+        active -> Bool,
+        pin_failures -> Integer,
+        locked_until -> Nullable<Timestamp>,
+        updated_at -> Timestamp,
     }
 }
 

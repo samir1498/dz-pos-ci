@@ -108,6 +108,30 @@ pub const ACTION_CANCEL_PURCHASE: &str = "purchase.cancel";
 /// written off. A decision, so the reason is in the entry.
 pub const ACTION_CLOSE_SHORT_PURCHASE: &str = "purchase.close_short";
 
+/// A user created.
+pub const ACTION_CREATE_USER: &str = "user.create";
+/// A user renamed. Its own action rather than a generic update, because the
+/// name is what the sign-in screen lists and the audit log prints.
+pub const ACTION_RENAME_USER: &str = "user.rename";
+/// A role changed. The entry carries the role before and after, which is the
+/// whole of what a change of role is.
+pub const ACTION_SET_ROLE: &str = "user.set_role";
+/// A PIN set or reset. The entry says that one was set and never what it is:
+/// a hash in a log is a hash in a backup and in every export of it.
+pub const ACTION_SET_PIN: &str = "user.set_pin";
+/// A password set or reset. The same, on the other credential.
+pub const ACTION_SET_PASSWORD: &str = "user.set_password";
+/// A user switched off. Never a deletion: the rows they wrote name them.
+pub const ACTION_DEACTIVATE_USER: &str = "user.deactivate";
+/// A user switched back on.
+pub const ACTION_REACTIVATE_USER: &str = "user.reactivate";
+/// A user locked out by wrong credentials. Written on the crossing and not on
+/// every attempt, so the log holds the event and not the noise: the entry
+/// carries the count and the moment they may try again, because a lockout
+/// nobody can see afterwards is a shop owner asking why the till would not
+/// open and getting no answer.
+pub const ACTION_LOCK_OUT_USER: &str = "user.locked_out";
+
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
