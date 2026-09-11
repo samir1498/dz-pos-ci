@@ -182,6 +182,12 @@ pub fn issue(
     // limit belongs to.
     let customer_id = new.customer_id;
 
+    // What the credit limit refused, if it refused. It lives out here, in
+    // memory, precisely because memory does not roll back: the transaction
+    // below unwinds every row it wrote, and the facts of the refusal have to
+    // outlive it to be written down at all.
+    let mut refused: Option<Refused> = None;
+
     let issued = conn.transaction(|conn| {
         let issued_at = new.issued_at.unwrap_or_else(clock::now);
         let regime = settings::regime_as_of(conn, shop_id, issued_at)?;
@@ -269,9 +275,12 @@ pub fn issue(
                 shop_id,
                 user_id,
                 customer_id,
-                new.payment_mode,
-                totals.net_to_pay,
-                new.override_credit,
+                CreditAsk {
+                    payment_mode: new.payment_mode,
+                    net_to_pay: totals.net_to_pay,
+                    override_credit: new.override_credit,
+                },
+                &mut refused,
             )?),
         };
 
@@ -569,11 +578,7 @@ pub fn issue(
     // The refusal wins if this write fails. A lost row is a lost row; a till
     // told "the database is unwell" when what actually happened is that the
     // customer is over their limit sends the cashier to the wrong person.
-    if let Err(CoreError::CreditLimit {
-        balance_after,
-        credit_limit,
-    }) = &issued
-    {
+    if let (Err(_), Some(refusal)) = (&issued, &refused) {
         let _ = audit::record(
             conn,
             shop_id,
@@ -586,13 +591,19 @@ pub fn issue(
                 before: Some(
                     serde_json::json!({
                         "customer_id": customer_id,
-                        "credit_limit_centimes": credit_limit.as_centimes(),
+                        "credit_limit_centimes": refusal.credit_limit.as_centimes(),
                     })
                     .to_string(),
                 ),
+                // `asked_to_override` is the difference between a cashier
+                // who rang a sale up and was stopped, and a cashier who sent
+                // the override flag and was stopped because they are not
+                // allowed to send it. A shop reading its log wants to tell
+                // those two apart.
                 after: Some(
                     serde_json::json!({
-                        "balance_would_be_centimes": balance_after.as_centimes(),
+                        "balance_would_be_centimes": refusal.balance_after.as_centimes(),
+                        "asked_to_override": refusal.asked_to_override,
                     })
                     .to_string(),
                 ),
@@ -695,6 +706,36 @@ fn unset(value: Option<&str>) -> bool {
     !value.is_some_and(|v| !v.trim().is_empty())
 }
 
+/// What the sale is asking the customer's standing for: how it is being
+/// paid, what it comes to, and whether the till sent the flag that says
+/// somebody means to pass the limit on purpose. Three fields rather than
+/// three arguments because the check already takes the shop, the person and
+/// the customer, and a list that long stops being readable.
+struct CreditAsk {
+    payment_mode: PaymentMode,
+    net_to_pay: Money,
+    override_credit: bool,
+}
+
+/// What a credit limit refused, kept where a rollback cannot reach it.
+///
+/// The sale that was refused unwound, taking any row written inside it with
+/// it, which is the whole reason the M2 review found a cashier could probe a
+/// customer's limit and leave nothing behind. These three facts are computed
+/// inside the transaction and read after it, so the row that records the
+/// refusal is written on ground the refusal did not wash away.
+struct Refused {
+    /// What the customer would have owed had the sale landed.
+    balance_after: Money,
+    /// What they are allowed to owe.
+    credit_limit: Money,
+    /// Whether the till sent the override flag. False is a cashier who rang
+    /// a sale up and was stopped by the limit. True is a cashier who tried
+    /// to pass it and was stopped because they may not, which is the case a
+    /// shop most wants to see in its log.
+    asked_to_override: bool,
+}
+
 /// What the customer's standing decided: the fiche, the triple the document
 /// stores, whether a limit was passed on purpose, and what the till should
 /// say.
@@ -724,10 +765,14 @@ fn credit_check(
     shop_id: i32,
     user_id: i32,
     customer_id: i32,
-    payment_mode: PaymentMode,
-    net_to_pay: Money,
-    override_credit: bool,
+    ask: CreditAsk,
+    refused: &mut Option<Refused>,
 ) -> Result<CreditCheck, CoreError> {
+    let CreditAsk {
+        payment_mode,
+        net_to_pay,
+        override_credit,
+    } = ask;
     // Reads through the service, so another shop's fiche is a NotFound here
     // rather than a buyer block printed on this shop's paper (rule 3).
     let customer = customers::get(conn, shop_id, customer_id)?;
@@ -760,6 +805,20 @@ fn credit_check(
     if payment_mode == PaymentMode::Credit {
         if let Some(credit_limit) = customer.credit_limit {
             if total_debt > credit_limit {
+                // Written down before either refusal below, because both of
+                // them are refusals and the log has to see both. The first
+                // version of this only caught the one on the left, so a
+                // cashier who learned to always send the override flag
+                // probed a customer's limit for ever without leaving a row:
+                // the flag turned the refusal into a forbidden, and only the
+                // limit refusal was being logged. The flag is a deliberate
+                // attempt to pass the limit, so it is the case the log most
+                // needs, which is why it is carried in the row.
+                *refused = Some(Refused {
+                    balance_after: total_debt,
+                    credit_limit,
+                    asked_to_override: override_credit,
+                });
                 if !override_credit {
                     return Err(CoreError::CreditLimit {
                         balance_after: total_debt,
@@ -775,6 +834,10 @@ fn credit_check(
                     role_of(conn, shop_id, user_id)?,
                     Permission::OverrideCreditBlock,
                 )?;
+                // Allowed. This is an override somebody was entitled to
+                // take, not a refusal, and the override's own row says so
+                // further up.
+                *refused = None;
                 overridden = true;
             }
         }

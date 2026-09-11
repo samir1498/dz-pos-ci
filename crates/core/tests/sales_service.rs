@@ -1329,6 +1329,85 @@ fn a_refused_credit_sale_is_still_in_the_log_after_the_sale_unwound() {
 }
 
 #[test]
+fn a_cashier_who_sends_the_override_flag_and_may_not_is_in_the_log_too() {
+    // The hole two review lenses found independently in the first version of
+    // this row. A cashier who sends no flag is refused by the limit and gets
+    // a row. A cashier who sends the flag is refused by the permission
+    // instead, a different error entirely, and used to get nothing at all.
+    // That is the case the log most needs: sending the flag is a deliberate
+    // attempt to pass the limit, so a cashier who learned to always send it
+    // could probe a customer's standing for ever in silence.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), None);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        cashier,
+        credit(c, vec![line(p, 1_000)], true),
+    )
+    .unwrap_err();
+    // Read the refusal rather than the fact of one: this has to be the
+    // permission refusing, not the limit, or the test proves nothing new.
+    assert_eq!(err.code(), "forbidden", "{err:?}");
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "sale.credit_blocked")
+        .expect("a cashier who tried to pass the limit leaves a row");
+    assert_eq!(entry.user_id, cashier);
+    assert_eq!(entry.entity_id, Some(c));
+    let after = entry.after.clone().unwrap_or_default();
+    assert!(after.contains("\"asked_to_override\":true"), "{after}");
+    assert!(
+        after.contains("\"balance_would_be_centimes\":100000"),
+        "{after}"
+    );
+
+    // And nothing landed: the refusal is still a refusal.
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+    assert!(debt::ledger(&mut conn, SHOP, c).unwrap().is_empty());
+}
+
+#[test]
+fn the_log_tells_a_stopped_sale_from_an_attempt_to_pass_the_limit() {
+    // The two refusals have to be distinguishable in the row, or the flag
+    // that carries the intent is recorded and unreadable.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), None);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    issue_sale(
+        &mut conn,
+        SHOP,
+        cashier,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap_err();
+    issue_sale(
+        &mut conn,
+        SHOP,
+        cashier,
+        credit(c, vec![line(p, 1_000)], true),
+    )
+    .unwrap_err();
+
+    let rows: Vec<String> = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .filter(|e| e.action == "sale.credit_blocked")
+        .map(|e| e.after.unwrap_or_default())
+        .collect();
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].contains("\"asked_to_override\":false"), "{rows:?}");
+    assert!(rows[1].contains("\"asked_to_override\":true"), "{rows:?}");
+}
+
+#[test]
 fn a_credit_sale_that_crossed_the_warn_threshold_leaves_a_row() {
     // Not a refusal and not a decision anybody took: the sale went through
     // and the account crossed the line the shop asked to hear about.
