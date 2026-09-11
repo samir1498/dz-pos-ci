@@ -29,10 +29,10 @@ fn granted(role: Role) -> HashSet<Permission> {
 
 #[test]
 fn every_permission_is_answered_for_every_role() {
-    // `can` returns a plain `bool`, never an `Option`, so every one of the
-    // three roles times eleven permissions below is either granted or
-    // refused and never left unanswered; this asserts the count reaches all
-    // 33 rather than trusting the type alone.
+    // `can` returns a plain `bool`, never an `Option`, so every role times
+    // every permission is either granted or refused and never left
+    // unanswered; this asserts the count reaches the whole grid rather than
+    // trusting the type alone.
     let mut answered = 0;
     for role in ROLES {
         for permission in Permission::ALL {

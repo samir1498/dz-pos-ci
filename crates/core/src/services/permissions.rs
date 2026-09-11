@@ -51,8 +51,13 @@ pub enum Permission {
     /// cost and landed-cost columns on products, purchases and the
     /// dashboard.
     SeeCostAndMargin,
-    /// Change a product's fiche: price, name, barcode, category.
-    EditProducts,
+    /// Change a card the shop keeps on something it deals with: a product's
+    /// fiche (price, name, barcode, category) and a supplier's, closing or
+    /// reopening one included, because a body carrying `active: false` closes
+    /// a supplier through the same rule the close route uses (M3 carry-in,
+    /// 2026-09-10). Named for the card and not for the product because the
+    /// same hand keeps both.
+    EditFiches,
     /// Change the shop's settings screen, the régime fiscal included.
     EditSettings,
     /// Read the dashboard and the reports it links to.
@@ -68,7 +73,11 @@ pub enum Permission {
     CommitMoney,
     /// Correct a ledger the ordinary flow does not: a supplier debt
     /// adjustment, a purchase return or close-short, or a stock recount
-    /// that rewrites a cached quantity on hand (M3 carry-in, 2026-09-10).
+    /// that rewrites a cached quantity on hand (M3 carry-in, 2026-09-10);
+    /// and undo a document already handed to a customer, which is a
+    /// cancellation or an avoir against a facture (M2 carry-in, 2026-09-09).
+    /// Undoing a sale and undoing a purchase are the same act on the two
+    /// sides of the counter, so they answer to the same permission.
     CorrectLedger,
     /// Walk the shop's data out on a USB stick, or rewrite its prices in
     /// bulk from one: the four exports, the product import template, and
@@ -95,7 +104,7 @@ impl Permission {
         Permission::DiscountAboveThreshold,
         Permission::OverrideCreditBlock,
         Permission::SeeCostAndMargin,
-        Permission::EditProducts,
+        Permission::EditFiches,
         Permission::EditSettings,
         Permission::SeeReports,
         Permission::ManageUsers,
@@ -114,7 +123,7 @@ impl Permission {
             Permission::DiscountAboveThreshold => "discount_above_threshold",
             Permission::OverrideCreditBlock => "override_credit_block",
             Permission::SeeCostAndMargin => "see_cost_and_margin",
-            Permission::EditProducts => "edit_products",
+            Permission::EditFiches => "edit_fiches",
             Permission::EditSettings => "edit_settings",
             Permission::SeeReports => "see_reports",
             Permission::ManageUsers => "manage_users",
@@ -155,7 +164,7 @@ pub const fn can(role: Role, permission: Permission) -> bool {
         Permission::DiscountAboveThreshold
         | Permission::OverrideCreditBlock
         | Permission::SeeCostAndMargin
-        | Permission::EditProducts
+        | Permission::EditFiches
         | Permission::EditSettings
         | Permission::SeeReports
         | Permission::CommitMoney
