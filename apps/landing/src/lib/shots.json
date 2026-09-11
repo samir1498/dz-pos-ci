@@ -1,122 +1,314 @@
 {
   "hero": {
     "fr": {
-      "src1x": "hero-1x.webp",
-      "src2x": "hero-2x.webp",
+      "sources": [
+        {
+          "url": "hero-684w.webp",
+          "width": 684
+        },
+        {
+          "url": "hero-1344w.webp",
+          "width": 1344
+        }
+      ],
+      "src": "hero-684w.webp",
       "width": 672,
-      "height": 757
+      "height": 757,
+      "sizes": "(min-width: 1120px) 672px, calc(100vw - 48px)"
     },
     "en": {
-      "src1x": "hero-1x.webp",
-      "src2x": "hero-2x.webp",
+      "sources": [
+        {
+          "url": "hero-684w.webp",
+          "width": 684
+        },
+        {
+          "url": "hero-1344w.webp",
+          "width": 1344
+        }
+      ],
+      "src": "hero-684w.webp",
       "width": 672,
-      "height": 757
+      "height": 757,
+      "sizes": "(min-width: 1120px) 672px, calc(100vw - 48px)"
     },
     "ar": {
-      "src1x": "hero-ar-1x.webp",
-      "src2x": "hero-ar-2x.webp",
+      "sources": [
+        {
+          "url": "hero-ar-684w.webp",
+          "width": 684
+        },
+        {
+          "url": "hero-ar-1344w.webp",
+          "width": 1344
+        }
+      ],
+      "src": "hero-ar-684w.webp",
       "width": 672,
-      "height": 757
+      "height": 757,
+      "sizes": "(min-width: 1120px) 672px, calc(100vw - 48px)"
     }
   },
   "selling": {
     "fr": {
-      "src1x": "selling-1x.webp",
-      "src2x": "selling-2x.webp",
-      "width": 512,
-      "height": 430
+      "sources": [
+        {
+          "url": "selling-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "selling-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "selling-628w.webp",
+      "width": 314,
+      "height": 266,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "en": {
-      "src1x": "selling-1x.webp",
-      "src2x": "selling-2x.webp",
-      "width": 512,
-      "height": 430
+      "sources": [
+        {
+          "url": "selling-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "selling-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "selling-628w.webp",
+      "width": 314,
+      "height": 266,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "ar": {
-      "src1x": "selling-ar-1x.webp",
-      "src2x": "selling-ar-2x.webp",
-      "width": 512,
-      "height": 430
+      "sources": [
+        {
+          "url": "selling-ar-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "selling-ar-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "selling-ar-628w.webp",
+      "width": 314,
+      "height": 266,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     }
   },
   "invoicing": {
     "fr": {
-      "src1x": "invoicing-1x.webp",
-      "src2x": "invoicing-2x.webp",
-      "width": 512,
-      "height": 388
+      "sources": [
+        {
+          "url": "invoicing-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "invoicing-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "invoicing-628w.webp",
+      "width": 314,
+      "height": 242,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "en": {
-      "src1x": "invoicing-1x.webp",
-      "src2x": "invoicing-2x.webp",
-      "width": 512,
-      "height": 388
+      "sources": [
+        {
+          "url": "invoicing-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "invoicing-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "invoicing-628w.webp",
+      "width": 314,
+      "height": 242,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "ar": {
-      "src1x": "invoicing-ar-1x.webp",
-      "src2x": "invoicing-ar-2x.webp",
-      "width": 512,
-      "height": 388
+      "sources": [
+        {
+          "url": "invoicing-ar-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "invoicing-ar-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "invoicing-ar-628w.webp",
+      "width": 314,
+      "height": 242,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     }
   },
   "stock": {
     "fr": {
-      "src1x": "stock-1x.webp",
-      "src2x": "stock-2x.webp",
-      "width": 512,
-      "height": 332
+      "sources": [
+        {
+          "url": "stock-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "stock-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "stock-628w.webp",
+      "width": 314,
+      "height": 209,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "en": {
-      "src1x": "stock-1x.webp",
-      "src2x": "stock-2x.webp",
-      "width": 512,
-      "height": 332
+      "sources": [
+        {
+          "url": "stock-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "stock-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "stock-628w.webp",
+      "width": 314,
+      "height": 209,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "ar": {
-      "src1x": "stock-ar-1x.webp",
-      "src2x": "stock-ar-2x.webp",
-      "width": 512,
-      "height": 332
+      "sources": [
+        {
+          "url": "stock-ar-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "stock-ar-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "stock-ar-628w.webp",
+      "width": 314,
+      "height": 209,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     }
   },
   "knowing": {
     "fr": {
-      "src1x": "knowing-1x.webp",
-      "src2x": "knowing-2x.webp",
-      "width": 512,
-      "height": 388
+      "sources": [
+        {
+          "url": "knowing-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "knowing-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "knowing-628w.webp",
+      "width": 314,
+      "height": 242,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "en": {
-      "src1x": "knowing-1x.webp",
-      "src2x": "knowing-2x.webp",
-      "width": 512,
-      "height": 388
+      "sources": [
+        {
+          "url": "knowing-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "knowing-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "knowing-628w.webp",
+      "width": 314,
+      "height": 242,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "ar": {
-      "src1x": "knowing-ar-1x.webp",
-      "src2x": "knowing-ar-2x.webp",
-      "width": 512,
-      "height": 388
+      "sources": [
+        {
+          "url": "knowing-ar-628w.webp",
+          "width": 628
+        },
+        {
+          "url": "knowing-ar-980w.webp",
+          "width": 980
+        }
+      ],
+      "src": "knowing-ar-628w.webp",
+      "width": 314,
+      "height": 242,
+      "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     }
   },
   "collage": {
     "fr": {
-      "src1x": "collage-fr-1x.webp",
-      "src2x": "collage-fr-2x.webp",
-      "width": 1215,
-      "height": 255
+      "sources": [
+        {
+          "url": "collage-fr-684w.webp",
+          "width": 684
+        },
+        {
+          "url": "collage-fr-1440w.webp",
+          "width": 1440
+        },
+        {
+          "url": "collage-fr-2142w.webp",
+          "width": 2142
+        }
+      ],
+      "src": "collage-fr-684w.webp",
+      "width": 342,
+      "height": 74,
+      "sizes": "(min-width: 1120px) 1072px, calc(100vw - 48px)"
     },
     "en": {
-      "src1x": "collage-fr-1x.webp",
-      "src2x": "collage-fr-2x.webp",
-      "width": 1215,
-      "height": 255
+      "sources": [
+        {
+          "url": "collage-fr-684w.webp",
+          "width": 684
+        },
+        {
+          "url": "collage-fr-1440w.webp",
+          "width": 1440
+        },
+        {
+          "url": "collage-fr-2142w.webp",
+          "width": 2142
+        }
+      ],
+      "src": "collage-fr-684w.webp",
+      "width": 342,
+      "height": 74,
+      "sizes": "(min-width: 1120px) 1072px, calc(100vw - 48px)"
     },
     "ar": {
-      "src1x": "collage-ar-1x.webp",
-      "src2x": "collage-ar-2x.webp",
-      "width": 1215,
-      "height": 255
+      "sources": [
+        {
+          "url": "collage-ar-684w.webp",
+          "width": 684
+        },
+        {
+          "url": "collage-ar-1440w.webp",
+          "width": 1440
+        },
+        {
+          "url": "collage-ar-2142w.webp",
+          "width": 2142
+        }
+      ],
+      "src": "collage-ar-684w.webp",
+      "width": 342,
+      "height": 74,
+      "sizes": "(min-width: 1120px) 1072px, calc(100vw - 48px)"
     }
   }
 }

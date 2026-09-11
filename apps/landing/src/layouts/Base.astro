@@ -35,10 +35,14 @@ const canonicalUrl = `${SITE_URL}${ROUTE_PATH[locale]}`;
 const cardUrl = `${SITE_URL}/og/${CARD_FILE}`;
 // The Lighthouse mobile run flagged the hero shot as not discoverable early
 // enough for LCP (it is the page's largest above-the-fold element in every
-// locale): a preload with the same srcset it renders with lets the browser
-// start that fetch from the HTML instead of only after it lays out
-// Hero.astro's <img>. Same file, same responsive choice, no new shot.
+// locale): a preload with the same srcset and sizes it renders with lets
+// the browser start that fetch from the HTML, picking the same candidate
+// Hero.astro's <img> will, instead of only starting after it lays out that
+// <img>. Same file, same responsive choice, no new shot. Dropping
+// `imagesizes` here would make the preload assume the default 100vw and
+// fetch the largest candidate every time, defeating the point.
 const heroShot = shots.hero[locale];
+const heroSrcset = heroShot.sources.map((source) => `/shots/${source.url} ${source.width}w`).join(", ");
 ---
 
 <!doctype html>
@@ -94,8 +98,9 @@ const heroShot = shots.hero[locale];
     <link
       rel="preload"
       as="image"
-      href={`/shots/${heroShot.src1x}`}
-      imagesrcset={`/shots/${heroShot.src1x} 1x, /shots/${heroShot.src2x} 2x`}
+      href={`/shots/${heroShot.src}`}
+      imagesrcset={heroSrcset}
+      imagesizes={heroShot.sizes}
     />
   </head>
   <body>
