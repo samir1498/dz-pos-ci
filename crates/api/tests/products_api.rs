@@ -47,11 +47,25 @@ async fn call(
     uri: &str,
     body: Option<Value>,
 ) -> (StatusCode, Value) {
+    call_as(app, method, uri, body, common::OWNER_SESSION).await
+}
+
+/// The same call, signed in as whichever session the caller names: this
+/// file's one entry point that cares who is asking, which is every test in
+/// it but the one that reads cost redaction off the caller's role (M4 T5
+/// review, 2026-09-11).
+async fn call_as(
+    app: &axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+    session: &str,
+) -> (StatusCode, Value) {
     let req = Request::builder()
         .method(method)
         .uri(uri)
         .header("authorization", format!("Bearer {TOKEN}"))
-        .header(common::SESSION_HEADER, common::OWNER_SESSION);
+        .header(common::SESSION_HEADER, session);
     let req = match body {
         Some(v) => req
             .header("content-type", "application/json")
@@ -798,4 +812,62 @@ async fn the_browser_is_allowed_to_send_a_put() {
         allowed_origin(res).as_deref(),
         Some("http://127.0.0.1:5173")
     );
+}
+
+/// `GET /products` cannot be refused outright (the till reads it to ring a
+/// sale up), so cost is redacted at the field instead: a cashier reading the
+/// same row a manager reads gets `cost_centimes: null` and
+/// `wholesale_centimes: null` where the manager gets the numbers the product
+/// was made with. Proven on both the list and the one-row read, and against
+/// a manager as well as an owner, since `services::permissions::can` gives a
+/// manager everything an owner has short of `ManageUsers`/`SeeAuditLog`
+/// (M4 T5 review, 2026-09-11).
+#[tokio::test]
+async fn a_cashier_reading_products_gets_no_cost_and_a_manager_does() {
+    let h = harness();
+    common::sign_in_as(&h.path, SHOP, "cashier", common::CASHIER_SESSION);
+    common::sign_in_as(&h.path, SHOP, "manager", common::MANAGER_SESSION);
+
+    let mut d = draft();
+    d["wholesale_centimes"] = json!(700);
+    let (status, made) = call(&h.app, "POST", "/products", Some(d)).await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+    let id = made["id"].as_i64().unwrap();
+
+    for session in [common::OWNER_SESSION, common::MANAGER_SESSION] {
+        let (status, list) = call_as(&h.app, "GET", "/products", None, session).await;
+        assert_eq!(status, StatusCode::OK, "{list}");
+        assert_eq!(list[0]["cost_centimes"], json!(820), "{session}: {list}");
+        assert_eq!(
+            list[0]["wholesale_centimes"],
+            json!(700),
+            "{session}: {list}"
+        );
+
+        let (status, one) = call_as(&h.app, "GET", &format!("/products/{id}"), None, session).await;
+        assert_eq!(status, StatusCode::OK, "{one}");
+        assert_eq!(one["cost_centimes"], json!(820), "{session}: {one}");
+        assert_eq!(one["wholesale_centimes"], json!(700), "{session}: {one}");
+    }
+
+    let (status, list) = call_as(&h.app, "GET", "/products", None, common::CASHIER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{list}");
+    assert_eq!(list[0]["cost_centimes"], Value::Null, "{list}");
+    assert_eq!(list[0]["wholesale_centimes"], Value::Null, "{list}");
+    // The rest of the fiche still reaches the till: a cashier redacted out
+    // of cost is not a cashier refused the product.
+    assert_eq!(list[0]["selling_centimes"], json!(920), "{list}");
+
+    let (status, one) = call_as(
+        &h.app,
+        "GET",
+        &format!("/products/{id}"),
+        None,
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{one}");
+    assert_eq!(one["cost_centimes"], Value::Null, "{one}");
+    assert_eq!(one["wholesale_centimes"], Value::Null, "{one}");
+    assert_eq!(one["selling_centimes"], json!(920), "{one}");
 }

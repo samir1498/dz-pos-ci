@@ -61,6 +61,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { isKey, useTranslation, type Key } from "@/i18n";
 import { RATES, rateCellLabel, rateLabel } from "@/lib/rate";
+import { useHasPermission } from "@/lib/session";
 
 export const Route = createFileRoute("/products")({ component: ProductsScreen });
 
@@ -560,6 +561,16 @@ function ProductForm({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<Key | null>(null);
+  // GET /products stays open to every signed-in role (the till needs the
+  // list to ring a sale up; route_gates.rs asserts the route itself carries
+  // no row), but the server no longer hands cost to a caller who lacks
+  // see_cost_and_margin: routes/products.rs::redact_cost nulls
+  // cost_centimes and wholesale_centimes on the way out, so a cashier's
+  // ProductDto genuinely carries null and not a value merely hidden here
+  // (M4 T5 review, 2026-09-11). This still hides the field on the fiche for
+  // everybody else, on top of that: a manager who briefly loses the
+  // permission should not see a stale cost sitting in a cached list either.
+  const seeCostAndMargin = useHasPermission("see_cost_and_margin");
 
   const save = useMutation({
     mutationFn: (input: NewProductDto) =>
@@ -779,15 +790,17 @@ function ProductForm({
         )}
       </form.Field>
 
-      <form.Field name="cost">
-        {(field) => (
-          <FormField label={t("field_cost")} hint={t("field_blank_is_zero")}>
-            {(parts) => (
-              <MoneyInput {...parts} value={field.state.value} onChange={field.handleChange} />
-            )}
-          </FormField>
-        )}
-      </form.Field>
+      {seeCostAndMargin ? (
+        <form.Field name="cost">
+          {(field) => (
+            <FormField label={t("field_cost")} hint={t("field_blank_is_zero")}>
+              {(parts) => (
+                <MoneyInput {...parts} value={field.state.value} onChange={field.handleChange} />
+              )}
+            </FormField>
+          )}
+        </form.Field>
+      ) : null}
 
       <form.Field name="wholesale">
         {(field) => (

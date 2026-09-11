@@ -10,6 +10,8 @@ import { I18nProvider, type Lang } from "@/i18n";
 import ar from "@/i18n/ar.json";
 import en from "@/i18n/en.json";
 import fr from "@/i18n/fr.json";
+import { SessionProvider } from "@/lib/session";
+import { ME_CASHIER, ME_OWNER } from "@/test/session";
 import { ProductsScreen } from "./products";
 
 const product: ProductDto = {
@@ -95,7 +97,14 @@ function mount(lang: Lang = "fr") {
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        <ProductsScreen />
+        {/* An owner by default: the fiche's cost field is what most of
+            this file already tested before M4 T5 gated it on
+            `see_cost_and_margin`, so most tests ask for the same session
+            that always saw it. The one that cares who is signed in sets
+            `me` to `ME_CASHIER` first. */}
+        <SessionProvider>
+          <ProductsScreen />
+        </SessionProvider>
       </QueryClientProvider>
     </I18nProvider>,
   );
@@ -110,6 +119,7 @@ let categories: CategoryDto[];
 let createAnswer: (() => Response) | null;
 let updateAnswer: (() => Response) | null;
 let labelAnswer: (() => Response) | null;
+let me: typeof ME_OWNER | typeof ME_CASHIER;
 
 beforeEach(() => {
   rows = [];
@@ -117,8 +127,11 @@ beforeEach(() => {
   createAnswer = null;
   updateAnswer = null;
   labelAnswer = null;
+  me = ME_OWNER;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/auth/me")) return Promise.resolve(json(200, me));
+    if (url.endsWith("/auth/idle")) return Promise.resolve(json(200, { idle_minutes: 30 }));
     if (init?.method === "POST" && url.includes("/labels/sheet")) {
       if (labelAnswer !== null) return Promise.resolve(labelAnswer());
       const ids: unknown = JSON.parse(String(init.body));
@@ -405,6 +418,15 @@ describe("the add form", () => {
 
     expect(await screen.findByText("Quantité invalide.")).toBeInTheDocument();
     expect(posted()).toBe(false);
+  });
+
+  test("hides the cost field from a cashier, who does not hold see_cost_and_margin", async () => {
+    me = ME_CASHIER;
+    const user = userEvent.setup();
+    mount();
+    await openTheForm(user);
+
+    expect(screen.queryByLabelText("Prix d'achat")).not.toBeInTheDocument();
   });
 
   test("leaves a blank cost and a blank stock meaning zero", async () => {

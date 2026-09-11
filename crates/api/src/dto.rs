@@ -76,6 +76,16 @@ impl From<UnitDto> for Unit {
     }
 }
 
+/// `cost_centimes` and `wholesale_centimes` are `Option`, not because either
+/// is ever absent in the row, but because `GET /products` and
+/// `GET /products/{id}` are open reads a cashier needs for the till (M4 T5
+/// review, 2026-09-11: the route cannot be gated the way `GET /purchases`
+/// and `GET /dashboard` are, because ringing a sale up means reading this
+/// list). `routes/products.rs::redact_cost` is the one place that turns
+/// either field back to `None` for a caller who does not hold
+/// `Permission::SeeCostAndMargin`; `From<Product>` below always fills both,
+/// so a missing value on the wire is a decision the handler took, never a
+/// blank the core left.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export_to = "ProductDto.ts")]
 pub struct ProductDto {
@@ -85,7 +95,7 @@ pub struct ProductDto {
     pub barcode: Option<String>,
     pub category_id: Option<i32>,
     pub unit: UnitDto,
-    pub cost_centimes: i64,
+    pub cost_centimes: Option<i64>,
     pub selling_centimes: i64,
     pub wholesale_centimes: Option<i64>,
     pub qty_on_hand_milli: i64,
@@ -103,7 +113,7 @@ impl From<Product> for ProductDto {
             barcode: p.barcode,
             category_id: p.category_id,
             unit: p.unit.into(),
-            cost_centimes: p.cost.as_centimes(),
+            cost_centimes: Some(p.cost.as_centimes()),
             selling_centimes: p.selling.as_centimes(),
             wholesale_centimes: p.wholesale.map(Money::as_centimes),
             qty_on_hand_milli: p.qty_on_hand_milli,

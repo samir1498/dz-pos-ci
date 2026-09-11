@@ -202,7 +202,14 @@ describe("createClient", () => {
 
   test("an update answered with the wrong shape is refused like a read", async () => {
     const api = createClient("http://x", stub(200, { id: 7 }));
-    await expect(api.updateProduct(7, { ...product })).rejects.toMatchObject({
+    // `product` is a `ProductDto` fixture, whose `cost_centimes` is nullable
+    // on the wire (M4 T5 review, 2026-09-11: a cashier's own read gets
+    // `null`); `NewProductDto`, what a write sends, still wants a number, so
+    // the body this test sends fills the one field the two shapes disagree
+    // on rather than pass on the fixture's own nullable answer.
+    await expect(
+      api.updateProduct(7, { ...product, cost_centimes: product.cost_centimes ?? 0 }),
+    ).rejects.toMatchObject({
       code: "bad_response",
     });
   });

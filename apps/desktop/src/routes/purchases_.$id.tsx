@@ -50,6 +50,7 @@ import {
 } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { errorKey } from "@/lib/fields";
+import { useHasPermission } from "@/lib/session";
 import { PurchaseStatusBadge } from "./purchases";
 
 export const Route = createFileRoute("/purchases_/$id")({ component: OnePurchaseRoute });
@@ -146,6 +147,13 @@ function PurchaseDetail({
   const { purchase, lines } = detail;
   const open = purchase.status === "ordered" || purchase.status === "partially_received";
   const anythingArrived = lines.some((l) => l.qty_received_milli > 0);
+  // GET /purchases/{id} itself now refuses a caller without
+  // see_cost_and_margin, the same as the list (crates/api/src/gates.rs, M4
+  // T5 review, 2026-09-11), and AppShell hides the nav entry that leads
+  // here on the same permission, so this reads true for everyone who
+  // reaches the screen with data to show. Kept for the day the route gate
+  // loosens back to an open read (closes the TODO(M4) LinesTable carried).
+  const seeCostAndMargin = useHasPermission("see_cost_and_margin");
 
   return (
     <>
@@ -219,14 +227,16 @@ function PurchaseDetail({
               <Fact label={t("col_status")}>
                 <PurchaseStatusBadge status={purchase.status} data-testid="purchase-status" />
               </Fact>
-              <Fact label={t("col_extra_costs")}>
-                <Money centimes={purchase.transport_centimes + purchase.extra_costs_centimes} />
-              </Fact>
+              {seeCostAndMargin ? (
+                <Fact label={t("col_extra_costs")}>
+                  <Money centimes={purchase.transport_centimes + purchase.extra_costs_centimes} />
+                </Fact>
+              ) : null}
             </dl>
           </CardContent>
         </Card>
 
-        <LinesTable lines={lines} nameOf={nameOf} />
+        <LinesTable lines={lines} nameOf={nameOf} seeCostAndMargin={seeCostAndMargin} />
 
         <ReceiptsList detail={detail} nameOf={nameOf} />
       </div>
@@ -237,12 +247,18 @@ function PurchaseDetail({
 function LinesTable({
   lines,
   nameOf,
+  seeCostAndMargin,
 }: {
   lines: PurchaseLineDto[];
   nameOf: (productId: number) => string;
+  seeCostAndMargin: boolean;
 }) {
   const { t } = useTranslation();
-  const columns: readonly Column<PurchaseLineDto>[] = [
+  // A plain, fully-typed array first and the filter as a second statement:
+  // a `.filter()` chained straight off the array literal loses the
+  // contextual type `Column<PurchaseLineDto>` gives every `cell`, and each
+  // `line` comes back untyped.
+  const allColumns: Column<PurchaseLineDto>[] = [
     { id: "product", header: t("col_product"), cell: (line) => nameOf(line.product_id) },
     {
       id: "ordered",
@@ -262,9 +278,6 @@ function LinesTable({
       numeric: true,
       cell: (line) => <Qty milli={line.qty_returned_milli} />,
     },
-    // TODO(M4): a cashier does not see these two. What the shop pays for its
-    // stock is not something a till operator has any call to read, and there
-    // are no roles in the app until §5 lands.
     {
       id: "cost",
       header: t("col_unit_cost"),
@@ -278,6 +291,14 @@ function LinesTable({
       cell: (line) => <Money centimes={line.landed_unit_cost_centimes} />,
     },
   ];
+  // Closes the TODO(M4) this table carried: what the shop pays for its
+  // stock is not something a till operator has any call to read.
+  // `SeeCostAndMargin` is what M4 T1 named for it, filtered out here rather
+  // than left out of the array above so the column definitions stay in one
+  // place.
+  const columns: readonly Column<PurchaseLineDto>[] = allColumns.filter(
+    (column) => seeCostAndMargin || (column.id !== "cost" && column.id !== "landed"),
+  );
   return (
     <DataTable
       columns={columns}
