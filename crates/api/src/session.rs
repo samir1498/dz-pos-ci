@@ -26,15 +26,17 @@
 //! it; a stale cookie left in a webview is the thing that would otherwise
 //! quietly decide who a request came from.
 
-use axum::extract::{FromRequestParts, Request, State};
+use axum::extract::{FromRequestParts, MatchedPath, Request, State};
 use axum::http::request::Parts;
 use axum::http::{header, HeaderValue};
 use axum::middleware::Next;
 use axum::response::Response;
 use dzpos_core::models::sql_types::Role;
+use dzpos_core::services::permissions;
 use dzpos_core::services::sessions::{self, Actor};
 
 use crate::error::ApiError;
+use crate::gates;
 use crate::AppState;
 
 /// The header the desktop shows its session token in.
@@ -84,6 +86,18 @@ impl<S: Send + Sync> FromRequestParts<S> for CurrentUser {
 /// The resolve also slides the idle time forward, so "how long since the till
 /// was touched" is measured by the requests it carried and not by a clock on
 /// the screen.
+///
+/// The permission gate (M4 T3) sits here too, once the actor is known and
+/// before the handler runs: `gates::ROUTE_GATES` is looked up by the method
+/// and `axum::extract::MatchedPath`, the route's own template
+/// (`/customers/{id}`, not the id a caller happened to send), so a route
+/// never names its permission a second time in its handler. A route this
+/// layer does not sit in front of (the auth routes, `/health`) has no row
+/// reachable this way and needs none: signing in is how a role comes to
+/// exist. `MatchedPath` is only absent when the router answers 404 or 405
+/// before a route matched, and a table lookup on no route finds nothing to
+/// enforce, which is the same as leaving the refusal to the response that is
+/// already on its way.
 pub async fn require(
     State(state): State<AppState>,
     mut req: Request,
@@ -98,8 +112,37 @@ pub async fn require(
         .blocking(move |c| sessions::resolve(c, shop, &token, at))
         .await?
         .ok_or(ApiError::SessionRequired)?;
-    req.extensions_mut().insert(CurrentUser::from(actor));
+    let current = CurrentUser::from(actor);
+
+    if let Some(matched) = req.extensions().get::<MatchedPath>() {
+        let method = req.method().as_str();
+        match gates::gate_for(method, matched.as_str()) {
+            Some(gate) => {
+                if let Some(permission) = gate.permission {
+                    permissions::require(current.role, permission)?;
+                }
+            }
+            // No row. For a read that is the ordinary case and the answer is
+            // yes. For a write it is a row somebody forgot, and the honest
+            // answer to "who may do this" is nobody: a gate that waves a
+            // write through because its own table is incomplete is not a
+            // gate. `tests/route_gates.rs` walks the router against the table
+            // so this cannot reach a shop; this is what holds if the walk
+            // ever stops seeing a route, which it would for one registered
+            // through a helper or a nested router.
+            None if is_a_write(method) => return Err(ApiError::UngatedWrite),
+            None => {}
+        }
+    }
+
+    req.extensions_mut().insert(current);
     Ok(next.run(req).await)
+}
+
+/// Whether a method changes the file. The table names every one of these and
+/// the five reads that carry a whole list out; any other read is open.
+fn is_a_write(method: &str) -> bool {
+    matches!(method, "POST" | "PUT" | "PATCH" | "DELETE")
 }
 
 /// UTC, not the shop's calendar. The idle time is a stretch of minutes and

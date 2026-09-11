@@ -101,6 +101,66 @@ pub fn sign_in(db: &Path, shop: i32) {
     .expect("the test session could not be opened");
 }
 
+/// The session token `tests/route_gates.rs` signs a cashier's calls with,
+/// for the walk that proves a gated route refuses one (M4 T3).
+pub const CASHIER_SESSION: &str = "dz-pos-test-session-for-a-cashier";
+/// The same, for a manager, who the table's rows all currently answer for
+/// like an owner.
+pub const MANAGER_SESSION: &str = "dz-pos-test-session-for-a-manager";
+
+/// Opens a session for one user of `role` ("cashier" or "manager") in
+/// `shop`, under `token`. Same shape as `sign_in`, generalised to the role
+/// the gate walk needs beside the owner every other file in this folder
+/// signs in as; `sign_in` is left alone so the fifteen files already calling
+/// it keep the owner they always got.
+pub fn sign_in_as(db: &Path, shop: i32, role: &str, token: &str) {
+    let mut conn = dzpos_core::db::open(db).expect("the test's shop file will not open");
+
+    diesel::sql_query("INSERT OR IGNORE INTO shops (id, name) VALUES (?, 'Test')")
+        .bind::<diesel::sql_types::Integer, _>(shop)
+        .execute(&mut conn)
+        .expect("the test shop could not be made");
+
+    #[derive(QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+    let user: Option<Id> = diesel::sql_query(
+        "SELECT id FROM users WHERE shop_id = ? AND role = ? AND active = 1 \
+         ORDER BY id LIMIT 1",
+    )
+    .bind::<diesel::sql_types::Integer, _>(shop)
+    .bind::<diesel::sql_types::Text, _>(role)
+    .get_result(&mut conn)
+    .optional()
+    .expect("the users table would not answer");
+    let user_id = match user {
+        Some(row) => row.id,
+        None => {
+            let made: Id = diesel::sql_query(
+                "INSERT INTO users (shop_id, name, role) VALUES (?, ?, ?) RETURNING id",
+            )
+            .bind::<diesel::sql_types::Integer, _>(shop)
+            .bind::<diesel::sql_types::Text, _>(format!("Test {role}"))
+            .bind::<diesel::sql_types::Text, _>(role)
+            .get_result(&mut conn)
+            .expect("the test user could not be made");
+            made.id
+        }
+    };
+
+    diesel::sql_query(
+        "INSERT OR REPLACE INTO sessions (shop_id, user_id, token_hash, created_at, last_seen_at) \
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+    )
+    .bind::<diesel::sql_types::Integer, _>(shop)
+    .bind::<diesel::sql_types::Integer, _>(user_id)
+    .bind::<diesel::sql_types::Text, _>(dzpos_core::services::sessions::token_digest(token))
+    .execute(&mut conn)
+    .expect("the test session could not be opened");
+}
+
 /// A router on `db` answering for `shop`, with that shop's owner already
 /// signed in under `OWNER_SESSION`. What a test uses to prove rule 3: a
 /// second shop's router should answer 404 on this shop's rows, and it has to

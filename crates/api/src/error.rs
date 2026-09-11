@@ -37,6 +37,13 @@ pub enum ApiError {
     /// (`services::sessions` says why).
     #[error("this call carried no session, or one that is no longer standing")]
     SessionRequired,
+    /// A write reached this API on a route the permission table does not
+    /// name. Nobody can say who is allowed to do it, so nobody is: the gate
+    /// fails closed rather than waving a write through because a row was
+    /// forgotten. `crates/api/tests/route_gates.rs` is what stops this ever
+    /// reaching a shop; this is what happens if it ever does.
+    #[error("this write is on a route no permission has been decided for")]
+    UngatedWrite,
     #[error("no such route")]
     NoRoute,
     #[error("this route does not take that method")]
@@ -164,6 +171,7 @@ impl ApiError {
             ApiError::BadRequest(_) => (StatusCode::UNPROCESSABLE_ENTITY, "bad_request"),
             ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             ApiError::SessionRequired => (StatusCode::UNAUTHORIZED, "session_required"),
+            ApiError::UngatedWrite => (StatusCode::INTERNAL_SERVER_ERROR, "ungated_write"),
             ApiError::NoRoute => (StatusCode::NOT_FOUND, "not_found"),
             ApiError::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed"),
             ApiError::Unavailable => (StatusCode::INTERNAL_SERVER_ERROR, "storage"),
