@@ -153,7 +153,7 @@ impl AppState {
     ///   nothing here opens it again. The file names are logged, and by the
     ///   time the app is relaunched step 5 has already made anything left
     ///   over harmless.
-    pub fn restore(&self, backup_path: &Path) -> Result<Restored, ApiError> {
+    pub fn restore(&self, backup_path: &Path, actor_id: i32) -> Result<Restored, ApiError> {
         let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
         let db = self.db_path.as_path();
@@ -242,6 +242,32 @@ impl AppState {
         match dzpos_core::db::open(db) {
             Ok(conn) => {
                 *guard = Some(conn);
+                // Written to the file that was just opened, after the swap
+                // and never before: `backup::record_restore`'s own doc says
+                // why a row against the connection being replaced would not
+                // survive being the thing overwritten. A failure here does
+                // not fail the restore the caller already has: the data is
+                // already replaced, and answering with an error would claim
+                // a restore that succeeded had not.
+                if let Some(live) = guard.as_mut() {
+                    let restored_from = backup_path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
+                    if let Err(e) = dzpos_core::services::backup::record_restore(
+                        live,
+                        self.shop_id,
+                        actor_id,
+                        restored_from,
+                        &safety_copy,
+                        &summary,
+                    ) {
+                        eprintln!(
+                            "dz-pos: the restore of {} finished but its audit row could not be written: {e}",
+                            db.display()
+                        );
+                    }
+                }
                 Ok(Restored {
                     summary,
                     safety_copy,

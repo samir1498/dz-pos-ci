@@ -16,11 +16,18 @@ use crate::schema::sessions;
 /// Who is acting, as every route above this layer wants it: the id that goes
 /// on a document and the role the permission table answers for. Nothing about
 /// the credential is on it.
+///
+/// `session_id` is the row this actor is acting through, not the user's only
+/// session: a person may hold several at once (a desktop till and a phone),
+/// and this is the one the current request carried. `services::users::set_pin`
+/// and `set_password` are the callers that need it, to leave the screen doing
+/// a self-reset signed in while every other open till for that name is not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Actor {
     pub user_id: i32,
     pub shop_id: i32,
     pub role: Role,
+    pub session_id: i32,
 }
 
 /// A freshly minted session: the secret, handed to the caller exactly once,
@@ -113,6 +120,7 @@ mod tests {
                 user_id: 1,
                 shop_id: 1,
                 role: Role::Owner,
+                session_id: 1,
             },
             name: "Propriétaire".to_owned(),
         };

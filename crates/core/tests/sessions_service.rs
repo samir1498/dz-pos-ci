@@ -53,7 +53,7 @@ fn a_cashier(conn: &mut SqliteConnection, name: &str, pin: &str) -> i32 {
         },
     )
     .unwrap();
-    users::set_pin(conn, SHOP, OWNER, user.id, pin).unwrap();
+    users::set_pin(conn, SHOP, OWNER, user.id, pin, None).unwrap();
     user.id
 }
 
@@ -88,7 +88,7 @@ fn a_right_pin_opens_a_session_that_names_the_user_and_their_role() {
 #[test]
 fn a_right_password_opens_a_session_the_same_way() {
     let (_dir, mut conn) = open_temp();
-    users::set_password(&mut conn, SHOP, OWNER, OWNER, "correct horse").unwrap();
+    users::set_password(&mut conn, SHOP, OWNER, OWNER, "correct horse", None).unwrap();
     let owner = users::get(&mut conn, SHOP, OWNER).unwrap();
 
     let signed_in =
@@ -404,6 +404,123 @@ fn ending_every_session_of_a_user_closes_them_all_and_leaves_other_users_alone()
     assert_eq!(
         sessions::end_all_for_user(&mut conn, SHOP, karim, at(12, 7)).unwrap(),
         0
+    );
+}
+
+/// Resetting a PIN never ended the session it was meant to
+/// kill. An owner who suspects a cashier's PIN was watched over their
+/// shoulder resets it exactly so the till that cashier is standing at stops
+/// working; before this, it went on answering until the idle timer ran out
+/// on its own.
+#[test]
+fn resetting_a_pin_ends_every_session_the_fiche_was_holding() {
+    let (_dir, mut conn) = open_temp();
+    let karim = a_cashier(&mut conn, "Karim", "2580");
+    let signed_in = sessions::sign_in_with_pin(&mut conn, SHOP, karim, "2580", noon()).unwrap();
+    let token = signed_in.token.expose().to_owned();
+    assert!(
+        sessions::resolve(&mut conn, SHOP, &token, at(12, 1))
+            .unwrap()
+            .is_some(),
+        "the session was not even open to begin with"
+    );
+
+    users::set_pin(&mut conn, SHOP, OWNER, karim, "3690", None).unwrap();
+
+    assert!(
+        sessions::resolve(&mut conn, SHOP, &token, at(12, 2))
+            .unwrap()
+            .is_none(),
+        "a PIN reset left the session it was meant to kill standing"
+    );
+}
+
+/// The same, on the other credential: a password reset is the same finding
+/// (`services::users::set_password`'s own doc says why it is fixed
+/// alongside the PIN even with no route calling it yet).
+#[test]
+fn resetting_a_password_ends_every_session_the_fiche_was_holding() {
+    let (_dir, mut conn) = open_temp();
+    users::set_password(&mut conn, SHOP, OWNER, OWNER, "correct horse", None).unwrap();
+    let owner = users::get(&mut conn, SHOP, OWNER).unwrap();
+    let signed_in =
+        sessions::sign_in_with_password(&mut conn, SHOP, &owner.name, "correct horse", noon())
+            .unwrap();
+    let token = signed_in.token.expose().to_owned();
+
+    users::set_password(&mut conn, SHOP, OWNER, OWNER, "battery staple", None).unwrap();
+
+    assert!(
+        sessions::resolve(&mut conn, SHOP, &token, at(12, 1))
+            .unwrap()
+            .is_none(),
+        "a password reset left the session it was meant to kill standing"
+    );
+}
+
+/// The one thing to get right about ending sessions on a credential reset:
+/// the person doing the resetting may be resetting their own, and ending
+/// every session they hold would sign them out of the screen they used to do
+/// it. `set_pin`'s own doc is the decision; this is the test of it. Every
+/// *other* session of that same fiche still ends, because the finding is
+/// about a watched PIN, not about the screen mid-reset.
+#[test]
+fn resetting_your_own_pin_keeps_the_session_that_did_it_and_ends_the_others() {
+    let (_dir, mut conn) = open_temp();
+    users::set_pin(&mut conn, SHOP, OWNER, OWNER, "1590", None).unwrap();
+    let acting = sessions::sign_in_with_pin(&mut conn, SHOP, OWNER, "1590", noon()).unwrap();
+    let elsewhere = sessions::sign_in_with_pin(&mut conn, SHOP, OWNER, "1590", noon()).unwrap();
+
+    users::set_pin(
+        &mut conn,
+        SHOP,
+        OWNER,
+        OWNER,
+        "2680",
+        Some(acting.actor.session_id),
+    )
+    .unwrap();
+
+    assert!(
+        sessions::resolve(&mut conn, SHOP, acting.token.expose(), at(12, 1))
+            .unwrap()
+            .is_some(),
+        "the session that reset its own PIN was ended by the reset it made"
+    );
+    assert!(
+        sessions::resolve(&mut conn, SHOP, elsewhere.token.expose(), at(12, 1))
+            .unwrap()
+            .is_none(),
+        "a second session of the same owner survived a self reset"
+    );
+}
+
+/// The gap the finding named beside the credential one: `deactivate` never
+/// called `end_all_for_user` either, and it happened to be safe only because
+/// the live join on `users.active` refused on its own — until the fiche is
+/// switched back on inside the idle window. This proves the row and not the
+/// join: `active` reads true again by the time this asserts, so a resolve
+/// that still answered `None` can only be the session having actually ended.
+#[test]
+fn deactivating_and_reactivating_inside_the_idle_window_does_not_resurrect_the_old_token() {
+    let (_dir, mut conn) = open_temp();
+    let karim = a_cashier(&mut conn, "Karim", "2580");
+    let signed_in = sessions::sign_in_with_pin(&mut conn, SHOP, karim, "2580", noon()).unwrap();
+    let token = signed_in.token.expose().to_owned();
+
+    users::deactivate(&mut conn, SHOP, OWNER, karim).unwrap();
+    let reactivated = users::reactivate(&mut conn, SHOP, OWNER, karim).unwrap();
+    assert!(
+        reactivated.active,
+        "reactivate did not turn the fiche back on"
+    );
+
+    assert!(
+        sessions::resolve(&mut conn, SHOP, &token, at(12, 1))
+            .unwrap()
+            .is_none(),
+        "a fiche switched off and back on inside the idle window handed the \
+         old token back with no new sign-in"
     );
 }
 

@@ -52,7 +52,7 @@ fn a_cashier(conn: &mut SqliteConnection, name: &str, pin: &str) -> i32 {
         },
     )
     .unwrap();
-    users::set_pin(conn, SHOP, OWNER, user.id, pin).unwrap();
+    users::set_pin(conn, SHOP, OWNER, user.id, pin, None).unwrap();
     user.id
 }
 
@@ -118,7 +118,7 @@ fn a_pin_round_trips_through_the_stored_hash() {
 #[test]
 fn a_password_round_trips_and_is_found_by_name() {
     let (_dir, mut conn) = open_temp();
-    users::set_password(&mut conn, SHOP, OWNER, OWNER, "correcte-batterie").unwrap();
+    users::set_password(&mut conn, SHOP, OWNER, OWNER, "correcte-batterie", None).unwrap();
     let signed_in =
         users::verify_password(&mut conn, SHOP, "Propriétaire", "correcte-batterie", noon())
             .unwrap();
@@ -180,7 +180,7 @@ fn a_pin_that_is_the_wrong_shape_is_refused_and_nothing_is_stored() {
         "1234", "4321", "345678", "987654", // Not digits.
         "12a4", "12 4", "١٢٣٤", "",
     ] {
-        let refused = users::set_pin(&mut conn, SHOP, OWNER, id, bad);
+        let refused = users::set_pin(&mut conn, SHOP, OWNER, id, bad, None);
         assert!(
             matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "pin"),
             "{bad} was not refused as a PIN: {refused:?}"
@@ -199,7 +199,7 @@ fn a_pin_of_four_to_six_digits_that_is_neither_a_run_nor_a_repeat_is_taken() {
     let id = a_cashier(&mut conn, "Karim", "1357");
     for good in ["1357", "90210", "428513", "1123", "0102"] {
         assert!(
-            users::set_pin(&mut conn, SHOP, OWNER, id, good).is_ok(),
+            users::set_pin(&mut conn, SHOP, OWNER, id, good, None).is_ok(),
             "{good} was refused as a PIN"
         );
         users::verify_pin(&mut conn, SHOP, id, good, noon()).unwrap();
@@ -210,13 +210,13 @@ fn a_pin_of_four_to_six_digits_that_is_neither_a_run_nor_a_repeat_is_taken() {
 fn a_password_under_eight_characters_is_refused() {
     let (_dir, mut conn) = open_temp();
     for bad in ["", "court", "sept ca"] {
-        let refused = users::set_password(&mut conn, SHOP, OWNER, OWNER, bad);
+        let refused = users::set_password(&mut conn, SHOP, OWNER, OWNER, bad, None);
         assert!(
             matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "password"),
             "{bad:?} was not refused as a password: {refused:?}"
         );
     }
-    assert!(users::set_password(&mut conn, SHOP, OWNER, OWNER, "huit car").is_ok());
+    assert!(users::set_password(&mut conn, SHOP, OWNER, OWNER, "huit car", None).is_ok());
 }
 
 // ---- the fiche ----
@@ -368,7 +368,7 @@ fn a_password_set_the_ordinary_way_shuts_the_door_too() {
     // The owner reached their office screen some other way (a future task's
     // business, not this one's) and set a password before ever touching a
     // PIN. The door is about any credential, not the PIN column alone.
-    users::set_password(&mut conn, SHOP, OWNER, OWNER, "huit caracteres").unwrap();
+    users::set_password(&mut conn, SHOP, OWNER, OWNER, "huit caracteres", None).unwrap();
     let refused = users::claim_first_pin(&mut conn, SHOP, "2580");
     assert!(
         matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "pin"),
@@ -546,7 +546,7 @@ fn an_owner_resetting_the_pin_lets_a_locked_out_cashier_back_in() {
     for _ in 0..5 {
         let _ = users::verify_pin(&mut conn, SHOP, id, "9999", noon());
     }
-    users::set_pin(&mut conn, SHOP, OWNER, id, "2468").unwrap();
+    users::set_pin(&mut conn, SHOP, OWNER, id, "2468", None).unwrap();
     // The one thing somebody in the shop can actually do about a lockout.
     assert_eq!(
         users::verify_pin(&mut conn, SHOP, id, "2468", noon())
@@ -571,8 +571,8 @@ fn every_mutating_call_writes_one_audit_row_naming_the_actor_and_the_target() {
         },
     )
     .unwrap();
-    users::set_pin(&mut conn, SHOP, OWNER, created.id, "1357").unwrap();
-    users::set_password(&mut conn, SHOP, OWNER, created.id, "huit car").unwrap();
+    users::set_pin(&mut conn, SHOP, OWNER, created.id, "1357", None).unwrap();
+    users::set_password(&mut conn, SHOP, OWNER, created.id, "huit car", None).unwrap();
     users::rename(&mut conn, SHOP, OWNER, created.id, "Karim B.").unwrap();
     users::set_role(&mut conn, SHOP, OWNER, created.id, Role::Manager).unwrap();
     users::deactivate(&mut conn, SHOP, OWNER, created.id).unwrap();

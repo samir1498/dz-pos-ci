@@ -277,3 +277,68 @@ async fn an_owner_with_a_co_owner_still_cannot_deactivate_their_own_row() {
     assert_eq!(refused["error"]["code"], "validation");
     assert_eq!(refused["error"]["field"], "active");
 }
+
+/// Resetting a PIN never ended the session it was meant to
+/// kill. A cashier's till, signed in before the reset, must stop answering
+/// on the very session it was already using, not merely on its next sign-in.
+#[tokio::test]
+async fn resetting_a_cashier_pin_ends_the_session_they_were_using() {
+    let (dir, app) = app();
+    let path = dir.path().join("t.db");
+    let id = a_cashier(&app, "Karim").await;
+    common::sign_in_as(&path, SHOP, "cashier", common::CASHIER_SESSION);
+
+    // The till is live before the reset.
+    let (status, _) = call(&app, "GET", "/products", None, common::CASHIER_SESSION).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, after) = owner(
+        &app,
+        "POST",
+        &format!("/users/{id}/pin"),
+        Some(json!({ "pin": "3690" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{after}");
+
+    let (status, refused) = call(&app, "GET", "/products", None, common::CASHIER_SESSION).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{refused}");
+    assert_eq!(refused["error"]["code"], "session_required");
+}
+
+/// The other half of the same finding: the owner resetting their own PIN
+/// must not be signed out of the screen they used to do it, while every
+/// other session of theirs still ends.
+#[tokio::test]
+async fn resetting_your_own_pin_keeps_you_signed_in_and_ends_your_other_sessions() {
+    let (dir, app) = app();
+    let path = dir.path().join("t.db");
+    let second_till = "dz-pos-test-session-owner-second-till";
+    common::sign_in_as(&path, SHOP, "owner", second_till);
+
+    let (_, listed) = owner(&app, "GET", "/users", None).await;
+    let owner_id = listed.as_array().unwrap()[0]["id"].as_i64().unwrap();
+
+    let (status, second_still_live) = call(&app, "GET", "/users", None, second_till).await;
+    assert_eq!(status, StatusCode::OK, "{second_still_live}");
+
+    let (status, after) = owner(
+        &app,
+        "POST",
+        &format!("/users/{owner_id}/pin"),
+        Some(json!({ "pin": "3690" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{after}");
+
+    let (status, still_you) = owner(&app, "GET", "/users", None).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "the session that reset its own PIN was ended by the reset it made: {still_you}"
+    );
+
+    let (status, refused) = call(&app, "GET", "/users", None, second_till).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{refused}");
+    assert_eq!(refused["error"]["code"], "session_required");
+}
