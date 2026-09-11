@@ -19,21 +19,45 @@ ruled out for the app itself, as opposed to the landing page's static
 Cloudflare Pages), and Anouar's GitHub billing fix itself, which the
 mirror works around but does not close.
 
-By 07:40 the mirror workflow is on main (PR #22) and its two heavy jobs,
-Windows and coverage, run only on a push to main (PR #24): `just ci` is a
-`workflow_dispatch`, so the first two branch checks paid for both. The
-2026-09-11 stale sweep is on main (PR #23). The landing page's first task
-is on main (PR #25): `apps/landing`, Astro with Tailwind v4, three routes
-(`/` fr, `/en`, `/ar` with `dir="rtl"`), Comptoir-only tokens generated
-from `@dzpos/design` at build time, `just landing` and `just landing-build`,
-the build joined to `pnpm -r build`. M4's first task is on the milestone
-branch `m4/2026-09-11`: migration 000011 adds the five sign-in columns to
-the `users` table that has existed since the first migration, argon2id
-hashing, the users service with an audit row per operation, and a wait
-that doubles after five wrong tries. Open for Samir on it: the wrong-try
-counter is one per person and covers the PIN and the password together, so
-a fumbled password locks that person's till PIN too; and no route sets a
-first PIN yet, so nothing can sign in until the session task lands.
+By 10:30 the landing page is five tasks of six done and on main: the site
+(PR #25), the copy with every fiscal claim carrying the `docs/features.md`
+row it rests on (#26), the product shots composed from the committed e2e
+screenshots with three new French saves the suite had never taken (#27),
+the sections (#28), and the load budget (#29: fonts split per route,
+Lighthouse 100/100/100/100 on French and English and 99 on Arabic, a test
+refusing an unsized image or a route over 678 KiB). The sixth task is
+publish preparation and stops short of publishing: the page is not cleared
+to go public while the product's name is a placeholder, there is no price,
+and no native speaker has read the Arabic. Left for later: the hero ships a
+1344-pixel file for a 342-pixel render on a phone.
+
+M4 has three of its ten tasks on the milestone branch `m4/2026-09-11`.
+Migration 000011 adds the five sign-in columns to the `users` table that
+has existed since the first migration, with argon2id hashing, the users
+service writing an audit row per operation, and a wait that doubles from
+thirty seconds to a quarter of an hour after five wrong tries. Thirteen
+permissions sit in one `can(role, permission)` table with a typed refusal
+carrying the permission, and the discount threshold rides the régime
+fiscal's dated history; a manager answers like an owner except on the staff
+list and the audit log. Sessions replace the seeded owner id on every
+route: a token of 32 random bytes stored as a digest, the desktop's own
+header or an httpOnly cookie, the launch token untouched and still first,
+and one table naming the permission each route will want. In flight:
+applying those permissions to the routes, and the sign-in screens.
+
+Open for Samir on M4: the wrong-try counter is one per person and covers
+the PIN and the password together, so a fumbled password locks that
+person's till PIN; the régime fiscal sits inside the settings permission a
+manager holds; and no route sets a first PIN, so only a seeded development
+shop can sign in until the users screen lands. `just e2e` is red until the
+sign-in screens land, by design.
+
+Earlier on 2026-09-11: the mirror workflow reached main (PR #22) and its two
+heavy jobs, Windows and coverage, were cut back to a push to main (PR #24)
+after the first two branch checks paid for both, because `just ci` starts a
+run by hand and a hand-started run is not a pull request. The stale sweeps
+through the code, the context store and the research notes are on main
+(PR #23 and two context commits).
 
 Roadmap `dz-pos-to-first-shop` (`just ctx roadmap show dz-pos-to-first-shop`
 from the repo root, full text `docs/roadmap.md`). M0 closed on 2026-09-09
