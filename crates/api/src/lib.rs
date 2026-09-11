@@ -70,7 +70,7 @@ impl AppState {
         shop_id: i32,
         backup_dir: impl AsRef<Path>,
     ) -> Result<Self, CoreError> {
-        let conn = dzpos_core::db::open(db.as_ref())?;
+        let conn = open_and_upgrade(db.as_ref())?;
         Ok(AppState {
             conn: Arc::new(Mutex::new(Some(conn))),
             db_path: Arc::new(db.as_ref().to_path_buf()),
@@ -314,6 +314,31 @@ impl AppState {
             .await
             .map_err(|_| ApiError::Unavailable)?
     }
+}
+
+/// Opens the shop's file and brings its schema up to this build, taking a
+/// copy of the file first when there is a schema for a migration to change.
+///
+/// The copy is what an owner gets back if the new version turns out to read
+/// the shop's books wrong. It sits beside the shop file under its own name
+/// (`backup::before_upgrade`), is never pruned, and is taken only when both
+/// halves are true: the file already holds a schema some version of this app
+/// wrote, and this build has migrations it has not had. A brand new file gets
+/// none, because a copy of an empty file is worth nothing and would sit there
+/// for ever; an unchanged file gets none either, since the ordinary daily
+/// copy already describes it.
+///
+/// A copy that cannot be written stops the app from starting. That is the
+/// point of it: the alternative is a migration running with nothing to go
+/// back to, on a disk that just said it was full.
+fn open_and_upgrade(db: &Path) -> Result<Conn, CoreError> {
+    let mut conn = dzpos_core::db::open_unmigrated(db)?;
+    let pending = dzpos_core::db::pending_migrations(&mut conn)?;
+    if !pending.is_empty() && dzpos_core::db::has_a_schema(&mut conn)? {
+        backup::before_upgrade(&mut conn, db, dzpos_core::services::clock::now())?;
+    }
+    dzpos_core::db::migrate(&mut conn)?;
+    Ok(conn)
 }
 
 /// `<db folder>/backups`. A shop file with no parent (a bare `t.db` on a

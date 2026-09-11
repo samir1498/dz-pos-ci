@@ -41,6 +41,15 @@ const STAMP: &str = "%Y%m%d-%H%M%S";
 /// safety copy is the only record of what the shop looked like before the
 /// owner replaced it.
 const SAFETY_INFIX: &str = ".before-restore-";
+/// What sits between the shop file's own name and the stamp on a copy taken
+/// on the way into an upgrade. Beside the shop file rather than in the
+/// backup folder, for the same reason a safety copy is: the thirty daily
+/// copies prune, and the one copy of what the shop looked like before a new
+/// version rewrote its schema must not be prunable. It is also the copy an
+/// owner needs when the upgrade itself is the thing that went wrong, which
+/// is the case no daily copy covers, because the daily one taken after the
+/// upgrade is already in the new shape.
+const UPGRADE_INFIX: &str = ".before-upgrade-";
 
 /// The first sixteen bytes of every SQLite file. Checked before the file is
 /// opened, because SQLite opens lazily: without it a text file and a torn
@@ -139,6 +148,113 @@ pub fn safety_taken_at(db: &Path, name: &str) -> Option<NaiveDateTime> {
     (at.format(STAMP).to_string() == stamp).then_some(at)
 }
 
+/// The name a copy taken before an upgrade gets. Same shape as
+/// [`safety_name`], including the millisecond, and a different word in the
+/// middle so the two kinds never sort into one list.
+pub fn upgrade_name(db: &Path, at: NaiveDateTime) -> String {
+    let stem = db
+        .file_name()
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    format!(
+        "{stem}{UPGRADE_INFIX}{}-{}{SUFFIX}",
+        at.format(STAMP),
+        at.format("%3f")
+    )
+}
+
+/// The time a pre-upgrade copy of `db` carries, or `None` when the name is
+/// not one this app wrote beside that file.
+pub fn upgrade_taken_at(db: &Path, name: &str) -> Option<NaiveDateTime> {
+    let stem = db.file_name()?.to_str()?;
+    let rest = name
+        .strip_prefix(stem)?
+        .strip_prefix(UPGRADE_INFIX)?
+        .strip_suffix(SUFFIX)?;
+    let (stamp, millis) = rest.rsplit_once('-')?;
+    if millis.len() != 3 || !millis.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let at = NaiveDateTime::parse_from_str(stamp, STAMP).ok()?;
+    (at.format(STAMP).to_string() == stamp).then_some(at)
+}
+
+/// Every pre-upgrade copy beside the shop file, newest first.
+pub fn list_upgrade(db: &Path) -> Result<Vec<Backup>, CoreError> {
+    let Some(dir) = folder_of(db) else {
+        return Ok(Vec::new());
+    };
+    collect(&dir, |name| upgrade_taken_at(db, name))
+}
+
+/// The folder a file sits in, with a bare name reading as the working
+/// folder rather than as nothing. `Path::parent` answers `Some("")` for
+/// `"shop.sqlite"`, and an empty path opens nothing.
+fn folder_of(file: &Path) -> Option<PathBuf> {
+    let dir = file.parent()?;
+    Some(if dir.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        dir.to_path_buf()
+    })
+}
+
+/// Writes a copy of the shop's file beside itself, before a migration runs.
+///
+/// One copy per upgrade that has migrations to run, kept for good. A shop
+/// that takes ten releases with schema changes in them ends up with ten of
+/// these beside its file, and nothing deletes them: the whole point of the
+/// copy is that it is still there months later, when somebody works out that
+/// the trouble started with an update.
+///
+/// Called from the app's startup and nowhere else. It takes no audit row and
+/// could not: nobody is signed in when a new version opens an old file, and
+/// the act is the new binary's, not a person's. What records it is the copy
+/// itself, whose name carries the moment.
+///
+/// The copy is written under a staging name and renamed once SQLite has
+/// finished with it, the same way [`create`] does, so a copy interrupted by
+/// a full disk is never mistaken for a complete one. Two copies in the same
+/// millisecond are one copy: an existing target is returned rather than
+/// overwritten.
+pub fn before_upgrade(conn: &mut Conn, db: &Path, at: NaiveDateTime) -> Result<Backup, CoreError> {
+    let Some(dir) = folder_of(db) else {
+        return Err(refused(
+            "the shop file has no folder to write a pre-upgrade copy into",
+        ));
+    };
+    // A copy killed mid `VACUUM INTO` leaves a staging file holding up to a
+    // whole database, and the retry that follows it is at a later moment and
+    // so under a different name, which would leave the first one there for
+    // good. Nothing else reads these names, so this is the only thing that
+    // would ever clear them.
+    sweep_staging(&dir, |stem| upgrade_taken_at(db, stem));
+    let name = upgrade_name(db, at);
+    let path = dir.join(&name);
+    if path.is_file() {
+        let bytes = std::fs::metadata(&path)?.len();
+        return Ok(Backup {
+            name,
+            path,
+            taken_at: at,
+            bytes,
+        });
+    }
+    let staging = dir.join(format!("{name}{STAGING_SUFFIX}"));
+    remove_if_present(&staging)?;
+    let written = copy_to(conn, &staging).and_then(|()| Ok(std::fs::rename(&staging, &path)?));
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&staging);
+        return Err(e);
+    }
+    let bytes = std::fs::metadata(&path)?.len();
+    Ok(Backup {
+        name,
+        path,
+        taken_at: at,
+        bytes,
+    })
+}
+
 /// Every safety copy beside the shop file, newest first.
 pub fn list_safety(db: &Path) -> Result<Vec<Backup>, CoreError> {
     let Some(dir) = db.parent() else {
@@ -192,7 +308,7 @@ pub fn is_due(newest: Option<NaiveDateTime>, now: NaiveDateTime) -> bool {
 /// reader, informative to none.
 pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, CoreError> {
     std::fs::create_dir_all(dir)?;
-    sweep_staging(dir);
+    sweep_staging(dir, taken_at);
     let name = file_name(at);
     let path = dir.join(&name);
     if path.is_file() {
@@ -234,14 +350,19 @@ pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, 
 /// allowed to keep quietly become twenty nine plus a corpse. Only names this
 /// module writes are swept, so a `.tmp` someone else put here is left alone.
 ///
-/// Safe to run at the top of `create` because copies are taken one at a
-/// time: they go through the one connection, which is behind one lock.
+/// `reads` says which names in this folder are the caller's own, because the
+/// two kinds of copy live under different names and a sweep must not delete
+/// a staging file the other kind is in the middle of writing.
+///
+/// Safe to run at the top of `create` and of [`before_upgrade`] because
+/// copies are taken one at a time: they go through the one connection, which
+/// is behind one lock.
 ///
 /// Nothing here can fail the copy it precedes. Housekeeping that refuses to
 /// finish is not a reason to stop backing the shop up, so a folder that will
 /// not list, an entry that will not stat and a file that will not delete are
 /// all left for the next run.
-fn sweep_staging(dir: &Path) {
+fn sweep_staging(dir: &Path, reads: impl Fn(&str) -> Option<NaiveDateTime>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -249,7 +370,7 @@ fn sweep_staging(dir: &Path) {
         let name = entry.file_name().to_string_lossy().into_owned();
         let is_ours = name
             .strip_suffix(STAGING_SUFFIX)
-            .is_some_and(|stem| taken_at(stem).is_some());
+            .is_some_and(|stem| reads(stem).is_some());
         if !is_ours {
             continue;
         }

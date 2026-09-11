@@ -67,10 +67,73 @@ pub fn checkpoint(conn: &mut SqliteConnection) -> Result<(), DbError> {
 
 /// Opens (creating if needed) the SQLite file and applies pending migrations.
 pub fn open(path: impl AsRef<Path>) -> Result<SqliteConnection, DbError> {
+    let mut conn = open_unmigrated(path)?;
+    migrate(&mut conn)?;
+    Ok(conn)
+}
+
+/// Opens (creating if needed) the SQLite file and stops there, with the
+/// pragmas set and nothing migrated.
+///
+/// [`open`] is this plus [`migrate`], and is what almost everything wants.
+/// This exists for the one caller that has to do something between the two:
+/// the app's startup copies the shop's file before an upgrade touches it, and
+/// it cannot know whether there is anything to copy until the file is open
+/// (`crates/api/src/lib.rs`, `AppState::open_with_backup_dir`).
+pub fn open_unmigrated(path: impl AsRef<Path>) -> Result<SqliteConnection, DbError> {
     let url = path.as_ref().to_string_lossy();
     let mut conn = SqliteConnection::establish(&url)?;
     conn.batch_execute("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-    conn.run_pending_migrations(MIGRATIONS)
-        .map_err(|e| DbError::Migrate(e.to_string()))?;
     Ok(conn)
+}
+
+/// Applies every migration the file has not had, and answers with their
+/// names in the order they ran. An empty answer means the file was already
+/// current.
+pub fn migrate(conn: &mut SqliteConnection) -> Result<Vec<String>, DbError> {
+    conn.run_pending_migrations(MIGRATIONS)
+        .map(|versions| versions.iter().map(ToString::to_string).collect())
+        .map_err(|e| DbError::Migrate(e.to_string()))
+}
+
+/// Whether this file has anything a migration could damage.
+///
+/// True once the file carries diesel's own bookkeeping table with at least
+/// one row in it, which is the same as saying some version of this app has
+/// opened it before. A file that answers false is either brand new or was
+/// created by something else entirely, and copying it before the first
+/// migration would leave a shop with a backup of nothing, taken on the day
+/// they installed, sitting beside their file for ever.
+pub fn has_a_schema(conn: &mut SqliteConnection) -> Result<bool, DbError> {
+    #[derive(QueryableByName)]
+    struct Count {
+        #[diesel(sql_type = diesel::sql_types::BigInt)]
+        n: i64,
+    }
+    let table: Count = diesel::sql_query(
+        "SELECT count(*) AS n FROM sqlite_master \
+         WHERE type = 'table' AND name = '__diesel_schema_migrations'",
+    )
+    .get_result(conn)?;
+    if table.n == 0 {
+        return Ok(false);
+    }
+    let applied: Count = diesel::sql_query("SELECT count(*) AS n FROM __diesel_schema_migrations")
+        .get_result(conn)?;
+    Ok(applied.n > 0)
+}
+
+/// The migrations this file has not had yet, by version, oldest first.
+///
+/// Asked before anything is written, so the app can say whether an upgrade
+/// is about to happen and take a copy of the file first.
+pub fn pending_migrations(conn: &mut SqliteConnection) -> Result<Vec<String>, DbError> {
+    conn.pending_migrations(MIGRATIONS)
+        .map(|pending| {
+            pending
+                .iter()
+                .map(|m| m.name().version().as_owned().to_string())
+                .collect()
+        })
+        .map_err(|e| DbError::Migrate(e.to_string()))
 }

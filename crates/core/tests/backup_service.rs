@@ -442,3 +442,167 @@ fn a_staging_name_that_is_a_dangling_link_does_not_stop_the_copy() {
     );
     assert_eq!(backup::list(&backups).unwrap().len(), 1);
 }
+
+#[test]
+fn a_pre_upgrade_copy_is_named_for_the_shop_file_and_never_read_as_a_safety_one() {
+    let (dir, mut conn) = open_temp();
+    let live = dir.path().join("t.db");
+
+    let first = backup::before_upgrade(&mut conn, &live, at(2, 3)).unwrap();
+    assert_eq!(first.name, "t.db.before-upgrade-20260102-033000-000.sqlite");
+    assert!(first.bytes > 0);
+    assert!(first.path.is_file());
+
+    // Two kinds of copy sit beside the shop file. Each list holds only its
+    // own, whichever order they were written in, because a restore and an
+    // upgrade are answers to different questions.
+    let safety = backup::safety_name(&live, at(2, 3));
+    backup::copy_to(&mut conn, &dir.path().join(&safety)).unwrap();
+    assert_eq!(backup::list_safety(&live).unwrap().len(), 1);
+    let upgrades = backup::list_upgrade(&live).unwrap();
+    assert_eq!(upgrades.len(), 1);
+    assert_eq!(upgrades.first().map(|b| b.taken_at), Some(at(2, 3)));
+    assert_eq!(backup::safety_taken_at(&live, &first.name), None);
+    assert_eq!(backup::upgrade_taken_at(&live, &safety), None);
+
+    // A second call in the same millisecond answers with the copy that is
+    // already there rather than writing over it.
+    let again = backup::before_upgrade(&mut conn, &live, at(2, 3)).unwrap();
+    assert_eq!(again.name, first.name);
+    assert_eq!(backup::list_upgrade(&live).unwrap().len(), 1);
+
+    // A later one is a second copy, newest first.
+    let second = backup::before_upgrade(&mut conn, &live, at(3, 3)).unwrap();
+    let listed = backup::list_upgrade(&live).unwrap();
+    let names: Vec<&str> = listed.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, vec![second.name.as_str(), first.name.as_str()]);
+}
+
+#[test]
+fn a_name_beside_the_shop_file_is_read_back_only_when_it_is_a_pre_upgrade_copy() {
+    let live = std::path::Path::new("/shop/t.db");
+    assert_eq!(
+        backup::upgrade_taken_at(live, "t.db.before-upgrade-20260108-093000-250.sqlite"),
+        Some(at(8, 9))
+    );
+    for bad in [
+        "t.db",
+        "t.db-wal",
+        "t.db.before-upgrade-20260108-093000-250.sqlite.tmp",
+        "other.db.before-upgrade-20260108-093000-250.sqlite",
+        "t.db.before-upgrade-20260108-093000.sqlite",
+        "t.db.before-upgrade-20260108-093000-25.sqlite",
+        "t.db.before-upgrade-20261308-093000-250.sqlite",
+        "t.db.before-restore-20260108-093000-250.sqlite",
+        "dzpos-20260108-093000.sqlite",
+    ] {
+        assert_eq!(
+            backup::upgrade_taken_at(live, bad),
+            None,
+            "{bad} was accepted"
+        );
+    }
+}
+
+#[test]
+fn a_pre_upgrade_copy_interrupted_halfway_is_not_left_looking_finished() {
+    let (dir, mut conn) = open_temp();
+    let live = dir.path().join("t.db");
+    let name = backup::upgrade_name(&live, at(4, 3));
+
+    // What a process killed mid `VACUUM INTO` leaves behind: the staging
+    // name, holding whatever had been written. Nothing reads it as a copy.
+    let staged = dir.path().join(format!("{name}.tmp"));
+    std::fs::write(&staged, b"half a database").unwrap();
+    assert!(backup::list_upgrade(&live).unwrap().is_empty());
+
+    // And the next attempt writes over it rather than refusing.
+    let taken = backup::before_upgrade(&mut conn, &live, at(4, 3)).unwrap();
+    assert_eq!(taken.name, name);
+    assert!(!staged.exists(), "the staging file was left behind");
+    assert_eq!(backup::list_upgrade(&live).unwrap().len(), 1);
+}
+
+#[test]
+fn a_staging_file_from_an_earlier_upgrade_is_swept_by_the_next_one() {
+    let (dir, mut conn) = open_temp();
+    let live = dir.path().join("t.db");
+
+    // The case a retry does not clean up by itself: a copy killed mid
+    // `VACUUM INTO` on Tuesday, and the next attempt is on Wednesday under a
+    // different name, so nothing would ever come back for Tuesday's.
+    let abandoned = dir
+        .path()
+        .join(format!("{}.tmp", backup::upgrade_name(&live, at(4, 3))));
+    std::fs::write(&abandoned, vec![0_u8; 4096]).unwrap();
+
+    backup::before_upgrade(&mut conn, &live, at(5, 3)).unwrap();
+    assert!(
+        !abandoned.exists(),
+        "a whole database was left under a name nothing reads"
+    );
+    assert_eq!(backup::list_upgrade(&live).unwrap().len(), 1);
+
+    // What the sweep must not touch: the other kind of copy, and anything
+    // that is not ours.
+    let safety_staging = dir
+        .path()
+        .join(format!("{}.tmp", backup::safety_name(&live, at(6, 3))));
+    std::fs::write(&safety_staging, b"someone else is mid-copy").unwrap();
+    let theirs = dir.path().join("notes.tmp");
+    std::fs::write(&theirs, b"not ours").unwrap();
+    backup::before_upgrade(&mut conn, &live, at(7, 3)).unwrap();
+    assert!(safety_staging.is_file(), "a restore's staging file went");
+    assert!(theirs.is_file(), "a file this module never wrote went");
+}
+
+#[test]
+fn a_second_call_in_the_same_millisecond_does_not_write_the_file_again() {
+    let (dir, mut conn) = open_temp();
+    let live = dir.path().join("t.db");
+
+    let first = backup::before_upgrade(&mut conn, &live, at(8, 3)).unwrap();
+    let written_at = std::fs::metadata(&first.path).unwrap().modified().unwrap();
+
+    // The shop's file moves on between the two calls, so a copy taken again
+    // would differ in both size and time. Neither may change: the copy is of
+    // the moment its name carries.
+    products::create(&mut conn, SHOP, OWNER, draft("Un deuxième article")).unwrap();
+
+    let again = backup::before_upgrade(&mut conn, &live, at(8, 3)).unwrap();
+    assert_eq!(again.path, first.path);
+    assert_eq!(again.bytes, first.bytes, "the copy was written again");
+    assert_eq!(
+        std::fs::metadata(&first.path).unwrap().modified().unwrap(),
+        written_at,
+        "the copy was written again"
+    );
+}
+
+#[test]
+fn a_folder_that_cannot_be_written_to_stops_the_pre_upgrade_copy() {
+    let (dir, mut conn) = open_temp();
+    let live = dir.path().join("t.db");
+
+    // A full disk and a folder nobody may write to fail in the same place,
+    // and the second is the one a test can arrange. Running as root would
+    // walk straight through it, so the test says so rather than passing for
+    // the wrong reason.
+    let mut mode = std::fs::metadata(dir.path()).unwrap().permissions();
+    mode.set_readonly(true);
+    std::fs::set_permissions(dir.path(), mode.clone()).unwrap();
+    let outcome = backup::before_upgrade(&mut conn, &live, at(9, 3));
+    let mut writable = std::fs::metadata(dir.path()).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    writable.set_readonly(false);
+    std::fs::set_permissions(dir.path(), writable).unwrap();
+
+    assert!(
+        outcome.is_err(),
+        "a copy into a folder nobody may write to reported success"
+    );
+    assert!(
+        backup::list_upgrade(&live).unwrap().is_empty(),
+        "a failed copy left a name the list trusts"
+    );
+}

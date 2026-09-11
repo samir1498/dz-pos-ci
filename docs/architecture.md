@@ -337,12 +337,22 @@ shown in About. The bundle identifier `com.dzpos.app` changes exactly
 once, with the final name, before the first tag (open decision 2 in
 `features.md`).
 
+A new build that opens an older shop file copies that file before it
+migrates it. The copy goes beside the shop file as
+`<name>.before-upgrade-<stamp>.sqlite`, so the daily prune cannot reach it,
+and it is taken only when the file already holds a schema and this build has
+migrations it has not had: a fresh install copies nothing, and a restart
+after the upgrade copies nothing either. A copy that cannot be written stops
+the app from starting, because the alternative is a migration running with
+nothing to go back to. `crates/api/src/lib.rs`, `open_and_upgrade`, is the
+only caller; `crates/api/tests/upgrade_from_a_previous_version.rs` builds a
+file at the previous version and opens it. Restoring one is a file swap by
+hand today: the restore route takes a daily copy's name and no other kind.
+
 Raised in the 2026-09-08 handoff, still open, each settled before
 `docs/roadmap.md` M5 closes:
 
 - Whether the version also heads the log file and the support bundle.
-- Migrations tied to the app version, with an automatic backup of the
-  SQLite file before any migration runs.
 - Tauri updater signing key: who generates it and who holds it; it never
   enters the repo, CI signs with a secret.
 - Windows code-signing certificate: cost and lead time, for Anouar.
