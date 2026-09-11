@@ -145,9 +145,10 @@ code already does.
 
 Release gates, all of them: every fiscal row in `features.md` confirmed by
 a comptable (R8); a real printed facture seen (open decision 4); the Arabic
-words file reviewed by a native speaker (R6); the article that puts NIF and
-AI on a facture cited (R3); Sonar quoted as a gate only if Rust support on
-the team server was verified first.
+words file reviewed by a native speaker (R6); Sonar quoted as a gate only if
+Rust support on the team server was verified first. The NIF citation (R3) is
+closed: loi 04-02 art. 34 makes it a facture mention and no text makes the
+article d'imposition one, which leaves the AI to the comptable under R8.
 
 Blocks: the final name (Anouar); the certificate's cost and lead time
 (Anouar); who holds the updater signing key (Anouar or Samir, decided
