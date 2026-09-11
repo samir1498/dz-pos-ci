@@ -313,7 +313,10 @@ worktree-rm name:
 # is the same repository under Samir's own account, where his free minutes
 # pay for the run. It carries no history of its own: this recipe force-pushes
 # the branch, so the mirror is always a copy and never a place work lives.
-ci branch="":
+# `windows` as the second argument also runs the windows job, for a branch
+# whose change is behind `cfg(windows)`: that job is main-only otherwise, so
+# without it the first Windows compile of such a change happens on main.
+ci branch="" windows="":
     #!/usr/bin/env bash
     set -euo pipefail
     b="{{branch}}"
@@ -345,7 +348,12 @@ ci branch="":
     done
     if [ -z "$id" ]; then
         echo "no run started itself; asking for one"
-        gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
+        if [ -n "{{windows}}" ]; then
+            echo "asking for the windows job too"
+            gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b" -f windows=true
+        else
+            gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
+        fi
         for _ in $(seq 1 12); do
             id="$(find_run || true)"
             [ -n "${id:-}" ] && [ "$id" != "null" ] && break
