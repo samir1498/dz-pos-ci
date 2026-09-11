@@ -178,6 +178,16 @@ fn the_pre_upgrade_copy_is_not_one_of_the_thirty_daily_ones() {
     assert_eq!(upgrade_copies(&path).len(), 1);
 }
 
+/// Unix only, and not because the refusal is: `open_and_upgrade` propagates
+/// the copy's error with a `?` and has no idea which platform it is on. The
+/// lever is what does not travel. This test makes the folder read-only, and
+/// Windows keeps that flag on a directory without letting it stop a file
+/// from being created inside, so the copy would succeed there and the app
+/// would start, passing an assertion that proves nothing. What actually
+/// stops the copy on a shopkeeper's machine is a full disk, which no test
+/// produces on any platform. Found by the windows job on 2026-09-12, the
+/// first time it ran against this file.
+#[cfg(unix)]
 #[test]
 fn a_copy_that_cannot_be_written_stops_the_app_from_starting() {
     let dir = tempfile::tempdir().unwrap();
