@@ -43,6 +43,9 @@ tasks:
   - id: 'T11'
     desc: 'The two kinds of copy that sit beside the shop file, the one taken before a restore and the one taken before an upgrade, are restorable from the settings screen. Today the restore route accepts the name of a daily copy and no other kind, so both are a file swap by hand. Needs a third list on the backups route, wording in three languages and a screen change. Also: the reopen inside a restore migrates an older copy in place without taking a pre-upgrade copy of it, which is a one-line change to a nine-step sequence and deserves its own review. Raised by the data-safety review, 2026-09-11.'
     status: 'pending'
+  - id: 'T12'
+    desc: 'The audit row is stamped from the shop clock like every other row, not left to SQLite''s default. `services::audit::record` omits `created_at`, so the column takes `CURRENT_TIMESTAMP`, which is UTC, while every other date in the file is on the shop''s calendar; `CoreError::Unstamped` already says no row may do this and `repos::supplier_debt` refuses it for the supplier ledger. The screen was made right on the read side on 2026-09-12 (PR #45) and this is the shape fix underneath it: stamp at insert, move the rows already written by a migration, then `services::audit::day_range_utc` becomes a plain day range and the conversion in `AuditEntryDto` goes away. Needs a migration, so it is a deliberate pass and not a night fix. Raised by the one-hour-a-day test failure that found the read-side bug.'
+    status: 'pending'
 acceptance: []
 ---
 # M5: first release, v1.0
