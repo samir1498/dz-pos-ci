@@ -321,7 +321,7 @@ pub fn record(conn: &mut Conn, shop_id: i32, actor_id: i32) -> Result<(), CoreEr
 }
 
 /// Reads the shop's own log file, the one [`crate::log::head_session`]
-/// writes, verbatim. `None` when it has never been written (a fresh file
+/// writes, verbatim. Empty when it has never been written (a fresh file
 /// with no session yet), read as empty rather than refused: a bundle asked
 /// for the moment a shop is set up should still build.
 pub fn read_log(log_path: &Path) -> Result<String, CoreError> {
