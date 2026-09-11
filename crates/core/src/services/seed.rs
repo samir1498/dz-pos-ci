@@ -47,7 +47,7 @@ use crate::services::purchases::{NewLine, NewPurchase, ReceiveLine};
 use crate::services::sales::{NewSale, NewSaleLine, SaleKind};
 use crate::services::{
     audit, avoir, customers, debt, documents, expenses, products, purchases, sales, shops,
-    supplier_debt, suppliers,
+    supplier_debt, suppliers, users,
 };
 
 /// The name the seeded shop trades under. Public because the binary reads it
@@ -55,6 +55,22 @@ use crate::services::{
 /// is somebody's books unless it is this one, and that is the difference
 /// between re-seeding a development file and writing over a real shop.
 pub const SHOP_NAME: &str = "Supérette El Bahdja";
+
+/// The PIN and the password the seeded owner gets (M4 T2). Public because the
+/// binary prints them: a development file nobody can sign in to is a
+/// development file nobody can use.
+///
+/// Why this is here at all. The first migration writes the owner with the
+/// `'!unset'` sentinel and no password, which is right for a shop that a
+/// person is about to set up, and wrong for a file a developer opens at nine
+/// in the morning: from M4 on every route wants a session, and there is no
+/// route that sets a first credential. Setting one belongs to the seeder,
+/// which already only ever runs on a `.dev/` file on a box that said
+/// `DZPOS_DEV=1`, and never to the API. What a real shop's first run does is
+/// a decision the plan has not taken; it is not this.
+pub const OWNER_PIN: &str = "1379";
+/// The seeded owner's password, for the name-and-password door.
+pub const OWNER_PASSWORD: &str = "developpement";
 
 /// The one number the whole file comes out of. Changing it changes every
 /// figure the seeded shop shows, which is why it is a constant and not an
@@ -177,6 +193,7 @@ pub fn run(
         let mut rng = Rng::new(SEED);
 
         the_shop_itself(conn, shop_id, user_id)?;
+        the_way_in(conn, shop_id, user_id)?;
         let categories = the_categories(conn, shop_id, user_id, &mut counts)?;
         let catalogue = the_catalogue(conn, shop_id, user_id, &categories, &mut counts)?;
         let buyers = the_customers(conn, shop_id, user_id, &mut counts)?;
@@ -248,6 +265,15 @@ struct Fiche {
 /// The seller block. A facture is refused until the shop carries RC and NIS
 /// (décret 05-468 art. 3), so a seeded shop that could not issue one would be
 /// a file half the screens cannot be developed against.
+/// Gives the seeded owner a PIN and a password, so the file can be signed in
+/// to. Through `users`, so the hashes are argon2id and the audit rows are the
+/// ones a reset leaves: the seeder writes nothing by hand here either.
+fn the_way_in(conn: &mut SqliteConnection, shop_id: i32, user_id: i32) -> Result<(), CoreError> {
+    users::set_pin(conn, shop_id, user_id, user_id, OWNER_PIN)?;
+    users::set_password(conn, shop_id, user_id, user_id, OWNER_PASSWORD)?;
+    Ok(())
+}
+
 fn the_shop_itself(
     conn: &mut SqliteConnection,
     shop_id: i32,

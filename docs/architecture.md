@@ -76,7 +76,13 @@ which device or account is asking, the user on the request says which
 person, and the permission list in `docs/features.md` §5 is checked in the
 service layer, so a request that skipped the screen still meets it. The
 middleware that checks the launch token is the request-identity slot; M4
-adds the user to it, it does not add a second gate.
+puts a second layer inside it rather than folding the two together. The
+launch token still answers first and is unchanged: it says the request came
+from this machine's own screen. Behind it, `crates/api/src/session.rs` reads
+a session token (the `X-Dzpos-Session` header, or the httpOnly cookie a
+browser was given) and refuses with 401 `session_required` when there is
+none. Two credentials, two answers, and a refused permission is a third
+thing again: 403 `forbidden` naming the permission (M4 T2).
 
 What is out of scope and stays so: the core does not encrypt the SQLite
 file (Data, below), does not rate-limit loopback, and does not defend the

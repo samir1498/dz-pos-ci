@@ -359,11 +359,15 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       session = next ?? undefined;
     },
 
-    /** Signs in with a user id and a PIN, or a name and a password. The
-     * token is remembered here as well as returned, so the very next call
-     * carries it. */
+    /** Signs in with a user id and a PIN, or a name and a password.
+     *
+     * The token is returned and deliberately not remembered: a browser got
+     * the same session as an httpOnly cookie, and holding the token in a
+     * variable JavaScript can read would hand back exactly what httpOnly was
+     * for. The desktop, whose webview cannot set a cookie, calls
+     * `setSession(answer.token)` after this (T4). */
     async login(body: LoginDto): Promise<SessionDto> {
-      const answer = narrow(
+      return narrow(
         await send("/auth/login", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -372,8 +376,6 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         sessionSchema,
         "sign-in answer",
       );
-      session = answer.token;
-      return answer;
     },
 
     /** Ends the session and forgets the token, whether or not the server had

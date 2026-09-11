@@ -144,6 +144,14 @@ fn cookie_token(headers: &header::HeaderMap) -> Option<String> {
 /// back with no cookie rather than with one the server will refuse. The
 /// server's own check is still the one that decides; this only saves a round
 /// trip.
+///
+/// One thing `Lax` costs, and only in development: a page served from
+/// `localhost:5173` calling an API on `127.0.0.1:4317` is cross-site to a
+/// browser, whatever the two resolve to, so the cookie does not travel and
+/// the preview falls back to the header. The shipped path is the Tauri
+/// webview, which carries the header anyway, so this is a note about the dev
+/// server and not a hole: open the preview on the same host name as the API
+/// and the cookie rides along.
 pub fn set_cookie(token: &str, idle_minutes: i64) -> Option<HeaderValue> {
     HeaderValue::from_str(&format!(
         "{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",

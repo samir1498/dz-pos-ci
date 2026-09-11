@@ -8,14 +8,23 @@
 //! there fails.
 //!
 //! **What T2 ships and what T3 does.** T2 is the mechanism, the table's shape
-//! and the actor. The content of the table is the M3 and M2 carry-in rulings
-//! in `context/plans/20260908-m4-team.md`, written out route by route, and
-//! those are decisions rather than suggestions, so they are written here now
-//! rather than invented again later. What T2 deliberately does not do is
-//! apply them: no handler calls `permissions::require` yet, and a cashier is
-//! refused by nothing. T3 is one pass down this table, and the session
-//! middleware can look a row up by `axum::extract::MatchedPath` rather than
-//! each handler naming its own permission a second time.
+//! and the actor. What T2 deliberately does not do is apply it: no handler
+//! calls `permissions::require` yet, and a cashier is refused by nothing. T3
+//! is one pass down this table, and the session middleware can look a row up
+//! by `axum::extract::MatchedPath` rather than each handler naming its own
+//! permission a second time.
+//!
+//! **Where the rows come from.** Some are rulings the plan already took: the
+//! M1, M2 and M3 carry-ins in `context/plans/20260908-m4-team.md` name the
+//! permission for the till, the stock screens, the settings block, the
+//! imports and exports and the price change at the till, and those are
+//! decisions rather than suggestions, so they are written out here rather
+//! than invented again later. The rest are read off the same rulings by the
+//! block a screen sits in, and T2 took them: the customer fiches and their
+//! payments and adjustments, the backup and restore routes, the purchase
+//! cancellation, and the sale routes past the first. Each says in `why` what
+//! it was read off. T3 is where they are argued with, and a row changed there
+//! is a row changed here, not a second opinion in a handler.
 
 use dzpos_core::services::permissions::Permission;
 
