@@ -50,6 +50,10 @@ const shot = shots.collage[locale];
     max-width: 100%;
     height: auto;
     margin-inline: auto;
-    box-shadow: var(--shadow-lg);
+    /* No shadow here: every --shadow-* token is a dark tint (stone-900),
+       which is next to invisible on --surface-inverse. Comptoir names no
+       shadow for an inverse surface, and inventing one is not this task's
+       call to make. The crisp ring shots.ts bakes into the tile is the only
+       depth cue on this band. */
   }
 </style>

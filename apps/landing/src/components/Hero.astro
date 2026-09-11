@@ -71,6 +71,12 @@ const shot = shots.hero[locale];
     flex: 1 1 320px;
     max-width: 100%;
     height: auto;
-    box-shadow: var(--shadow-lg);
+    /* frameTile bakes rounded, transparent corners into the shot itself
+       (src/lib/shots.ts); box-shadow casts from the rectangular border box
+       regardless of alpha, which squares the shadow off at those corners.
+       drop-shadow follows the alpha channel, and --shadow-lg is already an
+       offset/offset/blur/colour triple with no spread, so it parses as a
+       drop-shadow argument unchanged. */
+    filter: drop-shadow(var(--shadow-lg));
   }
 </style>

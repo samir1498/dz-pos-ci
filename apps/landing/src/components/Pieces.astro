@@ -76,7 +76,9 @@ const items = [
   .piece img {
     width: 100%;
     height: auto;
-    box-shadow: var(--shadow-md);
+    /* drop-shadow, not box-shadow: the shot's corners are transparent, not
+       square (see Hero.astro's comment on the same choice). */
+    filter: drop-shadow(var(--shadow-md));
   }
 
   .piece h3 {
