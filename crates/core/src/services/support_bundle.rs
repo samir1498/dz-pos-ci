@@ -30,6 +30,16 @@
 //! real one would carry, builds a bundle from it, and fails on any of that
 //! turning up anywhere in the zip's bytes, entry names included.
 //!
+//! One of those six is not held by the test, and whoever adds the logging
+//! framework has to know it. `log.txt` is copied out of the shop's log file
+//! verbatim, and that file today carries one line per process start and
+//! nothing else, so there is nothing in it to leak. The test seeds a shop
+//! and scans the bundle, which means it only ever sees what this build's own
+//! startup wrote: a later `info!(customer = %name)` on a failed sale would
+//! pass it unchanged and walk out inside `log.txt`. Whatever writes the
+//! first log line about a row of shop data owes this entry a redaction pass
+//! or an allowlist before it lands.
+//!
 //! The cost of that list. A bundle that carries none of a shop's own data
 //! cannot answer "why is this customer's balance wrong": there is a count of
 //! customers and no row of any of them. What it can answer is "does this
@@ -68,7 +78,7 @@ pub const ENTRIES: [&str; 6] = [
 ];
 
 const README_BODY: &str = "\n\
-FR: Ouvrez Param\u{e8}tres, appuyez sur \u{ab} Dossier d'assistance \u{bb}, puis envoyez-nous ce fichier zip. Il contient le journal de la caisse, la version du logiciel, la forme de la base de donn\u{e9}es et quelques totaux. Aucun nom de client, aucun nom de produit, aucun prix et aucun document ne s'y trouve.\n\
+FR: Ouvrez Param\u{e8}tres, appuyez sur \u{ab} Dossier d'assistance \u{bb}, puis envoyez-nous ce fichier zip. Il contient le journal de la caisse, la version du logiciel, la forme de la base de donn\u{e9}es et quelques d\u{e9}comptes. Aucun nom de client, aucun nom de produit, aucun prix et aucun document ne s'y trouve.\n\
 \n\
 EN: Open Settings, press \"Support bundle\", then send us this zip file. It holds the till's own log, the software version, the shape of the database and a few counts. No customer name, no product name, no price and no document is in it.\n\
 \n\
