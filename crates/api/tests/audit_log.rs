@@ -128,6 +128,40 @@ async fn other_customer(app: &axum::Router) {
     assert_eq!(status, StatusCode::CREATED, "{made}");
 }
 
+/// The hour that used to break this screen. `audit_log.created_at` is the
+/// one column in the file stamped by SQLite's own default, which is UTC,
+/// while `day=` filters on the shop's calendar (`audit::day_range_utc`).
+/// Between 23:00 UTC and midnight those are two different dates, so a row
+/// written at 00:30 in Algiers printed as 23:30 the day before while the
+/// filter counted it under the day it was written. Reading the column on
+/// the shop clock is what settles it, and this test is the proof: with the
+/// conversion removed the date below reads 2026-09-11 and the row a shop
+/// owner filters for on the 12th shows him a row dated the 11th.
+#[test]
+fn a_row_written_after_eleven_at_night_reads_on_the_shops_own_day() {
+    let stored = chrono::NaiveDate::from_ymd_opt(2026, 9, 11)
+        .unwrap()
+        .and_hms_opt(23, 30, 0)
+        .unwrap();
+    let entry = dzpos_core::services::audit::EntryWithUser {
+        entry: dzpos_core::models::audit::AuditEntry {
+            id: 1,
+            shop_id: SHOP,
+            user_id: 1,
+            action: "update".into(),
+            entity: "products".into(),
+            entity_id: Some(1),
+            before: None,
+            after: None,
+            created_at: stored,
+        },
+        user_name: "Propriétaire".into(),
+    };
+
+    let dto = dzpos_api::dto::AuditEntryDto::from(entry);
+    assert_eq!(dto.created_at, "2026-09-12 00:30:00");
+}
+
 #[tokio::test]
 async fn the_owner_sees_the_price_change_a_real_service_wrote() {
     let h = harness();
