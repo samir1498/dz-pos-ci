@@ -254,6 +254,34 @@ worktree-rm name:
     git worktree remove "$dir"
     git worktree prune
 
+# ---- CI on the mirror ----
+
+# Push this branch to samir1498/dz-pos-ci and watch the run there.
+#
+# The organisation's Actions budget is capped for the month, so every job on
+# Dinar-dz refuses to start ("recent account payments have failed or your
+# spending limit needs to be increased", since 2026-09-10 16:12). The mirror
+# is the same repository under Samir's own account, where his free minutes
+# pay for the run. It carries no history of its own: this recipe force-pushes
+# the branch, so the mirror is always a copy and never a place work lives.
+ci branch="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    b="{{branch}}"
+    [ -n "$b" ] || b="$(git rev-parse --abbrev-ref HEAD)"
+    git remote get-url ci >/dev/null 2>&1 || git remote add ci git@github.com:samir1498/dz-pos-ci.git
+    git push -q --force ci "$b:$b"
+    echo "pushed $b to the mirror; starting the run"
+    gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
+    # The run takes a moment to exist; ask for it until it does.
+    for _ in $(seq 1 10); do
+        id="$(gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
+        [ -n "${id:-}" ] && break
+        sleep 3
+    done
+    [ -n "${id:-}" ] || { echo "no run appeared; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
+    gh run watch "$id" --repo samir1498/dz-pos-ci --exit-status
+
 # ---- mockups (design/) ----
 
 mockup-serve:
