@@ -377,6 +377,12 @@ pub const ROUTE_GATES: &[Gate] = &[
     },
     Gate {
         method: "GET",
+        path: "/support-bundle",
+        permission: Some(Permission::EditSettings),
+        why: "a zip the shop sends to whoever is fixing something, reached from the settings screen and gated the same way the backups block beside it is (M5 T3); its own doc names why it carries no customer, product, price or document and an audit row still travels with it, the same as an export's, because the file is on its way out of the shop even though what is in it never is",
+    },
+    Gate {
+        method: "GET",
         path: "/users",
         permission: Some(Permission::ManageUsers),
         why: "who the shop's staff are; services::permissions::can's own doc says a manager answers like an owner on everything except this and the audit log, so the list itself is the owner's read and not an ordinary one",
@@ -454,7 +460,8 @@ mod tests {
                         || gate.path == "/cash"
                         || gate.path == "/suppliers"
                         || gate.path == "/suppliers/{id}/ledger"
-                        || gate.path == "/backups",
+                        || gate.path == "/backups"
+                        || gate.path == "/support-bundle",
                     "{} is a read this table was not opened for; widen this allow-list deliberately \
                      and say why in ROUTE_GATES's own `why` (M4 T5 review, 2026-09-11: /dashboard, \
                      /dashboard/series, /purchases and /purchases/{{id}} joined the exports, the \
@@ -462,7 +469,8 @@ mod tests {
                      M4 closing review, same day: /expenses, /cash, /suppliers, \
                      /suppliers/{{id}}/ledger and /backups joined them, the money the shop spends \
                      and owes having been readable by a cashier while the pages that sum it were \
-                     not)",
+                     not. M5 T3: /support-bundle joined them, the zip a shop sends out gated the \
+                     same way the backups block beside it is)",
                     gate.path
                 );
             }

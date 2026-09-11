@@ -1273,6 +1273,7 @@ dependencies = [
  "tower",
  "tower-http 0.7.1",
  "ts-rs",
+ "zip",
 ]
 
 [[package]]
@@ -1286,6 +1287,7 @@ dependencies = [
  "chrono",
  "diesel",
  "diesel_migrations",
+ "iana-time-zone",
  "libsqlite3-sys",
  "proptest",
  "rust_xlsxwriter",
@@ -1294,6 +1296,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror 2.0.20",
+ "zip",
 ]
 
 [[package]]

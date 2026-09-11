@@ -47,6 +47,17 @@ calamine = { version = "0.36.1", features = ["dates"] }
 # optional and off in the default features (ascii, json, svg, std), so this
 # adds no native code either.
 barcoders = "2.0.0"
+# The support bundle's zip (M5 T3). Already in the lock at 8.6.0 through
+# `rust_xlsxwriter`'s own zip backend (an .xlsx is a zip), so this compiles
+# nothing new; `default-features = false` plus `deflate` is the same feature
+# set that dependency already activates (no bzip2, zstd or lzma in the lock,
+# both of which need a C toolchain the bundled sqlite already avoids).
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
+# The machine's IANA time zone name for the support bundle (M5 T3). Already
+# in the lock at 0.1.65, pulled in transitively; this makes it a direct
+# dependency of the one caller that reads it rather than compiling a second
+# copy at a different version.
+iana-time-zone = "0.1"
 
 [dev-dependencies]
 tempfile = "3"

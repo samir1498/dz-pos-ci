@@ -18,7 +18,7 @@ use diesel::connection::SimpleConnection;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
-use crate::db::{Conn, MIGRATIONS};
+use crate::db::Conn;
 use crate::error::CoreError;
 use crate::services::audit;
 
@@ -504,7 +504,7 @@ pub fn verify(path: &Path) -> Result<Summary, CoreError> {
         diesel::sql_query("SELECT version FROM __diesel_schema_migrations")
             .load(&mut conn)
             .map_err(|_| refused("is not a dz-pos shop file"))?;
-    let known = embedded_versions()?;
+    let known = crate::db::embedded_versions()?;
     if let Some(ahead) = applied.iter().find(|row| !known.contains(&row.version)) {
         return Err(CoreError::validation(
             "backup",
@@ -519,19 +519,6 @@ pub fn verify(path: &Path) -> Result<Summary, CoreError> {
         products: count(&mut conn, "products")?.unwrap_or(0),
         documents: count(&mut conn, "documents")?,
     })
-}
-
-/// The migrations compiled into this binary. A copy may have fewer (it is
-/// older, and `db::open` migrates it forward on the way in); it may not have
-/// more.
-fn embedded_versions() -> Result<Vec<String>, CoreError> {
-    use diesel::migration::MigrationSource;
-    let migrations = MigrationSource::<diesel::sqlite::Sqlite>::migrations(&MIGRATIONS)
-        .map_err(|e| CoreError::Db(crate::db::DbError::Migrate(e.to_string())))?;
-    Ok(migrations
-        .iter()
-        .map(|m| m.name().version().to_string())
-        .collect())
 }
 
 /// `None` when the table is not in this copy's schema yet.

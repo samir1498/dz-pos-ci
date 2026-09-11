@@ -117,6 +117,36 @@ impl AppState {
         self.with_conn(|conn| backup::create(conn, &dir, at))
     }
 
+    /// The support bundle (M5 T3): the log file beside the shop file, the
+    /// build's own version and migration history, the shape of the schema,
+    /// a handful of counts and sizes, and the machine's OS, language and
+    /// time zone, zipped into one file a shop can send. Every rule about
+    /// what goes in lives in `dzpos_core::services::support_bundle`; this
+    /// reads the three paths its `gather` wants off `self` and hands the
+    /// connection over the same way every other write here does.
+    ///
+    /// The log is read before the connection is taken, not after: it is a
+    /// plain file with its own lock story, and reading it holds the
+    /// connection's mutex for no longer than building the zip needs to.
+    ///
+    /// `actor_id` is who asked, for the audit row
+    /// `dzpos_core::services::support_bundle::record` writes once the zip is
+    /// built and before it is handed back, the same order an export's own
+    /// row is written in.
+    pub fn support_bundle(&self, actor_id: i32) -> Result<Vec<u8>, ApiError> {
+        let log = dzpos_core::services::support_bundle::read_log(&default_log_path(&self.db_path))
+            .map_err(ApiError::from)?;
+        let db_path = Arc::clone(&self.db_path);
+        let backup_dir = Arc::clone(&self.backup_dir);
+        let shop_id = self.shop_id;
+        self.with_conn(|conn| {
+            let facts = dzpos_core::services::support_bundle::gather(conn, &db_path, &backup_dir)?;
+            let bytes = dzpos_core::services::support_bundle::build_zip(&facts, &log)?;
+            dzpos_core::services::support_bundle::record(conn, shop_id, actor_id)?;
+            Ok(bytes)
+        })
+    }
+
     /// Replaces the shop file with one of its copies, then reopens the
     /// connection on it, so the running server answers from the restored
     /// file without the app being restarted.
@@ -620,6 +650,7 @@ pub fn router_with_origin(
             "/suppliers/{id}/statement",
             get(routes::suppliers::statement),
         )
+        .route("/support-bundle", get(routes::support::bundle))
         .route(
             "/users",
             get(routes::users::list).post(routes::users::create),
