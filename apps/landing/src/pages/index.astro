@@ -1,5 +1,7 @@
 ---
+import "../styles/fonts-latin.css";
 import Base from "../layouts/Base.astro";
+import { LATIN_FONT_URLS } from "../lib/fonts";
 ---
 
-<Base locale="fr" />
+<Base locale="fr" fontUrls={LATIN_FONT_URLS} />
