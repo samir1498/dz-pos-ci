@@ -141,7 +141,19 @@ export default defineConfig({
       // The API names its allowed origins (the dev Vite port and the Tauri
       // ones); the test Vite runs on another port, so it is passed in the
       // way the SSH case is: one extra origin on the command line.
-      command: `rm -f "${tempDb}" "${tempDb}-shm" "${tempDb}-wal" "${tempDb}".before-restore-*.sqlite && rm -rf "${tempBackups}" && cargo run -p dzpos-api -- --db "${tempDb}" --port ${apiPort} --allow-origin ${baseURL}`,
+      // Built under the shared folder's lock and then run as a plain
+      // binary, rather than `cargo run`, which holds no lock at all. Every
+      // cargo invocation on this box shares one build folder and takes
+      // `flock` on it, because cargo names our own crates' artifacts the
+      // same in every worktree and decides freshness by mtime
+      // (`context/processes/20260908-machines-and-heavy-jobs.md`). A bare
+      // `cargo run` here opted out of that: another worktree building
+      // during a test run replaced the rlib underneath it, and the failure
+      // that came back was a compile error citing line numbers that do not
+      // exist in this tree, which is a very slow thing to diagnose. The
+      // lock is held for the build and dropped before the server starts, so
+      // a twenty-minute test run does not block every other checkout.
+      command: `rm -f "${tempDb}" "${tempDb}-shm" "${tempDb}-wal" "${tempDb}".before-restore-*.sqlite && rm -rf "${tempBackups}" && mkdir -p "$CARGO_TARGET_DIR" && flock "$CARGO_TARGET_DIR/.lock" cargo build -p dzpos-api && exec "$CARGO_TARGET_DIR/debug/dzpos-api" --db "${tempDb}" --port ${apiPort} --allow-origin ${baseURL}`,
       cwd: repoRoot,
       env: { ...cargoEnv, DZPOS_API_TOKEN: launchToken },
       url: `${apiUrl}/health`,
