@@ -2801,7 +2801,8 @@ pub struct AuditEntryDto {
     pub entity_id: Option<i32>,
     pub before: Option<String>,
     pub after: Option<String>,
-    /// `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
+    /// `YYYY-MM-DD HH:MM:SS` on the shop's calendar, the same clock every
+    /// other date this app shows is read on.
     pub created_at: String,
 }
 
@@ -2816,7 +2817,19 @@ impl From<dzpos_core::services::audit::EntryWithUser> for AuditEntryDto {
             entity_id: e.entry.entity_id,
             before: e.entry.before,
             after: e.entry.after,
-            created_at: e.entry.created_at.format(DATE_TIME_FORMAT).to_string(),
+            // The audit table is the one place a row takes its timestamp
+            // from the file's own default rather than from the shop clock,
+            // and SQLite's default is UTC. Reading it back on the shop's
+            // calendar is what makes the date printed on a row agree with
+            // the day the filter beside it asks for: a row written at 00:30
+            // in Algiers is stored as 23:30 the day before, and used to
+            // print that way while `day=` counted it under the day it was
+            // written (`services::audit::day_range_utc`).
+            created_at: dzpos_core::services::clock::shop_time(
+                chrono::DateTime::from_naive_utc_and_offset(e.entry.created_at, chrono::Utc),
+            )
+            .format(DATE_TIME_FORMAT)
+            .to_string(),
         }
     }
 }
