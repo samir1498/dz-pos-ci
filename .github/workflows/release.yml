@@ -1,0 +1,231 @@
+name: Release
+
+# A tag matching the release shape (v<semver>) on main is the only thing
+# that publishes a GitHub release (M5 T6, docs/architecture.md § Release).
+# A manual dispatch never publishes: it exists to exercise the same build
+# machinery before the first real tag, and uploads the installer as a run
+# artifact instead. The `gate` job below decides which of the two this run
+# is and says so in its own output; `.github/scripts/release-gate.sh` holds
+# the actual decision logic and can be run and proven off this file.
+#
+# Windows minutes are the same capped organisation budget `docs/architecture.md`
+# § Testing matrix talks about for CI. The dry-run path is what `just ci`
+# exercises on the mirror before the first real tag: push the branch, then
+# `gh workflow run Release --repo samir1498/dz-pos-ci --ref <branch>`. See
+# the PR description for what is proven here and what is not.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Decides release vs. dry-run and refuses anything that is neither. Every
+  # later job depends on this one, so a refusal here (non-zero exit) stops
+  # the build and the publish from running at all.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.gate.outputs.mode }}
+      version: ${{ steps.gate.outputs.version }}
+      prerelease: ${{ steps.gate.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Only meaningful for a tag push. `github.sha` is reliable for an
+      # annotated or lightweight tag alike because we dereference the ref
+      # ourselves with `^{commit}` rather than trust the event payload.
+      - name: Is the tagged commit on main
+        id: onmain
+        if: github.event_name == 'push'
+        run: |
+          git fetch origin main --quiet
+          sha="$(git rev-parse "${{ github.ref }}^{commit}")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$sha" origin/main; then
+            echo "on_main=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "on_main=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Gate
+        id: gate
+        run: |
+          .github/scripts/release-gate.sh \
+            "${{ github.event_name }}" \
+            "${{ github.ref }}" \
+            "${{ steps.onmain.outputs.sha || github.sha }}" \
+            "${{ steps.onmain.outputs.on_main }}" \
+            "Cargo.toml" \
+            "apps/desktop/src-tauri/tauri.conf.json"
+
+      - name: Say the decision out loud
+        env:
+          MODE: ${{ steps.gate.outputs.mode }}
+          VERSION: ${{ steps.gate.outputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          {
+            echo "### Release gate"
+            echo
+            echo "mode: \`$MODE\`"
+            echo "version: \`$VERSION\`"
+            if [ "$MODE" = "dry-run" ]; then
+              echo
+              echo "This is a manual dry run. It builds the Windows installer and"
+              echo "uploads it as a run artifact. **No release is created and no tag**"
+              echo "**is touched.**"
+            else
+              echo
+              echo "This is a real release, cut from \`$REF_NAME\` on main."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Builds the Windows installer. Runs for both a release and a dry run: the
+  # whole point of the dry run is to prove this job works before the first
+  # real tag needs it to. It never has `contents: write`, so nothing in this
+  # job can publish anything by itself.
+  build:
+    needs: gate
+    runs-on: windows-latest
+    outputs:
+      has_cert: ${{ steps.cert.outputs.present }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - uses: Swatinem/rust-cache@v2
+
+      - run: pnpm install --frozen-lockfile
+      # Type-checks `packages/shared` (its build script is `tsc --noEmit`)
+      # before `tauri build` runs `apps/desktop`'s own build through
+      # `beforeBuildCommand`; a broken shared type would rather fail here
+      # than inside the bundler.
+      - run: pnpm -r build
+
+      # Windows code-signing certificate. Not the Tauri updater key (T7):
+      # this signs the .exe itself so Windows SmartScreen does not flag it.
+      # No certificate exists yet (docs/architecture.md § Release, open
+      # question), so this branch is written but unexercised here.
+      - name: Is a Windows code-signing certificate configured
+        id: cert
+        shell: bash
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -n "$WINDOWS_CERTIFICATE" ] && [ -n "$WINDOWS_CERTIFICATE_PASSWORD" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::no WINDOWS_CERTIFICATE secret; building an unsigned installer"
+          fi
+
+      # Secrets go through env vars, never interpolated into the script text
+      # itself: a `$`, `"` or backtick in the password would otherwise land
+      # in the middle of PowerShell source rather than being read as data.
+      - name: Import the code-signing certificate
+        if: steps.cert.outputs.present == 'true'
+        id: import
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $bytes = [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          $path = Join-Path $env:RUNNER_TEMP "dz-pos-signing.pfx"
+          [IO.File]::WriteAllBytes($path, $bytes)
+          $securePw = ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $path -CertStoreLocation Cert:\CurrentUser\My -Password $securePw
+          Remove-Item $path
+          "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
+
+      - name: Build the Windows installer (signed)
+        if: steps.cert.outputs.present == 'true'
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          pnpm exec tauri build --bundles nsis --config "{\"bundle\":{\"windows\":{\"certificateThumbprint\":\"${{ steps.import.outputs.thumbprint }}\",\"digestAlgorithm\":\"sha256\",\"timestampUrl\":\"http://timestamp.digicert.com\"}}}"
+
+      - name: Build the Windows installer (unsigned)
+        if: steps.cert.outputs.present != 'true'
+        working-directory: apps/desktop
+        run: pnpm exec tauri build --bundles nsis
+
+      - name: Find the installer
+        id: find
+        shell: bash
+        run: |
+          exe="$(find target/release/bundle/nsis -maxdepth 1 -name '*.exe' 2>/dev/null | head -n1)"
+          if [ -z "$exe" ]; then
+            echo "::error::no NSIS installer found under target/release/bundle/nsis"
+            exit 1
+          fi
+          echo "path=$exe" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dz-pos-windows-installer-${{ needs.gate.outputs.mode }}-${{ needs.gate.outputs.version }}
+          path: ${{ steps.find.outputs.path }}
+          if-no-files-found: error
+
+  # Only this job can touch a GitHub release, and only this job has
+  # `contents: write`. It runs only for a push of a release-shaped tag on
+  # main that the gate job accepted; a manual dispatch cannot reach it no
+  # matter what ref it is pointed at, because it never sets mode to
+  # "release". That is the whole back-door answer: there is no input, no
+  # branch name and no token in the dry-run path that flips it to publish.
+  publish:
+    needs: [gate, build]
+    if: >
+      github.event_name == 'push' &&
+      needs.gate.outputs.mode == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dz-pos-windows-installer-release-${{ needs.gate.outputs.version }}
+          path: dist
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.gate.outputs.version }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ needs.gate.outputs.prerelease }}
+          HAS_CERT: ${{ needs.build.outputs.has_cert }}
+        run: |
+          set -euo pipefail
+          exe="$(find dist -maxdepth 1 -name '*.exe' | head -n1)"
+          [ -n "$exe" ] || { echo "::error::no installer in the downloaded artifact"; exit 1; }
+
+          flags=(--title "dz-pos $VERSION")
+          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+
+          if [ "$HAS_CERT" = "true" ]; then
+            notes="Windows installer, signed."
+          else
+            flags+=(--draft)
+            notes="No Windows code-signing certificate is configured yet: this installer is **unsigned**. Windows SmartScreen will warn on install. Published as a draft on purpose; review before making it public."
+            echo "::warning::publishing an unsigned installer as a draft release, not a public one"
+          fi
+
+          gh release create "$TAG" "$exe" "${flags[@]}" --notes "$notes"
