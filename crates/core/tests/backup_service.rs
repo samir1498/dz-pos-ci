@@ -522,3 +522,87 @@ fn a_pre_upgrade_copy_interrupted_halfway_is_not_left_looking_finished() {
     assert!(!staged.exists(), "the staging file was left behind");
     assert_eq!(backup::list_upgrade(&live).unwrap().len(), 1);
 }
+
+#[test]
+fn a_staging_file_from_an_earlier_upgrade_is_swept_by_the_next_one() {
+    let (dir, mut conn) = open_temp();
+    let live = dir.path().join("t.db");
+
+    // The case a retry does not clean up by itself: a copy killed mid
+    // `VACUUM INTO` on Tuesday, and the next attempt is on Wednesday under a
+    // different name, so nothing would ever come back for Tuesday's.
+    let abandoned = dir
+        .path()
+        .join(format!("{}.tmp", backup::upgrade_name(&live, at(4, 3))));
+    std::fs::write(&abandoned, vec![0_u8; 4096]).unwrap();
+
+    backup::before_upgrade(&mut conn, &live, at(5, 3)).unwrap();
+    assert!(
+        !abandoned.exists(),
+        "a whole database was left under a name nothing reads"
+    );
+    assert_eq!(backup::list_upgrade(&live).unwrap().len(), 1);
+
+    // What the sweep must not touch: the other kind of copy, and anything
+    // that is not ours.
+    let safety_staging = dir
+        .path()
+        .join(format!("{}.tmp", backup::safety_name(&live, at(6, 3))));
+    std::fs::write(&safety_staging, b"someone else is mid-copy").unwrap();
+    let theirs = dir.path().join("notes.tmp");
+    std::fs::write(&theirs, b"not ours").unwrap();
+    backup::before_upgrade(&mut conn, &live, at(7, 3)).unwrap();
+    assert!(safety_staging.is_file(), "a restore's staging file went");
+    assert!(theirs.is_file(), "a file this module never wrote went");
+}
+
+#[test]
+fn a_second_call_in_the_same_millisecond_does_not_write_the_file_again() {
+    let (dir, mut conn) = open_temp();
+    let live = dir.path().join("t.db");
+
+    let first = backup::before_upgrade(&mut conn, &live, at(8, 3)).unwrap();
+    let written_at = std::fs::metadata(&first.path).unwrap().modified().unwrap();
+
+    // The shop's file moves on between the two calls, so a copy taken again
+    // would differ in both size and time. Neither may change: the copy is of
+    // the moment its name carries.
+    products::create(&mut conn, SHOP, OWNER, draft("Un deuxième article")).unwrap();
+
+    let again = backup::before_upgrade(&mut conn, &live, at(8, 3)).unwrap();
+    assert_eq!(again.path, first.path);
+    assert_eq!(again.bytes, first.bytes, "the copy was written again");
+    assert_eq!(
+        std::fs::metadata(&first.path).unwrap().modified().unwrap(),
+        written_at,
+        "the copy was written again"
+    );
+}
+
+#[test]
+fn a_folder_that_cannot_be_written_to_stops_the_pre_upgrade_copy() {
+    let (dir, mut conn) = open_temp();
+    let live = dir.path().join("t.db");
+
+    // A full disk and a folder nobody may write to fail in the same place,
+    // and the second is the one a test can arrange. Running as root would
+    // walk straight through it, so the test says so rather than passing for
+    // the wrong reason.
+    let mut mode = std::fs::metadata(dir.path()).unwrap().permissions();
+    mode.set_readonly(true);
+    std::fs::set_permissions(dir.path(), mode.clone()).unwrap();
+    let outcome = backup::before_upgrade(&mut conn, &live, at(9, 3));
+    let mut writable = std::fs::metadata(dir.path()).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    writable.set_readonly(false);
+    std::fs::set_permissions(dir.path(), writable).unwrap();
+
+    assert!(
+        outcome.is_err(),
+        "a copy into a folder nobody may write to reported success"
+    );
+    assert!(
+        backup::list_upgrade(&live).unwrap().is_empty(),
+        "a failed copy left a name the list trusts"
+    );
+}

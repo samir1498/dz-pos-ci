@@ -120,6 +120,18 @@ fn the_copy_is_good_enough_to_restore_from() {
     // migration this build does not know. It also reports what is in there.
     let summary = dzpos_core::services::backup::verify(&copies[0].path).unwrap();
     assert_eq!(summary.products, 1);
+
+    // And it is the file from before the upgrade rather than a second copy
+    // of the file after it, which is the only thing that makes it worth
+    // restoring: a copy taken on the wrong side of the migration passes
+    // every check above and helps nobody.
+    let mut copied = dzpos_core::db::open_unmigrated(&copies[0].path).unwrap();
+    assert_eq!(
+        dzpos_core::db::pending_migrations(&mut copied)
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -164,4 +176,42 @@ fn the_pre_upgrade_copy_is_not_one_of_the_thirty_daily_ones() {
     let daily = dzpos_core::services::backup::list(&dzpos_api::default_backup_dir(&path)).unwrap();
     assert!(daily.is_empty(), "startup takes no daily copy: {daily:?}");
     assert_eq!(upgrade_copies(&path).len(), 1);
+}
+
+#[test]
+fn a_copy_that_cannot_be_written_stops_the_app_from_starting() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    a_file_from_the_previous_version(&path);
+
+    // The folder is made unwritable with the shop file's own sidecars
+    // already in it and a connection holding them open, so SQLite needs to
+    // create nothing to open the file and the first thing that wants a new
+    // name in that folder is the copy. Without the open connection the file
+    // would fail to open instead and this would pass for the wrong reason.
+    let holder = dzpos_core::db::open_unmigrated(&path).unwrap();
+    let mut mode = std::fs::metadata(dir.path()).unwrap().permissions();
+    mode.set_readonly(true);
+    std::fs::set_permissions(dir.path(), mode).unwrap();
+
+    let outcome = dzpos_api::AppState::open(&path, SHOP);
+
+    let mut writable = std::fs::metadata(dir.path()).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    writable.set_readonly(false);
+    std::fs::set_permissions(dir.path(), writable).unwrap();
+    drop(holder);
+
+    assert!(
+        outcome.is_err(),
+        "the app started with nothing to go back to"
+    );
+    // And the migration did not run: the file is still the one the previous
+    // version wrote, which is the whole reason for refusing.
+    let mut live = dzpos_core::db::open_unmigrated(&path).unwrap();
+    assert_eq!(
+        dzpos_core::db::pending_migrations(&mut live).unwrap().len(),
+        1,
+        "the shop file was migrated even though the copy failed"
+    );
 }

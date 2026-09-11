@@ -200,6 +200,12 @@ fn folder_of(file: &Path) -> Option<PathBuf> {
 
 /// Writes a copy of the shop's file beside itself, before a migration runs.
 ///
+/// One copy per upgrade that has migrations to run, kept for good. A shop
+/// that takes ten releases with schema changes in them ends up with ten of
+/// these beside its file, and nothing deletes them: the whole point of the
+/// copy is that it is still there months later, when somebody works out that
+/// the trouble started with an update.
+///
 /// Called from the app's startup and nowhere else. It takes no audit row and
 /// could not: nobody is signed in when a new version opens an old file, and
 /// the act is the new binary's, not a person's. What records it is the copy
@@ -216,6 +222,12 @@ pub fn before_upgrade(conn: &mut Conn, db: &Path, at: NaiveDateTime) -> Result<B
             "the shop file has no folder to write a pre-upgrade copy into",
         ));
     };
+    // A copy killed mid `VACUUM INTO` leaves a staging file holding up to a
+    // whole database, and the retry that follows it is at a later moment and
+    // so under a different name, which would leave the first one there for
+    // good. Nothing else reads these names, so this is the only thing that
+    // would ever clear them.
+    sweep_staging(&dir, |stem| upgrade_taken_at(db, stem));
     let name = upgrade_name(db, at);
     let path = dir.join(&name);
     if path.is_file() {
@@ -296,7 +308,7 @@ pub fn is_due(newest: Option<NaiveDateTime>, now: NaiveDateTime) -> bool {
 /// reader, informative to none.
 pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, CoreError> {
     std::fs::create_dir_all(dir)?;
-    sweep_staging(dir);
+    sweep_staging(dir, taken_at);
     let name = file_name(at);
     let path = dir.join(&name);
     if path.is_file() {
@@ -338,14 +350,19 @@ pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, 
 /// allowed to keep quietly become twenty nine plus a corpse. Only names this
 /// module writes are swept, so a `.tmp` someone else put here is left alone.
 ///
-/// Safe to run at the top of `create` because copies are taken one at a
-/// time: they go through the one connection, which is behind one lock.
+/// `reads` says which names in this folder are the caller's own, because the
+/// two kinds of copy live under different names and a sweep must not delete
+/// a staging file the other kind is in the middle of writing.
+///
+/// Safe to run at the top of `create` and of [`before_upgrade`] because
+/// copies are taken one at a time: they go through the one connection, which
+/// is behind one lock.
 ///
 /// Nothing here can fail the copy it precedes. Housekeeping that refuses to
 /// finish is not a reason to stop backing the shop up, so a folder that will
 /// not list, an entry that will not stat and a file that will not delete are
 /// all left for the next run.
-fn sweep_staging(dir: &Path) {
+fn sweep_staging(dir: &Path, reads: impl Fn(&str) -> Option<NaiveDateTime>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -353,7 +370,7 @@ fn sweep_staging(dir: &Path) {
         let name = entry.file_name().to_string_lossy().into_owned();
         let is_ours = name
             .strip_suffix(STAGING_SUFFIX)
-            .is_some_and(|stem| taken_at(stem).is_some());
+            .is_some_and(|stem| reads(stem).is_some());
         if !is_ours {
             continue;
         }
