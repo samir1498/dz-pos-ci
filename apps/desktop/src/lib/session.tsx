@@ -242,6 +242,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   //   the effect below already stops arming it the moment `locked` is true.
   useEffect(() => {
     focusManager.setFocused(locked ? false : undefined);
+    // The manager is a module-level singleton and outlives this component.
+    // Nothing unmounts the provider in the app, but an override left behind
+    // by one that did would decide, for the whole process, whether every
+    // later query refetches on focus.
+    return () => focusManager.setFocused(undefined);
   }, [locked]);
 
   // The idle timer. Counted from the shop's own figure, the same one the
