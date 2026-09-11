@@ -38,6 +38,7 @@ use dzpos_core::services::settings::DatedRegime;
 use dzpos_core::services::stock::{LastRecount, Report};
 use dzpos_core::services::supplier_debt::{SupplierAllocation, SupplierDebtKind};
 use dzpos_core::services::suppliers::{NewSupplier, SupplierWithBalance};
+use dzpos_core::services::users::User;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -2829,4 +2830,68 @@ impl AuditLogDto {
             actions: facets.actions,
         }
     }
+}
+
+/// A fiche on the users screen (M4 T8). No hash and no failure counter ever
+/// travel: `has_pin` and `has_password` are the honest answer to "can this
+/// person sign in", and a reset never has an old PIN to show because there
+/// is not one to show (`services::users`' own doc).
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "UserDto.ts")]
+pub struct UserDto {
+    pub id: i32,
+    pub shop_id: i32,
+    pub name: String,
+    pub role: RoleDto,
+    pub has_pin: bool,
+    pub has_password: bool,
+    pub active: bool,
+}
+
+impl From<User> for UserDto {
+    fn from(u: User) -> Self {
+        UserDto {
+            id: u.id,
+            shop_id: u.shop_id,
+            name: u.name,
+            role: RoleDto::from(u.role),
+            has_pin: u.has_pin,
+            has_password: u.has_password,
+            active: u.active,
+        }
+    }
+}
+
+/// A fiche's name and role, the two fields the screen's "add a user" dialog
+/// sends. No credential: a PIN is its own call
+/// (`services::users::create`'s own doc), so `POST /users/{id}/pin` is what
+/// gives a fresh row its first one.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewUserDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewUserDto {
+    pub name: String,
+    pub role: RoleDto,
+}
+
+/// The body `POST /users/{id}/pin` takes: a PIN alone, on the fiche the path
+/// names. The same call gives a fresh row its first PIN and resets one that
+/// is forgotten; `services::users::set_pin` does not tell the two apart and
+/// neither does this.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "SetPinDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct SetPinDto {
+    pub pin: String,
+}
+
+/// The body `POST /auth/first-pin` takes: a PIN alone and no `user_id`. This
+/// route is the one door into a shop nobody has ever signed into, and
+/// nobody signed in yet is not in a position to name a row; the shop's own
+/// owner is who `services::users::claim_first_pin` finds and acts on.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "ClaimFirstPinDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct ClaimFirstPinDto {
+    pub pin: String,
 }

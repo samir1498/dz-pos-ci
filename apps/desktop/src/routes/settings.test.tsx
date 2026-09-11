@@ -6,6 +6,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vi
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
@@ -94,6 +101,24 @@ function mount(lang: Lang = "fr") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  // The staff panel builds a real `Link` to `/settings/users` (M4 T8), and a
+  // `Link` without a router is a screen that cannot render; the second route
+  // is never visited here, so a stub component is enough.
+  const rootRoute = createRootRoute();
+  const settingsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings",
+    component: SettingsScreen,
+  });
+  const usersRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings/users",
+    component: () => null,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([settingsRoute, usersRoute]),
+    history: createMemoryHistory({ initialEntries: ["/settings"] }),
+  });
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
@@ -101,7 +126,7 @@ function mount(lang: Lang = "fr") {
             provider. It shares this screen's settings query key, so the two
             are one fetch and the call counts below are unchanged. */}
         <ThemeProvider>
-          <SettingsScreen />
+          <RouterProvider router={router} />
         </ThemeProvider>
       </QueryClientProvider>
     </I18nProvider>,
@@ -178,7 +203,7 @@ describe("the page", () => {
     expect(await screen.findByLabelText(fr.field_name)).toHaveValue("Superette El Baraka");
     expect(screen.getByLabelText(fr.field_rc)).toHaveValue("16/00-1234567 B 20");
     expect(screen.getByLabelText(fr.field_nif)).toHaveValue("");
-    expect(screen.getByTestId("regime-current")).toHaveTextContent(
+    expect(await screen.findByTestId("regime-current")).toHaveTextContent(
       `${fr.regime_reel} · ${fr.regime_since} 2026-01-01`,
     );
     expect(screen.queryByTestId("regime-planned")).not.toBeInTheDocument();
@@ -198,6 +223,15 @@ describe("the page", () => {
     );
     mount();
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_unauthorized);
+  });
+
+  test("carries a link out to the users screen (M4 T8), not a list of its own", async () => {
+    mount();
+    await screen.findByLabelText(fr.field_name);
+    const link = screen.getByRole("link", { name: fr.users_manage_link });
+    expect(link).toHaveAttribute("href", "/settings/users");
+    expect(screen.getByText(fr.settings_users)).toBeInTheDocument();
+    expect(screen.getByText(fr.settings_users_hint)).toBeInTheDocument();
   });
 });
 
@@ -298,7 +332,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     const day = within(regimeForm).getByLabelText(fr.field_valid_from);
     await user.clear(day);
@@ -318,7 +352,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     const day = within(regimeForm).getByLabelText(fr.field_valid_from);
     await user.clear(day);
@@ -336,7 +370,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     await user.clear(within(regimeForm).getByLabelText(fr.field_valid_from));
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
@@ -349,7 +383,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     expect(await within(regimeForm).findByRole("alert")).toHaveTextContent(fr.error_validation);
@@ -359,7 +393,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     const apply = within(regimeForm).getByRole("button", { name: fr.action_apply });
     expect(apply).toBeDisabled();
     await user.click(apply);

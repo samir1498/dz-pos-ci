@@ -99,3 +99,4 @@ export {
   supplierSchema,
   supplierStatementSchema,
 } from "./supplier";
+export { userSchema } from "./user";

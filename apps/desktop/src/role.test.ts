@@ -3,7 +3,7 @@ import { join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { ROLE_LABEL } from "@/components/UserMenu";
+import { ROLE_LABEL, ROLES } from "@/lib/roles";
 import ar from "@/i18n/ar.json";
 import en from "@/i18n/en.json";
 import fr from "@/i18n/fr.json";
@@ -11,16 +11,12 @@ import fr from "@/i18n/fr.json";
 /**
  * The same rule `theme.test.ts` holds themes to, held here for roles: a
  * role is a single value that reaches a screen once (`me.role`, or its
- * label) and never a branch. `UserMenu.tsx` is the one screen that reads
- * it at all today, through `ROLE_LABEL[me.role]`, a lookup and not a
- * comparison; the milestone's own text (`m4-common.md`) asks for a grep
- * test that holds every other screen to the same thing, the way
- * `theme.test.ts` already does for a theme name. `RoleDto` (generated,
- * `packages/shared/src/generated/RoleDto.ts`) carries no runtime export the
- * way `@dzpos/design` exports `THEMES`, so the three names are spelled
- * once here instead.
+ * label) and never a branch. Two screens read one at all: the topbar shows
+ * its label, and the staff screen offers the list when a person is added.
+ * Both go through `lib/roles.ts`, a lookup and not a comparison, and that
+ * is also where the three names are written down, so this test reads them
+ * rather than spelling a second copy that could drift from the first.
  */
-const ROLES = ["owner", "manager", "cashier"] as const;
 
 // process.cwd(), not import.meta.url: these run under jsdom, where
 // import.meta.url is an http:// URL and fileURLToPath refuses it.
@@ -32,23 +28,26 @@ const SRC = join(process.cwd(), "src");
  * fixtures need a real `role` value the same way a fixture needs a real
  * `name` — data, never a comparison.
  *
- * `session.test.tsx` builds two different people to prove the query cache
- * does not survive the change between them; which two roles they hold is
- * incidental. `AppShell.test.tsx` answers `/auth/me` with somebody, and a
- * person has a role. `audit.test.tsx` spells one inside the `after` of an
- * audit row, which is the log recording that a person's role was changed:
- * the role name there is the thing being logged, not a decision the screen
- * takes.
+ * `lib/roles.ts` is where the three names are written down, once, for the
+ * whole app. `session.test.tsx` builds two different people to prove the
+ * query cache does not survive the change between them; which two roles
+ * they hold is incidental. `AppShell.test.tsx` answers `/auth/me` with
+ * somebody, and a person has a role. `audit.test.tsx` spells one inside the
+ * `after` of an audit row, which is the log recording that a person's role
+ * was changed: the name there is the thing being logged, not a decision the
+ * screen takes. `settings_.users.test.tsx` builds the staff a staff screen
+ * lists, and staff have roles.
  *
  * Named one by one rather than "any test file", so a branch cannot hide in
  * a test either. Adding a file here is a claim that its role name is data;
  * the comparison test below still covers every file, this one included.
  */
 const ALLOWED: ReadonlySet<string> = new Set([
-  join("components", "UserMenu.tsx"),
+  join("lib", "roles.ts"),
   join("components", "AppShell.test.tsx"),
   join("lib", "session.test.tsx"),
   join("routes", "audit.test.tsx"),
+  join("routes", "settings_.users.test.tsx"),
   "role.test.ts",
 ]);
 

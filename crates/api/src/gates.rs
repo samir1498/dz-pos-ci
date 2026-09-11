@@ -7,15 +7,17 @@
 //! mutating route with no row here fails, and a row naming a route that is not
 //! there fails.
 //!
-//! **Six reads are in it.** The table is otherwise about writes, because a
+//! **Seven reads are in it.** The table is otherwise about writes, because a
 //! read of a list a cashier is already looking at needs no permission. The
 //! four exports and the import template are the exception the M3 carry-in
 //! named in words: an export is the whole customer list, the whole supplier
 //! list and every sale the shop ever rang up, walking out on a USB stick.
 //! They carry the same permission as the import that reads the template back.
-//! The sixth is the audit log itself (M4 T7): a read, but one that hands the
-//! owner every price change, override and correction the shop's staff have
-//! made, which is exactly the kind of read this table exists to gate.
+//! The other two are the owner's alone. The audit log (M4 T7) hands over
+//! every price change, override and correction the shop's staff have made.
+//! `GET /users` (M4 T8) is who the staff are, which
+//! `services::permissions::can`'s own doc puts with the owner and not with
+//! the ordinary lists a cashier is already looking at.
 //!
 //! **What T2 ships and what T3 does.** T2 is the mechanism, the table's shape
 //! and the actor. What T2 deliberately does not do is apply it: no handler
@@ -77,6 +79,12 @@ pub const ROUTE_GATES: &[Gate] = &[
         path: "/auth/logout",
         permission: None,
         why: "anybody who is signed in may stop being, and a sign-out gated on a role is a screen nobody can leave",
+    },
+    Gate {
+        method: "POST",
+        path: "/auth/first-pin",
+        permission: None,
+        why: "the one door into a shop nobody has ever signed into; services::users::claim_first_pin is the whole rule and it shuts itself the moment any credential in the shop exists, so no permission decides who may call it, only that rule does",
     },
     Gate {
         method: "POST",
@@ -288,6 +296,36 @@ pub const ROUTE_GATES: &[Gate] = &[
         permission: Some(Permission::CorrectLedger),
         why: "correcting what the shop owes a supplier (M3 carry-in, 2026-09-10)",
     },
+    Gate {
+        method: "GET",
+        path: "/users",
+        permission: Some(Permission::ManageUsers),
+        why: "who the shop's staff are; services::permissions::can's own doc says a manager answers like an owner on everything except this and the audit log, so the list itself is the owner's read and not an ordinary one",
+    },
+    Gate {
+        method: "POST",
+        path: "/users",
+        permission: Some(Permission::ManageUsers),
+        why: "adding a fiche to the staff list is what ManageUsers is named for",
+    },
+    Gate {
+        method: "POST",
+        path: "/users/{id}/pin",
+        permission: Some(Permission::ManageUsers),
+        why: "giving a fiche its first PIN or resetting a forgotten one; the owner's alone, and nothing here ever shows the PIN it replaces because there is not one to show",
+    },
+    Gate {
+        method: "POST",
+        path: "/users/{id}/deactivate",
+        permission: Some(Permission::ManageUsers),
+        why: "switching a fiche off; the last-owner and self refusals are T0's, enforced on the row (services::users::deactivate)",
+    },
+    Gate {
+        method: "POST",
+        path: "/users/{id}/reactivate",
+        permission: Some(Permission::ManageUsers),
+        why: "switching a fiche back on, the same permission as switching it off",
+    },
 ];
 
 /// The row for one route, if the table has one.
@@ -315,9 +353,9 @@ mod tests {
                 "{} is not a method this table carries",
                 gate.method
             );
-            // A read in here is one of the five the module doc names and
-            // never a sixth added in passing: an open read is open by having
-            // no row at all, not by a row with no permission.
+            // A read in here is one of the reads the module doc names and
+            // never one added in passing: an open read is open by having no
+            // row at all, not by a row with no permission.
             if gate.method == "GET" {
                 assert!(
                     gate.permission.is_some(),
@@ -327,7 +365,8 @@ mod tests {
                 assert!(
                     gate.path.starts_with("/export/")
                         || gate.path == "/import/products/template"
-                        || gate.path == "/audit-log",
+                        || gate.path == "/audit-log"
+                        || gate.path == "/users",
                     "{} is a read this table was not opened for",
                     gate.path
                 );

@@ -22,13 +22,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTranslation, type Key } from "@/i18n";
+import { ROLE_LABEL } from "@/lib/roles";
 import { useSession } from "@/lib/session";
-
-export const ROLE_LABEL: Readonly<Record<RoleDto, Key>> = {
-  owner: "role_owner",
-  manager: "role_manager",
-  cashier: "role_cashier",
-};
 
 export function UserMenu() {
   const { t } = useTranslation();

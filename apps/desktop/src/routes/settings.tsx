@@ -3,7 +3,7 @@
 // block is a card, every control comes from the kit, and the API decides:
 // this file shows and translates.
 
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
@@ -122,6 +122,7 @@ export function SettingsScreen() {
             />
           )}
           <ThemePanel />
+          <StaffPanel />
           <BackupsPanel />
           <ExportImportPanel />
           <StockRecountPanel />
@@ -472,6 +473,33 @@ function ThemePanel() {
         <CardContent>
           <ThemeSwitcher />
         </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * The link out to the users screen (M4 T8), not the list itself: the fiches
+ * and their roles are their own screen because a table, an "add a user"
+ * dialog and a PIN reset dialog are a page's worth, not a card's. `crate::
+ * gates` names `ManageUsers` on every route behind that screen, so a
+ * manager or a cashier who follows this same link is shown the translated
+ * 403 there rather than a card that pretended the link was not for them.
+ */
+function StaffPanel() {
+  const { t } = useTranslation();
+  return (
+    <section aria-labelledby="settings-users">
+      <Card>
+        <CardHeader>
+          <PanelHeading id="settings-users">{t("settings_users")}</PanelHeading>
+          <CardDescription>{t("settings_users_hint")}</CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Button variant="outline" asChild>
+            <Link to="/settings/users">{t("users_manage_link")}</Link>
+          </Button>
+        </CardFooter>
       </Card>
     </section>
   );

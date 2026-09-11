@@ -131,6 +131,19 @@ pub fn rename(
 /// Moves a user to another role. The last active owner cannot be moved off
 /// `owner` for the reason they cannot be switched off: the shop would have
 /// nobody who may hand the role back.
+///
+/// Unlike `deactivate`, this carries no unconditional `actor_id == id`
+/// refusal: an owner may move their own row today, because with two or
+/// more active owners `refuse_last_owner` has nothing to say about it and
+/// nothing on this branch calls `set_role` on a route a manager or a
+/// cashier could reach anyway. That is a fork from `deactivate`, not a rule
+/// this function decided; it exists only because nothing exposes `set_role`
+/// over HTTP yet (M4 T8). Whoever wires a role-change route should decide
+/// on purpose whether an owner may demote themselves out of `owner` in a
+/// two-owner shop, rather than inherit this gap unread: today that owner
+/// could do it, and would not be locked out by it the way a self-deactivate
+/// would, but the shop would still be down to one less owner than it meant
+/// to give up.
 pub fn set_role(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -178,6 +191,59 @@ pub fn set_pin(
             audit::ACTION_SET_PIN,
             id,
             Some(&before),
+            Some(&after),
+        )?;
+        Ok(after)
+    })
+}
+
+/// The one door into a shop nobody has ever signed into. `ManageUsers` is
+/// the owner's alone, and the owner cannot hold a session to use it before
+/// somebody has set their PIN, which is what this call is for: it needs no
+/// actor and no session, and it acts on the shop's own owner rather than on
+/// an id a caller names, because nobody signed in yet is who is supposed to
+/// choose one.
+///
+/// Two refusals, and each is the whole of a rule that would otherwise be
+/// argued over in an API handler:
+///
+/// - any credential anywhere in the shop already exists. The door shuts for
+///   good the moment an owner signs in the ordinary way and sets or resets a
+///   PIN through `set_pin`, which is `ManageUsers`, behind a session. A
+///   second call here after that is not a retry, it is a stranger with the
+///   launch token (the desktop process on this machine) trying the door
+///   again after it closed;
+/// - the shop does not have exactly one active owner to give the PIN to.
+///   Nothing to act on, or more than one candidate, and this call refuses
+///   rather than guess which row a caller meant.
+pub fn claim_first_pin(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    pin: &str,
+) -> Result<User, CoreError> {
+    validate_pin(pin)?;
+    let hash = hash(pin)?;
+    conn.transaction(|conn| {
+        if repo::any_credential_set(conn, shop_id)? {
+            return Err(CoreError::validation(
+                "pin",
+                "this shop has already been signed into; an owner resets a PIN from the users screen",
+            ));
+        }
+        let owner = repo::sole_active_owner(conn, shop_id)?.ok_or_else(|| {
+            CoreError::validation(
+                "pin",
+                "this shop has no single active owner to give the first PIN to",
+            )
+        })?;
+        let after = repo::set_pin_hash(conn, shop_id, owner.id, &hash, stamp())?;
+        record(
+            conn,
+            shop_id,
+            owner.id,
+            audit::ACTION_CLAIM_FIRST_PIN,
+            owner.id,
+            Some(&owner),
             Some(&after),
         )?;
         Ok(after)
