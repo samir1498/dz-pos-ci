@@ -35,8 +35,18 @@ pub const ACTION_ADJUST_DEBT: &str = "debt.adjust";
 /// A credit sale taken past the customer's credit limit on purpose. The
 /// entry carries the balance and the limit the rule refused on, and the
 /// document the decision produced, so the log reads as the decision it was.
-/// Until M4 there are no roles and anyone may take it (features.md §1).
+/// Only a user holding `Permission::OverrideCreditBlock` can take it (M4 T6);
+/// the row's `user_id` is that person.
 pub const ACTION_CREDIT_OVERRIDE: &str = "document.issue_override";
+
+/// A sale discounted past the shop's dated threshold on purpose
+/// (features.md §5 names "discount override" as its own audited action, so
+/// it is not the credit override's row under another name). The entry
+/// carries the basket before any discount, the threshold in force on the day
+/// and what it allowed, against the discount actually given and how it was
+/// split between the lines and the basket. Only a user holding
+/// `Permission::DiscountAboveThreshold` can take it (M4 T6).
+pub const ACTION_DISCOUNT_OVERRIDE: &str = "document.discount_override";
 
 /// A credit note written against a facture. The entry names the facture that
 /// changed, because that is the paper a reader is holding when they ask why it

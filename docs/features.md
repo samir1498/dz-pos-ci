@@ -178,12 +178,16 @@ A null warn threshold is no warning; reaching one is enough to warn, and a
 warned sale still goes through, so the answer carries `near_limit` beside
 the document rather than refusing it.
 
-The owner can pass the block by sending the sale again with `override`.
-That sale is written like any other and an audit row records it
-(`document.issue_override`, with the balance, the limit and the document it
-produced). There are no roles in the app until §5 lands, so the API accepts
-an override from anyone; the log is what carries the accountability in the
-meantime.
+A user holding `override_credit_block` (§5) can pass the block by sending
+the sale again with `override`. That sale is written like any other and an
+audit row records it (`document.issue_override`, with the balance, the limit
+and the document it produced, under the user who took the decision). A
+cashier who sends the flag is refused with `forbidden` naming that
+permission, and a cashier who sends none still hears `credit_limit` with the
+two amounts: the block is what stopped them, not a permission they were not
+using
+(`a_cashier_cannot_pass_a_credit_block_and_the_sale_is_written_nowhere`,
+`a_cashier_who_sends_no_override_still_hears_about_the_limit_and_not_about_a_permission`).
 
 A cash or a card sale may also name a customer. The document then carries
 the buyer block and the balance triple with a `remaining_debt` of nothing,
@@ -858,6 +862,25 @@ never deleted, only switched off, because their documents and ledger rows
 name them for good, and the shop's last active owner cannot be switched off
 or moved to another role. This paragraph is what M4 T0 shipped; §5 is
 rewritten to the whole milestone when it closes.
+
+"Give discount above X %" is tested on the whole sale and not on a line:
+every line discount is counted with the global one against what the basket
+was worth before anything came off it, so a discount split across the lines
+cannot duck a threshold the same discount would meet in one place
+(`line_discounts_are_counted_with_the_global_one_against_the_basket`). The
+X is the shop's own dated setting (`discount_threshold_bps`, the régime's
+append-only history in another key), and strictly above it is what needs the
+permission: a shop that allows 5 % means the 5 % sale to go through
+untouched (`a_discount_at_the_threshold_asks_nobody_and_writes_no_row`). No
+migration seeds a first row, so a shop that has never set one reads zero and
+until an owner raises it a cashier cannot take a centime off a price
+(`a_shop_that_has_never_set_a_threshold_asks_the_permission_for_any_discount_at_all`).
+A discount past the threshold writes `document.discount_override` beside the
+sale, carrying the basket, the threshold in force that day and what it
+allowed, against the discount actually given
+(`a_manager_discounts_past_the_threshold_and_the_log_says_what_the_rule_allowed`).
+A proforma is not a sale and is not gated: a quotation moves no stock and no
+money, and the sale it becomes is checked when it is rung up.
 
 ## 6. LAN mode (v1, after the desktop milestones)
 

@@ -184,7 +184,6 @@ pub async fn create(
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = NewSale::try_from(dto)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     // The warning the core answered with travels on this one answer only:
     // it is about the moment the sale was rung up, and a later read of the

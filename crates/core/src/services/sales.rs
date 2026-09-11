@@ -27,8 +27,9 @@ use crate::models::stock::{Movement, MovementKind};
 use crate::money::{
     compute_totals, Bps, Line, Money, MoneyError, PaymentMode, Regime, TotalsOptions,
 };
+use crate::services::permissions::{self, Permission, Role};
 use crate::services::{
-    audit, clock, customers, debt, documents, products, proforma, settings, shops, stock,
+    audit, clock, customers, debt, documents, products, proforma, settings, shops, stock, users,
 };
 
 /// Whether the droit de timbre applies at all. There is no shop setting for
@@ -92,9 +93,11 @@ pub struct NewSale {
     /// on card: a named customer gets a buyer block on the document either
     /// way, and only a credit sale gets a ledger movement.
     pub customer_id: Option<i32>,
-    /// The owner's decision to sell past the customer's credit limit. The
-    /// sale goes through and the audit log carries who did it; until M4
-    /// there are no roles, so anyone may send it (features.md §1).
+    /// The decision to sell past the customer's credit limit. The sale goes
+    /// through and the audit log carries who took it. Sending it is not
+    /// taking it: the flag only means anything on a sale the limit would
+    /// have refused, and there it asks for
+    /// `Permission::OverrideCreditBlock` (features.md §1 and §5).
     pub override_credit: bool,
     /// Ticket or facture, decided at the till before the sale is saved
     /// (features.md §3). Never by a later reprint: the document is due « dès
@@ -188,6 +191,26 @@ pub fn issue(
                 "a discount above the basket would make the sale negative",
             ));
         }
+
+        // The discount rule of features.md §5, on the basket and not on a
+        // line: the threshold is a percentage of what the basket was worth
+        // before anything came off it, and every line discount is counted
+        // with the global one, so a discount split across the lines cannot
+        // duck a threshold the same discount would meet in one place.
+        // Checked here, before `documents::issue`, so a refusal burns no
+        // number; the row it writes is further down, where the document it
+        // produced has an id.
+        let basket = sum_line_gross(&money_lines)?;
+        let discount = sum_discounts(&money_lines, new.global_discount)?;
+        let threshold = settings::discount_threshold_as_of(conn, shop_id, issued_at)?;
+        let discounted_past_threshold =
+            permissions::discount_needs_permission(basket, discount, threshold)?;
+        if discounted_past_threshold {
+            permissions::require(
+                role_of(conn, shop_id, user_id)?,
+                Permission::DiscountAboveThreshold,
+            )?;
+        }
         // Every input compute_totals could refuse has been refused above with
         // the field named, so what is left is a basket whose amounts do not
         // fit. That is still the caller's arithmetic, so it is named too.
@@ -212,6 +235,7 @@ pub fn issue(
             Some(customer_id) => Some(credit_check(
                 conn,
                 shop_id,
+                user_id,
                 customer_id,
                 new.payment_mode,
                 totals.net_to_pay,
@@ -285,6 +309,51 @@ pub fn issue(
                     unit_cost: p.cost,
                     document_id: Some(document.id),
                     user_id,
+                },
+            )?;
+        }
+
+        // A discount past the threshold is a decision somebody took past a
+        // rule, the same as an override of a credit block, so it is logged
+        // the same way: `before` is what the rule allowed, `after` is what
+        // was given. Written above the credit block below because a cash
+        // sale returns there and a discount is not a thing only a credit
+        // sale can carry.
+        if discounted_past_threshold {
+            audit::record(
+                conn,
+                shop_id,
+                user_id,
+                audit::Change {
+                    action: audit::ACTION_DISCOUNT_OVERRIDE,
+                    entity: "document",
+                    entity_id: Some(document.id),
+                    // The threshold in force on the day travels beside the
+                    // amount it allowed: a later change to the setting must
+                    // not make this row unreadable, and a reader asking why
+                    // 5 % was refused should not have to walk the dated
+                    // history to find out it was 2 % that day.
+                    before: Some(
+                        serde_json::json!({
+                            "basket_centimes": basket.as_centimes(),
+                            "threshold_bps": threshold.as_u32(),
+                            "allowed_discount_centimes": basket.pct(threshold)?.as_centimes(),
+                        })
+                        .to_string(),
+                    ),
+                    // Split as well as summed: the threshold is tested on the
+                    // whole, and a reader still wants to see whether it was
+                    // one line or the basket that carried it.
+                    after: Some(
+                        serde_json::json!({
+                            "document_id": document.id,
+                            "discount_centimes": discount.as_centimes(),
+                            "global_discount_centimes": new.global_discount.as_centimes(),
+                            "line_discount_centimes":
+                                discount.checked_sub(new.global_discount)?.as_centimes(),
+                        })
+                        .to_string(),
+                    ),
                 },
             )?;
         }
@@ -517,6 +586,7 @@ struct CreditCheck {
 fn credit_check(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    user_id: i32,
     customer_id: i32,
     payment_mode: PaymentMode,
     net_to_pay: Money,
@@ -560,6 +630,15 @@ fn credit_check(
                         credit_limit,
                     });
                 }
+                // The refusal comes first and the permission second, so a
+                // cashier who sends no flag still hears that the limit is
+                // what stopped them, with the two amounts the till shows,
+                // rather than a forbidden that names a permission they were
+                // not asking for.
+                permissions::require(
+                    role_of(conn, shop_id, user_id)?,
+                    Permission::OverrideCreditBlock,
+                )?;
                 overridden = true;
             }
         }
@@ -713,6 +792,41 @@ fn price(
 /// The basket's HT, read back to compare the global discount against it.
 /// A sum that does not fit is a basket the caller sent, so it is named as
 /// one rather than raised as a money fault.
+/// The role the permission table is asked about, read from the user the sale
+/// is being written under. Read here rather than taken as an argument so the
+/// role that was checked and the user the document and the audit row name are
+/// the same person: a role handed in beside a `user_id` is a second statement
+/// of who is acting, and two statements can disagree.
+fn role_of(conn: &mut SqliteConnection, shop_id: i32, user_id: i32) -> Result<Role, CoreError> {
+    Ok(users::get(conn, shop_id, user_id)?.role)
+}
+
+/// What the basket was worth before anything came off it: the base the
+/// discount threshold is a percentage of.
+fn sum_line_gross(lines: &[Line]) -> Result<Money, CoreError> {
+    let mut total = Money::ZERO;
+    for line in lines {
+        let gross = line
+            .unit_price
+            .checked_mul_milli(line.qty_milli)
+            .map_err(too_large("qty_milli"))?;
+        total = total.checked_add(gross).map_err(too_large("lines"))?;
+    }
+    Ok(total)
+}
+
+/// Everything the customer is not being asked to pay: every line discount
+/// and the one on the basket.
+fn sum_discounts(lines: &[Line], global_discount: Money) -> Result<Money, CoreError> {
+    let mut total = global_discount;
+    for line in lines {
+        total = total
+            .checked_add(line.line_discount)
+            .map_err(too_large("lines"))?;
+    }
+    Ok(total)
+}
+
 pub(crate) fn sum_line_totals(lines: &[Line]) -> Result<Money, CoreError> {
     let mut total = Money::ZERO;
     for line in lines {

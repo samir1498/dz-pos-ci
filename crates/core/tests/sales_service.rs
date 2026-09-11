@@ -16,8 +16,12 @@ use dzpos_core::money::{Bps, Money, PaymentMode, Regime};
 use dzpos_core::services::customers::{NewCustomer, PartyKind};
 use dzpos_core::services::debt::DebtKind;
 use dzpos_core::services::documents::{Document, DocumentKind};
+use dzpos_core::services::permissions::Permission;
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
-use dzpos_core::services::{audit, customers, debt, documents, products, settings, shops, stock};
+use dzpos_core::services::users::{NewUser, Role};
+use dzpos_core::services::{
+    audit, customers, debt, documents, products, settings, shops, stock, users,
+};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
@@ -1305,6 +1309,275 @@ fn an_override_on_a_sale_the_limit_would_have_taken_writes_no_log_row() {
             .any(|e| e.action == "document.issue_override"),
         "a sale inside the limit logged an override nobody took"
     );
+}
+
+// The two decisions a permission now stands in front of (M4 T6): passing a
+// credit block, and discounting past the shop's dated threshold. Both are
+// asserted here rather than only at the API, because the rule belongs to the
+// service and a screen that called it another way would meet the same
+// refusal.
+
+/// A user of `role`, the way the users screen makes one. `OWNER` is the shop's
+/// own owner, seeded by the first migration.
+fn user(conn: &mut SqliteConnection, name: &str, role: Role) -> i32 {
+    users::create(
+        conn,
+        SHOP,
+        OWNER,
+        NewUser {
+            name: name.to_string(),
+            role,
+        },
+    )
+    .unwrap()
+    .id
+}
+
+/// The threshold a discount is judged against, in force since before any sale
+/// this file rings up.
+fn discount_threshold(conn: &mut SqliteConnection, bps: u32) {
+    settings::set_discount_threshold(conn, SHOP, OWNER, Bps::new(bps).unwrap(), at(1)).unwrap();
+}
+
+/// A basket of `qty` at 1 000,00, discounted by `global_discount`, paid cash.
+fn discounted(product_id: i32, qty_milli: i64, global_discount: i64, tendered: i64) -> NewSale {
+    NewSale {
+        lines: vec![line(product_id, qty_milli)],
+        global_discount: Money::centimes(global_discount),
+        payment_mode: PaymentMode::Cash,
+        tendered: Some(Money::centimes(tendered)),
+        customer_id: None,
+        override_credit: false,
+        kind: SaleKind::Ticket,
+        issued_at: Some(at(9)),
+    }
+}
+
+#[test]
+fn a_cashier_cannot_pass_a_credit_block_and_the_sale_is_written_nowhere() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), None);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        cashier,
+        credit(c, vec![line(p, 1_000)], true),
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "forbidden", "{err:?}");
+    let CoreError::Forbidden { permission } = err else {
+        panic!("a refusal for a permission carries the one it wanted");
+    };
+    assert_eq!(permission, Permission::OverrideCreditBlock);
+
+    // The refusal unwinds the whole transaction: no document, no ledger
+    // movement, no stock, and no audit row saying the block was passed.
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+    assert!(debt::ledger(&mut conn, SHOP, c).unwrap().is_empty());
+    assert_eq!(
+        products::get(&mut conn, SHOP, p).unwrap().qty_on_hand_milli,
+        10_000
+    );
+    assert!(!audit::list(&mut conn, SHOP)
+        .unwrap()
+        .iter()
+        .any(|e| e.action == "document.issue_override"));
+}
+
+#[test]
+fn a_cashier_who_sends_no_override_still_hears_about_the_limit_and_not_about_a_permission() {
+    // The order the two rules answer in. A cashier who never asked to pass
+    // anything is told what stopped the sale, with the amounts the till
+    // shows, rather than being handed the name of a permission they were not
+    // using.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), None);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        cashier,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "credit_limit", "{err:?}");
+}
+
+#[test]
+fn a_manager_passes_the_credit_block_and_the_row_names_them_and_not_the_owner() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(50_000), None);
+    let manager = user(&mut conn, "Karim", Role::Manager);
+
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        manager,
+        credit(c, vec![line(p, 1_000)], true),
+    )
+    .unwrap();
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "document.issue_override")
+        .expect("an override past a rule is logged");
+    assert_eq!(entry.entity_id, Some(doc.id));
+    // The whole point of the row now that the seeded owner is gone: it names
+    // the person who took the decision, who is not the shop's owner.
+    assert_eq!(entry.user_id, manager);
+    assert_ne!(entry.user_id, OWNER);
+    assert_eq!(doc.user_id, manager);
+}
+
+#[test]
+fn a_cashier_cannot_discount_past_the_threshold_and_the_sale_is_written_nowhere() {
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 500); // 5 %
+    let p = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    // 100,00 of basket, 5,01 off: one centime past what 5 % allows.
+    let err = issue_sale(&mut conn, SHOP, cashier, discounted(p, 1_000, 501, 20_000)).unwrap_err();
+    assert_eq!(err.code(), "forbidden", "{err:?}");
+    let CoreError::Forbidden { permission } = err else {
+        panic!("a refusal for a permission carries the one it wanted");
+    };
+    assert_eq!(permission, Permission::DiscountAboveThreshold);
+
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+    assert_eq!(
+        products::get(&mut conn, SHOP, p).unwrap().qty_on_hand_milli,
+        10_000
+    );
+    // And the number it would have taken is still the first one.
+    let next = issue_sale(&mut conn, SHOP, cashier, discounted(p, 1_000, 500, 20_000)).unwrap();
+    assert_eq!(next.number, 1);
+}
+
+#[test]
+fn a_discount_at_the_threshold_asks_nobody_and_writes_no_row() {
+    // Strictly above, never at: a shop that allows 5 % means the 5 % sale to
+    // go through untouched, and a row for it would be a log of the ordinary.
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 500);
+    let p = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    let doc = issue_sale(&mut conn, SHOP, cashier, discounted(p, 1_000, 500, 20_000)).unwrap();
+    assert_eq!(doc.totals.discount, Money::centimes(500));
+    assert!(
+        !audit::list(&mut conn, SHOP)
+            .unwrap()
+            .iter()
+            .any(|e| e.action == "document.discount_override"),
+        "a discount the threshold allows logged a decision nobody took"
+    );
+}
+
+#[test]
+fn line_discounts_are_counted_with_the_global_one_against_the_basket() {
+    // The threshold is tested on the whole sale, so a discount split across
+    // the lines cannot duck a rule the same discount would meet in one place.
+    // Two lines of 100,00, each 3,00 off: 6,00 of a 200,00 basket is 3 %, past
+    // a threshold of 2 %.
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 200);
+    let a = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
+    let b = product(&mut conn, "Lait", 10_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+    let off = |product_id| NewSaleLine {
+        product_id,
+        qty_milli: 1_000,
+        unit_price: None,
+        line_discount: Money::centimes(300),
+    };
+    let basket = NewSale {
+        lines: vec![off(a), off(b)],
+        global_discount: Money::ZERO,
+        payment_mode: PaymentMode::Cash,
+        tendered: Some(Money::centimes(40_000)),
+        customer_id: None,
+        override_credit: false,
+        kind: SaleKind::Ticket,
+        issued_at: Some(at(9)),
+    };
+
+    let err = issue_sale(&mut conn, SHOP, cashier, basket).unwrap_err();
+    assert_eq!(err.code(), "forbidden", "{err:?}");
+}
+
+#[test]
+fn a_manager_discounts_past_the_threshold_and_the_log_says_what_the_rule_allowed() {
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 500);
+    let p = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
+    let manager = user(&mut conn, "Karim", Role::Manager);
+
+    // 200,00 of basket, 20,00 off: 10 %, past the 5 % the shop allows.
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        manager,
+        discounted(p, 2_000, 2_000, 40_000),
+    )
+    .unwrap();
+    assert_eq!(doc.totals.discount, Money::centimes(2_000));
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "document.discount_override")
+        .expect("a discount past the threshold is logged");
+    assert_eq!(entry.entity, "document");
+    assert_eq!(entry.entity_id, Some(doc.id));
+    assert_eq!(entry.user_id, manager);
+
+    // `before` is the rule the decision was taken against: the basket before
+    // anything came off it, the threshold in force on the day, and the
+    // amount that threshold allowed.
+    let before = entry.before.clone().unwrap_or_default();
+    assert!(before.contains("\"basket_centimes\":20000"), "{before}");
+    assert!(before.contains("\"threshold_bps\":500"), "{before}");
+    assert!(
+        before.contains("\"allowed_discount_centimes\":1000"),
+        "{before}"
+    );
+
+    // `after` is what was given, and how it was split.
+    let after = entry.after.clone().unwrap_or_default();
+    assert!(
+        after.contains(&format!("\"document_id\":{}", doc.id)),
+        "{after}"
+    );
+    assert!(after.contains("\"discount_centimes\":2000"), "{after}");
+    assert!(
+        after.contains("\"global_discount_centimes\":2000"),
+        "{after}"
+    );
+    assert!(after.contains("\"line_discount_centimes\":0"), "{after}");
+}
+
+#[test]
+fn a_shop_that_has_never_set_a_threshold_asks_the_permission_for_any_discount_at_all() {
+    // `Bps::ZERO` is what a shop reads before an owner sets one
+    // (`settings::discount_threshold_as_of`), so until they do, a cashier
+    // cannot take a centime off a price and an owner can.
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    let err = issue_sale(&mut conn, SHOP, cashier, discounted(p, 1_000, 1, 20_000)).unwrap_err();
+    assert_eq!(err.code(), "forbidden", "{err:?}");
+    // The same basket with nothing off it is the cashier's ordinary sale.
+    issue_sale(&mut conn, SHOP, cashier, discounted(p, 1_000, 0, 20_000)).unwrap();
+    issue_sale(&mut conn, SHOP, OWNER, discounted(p, 1_000, 1, 20_000)).unwrap();
 }
 
 #[test]
