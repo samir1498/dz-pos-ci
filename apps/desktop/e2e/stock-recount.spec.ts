@@ -15,7 +15,7 @@
 // Strings come from the JSON dictionary of the Playwright project running
 // the test, so the same run proves the block in fr, en and ar.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { apiHeaders, apiUrl } from "./api";

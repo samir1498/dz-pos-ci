@@ -22,24 +22,9 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { saveBlob } from "@/lib/download";
 import { useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  duplicate_barcode: "error_duplicate_barcode",
-  not_found: "error_not_found",
-  money: "error_money",
-  storage: "error_storage",
-  restart_needed: "error_restart_needed",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unauthorized: "error_unauthorized",
-  unreachable: "error_unreachable",
-};
 
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) return ERROR_KEY[error.code] ?? "error_unknown";
-  return "error_unknown";
-}
 
 const EXPORTS: { kind: ExportKind; label: Key; testId: string }[] = [
   { kind: "products", label: "export_products", testId: "export-products" },

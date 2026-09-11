@@ -16,6 +16,7 @@ use serde::Deserialize;
 
 use crate::dto::{CancelDocumentDto, NewAvoirDto, NewSaleDto, SaleDto, SaleKindDto};
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 /// Which paper the caller wants listed, if only one of them.
@@ -177,13 +178,13 @@ pub async fn facture(
 
 pub async fn create(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Result<Json<NewSaleDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<SaleDto>), ApiError> {
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = NewSale::try_from(dto)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     // The warning the core answered with travels on this one answer only:
     // it is about the moment the sale was rung up, and a later read of the
     // same document carries none.
@@ -201,6 +202,7 @@ pub async fn create(
 /// coming back and the ledger movement with what it settled.
 pub async fn avoir(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<NewAvoirDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<SaleDto>), ApiError> {
@@ -210,8 +212,7 @@ pub async fn avoir(
     let lines = dto.lines();
     let reason = dto.reason;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     let made = state
         .blocking(move |c| avoir::issue(c, shop, user, id, lines, reason, None))
         .await?;
@@ -240,6 +241,7 @@ pub async fn avoirs(
 /// writes in the same transaction, and the answer carries the block naming it.
 pub async fn cancel(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<CancelDocumentDto>, JsonRejection>,
 ) -> Result<Json<SaleDto>, ApiError> {
@@ -247,8 +249,7 @@ pub async fn cancel(
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
     let Json(CancelDocumentDto { reason }) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     let done = state
         .blocking(move |c| documents::cancel(c, shop, user, id, reason, None))
         .await?;

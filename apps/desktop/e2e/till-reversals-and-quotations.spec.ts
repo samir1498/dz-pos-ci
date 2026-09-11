@@ -16,7 +16,7 @@
 // own. That is the same reason settlement.spec and till-credit.spec sit
 // where they do.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import type { APIRequestContext } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

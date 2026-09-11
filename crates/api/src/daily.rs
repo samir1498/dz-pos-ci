@@ -60,11 +60,22 @@ pub async fn once(state: &AppState) -> (Option<Backup>, Option<Report>) {
 /// failed. A failure is logged and dropped for the reason a failed copy is:
 /// the cached quantity is a convenience the ledger can rebuild, and nothing
 /// here may take the till down.
+/// Who the nightly repair is recorded under. Row 1, the owner the first
+/// migration seeds and the one every document carried before there were
+/// sessions (features.md §5).
+///
+/// This is the one place in the crate that still names a user by constant,
+/// and it is not the gap M4 T2 closed: no session exists at three in the
+/// morning, and there is nobody at the keyboard to take one from. Claiming a
+/// person did something the machine did on its own is worse in an audit log
+/// than saying the shop did, which is the argument `services::users` makes
+/// for the lockout row naming the person it happened to. T7's screen is where
+/// this row reads differently from the ones a person wrote.
+const NIGHTLY_ACTOR_USER_ID: i32 = 1;
+
 pub async fn recount(state: &AppState) -> Option<Report> {
     let shop = state.shop_id;
-    // TODO(M4): the user the repair is recorded under comes from the
-    // request identity once there are users to have one.
-    let user = state.user_id;
+    let user = NIGHTLY_ACTOR_USER_ID;
     match state
         .blocking(move |c| stock::recount_if_due(c, shop, user))
         .await

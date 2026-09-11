@@ -27,6 +27,7 @@ use crate::dto::{
     DATE_FORMAT, DATE_TIME_FORMAT,
 };
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 /// The search box, as it reaches the API. Blank is no filter, so a box that
@@ -66,6 +67,7 @@ pub async fn get_one(
 /// there is one. The two are written together (core, `create`).
 pub async fn create(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Result<Json<NewSupplierDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<SupplierDto>), ApiError> {
     let Json(dto) = body.map_err(ApiError::from)?;
@@ -74,8 +76,7 @@ pub async fn create(
     let opening = money_field("opening_debt_centimes", dto.opening_debt_centimes)?;
     let new = NewSupplier::from(dto);
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     let made = state
         .blocking(move |c| {
             let created = service::create(c, shop, user, new, opening)?;
@@ -90,6 +91,7 @@ pub async fn create(
 /// opening debt is not among them; a wrong one is corrected by an adjustment.
 pub async fn update(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<SupplierWriteDto>, JsonRejection>,
 ) -> Result<Json<SupplierDto>, ApiError> {
@@ -101,10 +103,8 @@ pub async fn update(
     let close_reason = dto.close_reason.clone();
     let fields = NewSupplier::from(dto);
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state,
-    // and a body carrying `active: false` closes a fiche, so this route needs
     // the same permission the close route does.
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| {
             service::update(c, shop, user, id, fields, close_reason)?;
@@ -118,16 +118,16 @@ pub async fn update(
 /// open needs the reason, and the audit entry carries it beside the balance.
 pub async fn close(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<CloseSupplierDto>, JsonRejection>,
 ) -> Result<Json<SupplierDto>, ApiError> {
     let id = path_id(id)?;
     let Json(dto) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // Closing a fiche the shop still owes money to is a decision, and the log
     // is what carries the accountability until a permission does.
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| {
             service::close(c, shop, user, id, dto.reason)?;
@@ -156,6 +156,7 @@ pub async fn ledger(
 /// than what the form sent.
 pub async fn pay(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<NewPaymentDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<SupplierLedgerDto>), ApiError> {
@@ -165,8 +166,7 @@ pub async fn pay(
     let mode = dto.payment_mode.into();
     let note = dto.note;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     // The moment is the server's, not the till's: a machine whose clock is
     // wrong must not decide which side of a statement's date range a payment
     // falls on.
@@ -185,6 +185,7 @@ pub async fn pay(
 /// answered here is the figure the audit entry carries.
 pub async fn adjust(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<AdjustmentDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<SupplierLedgerDto>), ApiError> {
@@ -193,10 +194,9 @@ pub async fn adjust(
     let amount = dto.amount()?;
     let note = dto.note;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // A correction moves what the shop owes with nobody's name on it but the
     // seeded owner's, which is what the audit row stands in for meanwhile.
-    let user = state.user_id;
+    let user = who.id;
     let written = state
         .blocking(move |c| {
             debt::adjust(c, shop, user, id, amount, note)?;

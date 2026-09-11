@@ -12,7 +12,8 @@ use dzpos_core::services::products;
 
 const SHOP: i32 = 1;
 const SEEDED_CATEGORY: i32 = 1;
-/// The owner the first migration seeds. TODO(M4): the real user.
+/// The owner the first migration seeds. A service takes whoever acted as an
+/// argument; the API reads that from the session, and a test says it here.
 const OWNER: i32 = 1;
 
 mod common;

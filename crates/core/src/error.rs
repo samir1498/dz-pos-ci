@@ -4,6 +4,7 @@
 
 use crate::db::DbError;
 use crate::money::{Money, MoneyError};
+use crate::services::permissions::Permission;
 
 /// Which half of a facture a `PartyIds` refusal is about. The two blocks are
 /// filled in from two different screens, so the side is what tells the till
@@ -131,6 +132,41 @@ pub enum CoreError {
         product_id: i32,
         reason: &'static str,
     },
+    /// A credential that did not match: a wrong PIN, a wrong password, a name
+    /// nobody in the shop answers to, or a user who has been deactivated.
+    ///
+    /// One variant for all four on purpose. The password screen asks for a
+    /// name, so an error that said "no such user" would let anybody standing
+    /// at the till read the staff list off the login box one guess at a time,
+    /// and one that said "deactivated" would say who used to work here. The
+    /// message names no field for the same reason.
+    #[error("that is not a credential this shop accepts")]
+    AuthRefused,
+    /// Too many wrong credentials on one user: the shop counter is a public
+    /// place and the file makes whoever is standing at it wait
+    /// (features.md §5). The wait travels with the code because the screen has
+    /// to count it down, and it is a figure the caller never sent.
+    #[error("too many wrong attempts; this user may try again in {retry_after_seconds} seconds")]
+    LockedOut { retry_after_seconds: i64 },
+    /// A credential could not be hashed, or a stored hash could not be read
+    /// back as one. Its own variant and not a `Validation`, for the reason
+    /// `Render` and `Workbook` have theirs: the input is bytes this crate
+    /// chose the shape of and the parameters are its own, so a failure here is
+    /// a bug in the app and never something a caller can correct. The API
+    /// answers 500 and the message is fixed; the cause stays on the source
+    /// chain for the server's log.
+    ///
+    /// Never raised by a credential that simply did not match, and never by
+    /// the `'!unset'` sentinel: an unparseable stored hash on a sign-in is a
+    /// refusal, so the file fails closed rather than 500ing its way open.
+    #[error("the credential could not be hashed")]
+    Hash(#[source] argon2::password_hash::Error),
+    /// A role asked for something `services::permissions::can` refuses. The
+    /// permission travels so the caller can say which one was missing
+    /// instead of a bare "forbidden" (M4 T2 puts this on the wire as the
+    /// `forbidden` code and the permission's name).
+    #[error("this role does not have the {permission} permission")]
+    Forbidden { permission: Permission },
     #[error(transparent)]
     Money(#[from] MoneyError),
     #[error(transparent)]
@@ -172,10 +208,14 @@ impl CoreError {
             CoreError::Exhausted { .. } => "exhausted",
             CoreError::CreditLimit { .. } => "credit_limit",
             CoreError::PartyIds { .. } => "party_ids",
+            CoreError::AuthRefused => "auth_refused",
+            CoreError::LockedOut { .. } => "locked_out",
+            CoreError::Forbidden { .. } => "forbidden",
             CoreError::Money(_) => "money",
             CoreError::Db(_)
             | CoreError::Query(_)
             | CoreError::Io(_)
+            | CoreError::Hash(_)
             | CoreError::Unstamped { .. }
             | CoreError::UnpricedReversal { .. } => "storage",
             CoreError::Render(_) => "print",
@@ -202,5 +242,9 @@ impl CoreError {
             field: field.to_string(),
             message: message.to_string(),
         }
+    }
+
+    pub const fn forbidden(permission: Permission) -> Self {
+        CoreError::Forbidden { permission }
     }
 }

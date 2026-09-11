@@ -21,6 +21,7 @@ use crate::dto::{
     CloseOrderDto, NewPurchaseDto, NewReceiptDto, PurchaseDetailDto, PurchaseDto, PurchaseStatusDto,
 };
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 /// The list's two filters. Both absent is the whole list, which is what a
@@ -65,15 +66,15 @@ pub async fn get_one(
 /// delivery too. One transaction in the core.
 pub async fn create(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Result<Json<NewPurchaseDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<PurchaseDetailDto>), ApiError> {
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = dto.into_core()?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // Writing an order commits the shop's money, so this route needs a
     // permission of its own once roles land.
-    let user = state.user_id;
+    let user = who.id;
     let made = state
         .blocking(move |c| service::save(c, shop, user, new))
         .await?;
@@ -84,6 +85,7 @@ pub async fn create(
 /// with it, at the cost the goods landed at (features.md §1).
 pub async fn receive(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<NewReceiptDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<PurchaseDetailDto>), ApiError> {
@@ -92,8 +94,7 @@ pub async fn receive(
     let lines = dto.lines.into_iter().map(Into::into).collect();
     let note = dto.note;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| service::receive(c, shop, user, id, lines, note))
         .await?;
@@ -104,6 +105,7 @@ pub async fn receive(
 /// movement out and the credit on the ledger are the record.
 pub async fn returns(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<NewReceiptDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<PurchaseDetailDto>), ApiError> {
@@ -112,10 +114,9 @@ pub async fn returns(
     let lines = dto.lines.into_iter().map(Into::into).collect();
     let note = dto.note;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // A return lowers what the shop owes, so it needs the same permission a
     // correction to the ledger does.
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| service::return_to_supplier(c, shop, user, id, lines, note))
         .await?;
@@ -125,14 +126,14 @@ pub async fn returns(
 /// An order that never happened. Only while nothing has arrived against it.
 pub async fn cancel(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<CloseOrderDto>, JsonRejection>,
 ) -> Result<Json<PurchaseDetailDto>, ApiError> {
     let id = path_id(id)?;
     let Json(dto) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| service::cancel(c, shop, user, id, dto.reason))
         .await?;
@@ -143,16 +144,16 @@ pub async fn cancel(
 /// is written off, with the reason in the log.
 pub async fn close_short(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<CloseOrderDto>, JsonRejection>,
 ) -> Result<Json<PurchaseDetailDto>, ApiError> {
     let id = path_id(id)?;
     let Json(dto) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // Writing off goods that never came is a decision, and the log is what
     // carries the accountability until a permission does.
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| service::close_short(c, shop, user, id, dto.reason))
         .await?;

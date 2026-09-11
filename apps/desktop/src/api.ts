@@ -89,11 +89,20 @@ export const customersQueryKey: readonly string[] = ["customers"];
  * invalidation of this key refreshes every search that is in the cache. */
 export const suppliersQueryKey: readonly string[] = ["suppliers"];
 
+/** The shop's staff (M4 T8). The owner's own read: `crate::gates` names
+ * `ManageUsers` on `GET /users`, so a cashier or a manager reading this key
+ * gets the translated 403 rather than a list. */
+export const usersQueryKey: readonly string[] = ["users"];
+
 /** The order list. The two filters are appended by the screen, so an
  * invalidation of this key refreshes every filter that is in the cache: a
  * delivery moves an order from one state to another, and the list narrowed
  * to the state it left must not go on showing it. */
 export const purchasesQueryKey: readonly string[] = ["purchases"];
+
+/** The owner's audit log (M4 T7). The three filters and the page are
+ * appended by the screen, the same way the purchase list's are. */
+export const auditLogQueryKey: readonly string[] = ["audit-log"];
 
 /** One order with its lines and its deliveries. Its own key rather than a
  * slice of the list's: the list answers a row per order and this answers the

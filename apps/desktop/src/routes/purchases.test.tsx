@@ -21,6 +21,8 @@ import type { ProductDto, PurchaseDetailDto, SupplierDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
+import { SessionProvider } from "@/lib/session";
+import { ME_CASHIER, ME_OWNER } from "@/test/session";
 
 import { PurchasesScreen } from "./purchases";
 import { OnePurchase } from "./purchases_.$id";
@@ -172,7 +174,13 @@ function wrap(node: React.ReactNode, lang: Lang) {
   });
   return render(
     <I18nProvider lang={lang}>
-      <QueryClientProvider client={client}>{node}</QueryClientProvider>
+      <QueryClientProvider client={client}>
+        {/* An owner by default: the cost columns are what most of this
+            file already tested before M4 T5 gated them on
+            `see_cost_and_margin`. `me` is set to `ME_CASHIER` first by the
+            one test that cares who is signed in. */}
+        <SessionProvider>{node}</SessionProvider>
+      </QueryClientProvider>
     </I18nProvider>,
   );
 }
@@ -213,13 +221,17 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let detail: PurchaseDetailDto;
 let list: PurchaseDetailDto["purchase"][] | null;
 let writeAnswer: (() => Response) | null;
+let me: typeof ME_OWNER | typeof ME_CASHIER;
 
 beforeEach(() => {
   detail = partly;
   list = null;
   writeAnswer = null;
+  me = ME_OWNER;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/auth/me")) return Promise.resolve(json(200, me));
+    if (url.endsWith("/auth/idle")) return Promise.resolve(json(200, { idle_minutes: 30 }));
     if (init?.method === "POST") {
       if (writeAnswer !== null) return Promise.resolve(writeAnswer());
       return Promise.resolve(json(201, detail));
@@ -251,6 +263,13 @@ describe("the list of orders", () => {
       fr.purchase_status_partially_received,
       fr.purchases_open,
     ]);
+  });
+
+  test("hides the extra-costs column from a cashier, who does not hold see_cost_and_margin", async () => {
+    me = ME_CASHIER;
+    mountList();
+    const table = await screen.findByRole("table", { name: fr.purchases_title });
+    expect(within(table).queryByRole("columnheader", { name: fr.col_extra_costs })).not.toBeInTheDocument();
   });
 
   test("an empty list says so and offers the first order", async () => {
@@ -286,6 +305,15 @@ describe("one order", () => {
     expect(screen.getByTestId("purchase-status")).toHaveTextContent(
       fr.purchase_status_partially_received,
     );
+  });
+
+  test("hides the cost columns and the extra-costs fact from a cashier", async () => {
+    me = ME_CASHIER;
+    mountOrder();
+    const table = await screen.findByRole("table", { name: fr.purchases_lines });
+    expect(within(table).queryByRole("columnheader", { name: fr.col_unit_cost })).not.toBeInTheDocument();
+    expect(within(table).queryByRole("columnheader", { name: fr.col_landed_cost })).not.toBeInTheDocument();
+    expect(screen.queryByText(fr.col_extra_costs)).not.toBeInTheDocument();
   });
 
   test("the delivery notes are listed with the number they took", async () => {

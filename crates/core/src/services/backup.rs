@@ -20,6 +20,7 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::db::{Conn, MIGRATIONS};
 use crate::error::CoreError;
+use crate::services::audit;
 
 /// How many copies the folder keeps (features.md §1). The oldest beyond it
 /// goes when a new one is made.
@@ -175,6 +176,20 @@ pub fn is_due(newest: Option<NaiveDateTime>, now: NaiveDateTime) -> bool {
 /// The copy is named for `at`, so two copies in the same second are one
 /// copy: an existing file is returned rather than overwritten, since a
 /// double click on "back up now" must not destroy the copy it just made.
+///
+/// Writes no audit row, on purpose (a review asked the question
+/// separately from the restore it sits beside). A restore rewrites every row
+/// the shop has and is the act this milestone's control is about; a backup
+/// changes nothing a screen reads and nothing walks out of the shop, it only
+/// exists in a folder beside the file it copied. It is also, unlike a
+/// restore, routinely taken with nobody signed in at all: `crates/api/src/
+/// daily.rs` calls this once a day on a timer, and a row that named an actor
+/// for that call would be naming whoever happened to be signed in when the
+/// hourly check fired, which is not who backed the shop up, and a row with
+/// no actor at all is not something this log has a shape for. A row that
+/// fired once a day forever regardless would also be exactly the noise
+/// `permissions::record_refusal`'s own doc warns against: present for every
+/// reader, informative to none.
 pub fn create(conn: &mut Conn, dir: &Path, at: NaiveDateTime) -> Result<Backup, CoreError> {
     std::fs::create_dir_all(dir)?;
     sweep_staging(dir);
@@ -428,4 +443,57 @@ fn starts_like_sqlite(path: &Path) -> bool {
 
 fn refused(why: &str) -> CoreError {
     CoreError::validation("backup", why)
+}
+
+/// The row a restore writes: a restore used to leave nothing
+/// behind. `crate::AppState::restore` (`crates/api/src/lib.rs`) is the only
+/// caller, and it calls this only after the swap has already happened and
+/// the connection reopened, never before: a restore is the one act that
+/// replaces the whole audit log along with everything else the shop file
+/// holds, so a row written against the connection being replaced would be
+/// gone the instant the replacement landed, and the restore would still look
+/// silent to whoever reads the log afterwards. Written after, it is the
+/// first row the shop's log carries on the file that is now live, which is
+/// as much as a row can promise about an act that can rewrite the very log
+/// it is written to: the row is still worth writing, because everything
+/// written to the *new* file from here on is genuinely durable, and an owner
+/// reading the log for "was this shop ever restored" has an honest answer
+/// for every restore since the one this call is about, even though an
+/// attacker who controlled a restore could in principle also choose a copy
+/// old enough to omit this very call's own effect on what the log looks
+/// like going forward. That is a property of restoring a database, not a gap
+/// this row could close by being shaped differently.
+///
+/// A failure to write this row does not fail the restore that already
+/// happened: the data is already replaced, and answering the caller with an
+/// error would claim a restore that succeeded had not. `crate::AppState::
+/// restore` logs that failure to the server's own log instead.
+pub fn record_restore(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    actor_id: i32,
+    restored_from: &str,
+    safety_copy: &str,
+    summary: &Summary,
+) -> Result<(), CoreError> {
+    audit::record(
+        conn,
+        shop_id,
+        actor_id,
+        audit::Change {
+            action: audit::ACTION_RESTORE_BACKUP,
+            entity: "backup",
+            entity_id: None,
+            before: None,
+            after: Some(
+                serde_json::json!({
+                    "restored_from": restored_from,
+                    "safety_copy": safety_copy,
+                    "products": summary.products,
+                    "documents": summary.documents,
+                })
+                .to_string(),
+            ),
+        },
+    )
 }

@@ -10,7 +10,7 @@
 // read here and its numbers compared with SaleDto.totals, so a screen that
 // computed a wrong preview and an API that agreed with it would still fail.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

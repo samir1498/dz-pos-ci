@@ -24,6 +24,8 @@ import type {
 
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
+import { SessionProvider } from "@/lib/session";
+import { ME_CASHIER, ME_OWNER } from "@/test/session";
 import { DashboardScreen } from "./dashboard";
 
 /** What the server says the day is. A day the machine is not on, so a screen
@@ -138,6 +140,7 @@ const CHART_BOX = { width: 900, height: 256 } as const;
 let fetchMock: ReturnType<typeof vi.fn>;
 /** Set to make `/dashboard` refuse, so the error path can be driven. */
 let refuse: boolean;
+let me: typeof ME_OWNER | typeof ME_CASHIER;
 
 /** Every URL asked for, in order. */
 function fetched(): string[] {
@@ -146,6 +149,7 @@ function fetched(): string[] {
 
 beforeEach(() => {
   refuse = false;
+  me = ME_OWNER;
   // recharts measures its box with a ResizeObserver, which jsdom does not
   // implement, and draws nothing at all while it believes it is zero wide. So
   // the stub answers once with a plausible box; the numbers are the size the
@@ -179,6 +183,8 @@ beforeEach(() => {
   );
   fetchMock = vi.fn((input: unknown) => {
     const url = String(input);
+    if (url.endsWith("/auth/me")) return Promise.resolve(json(200, me));
+    if (url.endsWith("/auth/idle")) return Promise.resolve(json(200, { idle_minutes: 30 }));
     if (url.includes("/clock")) return Promise.resolve(json(200, { today: SHOP_TODAY }));
     // Before the plain dashboard branch: the series URL contains it too.
     if (url.includes("/dashboard/series")) return Promise.resolve(json(200, series));
@@ -204,7 +210,13 @@ function mount(lang: Lang = "fr") {
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        <DashboardScreen />
+        {/* An owner by default: the margin figures are what this file
+            already tested before M4 T5 gated them on
+            `see_cost_and_margin`. `me` is set to `ME_CASHIER` first by the
+            tests that care who is signed in. */}
+        <SessionProvider>
+          <DashboardScreen />
+        </SessionProvider>
       </QueryClientProvider>
     </I18nProvider>,
   );
@@ -276,6 +288,8 @@ describe("the three lists", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     fetchMock.mockImplementation((input: unknown) => {
       const url = String(input);
+      if (url.endsWith("/auth/me")) return Promise.resolve(json(200, ME_OWNER));
+      if (url.endsWith("/auth/idle")) return Promise.resolve(json(200, { idle_minutes: 30 }));
       if (url.includes("/clock")) return Promise.resolve(json(200, { today: SHOP_TODAY }));
       if (url.includes("/dashboard/series")) return Promise.resolve(json(200, series));
       if (url.includes("/dashboard")) {
@@ -288,7 +302,9 @@ describe("the three lists", () => {
     render(
       <I18nProvider lang="fr">
         <QueryClientProvider client={client}>
-          <DashboardScreen />
+          <SessionProvider>
+            <DashboardScreen />
+          </SessionProvider>
         </QueryClientProvider>
       </I18nProvider>,
     );

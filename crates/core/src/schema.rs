@@ -52,6 +52,22 @@ diesel::table! {
     }
 }
 
+// ---- migrations/2026-09-11-000012_sessions ----
+
+diesel::table! {
+    sessions (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        user_id -> Integer,
+        // SHA-256 of the token, hex. The token itself is never stored.
+        token_hash -> Text,
+        created_at -> Timestamp,
+        last_seen_at -> Timestamp,
+        // Null while the session is live.
+        ended_at -> Nullable<Timestamp>,
+    }
+}
+
 diesel::table! {
     settings (seq) {
         seq -> Integer,
@@ -84,6 +100,12 @@ diesel::table! {
         role -> Text,
         pin_hash -> Text,
         created_at -> Timestamp,
+        // migrations/2026-09-11-000011_users_auth
+        password_hash -> Nullable<Text>,
+        active -> Bool,
+        pin_failures -> Integer,
+        locked_until -> Nullable<Timestamp>,
+        updated_at -> Timestamp,
     }
 }
 
@@ -396,6 +418,8 @@ diesel::joinable!(categories -> shops (shop_id));
 diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
 diesel::joinable!(preferences -> shops (shop_id));
+diesel::joinable!(sessions -> shops (shop_id));
+diesel::joinable!(sessions -> users (user_id));
 diesel::joinable!(settings -> shops (shop_id));
 diesel::joinable!(users -> shops (shop_id));
 diesel::joinable!(documents -> shops (shop_id));
@@ -465,6 +489,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     purchase_receipts,
     purchases,
     preferences,
+    sessions,
     settings,
     shops,
     stock_movements,

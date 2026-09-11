@@ -11,6 +11,14 @@ diesel = "2.2"
 chrono = "0.4"
 serde = "1.0"
 serde_json = "1.0"
+# Password and PIN hashing (features.md §5). Pinned here rather than in the
+# crate: a second crate that ever hashes has to hash the same way, and a
+# version bump on a password hash is a decision taken once for the workspace.
+# Pure Rust, from the RustCrypto password-hashes repository, and it pulls no
+# C library in: its tree is `base64ct`, `password-hash`, `subtle` and
+# `blake2`. `rand` is on because the salt comes from the OS random source
+# through `password_hash::rand_core::OsRng`, and `std` so that source exists.
+argon2 = { version = "0.5.3", features = ["std"] }
 
 # Panics on a shop's till are data loss; every fallible path returns an error.
 [workspace.lints.clippy]

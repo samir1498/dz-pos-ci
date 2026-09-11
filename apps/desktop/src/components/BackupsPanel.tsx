@@ -29,23 +29,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  not_found: "error_not_found",
-  storage: "error_storage",
-  restart_needed: "error_restart_needed",
-  restore_failed_restart_needed: "error_restore_failed_restart_needed",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unauthorized: "error_unauthorized",
-  unreachable: "error_unreachable",
-};
 
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) return ERROR_KEY[error.code] ?? "error_unknown";
-  return "error_unknown";
-}
 
 const BYTES_PER_KB = 1024;
 const BYTES_PER_MB = BYTES_PER_KB * 1024;

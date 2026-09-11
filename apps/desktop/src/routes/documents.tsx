@@ -71,24 +71,9 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  not_found: "error_not_found",
-  money: "error_money",
-  storage: "error_storage",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unreachable: "error_unreachable",
-};
 
-/** The server sends a code, never a sentence; the UI owns the wording. */
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) {
-    return ERROR_KEY[error.code] ?? "error_unknown";
-  }
-  return "error_unknown";
-}
 
 /** The refusal, wherever one is shown. One shape, so a failed list, a failed
  *  avoir and a failed sheet all read the same and all wear the danger role

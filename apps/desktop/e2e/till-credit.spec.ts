@@ -10,7 +10,7 @@
 // 5 500,00. A card sale to the same customer closes the file: the buyer is
 // named on the document and no debt row is written, because nothing is owed.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { APIRequestContext, Page } from "@playwright/test";

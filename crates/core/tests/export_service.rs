@@ -158,7 +158,7 @@ fn the_products_workbook_names_its_tab_in_the_shops_language_and_holds_one_row_p
     seed_second_shop(&mut conn);
     a_product(&mut conn, "Café moulu 250 g", 32_050);
 
-    let bytes = export::products(&mut conn, SHOP, Lang::Fr).unwrap();
+    let bytes = export::products(&mut conn, SHOP, OWNER, Lang::Fr).unwrap();
     let rows = sheet(&bytes, "Produits");
 
     assert_eq!(header(&rows)[0], "name");
@@ -181,9 +181,9 @@ fn the_products_tab_is_named_in_english_and_in_arabic_too() {
     let (_dir, mut conn) = open_temp();
     a_product(&mut conn, "Sucre", 11_000);
 
-    let en = export::products(&mut conn, SHOP, Lang::En).unwrap();
+    let en = export::products(&mut conn, SHOP, OWNER, Lang::En).unwrap();
     assert_eq!(header(&sheet(&en, "Products"))[0], "name");
-    let ar = export::products(&mut conn, SHOP, Lang::Ar).unwrap();
+    let ar = export::products(&mut conn, SHOP, OWNER, Lang::Ar).unwrap();
     assert_eq!(header(&sheet(&ar, "المنتجات"))[0], "name");
 }
 
@@ -243,7 +243,7 @@ fn the_sales_workbook_writes_one_row_per_line_with_the_number_the_paper_prints()
     )
     .unwrap();
 
-    let bytes = export::sales(&mut conn, SHOP, Lang::Fr, DayRange::default()).unwrap();
+    let bytes = export::sales(&mut conn, SHOP, OWNER, Lang::Fr, DayRange::default()).unwrap();
     let rows = sheet(&bytes, "Ventes");
 
     assert_eq!(rows.len(), 3, "one header row and one row per line");
@@ -296,12 +296,13 @@ fn a_range_leaves_out_the_documents_outside_it() {
         .unwrap();
     }
 
-    let whole = export::sales(&mut conn, SHOP, Lang::Fr, DayRange::default()).unwrap();
+    let whole = export::sales(&mut conn, SHOP, OWNER, Lang::Fr, DayRange::default()).unwrap();
     assert_eq!(sheet(&whole, "Ventes").len(), 3);
 
     let narrowed = export::sales(
         &mut conn,
         SHOP,
+        OWNER,
         Lang::Fr,
         DayRange {
             from: NaiveDate::from_ymd_opt(2026, 9, 9),
@@ -353,7 +354,7 @@ fn a_cancelled_document_is_in_the_file_with_cancelled_in_its_status_column() {
     )
     .unwrap();
 
-    let bytes = export::sales(&mut conn, SHOP, Lang::Fr, DayRange::default()).unwrap();
+    let bytes = export::sales(&mut conn, SHOP, OWNER, Lang::Fr, DayRange::default()).unwrap();
     let rows = sheet(&bytes, "Ventes");
     assert_eq!(rows.len(), 2, "the annulled ticket is not in the file");
     assert_eq!(text(&rows, 1, "status"), "cancelled");
@@ -400,6 +401,7 @@ fn a_document_issued_in_the_last_second_of_the_closing_day_is_inside_the_range()
     let closing = export::sales(
         &mut conn,
         SHOP,
+        OWNER,
         Lang::Fr,
         DayRange {
             from: NaiveDate::from_ymd_opt(2026, 9, 1),
@@ -418,6 +420,7 @@ fn a_document_issued_in_the_last_second_of_the_closing_day_is_inside_the_range()
     let day_before = export::sales(
         &mut conn,
         SHOP,
+        OWNER,
         Lang::Fr,
         DayRange {
             from: NaiveDate::from_ymd_opt(2026, 9, 1),
@@ -454,7 +457,7 @@ fn the_customers_workbook_carries_the_fiche_and_the_balance_the_ledger_sums_to()
     )
     .unwrap();
 
-    let bytes = export::customers(&mut conn, SHOP, Lang::Fr).unwrap();
+    let bytes = export::customers(&mut conn, SHOP, OWNER, Lang::Fr).unwrap();
     let rows = sheet(&bytes, "Clients");
 
     assert_eq!(rows.len(), 2, "the neighbour's customer is not in it");
@@ -490,7 +493,7 @@ fn the_suppliers_workbook_carries_the_fiche_and_the_balance_the_ledger_sums_to()
     )
     .unwrap();
 
-    let bytes = export::suppliers(&mut conn, SHOP, Lang::Fr).unwrap();
+    let bytes = export::suppliers(&mut conn, SHOP, OWNER, Lang::Fr).unwrap();
     let rows = sheet(&bytes, "Fournisseurs");
 
     assert_eq!(rows.len(), 2, "the neighbour's supplier is not in it");
@@ -511,7 +514,7 @@ fn an_amount_below_zero_keeps_its_sign_and_its_centimes() {
     let id = common::a_supplier(&mut conn, "Avance");
     common::a_supplier_payment_row(&mut conn, id, 5);
 
-    let bytes = export::suppliers(&mut conn, SHOP, Lang::Fr).unwrap();
+    let bytes = export::suppliers(&mut conn, SHOP, OWNER, Lang::Fr).unwrap();
     let rows = sheet(&bytes, "Fournisseurs");
     assert_eq!(centimes(&rows, 1, "balance_da"), -5);
 }
@@ -526,7 +529,7 @@ fn an_amount_far_past_what_a_float_counts_in_whole_centimes_survives_the_workboo
     let (_dir, mut conn) = open_temp();
     let p = a_product(&mut conn, "Lot entier", 12_345_678_901);
 
-    let bytes = export::products(&mut conn, SHOP, Lang::Fr).unwrap();
+    let bytes = export::products(&mut conn, SHOP, OWNER, Lang::Fr).unwrap();
     let rows = sheet(&bytes, "Produits");
     assert_eq!(centimes(&rows, 1, "selling_da"), 12_345_678_901);
     // Read as the number it is, not as a rounded one: the cell holds

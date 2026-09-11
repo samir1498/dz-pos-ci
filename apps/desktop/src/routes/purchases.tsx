@@ -40,6 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api, purchasesQueryKey, suppliersQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { errorKey } from "@/lib/fields";
+import { useHasPermission } from "@/lib/session";
 
 export const Route = createFileRoute("/purchases")({ component: PurchasesScreen });
 
@@ -123,6 +124,14 @@ function PurchasesScreen() {
     queryKey: [...suppliersQueryKey, ""],
     queryFn: () => api.listSuppliers(),
   });
+  // GET /purchases itself now refuses a caller without see_cost_and_margin
+  // (crates/api/src/gates.rs, M4 T5 review, 2026-09-11) and AppShell hides
+  // the nav entry on the same permission, so a cashier never reaches this
+  // screen with data to draw and this reads true for everyone who does. Kept
+  // rather than deleted: the column filter is the one place that would still
+  // matter if the route gate ever loosened back to an open read, the way
+  // /products stayed open and moved its own redaction to the field.
+  const seeCostAndMargin = useHasPermission("see_cost_and_margin");
 
   return (
     <section className="flex flex-col gap-4">
@@ -195,7 +204,11 @@ function PurchasesScreen() {
         </p>
       ) : null}
       {purchases.isSuccess ? (
-        <PurchaseTable rows={purchases.data} suppliers={suppliers.data ?? []} />
+        <PurchaseTable
+          rows={purchases.data}
+          suppliers={suppliers.data ?? []}
+          seeCostAndMargin={seeCostAndMargin}
+        />
       ) : null}
     </section>
   );
@@ -204,15 +217,21 @@ function PurchasesScreen() {
 function PurchaseTable({
   rows,
   suppliers,
+  seeCostAndMargin,
 }: {
   rows: PurchaseDto[];
   suppliers: SupplierDto[];
+  seeCostAndMargin: boolean;
 }) {
   const { t } = useTranslation();
   const nameOf = (supplierId: number) =>
     suppliers.find((s) => s.id === supplierId)?.name ?? "";
 
-  const columns: readonly Column<PurchaseDto>[] = [
+  // A plain, fully-typed array first and the filter as a second statement:
+  // a `.filter()` chained straight off the array literal loses the
+  // contextual type `Column<PurchaseDto>` gives every `cell`, and each `p`
+  // comes back untyped.
+  const allColumns: Column<PurchaseDto>[] = [
     {
       id: "date",
       header: t("col_date"),
@@ -246,6 +265,13 @@ function PurchaseTable({
       cell: (p) => <PurchaseStatusBadge status={p.status} />,
     },
   ];
+  // What the shop pays for its stock, filtered out here rather than left out
+  // of the array above so the column definitions stay in one place
+  // (`SeeCostAndMargin`, M4 T5; see PurchasesScreen's own comment for why
+  // this reads true for everyone who reaches this screen today).
+  const columns: readonly Column<PurchaseDto>[] = allColumns.filter(
+    (column) => seeCostAndMargin || column.id !== "extra",
+  );
 
   return (
     <DataTable

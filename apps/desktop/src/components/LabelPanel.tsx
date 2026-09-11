@@ -10,17 +10,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "@dzpos/shared";
 import { api } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_label_no_barcode",
-  not_found: "error_not_found",
-  storage: "error_storage",
-  restart_needed: "error_restart_needed",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unauthorized: "error_unauthorized",
-  unreachable: "error_unreachable",
-};
 
 /** The two ways a label is refused, told apart by the field the server
  * names. Both arrive as `validation`, and the shop does two different
@@ -35,13 +26,21 @@ const FIELD_KEY: Record<string, Key> = {
   ids: "error_label_too_many",
 };
 
-function errorKey(error: unknown): Key {
-  if (!(error instanceof ApiError)) return "error_unknown";
-  if (error.code === "validation" && error.field !== undefined) {
+
+/**
+ * Which sentence a refused label gets. Not a copy of the shared table: the
+ * two ways a label is refused both arrive as `validation` and are told
+ * apart by the field the server named, which no other screen does. Only the
+ * fallback is shared, so a code added to `lib/fields.tsx` reaches here too,
+ * and `validation` with no field it recognises means the one thing this
+ * panel is ever asked about, a product with no barcode to print.
+ */
+function labelErrorKey(error: unknown): Key {
+  if (error instanceof ApiError && error.code === "validation" && error.field !== undefined) {
     const named = FIELD_KEY[error.field];
     if (named !== undefined) return named;
   }
-  return ERROR_KEY[error.code] ?? "error_unknown";
+  return errorKey(error, { validation: "error_label_no_barcode" });
 }
 
 /** The label of one product, or a sheet of the products named. */
@@ -68,7 +67,7 @@ export function LabelPanel({ ask }: { ask: LabelAsk }) {
       {page.isPending ? <p className="text-muted-foreground">{t("products_loading")}</p> : null}
       {page.isError ? (
         <p role="alert" className="text-fg-danger">
-          {t(errorKey(page.error))}
+          {t(labelErrorKey(page.error))}
         </p>
       ) : null}
       {page.isSuccess ? (

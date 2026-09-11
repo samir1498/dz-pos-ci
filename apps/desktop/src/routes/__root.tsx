@@ -10,20 +10,48 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/AppShell";
+import { LockScreen } from "@/components/LockScreen";
+import { SignInScreen } from "@/components/SignInScreen";
 import { useTranslation } from "@/i18n";
+import { useSession } from "@/lib/session";
 
 export const Route = createRootRoute({ component: RootLayout });
 
 function RootLayout() {
   const { dir } = useTranslation();
+  const { status, locked } = useSession();
   return (
     // The provider already writes `dir` on the document element; this repeats
     // it on the tree so a component reading its own inherited direction (and
     // a test rendering a screen without the document) agrees with the page.
     <div dir={dir} className="min-h-screen">
-      <AppShell>
-        <Outlet />
-      </AppShell>
+      {status === "checking" ? null : status === "signed-out" ? (
+        <SignInScreen />
+      ) : (
+        // The shell and the route inside it stay mounted whether or not the
+        // till is locked: `LockScreen` below is an overlay on top of this,
+        // never a replacement for it, which is what keeps a cart on the till
+        // alive while the screen is covered.
+        //
+        // `inert` while locked, not just visually covered: the overlay sits
+        // above this in the stacking order, which stops a click, but a key
+        // typed by a scanner or a keyboard goes to whatever element holds
+        // DOM focus, not to whatever is on top, and nothing about being
+        // covered moves focus away on its own. `inert` does: the browser
+        // blurs a focused element the moment its subtree turns inert, drops
+        // it from the tab order, and makes `.focus()` a no-op on it, so a
+        // search box that had focus when the till went idle stops being
+        // reachable at all, by a click, a Tab, a scan or an effect calling
+        // `.focus()` on it again. `className="contents"` keeps the wrapper
+        // this needs out of AppShell's own layout — `inert` cascades to a
+        // whole subtree regardless of `display`, so it costs nothing here.
+        <div inert={locked} className="contents">
+          <AppShell>
+            <Outlet />
+          </AppShell>
+        </div>
+      )}
+      {status === "signed-in" && locked ? <LockScreen /> : null}
     </div>
   );
 }

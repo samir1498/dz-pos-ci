@@ -12,6 +12,8 @@ use http_body_util::BodyExt;
 use serde_json::Value;
 use tower::ServiceExt;
 
+mod common;
+
 const SHOP: i32 = 1;
 const TOKEN: &str = "test-launch-token";
 
@@ -27,6 +29,7 @@ struct Harness {
 fn harness() -> Harness {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     Harness {
         _dir: dir,
@@ -39,6 +42,7 @@ async fn get(app: &axum::Router, uri: &str) -> (StatusCode, Value) {
         .method("GET")
         .uri(uri)
         .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
         .body(Body::empty())
         .unwrap();
     let res = app.clone().oneshot(req).await.unwrap();

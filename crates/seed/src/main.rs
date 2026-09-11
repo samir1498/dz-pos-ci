@@ -203,6 +203,15 @@ fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     ] {
         println!("  {label:<20} {count}");
     }
+    // From M4 on the API wants a session on every route, and the owner the
+    // first migration writes has no credential at all. The seeder gives it
+    // one; printing it here is what makes the file usable, and these are
+    // development credentials on a `.dev/` file by construction.
+    println!(
+        "sign in as the owner with PIN {} or password {}",
+        seed::OWNER_PIN,
+        seed::OWNER_PASSWORD
+    );
     Ok(())
 }
 
@@ -287,11 +296,11 @@ mod tests {
 
     #[test]
     fn the_api_source_reaches_the_seeder_nowhere() {
-        // Not a search for the word: `SEEDED_OWNER_USER_ID` is the owner the
-        // first migration writes, which has nothing to do with this and would
-        // make the check a thing people learn to work around. What is looked
-        // for is a way in: the crate by name, the service by path, and a
-        // route or a flag spelled `seed`.
+        // Not a search for the word: the API has had identifiers with `seed`
+        // in them that have nothing to do with this crate, and a check that
+        // greps for a word is a check people learn to work around. What is
+        // looked for is a way in: the crate by name, the service by path, and
+        // a route or a flag spelled `seed`.
         for file in ["crates/api/src/main.rs", "crates/api/src/lib.rs"] {
             let text = std::fs::read_to_string(root().join(file)).unwrap();
             for forbidden in [

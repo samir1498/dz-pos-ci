@@ -11,7 +11,7 @@ import { describe, expect, test } from "vitest";
 
 import { I18nProvider } from "@/i18n";
 
-import { Keypad, keyedAmount, type KeypadKey } from "./Keypad";
+import { Keypad, keyedAmount, keyedDigits, type KeypadKey } from "./Keypad";
 
 /** The pad, and the keys it sent, in order. */
 function mount(disabled = false): KeypadKey[] {
@@ -132,5 +132,55 @@ describe("keyedAmount", () => {
   test("validating is not an amount and changes nothing", () => {
     expect(keyedAmount(150_000, "enter")).toBe(150_000);
     expect(keyedAmount(null, "enter")).toBeNull();
+  });
+});
+
+/**
+ * What a press does to a string of digits: a user id, a PIN. Every digit
+ * typed is kept in order and a leading zero is a digit like any other,
+ * because `0512` and `512` are two different PINs.
+ */
+describe("keyedDigits", () => {
+  /** The keys pressed in order, from an empty string, capped at `max`. */
+  function typed(keys: readonly KeypadKey[], max = 6): string {
+    return keys.reduce<string>((digits, key) => keyedDigits(digits, key, max), "");
+  }
+
+  test("a run of digits is kept in order", () => {
+    expect(typed(["1", "3", "7", "9"])).toBe("1379");
+  });
+
+  test("a leading zero is kept, unlike an amount", () => {
+    expect(typed(["0", "5", "1", "2"])).toBe("0512");
+  });
+
+  test("the double zero types two digits", () => {
+    expect(typed(["1", "00", "2"])).toBe("1002");
+  });
+
+  test("backspace on an empty string stays empty", () => {
+    expect(typed(["backspace"])).toBe("");
+    expect(keyedDigits("", "backspace", 6)).toBe("");
+  });
+
+  test("backspace takes the last digit off", () => {
+    expect(typed(["1", "3", "7", "backspace"])).toBe("13");
+  });
+
+  test("stops taking digits past the cap, and 00 is refused whole rather than truncated", () => {
+    expect(typed(["1", "2", "3", "4"], 3)).toBe("123");
+    expect(keyedDigits("12", "00", 3)).toBe("12");
+  });
+
+  test("validating is not a digit and changes nothing", () => {
+    expect(keyedDigits("1379", "enter", 6)).toBe("1379");
+    expect(keyedDigits("", "enter", 6)).toBe("");
+  });
+
+  test("does not mutate its input", () => {
+    const before = "13";
+    const digits = keyedDigits(before, "7", 6);
+    expect(before).toBe("13");
+    expect(digits).toBe("137");
   });
 });

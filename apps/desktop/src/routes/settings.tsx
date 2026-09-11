@@ -3,7 +3,7 @@
 // block is a card, every control comes from the kit, and the API decides:
 // this file shows and translates.
 
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
@@ -28,7 +28,9 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useShopToday } from "@/lib/clock";
+import { useHasPermission } from "@/lib/session";
 import { isKey, useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 
 export const Route = createFileRoute("/settings")({ component: SettingsScreen });
 
@@ -39,21 +41,7 @@ const REGIME_KEY: Record<RegimeDto, Key> = {
   reel: "regime_reel",
 };
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  not_found: "error_not_found",
-  storage: "error_storage",
-  restart_needed: "error_restart_needed",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unauthorized: "error_unauthorized",
-  unreachable: "error_unreachable",
-};
 
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) return ERROR_KEY[error.code] ?? "error_unknown";
-  return "error_unknown";
-}
 
 /** `YYYY-MM-DD`, the only shape the API takes a day in. */
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -73,6 +61,13 @@ export function SettingsScreen() {
   // Lives here, not in the form: a save refetches the page and the form is
   // remounted on the fresh block (its key), which would drop the message.
   const [storeSaved, setStoreSaved] = useState(false);
+  // `GET /users`, and every route the staff panel's link leads to, already
+  // name `ManageUsers` in gates.rs and refuse a cashier or a manager with a
+  // 403 (services::permissions says the owner alone holds it). Same for
+  // `ExportAndImport` on the four exports and the two import routes: the
+  // panel below is only the hidden button; the server already refuses both.
+  const manageUsers = useHasPermission("manage_users");
+  const exportAndImport = useHasPermission("export_and_import");
 
   return (
     <section className="flex flex-col">
@@ -122,8 +117,9 @@ export function SettingsScreen() {
             />
           )}
           <ThemePanel />
+          {manageUsers ? <StaffPanel /> : null}
           <BackupsPanel />
-          <ExportImportPanel />
+          {exportAndImport ? <ExportImportPanel /> : null}
           <StockRecountPanel />
         </div>
       ) : null}
@@ -472,6 +468,35 @@ function ThemePanel() {
         <CardContent>
           <ThemeSwitcher />
         </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * The link out to the users screen (M4 T8), not the list itself: the fiches
+ * and their roles are their own screen because a table, an "add a user"
+ * dialog and a PIN reset dialog are a page's worth, not a card's. `crate::
+ * gates` names `ManageUsers` on every route behind that screen, so the
+ * owner alone holds it; `SettingsScreen` hides this whole panel from a
+ * manager and a cashier for that reason (M4 T5), and typing `/settings/users`
+ * by hand still meets the server's own refusal there — the panel is the
+ * hidden button, `gates.rs` is the defence.
+ */
+function StaffPanel() {
+  const { t } = useTranslation();
+  return (
+    <section aria-labelledby="settings-users">
+      <Card>
+        <CardHeader>
+          <PanelHeading id="settings-users">{t("settings_users")}</PanelHeading>
+          <CardDescription>{t("settings_users_hint")}</CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <Button variant="outline" asChild>
+            <Link to="/settings/users">{t("users_manage_link")}</Link>
+          </Button>
+        </CardFooter>
       </Card>
     </section>
   );

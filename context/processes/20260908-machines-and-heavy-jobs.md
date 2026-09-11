@@ -137,6 +137,16 @@ disk hit zero five times in an hour.
   invocation at a time across every checkout; the second waits. A gate
   run that overlapped another worktree's build is not a gate run: rerun
   it through `just`.
+- **Holding the lock is not enough on its own: export the folder too.**
+  `flock "$CARGO_TARGET_DIR/.lock" cargo test ...` typed by hand, without
+  `export CARGO_TARGET_DIR=<main checkout>/.cargo-target` first, serialises
+  correctly and then builds into a per-worktree `target/` anyway, because
+  the variable the lock path names is empty in that shell. That is where
+  both of 2026-09-11's stray target folders came from, 1.3 GB and 2.2 GB,
+  and the second one was written after the first had been cleaned. The
+  `just` recipes export it; a bare `cargo` needs the export as well as the
+  `just claim`. `just disk` names a stray folder, so read it after a hand-run
+  rather than at the start of the next session.
 - **Never background a long check and wait on a process check.** Run
   `just gates`, `just test`, `just clippy` and `just e2e` in the foreground
   and read the output. This cost four agents about an hour each on
