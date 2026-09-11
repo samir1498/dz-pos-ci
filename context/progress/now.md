@@ -12,12 +12,24 @@ sweep) and a new `landing-page` plan was written, replacing D5 of the
 design plan; the organisation's GitHub Actions budget is still capped, but
 `just ci` now pushes a branch to the mirror `samir1498/dz-pos-ci` (merged to
 main as PR #22) so gates run on Samir's own minutes without waiting on
-Anouar. Still open: the host for the demo
-deploy (a container on Koyeb or Render, or Cloudflare Containers — the
-box-side tunnel pieces are stopped; unverified whether Cloudflare was
-ruled out for the app itself, as opposed to the landing page's static
-Cloudflare Pages), and Anouar's GitHub billing fix itself, which the
-mirror works around but does not close.
+Anouar. Still open: Anouar's GitHub billing fix itself, which the mirror works
+around but does not close.
+
+The demo host was open and is now answered, on 2026-09-11, with the question
+that had been marked unverified: Cloudflare is not ruled out for the app
+itself, and it is the best fit. Cloudflare Containers reached general
+availability in April 2026, and their disk is ephemeral: a container sleeps
+after ten minutes of inactivity by default and wakes with a fresh disk from
+its image. For a shop's real data that would be disqualifying. For a demo it
+is the behaviour to want, because the seeded SQLite file ships inside the
+image, every visitor gets the same shop with its thirty days of trading, and
+nothing a visitor does survives them. `just seed` is deterministic and
+repeatable, which is what makes that work. The cost is a cold start for the
+first visitor after a quiet spell, which a Rust binary opening a SQLite file
+pays quickly. The other argument for it is that the landing page is already
+on Cloudflare Pages, so it is one account and one domain rather than two.
+Not deployed: putting the app on a public address is Samir's call, not the
+session's.
 
 The landing page is finished, all six tasks on main: the site (PR #25), the
 copy with every fiscal claim carrying the `docs/features.md` row it rests on
@@ -117,15 +129,28 @@ names twice as well; neither was visible to the translation test, because it
 read the parsed object and JSON keeps the last of a repeated key in silence.
 It reads the files as text now.
 
-Next: M5, the first release, which is the last milestone before a shop can
-run on this. `docs/roadmap.md` § M5 has it: the bundle identifier changed
-once with the final name, the Tauri updater and its signing key, the Windows
-code-signing certificate, migrations tied to the app version with a backup
-before each and a previous-version open test, a tag on main building the
-installer and the GitHub release, the support bundle, the Arabic and RTL
-polish pass, and the delivery note. Five of its release gates are Samir's
-and Anouar's rather than mine, and two of them have lead times: the product
-name and the code-signing certificate.
+**M5, the first release, started on 2026-09-11 at 19:30**
+(`context/plans/20260908-m5-first-release-v1.md`, ten tasks). It is the last
+milestone before a shop can run on this, and it is different from the four
+before it: most of what it builds cannot be demonstrated from this machine.
+An installer needs Windows, a signature needs a certificate nobody has
+bought, and an update needs a previous release to update from. So every task
+says what can be proven here and what cannot, and a task that says it is
+done and means it compiles is not done.
+
+In flight: the webview's content security policy with the launch token out
+of the page global it sits in today, which is the only item in the milestone
+that is a hole rather than machinery; and the version, git short hash and
+build date embedded at build time, shown in About and heading the log.
+
+Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
+bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
+not an effort one, and the two pages now point at each other.
+
+Five release gates are Samir's and Anouar's rather than mine, and two have
+lead times that start when they say so: the product's final name, which is
+baked into the installer, and the Windows code-signing certificate, without
+which every customer sees a warning.
 
 Open for Samir on M4: the wrong-try counter is one per person and covers the
 PIN and the password together, so a fumbled password locks that person's
