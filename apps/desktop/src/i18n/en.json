@@ -649,9 +649,6 @@
   "lock_title": "The till is locked",
   "lock_unlock": "Unlock",
   "lock_switch_user": "Sign in as someone else",
-  "role_owner": "Owner",
-  "role_manager": "Manager",
-  "role_cashier": "Cashier",
   "topbar_lock_now": "Lock now",
   "topbar_sign_out": "Sign out",
   "nav_audit_log": "Audit log",
@@ -667,6 +664,5 @@
   "audit_page_next": "Next",
   "col_user": "User",
   "col_entity": "Record",
-  "col_change": "Change",
-  "error_forbidden": "You do not have permission to see this."
+  "col_change": "Change"
 }

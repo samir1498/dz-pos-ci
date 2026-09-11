@@ -649,9 +649,6 @@
   "lock_title": "الصندوق مقفل",
   "lock_unlock": "فتح القفل",
   "lock_switch_user": "تسجيل الدخول كشخص آخر",
-  "role_owner": "المالك",
-  "role_manager": "المدير",
-  "role_cashier": "الكاشير",
   "topbar_lock_now": "قفل الآن",
   "topbar_sign_out": "تسجيل الخروج",
   "nav_audit_log": "سجل التدقيق",
@@ -667,6 +664,5 @@
   "audit_page_next": "التالي",
   "col_user": "المستخدم",
   "col_entity": "السجل",
-  "col_change": "التغيير",
-  "error_forbidden": "ليست لديك صلاحية لرؤية هذا."
+  "col_change": "التغيير"
 }

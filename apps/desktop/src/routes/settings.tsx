@@ -30,6 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useShopToday } from "@/lib/clock";
 import { useHasPermission } from "@/lib/session";
 import { isKey, useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 
 export const Route = createFileRoute("/settings")({ component: SettingsScreen });
 
@@ -40,21 +41,7 @@ const REGIME_KEY: Record<RegimeDto, Key> = {
   reel: "regime_reel",
 };
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  not_found: "error_not_found",
-  storage: "error_storage",
-  restart_needed: "error_restart_needed",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unauthorized: "error_unauthorized",
-  unreachable: "error_unreachable",
-};
 
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) return ERROR_KEY[error.code] ?? "error_unknown";
-  return "error_unknown";
-}
 
 /** `YYYY-MM-DD`, the only shape the API takes a day in. */
 const DAY = /^\d{4}-\d{2}-\d{2}$/;

@@ -134,3 +134,30 @@ describe("every role's label", () => {
     }
   });
 });
+
+/**
+ * The server sends a code and the UI owns the wording, which only works if
+ * there is one place that turns a code into wording. There were two until
+ * 2026-09-11: `lib/fields.tsx` and a private copy inside `routes/till.tsx`,
+ * and they had drifted in both directions. The till's knew about a credit
+ * limit and a barcode already taken; the shared one did not. The shared one
+ * knew about a refused permission; the till's did not. So a cashier refused
+ * a discount at the till, which is the exact refusal this milestone exists
+ * to produce, was shown "something went wrong".
+ *
+ * The first cashier spec in the browser suite is what found it, and this is
+ * what stops the second copy coming back. The same shape as the role rule
+ * above and for the same reason: a second copy of a table is not a bug on
+ * the day it is written, it is a bug on the day one of them is updated.
+ */
+describe("a server error code becomes wording in one place", () => {
+  it("declares no second error map", () => {
+    const found = offenders(/\bconst ERROR_KEY\s*:\s*Record<string,\s*Key>/, new Set([SELF, "lib/fields.tsx"]));
+    expect(found).toEqual([]);
+  });
+
+  it("writes no second errorKey function", () => {
+    const found = offenders(/function\s+errorKey\s*\(/, new Set([SELF, "lib/fields.tsx"]));
+    expect(found).toEqual([]);
+  });
+});

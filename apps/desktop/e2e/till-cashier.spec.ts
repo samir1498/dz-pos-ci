@@ -299,18 +299,13 @@ test("a discount above the shop's threshold is refused, and names that permissio
   expect(body.error.code).toBe("forbidden");
   expect(body.error.permission).toBe("discount_above_threshold");
 
-  // The screen still says something rather than swallowing the refusal —
-  // though not, today, the right something. `till.tsx` keeps its own
-  // `ERROR_KEY` map rather than the shared one `audit.tsx` and
-  // `settings_.users.tsx` read from `@/lib/fields`, and that map has no
-  // `forbidden` entry, so a cashier refused at the till reads the generic
-  // "Une erreur est survenue." instead of the "you don't have permission"
-  // sentence the shared map already knows. `apps/desktop/src/routes/` is
-  // out of scope for this branch (the task's own instruction), so this
-  // locks down what the screen actually does today rather than what it
-  // should; the fix belongs in `till.tsx`'s `ERROR_KEY`, and it is reported
-  // as a product gap rather than patched here.
-  await expect(page.getByRole("alert").filter({ hasText: t("error_unknown") })).toBeVisible();
+  // And the screen says the right thing. This assertion read
+  // `error_unknown` when the spec was first written, because the till kept
+  // its own copy of the error table and that copy had no entry for a
+  // refused permission. Writing this spec is what found it; ten screens
+  // were carrying a copy and six of them could not say the word. There is
+  // one table now (`@/lib/fields`) and this is what holds the till to it.
+  await expect(page.getByRole("alert").filter({ hasText: t("error_forbidden") })).toBeVisible();
 });
 
 test("a line priced under the product's card price is refused, and names that permission", async ({
@@ -405,17 +400,15 @@ test("a credit sale past the limit is refused, and refused again — differently
   expect(secondBody.error.permission).toBe("override_credit_block");
 
   // A `forbidden` carries neither figure `creditRefusal`
-  // (`apps/desktop/src/routes/-till/payment.tsx`) reads for, so the
-  // till's own credit panel drops away and a plain alert takes its place —
-  // the trap the milestone's review named: two refusals that look alike on
-  // screen and are not the same guard. What the alert says is today's
-  // "Une erreur est survenue." rather than a named permission, the same
-  // `till.tsx` `ERROR_KEY` gap the discount test above documents; this
-  // assertion is on the panel disappearing and something replacing it, and
-  // the two response bodies above are what actually tells the refusals
-  // apart.
+  // (`apps/desktop/src/routes/-till/payment.tsx`) reads for, so the till's
+  // own credit panel drops away and a plain alert takes its place. That is
+  // the visible difference between the two refusals, and it is the trap the
+  // milestone's review named: two refusals that could have looked alike on
+  // screen. They do not. The limit shows the two figures; the permission
+  // says what the cashier may not do. The two response bodies above are
+  // what tells them apart for certain.
   await expect(page.getByTestId("till-balance-after")).toBeHidden();
-  await expect(page.getByRole("alert").filter({ hasText: t("error_unknown") })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: t("error_forbidden") })).toBeVisible();
 
   // Nothing was written by either refusal: the ledger the sale would have
   // moved is still exactly what it was before the till ever asked.

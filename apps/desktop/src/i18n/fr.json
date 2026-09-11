@@ -649,9 +649,6 @@
   "lock_title": "La caisse est verrouillée",
   "lock_unlock": "Déverrouiller",
   "lock_switch_user": "Se connecter comme quelqu’un d’autre",
-  "role_owner": "Propriétaire",
-  "role_manager": "Gérant",
-  "role_cashier": "Caissier",
   "topbar_lock_now": "Verrouiller maintenant",
   "topbar_sign_out": "Se déconnecter",
   "nav_audit_log": "Journal d'audit",
@@ -667,6 +664,5 @@
   "audit_page_next": "Suivant",
   "col_user": "Utilisateur",
   "col_entity": "Fiche",
-  "col_change": "Changement",
-  "error_forbidden": "Vous n'avez pas la permission de voir ceci."
+  "col_change": "Changement"
 }

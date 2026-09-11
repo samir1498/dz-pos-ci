@@ -57,6 +57,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, cashQueryKey, expenseCategoriesQueryKey, expensesQueryKey } from "@/api";
 import { isKey, useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 import { useShopToday } from "@/lib/clock";
 import { cn } from "@/lib/utils";
 
@@ -75,25 +76,7 @@ const CATEGORY_KEY: Record<string, Key> = {
   other: "expense_category_other",
 };
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  not_found: "error_not_found",
-  money: "error_money",
-  storage: "error_storage",
-  restart_needed: "error_restart_needed",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unreachable: "error_unreachable",
-  unauthorized: "error_unauthorized",
-};
 
-/** The server sends a code, never a sentence; the UI owns the wording. */
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) {
-    return ERROR_KEY[error.code] ?? "error_unknown";
-  }
-  return "error_unknown";
-}
 
 /** The month a day falls in, `YYYY-MM`. Cut off the day rather than built
  *  from a Date: the string already comes from the shop's clock. */

@@ -68,6 +68,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 import { useSession } from "@/lib/session";
 
 import { Cart, CartHeader, ONE_UNIT_MILLI, readLine } from "./-till/cart";
@@ -85,28 +86,6 @@ export const Route = createFileRoute("/till")({ component: TillScreen });
  * setting for it yet, and a cash payment is still what makes it due. When it
  * becomes a setting, both read the setting. */
 const STAMP_ENABLED = true;
-
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  duplicate_barcode: "error_duplicate_barcode",
-  not_found: "error_not_found",
-  money: "error_money",
-  print: "error_print",
-  storage: "error_storage",
-  exhausted: "error_exhausted",
-  bad_request: "error_bad_request",
-  credit_limit: "error_credit_limit",
-  party_ids: "error_party_ids",
-  unauthorized: "error_unauthorized",
-  bad_response: "error_bad_response",
-  unreachable: "error_unreachable",
-};
-
-/** The server sends a code, never a sentence; the UI owns the wording. */
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) return ERROR_KEY[error.code] ?? "error_unknown";
-  return "error_unknown";
-}
 
 /** What the till says about a sale the server let through anyway. The switch
  * is exhaustive on the union the server publishes: a second warning added to

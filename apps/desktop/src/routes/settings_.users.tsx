@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isKey, useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 import { DEFAULT_ROLE, ROLE_LABEL, ROLES } from "@/lib/roles";
 
 export const Route = createFileRoute("/settings_/users")({ component: UsersScreen });
@@ -62,21 +63,7 @@ function toRole(value: string): RoleDto | undefined {
   return ROLES.find((r) => r === value);
 }
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  conflict: "error_conflict",
-  not_found: "error_not_found",
-  forbidden: "error_forbidden",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unauthorized: "error_unauthorized",
-  unreachable: "error_unreachable",
-};
 
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) return ERROR_KEY[error.code] ?? "error_unknown";
-  return "error_unknown";
-}
 
 /** A field validator answers with a translation key, never a sentence, and
  *  `FormField` wants the sentence. This screen keeps its own copy rather

@@ -60,6 +60,7 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { isKey, useTranslation, type Key } from "@/i18n";
+import { errorKey } from "@/lib/fields";
 import { RATES, rateCellLabel, rateLabel } from "@/lib/rate";
 import { useHasPermission } from "@/lib/session";
 
@@ -111,25 +112,7 @@ function rateOptions(
   return [...fixed, ...extra];
 }
 
-const ERROR_KEY: Record<string, Key> = {
-  validation: "error_validation",
-  duplicate_barcode: "error_duplicate_barcode",
-  not_found: "error_not_found",
-  money: "error_money",
-  storage: "error_storage",
-  restart_needed: "error_restart_needed",
-  bad_request: "error_bad_request",
-  bad_response: "error_bad_response",
-  unreachable: "error_unreachable",
-};
 
-/** The server sends a code, never a sentence; the UI owns the wording. */
-function errorKey(error: unknown): Key {
-  if (error instanceof ApiError) {
-    return ERROR_KEY[error.code] ?? "error_unknown";
-  }
-  return "error_unknown";
-}
 
 /**
  * What the fiche holds while it is being typed. The three prices are integer
