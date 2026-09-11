@@ -134,6 +134,15 @@ in `docs/architecture.md` § Release (version in the log header and
 support bundle, backup before each migration, key holder, tag-only
 builds) answered and built as answered.
 
+Not in, despite an earlier draft of this list saying so: the bon de
+livraison. `docs/features.md` § Later parks it, and the reason is fiscal
+rather than a matter of effort. Décret 05-468 articles 14 to 17 allow a
+delivery note only together with a facture récapitulative and a wilaya
+authorisation, so a shop that issued one on its own would be issuing a
+document it may not. The `bon_de_livraison` kind stays in the model, with
+no template and no screen, which is what the spec asks for and what the
+code already does.
+
 Release gates, all of them: every fiscal row in `features.md` confirmed by
 a comptable (R8); a real printed facture seen (open decision 4); the Arabic
 words file reviewed by a native speaker (R6); the article that puts NIF and
