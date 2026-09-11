@@ -4,7 +4,7 @@ slug: 'm3-stock-in-expenses-reports'
 status: 'done'
 category: 'milestone'
 created: 20260908
-tldr: 'Yearly series reset, suppliers, purchases with partial receipt, expenses, stock re-derive, dashboard, Excel; nine tasks'
+tldr: 'Yearly series reset, suppliers, purchases with partial receipt, expenses, stock re-derive, dashboard, Excel; ten tasks'
 priority: 40
 tasks:
   - id: 'T0'

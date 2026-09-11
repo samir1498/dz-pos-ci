@@ -1,15 +1,23 @@
 ---
 type: 'now'
-updated: '2026-09-10'
+updated: '2026-09-11'
 ---
 ## Active
 
-**Paused 2026-09-10 23:01 (Samir: "see ya next week time to rest").** The loop
-does not start anything on its own until Samir says so. Waiting on him: the
-host for the demo deploy (a container on Koyeb or Render, or Cloudflare
-Containers; the box-side tunnel pieces are stopped), Anouar's GitHub billing
-fix so CI runs again, and the M4 plan's tasks, which get written and shown
-to him before any agent starts.
+**Resumed 2026-09-11** after the 2026-09-10 23:01 pause ("see ya next week
+time to rest"); the loop restarts today as 20-minute ticks working M4 and
+the landing page. This morning: M4's plan gained its ten tasks
+(`context/plans/20260908-m4-team.md`, users and PINs through the closing
+sweep) and a new `landing-page` plan was written, replacing D5 of the
+design plan; the organisation's GitHub Actions budget is still capped, but
+`just ci` (branch `ci/lean-and-mirror`, not yet merged to main) now pushes a
+branch to the mirror `samir1498/dz-pos-ci` so gates run on Samir's own
+minutes without waiting on Anouar. Still open: the host for the demo
+deploy (a container on Koyeb or Render, or Cloudflare Containers — the
+box-side tunnel pieces are stopped; unverified whether Cloudflare was
+ruled out for the app itself, as opposed to the landing page's static
+Cloudflare Pages), and Anouar's GitHub billing fix itself, which the
+mirror works around but does not close.
 
 Roadmap `dz-pos-to-first-shop` (`just ctx roadmap show dz-pos-to-first-shop`
 from the repo root, full text `docs/roadmap.md`). M0 closed on 2026-09-09
@@ -20,7 +28,7 @@ statement, debt slip) merged to main on 2026-09-10 at 03:36 (PR #19,
 79732ca): nine tasks run as a loop on `m2/2026-09-09`, each with three
 review lenses and a fix round, then a combined review of the whole diff.
 M3 (stock in, expenses, reports) runs as a loop on `m3/2026-09-10` since
-2026-09-10 06:33: nine tasks in its plan, the yearly reset of every
+2026-09-10 06:33: ten tasks in its plan, the yearly reset of every
 document series first (Samir, 2026-09-10: the common practice, the year
 in the number), then suppliers, purchases with partial receipt, expenses,
 the stock re-derive, the dashboard, Excel. The two M2 refactors (T10 the
@@ -46,9 +54,10 @@ merged (docs, comments, the whole-milestone review and its two import
 fixes) and the milestone is on main since 20:18 (PR #20, merged on the
 local gates at Samir's word because GitHub Actions cannot start a job:
 the organisation's billing failed at 16:12, every run since fails in five
-seconds; Anouar fixes it in Billing and plans). Next is M4 (roles, PIN,
-permissions, audit log), whose plan needs its tasks written first; D4 (the Claude Design bundle
-lags the repo) and D5 (the Astro landing) are later.
+seconds; Anouar fixes it in Billing and plans). M4 (roles, PIN,
+permissions, audit log) gained its ten tasks on 2026-09-11; D4 (the Claude
+Design bundle lags the repo) is still open, and D5 (the Astro landing) is
+superseded by its own `landing-page` plan.
 The brand pages are on the boss site under /design/. 2026-09-10 midday: the
 WSL disk reached 125 GB from per-worktree cargo targets and the box crashed
 five times; the disk rules in CLAUDE.md and the machines process page came

@@ -8,6 +8,12 @@ tldr: 'ctx roadmap add omits category and created; plan_validate fails until add
 ---
 # pc-ctx traps seen on 2026-09-08
 
+Written 2026-09-08. The last item's per-worktree `CARGO_TARGET_DIR` advice
+is superseded: since 2026-09-10 every worktree shares one build folder with
+a claim step and a lock — current rule in
+`context/processes/20260908-machines-and-heavy-jobs.md`. The rest of this
+page still holds.
+
 - `ctx roadmap add` writes a roadmap file without `category` and
   `created` in the frontmatter, and `plan_validate` then reports two
   errors. Add `category: 'roadmap'` and `created: YYYYMMDD` by hand after
