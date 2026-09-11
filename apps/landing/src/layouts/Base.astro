@@ -6,6 +6,7 @@
 import "../styles/base.css";
 
 import markUrl from "@dzpos/design/assets/mark.svg?url";
+import shots from "../lib/shots.json";
 import { dictionaries } from "../i18n";
 import type { Locale } from "../i18n";
 import Hero from "../components/Hero.astro";
@@ -18,10 +19,20 @@ import Pricing from "../components/Pricing.astro";
 
 interface Props {
   readonly locale: Locale;
+  /** This route's own script's woff2 files (src/lib/fonts.ts), preloaded so
+   * the browser starts the font fetch alongside the HTML instead of after
+   * it discovers the @font-face rule in the route's CSS. */
+  readonly fontUrls: readonly string[];
 }
 
-const { locale } = Astro.props;
+const { locale, fontUrls } = Astro.props;
 const dict = dictionaries[locale];
+// The Lighthouse mobile run flagged the hero shot as not discoverable early
+// enough for LCP (it is the page's largest above-the-fold element in every
+// locale): a preload with the same srcset it renders with lets the browser
+// start that fetch from the HTML instead of only after it lays out
+// Hero.astro's <img>. Same file, same responsive choice, no new shot.
+const heroShot = shots.hero[locale];
 ---
 
 <!doctype html>
@@ -31,6 +42,17 @@ const dict = dictionaries[locale];
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{dict.title}</title>
     <meta name="description" content={dict.tagline} />
+    {
+      fontUrls.map((href) => (
+        <link rel="preload" as="font" type="font/woff2" href={href} crossorigin="anonymous" />
+      ))
+    }
+    <link
+      rel="preload"
+      as="image"
+      href={`/shots/${heroShot.src1x}`}
+      imagesrcset={`/shots/${heroShot.src1x} 1x, /shots/${heroShot.src2x} 2x`}
+    />
   </head>
   <body>
     <header class="site-header">
