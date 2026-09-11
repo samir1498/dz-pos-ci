@@ -336,7 +336,7 @@ fn a_virgin_shop_gives_its_seeded_owner_the_first_pin_and_it_signs_them_in() {
         users::verify_pin(&mut conn, SHOP, OWNER, "2580", noon()).is_ok(),
         "the PIN this call set does not sign the owner in"
     );
-    assert_eq!(audit_actions(&mut conn), vec!["user.set_pin"]);
+    assert_eq!(audit_actions(&mut conn), vec!["user.claim_first_pin"]);
 }
 
 #[test]
@@ -359,7 +359,7 @@ fn the_door_shuts_for_good_once_any_credential_in_the_shop_exists() {
     );
     // The owner's PIN is still the first one; the refused call wrote nothing.
     assert!(users::verify_pin(&mut conn, SHOP, OWNER, "2580", noon()).is_ok());
-    assert_eq!(audit_actions(&mut conn), vec!["user.set_pin"]);
+    assert_eq!(audit_actions(&mut conn), vec!["user.claim_first_pin"]);
 }
 
 #[test]
@@ -369,7 +369,11 @@ fn a_password_set_the_ordinary_way_shuts_the_door_too() {
     // business, not this one's) and set a password before ever touching a
     // PIN. The door is about any credential, not the PIN column alone.
     users::set_password(&mut conn, SHOP, OWNER, OWNER, "huit caracteres").unwrap();
-    assert!(users::claim_first_pin(&mut conn, SHOP, "2580").is_err());
+    let refused = users::claim_first_pin(&mut conn, SHOP, "2580");
+    assert!(
+        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "pin"),
+        "{refused:?}"
+    );
 }
 
 #[test]

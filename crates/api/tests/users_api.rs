@@ -249,3 +249,31 @@ async fn a_second_owner_may_be_switched_off_because_two_owners_is_not_the_last_o
     assert_eq!(status, StatusCode::OK, "{off}");
     assert_eq!(off["active"], false);
 }
+
+/// The isolating case `an_owner_cannot_deactivate_their_own_row` cannot be:
+/// with a second owner in the shop, `refuse_last_owner` has nothing to say
+/// about the first owner's own row, so a refusal here can only be the
+/// self-guard. Without it, an owner in a two-owner shop could switch off
+/// their own live fiche and be locked out of their own till.
+#[tokio::test]
+async fn an_owner_with_a_co_owner_still_cannot_deactivate_their_own_row() {
+    let (_dir, app) = app();
+    let (status, listed) = owner(&app, "GET", "/users", None).await;
+    assert_eq!(status, StatusCode::OK, "{listed}");
+    let owner_id = listed.as_array().unwrap()[0]["id"].as_i64().unwrap();
+
+    let (status, second) = owner(
+        &app,
+        "POST",
+        "/users",
+        Some(json!({ "name": "Nabil", "role": "owner" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{second}");
+
+    let (status, refused) =
+        owner(&app, "POST", &format!("/users/{owner_id}/deactivate"), None).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+    assert_eq!(refused["error"]["code"], "validation");
+    assert_eq!(refused["error"]["field"], "active");
+}

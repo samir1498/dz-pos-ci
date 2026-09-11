@@ -131,6 +131,19 @@ pub fn rename(
 /// Moves a user to another role. The last active owner cannot be moved off
 /// `owner` for the reason they cannot be switched off: the shop would have
 /// nobody who may hand the role back.
+///
+/// Unlike `deactivate`, this carries no unconditional `actor_id == id`
+/// refusal: an owner may move their own row today, because with two or
+/// more active owners `refuse_last_owner` has nothing to say about it and
+/// nothing on this branch calls `set_role` on a route a manager or a
+/// cashier could reach anyway. That is a fork from `deactivate`, not a rule
+/// this function decided; it exists only because nothing exposes `set_role`
+/// over HTTP yet (M4 T8). Whoever wires a role-change route should decide
+/// on purpose whether an owner may demote themselves out of `owner` in a
+/// two-owner shop, rather than inherit this gap unread: today that owner
+/// could do it, and would not be locked out by it the way a self-deactivate
+/// would, but the shop would still be down to one less owner than it meant
+/// to give up.
 pub fn set_role(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -228,7 +241,7 @@ pub fn claim_first_pin(
             conn,
             shop_id,
             owner.id,
-            audit::ACTION_SET_PIN,
+            audit::ACTION_CLAIM_FIRST_PIN,
             owner.id,
             Some(&owner),
             Some(&after),

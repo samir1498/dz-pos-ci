@@ -110,6 +110,15 @@ pub const ACTION_CLOSE_SHORT_PURCHASE: &str = "purchase.close_short";
 
 /// A user created.
 pub const ACTION_CREATE_USER: &str = "user.create";
+/// A shop's very first PIN, claimed by its own owner before anybody has ever
+/// signed in (`services::users::claim_first_pin`). Its own action rather
+/// than `ACTION_SET_PIN`: an ordinary reset is a person already inside the
+/// shop changing a credential, and this row is the shop coming into
+/// existence as far as the till is concerned, written with no session open
+/// and no actor but the owner it names. `claim_first_pin` refuses once any
+/// credential exists anywhere in the shop, so a shop's log holds at most
+/// one of these, ever, and never more.
+pub const ACTION_CLAIM_FIRST_PIN: &str = "user.claim_first_pin";
 /// A user renamed. Its own action rather than a generic update, because the
 /// name is what the sign-in screen lists and the audit log prints.
 pub const ACTION_RENAME_USER: &str = "user.rename";
