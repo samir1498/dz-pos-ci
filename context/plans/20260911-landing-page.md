@@ -9,7 +9,7 @@ priority: 40
 tasks:
   - id: 'L0'
     desc: 'The site exists: `apps/landing`, Astro with the Tailwind v4 integration, reading `@dzpos/design` for its tokens so the page and the app cannot drift; the four theme blocks are not shipped here, the page is Comptoir with one dark band, because a visitor chooses nothing. Three languages as three routes (`/`, `/en`, `/ar`) with the Arabic one RTL, the vendored Plex families, the coin mark and the language-following wordmark from the kit. `just landing` serves it, `just landing-deploy` publishes to Cloudflare Pages (project `dinar-landing`), and the build joins `pnpm -r build` so a broken page fails the gates.'
-    status: 'pending'
+    status: 'done'
   - id: 'L1'
     desc: 'The screens as product shots: a script that takes the committed e2e screenshots (`apps/desktop/e2e/screenshots/*.png`, twenty-three of them, French and Arabic) and composes the hero and the section images from them, in the browser frame the mockups use, one collage of several screens and several single shots; no hand-drawn fake UI anywhere on the page, every pixel is the real application. The script is rerun when a screen changes, and the result is committed so a visitor never waits on a build.'
     status: 'pending'
