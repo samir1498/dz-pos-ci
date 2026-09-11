@@ -10,7 +10,7 @@
 // being hypothetical. So this seeds a cache entry as one person, signs in
 // (or out) as another, and reads the entry back: gone, not merely stale.
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager, useQuery } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { ReactNode } from "react";
@@ -148,5 +148,109 @@ describe("the query cache does not survive a change of who is signed in", () => 
     });
     await waitFor(() => expect(result.current.status).toBe("signed-out"));
     expect(client.getQueryData(["audit-log"])).toBeUndefined();
+  });
+});
+
+// The defect this proves: `refetchOnWindowFocus` is on at its default
+// (`main.tsx` sets `staleTime` and `retry` and nothing else), and every
+// screen's query carries the session credential — `session::resolve`
+// (`crates/api/src/session.rs`) slides `last_seen_at` on every request that
+// reaches it. So a till covered by `LockScreen` (which does not unmount the
+// shell) never timed out on the server as long as a window kept getting
+// focus back. The claim to prove is the one in the brief: while locked, no
+// request reaches the API when the window is focused again, and the unlock
+// request still works.
+describe("locked, the shell's queries stop asking the API on a window focus", () => {
+  afterEach(() => {
+    // `focusManager` is a module-level singleton, shared with every other
+    // test in this process — an override left behind here would decide
+    // whether an unrelated test's query refetches on focus.
+    focusManager.setFocused(undefined);
+  });
+
+  test("a window focus while locked reaches no query, and the unlock call still answers", async () => {
+    const client = new QueryClient({
+      // `main.tsx`'s real defaults, not `retry: false`: this is the shape
+      // every screen's query actually has, focus refetch included.
+      defaultOptions: { queries: { staleTime: 30_000, retry: 2 } },
+    });
+    const dashboard = { calls: 0 };
+
+    // Stands in for a real screen's query (`routes/dashboard.tsx` and
+    // every other route inside the shell): same session-carrying fetch,
+    // gated on being signed in the way a route only rendered once
+    // `status === "signed-in"` (`__root.tsx`) is, and stale the instant it
+    // lands — a till locked for the idle time is always well past
+    // `staleTime: 30_000`, so a suppressed focus refetch is only provable
+    // against a query that would otherwise actually be stale enough to
+    // fire one.
+    function DashboardProbe() {
+      const { status } = useSession();
+      useQuery({
+        queryKey: ["dashboard"],
+        queryFn: async (): Promise<unknown> => {
+          const res = await fetch("http://test.local/dashboard");
+          return res.json();
+        },
+        staleTime: 0,
+        enabled: status === "signed-in",
+      });
+      return null;
+    }
+
+    fetchMock.mockImplementation((input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/auth/login")) {
+        return Promise.resolve(json(200, { me: OWNER, token: "owner-token", idle_minutes: 15 }));
+      }
+      if (url.endsWith("/dashboard")) {
+        dashboard.calls += 1;
+        return Promise.resolve(json(200, { total: dashboard.calls }));
+      }
+      return Promise.resolve(notFound());
+    });
+
+    const { result } = renderHook(() => useSession(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>
+          <SessionProvider>
+            <DashboardProbe />
+            {children}
+          </SessionProvider>
+        </QueryClientProvider>
+      ),
+    });
+    await waitFor(() => expect(result.current.status).toBe("signed-out"));
+
+    await act(async () => {
+      await result.current.signInWithPassword("Propriétaire", "developpement");
+    });
+    await waitFor(() => expect(result.current.status).toBe("signed-in"));
+    await waitFor(() => expect(dashboard.calls).toBe(1));
+
+    act(() => {
+      result.current.lockNow();
+    });
+    expect(result.current.locked).toBe(true);
+
+    // The window becoming visible again while locked — the event this
+    // version of the library actually drives a focus refetch off
+    // (`query-core`'s `FocusManager` listens to `visibilitychange`, not a
+    // `focus` event; `session.tsx`'s override is written to win either
+    // way, but this is the real one).
+    await act(async () => {
+      window.dispatchEvent(new Event("visibilitychange"));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(dashboard.calls).toBe(1);
+
+    // The unlock call itself must still work while the focus manager is
+    // telling every query the window is blurred: it is a plain fetch
+    // through `api.login`, never a react-query query or mutation, so
+    // nothing here should have been able to stop it.
+    await act(async () => {
+      await result.current.signInWithPassword("Propriétaire", "developpement");
+    });
+    expect(result.current.locked).toBe(false);
   });
 });

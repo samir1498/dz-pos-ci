@@ -27,7 +27,7 @@
 
 import { ApiError } from "@dzpos/shared";
 import type { LoginDto, MeDto } from "@dzpos/shared";
-import { useQueryClient } from "@tanstack/react-query";
+import { focusManager, useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
   useCallback,
@@ -206,6 +206,43 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [status, forgetSession]);
+
+  // While locked, tell TanStack Query the window is not focused, so no
+  // screen under the overlay refetches when the OS hands this window focus
+  // back (`refetchOnWindowFocus` is on at its default, `main.tsx` sets
+  // nothing else). Every one of those requests carries the session
+  // credential and `session::resolve` (`crates/api/src/session.rs`) slides
+  // `last_seen_at` on every one that reaches it, so a till left locked with
+  // a window that keeps getting focus never timed out on the server even
+  // though the glass stayed covered. `setFocused(false)` is a manual
+  // override that sticks regardless of which real event fires next (this
+  // version of the library drives it off `visibilitychange`, not a `focus`
+  // event, and the override wins either way); `setFocused(undefined)` on
+  // unlock hands the decision back to the library's own default.
+  //
+  // Two things this does not touch, deliberately:
+  //
+  // - The unlock call. `signInWithPin` / `signInWithPassword` below call
+  //   `api.login` directly, a plain fetch through `@dzpos/shared`'s client
+  //   and never a react-query query or mutation, so `focusManager` saying
+  //   the window is blurred has nothing to say about it — a query's
+  //   `refetchOnWindowFocus` decides whether a mount auto-refetches, not
+  //   whether a call may be made. Same for the revalidate-on-focus check
+  //   just above (`api.me()`): it is a plain `window.addEventListener`
+  //   handler, not a query, and `GET /auth/me` does not slide the idle
+  //   clock either, so it is left running while locked on purpose — a
+  //   session ended elsewhere is still worth finding out about from behind
+  //   the lock screen. `session.test.tsx` proves the login call still
+  //   answers while this effect has told the manager the window is blurred.
+  // - The idle timer below. It is a client-side `setTimeout` armed and
+  //   cleared by `pointerdown` / `keydown` on `window`, never by query
+  //   focus state, so a blurred focus manager cannot stop it noticing a
+  //   typed PIN: the keystrokes that answer the lock screen are the same
+  //   ones that would have reset the timer had it still been running, and
+  //   the effect below already stops arming it the moment `locked` is true.
+  useEffect(() => {
+    focusManager.setFocused(locked ? false : undefined);
+  }, [locked]);
 
   // The idle timer. Counted from the shop's own figure, the same one the
   // lock screen would show if it asked again, reset by a pointer or a key
