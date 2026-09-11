@@ -15,7 +15,7 @@ tasks:
     status: 'pending'
   - id: 'L2'
     desc: 'The copy, French first, for a shopkeeper and not for a developer: what it is (the till, the facture, the stock, the suppliers, the dashboard), what it is not (no monthly cloud bill, no internet needed at the counter), the fiscal answers an Algerian owner asks first (a numbered facture in its yearly series, the stamp on cash, TVA per rate, the amount in words), and the three languages as a feature rather than a footnote. English and Arabic are translations of the same page, reviewed for Arabic by a native speaker before it goes public (R6 covers the printed words; this is the same rule for the page).'
-    status: 'pending'
+    status: 'done'
   - id: 'L3'
     desc: 'The sections: a hero that shows the till and says what it does in one line; the four pieces (sell, invoice, stock, know); the fiscal block; a band of screens; who it is for; the price and how to get it, which is a form that writes to nothing until Anouar decides the model, so it collects a name, a phone and a wilaya and sends them to an address he reads. No fake testimonials, no invented shop names, no logos of shops that do not use it.'
     status: 'pending'
