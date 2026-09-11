@@ -5,9 +5,11 @@
 // call like any other (`useSession().signInWithPin` /
 // `signInWithPassword`), just one that already knows who it is asking for.
 
+import { KeyRound, User } from "lucide-react";
 import { useState } from "react";
 
 import { FormField } from "@/components/FormField";
+import { Icon } from "@/components/Icon";
 import { Keypad, keyedDigits, type KeypadKey } from "@/components/Keypad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,21 +110,24 @@ function Feedback({ attempt }: { attempt: ReturnType<typeof useLoginAttempt> }) 
   return null;
 }
 
-/** Which unlock control to offer: the door the person came in through.
- * `method` is remembered from the sign-in call that succeeded (`lib/
- * session.tsx`), never worked out from the role, so an owner who happened
- * to sign in with a PIN this morning unlocks with the same PIN tonight. A
- * session resumed from the browser's cookie (no sign-in call ran on this
- * window) has no method to remember; the password form is the one that
- * never needs anything this window doesn't already have, `me.name`. */
-function unlockMethod(method: AuthMethod | null): AuthMethod {
-  return method ?? "password";
-}
-
 export function LockScreen() {
   const { t } = useTranslation();
   const { me, method, signOut } = useSession();
+  // The door the person came in through, remembered from the sign-in call
+  // that succeeded (`lib/session.tsx`) and never worked out from the role:
+  // an owner who happened to sign in with a PIN this morning unlocks with
+  // the same PIN tonight. A session resumed from the browser's cookie (no
+  // sign-in call ran on this window) has no method to remember, and
+  // forcing the password form on that person was its own bug: the one
+  // unlock door they might not have (a cashier who only has a PIN, never a
+  // password) is the only one offered, and their sole way out was "sign in
+  // as someone else", which signs out and drops the very cart this screen
+  // exists to keep. So an unknown method offers both, defaulting to the
+  // password form (the one every session can answer, cookie or not) with a
+  // switch to the PIN pad right there next to it.
+  const [mode, setMode] = useState<AuthMethod>("password");
   if (me === null) return null;
+  const shown = method ?? mode;
 
   return (
     <div
@@ -134,11 +139,19 @@ export function LockScreen() {
           <h2 className="text-lg font-semibold">{t("lock_title")}</h2>
           <p className="text-sm text-muted-foreground">{me.name}</p>
         </div>
-        {unlockMethod(method) === "pin" ? (
-          <PinUnlock userId={me.user_id} />
-        ) : (
-          <PasswordUnlock name={me.name} />
-        )}
+        {shown === "pin" ? <PinUnlock userId={me.user_id} /> : <PasswordUnlock name={me.name} />}
+        {method === null ? (
+          <Button
+            type="button"
+            variant="ghost"
+            data-testid="lock-mode-switch"
+            className="mt-3 w-full gap-2"
+            onClick={() => setMode(mode === "pin" ? "password" : "pin")}
+          >
+            <Icon as={mode === "pin" ? KeyRound : User} size={18} />
+            {mode === "pin" ? t("signin_pin_switch_to_password") : t("signin_password_switch_to_pin")}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="link"

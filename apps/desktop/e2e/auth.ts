@@ -4,7 +4,7 @@
 //
 // What the sign-in screen itself does, the PIN pad's two stages, the wrong
 // answer and its counted-down wait, the password form, is exercised for
-// real in `signin.spec.ts` and `lock.spec.ts`, through the actual keys and
+// real in `signin.spec.ts` and `till-lock.spec.ts`, through the actual keys and
 // the actual fields. Every other spec only wants to be past the door, so
 // this signs in once through the API, before the browser context's first
 // navigation, and every `goto` and `reload` after that carries the session

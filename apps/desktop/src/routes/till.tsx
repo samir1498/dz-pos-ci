@@ -68,6 +68,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation, type Key } from "@/i18n";
+import { useSession } from "@/lib/session";
 
 import { Cart, CartHeader, ONE_UNIT_MILLI, readLine } from "./-till/cart";
 import type { CartLine } from "./-till/cart";
@@ -139,6 +140,12 @@ const MONEY_ERROR_KEY: Record<string, Key> = {
 export function TillScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  // Not a role, not a permission, just the one flag the lock overlay
+  // itself reads: whether this window is covered right now. `__root.tsx`
+  // makes the shell `inert` while locked, which fences a click, a Tab and
+  // a `.focus()` call, but the F9 listener below sits on `window`, above
+  // any subtree `inert` can reach, so it has to check this for itself.
+  const { locked } = useSession();
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState("");
@@ -408,11 +415,17 @@ export function TillScreen() {
     function onKey(event: KeyboardEvent) {
       if (event.key !== "F9") return;
       event.preventDefault();
+      // A window listener answers to no DOM focus and no `inert`: F9 fired
+      // from inside the lock screen's own PIN field would otherwise reach
+      // this and pay, in exactly the mid-sale state an idle lock drops
+      // into. Checked here, not folded into `submit`/`canPay`, because
+      // this is the one path `inert` on the shell cannot cover.
+      if (locked) return;
       submitRef.current();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [locked]);
 
   function onSearchKey(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Escape") {

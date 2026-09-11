@@ -18,6 +18,7 @@ import {
 } from "@tanstack/react-router";
 import type { CategoryDto, CustomerDto, ProductDto, SaleDto, SettingsDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
+import { SessionProvider } from "@/lib/session";
 import { TillScreen } from "./till";
 
 // The two products of the till_cash_sale_two_rates fixture case: 400,00 DA
@@ -320,9 +321,17 @@ function mount(lang: Lang = "fr") {
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        {/* The router this test builds is not the app's, and the app's is
-            what the `Register` declaration types `Link` against. */}
-        <RouterProvider router={router} />
+        {/* TillScreen reads `useSession()` for the one flag that guards F9
+            under a lock (`locked`); this test never locks anything, so the
+            stub's catch-all 200 for `/auth/me` and `/auth/idle` is enough
+            to keep the provider out of a rejected-promise churn, and
+            `locked` stays the `false` it starts at regardless of what
+            those two calls answer. */}
+        <SessionProvider>
+          {/* The router this test builds is not the app's, and the app's is
+              what the `Register` declaration types `Link` against. */}
+          <RouterProvider router={router} />
+        </SessionProvider>
       </QueryClientProvider>
     </I18nProvider>,
   );

@@ -103,11 +103,16 @@ test.describe("the locked-out wait", () => {
     await pressPad(page, [...OWNER_PIN]);
     await pressEnter(page);
 
-    await expect(page.getByTestId("signin-retry")).toContainText("3");
+    // The whole formatted string, not a substring: `toContainText("3")`
+    // would also pass a client that hardcoded 30 seconds and never read
+    // `retry_after_seconds` at all.
+    const retryText = (seconds: number): string =>
+      `${t("signin_error_locked_out")} ${t("signin_retry_seconds").replace("{n}", String(seconds))}`;
+    await expect(page.getByTestId("signin-retry")).toHaveText(retryText(3));
     await expect(page.getByTestId("keypad").getByRole("button", { name: "1" })).toBeDisabled();
     // The clock ticks down on its own and re-enables the pad at zero,
     // without a second answer from the server.
-    await expect(page.getByTestId("signin-retry")).toContainText("1", { timeout: 5_000 });
+    await expect(page.getByTestId("signin-retry")).toHaveText(retryText(1), { timeout: 5_000 });
     await expect(page.getByTestId("keypad").getByRole("button", { name: "1" })).toBeEnabled({
       timeout: 5_000,
     });

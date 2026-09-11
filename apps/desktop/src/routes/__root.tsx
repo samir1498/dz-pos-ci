@@ -32,9 +32,24 @@ function RootLayout() {
         // till is locked: `LockScreen` below is an overlay on top of this,
         // never a replacement for it, which is what keeps a cart on the till
         // alive while the screen is covered.
-        <AppShell>
-          <Outlet />
-        </AppShell>
+        //
+        // `inert` while locked, not just visually covered: the overlay sits
+        // above this in the stacking order, which stops a click, but a key
+        // typed by a scanner or a keyboard goes to whatever element holds
+        // DOM focus, not to whatever is on top, and nothing about being
+        // covered moves focus away on its own. `inert` does: the browser
+        // blurs a focused element the moment its subtree turns inert, drops
+        // it from the tab order, and makes `.focus()` a no-op on it, so a
+        // search box that had focus when the till went idle stops being
+        // reachable at all, by a click, a Tab, a scan or an effect calling
+        // `.focus()` on it again. `className="contents"` keeps the wrapper
+        // this needs out of AppShell's own layout — `inert` cascades to a
+        // whole subtree regardless of `display`, so it costs nothing here.
+        <div inert={locked} className="contents">
+          <AppShell>
+            <Outlet />
+          </AppShell>
+        </div>
       )}
       {status === "signed-in" && locked ? <LockScreen /> : null}
     </div>

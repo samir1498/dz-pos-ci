@@ -5,8 +5,8 @@
 // `ThemeSwitcher`'s `THEME_LABEL` uses for a theme name: a fourth role
 // added to the core would fail to compile here until it has a label, and
 // nothing in this file branches on which one it is. That is what
-// architecture.md rule 2 asks for and what the next task's grep test will
-// hold every screen to; this one already reads it.
+// architecture.md rule 2 asks for, and `role.test.ts` holds every file
+// under `src/` to it; this one already reads it.
 
 import type { RoleDto } from "@dzpos/shared";
 import { LogOut, Lock, User } from "lucide-react";
@@ -24,7 +24,7 @@ import {
 import { useTranslation, type Key } from "@/i18n";
 import { useSession } from "@/lib/session";
 
-const ROLE_LABEL: Readonly<Record<RoleDto, Key>> = {
+export const ROLE_LABEL: Readonly<Record<RoleDto, Key>> = {
   owner: "role_owner",
   manager: "role_manager",
   cashier: "role_cashier",

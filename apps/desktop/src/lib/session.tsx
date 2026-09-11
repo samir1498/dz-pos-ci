@@ -9,11 +9,15 @@
 // file's, and it is what lets `just e2e` sign in once per run instead of
 // once per spec.
 //
-// The role never reaches a screen as a comparison. Every route past the
-// sign-in screen reads `me.permissions`, the array `GET /auth/me` and
-// `POST /auth/login` both hand back untouched (architecture.md rule 2); the
-// next task's grep test holds that no screen spells a role string, and this
-// file gives screens nothing to spell one against.
+// The role never reaches a screen as a comparison. Today the only screen
+// that reads it at all is the topbar's `UserMenu`, and it reads it as a
+// single value — a lookup into a label, `ROLE_LABEL[me.role]`, the same
+// shape `ThemeSwitcher` uses for a theme name — never a branch on which
+// role it is; `role.test.ts` holds every file under `src/` to that, the
+// way `theme.test.ts` holds them to never branching on a theme. `GET
+// /auth/me` and `POST /auth/login` both hand back `permissions` too
+// (architecture.md rule 2), untouched, for the day a screen needs to gate
+// something finer than a label on it; nothing reads that field yet.
 //
 // Locking is a client-side idea and does not touch the server session: the
 // idle timer here only raises a flag `__root.tsx` reads to show the lock
@@ -128,11 +132,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setIdleMinutes(session.idle_minutes);
       setLocked(false);
       setStatus("signed-in");
-      // Whatever a screen asked for before anybody was signed in answered
-      // 401 and sits in the cache as a refusal; a fresh sign-in (and an
-      // unlock, which is the same call) asks again now that there is
-      // someone to answer for.
-      void queryClient.invalidateQueries();
+      // `clear()`, not `invalidateQueries()`: an invalidated query still
+      // renders its last answer while the refetch is in flight, and
+      // `staleTime: 30_000` (`main.tsx`) means a query that was already
+      // fresh does not even refetch on its own for half a minute. Either
+      // way a cashier signing in right after an owner, on the same
+      // machine, would be served the owner's cached rows for a while
+      // without the server ever being asked — the audit log screen is
+      // where that stopped being hypothetical. `clear()` drops the data
+      // itself, not just its freshness, so the next read has nothing
+      // stale to render and has to ask. Paid for on every unlock too
+      // (`establish` is the same call), not only a fresh sign-in: nothing
+      // here can tell an unlock apart from a different person sitting
+      // down, and a wasted refetch is a far smaller cost than getting
+      // that distinction wrong.
+      queryClient.clear();
     },
     [queryClient],
   );

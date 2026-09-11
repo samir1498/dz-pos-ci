@@ -181,12 +181,17 @@ second language on; use the looped `just e2e` or a single `--project`.
   `till-facture.spec.ts`, a facture on credit that leaves the ticket series
   alone, and a facture paid in cash carrying its TVA recap and its droit de
   timbre;
-  `till-lock.spec.ts`, the brief's own proof for M4 T4: a product scanned
-  into the cart, the till locked from the topbar's user menu, and the same
-  quantity box read back after unlocking with the owner's password, which
-  is what a session resumed from the `./auth` fixture's cookie unlocks
-  with (`LockScreen.tsx`'s `unlockMethod`, no `AuthMethod` remembered on a
-  window that never made a sign-in call of its own);
+  `till-lock.spec.ts`, the brief's own proof for M4 T4, in three parts: a
+  product scanned into the cart survives being locked from the topbar's
+  user menu and read back after unlocking with the owner's password
+  (what a session resumed from the `./auth` fixture's cookie unlocks with,
+  no `AuthMethod` remembered on a window that never made a sign-in call of
+  its own); the covered till answers to nothing while it is locked — a
+  forced `.focus()` on the search box is a no-op, a scanned barcode lands
+  nowhere, and F9 does not pay, even though the basket it would have paid
+  is a real one; and a session with no remembered method offers both
+  unlock doors rather than stranding a PIN-only cashier behind the
+  password form;
   `till-reversals-and-quotations.spec.ts`, a partial avoir, a whole
   cancellation, the credit it leaves and a proforma;
   `zz-exports-and-labels.spec.ts`, the four workbooks read back as real
@@ -352,6 +357,7 @@ here. These are all of them.
 | `signin-error`, `signin-retry` | `SignInScreen.tsx` | The refusal and the counted-down wait, mutually exclusive so a test reads whichever is on screen without a role query matching both a message and a countdown. |
 | `lock-screen` | `LockScreen.tsx` | The overlay; a test asserts it covers the shell without asserting the shell is gone, which is the whole point of it. |
 | `lock-pin-display`, `lock-password`, `lock-unlock` | `LockScreen.tsx` | The unlock control, one of a PIN pad or a password field depending on how the session was opened (`AuthMethod`). |
+| `lock-mode-switch` | `LockScreen.tsx` | Only present when the session carries no remembered `AuthMethod` (resumed from a cookie): switches between the two unlock doors, so a cashier who only has a PIN is never stranded behind the password form. |
 | `lock-error`, `lock-retry` | `LockScreen.tsx` | As `signin-error` / `signin-retry`, for the same reason. |
 | `lock-switch-user` | `LockScreen.tsx` | Ends the session instead of unlocking it; a link beside a button, so a role query by name is not enough on its own. |
 | `user-menu-trigger`, `user-menu` | `UserMenu.tsx` | The topbar's signed-in user; the trigger carries the name, which is data and not a translated word a test can ask for by text. |
