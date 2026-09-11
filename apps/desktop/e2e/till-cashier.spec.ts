@@ -512,9 +512,15 @@ test("purchases and the dashboard refuse a cashier at the server too, sidebar hi
   // routes M4 T5's review gated for the same reason (M4 T5 review,
   // 2026-09-11): the entries are gone, an ordinary one beside them is not.
   await expect(page.getByTestId("nav-till")).toBeVisible();
-  await expect(page.getByTestId("nav-suppliers")).toBeVisible();
+  await expect(page.getByTestId("nav-customers")).toBeVisible();
   await expect(page.getByTestId("nav-dashboard")).toHaveCount(0);
   await expect(page.getByTestId("nav-purchases")).toHaveCount(0);
+  // Suppliers and expenses joined them in the closing review: both routes
+  // were readable by a cashier on the server while the dashboard that sums
+  // them was refused. Customers above is the ordinary entry beside them, and
+  // it is the one a cashier genuinely needs to sell on credit.
+  await expect(page.getByTestId("nav-suppliers")).toHaveCount(0);
+  await expect(page.getByTestId("nav-expenses")).toHaveCount(0);
 
   // Typing the addresses anyway. Matched on the API's own origin and an
   // exact path, not a suffix: Vite's dev server answers its own GET
@@ -607,4 +613,47 @@ test("a cashier reading the product list gets its cost fields redacted, not mere
   expect(cashierRow).toBeDefined();
   expect(cashierRow?.cost_centimes).toBeNull();
   expect(cashierRow?.wholesale_centimes).toBeNull();
+});
+
+test("the shop's money is refused a cashier on every route that carries it", async ({
+  context,
+  request,
+}) => {
+  // The closing review's finding, in the browser rather than in a unit
+  // test: five reads carried what the shop spends and what it owes, and
+  // every one of them was open to a cashier while the screen that sums the
+  // figures was refused. Asked directly, with a real cashier session and no
+  // screen in the way, because a screen that never draws the link is not
+  // what stops anybody.
+  await signInOwner(request);
+  await signInCashier(context.request);
+  const api = context.request;
+
+  const month = day(0).slice(0, 7);
+  const asked: readonly (readonly [string, string])[] = [
+    [`/expenses?month=${month}`, "see_reports"],
+    [`/cash?month=${month}`, "see_reports"],
+    ["/suppliers", "see_cost_and_margin"],
+    ["/suppliers/1/ledger", "see_cost_and_margin"],
+    ["/backups", "edit_settings"],
+  ];
+
+  for (const [path, permission] of asked) {
+    const res = await api.get(`${apiUrl()}${path}`, { headers: apiHeaders() });
+    expect(res.status(), `${path} answered a cashier`).toBe(403);
+    const body: ErrorBody = await res.json();
+    expect(body.error.code, path).toBe("forbidden");
+    // The permission the route's own row names, not merely a refusal: a
+    // 403 for some other reason would pass the status check above and
+    // prove nothing about the gate.
+    expect(body.error.permission, path).toBe(permission);
+  }
+
+  // The owner reads the same five, so what was refused is the cashier and
+  // not the route. Without this the five assertions above would pass just
+  // as well against a route that is broken for everybody.
+  for (const [path] of asked) {
+    const res = await request.get(`${apiUrl()}${path}`, { headers: apiHeaders() });
+    expect(res.status(), `${path} refused the owner as well`).not.toBe(403);
+  }
 });

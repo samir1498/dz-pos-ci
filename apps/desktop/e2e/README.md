@@ -415,6 +415,23 @@ How to tell the two apart:
   entry, and a `-24165` on `till.png` was the cashier spec inserting a sale
   ahead of `till.spec.ts` and moving the ticket number.
 
+There is a third reason a screenshot changes with nothing behind it, and it
+is not noise: **`settings-ar.png` and its siblings carry a live clock.** The
+backups block shows the day and time of the last backup, which is the moment
+the suite ran, so those files change every hour whatever the code does.
+Measured the same day: the whole difference between two runs of
+`settings-ar.png` was `16:22` becoming `17:22`, 684 differing subpixels out
+of 9.4 million, all of them inside one 35-row band. Nothing else on the page
+moved. If a settings screenshot is the only thing in a diff, check the clock
+before looking for anything else.
+
+Telling the two apart is worth the minute it costs, because the numbers
+overlap. Rasterisation noise on an Arabic page runs to a few hundred bytes,
+not tens: `theme-observe-ar.png` moved 445 bytes on a run that changed
+nothing, spread over 134 rows across the full height of the page. A change
+scattered over the whole image is rasterisation; a change inside one band is
+something on the screen.
+
 The second of those is the thing to remember about this suite: every spec
 shares one API process over one SQLite file, in filename order, so adding a
 spec changes what every spec after it sees. That is by design (the README
