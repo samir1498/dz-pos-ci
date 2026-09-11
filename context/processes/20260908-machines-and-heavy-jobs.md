@@ -126,6 +126,18 @@ disk hit zero five times in an hour.
   invocation at a time across every checkout; the second waits. A gate
   run that overlapped another worktree's build is not a gate run: rerun
   it through `just`.
+- **Never background a long check and wait on a process check.** Run
+  `just gates`, `just test`, `just clippy` and `just e2e` in the foreground
+  and read the output. This cost four agents about an hour each on
+  2026-09-11 and it is the single most expensive mistake made in this repo.
+  The reason it is so expensive here specifically: because of the `flock`
+  rule above, a cargo run that is queued behind another worktree's run looks
+  exactly like a cargo run that has hung, and a watcher polling for a
+  process cannot tell the two apart. Two of the four were worse than a
+  simple wait: one watched a process name that matched a *different*
+  agent's run and could never have exited, and one waited on a run that had
+  already finished and been cleaned up. A foreground run that takes twenty
+  minutes because it is queued is a foreground run that is working.
 - A worktree is torn down with `just worktree-rm` the moment its branch
   merges. Moving a worktree to a new task to keep its warm cache (what the
   loop did all morning) is what kept four `target/` folders alive.
