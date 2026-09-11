@@ -11,7 +11,7 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
-use crate::models::user::{Credentials, Role, User, UserRow, UserRowWrite};
+use crate::models::user::{Credentials, Role, User, UserRow, UserRowWrite, PIN_UNSET};
 use crate::schema::users;
 
 /// The shop's users, the active ones first, then alphabetical. The same order
@@ -213,6 +213,48 @@ pub fn count_active_with_role(
         .filter(users::role.eq(role))
         .count()
         .get_result(conn)?)
+}
+
+/// Whether any user of this shop has ever had a PIN or a password set.
+/// `services::users::claim_first_pin` is the one caller: it is the shop-wide
+/// half of "nobody has ever signed into this shop", the fact that keeps the
+/// bootstrap door from reopening once an owner has set a credential the
+/// ordinary way.
+pub fn any_credential_set(conn: &mut SqliteConnection, shop_id: i32) -> Result<bool, CoreError> {
+    let found: Option<i32> = users::table
+        .filter(users::shop_id.eq(shop_id))
+        .filter(
+            users::pin_hash
+                .ne(PIN_UNSET)
+                .or(users::password_hash.is_not_null()),
+        )
+        .select(users::id)
+        .first(conn)
+        .optional()?;
+    Ok(found.is_some())
+}
+
+/// The shop's one active owner, when there is exactly one. Every other
+/// caller in this crate is handed an id by a session or by a caller who
+/// already has one; `claim_first_pin` is the one place nothing has signed in
+/// yet to say which row it means, so it asks for the row instead of the id.
+pub fn sole_active_owner(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+) -> Result<Option<User>, CoreError> {
+    let mut rows: Vec<UserRow> = users::table
+        .filter(users::shop_id.eq(shop_id))
+        .filter(users::active.eq(true))
+        .filter(users::role.eq(Role::Owner))
+        .select(UserRow::as_select())
+        .load(conn)?;
+    if rows.len() != 1 {
+        return Ok(None);
+    }
+    // `pop` rather than indexing: the length check above is the only proof
+    // there is exactly one row, and this is the one way to take it without
+    // restating that as an index.
+    Ok(rows.pop().map(User::from))
 }
 
 /// Whether another row of this shop already answers to that name. `exclude`

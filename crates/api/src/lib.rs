@@ -435,7 +435,8 @@ pub fn router_with_origin(
     let auth = Router::new()
         .route("/auth/login", post(routes::auth::login))
         .route("/auth/logout", post(routes::auth::logout))
-        .route("/auth/me", get(routes::auth::me));
+        .route("/auth/me", get(routes::auth::me))
+        .route("/auth/first-pin", post(routes::auth::claim_first_pin));
     let guarded = Router::new()
         .route("/auth/idle", get(routes::auth::idle))
         .route("/backups", get(routes::backups::list))
@@ -536,6 +537,13 @@ pub fn router_with_origin(
             "/suppliers/{id}/statement",
             get(routes::suppliers::statement),
         )
+        .route(
+            "/users",
+            get(routes::users::list).post(routes::users::create),
+        )
+        .route("/users/{id}/pin", post(routes::users::set_pin))
+        .route("/users/{id}/deactivate", post(routes::users::deactivate))
+        .route("/users/{id}/reactivate", post(routes::users::reactivate))
         // Every route above takes its actor from the session; nothing reads a
         // seeded owner id any more.
         .layer(from_fn_with_state(state.clone(), session::require));

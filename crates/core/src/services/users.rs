@@ -184,6 +184,59 @@ pub fn set_pin(
     })
 }
 
+/// The one door into a shop nobody has ever signed into. `ManageUsers` is
+/// the owner's alone, and the owner cannot hold a session to use it before
+/// somebody has set their PIN, which is what this call is for: it needs no
+/// actor and no session, and it acts on the shop's own owner rather than on
+/// an id a caller names, because nobody signed in yet is who is supposed to
+/// choose one.
+///
+/// Two refusals, and each is the whole of a rule that would otherwise be
+/// argued over in an API handler:
+///
+/// - any credential anywhere in the shop already exists. The door shuts for
+///   good the moment an owner signs in the ordinary way and sets or resets a
+///   PIN through `set_pin`, which is `ManageUsers`, behind a session. A
+///   second call here after that is not a retry, it is a stranger with the
+///   launch token (the desktop process on this machine) trying the door
+///   again after it closed;
+/// - the shop does not have exactly one active owner to give the PIN to.
+///   Nothing to act on, or more than one candidate, and this call refuses
+///   rather than guess which row a caller meant.
+pub fn claim_first_pin(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    pin: &str,
+) -> Result<User, CoreError> {
+    validate_pin(pin)?;
+    let hash = hash(pin)?;
+    conn.transaction(|conn| {
+        if repo::any_credential_set(conn, shop_id)? {
+            return Err(CoreError::validation(
+                "pin",
+                "this shop has already been signed into; an owner resets a PIN from the users screen",
+            ));
+        }
+        let owner = repo::sole_active_owner(conn, shop_id)?.ok_or_else(|| {
+            CoreError::validation(
+                "pin",
+                "this shop has no single active owner to give the first PIN to",
+            )
+        })?;
+        let after = repo::set_pin_hash(conn, shop_id, owner.id, &hash, stamp())?;
+        record(
+            conn,
+            shop_id,
+            owner.id,
+            audit::ACTION_SET_PIN,
+            owner.id,
+            Some(&owner),
+            Some(&after),
+        )?;
+        Ok(after)
+    })
+}
+
 pub fn set_password(
     conn: &mut SqliteConnection,
     shop_id: i32,

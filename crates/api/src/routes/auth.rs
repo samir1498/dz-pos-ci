@@ -15,9 +15,10 @@ use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use dzpos_core::services::permissions::{self, Permission};
-use dzpos_core::services::{preferences, sessions};
+use dzpos_core::services::sessions::SignedIn;
+use dzpos_core::services::{preferences, sessions, users};
 
-use crate::dto::{LoginDto, MeDto, PermissionDto, RoleDto, SessionDto};
+use crate::dto::{ClaimFirstPinDto, LoginDto, MeDto, PermissionDto, RoleDto, SessionDto};
 use crate::error::ApiError;
 use crate::session::{self, CurrentUser};
 use crate::AppState;
@@ -53,6 +54,41 @@ pub async fn login(
         })
         .await?;
 
+    Ok(session_response(signed_in, idle))
+}
+
+/// The one door into a shop nobody has ever signed into.
+/// `services::users::claim_first_pin` is the whole rule: it acts on the
+/// shop's own owner rather than an id the caller names (nobody signed in
+/// yet is not in a position to choose one), and it refuses the moment any
+/// credential anywhere in the shop already exists, which is how the door
+/// shuts for good the first time an owner sets a PIN the ordinary way.
+///
+/// Answers the same `SessionDto` as `login`, so the owner who just claimed
+/// the PIN is standing at the till and not sent back to a sign-in screen to
+/// type the PIN they just chose.
+pub async fn claim_first_pin(
+    State(state): State<AppState>,
+    body: Result<Json<ClaimFirstPinDto>, JsonRejection>,
+) -> Result<Response, ApiError> {
+    let Json(ClaimFirstPinDto { pin }) = body.map_err(ApiError::from)?;
+    let shop = state.shop_id;
+    let at = session::now();
+    let (signed_in, idle) = state
+        .blocking(move |c| {
+            let owner = users::claim_first_pin(c, shop, &pin)?;
+            let signed_in = sessions::sign_in_with_pin(c, shop, owner.id, &pin, at)?;
+            let idle = preferences::session_idle(c, shop)?.num_minutes();
+            Ok((signed_in, idle))
+        })
+        .await?;
+    Ok(session_response(signed_in, idle))
+}
+
+/// What a sign-in answers with, whichever of the two doors it came through:
+/// who is now acting, the token in the body for the desktop webview, and the
+/// same token as an httpOnly cookie for a browser.
+fn session_response(signed_in: SignedIn, idle: i64) -> Response {
     let body = SessionDto {
         me: MeDto {
             user_id: signed_in.actor.user_id,
@@ -67,7 +103,7 @@ pub async fn login(
     if let Some(cookie) = session::set_cookie(signed_in.token.expose(), idle) {
         res.headers_mut().append(header::SET_COOKIE, cookie);
     }
-    Ok(res)
+    res
 }
 
 /// Ends the session this request carries and clears the cookie.
