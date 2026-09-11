@@ -59,30 +59,6 @@ const FIRST_LOCKOUT_SECONDS: i64 = 30;
 /// resetting the PIN, which is a thing somebody in the shop can actually do.
 const MAX_LOCKOUT_SECONDS: i64 = 900;
 
-/// A user created.
-pub const ACTION_CREATE_USER: &str = "user.create";
-/// A user renamed. Its own action rather than a generic update, because the
-/// name is what the sign-in screen lists and the audit log prints.
-pub const ACTION_RENAME_USER: &str = "user.rename";
-/// A role changed. The entry carries the role before and after, which is the
-/// whole of what a change of role is.
-pub const ACTION_SET_ROLE: &str = "user.set_role";
-/// A PIN set or reset. The entry says that one was set and never what it is:
-/// a hash in a log is a hash in a backup and in every export of it.
-pub const ACTION_SET_PIN: &str = "user.set_pin";
-/// A password set or reset. The same, on the other credential.
-pub const ACTION_SET_PASSWORD: &str = "user.set_password";
-/// A user switched off. Never a deletion: the rows they wrote name them.
-pub const ACTION_DEACTIVATE_USER: &str = "user.deactivate";
-/// A user switched back on.
-pub const ACTION_REACTIVATE_USER: &str = "user.reactivate";
-/// A user locked out by wrong credentials. Written on the crossing and not on
-/// every attempt, so the log holds the event and not the noise: the entry
-/// carries the count and the moment they may try again, because a lockout
-/// nobody can see afterwards is a shop owner asking why the till would not
-/// open and getting no answer.
-pub const ACTION_LOCK_OUT_USER: &str = "user.locked_out";
-
 /// The shop's users, active first then alphabetical.
 pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<User>, CoreError> {
     repo::list(conn, shop_id)
@@ -118,7 +94,7 @@ pub fn create(
             conn,
             shop_id,
             actor_id,
-            ACTION_CREATE_USER,
+            audit::ACTION_CREATE_USER,
             created.id,
             None,
             Some(&created),
@@ -143,7 +119,7 @@ pub fn rename(
             conn,
             shop_id,
             actor_id,
-            ACTION_RENAME_USER,
+            audit::ACTION_RENAME_USER,
             id,
             Some(&before),
             Some(&after),
@@ -172,7 +148,7 @@ pub fn set_role(
             conn,
             shop_id,
             actor_id,
-            ACTION_SET_ROLE,
+            audit::ACTION_SET_ROLE,
             id,
             Some(&before),
             Some(&after),
@@ -199,7 +175,7 @@ pub fn set_pin(
             conn,
             shop_id,
             actor_id,
-            ACTION_SET_PIN,
+            audit::ACTION_SET_PIN,
             id,
             Some(&before),
             Some(&after),
@@ -224,7 +200,7 @@ pub fn set_password(
             conn,
             shop_id,
             actor_id,
-            ACTION_SET_PASSWORD,
+            audit::ACTION_SET_PASSWORD,
             id,
             Some(&before),
             Some(&after),
@@ -261,7 +237,7 @@ pub fn deactivate(
             conn,
             shop_id,
             actor_id,
-            ACTION_DEACTIVATE_USER,
+            audit::ACTION_DEACTIVATE_USER,
             id,
             Some(&before),
             Some(&after),
@@ -283,7 +259,7 @@ pub fn reactivate(
             conn,
             shop_id,
             actor_id,
-            ACTION_REACTIVATE_USER,
+            audit::ACTION_REACTIVATE_USER,
             id,
             Some(&before),
             Some(&after),
@@ -396,7 +372,7 @@ fn settle(
                 shop_id,
                 creds.id,
                 audit::Change {
-                    action: ACTION_LOCK_OUT_USER,
+                    action: audit::ACTION_LOCK_OUT_USER,
                     entity: "user",
                     entity_id: Some(creds.id),
                     before: None,
@@ -436,9 +412,13 @@ fn lockout_until(failures: i32, now: NaiveDateTime) -> Option<NaiveDateTime> {
 }
 
 /// What an unknown name is checked against so that it costs what a known one
-/// costs. A real argon2id string with argon2's own parameters, over a secret
-/// nobody holds: it parses, it verifies nothing, and it is not a credential
-/// this app ever writes.
+/// costs. A well-formed argon2id string at this app's own parameters whose
+/// digest matches no secret: it parses, so the verifier does the full two
+/// passes over 19 MiB before answering no, and it is not a credential this
+/// app ever writes. `dummy_hash_is_well_formed` below is what holds that it
+/// still parses, because a string that stopped parsing would answer an
+/// unknown name in microseconds and hand the staff list to anybody with a
+/// clock.
 const DUMMY_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$\
     ZHpwb3Mtbm8tc3VjaC11c2Vy$Qq1sMUS3FTRWiXf5xZTQ7ARAYhUXQ1kXBDJ2vcPYZTk";
 
@@ -643,4 +623,57 @@ fn record(
             after: after.map(as_json),
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    // A test may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    /// The whole timing argument for an unknown name rests on this string
+    /// parsing. Asserted here rather than trusted, because it is typed out by
+    /// hand and nothing else in the crate would notice it rotting.
+    #[test]
+    fn dummy_hash_is_well_formed_and_matches_nothing() {
+        assert!(
+            PasswordHash::new(DUMMY_HASH).is_ok(),
+            "the stand-in hash no longer parses, so an unknown name is answered in microseconds"
+        );
+        for guess in ["", "1234", "dzpos-no-such-user", "!unset"] {
+            assert!(!matches(guess, DUMMY_HASH), "{guess} matched the stand-in");
+        }
+    }
+
+    /// The sentinel the first migration writes fails closed: it is not a PHC
+    /// string, so it is a refusal and never a `Hash` error that would 500 a
+    /// sign-in open.
+    #[test]
+    fn the_unset_sentinel_is_a_refusal_and_not_an_error() {
+        assert!(!matches("!unset", crate::models::user::PIN_UNSET));
+        assert!(!matches("1357", crate::models::user::PIN_UNSET));
+    }
+
+    /// The doubling the shop chose, read straight off the function rather
+    /// than through a database.
+    #[test]
+    fn the_wait_doubles_from_thirty_seconds_and_stops_at_a_quarter_of_an_hour() {
+        let now = chrono::NaiveDate::from_ymd_opt(2026, 9, 11)
+            .unwrap()
+            .and_hms_opt(12, 0, 0)
+            .unwrap();
+        assert_eq!(lockout_until(4, now), None);
+        let seconds = |failures| {
+            lockout_until(failures, now)
+                .map(|until| (until - now).num_seconds())
+                .unwrap_or_default()
+        };
+        assert_eq!(
+            (5..=12).map(seconds).collect::<Vec<_>>(),
+            vec![30, 60, 120, 240, 480, 900, 900, 900]
+        );
+        // A till with something resting on a key does not overflow the shift.
+        assert_eq!(seconds(i32::MAX), MAX_LOCKOUT_SECONDS);
+    }
 }

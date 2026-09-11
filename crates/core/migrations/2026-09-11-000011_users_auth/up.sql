@@ -8,10 +8,13 @@
 -- migration adds the columns signing in needs and leaves the rest alone.
 --
 -- Additive on purpose, five ADD COLUMNs and an index rather than the
--- twelve-step rebuild migrations 2, 6 and 8 used. Twelve tables name
--- `users(id)` in a foreign key and every one of their rows points at row 1;
--- rebuilding the table they point at, with the foreign keys off, to add a
--- column would be the largest possible way to do the smallest possible thing.
+-- twelve-step rebuild migrations 2, 6 and 8 used. Eight tables name
+-- `users(id)` in a foreign key: `documents` twice, on its author and on
+-- whoever cancelled it, then `stock_movements`, `audit_log`, `debt_ledger`,
+-- `supplier_ledger`, `purchases`, `purchase_receipts` and `expenses`. Every
+-- one of their rows points at row 1, and rebuilding the table they all point
+-- at, with the foreign keys off, to add a column would be the largest
+-- possible way to do the smallest possible thing.
 
 -- The password half of the pair. NULL, and only NULL, means "this user has no
 -- password and signs in with a PIN": unlike `pin_hash` there is no sentinel,
