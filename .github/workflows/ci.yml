@@ -55,6 +55,21 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h / | tail -1
       - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # dzpos-desktop's generate_context!() embeds apps/desktop/dist/index.html
+      # at compile time (M5 T0's custom-protocol dev-dependency feature makes
+      # a plain `cargo test`/`cargo clippy` exercise the real asset-embedding
+      # path rather than Tauri's dev bypass), so both need it built first, the
+      # same reason the `desktop-dist` justfile recipe exists for `just
+      # clippy`/`just test` locally.
+      - run: pnpm --filter dzpos-desktop build
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
@@ -97,6 +112,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Same reason as the rust job above: dzpos-desktop's compile-time
+      # asset embedding needs apps/desktop/dist/index.html to exist.
+      - run: pnpm --filter dzpos-desktop build
       - run: cargo test --workspace
 
   # Coverage feeds Sonar, which reads main, so it runs only on main. A branch's
