@@ -37,9 +37,10 @@ answer without a checkout. Left for later: the hero ships a 1344-pixel file
 for a 342-pixel render on a phone, which needs width descriptors in the shot
 pipeline.
 
-M4 has all ten of its tasks on the milestone branch `m4/2026-09-11`. The
-last of them was the closing sweep, and the only thing it has left is the
-checkpoint PR onto main. What a person gets:
+**M4 is on main since 2026-09-11 18:49 (PR #33, cf5236a).** Ten tasks, each
+reviewed and merged on its own, then a whole-milestone review and a second
+round over the fixes that review produced. The branch is gone; the mirror
+check was green on its head. What a person gets:
 
 Migration 000011 adds the five sign-in columns to the `users` table that has
 existed since the first migration, with argon2id hashing, the users service
@@ -114,6 +115,16 @@ twice in all three dictionaries with the wrong one winning, and the role
 names twice as well; neither was visible to the translation test, because it
 read the parsed object and JSON keeps the last of a repeated key in silence.
 It reads the files as text now.
+
+Next: M5, the first release, which is the last milestone before a shop can
+run on this. `docs/roadmap.md` § M5 has it: the bundle identifier changed
+once with the final name, the Tauri updater and its signing key, the Windows
+code-signing certificate, migrations tied to the app version with a backup
+before each and a previous-version open test, a tag on main building the
+installer and the GitHub release, the support bundle, the Arabic and RTL
+polish pass, and the delivery note. Five of its release gates are Samir's
+and Anouar's rather than mine, and two of them have lead times: the product
+name and the code-signing certificate.
 
 Open for Samir on M4: the wrong-try counter is one per person and covers the
 PIN and the password together, so a fumbled password locks that person's
