@@ -60,6 +60,10 @@ export const settingsSchema = z.object({
   regime_planned: datedRegimeSchema.nullable(),
   /** `null` is the shop following the machine, not a missing answer. */
   theme: themeSchema.nullable(),
+  /** Basis points of the basket, so a whole number: 250 is 2,5 %. Zero on
+   *  a shop that has never set one, which refuses a cashier every
+   *  discount. */
+  discount_threshold_bps: exactInteger,
 }) satisfies z.ZodType<SettingsDto>;
 type _Settings = Assert<Matches<SettingsDto, typeof settingsSchema>>;
 

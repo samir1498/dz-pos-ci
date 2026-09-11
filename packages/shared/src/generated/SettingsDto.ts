@@ -11,4 +11,13 @@ export type SettingsDto = { store: StoreDto, regime: DatedRegimeDto, regime_plan
 /**
  * `null` when the shop has never chosen one.
  */
-theme: ThemeDto | null, };
+theme: ThemeDto | null, 
+/**
+ * How much a cashier may take off a basket before the sale needs
+ * someone holding `discount_above_threshold`, in basis points of the
+ * basket before any discount (250 is 2,5 %). Zero on a shop that has
+ * never set one, which refuses a cashier every discount: the screen
+ * should say so rather than leave an owner wondering why the till
+ * refuses a round number off.
+ */
+discount_threshold_bps: number, };

@@ -34,6 +34,7 @@ const settings = {
   regime: { regime: "reel", valid_from: "2026-01-01" },
   regime_planned: null,
   theme: null,
+  discount_threshold_bps: 0,
 };
 
 const json = (status: number, body: unknown): Response =>
