@@ -334,3 +334,48 @@ fn the_table_is_about_writes_and_the_five_reads_that_carry_the_lists_out() {
         );
     }
 }
+
+/// The gate's own default when the walk above is not looking.
+///
+/// Every write the router answers today has a row, and the two walks are
+/// what keep that true. They read `lib.rs` as text, so a route that arrives
+/// through a helper, a nested router or a `route_layer` is invisible to
+/// them. What holds then is the gate itself: a write on a route no
+/// permission has been decided for is refused, because the honest answer to
+/// "who may do this" is nobody. A read on the same route is the ordinary
+/// case and goes through.
+#[tokio::test]
+async fn a_write_on_a_route_the_table_does_not_name_is_refused() {
+    let dir = tempfile::tempdir().expect("no temp dir for the test's shop file");
+    let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
+    let state = dzpos_api::AppState::open(&path, SHOP).expect("the test's shop file will not open");
+
+    const UNKNOWN: &str = "/a-route-nobody-decided-on";
+    assert!(
+        gate_for("POST", UNKNOWN).is_none() && gate_for("GET", UNKNOWN).is_none(),
+        "{UNKNOWN} is supposed to be a path the table has never heard of"
+    );
+
+    // The same session layer the real router puts in front of every guarded
+    // route, over a route the table does not name.
+    let app = axum::Router::new()
+        .route(
+            UNKNOWN,
+            axum::routing::post(|| async { "ok" }).get(|| async { "ok" }),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            dzpos_api::session::require,
+        ))
+        .with_state(state);
+
+    // The shop's owner, who holds every permission there is, and is still
+    // refused: this is not a role decision.
+    let (status, body) = call(&app, "POST", UNKNOWN, common::OWNER_SESSION).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body}");
+    assert_eq!(body["error"]["code"], "ungated_write", "{body}");
+
+    let (status, body) = call(&app, "GET", UNKNOWN, common::OWNER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+}
