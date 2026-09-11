@@ -16,6 +16,14 @@ use crate::error::ApiError;
 use crate::session::CurrentUser;
 use crate::AppState;
 
+/// Every answer in this file that carries a product goes through here,
+/// writes included. A create or an update is behind `EditFiches`, which only
+/// a manager or an owner holds today and both of those hold
+/// `SeeCostAndMargin` as well, so redacting the write answers changes
+/// nothing now. It is here so that the day somebody adds a role that may
+/// edit a fiche without seeing what the shop paid, the fiche it hands back
+/// does not quietly tell them (M4 closing review, 2026-09-11).
+///
 /// `GET /products` and `GET /products/{id}` carry the whole catalogue to
 /// every signed-in role, cashier included, because the till needs it to
 /// ring a sale up (`gates.rs` names no row for either read). What the till
@@ -74,7 +82,10 @@ pub async fn create(
     let made = state
         .blocking(move |c| service::create(c, shop, user, new))
         .await?;
-    Ok((StatusCode::CREATED, Json(ProductDto::from(made))))
+    Ok((
+        StatusCode::CREATED,
+        Json(redact_cost(ProductDto::from(made), who.role)),
+    ))
 }
 
 /// The whole product again, not a patch: the screen sends every field it
@@ -95,7 +106,7 @@ pub async fn update(
     let after = state
         .blocking(move |c| service::update(c, shop, user, id, new))
         .await?;
-    Ok(Json(ProductDto::from(after)))
+    Ok(Json(redact_cost(ProductDto::from(after), who.role)))
 }
 
 /// The language on the label, named by the caller on every call the way the
