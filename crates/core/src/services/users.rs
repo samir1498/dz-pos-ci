@@ -327,6 +327,12 @@ pub fn verify_password(
 /// by the very refusal it was counting, which is the M2 credit-block finding
 /// on another table. Each write here commits on its own, before the refusal
 /// leaves.
+// One counter and one lock per user, shared by the PIN and the password: five
+// wrong passwords at the office screen leave the same person waiting at the
+// till. That is deliberate (the person is the thing being protected, not the
+// screen) and it is also a way for one member of staff to keep another out of
+// the till for a quarter of an hour. Samir has the question; splitting it is a
+// column and this function, and T2 is the last comfortable moment to do it.
 fn settle(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -418,7 +424,10 @@ fn lockout_until(failures: i32, now: NaiveDateTime) -> Option<NaiveDateTime> {
 /// app ever writes. `dummy_hash_is_well_formed` below is what holds that it
 /// still parses, because a string that stopped parsing would answer an
 /// unknown name in microseconds and hand the staff list to anybody with a
-/// clock.
+/// clock. What the suite holds is that the string parses and matches nothing;
+/// that the two answers take the same time is reasoned from the verifier
+/// doing the same work, not measured, and measuring it would want a benchmark
+/// rather than a test.
 const DUMMY_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$\
     ZHpwb3Mtbm8tc3VjaC11c2Vy$Qq1sMUS3FTRWiXf5xZTQ7ARAYhUXQ1kXBDJ2vcPYZTk";
 
