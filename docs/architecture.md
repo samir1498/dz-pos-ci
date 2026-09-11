@@ -378,16 +378,22 @@ exercising the pipeline early; it can never publish. No certificate yet
 means the release is cut unsigned and left as a draft, not presented as
 finished.
 
+Decided (2026-09-11, M5 T0): the window runs under a policy that admits no
+remote origin and no inline or evaluated script, and a check on the Rust
+side refuses any navigation away from the app's own origins, since the
+directive that would have done it was dropped from the CSP spec before any
+engine shipped it. The launch token is fetched from the Rust side rather
+than left in a page global. What protects it is the policy that stops
+injected script from running at all; keeping it in a module variable buys
+little on its own.
+
 Raised in the 2026-09-08 handoff, still open, each settled before
-`docs/roadmap.md` M5 closes:
+`docs/roadmap.md` M5 closes. `docs/release-checklist.md` is the page that
+tracks them, alongside the release gates and who holds each:
 
 - Tauri updater signing key: who generates it and who holds it; it never
   enters the repo, CI signs with a secret.
 - Windows code-signing certificate: cost and lead time, for Anouar.
-- A content security policy on the webview (`tauri.conf.json` has
-  `csp: null`): the launch token sits in a page global, so one link that
-  navigates the main frame to a remote page would hand it over. No screen
-  has such a link today; the policy is what keeps it so.
 
 ## Testing matrix
 
