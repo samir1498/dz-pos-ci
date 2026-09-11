@@ -26,7 +26,7 @@ tauri-build = { version = "2", features = [] }
 #
 # `custom-protocol` too, on purpose: it is what `tauri::is_dev()` is (`!cfg!
 # (feature = "custom-protocol")`), and it also gates a second thing that
-# matters more here — `AssetResolver` reads `dist/index.html` straight off
+# matters more here -- `AssetResolver` reads `dist/index.html` straight off
 # disk with no CSP at all whenever `devUrl` is configured and `is_dev()` is
 # true, which describes every plain `cargo run`/`cargo test` in this repo
 # otherwise (`tauri.conf.json` always sets `devUrl`). Only the Tauri CLI's

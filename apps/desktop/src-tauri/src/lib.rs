@@ -29,8 +29,8 @@ pub struct ApiPort(pub u16);
 
 /// The launch token, held for exactly one hand-over. `take_launch_token`
 /// gives it to the first caller and an error to every caller after, so the
-/// secret never sits somewhere a script running later in the page — or one
-/// running in whatever document the window was navigated to — can go back
+/// secret never sits somewhere a script running later in the page -- or one
+/// running in whatever document the window was navigated to -- can go back
 /// and read (docs/architecture.md § Release).
 struct TokenHandoff(Mutex<Option<String>>);
 
@@ -90,7 +90,7 @@ fn allowed_navigation(url: &Url) -> bool {
 // Reads the policy off the page Tauri actually serves, the way a real
 // launch would get it: `get_asset` (tauri's own manager) rewrites the CSP
 // into `index.html` and returns the same string as a header value at serve
-// time, which is what `dist/index.html` on disk never carries — the
+// time, which is what `dist/index.html` on disk never carries -- the
 // directive is added when the asset is handed out, not baked into the
 // build. `pnpm --filter dzpos-desktop build` has to have run first, the
 // same requirement `generate_context!()` already has for `cargo run`.
@@ -99,7 +99,7 @@ fn allowed_navigation(url: &Url) -> bool {
 // turns on for this dev-dependency only. Two things ride on it: it is what
 // `tauri::is_dev()` is (`!cfg!(feature = "custom-protocol")`), and,
 // separately, `AssetResolver` reads `dist/index.html` straight off disk
-// with `csp_header: None` — the whole CSP mechanism skipped — whenever
+// with `csp_header: None` -- the whole CSP mechanism skipped -- whenever
 // `devUrl` is configured (it always is here) and `is_dev()` is true, which
 // is every plain `cargo test` otherwise. Without the feature this test
 // would pass for the wrong reason: `csp_header` would be `None` because
@@ -270,7 +270,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // has to be wired before the first document loads, and a
                 // window built from the config alone has no way to carry it.
                 // This is the CSP note's `navigate-to` equivalent
-                // (docs/architecture.md § Release) — there is no such CSP
+                // (docs/architecture.md § Release) -- there is no such CSP
                 // directive, `navigate-to` was dropped from the spec before
                 // any engine shipped it, so the refusal lives here in Rust
                 // rather than in the policy string.

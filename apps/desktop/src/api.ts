@@ -15,7 +15,7 @@
 // hands it out to the first caller and refuses every caller after
 // (docs/architecture.md § Release). The alternative considered was having
 // Rust attach the `Authorization` header itself on every call, which would
-// need the webview's own HTTP requests proxied through Tauri IPC — the
+// need the webview's own HTTP requests proxied through Tauri IPC -- the
 // thing rule 2 above says data never does, and CSP's `connect-src` already
 // closes the direct exfiltration path a global was open to.
 
