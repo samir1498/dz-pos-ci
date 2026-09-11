@@ -19,19 +19,25 @@ ruled out for the app itself, as opposed to the landing page's static
 Cloudflare Pages), and Anouar's GitHub billing fix itself, which the
 mirror works around but does not close.
 
-By 10:30 the landing page is five tasks of six done and on main: the site
-(PR #25), the copy with every fiscal claim carrying the `docs/features.md`
-row it rests on (#26), the product shots composed from the committed e2e
-screenshots with three new French saves the suite had never taken (#27),
-the sections (#28), and the load budget (#29: fonts split per route,
-Lighthouse 100/100/100/100 on French and English and 99 on Arabic, a test
-refusing an unsized image or a route over 678 KiB). The sixth task is
-publish preparation and stops short of publishing: the page is not cleared
-to go public while the product's name is a placeholder, there is no price,
-and no native speaker has read the Arabic. Left for later: the hero ships a
-1344-pixel file for a 342-pixel render on a phone.
+The landing page is finished, all six tasks on main: the site (PR #25), the
+copy with every fiscal claim carrying the `docs/features.md` row it rests on
+(#26), the product shots composed from the committed e2e screenshots with
+three new French saves the suite had never taken (#27), the sections (#28),
+the load budget (#29: fonts split per route, Lighthouse 100/100/100/100 on
+French and English and 99 on Arabic, a test refusing an unsized image or a
+route over 678 KiB), and the publish preparation (#30: canonical and
+alternate links, the sitemap, the sharing card drawn from `@dzpos/design`,
+Cloudflare Web Analytics written in and switched off, and `just
+landing-deploy` refusing to run without `DZPOS_LANDING_PUBLISH=1`). The page
+is built and not published. Three things block it and all three are Samir's
+and Anouar's: the product's name is a placeholder, there is no price, and no
+native speaker has read the Arabic. The three built routes are shot and on
+the boss site at https://dinar-reports.pages.dev/landing/ so Anouar can
+answer without a checkout. Left for later: the hero ships a 1344-pixel file
+for a 342-pixel render on a phone, which needs width descriptors in the shot
+pipeline.
 
-M4 has three of its ten tasks on the milestone branch `m4/2026-09-11`.
+M4 has four of its ten tasks on the milestone branch `m4/2026-09-11`.
 Migration 000011 adds the five sign-in columns to the `users` table that
 has existed since the first migration, with argon2id hashing, the users
 service writing an audit row per operation, and a wait that doubles from
@@ -42,8 +48,12 @@ fiscal's dated history; a manager answers like an owner except on the staff
 list and the audit log. Sessions replace the seeded owner id on every
 route: a token of 32 random bytes stored as a digest, the desktop's own
 header or an httpOnly cookie, the launch token untouched and still first,
-and one table naming the permission each route will want. In flight:
-applying those permissions to the routes, and the sign-in screens.
+and one table naming the permission each route will want. Those permissions
+are now applied: the session middleware looks the row up by the route's own
+template and refuses before the handler runs, so no handler names a
+permission twice, and a write on a route the table does not name is refused
+rather than waved through. In flight: the sign-in screens, the credit-block
+override moving onto its permission, and the audit log screen.
 
 Open for Samir on M4: the wrong-try counter is one per person and covers
 the PIN and the password together, so a fumbled password locks that
