@@ -194,13 +194,39 @@ tauri:
 
 # the landing page (apps/landing), dev server only. `just landing-build`
 # builds it; that build already rides `pnpm -r build` via the workspace, so
-# a broken page fails `just gates` without a recipe change here. L5 owns the
-# publish recipe once there is somewhere real to publish to.
+# a broken page fails `just gates` without a recipe change here. `just
+# landing-deploy` is the publish recipe (L5); it is not cleared to run yet.
 landing:
     pnpm --filter dzpos-landing dev
 
 landing-build:
     pnpm --filter dzpos-landing build
+
+# regenerate the committed generated art: the product shots (L1) and the
+# Open Graph / Twitter card (L5), both re-read from @dzpos/design and the
+# desktop's committed screenshots, both then committed as ordinary files.
+landing-art:
+    pnpm --filter dzpos-landing shots
+    pnpm --filter dzpos-landing card
+
+# Publish apps/landing to Cloudflare Pages (project: src/lib/site.ts's
+# PAGES_PROJECT). Refuses to run unless DZPOS_LANDING_PUBLISH=1: the
+# product name is a placeholder, the price does not exist, and the Arabic
+# translation has not been read by a native speaker
+# (context/plans/20260911-landing-page.md, L5 brief).
+# This page is NOT CLEARED TO GO PUBLIC YET.
+landing-deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "${DZPOS_LANDING_PUBLISH:-}" != "1" ]; then
+        echo "landing-deploy: refusing. This page is not cleared to go public yet" >&2
+        echo "(placeholder name, no price, unreviewed Arabic). Set DZPOS_LANDING_PUBLISH=1" >&2
+        echo "only once Samir and Anouar have said so." >&2
+        exit 1
+    fi
+    project="$(node -e "import('./apps/landing/src/lib/site.ts').then((m) => console.log(m.PAGES_PROJECT))")"
+    pnpm --filter dzpos-landing build
+    pnpm dlx wrangler@4 pages deploy apps/landing/dist --project-name "$project" --commit-dirty=true
 
 # ---- e2e (headless chromium; starts its own API and Vite) ----
 

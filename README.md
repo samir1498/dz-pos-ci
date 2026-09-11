@@ -46,6 +46,21 @@ products, customers, documents, suppliers, purchases, expenses, settings.
 built only in a dev build (`routes/kit.tsx` throws `notFound()` otherwise)
 and the page a reviewer compares against the mockups.
 
+## Landing page
+
+`apps/landing`: Astro, French/English/Arabic as three routes, reading
+`@dzpos/design` for its tokens and `apps/desktop/e2e/screenshots/*.png` for
+every picture it shows, so it cannot drift from the application it
+advertises. `just landing` serves it; `just landing-build` builds it (that
+build already rides `pnpm -r build`, so a broken page fails `just gates`);
+`just landing-art` reruns the committed product shots and the Open Graph
+card from the design package. `just landing-deploy` would publish it to the
+Cloudflare Pages project named in `apps/landing/src/lib/site.ts`, but
+refuses to run unless `DZPOS_LANDING_PUBLISH=1` is set. It is blocked on
+Anouar: the product name is still the `dz-pos` placeholder, the price is not
+set, and the Arabic copy has not been read by a native speaker
+(`context/plans/20260911-landing-page.md`).
+
 ## Commands
 
 The `justfile` at the root is the list; `just` alone prints it.

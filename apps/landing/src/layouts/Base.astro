@@ -9,6 +9,9 @@ import markUrl from "@dzpos/design/assets/mark.svg?url";
 import shots from "../lib/shots.json";
 import { dictionaries } from "../i18n";
 import type { Locale } from "../i18n";
+import { CF_BEACON_TOKEN } from "../lib/analytics";
+import { CARD_FILE, CARD_HEIGHT, CARD_WIDTH } from "../lib/card";
+import { HREFLANG, OG_LOCALE, ROUTE_PATH, SITE_URL } from "../lib/site";
 import Hero from "../components/Hero.astro";
 import Pieces from "../components/Pieces.astro";
 import Fiscal from "../components/Fiscal.astro";
@@ -27,6 +30,9 @@ interface Props {
 
 const { locale, fontUrls } = Astro.props;
 const dict = dictionaries[locale];
+const LOCALES: readonly Locale[] = ["fr", "en", "ar"];
+const canonicalUrl = `${SITE_URL}${ROUTE_PATH[locale]}`;
+const cardUrl = `${SITE_URL}/og/${CARD_FILE}`;
 // The Lighthouse mobile run flagged the hero shot as not discoverable early
 // enough for LCP (it is the page's largest above-the-fold element in every
 // locale): a preload with the same srcset it renders with lets the browser
@@ -42,6 +48,44 @@ const heroShot = shots.hero[locale];
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{dict.title}</title>
     <meta name="description" content={dict.tagline} />
+    <link rel="canonical" href={canonicalUrl} />
+    {
+      LOCALES.map((loc) => (
+        <link rel="alternate" hreflang={HREFLANG[loc]} href={`${SITE_URL}${ROUTE_PATH[loc]}`} />
+      ))
+    }
+    {/* fr is astro.config.ts's defaultLocale: the route a visitor with no
+        language preference the other two match should land on. */}
+    <link rel="alternate" hreflang="x-default" href={`${SITE_URL}${ROUTE_PATH.fr}`} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={`${dict.brandWord} ${dict.brandSuffix}`} />
+    <meta property="og:title" content={dict.title} />
+    <meta property="og:description" content={dict.tagline} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:locale" content={OG_LOCALE[locale]} />
+    {
+      LOCALES.filter((loc) => loc !== locale).map((loc) => (
+        <meta property="og:locale:alternate" content={OG_LOCALE[loc]} />
+      ))
+    }
+    <meta property="og:image" content={cardUrl} />
+    <meta property="og:image:width" content={String(CARD_WIDTH)} />
+    <meta property="og:image:height" content={String(CARD_HEIGHT)} />
+    <meta property="og:image:alt" content={dict.title} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={dict.title} />
+    <meta name="twitter:description" content={dict.tagline} />
+    <meta name="twitter:image" content={cardUrl} />
+    {
+      CF_BEACON_TOKEN !== undefined && (
+        <script
+          is:inline
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon={`{"token": "${CF_BEACON_TOKEN}"}`}
+        />
+      )
+    }
     {
       fontUrls.map((href) => (
         <link rel="preload" as="font" type="font/woff2" href={href} crossorigin="anonymous" />

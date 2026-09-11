@@ -10,6 +10,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:f
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -204,6 +205,100 @@ describe("the three routes render", () => {
         total,
         `${file} weighs ${total} bytes, over the ${BUDGET_BYTES} byte budget. Heaviest assets:\n  ${heaviest}`,
       ).toBeLessThanOrEqual(BUDGET_BYTES);
+    });
+  });
+
+  describe("the head carries canonical, alternate links and the card (L5)", () => {
+    const ROUTE_CANONICAL: ReadonlyArray<readonly [file: string, canonical: string]> = [
+      ["index.html", "https://dinar-landing.pages.dev/"],
+      [join("en", "index.html"), "https://dinar-landing.pages.dev/en/"],
+      [join("ar", "index.html"), "https://dinar-landing.pages.dev/ar/"],
+    ];
+
+    it.each(ROUTE_CANONICAL)("%s has one canonical link to its own URL", (file, canonical) => {
+      const html = read(file);
+      const links = [...html.matchAll(/<link rel="canonical" href="([^"]+)">/g)];
+      expect(links).toHaveLength(1);
+      expect(links[0]?.[1]).toBe(canonical);
+    });
+
+    it.each(ROUTES)("%s carries all three alternate links plus x-default", (file) => {
+      const html = read(file);
+      const alternates = [...html.matchAll(/<link rel="alternate" hreflang="([^"]+)" href="([^"]+)">/g)].map((m) => [
+        m[1],
+        m[2],
+      ]);
+      expect(alternates).toEqual(
+        expect.arrayContaining([
+          ["fr-FR", "https://dinar-landing.pages.dev/"],
+          ["en-US", "https://dinar-landing.pages.dev/en/"],
+          ["ar", "https://dinar-landing.pages.dev/ar/"],
+          ["x-default", "https://dinar-landing.pages.dev/"],
+        ]),
+      );
+    });
+
+    it.each(ROUTES)("%s points og:image and twitter:image at the committed card", (file) => {
+      const html = read(file);
+      expect(html).toContain('<meta property="og:image" content="https://dinar-landing.pages.dev/og/card.png">');
+      expect(html).toContain('<meta property="og:image:width" content="1200">');
+      expect(html).toContain('<meta property="og:image:height" content="630">');
+      expect(html).toContain('<meta name="twitter:card" content="summary_large_image">');
+      expect(html).toContain('<meta name="twitter:image" content="https://dinar-landing.pages.dev/og/card.png">');
+    });
+
+    it("the card file og:image points at is 1200x630, on disk in the build", async () => {
+      const bytes = readFileSync(join(outDir, "og", "card.png"));
+      const meta = await sharp(bytes).metadata();
+      expect(meta.width).toBe(1200);
+      expect(meta.height).toBe(630);
+    });
+  });
+
+  describe("the sitemap lists all three routes with their alternates (L5)", () => {
+    it("sitemap-index.xml exists and points at sitemap-0.xml", () => {
+      const index = read("sitemap-index.xml");
+      expect(index).toContain("https://dinar-landing.pages.dev/sitemap-0.xml");
+    });
+
+    it("sitemap-0.xml carries the three routes, each with all three hreflang alternates", () => {
+      const sitemap = read("sitemap-0.xml");
+      for (const { path } of Object.values({
+        fr: { path: "/" },
+        en: { path: "/en/" },
+        ar: { path: "/ar/" },
+      })) {
+        expect(sitemap).toContain(`<loc>https://dinar-landing.pages.dev${path}</loc>`);
+      }
+      expect((sitemap.match(/hreflang="fr-FR"/g) ?? []).length).toBe(3);
+      expect((sitemap.match(/hreflang="en-US"/g) ?? []).length).toBe(3);
+      expect((sitemap.match(/hreflang="ar"/g) ?? []).length).toBe(3);
+    });
+  });
+
+  describe("Cloudflare Web Analytics stays off unless DZPOS_CF_BEACON_TOKEN is set (L5)", () => {
+    it("the default build (this suite's own, token unset) carries no beacon script", () => {
+      for (const file of ROUTES) {
+        expect(read(file)).not.toContain("cloudflareinsights");
+      }
+    });
+
+    it("setting the token adds exactly the Cloudflare beacon script, nothing else", () => {
+      const tokenOutDir = mkdtempSync(join(ROOT, "node_modules", ".smoke-token-"));
+      try {
+        const astroBin = join(ROOT, "node_modules", ".bin", process.platform === "win32" ? "astro.cmd" : "astro");
+        execFileSync(astroBin, ["build", "--outDir", tokenOutDir], {
+          cwd: ROOT,
+          encoding: "utf8",
+          env: { ...process.env, DZPOS_CF_BEACON_TOKEN: "smoke-test-token" },
+        });
+        const html = readFileSync(join(tokenOutDir, "index.html"), "utf8");
+        expect(html).toContain(
+          '<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon="{&quot;token&quot;: &quot;smoke-test-token&quot;}"></script>',
+        );
+      } finally {
+        rmSync(tokenOutDir, { recursive: true, force: true });
+      }
     });
   });
 });

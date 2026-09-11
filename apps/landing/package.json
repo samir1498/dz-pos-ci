@@ -11,9 +11,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "shots": "DZPOS_SHOTS_WRITE=1 vitest run src/shots.test.ts"
+    "shots": "DZPOS_SHOTS_WRITE=1 vitest run src/shots.test.ts",
+    "card": "DZPOS_CARD_WRITE=1 vitest run src/card.test.ts"
   },
   "dependencies": {
+    "@astrojs/sitemap": "3.7.4",
     "@dzpos/design": "workspace:*",
     "@fontsource/ibm-plex-sans": "5.3.0",
     "@fontsource/ibm-plex-sans-arabic": "5.3.0",
@@ -24,8 +26,10 @@
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
+    "@types/opentype.js": "1.3.10",
     "eslint": "10.10.0",
     "eslint-plugin-astro": "^3.1.0",
+    "opentype.js": "1.3.4",
     "sharp": "0.35.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
