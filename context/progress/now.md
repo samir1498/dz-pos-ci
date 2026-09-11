@@ -1,6 +1,6 @@
 ---
 type: 'now'
-updated: '2026-09-11'
+updated: '2026-09-12'
 ---
 ## Active
 
@@ -174,6 +174,40 @@ image itself is not growing, which was checked by writing half a gigabyte
 inside the distro and watching the byte count stay put. Anything that does
 not need the browser suite is proven on the mirror instead, which is how
 three pieces landed after the disk ran out.
+
+The audit log reads its dates on the shop's calendar since 2026-09-12
+(PR #45). `audit_log.created_at` is the one column in the file stamped by
+SQLite's `CURRENT_TIMESTAMP`, which is UTC, while every date the app shows
+is on the shop's calendar; the day filter beside the screen already
+converted and the screen did not, so between 23:00 UTC and midnight a row
+written at 00:30 in Algiers printed as 23:30 the day before while `day=`
+counted it under the day it was written. The column is unchanged and the
+reading converts. The shape fix underneath it is task T12 of the M5 plan:
+`services::audit::record` should stamp the row from `services::clock` like
+every other row, which `CoreError::Unstamped` already says, and that needs a
+migration for the rows already written. Found by a test that only fails for
+the hour the bug lives in, on Linux and on Windows alike.
+
+Release gate R3 is closed since 2026-09-12. Décret 05-468 art. 3 names the
+registre du commerce number and the numéro d'identification statistique for
+both parties and never the NIF; the NIF is a facture mention through loi
+04-02 art. 34, whose omission is a défaut de facturation under art. 33, and
+through LF 2006 art. 42. Nothing makes the article d'imposition a facture
+mention: CIDTA art. 183 ter asks a wholesaler to hold each client's AI for
+its état-clients. That last reading is the comptable's to confirm, so it
+sits under R8. The research had been read from the Journal Officiel on
+2026-09-08 and never carried into the spec; it is in `docs/features.md`,
+`docs/release-checklist.md` and `docs/roadmap.md` now.
+
+The support bundle has been through two review lenses and its four findings
+are fixed on the branch: the entry-set assertion no longer reads its
+expectation from the constant the writer walks, the audit row is asserted,
+a log file that was never written has its own test, and the seeded PIN is
+out of the forbidden list where four digits could collide with a byte count.
+One limit is written into the module's doc rather than fixed: `log.txt` is
+copied out verbatim and the leak test only ever sees what this build's own
+startup wrote, so whoever adds a logging framework owes that entry a
+redaction pass.
 
 Two tasks the reviews added on 2026-09-11. A Windows release build has no
 console, so a refusal to start says nothing at all to the shopkeeper: the
