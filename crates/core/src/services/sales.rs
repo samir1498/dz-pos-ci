@@ -359,14 +359,14 @@ pub fn issue(
                     action: audit::ACTION_PRICE_OVERRIDE,
                     entity: "document",
                     entity_id: Some(document.id),
-                    before: Some(
-                        serde_json::json!({ "lines": negotiated.len() }).to_string(),
+                    before: Some(serde_json::json!({ "lines": negotiated.len() }).to_string()),
+                    after: Some(
+                        serde_json::json!({
+                            "document_id": document.id,
+                            "lines": negotiated,
+                        })
+                        .to_string(),
                     ),
-                    after: Some(serde_json::json!({
-                        "document_id": document.id,
-                        "lines": negotiated,
-                    })
-                    .to_string()),
                 },
             )?;
         }

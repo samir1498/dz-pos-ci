@@ -2349,8 +2349,13 @@ fn a_cashier_cannot_type_a_price_the_product_card_does_not_say() {
     let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
     let cashier = user(&mut conn, "Nadia", Role::Cashier);
 
-    let err = issue_sale(&mut conn, SHOP, cashier, negotiated(p, 1_000, 90_000, 200_000))
-        .unwrap_err();
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        cashier,
+        negotiated(p, 1_000, 90_000, 200_000),
+    )
+    .unwrap_err();
     assert_eq!(err.code(), "forbidden", "{err:?}");
     let CoreError::Forbidden { permission } = err else {
         panic!("a refusal for a permission carries the one it wanted");
@@ -2366,7 +2371,13 @@ fn a_cashier_cannot_type_a_price_the_product_card_does_not_say() {
 
     // The same basket at the card's own price goes through, so what was
     // refused was the price and not the sale.
-    let doc = issue_sale(&mut conn, SHOP, cashier, cash(vec![line(p, 1_000)], 200_000)).unwrap();
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        cashier,
+        cash(vec![line(p, 1_000)], 200_000),
+    )
+    .unwrap();
     assert_eq!(doc.number, 1);
 }
 
@@ -2376,7 +2387,13 @@ fn a_manager_negotiates_a_price_and_the_row_carries_the_card_beside_what_was_cha
     let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
     let manager = user(&mut conn, "Karim", Role::Manager);
 
-    let doc = issue_sale(&mut conn, SHOP, manager, negotiated(p, 1_000, 90_000, 200_000)).unwrap();
+    let doc = issue_sale(
+        &mut conn,
+        SHOP,
+        manager,
+        negotiated(p, 1_000, 90_000, 200_000),
+    )
+    .unwrap();
 
     let entries = audit::list(&mut conn, SHOP).unwrap();
     let entry = entries
@@ -2385,8 +2402,7 @@ fn a_manager_negotiates_a_price_and_the_row_carries_the_card_beside_what_was_cha
         .expect("a price that is not the product's own is logged");
     assert_eq!(entry.entity_id, Some(doc.id));
     assert_eq!(entry.user_id, manager);
-    let after: serde_json::Value =
-        serde_json::from_str(entry.after.as_deref().unwrap()).unwrap();
+    let after: serde_json::Value = serde_json::from_str(entry.after.as_deref().unwrap()).unwrap();
     let sold = &after["lines"][0];
     assert_eq!(sold["card_price_centimes"], 100_000);
     assert_eq!(sold["charged_centimes"], 90_000);
@@ -2401,11 +2417,19 @@ fn a_sale_at_the_card_price_asks_nobody_and_writes_no_price_row() {
 
     // The same price typed out rather than left to the card: the same price,
     // so nothing was negotiated and nothing is logged.
-    issue_sale(&mut conn, SHOP, cashier, negotiated(p, 1_000, 100_000, 200_000)).unwrap();
+    issue_sale(
+        &mut conn,
+        SHOP,
+        cashier,
+        negotiated(p, 1_000, 100_000, 200_000),
+    )
+    .unwrap();
 
     let entries = audit::list(&mut conn, SHOP).unwrap();
     assert!(
-        !entries.iter().any(|e| e.action == "document.price_override"),
+        !entries
+            .iter()
+            .any(|e| e.action == "document.price_override"),
         "a sale at the card's own price is not an override"
     );
 }
