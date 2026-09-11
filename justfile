@@ -23,7 +23,10 @@ export CARGO_BUILD_JOBS := env_var_or_default("CARGO_BUILD_JOBS", "4")
 # checkout built last and, when it changes, touches this checkout's crate
 # sources so cargo rebuilds the workspace's own members; the dependencies stay
 # cached, they are identical in every checkout. Every cargo recipe below
-# depends on it; run a bare `cargo` in a worktree only after `just claim`.
+# depends on it; a bare `cargo` needs both `just claim` run first and
+# `CARGO_TARGET_DIR` exported into the same shell (`just claim` alone does
+# not export it there: the export only lives inside a recipe's own
+# subprocess).
 #
 # The recipes that compile and then run something hold a lock on the
 # folder for the whole run: cargo's own lock only covers compilation, so
@@ -272,7 +275,7 @@ worktree name branch:
     if [ -e "$dir" ]; then echo "$dir exists" >&2; exit 1; fi
     git worktree add -b "{{branch}}" "$dir" HEAD
     (cd "$dir" && pnpm install --frozen-lockfile --silent)
-    echo "worktree $dir on {{branch}}; run cargo there through just (or after just claim), never bare"
+    echo "worktree $dir on {{branch}}; run cargo there through just, never bare"
 
 # remove a worktree once its branch is merged.
 # target/ goes first: it is gitignored, so `git worktree remove` refuses to

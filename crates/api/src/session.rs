@@ -168,7 +168,8 @@ pub async fn require(
 }
 
 /// Whether a method changes the file. The table names every one of these and
-/// the five reads that carry a whole list out; any other read is open.
+/// the reads `crates/api/src/gates.rs`'s own doc names that carry a whole
+/// list out; any other read is open.
 fn is_a_write(method: &str) -> bool {
     matches!(method, "POST" | "PUT" | "PATCH" | "DELETE")
 }

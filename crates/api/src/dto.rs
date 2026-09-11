@@ -428,8 +428,8 @@ impl From<ThemeDto> for Theme {
 }
 
 /// The theme the shop chose. `null` is not a missing answer: it is the shop
-/// saying "follow the machine", and the app then reads the operating system's
-/// light or dark preference.
+/// asking to forget its choice, which puts the app back on Comptoir, the
+/// default (the machine's own light or dark preference is not consulted).
 #[derive(Debug, Clone, Copy, Deserialize, TS)]
 #[ts(export_to = "ThemeChoiceDto.ts")]
 #[serde(deny_unknown_fields)]

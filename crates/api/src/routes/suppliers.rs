@@ -194,8 +194,6 @@ pub async fn adjust(
     let amount = dto.amount()?;
     let note = dto.note;
     let shop = state.shop_id;
-    // A correction moves what the shop owes with nobody's name on it but the
-    // seeded owner's, which is what the audit row stands in for meanwhile.
     let user = who.id;
     let written = state
         .blocking(move |c| {

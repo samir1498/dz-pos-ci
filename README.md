@@ -41,10 +41,11 @@ and `design`.
 ## Screens
 
 `apps/desktop/src/routes`: dashboard, till (the app's launch screen),
-products, customers, documents, suppliers, purchases, expenses, settings.
-`/kit` is a tenth route, every kit component in every state on one page,
-built only in a dev build (`routes/kit.tsx` throws `notFound()` otherwise)
-and the page a reviewer compares against the mockups.
+products, customers, documents, suppliers, purchases, expenses, settings,
+audit (the owner's audit log). `/kit` is an eleventh route, every kit
+component in every state on one page, built only in a dev build
+(`routes/kit.tsx` throws `notFound()` otherwise) and the page a reviewer
+compares against the mockups.
 
 ## Landing page
 
@@ -91,7 +92,10 @@ Every `cargo` command builds into one folder shared by every worktree and
 the laptop clone (`CARGO_TARGET_DIR`, next to the main checkout's `.git`),
 never a `target/` of its own; `just claim` (which every recipe above that
 touches cargo runs first) points that folder at this checkout before a
-bare `cargo` command reuses another checkout's build by mistake.
+bare `cargo` command reuses another checkout's build by mistake. A bare
+`cargo` also needs `CARGO_TARGET_DIR` exported into the same shell; `just
+claim` on its own does not export it there
+(`context/processes/20260908-machines-and-heavy-jobs.md`).
 
 Every API route but `/health` needs the launch token, so `just api` runs
 first and `just dev` after it. From another machine, pass the browser's

@@ -861,9 +861,12 @@ came from.
 
 The other eleven: `discount_above_threshold` (a discount strictly above the
 shop's own setting), `override_credit_block`, `see_cost_and_margin` (the
-cost and margin columns on products, purchases and the dashboard),
-`edit_fiches` (a product's card and a supplier's, closing and reopening
-included), `edit_settings` (the régime fiscal included), `see_reports`,
+cost and margin columns on products, redacted rather than hidden; the
+purchase and supplier routes, closed outright since no till flow reads
+either), `edit_fiches` (a product's card and a supplier's, closing and
+reopening included), `edit_settings` (the régime fiscal included, and the
+backups list), `see_reports` (the dashboard and the expense and cash
+figures it sums),
 `commit_money` (a supplier payment, a purchase and its receipt, an expense),
 `correct_ledger` (a debt adjustment, a purchase return or close-short, a
 stock recount, and undoing a document already handed to a customer),
@@ -955,7 +958,9 @@ and has since the first migration. Thirty-odd actions write to the log:
 price and discount overrides with the card price beside what was charged,
 credit-block overrides, cancellations and avoirs, settings and régime
 changes, the discount threshold and the idle time, recount drifts, supplier
-and purchase corrections, every user operation, and lockouts.
+and purchase corrections, every user operation, and lockouts, plus a refused
+credit sale, a refused discount, a refused typed-under price and a refused
+permission whichever way each was refused, and an export or a restore.
 
 The owner reads it on one screen, filtered by day, by user and by kind, with
 the before and the after of each change. There is no editing and no
