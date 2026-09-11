@@ -7,7 +7,7 @@
 //! mutating route with no row here fails, and a row naming a route that is not
 //! there fails.
 //!
-//! **Eleven reads are in it.** The table is otherwise about writes, because a
+//! **Sixteen reads are in it.** The table is otherwise about writes, because a
 //! read of a list a cashier is already looking at needs no permission. The
 //! four exports and the import template are the exception the M3 carry-in
 //! named in words: an export is the whole customer list, the whole supplier
@@ -28,17 +28,28 @@
 //! screen `Permission::SeeReports`'s own doc names ("read the dashboard and
 //! the reports it links to"), and nothing a cashier's ordinary work reads:
 //! unlike `GET /products`, no till or sale flow calls either. `GET /products`
-//! stayed off this table for exactly that reason — the till needs it — and
-//! is redacted at the field instead (`ProductDto.cost_centimes` and
+//! stayed off this table for the reason that the till needs it, and is
+//! redacted at the field instead (`ProductDto.cost_centimes` and
 //! `.wholesale_centimes`, both `Option`, filled only for a caller who holds
 //! `SeeCostAndMargin`); see that DTO's own doc comment.
 //!
-//! **What T2 ships and what T3 does.** T2 is the mechanism, the table's shape
-//! and the actor. What T2 deliberately does not do is apply it: no handler
-//! calls `permissions::require` yet, and a cashier is refused by nothing. T3
-//! is one pass down this table, and the session middleware can look a row up
-//! by `axum::extract::MatchedPath` rather than each handler naming its own
-//! permission a second time.
+//! Five more joined on the milestone's closing review (2026-09-11), which
+//! found the reads carrying the shop's money were still open after the sweep
+//! meant to close them: `GET /backups` sits with the two settings writes
+//! beside it, gated the same way. `GET /expenses` and `GET /cash` are what
+//! the dashboard's own expense and cash figures come from, read directly
+//! rather than through the chart a cashier cannot open, so the same
+//! `SeeReports` refusal applies. `GET /suppliers` and
+//! `GET /suppliers/{id}/ledger` sit with `GET /purchases` for the same
+//! reason: the buying side of the shop, gated whole because no till flow
+//! reads either.
+//!
+//! **Where it is applied.** T2 shipped the mechanism, the table's shape and
+//! the actor. T3 applied it: `crates/api/src/session.rs::require` looks the
+//! matched route up in this table by `axum::extract::MatchedPath` and calls
+//! `permissions::require` before the handler runs, once per request rather
+//! than once per handler, so no handler names its own permission a second
+//! time.
 //!
 //! **Where the rows come from.** Some are rulings the plan already took: the
 //! M1, M2 and M3 carry-ins in `context/plans/20260908-m4-team.md` name the
@@ -61,7 +72,7 @@ use dzpos_core::services::permissions::Permission;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Gate {
     /// Upper case, as the router spells it: `POST`, `PUT`, and `GET` for the
-    /// five reads the module doc names.
+    /// reads the module doc names.
     pub method: &'static str,
     /// The path exactly as `crates/api/src/lib.rs` writes it, `{id}`
     /// placeholders and all, so the walking test can match the two by string.
@@ -70,8 +81,8 @@ pub struct Gate {
     pub why: &'static str,
 }
 
-/// Every mutating route this API answers, and the five reads that carry the
-/// shop's lists out of it, with what each will want.
+/// Every mutating route this API answers, and the reads the module doc names
+/// that carry the shop's lists out of it, with what each will want.
 ///
 /// Sorted by path, which is how `lib.rs` lists its routes, so the two read
 /// side by side.

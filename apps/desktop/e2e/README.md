@@ -174,8 +174,15 @@ second language on; use the looped `just e2e` or a single `--project`.
   Comptoir, the default, before it leaves, the way the settings spec hands the
   régime back, because it runs before the till specs and their screenshots
   are taken in the light theme;
-  `till.spec.ts`, one whole cash sale from `/` landing on the till to the
-  stock it moved;
+  `till-cashier.spec.ts`, a cashier signed in on the till's own session
+  (M4 T9), driving the refusals the permission table promises through the
+  real API rather than a mock: a sale rung up (the one thing every role
+  may do), a discount above the threshold and a typed-under price both
+  refused by name, a credit sale past the limit refused and overridden,
+  the staff list and the audit log refused at the server and not merely
+  hidden from the sidebar, purchases and the dashboard the same way, the
+  product list's cost fields redacted rather than closed, and every route
+  carrying the shop's money refused in turn;
   `till-credit.spec.ts`, a credit sale warned at the threshold, refused
   past the limit and then overridden;
   `till-facture.spec.ts`, a facture on credit that leaves the ticket series
@@ -186,7 +193,7 @@ second language on; use the looped `just e2e` or a single `--project`.
   user menu and read back after unlocking with the owner's password
   (what a session resumed from the `./auth` fixture's cookie unlocks with,
   no `AuthMethod` remembered on a window that never made a sign-in call of
-  its own); the covered till answers to nothing while it is locked — a
+  its own); the covered till answers to nothing while it is locked, a
   forced `.focus()` on the search box is a no-op, a scanned barcode lands
   nowhere, and F9 does not pay, even though the basket it would have paid
   is a real one; and a session with no remembered method offers both
@@ -194,6 +201,8 @@ second language on; use the looped `just e2e` or a single `--project`.
   password form;
   `till-reversals-and-quotations.spec.ts`, a partial avoir, a whole
   cancellation, the credit it leaves and a proforma;
+  `till.spec.ts`, one whole cash sale from `/` landing on the till to the
+  stock it moved;
   `zz-exports-and-labels.spec.ts`, the four workbooks read back as real
   spreadsheets, the product template downloaded, the committed fixture
   checked and applied, and the label of the product it created shown in the

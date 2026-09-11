@@ -10,9 +10,9 @@ the landing page. This morning: M4's plan gained its ten tasks
 (`context/plans/20260908-m4-team.md`, users and PINs through the closing
 sweep) and a new `landing-page` plan was written, replacing D5 of the
 design plan; the organisation's GitHub Actions budget is still capped, but
-`just ci` (branch `ci/lean-and-mirror`, not yet merged to main) now pushes a
-branch to the mirror `samir1498/dz-pos-ci` so gates run on Samir's own
-minutes without waiting on Anouar. Still open: the host for the demo
+`just ci` now pushes a branch to the mirror `samir1498/dz-pos-ci` (merged to
+main as PR #22) so gates run on Samir's own minutes without waiting on
+Anouar. Still open: the host for the demo
 deploy (a container on Koyeb or Render, or Cloudflare Containers — the
 box-side tunnel pieces are stopped; unverified whether Cloudflare was
 ruled out for the app itself, as opposed to the landing page's static
@@ -67,8 +67,9 @@ shortcut that pays refuses while it is up, and the app underneath stops
 asking the server for anything, so the session finally times out on the
 server as well as on the glass.
 
-A cashier cannot see what the shop paid. The purchase and dashboard routes
-refuse them outright; the product list, which they need to ring a sale up,
+A cashier cannot see what the shop paid. The purchase, dashboard, expense,
+cash and supplier routes refuse them outright; the product list, which they
+need to ring a sale up,
 hands back its cost and wholesale fields empty instead of being closed. That
 second half is what the closing review found missing: the two permissions
 about seeing cost and seeing reports were written down, tested, and enforced
@@ -196,6 +197,41 @@ Run `just status` from the repo root for the ladder and the plans.
 Run `just ctx show <slug>` for plan details.
 
 ## Done recently
+- 2026-09-11: stale-info sweep after the M4 checkpoint (roles, PINs,
+  permissions, sessions, audit log; PR #33). Two context items fixed on
+  `main` (70fa841, folded into PR #35's squash when the worktree fetched
+  local main before origin caught up): the CI mirror branch note in
+  `now.md` and the repos page still said `ci/lean-and-mirror` was not
+  merged (it reached main as PR #22), and `now.md` named only the purchase
+  and dashboard routes as closed to a cashier outright where five are.
+  Nine more items fixed on `chore/stale-sweep-20260911-m4` (PR #35,
+  4b69007): `docs/roadmap.md`'s M4 heading had no closed tag; `README.md`'s
+  Screens list was missing `audit` and undercounted `/kit`;
+  `docs/architecture.md`'s error-code table was missing five codes
+  (`session_required`, `auth_refused`, `locked_out`, `forbidden`,
+  `ungated_write`) and said six optional fields where M4 made it eight;
+  `crates/api/src/routes/suppliers.rs::adjust` still explained a
+  seeded-owner stand-in the route stopped needing at M4 T1;
+  `crates/api/src/dto.rs`'s `ThemeChoiceDto` doc and
+  `crates/core/src/repos/preferences.rs::clear` still called a cleared
+  theme "follow the machine" instead of Comptoir, the default (`just
+  types` regenerated `ThemeChoiceDto.ts` to match); `crates/api/src/gates.rs`
+  still said eleven reads and that permissions were not yet applied, where
+  the closing review gated five more for sixteen and T3 applied them
+  the same day; the `justfile`, `README.md` and `CLAUDE.md` claim-comments
+  did not say a bare `cargo` needs `CARGO_TARGET_DIR` exported, not only
+  `just claim`; `apps/desktop/e2e/README.md`'s Files list was missing
+  `till-cashier.spec.ts` and misordered the till files; `docs/features.md`
+  §5 credited `see_cost_and_margin` with gating the dashboard (it is
+  `see_reports`) and left five audit-log categories out of its list. Three
+  new `.claude/stale-homes.md` rows (desktop screens list, gated-read
+  count, API error codes). Checked and found correct, not stale:
+  `context/roadmaps/` M4 entry, `context/plans/20260908-m4-team.md`,
+  `docs/features.md` §5/§8 elsewhere, `apps/desktop/e2e/README.md`'s
+  screenshot section, `context/processes/20260908-machines-and-heavy-jobs.md`,
+  `.github/workflows/ci.yml`, `crates/core/src/lib.rs`'s mod list. Not
+  checked: the boss site (`~/.dz-night/report/`), out of this sweep's
+  file list.
 - 2026-09-11: stale-info sweep of `context/` after the M3 checkpoint and the design-system merge: seven pages fixed on `main` (4229651, plus a same-day follow-up fixing an unescaped apostrophe that commit left in the design plan's YAML) — a task-count drift (M3's plan and now.md still said "nine tasks" after T0 grew it to ten), the roadmap's M4 entry still `planned` with no note of its ten tasks, the design plan's D2 still describing the theme select falling back to the machine's preference (superseded by Comptoir as the default), D4/D5 still calling the Astro landing "a later plan" instead of naming the `landing-page` plan that replaces D5, the repos page's CI row still describing every-PR Windows/coverage runs on GitHub instead of the mirror workaround, the M3 loop's 16:20 entry still saying "two jobs", and a 2026-09-08 reference recommending a since-superseded per-worktree `CARGO_TARGET_DIR`. Left unverified: whether Cloudflare (as opposed to a container host) was ruled out for the app's own demo deploy. Not touched (another agent's in-flight work, or out of scope): `.claude/stale-homes.md` needs a new CI row; `docs/`, code and `research/`.
 - 2026-09-10 06:50: stale-info sweep of the repo and the boss site after the M2 merge: 12 prose items (roadmap headings and the merge sentence, the numbering paragraph, a process page subject, four boss reference pages), 2 justfile comments; context fixed on `main`, docs and justfile through `m3/stale-docs` into the milestone branch, the site redeployed; three new rows in `.claude/stale-homes.md`.
 - 2026-09-10: M2 merged to main (PR #19, 79732ca). Rulings taken during the build are in docs/features.md §2 to §4; the open questions for the comptable are on the status site's M2 checkpoint page; the M4 plan carries the permissions M2 leaves open (override, correction, cancel, avoir, closing a fiche).

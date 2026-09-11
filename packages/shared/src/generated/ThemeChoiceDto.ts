@@ -3,7 +3,7 @@ import type { ThemeDto } from "./ThemeDto";
 
 /**
  * The theme the shop chose. `null` is not a missing answer: it is the shop
- * saying "follow the machine", and the app then reads the operating system's
- * light or dark preference.
+ * asking to forget its choice, which puts the app back on Comptoir, the
+ * default (the machine's own light or dark preference is not consulted).
  */
 export type ThemeChoiceDto = { theme: ThemeDto | null, };
