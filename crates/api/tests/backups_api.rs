@@ -11,6 +11,8 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+mod common;
+
 const SHOP: i32 = 1;
 const TOKEN: &str = "test-launch-token";
 
@@ -82,6 +84,7 @@ fn backup_files(h: &Harness) -> Vec<std::path::PathBuf> {
 fn harness() -> Harness {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     Harness {
         dir,
@@ -98,7 +101,8 @@ async fn call(
     let req = Request::builder()
         .method(method)
         .uri(uri)
-        .header("authorization", format!("Bearer {TOKEN}"));
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION);
     let req = match body {
         Some(v) => req
             .header("content-type", "application/json")
@@ -398,11 +402,16 @@ async fn a_shop_file_that_cannot_be_reopened_leaves_the_server_refusing_every_qu
         "a copy was written, or an older one pruned, off a shop file that is not open"
     );
 
-    // Listing reads the folder, not the shop file, so the owner can still
-    // see what there is to restore from.
+    // Listing reads the folder and not the shop file, but it is still
+    // refused, and that is M4 T2's doing rather than a regression: every
+    // route takes its actor from a session, a session lives in the shop file,
+    // and a server that cannot open the file cannot say who is asking. It
+    // answers the one code that helps rather than reading a folder out to a
+    // caller it cannot name, and the answer says to relaunch, after which the
+    // file opens, the owner signs in and the list is there.
     let (status, listed) = call(&h.app, "GET", "/backups", None).await;
-    assert_eq!(status, StatusCode::OK, "{listed}");
-    assert_eq!(listed["backups"].as_array().unwrap().len(), 1);
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{listed}");
+    assert_eq!(listed["error"]["code"], "restart_needed");
 }
 
 /// The copy is in place and a sidecar of the file it replaced could not be

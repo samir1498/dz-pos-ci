@@ -21,6 +21,7 @@ use serde::Deserialize;
 
 use crate::dto::{ImportAppliedDto, ImportDryRunDto};
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::routes::export::workbook;
 use crate::routes::settings::now;
 use crate::AppState;
@@ -73,10 +74,11 @@ pub async fn dry_run(
 /// else created is refused here rather than half applied.
 pub async fn apply(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Bytes,
 ) -> Result<Json<ImportAppliedDto>, ApiError> {
     let shop = state.shop_id;
-    let user = state.user_id;
+    let user = who.id;
     let done = state
         .blocking(move |c| import::apply(c, shop, user, &body))
         .await?;

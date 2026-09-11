@@ -25,6 +25,7 @@ fn token() -> dzpos_api::LaunchToken {
 fn app() -> (tempfile::TempDir, axum::Router) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     (dir, dzpos_api::router(state, &token()))
 }
@@ -38,7 +39,8 @@ async fn call(
     let req = Request::builder()
         .method(method)
         .uri(uri)
-        .header("authorization", format!("Bearer {TOKEN}"));
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION);
     let req = match body {
         Some(v) => req
             .header("content-type", "application/json")
@@ -175,7 +177,7 @@ async fn a_sale_of_another_shop_is_not_found_even_by_its_own_id() {
     // Two routers over one file, the way two shops share one installation.
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
-    let mine = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap(), &token());
+    let mine = common::signed_in_router(&path, SHOP, &token());
     let p = product(&mine, "Sucre", 1_000, 1900).await;
     let (status, sale) = call(
         &mine,
@@ -191,7 +193,7 @@ async fn a_sale_of_another_shop_is_not_found_even_by_its_own_id() {
     assert_eq!(status, StatusCode::CREATED, "{sale}");
     let id = sale["id"].as_i64().unwrap();
 
-    let other = dzpos_api::router(dzpos_api::AppState::open(&path, 2).unwrap(), &token());
+    let other = common::signed_in_router(&path, 2, &token());
     let (status, body) = call(&other, "GET", &format!("/sales/{id}"), None).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
     assert_eq!(code(&body), "not_found");

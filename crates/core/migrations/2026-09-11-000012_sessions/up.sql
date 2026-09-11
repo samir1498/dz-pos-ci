@@ -43,11 +43,14 @@ CREATE TABLE sessions (
     ended_at     TEXT
 ) STRICT;
 
--- Every request looks a session up by this and by nothing else, so it is the
--- unique key rather than an ordinary index: two rows under one hash would be
--- a collision in SHA-256 or a bug in the service, and the file should refuse
--- both.
-CREATE UNIQUE INDEX idx_sessions_token_hash ON sessions (token_hash);
+-- Every request looks a session up by its shop and this hash and by nothing
+-- else, so the pair is the unique key rather than an ordinary index: two rows
+-- of one shop under one hash would be a collision in SHA-256 or a bug in the
+-- service, and the file should refuse both. Scoped by shop rather than global
+-- for the reason every query in `repos` is (rule 3): a token is only ever
+-- looked up inside the shop this server answers for, so uniqueness across
+-- shops would be a promise nothing reads.
+CREATE UNIQUE INDEX idx_sessions_token_hash ON sessions (shop_id, token_hash);
 
 -- Signing a user out of every screen at once, and the T8 case of a fiche
 -- being switched off while its owner is still holding a session.

@@ -13,6 +13,8 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+mod common;
+
 const SHOP: i32 = 1;
 
 const TOKEN: &str = "test-launch-token";
@@ -30,6 +32,7 @@ struct Harness {
 fn harness() -> Harness {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     Harness {
         _dir: dir,
@@ -41,7 +44,7 @@ fn harness() -> Harness {
 /// The same shop file, answered for as shop 2: the state carries the shop, so
 /// this is the whole of what another shop can reach.
 fn other_shop(h: &Harness) -> axum::Router {
-    dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap(), &token())
+    common::signed_in_router(&h.path, 2, &token())
 }
 
 async fn call(
@@ -53,7 +56,8 @@ async fn call(
     let req = Request::builder()
         .method(method)
         .uri(uri)
-        .header("authorization", format!("Bearer {TOKEN}"));
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION);
     let req = match body {
         Some(v) => req
             .header("content-type", "application/json")

@@ -31,6 +31,7 @@ fn token() -> dzpos_api::LaunchToken {
 fn app() -> (tempfile::TempDir, std::path::PathBuf, axum::Router) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     let router = dzpos_api::router(state, &token());
     (dir, path, router)
@@ -46,6 +47,7 @@ async fn call_text(
     let req = Request::builder().method("GET").uri(uri);
     let req = if bearer {
         req.header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
     } else {
         req
     };
@@ -80,6 +82,7 @@ async fn a_sale(app: &axum::Router) -> i64 {
         .method("POST")
         .uri("/products")
         .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
         .header("content-type", "application/json")
         .body(Body::from(
             json!({
@@ -103,6 +106,7 @@ async fn a_sale(app: &axum::Router) -> i64 {
         .method("POST")
         .uri("/sales")
         .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
         .header("content-type", "application/json")
         .body(Body::from(
             json!({
@@ -226,6 +230,7 @@ async fn a_facture(app: &axum::Router) -> i64 {
                 })
                 .uri(uri)
                 .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
                 .header("content-type", "application/json")
                 .body(Body::from(body.to_string()))
                 .unwrap();
@@ -426,6 +431,7 @@ async fn post_json(app: &axum::Router, uri: &str, body: Value) -> Value {
         .method("POST")
         .uri(uri)
         .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))
         .unwrap();

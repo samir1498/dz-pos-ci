@@ -25,11 +25,18 @@ use dzpos_api::dto::{
     SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
     SaleWarningDto, SettingsDto, StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto,
     SupplierDebtKindDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto,
-    SupplierWriteDto, TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto,
+    LoginDto, MeDto, PermissionDto, RoleDto, SessionDto, SessionIdleDto, SupplierWriteDto,
+    TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 91] = [
+const FILES: [&str; 97] = [
+    "LoginDto.ts",
+    "MeDto.ts",
+    "SessionDto.ts",
+    "SessionIdleDto.ts",
+    "RoleDto.ts",
+    "PermissionDto.ts",
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -178,6 +185,12 @@ fn export_bindings() {
     let dir = out_dir();
     std::fs::create_dir_all(&dir).unwrap();
     let cfg = config(&dir);
+    RoleDto::export_all(&cfg).unwrap();
+    PermissionDto::export_all(&cfg).unwrap();
+    MeDto::export_all(&cfg).unwrap();
+    LoginDto::export_all(&cfg).unwrap();
+    SessionDto::export_all(&cfg).unwrap();
+    SessionIdleDto::export_all(&cfg).unwrap();
     UnitDto::export_all(&cfg).unwrap();
     ProductDto::export_all(&cfg).unwrap();
     NewProductDto::export_all(&cfg).unwrap();

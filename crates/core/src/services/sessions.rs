@@ -115,7 +115,7 @@ fn open(
         &SessionRowWrite {
             shop_id,
             user_id: user.id,
-            token_hash: digest(token.expose()),
+            token_hash: token_digest(token.expose()),
             created_at: now,
             last_seen_at: now,
         },
@@ -181,10 +181,10 @@ fn live(
     token: &str,
     now: NaiveDateTime,
 ) -> Result<Option<repo::Live>, CoreError> {
-    let Some(found) = repo::by_token_hash(conn, shop_id, &digest(token))? else {
+    let Some(found) = repo::by_token_hash(conn, shop_id, &token_digest(token))? else {
         return Ok(None);
     };
-    if !constant_time_eq(&found.row.token_hash, &digest(token)) {
+    if !constant_time_eq(&found.row.token_hash, &token_digest(token)) {
         return Ok(None);
     }
     if found.row.ended_at.is_some() || !found.user_active {
@@ -205,7 +205,7 @@ pub fn sign_out(
     token: &str,
     now: NaiveDateTime,
 ) -> Result<(), CoreError> {
-    if let Some(found) = repo::by_token_hash(conn, shop_id, &digest(token))? {
+    if let Some(found) = repo::by_token_hash(conn, shop_id, &token_digest(token))? {
         repo::end(conn, shop_id, found.row.id, now)?;
     }
     Ok(())
@@ -231,7 +231,12 @@ fn mint() -> Result<SessionToken, CoreError> {
 
 /// SHA-256 of the token, lowercase hex. The stored form, and the only form
 /// this crate ever compares.
-fn digest(token: &str) -> String {
+///
+/// Public because it is not a secret: it is a published hash of a value the
+/// caller already holds, and a test that wants to plant or find a session row
+/// should ask for the stored form rather than guess at it. Nothing here turns
+/// a digest back into a token.
+pub fn token_digest(token: &str) -> String {
     use sha2::{Digest, Sha256};
     let mut hex = String::with_capacity(64);
     for b in Sha256::digest(token.as_bytes()) {
@@ -269,8 +274,8 @@ mod tests {
         assert_eq!(a.expose().len(), 64);
         assert!(a.expose().bytes().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a.expose(), b.expose());
-        assert_ne!(digest(a.expose()), a.expose());
-        assert_eq!(digest(a.expose()).len(), 64);
+        assert_ne!(token_digest(a.expose()), a.expose());
+        assert_eq!(token_digest(a.expose()).len(), 64);
     }
 
     /// The one published vector for SHA-256, so a refactor that reached for
@@ -278,11 +283,11 @@ mod tests {
     #[test]
     fn the_digest_is_sha_256_and_lowercase_hex() {
         assert_eq!(
-            digest("abc"),
+            token_digest("abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
-        assert_eq!(digest(""), digest(""));
-        assert_ne!(digest("a"), digest("A"));
+        assert_eq!(token_digest(""), token_digest(""));
+        assert_ne!(token_digest("a"), token_digest("A"));
     }
 
     #[test]

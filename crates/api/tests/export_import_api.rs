@@ -16,6 +16,8 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+mod common;
+
 const SHOP: i32 = 1;
 const TOKEN: &str = "test-launch-token";
 const XLSX: &str = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -31,6 +33,7 @@ fn token() -> dzpos_api::LaunchToken {
 fn app() -> (tempfile::TempDir, axum::Router) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     let router = dzpos_api::router(state, &token());
     (dir, router)
@@ -53,7 +56,8 @@ async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Vec<u8>>
     let req = Request::builder()
         .method(method)
         .uri(uri)
-        .header("authorization", format!("Bearer {TOKEN}"));
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION);
     let req = match body {
         Some(bytes) => req.body(Body::from(bytes)).unwrap(),
         None => req.body(Body::empty()).unwrap(),
@@ -82,6 +86,7 @@ async fn post_json(app: &axum::Router, uri: &str, body: Value) -> Answer {
         .method("POST")
         .uri(uri)
         .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))
         .unwrap();

@@ -12,6 +12,7 @@ use serde::Deserialize;
 
 use crate::dto::{LabelSheetDto, NewProductDto, ProductDto, LABEL_SHEET_MAX};
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<ProductDto>>, ApiError> {
@@ -36,6 +37,7 @@ pub async fn get_one(
 
 pub async fn create(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Result<Json<NewProductDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ProductDto>), ApiError> {
     // A body that does not parse is the caller's mistake, not a server
@@ -43,7 +45,7 @@ pub async fn create(
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = NewProduct::try_from(dto)?;
     let shop = state.shop_id;
-    let user = state.user_id;
+    let user = who.id;
     let made = state
         .blocking(move |c| service::create(c, shop, user, new))
         .await?;
@@ -55,6 +57,7 @@ pub async fn create(
 /// `barcode` null keeps the number the product has (core, `update`).
 pub async fn update(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<NewProductDto>, JsonRejection>,
 ) -> Result<Json<ProductDto>, ApiError> {
@@ -63,7 +66,7 @@ pub async fn update(
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = NewProduct::try_from(dto)?;
     let shop = state.shop_id;
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| service::update(c, shop, user, id, new))
         .await?;

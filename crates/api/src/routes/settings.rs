@@ -12,6 +12,7 @@ use dzpos_core::services::{preferences, settings, shops};
 
 use crate::dto::{parse_day, RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto};
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 /// This moment on the shop's calendar. The offset itself lives in the core
@@ -42,12 +43,13 @@ pub async fn read(State(state): State<AppState>) -> Result<Json<SettingsDto>, Ap
 
 pub async fn update_store(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Result<Json<StoreDto>, JsonRejection>,
 ) -> Result<Json<StoreDto>, ApiError> {
     let Json(dto) = body.map_err(ApiError::from)?;
     let block = StoreBlock::from(dto);
     let shop = state.shop_id;
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| shops::update_store(c, shop, user, block))
         .await?;
@@ -80,13 +82,14 @@ pub async fn set_theme(
 /// which.
 pub async fn change_regime(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Result<Json<RegimeChangeDto>, JsonRejection>,
 ) -> Result<Json<SettingsDto>, ApiError> {
     let Json(dto) = body.map_err(ApiError::from)?;
     let from = parse_day("valid_from", &dto.valid_from)?.and_time(NaiveTime::MIN);
     let regime = dto.regime.into();
     let shop = state.shop_id;
-    let user = state.user_id;
+    let user = who.id;
     let all = state
         .blocking(move |c| {
             settings::set_regime(c, shop, user, regime, from)?;
