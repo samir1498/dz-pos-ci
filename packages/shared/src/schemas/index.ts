@@ -33,6 +33,7 @@ export {
 export {
   backupSchema,
   backupsSchema,
+  buildInfoSchema,
   clockSchema,
   datedRegimeSchema,
   healthSchema,

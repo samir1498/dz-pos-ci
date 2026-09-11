@@ -337,7 +337,37 @@ shown in About. The bundle identifier `com.dzpos.app` changes exactly
 once, with the final name, before the first tag (open decision 2 in
 `features.md`).
 
-Decided (Samir, 2026-09-11, M5 T6): a tag matching `v<semver>` on `main` is
+Decided (2026-09-11, M5 T1): the version also heads the log file and will
+head the support bundle. `crates/core::build_info::BUILD_INFO` is the one
+place the three come from. `build.rs` bakes the git short hash and the
+build date in with `env!` at compile time (`git rev-parse --short=8 HEAD`
+and the UTC date the crate was compiled), `CARGO_PKG_VERSION` is the
+semver. A checkout with no `git` binary or no `.git` still builds: the hash
+is `"nogit"`, a sentinel a test can name, never an invented value or the
+word `"unknown"`. `crates/api` exposes `GET /build-info`
+(`BuildInfoDto`) as the one route `apps/desktop`'s About screen (reachable
+from Settings) reads; the web side keeps no second copy of any of the
+three. `AppState::open_with_backup_dir` calls
+`dzpos_core::log::head_session`, which appends
+`build_info::header_line` to `dzpos.log` beside the shop file at the start
+of every session, standalone binary and desktop process alike. T3's
+support bundle carries the same line: `build_info::header_line(&BUILD_INFO)`
+is the one function that formats it, and the bundle's own header will be
+that call.
+
+A new build that opens an older shop file copies that file before it
+migrates it. The copy goes beside the shop file as
+`<name>.before-upgrade-<stamp>.sqlite`, so the daily prune cannot reach it,
+and it is taken only when the file already holds a schema and this build has
+migrations it has not had: a fresh install copies nothing, and a restart
+after the upgrade copies nothing either. A copy that cannot be written stops
+the app from starting, because the alternative is a migration running with
+nothing to go back to. `crates/api/src/lib.rs`, `open_and_upgrade`, is the
+only caller; `crates/api/tests/upgrade_from_a_previous_version.rs` builds a
+file at the previous version and opens it. Restoring one is a file swap by
+hand today: the restore route takes a daily copy's name and no other kind.
+
+Decided (2026-09-11, M5 T6): a tag matching `v<semver>` on `main` is
 the only thing that publishes the GitHub release
 (`.github/workflows/release.yml`); an off-main tag or a malformed one
 refuses and says why, and a plain push never triggers the workflow at all.
@@ -351,9 +381,6 @@ finished.
 Raised in the 2026-09-08 handoff, still open, each settled before
 `docs/roadmap.md` M5 closes:
 
-- Whether the version also heads the log file and the support bundle.
-- Migrations tied to the app version, with an automatic backup of the
-  SQLite file before any migration runs.
 - Tauri updater signing key: who generates it and who holds it; it never
   enters the repo, CI signs with a secret.
 - Windows code-signing certificate: cost and lead time, for Anouar.

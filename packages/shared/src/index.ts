@@ -43,6 +43,7 @@ export type { ThemeChoiceDto } from "./generated/ThemeChoiceDto";
 export type { RegimeChangeDto } from "./generated/RegimeChangeDto";
 export type { BackupDto } from "./generated/BackupDto";
 export type { BackupsDto } from "./generated/BackupsDto";
+export type { BuildInfoDto } from "./generated/BuildInfoDto";
 export type { RestoreDto } from "./generated/RestoreDto";
 export type { PaymentModeDto } from "./generated/PaymentModeDto";
 export type { DocumentKindDto } from "./generated/DocumentKindDto";

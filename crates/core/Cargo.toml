@@ -54,5 +54,12 @@ tempfile = "3"
 # which is a normal dependency above.
 proptest = "1.11"
 
+# build.rs reads today's date in UTC to bake into `build_info` (M5 T1). The
+# workspace already carries chrono for the shipped crate; reusing it here
+# instead of hand-rolling a calendar calculation avoids a second, unreviewed
+# implementation of leap years for one date string.
+[build-dependencies]
+chrono = { workspace = true }
+
 [lints]
 workspace = true
