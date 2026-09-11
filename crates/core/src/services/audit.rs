@@ -292,49 +292,66 @@ fn day_range_utc(day: NaiveDate) -> (NaiveDateTime, NaiveDateTime) {
     (start, start + Duration::days(1))
 }
 
-/// One page of the log, filtered, and the two dropdowns' options, in one
-/// pass over the shop's rows: `list_desc` and the shop's users are each read
-/// once, whatever `filter` narrows and whichever `page` is asked for.
+/// One page of the log, filtered in SQL (`WHERE` and `LIMIT`/`OFFSET`, not a
+/// `Vec` sliced afterwards), and the two dropdowns' options. The dropdowns
+/// read off the whole log regardless of `filter` (`repo::distinct_actions`,
+/// `users::list`) — a filter narrow enough to empty the page must not also
+/// empty the choices that would widen it back.
+///
+/// The lockout row is the one filter case worth naming here: `user.locked_out`
+/// is written with `user_id` set to the person the attempts were made on
+/// (`services::users::settle`'s own comment — "The actor is the user the
+/// attempts were made on: nobody knows who was standing there, and claiming
+/// otherwise in an audit log is worse than saying nothing"), because nobody
+/// is signed in when the row is written. That is a plain equality on the
+/// stored column, same as any other row's `user_id`, so a filter by that
+/// person still finds it — filtering it out would be inventing an actor the
+/// row never claimed to have. What keeps the row from reading as something
+/// that person *did* is the action's own name, `user.locked_out`, which
+/// `record` writes the way every service writes it and this function does
+/// not touch.
 pub fn read(
     conn: &mut SqliteConnection,
     shop_id: i32,
     filter: &Filter,
     page_number: i64,
 ) -> Result<(Page, Facets), CoreError> {
-    let all = repo::list_desc(conn, shop_id)?;
     let names: HashMap<i32, String> = users::list(conn, shop_id)?
         .into_iter()
         .map(|u| (u.id, u.name))
         .collect();
-
-    let mut actions: Vec<String> = all.iter().map(|e| e.action.clone()).collect();
-    actions.sort_unstable();
-    actions.dedup();
     let mut people: Vec<(i32, String)> =
         names.iter().map(|(id, name)| (*id, name.clone())).collect();
     people.sort_by(|a, b| a.1.cmp(&b.1));
+    let actions = repo::distinct_actions(conn, shop_id)?;
 
     let range = filter.day.map(day_range_utc);
-    let matched: Vec<AuditEntry> = all
-        .into_iter()
-        .filter(|e| filter.user_id.is_none_or(|u| e.user_id == u))
-        .filter(|e| filter.action.as_deref().is_none_or(|a| e.action == a))
-        .filter(|e| range.is_none_or(|(start, end)| e.created_at >= start && e.created_at < end))
-        .collect();
+    let repo_filter = repo::SearchFilter {
+        user_id: filter.user_id,
+        action: filter.action.clone(),
+        created_from: range.map(|(start, _)| start),
+        created_to: range.map(|(_, end)| end),
+    };
 
     // `page_number` comes straight off the query string, so a caller can
     // send anything up to `i64::MAX`: the multiplication below has to
     // saturate rather than overflow, or a large enough page answers 500
-    // instead of the empty page it should.
+    // instead of the empty page it should. Unlike the old in-memory slice,
+    // an absurd offset costs SQLite nothing to refuse: it just matches no
+    // row.
     let page_number = page_number.max(1);
-    let start = usize::try_from(page_number - 1)
-        .unwrap_or(usize::MAX)
-        .saturating_mul(PAGE_SIZE);
-    let has_more = matched.len() > start.saturating_add(PAGE_SIZE);
-    let rows = matched
+    let limit = i64::try_from(PAGE_SIZE).unwrap_or(i64::MAX);
+    let offset = (page_number - 1).saturating_mul(limit);
+
+    // A second query rather than a `COUNT(*) OVER()` window function: both
+    // read the same filter, and writing it once as a plain, typed diesel
+    // query — the house style every other repo in this folder uses — beats
+    // a raw SQL fragment for one extra indexed read on a page the owner
+    // opens by hand, not on a hot path.
+    let total = repo::count(conn, shop_id, &repo_filter)?;
+    let has_more = total > offset.saturating_add(limit);
+    let rows = repo::search(conn, shop_id, &repo_filter, limit, offset)?
         .into_iter()
-        .skip(start)
-        .take(PAGE_SIZE)
         .map(|entry| {
             let user_name = names.get(&entry.user_id).cloned().unwrap_or_default();
             EntryWithUser { entry, user_name }
