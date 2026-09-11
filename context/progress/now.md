@@ -316,7 +316,7 @@ M0 ran step by step, Samir reviewing between steps. M1 runs as the loop
 described under Active; its tasks and statuses are in the M1 plan, not
 here.
 
-1. [x] Stamp, TVA, rounding, facture mentions, numbering, IFU, words read from primary sources; all in `research/legal-fiscal/2026-09-08-fiscal-sources-and-findings.md` and the Source column of `docs/features.md` (R1, R2, R4, R5 done; R3, R6 partial)
+1. [x] Stamp, TVA, rounding, facture mentions, numbering, IFU, words read from primary sources; all in `research/legal-fiscal/2026-09-08-fiscal-sources-and-findings.md` and the Source column of `docs/features.md` (R1, R2, R3, R4, R5 done; R6 partial; R3's citations are in `research/legal-fiscal/2026-09-08-facture-and-ticket.md` and the party identifiers row of `docs/features.md`)
 2. [x] `Money` newtype and `pct` in `crates/core`, first fixtures, first proptest (money plan T1)
 3. [x] TVA grouping per rate and global discount spread; fixtures shared with `design/shared/money.js` via vitest (T2, T5)
 4. [x] Stamp duty per step 1 (T3, T8)

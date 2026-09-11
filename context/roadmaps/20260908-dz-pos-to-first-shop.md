@@ -13,7 +13,7 @@ entries:
     note: 'M0 closed 2026-09-09 with PR #14 merged (c3f6384)'
   - ref: 'legal-fiscal-and-tooling-research-for-dz-pos'
     status: 'in-progress'
-    note: 'M0: R3, R6, R7, R8, R9 open; R8 and R6 gate M2, R3 gates M5'
+    note: 'M0: R6, R8, R9 open; R3 and R7 done; R8 and R6 gate M2'
   - ref: 'repo-tooling-skills-and-rules-for-dz-pos'
     status: 'in-progress'
     note: 'open: laptop clone, Sonar Rust check'
