@@ -92,6 +92,38 @@ describe("the committed shots", () => {
   );
 
   it.each(KEYS.flatMap((key) => LOCALES.map((locale) => [key, locale] as const)))(
+    "%s/%s's sources never get lighter as they get wider",
+    (key, locale) => {
+      // The hero once shipped a 684w tile at 58490 B, heavier than the
+      // 1344w tile above it (42592 B) -- lossless webp storing a rescale's
+      // resampling noise pixel for pixel, on a tier that was supposed to
+      // save a phone bytes. A wider tier that is never lighter than a
+      // narrower one is what a `w`-descriptor srcset needs to be worth
+      // shipping at all: a browser choosing between two candidates should
+      // never find the bigger number is also the smaller download.
+      const entry = built.manifest[key][locale];
+      const byFile = new Map(built.files.map((f) => [f.file, f.bytes.length]));
+      const sized = entry.sources.map((source) => {
+        const bytes = byFile.get(source.url);
+        if (bytes === undefined) {
+          throw new Error(`${source.url}: not among the files this run produced`);
+        }
+        return { url: source.url, width: source.width, bytes };
+      });
+      for (let i = 1; i < sized.length; i += 1) {
+        const narrower = sized[i - 1];
+        const wider = sized[i];
+        if (narrower === undefined || wider === undefined) continue;
+        expect(
+          wider.bytes,
+          `${wider.url} (${wider.width}w, ${wider.bytes} B) is lighter than ` +
+            `${narrower.url} (${narrower.width}w, ${narrower.bytes} B)`,
+        ).toBeGreaterThanOrEqual(narrower.bytes);
+      }
+    },
+  );
+
+  it.each(KEYS.flatMap((key) => LOCALES.map((locale) => [key, locale] as const)))(
     "%s/%s's sizes attribute is not empty",
     (key, locale) => {
       expect(built.manifest[key][locale].sizes.length).toBeGreaterThan(0);

@@ -55,6 +55,36 @@ const FRAME = {
 export const RETINA_FACTOR = 2;
 
 /**
+ * Every screenshot in apps/desktop/e2e/screenshots/ is captured 1280 device
+ * px wide. A tile whose resize target lands within a device pixel or two of
+ * that is not a real rescale -- sharp's resize is close enough to a no-op
+ * that the pixels stay flat and lossless webp compresses them tight. A tile
+ * resized further off, up or down, resamples the screenshot and introduces
+ * blend noise that lossless stores pixel for pixel, which costs more than a
+ * heavier, sharper photograph would (measured: the hero's 620-wide downscale
+ * was 58490 B lossless, more than the 672-tier's untouched 1280-wide
+ * 42592 B). Those tiles get lossy webp instead; see toWebp.
+ */
+const SOURCE_WIDTH = 1280;
+const isNearOriginalScale = (targetWidth: number): boolean => Math.abs(targetWidth - SOURCE_WIDTH) <= 2;
+
+/**
+ * webp quality for a tile that isn't near-original-scale (see
+ * isNearOriginalScale). Chosen by rendering the hero's most-resampled
+ * tiers at the time -- 342 outer (a 2.06x downscale) and a 720-outer tier
+ * that was since deleted (a 1.08x *upscale* of the 1280px source, so it
+ * carried no pixel the 1344w tier didn't already have; see HERO_WIDTHS) --
+ * at quality 70/78/82/88/92/96, comparing lossless vs each quality at 2x-4x
+ * nearest-neighbour zoom on the ticket panel's smallest text (the ticket ID
+ * and the price figures), the densest, smallest text either tile carries.
+ * 82 was visually indistinguishable from lossless at that zoom on both
+ * tiers, with real margin below it (70 was also clean); 82 is kept rather
+ * than pushed lower so a future, more detailed screenshot has headroom
+ * before this needs re-checking by eye.
+ */
+const LOSSY_QUALITY = 82;
+
+/**
  * HERO_WIDTHS, PIECE_WIDTHS and SCREENS_WIDTHS below are the shot's own
  * *outer*, ring-included CSS width -- what a headless browser measures on
  * the rendered `<img>`, since the ring is baked into the bitmap rather than
@@ -98,7 +128,7 @@ const roundedRectStroke = (width: number, height: number, radius: number, stroke
 const frameTile = async (
   crop: Crop,
   cssWidth: number,
-): Promise<{ image: Sharp; width: number; height: number }> => {
+): Promise<{ image: Sharp; width: number; height: number; lossless: boolean }> => {
   const width = cssWidth * RETINA_FACTOR;
   const shot = await sharp(screenshotPath(crop.source))
     .extract({ left: 0, top: crop.top, width: 1280, height: crop.height })
@@ -121,7 +151,7 @@ const frameTile = async (
     { input: roundedRectStroke(outerWidth, outerHeight, radius, FRAME.borderColor), left: 0, top: 0 },
   ]);
 
-  return { image, width: outerWidth, height: outerHeight };
+  return { image, width: outerWidth, height: outerHeight, lossless: isNearOriginalScale(width) };
 };
 
 /**
@@ -135,24 +165,38 @@ const frameTile = async (
 const HERO_SIZES = "(min-width: 1120px) 672px, calc(100vw - 48px)";
 
 /**
- * Ascending by pixel value, not by breakpoint name: the fluid single-column
- * range renders the shot wider at the 768px tablet measurement (720 CSS
- * px) than the fixed two-column layout ever does at 1120px+ desktop width
- * (672 CSS px), because hero-copy's own text claims a lane there and stops
- * the shot from growing past it; see HERO_SIZES.
+ * The fluid single-column range measured 720 CSS px wide at the 768px
+ * tablet breakpoint -- wider than the fixed two-column layout's 672 CSS px
+ * desktop tier, because hero-copy's own text claims a lane there and stops
+ * the shot from growing past it; see HERO_SIZES. That third, 720-wide tier
+ * is dropped: at RETINA_FACTOR 2 it resizes to 1440 device px, past the
+ * 1280px source, so it upscales rather than resamples down and carries no
+ * pixel the 672 tier's 1344w file doesn't already have. A browser or
+ * tablet that would have picked it falls back to the 1344w file and scales
+ * it in CSS, the same source-to-screen mapping for free.
  */
-const HERO_WIDTHS: readonly number[] = [342, 672, 720];
+const HERO_WIDTHS: readonly number[] = [342, 672];
 
 /**
  * Pieces.astro's four shots share one grid: one column at or below the
  * 720px media query (full content width minus the card's own padding and
  * border), two columns above it (half the content width, same minus),
  * capped once the columns stop growing at .wrap's 1120px content width.
- * Measured the same way as HERO_SIZES.
+ * Measured the same way as HERO_SIZES: 308 CSS px at the 390px phone
+ * measurement, 314 CSS px at the 768px tablet measurement, 490 CSS px
+ * capped.
+ *
+ * Only two of those three numbers are kept below. 308 is dropped: it and
+ * 314 are 6 CSS px (2.2%) apart, close enough that the 314 tier's own
+ * 628-wide file already satisfies a 390px phone's DPR2 target (616) even
+ * without a dedicated 308 tier, and close enough in rendered pixels that
+ * lossy webp's output size does not reliably stay ordered between the two
+ * -- measured: the "knowing" shot's 308 tier came out 82 B *larger* than
+ * its 314 tier, which the ascending-bytes test below exists to catch.
  */
 const PIECE_SIZES =
   "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)";
-const PIECE_WIDTHS: readonly number[] = [308, 314, 490];
+const PIECE_WIDTHS: readonly number[] = [314, 490];
 
 /**
  * Screens.astro's collage: the full content width the same way the hero's
@@ -195,7 +239,7 @@ export const HERO: SingleSpec = {
   crop: { source: "till", top: 0, height: 1450 },
   widths: HERO_WIDTHS,
   sizes: HERO_SIZES,
-  // HERO_WIDTHS is [342, 672, 720]: index 1 is the 672 CSS px desktop tier.
+  // HERO_WIDTHS is [342, 672]: index 1 is the 672 CSS px desktop tier.
   attrWidthIndex: 1,
 };
 export const HERO_AR_CROP: Crop = { source: "till-ar", top: 0, height: 1450 };
@@ -286,12 +330,22 @@ export interface RenderedShot {
   readonly bytes: Buffer;
 }
 
-const toWebp = async (image: Sharp, file: string): Promise<RenderedShot> => {
+/**
+ * `lossless` selects the encode, not just a flag passed through: a tile
+ * near the screenshot's own 1280px scale (see isNearOriginalScale) is flat
+ * enough that lossless wins outright, while a genuinely resampled tile
+ * carries resize noise lossless would store pixel for pixel, so it gets
+ * lossy webp at LOSSY_QUALITY instead. See the doc comment on
+ * isNearOriginalScale for the measurement that found this.
+ */
+const toWebp = async (image: Sharp, file: string, lossless: boolean): Promise<RenderedShot> => {
   const meta = await image.metadata();
   if (meta.width === undefined || meta.height === undefined) {
     throw new Error(`${file}: sharp returned no pixel dimensions`);
   }
-  const bytes = await image.webp({ lossless: true }).toBuffer();
+  const bytes = await image
+    .webp(lossless ? { lossless: true } : { quality: LOSSY_QUALITY })
+    .toBuffer();
   return { file, width: meta.width, height: meta.height, bytes };
 };
 
@@ -309,11 +363,11 @@ const renderSingle = async (
   cssWidth: number,
   fileKey: string = spec.key,
 ): Promise<RenderedShot> => {
-  const { image, width } = await frameTile(crop, contentWidth(cssWidth));
+  const { image, width, lossless } = await frameTile(crop, contentWidth(cssWidth));
   // The file's actual pixel width, ring included, not cssWidth*RETINA_FACTOR:
   // the ring adds pixels the srcset `w` descriptor has to account for too,
   // or the browser picks against a number the file doesn't actually match.
-  return toWebp(image, `${fileKey}-${width}w.webp`);
+  return toWebp(image, `${fileKey}-${width}w.webp`, lossless);
 };
 
 const renderCollage = async (
@@ -343,10 +397,18 @@ const renderCollage = async (
     create: { width: canvasWidth, height: canvasHeight, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   }).composite(placed);
 
+  // Every tile in one call shares tileWidth1x, so they all got the same
+  // near-original-scale verdict from frameTile; take it from the first
+  // rather than recomputing.
+  const firstTile = tiles[0];
+  if (firstTile === undefined) {
+    throw new Error(`collage-${variant}: no crops to render`);
+  }
+
   // canvasWidth, not cssWidth*RETINA_FACTOR: the three tiles' rings and the
   // rounding in tileWidth1x mean the composed canvas is not exactly that
   // product, and the filename has to match the file's real pixel width.
-  return toWebp(composed, `collage-${variant}-${canvasWidth}w.webp`);
+  return toWebp(composed, `collage-${variant}-${canvasWidth}w.webp`, firstTile.lossless);
 };
 
 /** One `srcset` candidate: the file and its actual rendered pixel width. */

@@ -9,10 +9,6 @@
         {
           "url": "hero-1344w.webp",
           "width": 1344
-        },
-        {
-          "url": "hero-1440w.webp",
-          "width": 1440
         }
       ],
       "src": "hero-684w.webp",
@@ -29,10 +25,6 @@
         {
           "url": "hero-1344w.webp",
           "width": 1344
-        },
-        {
-          "url": "hero-1440w.webp",
-          "width": 1440
         }
       ],
       "src": "hero-684w.webp",
@@ -49,10 +41,6 @@
         {
           "url": "hero-ar-1344w.webp",
           "width": 1344
-        },
-        {
-          "url": "hero-ar-1440w.webp",
-          "width": 1440
         }
       ],
       "src": "hero-ar-684w.webp",
@@ -65,10 +53,6 @@
     "fr": {
       "sources": [
         {
-          "url": "selling-616w.webp",
-          "width": 616
-        },
-        {
           "url": "selling-628w.webp",
           "width": 628
         },
@@ -77,18 +61,14 @@
           "width": 980
         }
       ],
-      "src": "selling-616w.webp",
-      "width": 308,
-      "height": 261,
+      "src": "selling-628w.webp",
+      "width": 314,
+      "height": 266,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "en": {
       "sources": [
         {
-          "url": "selling-616w.webp",
-          "width": 616
-        },
-        {
           "url": "selling-628w.webp",
           "width": 628
         },
@@ -97,17 +77,13 @@
           "width": 980
         }
       ],
-      "src": "selling-616w.webp",
-      "width": 308,
-      "height": 261,
+      "src": "selling-628w.webp",
+      "width": 314,
+      "height": 266,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "ar": {
       "sources": [
-        {
-          "url": "selling-ar-616w.webp",
-          "width": 616
-        },
         {
           "url": "selling-ar-628w.webp",
           "width": 628
@@ -117,9 +93,9 @@
           "width": 980
         }
       ],
-      "src": "selling-ar-616w.webp",
-      "width": 308,
-      "height": 261,
+      "src": "selling-ar-628w.webp",
+      "width": 314,
+      "height": 266,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     }
   },
@@ -127,10 +103,6 @@
     "fr": {
       "sources": [
         {
-          "url": "invoicing-616w.webp",
-          "width": 616
-        },
-        {
           "url": "invoicing-628w.webp",
           "width": 628
         },
@@ -139,18 +111,14 @@
           "width": 980
         }
       ],
-      "src": "invoicing-616w.webp",
-      "width": 308,
-      "height": 237,
+      "src": "invoicing-628w.webp",
+      "width": 314,
+      "height": 242,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "en": {
       "sources": [
         {
-          "url": "invoicing-616w.webp",
-          "width": 616
-        },
-        {
           "url": "invoicing-628w.webp",
           "width": 628
         },
@@ -159,17 +127,13 @@
           "width": 980
         }
       ],
-      "src": "invoicing-616w.webp",
-      "width": 308,
-      "height": 237,
+      "src": "invoicing-628w.webp",
+      "width": 314,
+      "height": 242,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "ar": {
       "sources": [
-        {
-          "url": "invoicing-ar-616w.webp",
-          "width": 616
-        },
         {
           "url": "invoicing-ar-628w.webp",
           "width": 628
@@ -179,9 +143,9 @@
           "width": 980
         }
       ],
-      "src": "invoicing-ar-616w.webp",
-      "width": 308,
-      "height": 237,
+      "src": "invoicing-ar-628w.webp",
+      "width": 314,
+      "height": 242,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     }
   },
@@ -189,10 +153,6 @@
     "fr": {
       "sources": [
         {
-          "url": "stock-616w.webp",
-          "width": 616
-        },
-        {
           "url": "stock-628w.webp",
           "width": 628
         },
@@ -201,18 +161,14 @@
           "width": 980
         }
       ],
-      "src": "stock-616w.webp",
-      "width": 308,
-      "height": 205,
+      "src": "stock-628w.webp",
+      "width": 314,
+      "height": 209,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "en": {
       "sources": [
         {
-          "url": "stock-616w.webp",
-          "width": 616
-        },
-        {
           "url": "stock-628w.webp",
           "width": 628
         },
@@ -221,17 +177,13 @@
           "width": 980
         }
       ],
-      "src": "stock-616w.webp",
-      "width": 308,
-      "height": 205,
+      "src": "stock-628w.webp",
+      "width": 314,
+      "height": 209,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "ar": {
       "sources": [
-        {
-          "url": "stock-ar-616w.webp",
-          "width": 616
-        },
         {
           "url": "stock-ar-628w.webp",
           "width": 628
@@ -241,9 +193,9 @@
           "width": 980
         }
       ],
-      "src": "stock-ar-616w.webp",
-      "width": 308,
-      "height": 205,
+      "src": "stock-ar-628w.webp",
+      "width": 314,
+      "height": 209,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     }
   },
@@ -251,10 +203,6 @@
     "fr": {
       "sources": [
         {
-          "url": "knowing-616w.webp",
-          "width": 616
-        },
-        {
           "url": "knowing-628w.webp",
           "width": 628
         },
@@ -263,18 +211,14 @@
           "width": 980
         }
       ],
-      "src": "knowing-616w.webp",
-      "width": 308,
-      "height": 237,
+      "src": "knowing-628w.webp",
+      "width": 314,
+      "height": 242,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "en": {
       "sources": [
         {
-          "url": "knowing-616w.webp",
-          "width": 616
-        },
-        {
           "url": "knowing-628w.webp",
           "width": 628
         },
@@ -283,17 +227,13 @@
           "width": 980
         }
       ],
-      "src": "knowing-616w.webp",
-      "width": 308,
-      "height": 237,
+      "src": "knowing-628w.webp",
+      "width": 314,
+      "height": 242,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     },
     "ar": {
       "sources": [
-        {
-          "url": "knowing-ar-616w.webp",
-          "width": 616
-        },
         {
           "url": "knowing-ar-628w.webp",
           "width": 628
@@ -303,9 +243,9 @@
           "width": 980
         }
       ],
-      "src": "knowing-ar-616w.webp",
-      "width": 308,
-      "height": 237,
+      "src": "knowing-ar-628w.webp",
+      "width": 314,
+      "height": 242,
       "sizes": "(min-width: 1120px) 490px, (max-width: 720px) calc(100vw - 82px), calc(50vw - 70px)"
     }
   },

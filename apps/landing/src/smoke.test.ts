@@ -144,18 +144,24 @@ describe("the three routes render", () => {
     // nobody trims, a whole extra family) trips it well before it reaches
     // a visitor, while normal copy or shot changes still fit.
     // Measured 2026-09-11 with a real Chromium network capture (mobile
-    // viewport 390x844, DPR 3) over the built routes, after the shots
-    // moved from a 1x/2x pair to a three-width srcset: fr 495560 B,
-    // en 495317 B, ar 570856 B -- ar includes one Latin woff2
-    // (fonts-arabic.css: the Western digits in fiscal.tva) that is
-    // declared but not preloaded, so it is discovered from the inline
-    // @font-face rule, not a <link>; see routeWeight below for how that is
-    // still counted. DPR 3 is the worst case this page has: the same
-    // Chromium capture at DPR 2 (the common phone case) measured fr
-    // 339790 B, en 339547 B, ar 431490 B, well under this budget already,
-    // and nothing this page serves picks a heavier candidate than DPR 3
-    // already does.
-    const BUDGET_BYTES = 656_485; // ~641 KiB, ~15% over ar's 570856 B
+    // viewport 390x844, DPR 3) over the built routes, after shots.ts
+    // stopped encoding every tile lossless and started choosing lossy
+    // webp for a tile that is a genuine rescale of its 1280px source (see
+    // isNearOriginalScale in lib/shots.ts): fr 290836 B, en 290653 B,
+    // ar 388012 B -- ar includes one Latin woff2 (fonts-arabic.css: the
+    // Western digits in fiscal.tva) that is declared but not preloaded, so
+    // it is discovered from the inline @font-face rule, not a <link>; see
+    // routeWeight below for how that is still counted. DPR 3 is the worst
+    // case this page has: the same Chromium capture at DPR 2 (the common
+    // phone case) measured fr 201096 B, en 200913 B, ar 304564 B, well
+    // under this budget already, and nothing this page serves picks a
+    // heavier candidate than DPR 3 already does. fr was re-measured after
+    // HERO_WIDTHS dropped its 720/1440w tier (lib/shots.ts); both numbers
+    // held, because no candidate a 390px phone ever requests came from
+    // that tier -- it fell back to hero-1344w, same as before the tier
+    // existed. en/ar were not re-measured for the same reason: neither
+    // route's phone-width picks touch the hero's dropped tier either.
+    const BUDGET_BYTES = 446_214; // ~436 KiB, ~15% over ar's 388012 B
 
     const VIEWPORT_WIDTH = 390;
     const DPR = 3;
@@ -268,7 +274,7 @@ describe("the three routes render", () => {
       return { total: assets.reduce((sum, a) => sum + a.bytes, 0), assets };
     };
 
-    it.each(ROUTES)("%s stays under the 641 KiB budget", (file) => {
+    it.each(ROUTES)("%s stays under the 436 KiB budget", (file) => {
       const { total, assets } = routeWeight(file);
       const heaviest = [...assets]
         .sort((a, b) => b.bytes - a.bytes)
