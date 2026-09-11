@@ -1,11 +1,11 @@
 // The support bundle block on the settings screen (M5 T3). One button, one
 // call, one file saved: `dzpos_core::services::support_bundle`'s own doc
 // names everything the zip carries and everything it refuses to, and this
-// file adds none of its own logic to that list. Gated the same way the
-// backups block beside it is: `useHasPermission("edit_settings")` hides the
-// button from a cashier or a manager who cannot reach `/support-bundle`
-// anyway, the same shape `SettingsScreen` already hides the staff and the
-// export panels with.
+// file adds none of its own logic to that list. Not gated client-side, the
+// same as the backups block beside it: `/support-bundle` is refused server
+// side to anyone without `edit_settings` (`crates/api/src/gates.rs`), and a
+// cashier or manager who cannot reach it sees the refusal `errorKey` reads
+// rather than a hidden button.
 
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/api";
