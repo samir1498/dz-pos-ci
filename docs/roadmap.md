@@ -95,7 +95,7 @@ stamped receipt, and on which amount is the stamp computed, the facture's
 `total_ttc` or the sum paid. Depending on the answer, a receipt kind
 (quittance) joins the document model here.
 
-## M3. Stock in, expenses, reports (in flight)
+## M3. Stock in, expenses, reports (closed 2026-09-10)
 
 Demo: a purchase from a supplier lands stock and supplier debt; the
 dashboard shows today's sales, gross margin, cash position, low stock and

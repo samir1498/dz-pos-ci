@@ -18,7 +18,7 @@ that changes, `CLAUDE.md` says what to do.
 Run these from the repo root and keep the tail of each output for the body:
 
 ```
-just gates   # fmt, clippy, generated types check, cargo test, pnpm test, builds
+just gates   # fmt, lint, clippy, generated types check, cargo test, pnpm test, builds
 just e2e     # Playwright against a fresh API and database
 ```
 
@@ -68,6 +68,6 @@ opening the fixtures.
 
 ## After opening
 
-Post the URL. Merging is Samir's call unless he has said otherwise for the
-branch; when he has, squash-merge, delete the branch, and log the close in
-`context/` with the `ctx:` trailer on the squash commit.
+Post the URL. Since 2026-09-09 the session opens and merges dz-pos PRs
+itself once the gates are green: squash-merge, delete the branch, and log
+the close in `context/` with the `ctx:` trailer on the squash commit.

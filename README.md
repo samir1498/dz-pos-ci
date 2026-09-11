@@ -53,7 +53,7 @@ The `justfile` at the root is the list; `just` alone prints it.
 ```
 just gates        # fmt, lint, clippy, generated types check, tests, builds; what a PR needs
 just claim        # claim the shared build folder for this checkout before a bare `cargo`
-just lint         # the desktop's one eslint rule: no bare input, button, select or table
+just lint         # the desktop's one eslint rule: no bare input, button, select, textarea or table
 just e2e          # Playwright against a fresh API and database, fr then en then ar
 just api          # the API on 4317 with a dev database and a fresh launch token
 just seed         # fill .dev/dev.db with a month of trading to develop against
@@ -107,11 +107,14 @@ From the architecture notes; the reasons are there.
 ## Quality gates
 
 `just gates`: `cargo fmt --check`, the desktop's eslint (`just lint`,
-the rule against a bare input, button, select or table outside the
+the rule against a bare input, button, select, textarea or table outside the
 component kit), `cargo clippy --all-targets -D
 warnings`, the generated TypeScript types diffed against the Rust DTOs,
-`cargo test`, `pnpm -r test`, `pnpm -r build`. CI runs the same on Linux
-and Windows, plus coverage with `cargo llvm-cov`. `just e2e` runs before a
+`cargo test`, `pnpm -r test`, `pnpm -r build`. CI runs the same checks on
+Linux on every push and pull request; Windows and coverage (`cargo
+llvm-cov`) run only outside a pull request, because the organisation's
+Actions budget is capped: `just ci` pushes the branch to a personal mirror
+and watches the run there. `just e2e` runs before a
 merge but not in CI yet; it runs the three language projects one after the
 other, because they share a port pair. Sonar: not wired yet, Rust support on
 the team server is unverified (`rust:S1481` probe returned 404); check
