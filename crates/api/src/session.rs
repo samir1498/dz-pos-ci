@@ -26,15 +26,17 @@
 //! it; a stale cookie left in a webview is the thing that would otherwise
 //! quietly decide who a request came from.
 
-use axum::extract::{FromRequestParts, Request, State};
+use axum::extract::{FromRequestParts, MatchedPath, Request, State};
 use axum::http::request::Parts;
 use axum::http::{header, HeaderValue};
 use axum::middleware::Next;
 use axum::response::Response;
 use dzpos_core::models::sql_types::Role;
+use dzpos_core::services::permissions;
 use dzpos_core::services::sessions::{self, Actor};
 
 use crate::error::ApiError;
+use crate::gates;
 use crate::AppState;
 
 /// The header the desktop shows its session token in.
@@ -84,6 +86,18 @@ impl<S: Send + Sync> FromRequestParts<S> for CurrentUser {
 /// The resolve also slides the idle time forward, so "how long since the till
 /// was touched" is measured by the requests it carried and not by a clock on
 /// the screen.
+///
+/// The permission gate (M4 T3) sits here too, once the actor is known and
+/// before the handler runs: `gates::ROUTE_GATES` is looked up by the method
+/// and `axum::extract::MatchedPath`, the route's own template
+/// (`/customers/{id}`, not the id a caller happened to send), so a route
+/// never names its permission a second time in its handler. A route this
+/// layer does not sit in front of (the auth routes, `/health`) has no row
+/// reachable this way and needs none: signing in is how a role comes to
+/// exist. `MatchedPath` is only absent when the router answers 404 or 405
+/// before a route matched, and a table lookup on no route finds nothing to
+/// enforce, which is the same as leaving the refusal to the response that is
+/// already on its way.
 pub async fn require(
     State(state): State<AppState>,
     mut req: Request,
@@ -98,7 +112,17 @@ pub async fn require(
         .blocking(move |c| sessions::resolve(c, shop, &token, at))
         .await?
         .ok_or(ApiError::SessionRequired)?;
-    req.extensions_mut().insert(CurrentUser::from(actor));
+    let current = CurrentUser::from(actor);
+
+    if let Some(matched) = req.extensions().get::<MatchedPath>() {
+        if let Some(gate) = gates::gate_for(req.method().as_str(), matched.as_str()) {
+            if let Some(permission) = gate.permission {
+                permissions::require(current.role, permission)?;
+            }
+        }
+    }
+
+    req.extensions_mut().insert(current);
     Ok(next.run(req).await)
 }
 

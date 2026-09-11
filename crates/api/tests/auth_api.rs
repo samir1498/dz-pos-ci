@@ -329,28 +329,34 @@ async fn signing_out_ends_the_session_and_clears_the_cookie() {
 /// The heart of the task: a write names the person who signed in, not the
 /// seeded owner id the API used to carry. Asserted on the stored row and not
 /// on the answer, because the answer would have said the same thing before.
+///
+/// Signed in as a manager and not a cashier: `POST /products` writes a
+/// product's fiche, which M4 T3 gates behind `EditFiches` (a manager holds
+/// it, a cashier does not), and this test is about who a write is recorded
+/// under, not about the gate. `tests/route_gates.rs` is where a cashier being
+/// refused this same route is asserted.
 #[tokio::test]
 async fn a_write_names_the_user_the_session_says_is_acting() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
     let mut conn = dzpos_core::db::open(&path).unwrap();
-    let cashier = dzpos_core::services::users::create(
+    let manager = dzpos_core::services::users::create(
         &mut conn,
         SHOP,
         OWNER,
         dzpos_core::services::users::NewUser {
             name: "Karim".to_owned(),
-            role: dzpos_core::services::users::Role::Cashier,
+            role: dzpos_core::services::users::Role::Manager,
         },
     )
     .unwrap();
-    dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, cashier.id, "3690").unwrap();
+    dzpos_core::services::users::set_pin(&mut conn, SHOP, OWNER, manager.id, "3690").unwrap();
     drop(conn);
 
     let app = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap(), &token());
-    let (_, signed_in, _) = login(&app, json!({ "user_id": cashier.id, "pin": "3690" })).await;
+    let (_, signed_in, _) = login(&app, json!({ "user_id": manager.id, "pin": "3690" })).await;
     let session = signed_in["token"].as_str().unwrap().to_owned();
-    assert_eq!(signed_in["me"]["role"], "cashier");
+    assert_eq!(signed_in["me"]["role"], "manager");
 
     let (status, made, _) = call(
         &app,
@@ -391,7 +397,7 @@ async fn a_write_names_the_user_the_session_says_is_acting() {
     assert!(!rows.is_empty(), "the product write left no movement");
     for row in rows {
         assert_eq!(
-            row.user_id, cashier.id,
+            row.user_id, manager.id,
             "a write was recorded under somebody who was not signed in"
         );
     }

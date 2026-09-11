@@ -15,11 +15,159 @@
 //! branch: a source walk is what there is when the thing being checked is a
 //! list a person maintains.
 //!
-//! What this does not do is check that a route refuses a cashier. That is T3,
-//! which is one pass down this table; T2 ships the table, the actor and the
-//! mechanism.
+//! T2 shipped the table, the actor and the mechanism with nothing applied.
+//! `a_cashier_is_refused_and_a_manager_is_not_on_every_gated_route` below is
+//! T3's pass down the table over real HTTP: it walks `ROUTE_GATES` the same
+//! way the two tests above do, so a row added to the table is a case added
+//! here rather than a thirty-seventh test written out by hand.
+
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use http_body_util::BodyExt;
+use serde_json::Value;
+use tower::ServiceExt;
 
 use dzpos_api::gates::{gate_for, Gate, ROUTE_GATES};
+use dzpos_core::services::permissions::{can, Role};
+
+mod common;
+
+const SHOP: i32 = 1;
+const TOKEN: &str = "test-launch-token";
+
+fn token() -> dzpos_api::LaunchToken {
+    dzpos_api::LaunchToken::from_secret(TOKEN).expect("a fixed test secret makes a token")
+}
+
+/// `gate.path` as the router wrote it (`/customers/{id}`), with every
+/// `{placeholder}` segment stood in for by a value that will match the
+/// route: the gate runs before the handler even looks at whether `1` names
+/// anything, so what is there does not matter, only that the path matches.
+fn concrete_path(template: &str) -> String {
+    template
+        .split('/')
+        .map(|segment| {
+            if segment.starts_with('{') && segment.ends_with('}') {
+                "1"
+            } else {
+                segment
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+async fn call(app: &axum::Router, method: &str, uri: &str, session: &str) -> (StatusCode, Value) {
+    let req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, session)
+        .body(Body::empty())
+        .expect("a GET or an empty body always builds a request");
+    let res = app
+        .clone()
+        .oneshot(req)
+        .await
+        .expect("the router did not answer");
+    let status = res.status();
+    let bytes = res
+        .into_body()
+        .collect()
+        .await
+        .expect("the body did not read")
+        .to_bytes();
+    let value = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+    };
+    (status, value)
+}
+
+/// The walk itself: every row of `ROUTE_GATES` that names a permission is
+/// asked twice, once as a cashier and once as a manager, on the same shop.
+/// What each is owed is read off `services::permissions::can` rather than
+/// assumed, because one row (`POST /sales`) names `Permission::Sell`
+/// precisely because every role holds it (the row's own `why`: "the one
+/// thing every role may do"), so a table-driven test has to ask the same
+/// table the gate itself asks rather than hard-code "a cashier is always
+/// refused". For every row `can` refuses a cashier, and today that is every
+/// row but `/sales`: a cashier gets 403 `forbidden` naming the row's own
+/// permission. For every row `can` allows a role, that role never sees a
+/// 403 here, nor a 401 (a 401 would mean `sign_in_as` silently failed to
+/// seat that role, which would otherwise pass this branch by vacuum), though
+/// it may see any other status the handler itself decides on the empty body
+/// this test sends. Neither side sends a body: the gate
+/// runs in `session::require`, before any handler reads one, so an empty
+/// body is as good as a correct one for proving the gate fired first.
+#[tokio::test]
+async fn a_cashier_is_refused_and_a_manager_is_not_on_every_gated_route() {
+    let dir = tempfile::tempdir().expect("no temp dir for the test's shop file");
+    let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
+    common::sign_in_as(&path, SHOP, "cashier", common::CASHIER_SESSION);
+    common::sign_in_as(&path, SHOP, "manager", common::MANAGER_SESSION);
+    let state = dzpos_api::AppState::open(&path, SHOP).expect("the test's shop file will not open");
+    let app = dzpos_api::router(state, &token());
+
+    for gate in ROUTE_GATES {
+        let Some(permission) = gate.permission else {
+            continue;
+        };
+        let uri = concrete_path(gate.path);
+
+        for (role, session) in [
+            (Role::Cashier, common::CASHIER_SESSION),
+            (Role::Manager, common::MANAGER_SESSION),
+        ] {
+            let (status, body) = call(&app, gate.method, &uri, session).await;
+            if can(role, permission) {
+                assert_ne!(
+                    status,
+                    StatusCode::FORBIDDEN,
+                    "{} {} refused a {role:?}, who holds {permission}: {body}",
+                    gate.method,
+                    gate.path
+                );
+                // A missing or unresolved session also answers something
+                // other than FORBIDDEN, which would let this branch pass
+                // vacuously if `sign_in_as` ever failed to plant the role's
+                // session row. A held permission is proved by getting past
+                // the gate, not merely by not being refused by it.
+                assert_ne!(
+                    status,
+                    StatusCode::UNAUTHORIZED,
+                    "{} {} would not even sign a {role:?} in, who holds {permission}: {body}",
+                    gate.method,
+                    gate.path
+                );
+            } else {
+                assert_eq!(
+                    status,
+                    StatusCode::FORBIDDEN,
+                    "{} {} let a {role:?} through, who does not hold {permission}: {body}",
+                    gate.method,
+                    gate.path
+                );
+                assert_eq!(
+                    body["error"]["code"].as_str(),
+                    Some("forbidden"),
+                    "{} {} refused a {role:?} for a different reason: {body}",
+                    gate.method,
+                    gate.path
+                );
+                assert_eq!(
+                    body["error"]["permission"].as_str(),
+                    Some(permission.as_str()),
+                    "{} {} named a different permission than its own row: {body}",
+                    gate.method,
+                    gate.path
+                );
+            }
+        }
+    }
+}
 
 /// The router, as source. Read at compile time so this test cannot be run
 /// against a file that is not the one that shipped.
