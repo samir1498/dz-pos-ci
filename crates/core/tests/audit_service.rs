@@ -219,6 +219,53 @@ mod read {
         assert_eq!(page.rows.len(), 2);
     }
 
+    /// The lockout row names, in the ordinary `user_id` column every other
+    /// row's filter now runs a SQL `WHERE` against, the person the wrong
+    /// PINs were tried against — not whoever a signed-in session would have
+    /// named, because nobody is signed in when the row is written
+    /// (`services::users::settle`'s own comment: "The actor is the user the
+    /// attempts were made on: nobody knows who was standing there, and
+    /// claiming otherwise in an audit log is worse than saying nothing").
+    /// Filtering that person out of their own lockout row would be
+    /// inventing an actor the row never claimed to have, so this checks the
+    /// opposite: the SQL filter still finds it, the same as it did when the
+    /// filter ran in memory, and the row still carries the passive action
+    /// name (`user.locked_out`) that keeps it from reading as something
+    /// they did.
+    #[test]
+    fn a_filter_by_the_locked_out_person_still_finds_their_own_lockout_row() {
+        let (_dir, mut conn) = open_temp();
+        let clerk = users::create(
+            &mut conn,
+            SHOP,
+            OWNER,
+            NewUser {
+                name: "Karim".to_string(),
+                role: Role::Cashier,
+            },
+        )
+        .unwrap();
+        users::set_pin(&mut conn, SHOP, OWNER, clerk.id, "1357").unwrap();
+
+        let now = dzpos_core::services::clock::now();
+        for _ in 0..users::FAILURES_BEFORE_LOCKOUT {
+            let _ = users::verify_pin(&mut conn, SHOP, clerk.id, "9999", now);
+        }
+
+        let filter = Filter {
+            user_id: Some(clerk.id),
+            ..Filter::default()
+        };
+        let (page, _) = audit::read(&mut conn, SHOP, &filter, 1).unwrap();
+        let lockout = page
+            .rows
+            .iter()
+            .find(|r| r.entry.action == audit::ACTION_LOCK_OUT_USER)
+            .expect("the lockout row is found under the locked-out user's own filter");
+        assert_eq!(lockout.entry.user_id, clerk.id);
+        assert_eq!(lockout.user_name, "Karim");
+    }
+
     #[test]
     fn an_action_that_was_never_written_answers_no_rows() {
         let (_dir, mut conn) = open_temp();
@@ -354,8 +401,9 @@ fn the_log_is_scoped_to_its_shop() {
     assert!(audit::list(&mut conn, 2).unwrap().is_empty());
 
     // The owner's screen calls `read`, not `list`: `list`'s own scoping does
-    // not prove `read`'s, which loads the same rows through a different
-    // repo call (`list_desc`) and joins the shop's own users on top.
+    // not prove `read`'s, which loads the same rows through different repo
+    // calls (`search`, `count`, `distinct_actions`) and joins the shop's
+    // own users on top.
     let (page, _) = audit::read(&mut conn, SHOP, &audit::Filter::default(), 1).unwrap();
     assert_eq!(page.rows.len(), 1);
     let (other, _) = audit::read(&mut conn, 2, &audit::Filter::default(), 1).unwrap();
