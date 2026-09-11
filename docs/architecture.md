@@ -169,7 +169,12 @@ code and shows the message to nobody.
 | `exhausted` | 409 | a number series the shop hands out (in-store barcodes, a document kind's series for one year) has no next value | |
 | `bad_request` | 422 | a body that did not parse, before any service ran | |
 | `unauthorized` | 401 | no launch token, or the wrong one; the answer carries `WWW-Authenticate: Bearer` | |
+| `session_required` | 401 | no session, or one that has stopped standing; carries `WWW-Authenticate: Bearer` | |
+| `auth_refused` | 401 | a wrong PIN or password; carries `WWW-Authenticate: Bearer` | |
+| `locked_out` | 429 | too many wrong credentials against the same person in a row | `retry_after_seconds` |
+| `forbidden` | 403 | a signed-in role the permission table refuses on this route | `permission` |
 | `method_not_allowed` | 405 | a route that does not take that method | |
+| `ungated_write` | 500 | a write reached a route the permission table names no row for | |
 | `money` | 500 | stored money a migration's CHECK makes impossible | |
 | `storage` | 500 | the shop file could not complete the operation | |
 | `print` | 500 | a stored row the template will not render | |
@@ -180,10 +185,11 @@ what the caller wrote, which is why it is not a `validation`: a name another
 supplier already holds and a name too long for a ticket are two sentences a
 screen says differently, and both used to arrive as a `validation` on `name`.
 
-The three codes that carry figures are the one exception to "a code and a
-sentence", and the payload has six optional fields for them:
+A handful of codes carry more than a sentence, the one exception to "a code
+and a sentence", and the payload has eight optional fields for them:
 `balance_after_centimes`, `credit_limit_centimes`, `field`,
-`outstanding_centimes`, `party_side` and `missing_ids`. Each is filled by the
+`outstanding_centimes`, `party_side`, `missing_ids`, `retry_after_seconds`
+and `permission`. Each is filled by the
 one error that knows it and left out of every other body rather than sent as
 a null, so an ordinary refusal is the two keys it always was. They are there
 because the till has to say by how much a limit was passed, the fiche by how

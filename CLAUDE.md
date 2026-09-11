@@ -51,7 +51,10 @@ where each duplicated fact lives and how a fix is routed.
   `just claim`: cargo names our three crates' artifacts the same in every
   worktree and trusts mtimes, so a bare `cargo` in a worktree after another
   worktree built silently reuses the other branch's crates. `just claim`
-  before any bare `cargo`. Never a per-worktree `target/`. A worktree is torn down with
+  before any bare `cargo`, and export `CARGO_TARGET_DIR` into that shell
+  too: `just claim` alone does not export it there
+  (`context/processes/20260908-machines-and-heavy-jobs.md`). Never a
+  per-worktree `target/`. A worktree is torn down with
   `just worktree-rm` the moment its branch merges, never moved around to
   keep a warm cache. `df -h /mnt/c` before any build; under 20 GB free,
   clean first. One Claude session per conversation: a second
