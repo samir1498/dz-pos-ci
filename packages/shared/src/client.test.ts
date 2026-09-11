@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { ApiError, createClient } from "./client";
+import { ApiError, createClient, SESSION_HEADER } from "./client";
 import type { BackupDto } from "./generated/BackupDto";
 import type { CustomerDto } from "./generated/CustomerDto";
 import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
@@ -12,6 +12,7 @@ import type { NewProductDto } from "./generated/NewProductDto";
 import type { NewSaleDto } from "./generated/NewSaleDto";
 import type { RestoreDto } from "./generated/RestoreDto";
 import type { SaleDto } from "./generated/SaleDto";
+import type { SessionDto } from "./generated/SessionDto";
 import type { ProductDto } from "./generated/ProductDto";
 import type { ImportDryRunDto } from "./generated/ImportDryRunDto";
 import type { LastStockRecountDto } from "./generated/LastStockRecountDto";
@@ -1259,5 +1260,95 @@ describe("the exports, the product import and the labels", () => {
       code: "validation",
       field: "barcode",
     });
+  });
+});
+
+describe("the session on the wire (M4 T2)", () => {
+  const signedIn: SessionDto = {
+    me: { user_id: 3, name: "Karim", role: "cashier", permissions: ["sell"] },
+    token: "6f".repeat(32),
+    idle_minutes: 15,
+  };
+
+  /** A fetch that keeps the init of every call it was handed. */
+  function watching(body: unknown): { fetch: typeof fetch; seen: RequestInit[] } {
+    const seen: RequestInit[] = [];
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      seen.push(init ?? {});
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    return { fetch: fetchImpl, seen };
+  }
+
+  test("a session the client holds travels on every call, beside the launch token", async () => {
+    const { fetch: fetchImpl, seen } = watching([product]);
+    const api = createClient("http://x", { fetch: fetchImpl, token: "launch", session: "abc" });
+    await api.listProducts();
+    const headers = new Headers(seen[0]?.headers);
+    expect(headers.get(SESSION_HEADER)).toBe("abc");
+    expect(headers.get("authorization")).toBe("Bearer launch");
+    // The cookie is the browser's half of the same thing, and it only rides
+    // along on a cross-origin call when the call asks for it.
+    expect(seen[0]?.credentials).toBe("include");
+  });
+
+  test("with no session in hand the header is absent rather than empty", async () => {
+    const { fetch: fetchImpl, seen } = watching([product]);
+    const api = createClient("http://x", { fetch: fetchImpl, token: "launch" });
+    await api.listProducts();
+    expect(new Headers(seen[0]?.headers).has(SESSION_HEADER)).toBe(false);
+  });
+
+  test("setSession puts one on and null takes it off again", async () => {
+    const { fetch: fetchImpl, seen } = watching([product]);
+    const api = createClient("http://x", { fetch: fetchImpl });
+    api.setSession("abc");
+    await api.listProducts();
+    api.setSession(null);
+    await api.listProducts();
+    expect(new Headers(seen[0]?.headers).get(SESSION_HEADER)).toBe("abc");
+    expect(new Headers(seen[1]?.headers).has(SESSION_HEADER)).toBe(false);
+  });
+
+  test("signing in hands the token back and does not remember it by itself", async () => {
+    // The sign-in answer first, a product list after it: one body for every
+    // call would have the second call fail on the shape rather than on the
+    // header, which is what this is about.
+    const bodies: unknown[] = [signedIn, [product]];
+    const seen: RequestInit[] = [];
+    const api = createClient("http://x", {
+      fetch: async (_url, init) => {
+        seen.push(init ?? {});
+        return new Response(JSON.stringify(bodies.shift()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+    await expect(api.login({ user_id: 3, pin: "1379" })).resolves.toEqual(signedIn);
+    // The browser already has the session as an httpOnly cookie; a client
+    // that also kept the token in a variable would undo that. The desktop,
+    // which has no cookie, calls setSession with what it was handed (T4).
+    await api.listProducts();
+    expect(new Headers(seen[1]?.headers).has(SESSION_HEADER)).toBe(false);
+  });
+
+  test("signing out forgets the token even when the server refuses the call", async () => {
+    const seen: RequestInit[] = [];
+    const api = createClient("http://x", {
+      fetch: async (_url, init) => {
+        seen.push(init ?? {});
+        return new Response(JSON.stringify({ error: { code: "boom", message: "no" } }), {
+          status: 500,
+        });
+      },
+      session: "abc",
+    });
+    await expect(api.logout()).rejects.toBeInstanceOf(ApiError);
+    await expect(api.listProducts()).rejects.toBeInstanceOf(ApiError);
+    expect(new Headers(seen[1]?.headers).has(SESSION_HEADER)).toBe(false);
   });
 });

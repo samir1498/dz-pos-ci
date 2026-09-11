@@ -20,6 +20,7 @@ use crate::dto::{
     NewExpenseDto,
 };
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 /// The month a list is asked for, `YYYY-MM`.
@@ -68,13 +69,14 @@ pub async fn categories(
 
 pub async fn create(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Result<Json<NewExpenseDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ExpenseDto>), ApiError> {
     let Json(dto) = body.map_err(ApiError::from)?;
     let fields = NewExpense::try_from(dto)?;
     let shop = state.shop_id;
     // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     let made = state
         .blocking(move |c| service::create(c, shop, user, fields))
         .await?;

@@ -28,6 +28,15 @@ pub enum ApiError {
     /// missing route so a stranger cannot map the API by its 404s.
     #[error("this call did not show the launch token")]
     Unauthorized,
+    /// No session, or one that is not standing any more. Its own code beside
+    /// `unauthorized` and `auth_refused`, because the three send a screen
+    /// three different ways: the launch token is the app being started wrong
+    /// and nothing a person can fix, a refused credential is the PIN just
+    /// typed, and this is "sign in again" on a screen that thought it already
+    /// had. Which of the four ways the session died is deliberately not said
+    /// (`services::sessions` says why).
+    #[error("this call carried no session, or one that is no longer standing")]
+    SessionRequired,
     #[error("no such route")]
     NoRoute,
     #[error("this route does not take that method")]
@@ -94,6 +103,13 @@ struct Payload {
     /// error.
     #[serde(skip_serializing_if = "Option::is_none")]
     retry_after_seconds: Option<i64>,
+    /// Only on `forbidden`: the name of the permission the route wanted, the
+    /// same spelling `Permission::as_str` writes and `PermissionDto`
+    /// serialises. The same exception for the same reason: a screen that had
+    /// to work out which permission a 403 was about would be restating the
+    /// table in `services::permissions`, and the refusal already knows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    permission: Option<&'static str>,
 }
 
 /// What an error carries besides its code and its sentence. One value per
@@ -108,6 +124,7 @@ struct Figures {
     party_side: Option<&'static str>,
     missing_ids: Option<Vec<&'static str>>,
     retry_after_seconds: Option<i64>,
+    permission: Option<&'static str>,
 }
 
 impl Figures {
@@ -119,6 +136,7 @@ impl Figures {
         party_side: None,
         missing_ids: None,
         retry_after_seconds: None,
+        permission: None,
     };
 }
 
@@ -145,6 +163,7 @@ impl ApiError {
             ApiError::Request(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.code()),
             ApiError::BadRequest(_) => (StatusCode::UNPROCESSABLE_ENTITY, "bad_request"),
             ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
+            ApiError::SessionRequired => (StatusCode::UNAUTHORIZED, "session_required"),
             ApiError::NoRoute => (StatusCode::NOT_FOUND, "not_found"),
             ApiError::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed"),
             ApiError::Unavailable => (StatusCode::INTERNAL_SERVER_ERROR, "storage"),
@@ -211,6 +230,14 @@ impl ApiError {
                 retry_after_seconds,
             }) => Figures {
                 retry_after_seconds: Some(*retry_after_seconds),
+                ..Figures::NONE
+            },
+            // The permission the route wanted, travelling back out of the
+            // very check that asked for it (M4 T1's `require`), so neither a
+            // route nor a screen restates which one it was.
+            ApiError::Core(CoreError::Forbidden { permission })
+            | ApiError::Request(CoreError::Forbidden { permission }) => Figures {
+                permission: Some(permission.as_str()),
                 ..Figures::NONE
             },
             ApiError::Core(CoreError::PartyIds { side, missing })
@@ -326,6 +353,7 @@ impl IntoResponse for ApiError {
             party_side,
             missing_ids,
             retry_after_seconds,
+            permission,
         } = self.figures();
         let mut res = (
             status,
@@ -340,17 +368,23 @@ impl IntoResponse for ApiError {
                     party_side,
                     missing_ids,
                     retry_after_seconds,
+                    permission,
                 },
             }),
         )
             .into_response();
-        // RFC 7235: a 401 names the scheme it wants. Both of this API's 401s
-        // do, and the two are told apart by the code in the body: `unauthorized`
-        // is the launch token the process was started with, `auth_refused` is
-        // the person standing at the till.
+        // RFC 7235: a 401 names the scheme it wants. All three of this API's
+        // 401s do, and they are told apart by the code in the body:
+        // `unauthorized` is the launch token the process was started with,
+        // `auth_refused` is the person standing at the till getting their PIN
+        // wrong, and `session_required` is a screen whose session has stopped
+        // standing. A screen acts differently on each and cannot read the
+        // status alone.
         if matches!(
             self,
-            ApiError::Unauthorized | ApiError::Core(CoreError::AuthRefused)
+            ApiError::Unauthorized
+                | ApiError::SessionRequired
+                | ApiError::Core(CoreError::AuthRefused)
         ) {
             res.headers_mut()
                 .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));

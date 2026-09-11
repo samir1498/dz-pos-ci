@@ -134,6 +134,11 @@ pub const ACTION_LOCK_OUT_USER: &str = "user.locked_out";
 /// A discount threshold change appended to the dated series, the same shape
 /// as `ACTION_SET_REGIME` (M4 T1, features.md §5).
 pub const ACTION_SET_DISCOUNT_THRESHOLD: &str = "set_discount_threshold";
+/// How long a session survives unattended, changed (M4 T2). A preference and
+/// not a dated setting, but still a control somebody answers for: lengthening
+/// it is how a till is left open, and the theme beside it in the same table
+/// writes no row for the reason this one does.
+pub const ACTION_SET_SESSION_IDLE: &str = "set_session_idle";
 
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.

@@ -12,6 +12,7 @@ pub mod jobs;
 pub mod preferences;
 pub mod products;
 pub mod purchases;
+pub mod sessions;
 pub mod settings;
 pub mod shops;
 pub mod stock;

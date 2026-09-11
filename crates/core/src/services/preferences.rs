@@ -1,19 +1,45 @@
-//! How the app looks, per shop. The only preference so far is the theme.
+//! What a shop has set that is written over in place rather than dated: the
+//! theme it opens on, and the idle time a session survives.
 //!
 //! Not in `services::settings`: that module is the dated series a document
 //! reads to know the régime it printed under, and nothing here is ever read
-//! by a document. This one has no history and no audit row either, for the
-//! same reason: `services::audit` records what somebody would have to answer
-//! for, and a colour scheme is not that.
+//! by a document. A preference is one row per (shop, key), rewritten; a
+//! setting is a row per change, with the day it applies from, kept forever.
+//! The question that sorts a value into one or the other is whether anybody
+//! ever reads its history. Nobody reads back what the idle time was in March,
+//! and a dated series would append a row every time an owner nudged the
+//! figure; the régime fiscal is the opposite of that on both counts.
+//!
+//! The theme has no audit row either, because `services::audit` records what
+//! somebody would have to answer for and a colour scheme is not that. The
+//! idle time is not in that class and `set_session_idle` writes one.
 
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::repos::preferences as repo;
+use crate::services::audit;
 
 /// The key the theme is stored under.
 pub const THEME: &str = "theme";
+
+/// The key the session idle time is stored under, in whole minutes.
+pub const SESSION_IDLE_MINUTES: &str = "session_idle_minutes";
+
+/// How long a session survives with nothing happening on it, for a shop that
+/// has never set the figure. Fifteen minutes: a till in a shop with the door
+/// open is the thing being protected, and a cashier who has served nobody for
+/// a quarter of an hour typing four digits again is the whole cost of it.
+/// The alternative a shop will ask for is longer, not shorter, which is why
+/// the default is at the short end and the setting exists.
+pub const DEFAULT_SESSION_IDLE_MINUTES: i64 = 15;
+/// The shortest a shop may set it to. Under a minute the till would lock
+/// between a customer's two items.
+pub const MIN_SESSION_IDLE_MINUTES: i64 = 1;
+/// The longest. Twelve hours is a whole opening day, and past it the setting
+/// stops meaning "idle" and starts meaning "never".
+pub const MAX_SESSION_IDLE_MINUTES: i64 = 720;
 
 /// The four themes the design package emits a block for. `Comptoir` is the
 /// default, the one a shop that has never chosen opens on; the rest are
@@ -80,6 +106,59 @@ pub fn set_theme(
     }
 }
 
+/// How long a session survives with nothing happening on it.
+///
+/// A stored figure this build cannot read, or one outside the bounds, reads
+/// as the default rather than as an error, the way an unknown theme reads as
+/// no choice: the cost of being wrong is a session that lives fifteen minutes
+/// instead of twenty, and the alternative is a shop that cannot sign in
+/// because somebody once wrote a bad row.
+pub fn session_idle(conn: &mut SqliteConnection, shop_id: i32) -> Result<Duration, CoreError> {
+    let minutes = repo::value(conn, shop_id, SESSION_IDLE_MINUTES)?
+        .and_then(|v| v.parse::<i64>().ok())
+        .filter(|m| (MIN_SESSION_IDLE_MINUTES..=MAX_SESSION_IDLE_MINUTES).contains(m))
+        .unwrap_or(DEFAULT_SESSION_IDLE_MINUTES);
+    Ok(Duration::minutes(minutes))
+}
+
+/// Sets the idle time, in whole minutes, and writes the audit row: how long
+/// the till stays open unattended is a control somebody answers for, unlike
+/// the theme beside it.
+pub fn set_session_idle(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    actor_id: i32,
+    minutes: i64,
+    at: NaiveDateTime,
+) -> Result<(), CoreError> {
+    if !(MIN_SESSION_IDLE_MINUTES..=MAX_SESSION_IDLE_MINUTES).contains(&minutes) {
+        return Err(CoreError::validation(
+            "session_idle_minutes",
+            "a session's idle time is between one minute and twelve hours",
+        ));
+    }
+    let before = session_idle(conn, shop_id)?.num_minutes();
+    repo::put(
+        conn,
+        shop_id,
+        SESSION_IDLE_MINUTES,
+        &minutes.to_string(),
+        at,
+    )?;
+    audit::record(
+        conn,
+        shop_id,
+        actor_id,
+        audit::Change {
+            action: audit::ACTION_SET_SESSION_IDLE,
+            entity: "preference",
+            entity_id: None,
+            before: Some(serde_json::json!({ "session_idle_minutes": before }).to_string()),
+            after: Some(serde_json::json!({ "session_idle_minutes": minutes }).to_string()),
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -129,6 +208,61 @@ mod tests {
         let (_dir, mut conn) = open();
         repo::put(&mut conn, SHOP, THEME, "midnight", at()).unwrap();
         assert_eq!(theme(&mut conn, SHOP).unwrap(), None);
+    }
+
+    /// The figure a shop that has never set one runs on, read off the
+    /// service rather than restated.
+    #[test]
+    fn a_shop_that_has_never_set_an_idle_time_gets_the_default() {
+        let (_dir, mut conn) = open();
+        assert_eq!(
+            session_idle(&mut conn, SHOP).unwrap(),
+            Duration::minutes(DEFAULT_SESSION_IDLE_MINUTES)
+        );
+    }
+
+    #[test]
+    fn an_idle_time_the_owner_sets_survives_a_round_trip() {
+        let (_dir, mut conn) = open();
+        set_session_idle(&mut conn, SHOP, 1, 45, at()).unwrap();
+        assert_eq!(
+            session_idle(&mut conn, SHOP).unwrap(),
+            Duration::minutes(45)
+        );
+    }
+
+    /// Both ends, and the row is not written when the figure is refused.
+    #[test]
+    fn an_idle_time_outside_the_bounds_is_refused_and_nothing_is_stored() {
+        let (_dir, mut conn) = open();
+        for bad in [0, -5, MAX_SESSION_IDLE_MINUTES + 1] {
+            assert!(
+                set_session_idle(&mut conn, SHOP, 1, bad, at()).is_err(),
+                "{bad}"
+            );
+        }
+        assert_eq!(
+            repo::value(&mut conn, SHOP, SESSION_IDLE_MINUTES).unwrap(),
+            None
+        );
+        for ok in [MIN_SESSION_IDLE_MINUTES, MAX_SESSION_IDLE_MINUTES] {
+            set_session_idle(&mut conn, SHOP, 1, ok, at()).unwrap();
+        }
+    }
+
+    /// A row a newer build, or a hand, wrote: the session lives the default
+    /// rather than the sign-in screen 500ing.
+    #[test]
+    fn a_stored_idle_time_this_build_cannot_read_falls_back_to_the_default() {
+        let (_dir, mut conn) = open();
+        for bad in ["soon", "", "0", "99999", "-3"] {
+            repo::put(&mut conn, SHOP, SESSION_IDLE_MINUTES, bad, at()).unwrap();
+            assert_eq!(
+                session_idle(&mut conn, SHOP).unwrap(),
+                Duration::minutes(DEFAULT_SESSION_IDLE_MINUTES),
+                "{bad}"
+            );
+        }
     }
 
     /// The stored spelling is the one the CSS attribute carries, so a value in

@@ -11,6 +11,8 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+mod common;
+
 const SHOP: i32 = 1;
 
 /// The launch token every request in this file shows. The desktop makes a
@@ -30,6 +32,7 @@ struct Harness {
 fn harness() -> Harness {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     Harness {
         _dir: dir,
@@ -47,7 +50,8 @@ async fn call(
     let req = Request::builder()
         .method(method)
         .uri(uri)
-        .header("authorization", format!("Bearer {TOKEN}"));
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION);
     let req = match body {
         Some(v) => req
             .header("content-type", "application/json")
@@ -183,7 +187,7 @@ async fn one_barcode_may_exist_once_in_each_shop() {
         .execute(&mut seed)
         .unwrap();
 
-    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap(), &token());
+    let other = common::signed_in_router(&h.path, 2, &token());
     // Shop 2 has no categories of its own, so it names its rate.
     d["category_id"] = json!(null);
     d["rate_bps"] = json!(1900);
@@ -368,7 +372,7 @@ async fn categories_are_listed_with_the_rate_a_product_would_inherit() {
 async fn categories_are_scoped_to_the_servers_own_shop() {
     // Rule 3, the same way products are.
     let h = harness();
-    let other = dzpos_api::router(dzpos_api::AppState::open(&h.path, 2).unwrap(), &token());
+    let other = common::signed_in_router(&h.path, 2, &token());
     let (status, list) = call(&other, "GET", "/categories", None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(list.as_array().map(Vec::len), Some(0));
@@ -423,6 +427,7 @@ async fn one_more_origin_can_be_named_for_the_ssh_case() {
 
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     let app = dzpos_api::router_with_origin(
         state,
@@ -449,11 +454,11 @@ async fn the_server_only_ever_answers_for_its_own_shop() {
     // Rule 3: the shop is the server's, never the caller's to choose.
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
-    let mine = dzpos_api::router(dzpos_api::AppState::open(&path, SHOP).unwrap(), &token());
+    let mine = common::signed_in_router(&path, SHOP, &token());
     let (status, _) = call(&mine, "POST", "/products", Some(draft())).await;
     assert_eq!(status, StatusCode::CREATED);
 
-    let other = dzpos_api::router(dzpos_api::AppState::open(&path, 2).unwrap(), &token());
+    let other = common::signed_in_router(&path, 2, &token());
     let (_, list) = call(&other, "GET", "/products", None).await;
     assert_eq!(list.as_array().map(Vec::len), Some(0));
 
@@ -511,13 +516,21 @@ async fn a_spent_barcode_series_is_a_conflict_on_the_wire() {
 
 /// A request built by hand, with whatever `authorization` value the test
 /// wants, or none. `call` above always shows the right token.
+///
+/// The session header goes on every one of these, because what these tests
+/// are about is the launch token: a request that showed the right launch
+/// token and no session would be refused by the session gate instead, and
+/// they would all pass for the wrong reason.
 async fn call_with_auth(
     app: &axum::Router,
     method: &str,
     uri: &str,
     authorization: Option<&str>,
 ) -> axum::response::Response {
-    let req = Request::builder().method(method).uri(uri);
+    let req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header(common::SESSION_HEADER, common::OWNER_SESSION);
     let req = match authorization {
         Some(value) => req.header("authorization", value),
         None => req,

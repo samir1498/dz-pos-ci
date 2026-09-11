@@ -26,6 +26,7 @@ use crate::dto::{
     CustomerWriteDto, NewCustomerDto, NewPaymentDto, PaymentDto,
 };
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 /// The search box, as it reaches the API. Blank is no filter, so a box that
@@ -65,6 +66,7 @@ pub async fn get_one(
 /// when there is one. The two are written together (core, `create`).
 pub async fn create(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Result<Json<NewCustomerDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<CustomerDto>), ApiError> {
     let Json(dto) = body.map_err(ApiError::from)?;
@@ -74,7 +76,7 @@ pub async fn create(
     let new = NewCustomer::try_from(dto)?;
     let shop = state.shop_id;
     // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     let made = state
         .blocking(move |c| {
             let created = service::create(c, shop, user, new, opening)?;
@@ -90,6 +92,7 @@ pub async fn create(
 /// an adjustment.
 pub async fn update(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<CustomerWriteDto>, JsonRejection>,
 ) -> Result<Json<CustomerDto>, ApiError> {
@@ -101,7 +104,7 @@ pub async fn update(
     let close_reason = dto.close_reason.clone();
     let fields = NewCustomer::try_from(dto)?;
     let shop = state.shop_id;
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| {
             service::update(c, shop, user, id, fields, close_reason)?;
@@ -133,6 +136,7 @@ pub async fn ledger(
 /// audit entry carries, so the log and the screen cannot disagree.
 pub async fn adjust(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<AdjustmentDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<CustomerLedgerDto>), ApiError> {
@@ -141,7 +145,7 @@ pub async fn adjust(
     let amount = dto.amount()?;
     let note = dto.note;
     let shop = state.shop_id;
-    let user = state.user_id;
+    let user = who.id;
     let written = state
         .blocking(move |c| debt::adjust(c, shop, user, id, amount, note))
         .await?;
@@ -157,6 +161,7 @@ pub async fn adjust(
 /// is what the core stored rather than what the form sent.
 pub async fn pay(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<NewPaymentDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<CustomerPaymentsDto>), ApiError> {
@@ -167,7 +172,7 @@ pub async fn pay(
     let note = dto.note;
     let shop = state.shop_id;
     // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     // The moment is the server's, not the till's: a machine whose clock is
     // wrong must not decide which side of a statement's date range a payment
     // falls on. The shop's calendar, which is the one clock the ledger and a

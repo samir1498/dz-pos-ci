@@ -12,6 +12,7 @@ import type { ApiErrorPayloadDto } from "../generated/ApiErrorPayloadDto";
 import type { StoreDto } from "../generated/StoreDto";
 import type { Assert, Covers, Matches } from "./drift";
 import { apiErrorPayloadSchema } from "./error";
+import { permissionSchema } from "./session";
 import { storeSchema } from "./settings";
 
 const store: StoreDto = {
@@ -60,6 +61,8 @@ const missingOptional = z.object({
   field: z.string().optional(),
   outstanding_centimes: z.int().optional(),
   missing_ids: z.array(z.string()).optional(),
+  retry_after_seconds: z.int().optional(),
+  permission: permissionSchema.optional(),
 }) satisfies z.ZodType<ApiErrorPayloadDto>;
 type _StillCovers = Assert<Covers<ApiErrorPayloadDto, typeof missingOptional>>;
 // @ts-expect-error party_side is a key of the payload and not of this schema

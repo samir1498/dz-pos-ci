@@ -53,6 +53,7 @@ pub mod proforma;
 pub mod purchases;
 pub mod sales;
 pub mod seed;
+pub mod sessions;
 pub mod settings;
 pub mod shops;
 pub mod stock;

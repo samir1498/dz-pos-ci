@@ -136,6 +136,7 @@ fn migration_creates_every_table() {
             "purchase_receipt_lines",
             "purchase_receipts",
             "purchases",
+            "sessions",
             "settings",
             "shops",
             "stock_movements",
@@ -2284,9 +2285,24 @@ fn the_migration_reverts_and_reapplies() {
         1
     );
 
-    // The eleventh is the top of the stack: the columns signing in needs. It
-    // adds five to `users` and an index over them, and its down takes exactly
-    // those off and leaves the row, its id and its role standing.
+    // The twelfth is the top of the stack: the sessions table. It adds a
+    // table and two indexes and nothing else, so its down drops all three and
+    // touches no user and no document.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master \
+             WHERE name IN ('sessions', 'idx_sessions_token_hash', 'idx_sessions_shop_user')"
+        ),
+        0,
+        "the sessions down.sql left the table or one of its indexes behind"
+    );
+
+    // The eleventh: the columns signing in needs. It adds five to `users` and
+    // an index over them, and its down takes exactly those off and leaves the
+    // row, its id and its role standing.
     assert_eq!(
         count(
             &mut conn,
@@ -4058,5 +4074,121 @@ fn a_database_without_the_sign_in_columns_takes_the_migration_that_adds_them() {
     diesel::sql_query("DELETE FROM shops WHERE id = 2")
         .execute(&mut conn)
         .unwrap();
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
+
+/// The sessions table lands on a file that already holds a shop, its users
+/// and the paper they signed. Nothing is backfilled: a session is a live
+/// thing and a file that has never had one starts with none.
+#[test]
+fn a_database_without_sessions_takes_the_migration_that_adds_them() {
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_before_migration("sessions");
+    seed_a_facture_naming_a_customer(&mut conn);
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = 'sessions'"
+        ),
+        0,
+        "the file this starts from already carries the sessions table"
+    );
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    // Empty, and STRICT like every table since the first one.
+    assert_eq!(count(&mut conn, "SELECT COUNT(*) AS n FROM sessions"), 0);
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_list('sessions') WHERE strict = 1"
+        ),
+        1,
+        "the sessions table is not STRICT"
+    );
+    // Rule 3: the shop is on the row, and so is the user the session acts as.
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_table_info('sessions') \
+             WHERE name IN ('shop_id', 'user_id', 'token_hash', 'created_at', \
+                            'last_seen_at', 'ended_at')"
+        ),
+        6
+    );
+
+    diesel::sql_query(
+        "INSERT INTO sessions (shop_id, user_id, token_hash, created_at, last_seen_at) \
+         VALUES (1, 1, 'aa', '2026-09-11 12:00:00', '2026-09-11 12:00:00')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    // One row per token hash: two under one hash would be a SHA-256 collision
+    // or a bug, and the file refuses both.
+    assert!(
+        diesel::sql_query(
+            "INSERT INTO sessions (shop_id, user_id, token_hash, created_at, last_seen_at) \
+             VALUES (1, 1, 'aa', '2026-09-11 12:00:00', '2026-09-11 12:00:00')"
+        )
+        .execute(&mut conn)
+        .is_err(),
+        "two sessions took the same token hash"
+    );
+    // A session of a user nobody has, or of a shop nobody has.
+    assert!(
+        diesel::sql_query(
+            "INSERT INTO sessions (shop_id, user_id, token_hash, created_at, last_seen_at) \
+             VALUES (1, 999, 'bb', '2026-09-11 12:00:00', '2026-09-11 12:00:00')"
+        )
+        .execute(&mut conn)
+        .is_err(),
+        "a session named a user that is not there"
+    );
+    assert!(
+        diesel::sql_query(
+            "INSERT INTO sessions (shop_id, user_id, token_hash, created_at, last_seen_at) \
+             VALUES (999, 1, 'cc', '2026-09-11 12:00:00', '2026-09-11 12:00:00')"
+        )
+        .execute(&mut conn)
+        .is_err(),
+        "a session named a shop that is not there"
+    );
+    assert_eq!(orphan_rows(&mut conn), 0);
+
+    // A deleted shop takes its sessions with it, the way it takes its
+    // preferences; the user it names is what keeps the row from outliving the
+    // person, and the FK on users has no cascade because a user is never
+    // deleted.
+    assert_eq!(on_delete_from_shops(&mut conn, "sessions"), "CASCADE");
+    diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième')")
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(
+        "INSERT INTO users (id, shop_id, name, role) VALUES (7, 2, 'Karim', 'cashier')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO sessions (shop_id, user_id, token_hash, created_at, last_seen_at) \
+         VALUES (2, 7, 'dd', '2026-09-11 12:00:00', '2026-09-11 12:00:00')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query("DELETE FROM users WHERE shop_id = 2")
+        .execute(&mut conn)
+        .unwrap_err();
+    diesel::sql_query("DELETE FROM shops WHERE id = 2")
+        .execute(&mut conn)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sessions WHERE shop_id = 2"
+        ),
+        0,
+        "a deleted shop left its sessions behind"
+    );
     assert_eq!(orphan_rows(&mut conn), 0);
 }
