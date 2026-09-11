@@ -141,3 +141,23 @@ fn a_zero_threshold_needs_the_permission_for_any_discount_at_all() {
     assert!(!discount_needs_permission(base, Money::ZERO, Bps::ZERO).unwrap());
     assert!(discount_needs_permission(base, Money::centimes(1), Bps::ZERO).unwrap());
 }
+
+#[test]
+fn as_str_and_the_wire_spelling_never_drift() {
+    // `as_str` is what the wire and the UI translate; serde's `snake_case`
+    // is what actually goes over JSON. Nothing else checks the two agree, so
+    // a variant renamed on one side and not the other would only show up as
+    // a silent mismatch on whatever screen reads it.
+    for role in Role::ALL {
+        assert_eq!(
+            serde_json::to_value(role).unwrap(),
+            serde_json::Value::String(role.as_str().to_string())
+        );
+    }
+    for permission in Permission::ALL {
+        assert_eq!(
+            serde_json::to_value(permission).unwrap(),
+            serde_json::Value::String(permission.as_str().to_string())
+        );
+    }
+}

@@ -62,7 +62,7 @@ impl std::fmt::Display for Role {
 ///
 /// The stock recount is not its own variant. The same ruling reads it onto
 /// `CorrectLedger`, "the way a supplier adjustment and a purchase return
-/// already do" — a twelfth permission that answers the same question as an
+/// already do": a twelfth permission that answers the same question as an
 /// existing one would be a second statement of a rule already decided, which
 /// is exactly what this table exists to stop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
