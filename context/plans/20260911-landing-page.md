@@ -1,7 +1,7 @@
 ---
 title: 'Landing page'
 slug: 'landing-page'
-status: 'active'
+status: 'done'
 category: 'product'
 created: 20260911
 tldr: 'The public page for the product: Astro, the branding, the real screens, three languages, on Cloudflare Pages'
@@ -26,6 +26,7 @@ tasks:
     desc: 'Publish: the Cloudflare Pages project, the domain Anouar picks (or a pages.dev address until then), the sitemap and the Open Graph card drawn from the branding, the analytics question answered (Cloudflare Web Analytics is free and cookieless; nothing else goes on the page), and a line in the README and on the boss site saying where the page lives and how to change it.'
     status: 'done'
 acceptance: []
+completed_at: '2026-09-11'
 ---
 # The landing page
 
