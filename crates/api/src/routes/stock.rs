@@ -26,7 +26,6 @@ pub async fn recount(
     who: CurrentUser,
 ) -> Result<Json<StockRecountDto>, ApiError> {
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     let report = state
         .blocking(move |c| service::recount(c, shop, user))

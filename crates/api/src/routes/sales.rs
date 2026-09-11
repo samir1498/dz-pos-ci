@@ -212,7 +212,6 @@ pub async fn avoir(
     let lines = dto.lines();
     let reason = dto.reason;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     let made = state
         .blocking(move |c| avoir::issue(c, shop, user, id, lines, reason, None))
@@ -250,7 +249,6 @@ pub async fn cancel(
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
     let Json(CancelDocumentDto { reason }) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     let done = state
         .blocking(move |c| documents::cancel(c, shop, user, id, reason, None))

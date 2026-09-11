@@ -72,7 +72,6 @@ pub async fn create(
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = dto.into_core()?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // Writing an order commits the shop's money, so this route needs a
     // permission of its own once roles land.
     let user = who.id;
@@ -95,7 +94,6 @@ pub async fn receive(
     let lines = dto.lines.into_iter().map(Into::into).collect();
     let note = dto.note;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     let after = state
         .blocking(move |c| service::receive(c, shop, user, id, lines, note))
@@ -116,7 +114,6 @@ pub async fn returns(
     let lines = dto.lines.into_iter().map(Into::into).collect();
     let note = dto.note;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // A return lowers what the shop owes, so it needs the same permission a
     // correction to the ledger does.
     let user = who.id;
@@ -136,7 +133,6 @@ pub async fn cancel(
     let id = path_id(id)?;
     let Json(dto) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     let user = who.id;
     let after = state
         .blocking(move |c| service::cancel(c, shop, user, id, dto.reason))
@@ -155,7 +151,6 @@ pub async fn close_short(
     let id = path_id(id)?;
     let Json(dto) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
     // Writing off goods that never came is a decision, and the log is what
     // carries the accountability until a permission does.
     let user = who.id;
