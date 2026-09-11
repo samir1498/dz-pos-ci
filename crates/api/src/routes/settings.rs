@@ -6,11 +6,15 @@ use axum::extract::rejection::JsonRejection;
 use axum::extract::State;
 use axum::Json;
 use chrono::{NaiveDateTime, NaiveTime};
+use dzpos_core::error::CoreError;
 use dzpos_core::models::shop::StoreBlock;
+use dzpos_core::money::Bps;
 use dzpos_core::services::clock;
 use dzpos_core::services::{preferences, settings, shops};
 
-use crate::dto::{parse_day, RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto};
+use crate::dto::{
+    parse_day, DiscountThresholdChangeDto, RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto,
+};
 use crate::error::ApiError;
 use crate::session::CurrentUser;
 use crate::AppState;
@@ -32,6 +36,7 @@ fn read_all(
         regime: settings::regime_current(conn, shop, at)?.into(),
         regime_planned: settings::regime_planned(conn, shop, at)?.map(Into::into),
         theme: preferences::theme(conn, shop)?.map(Into::into),
+        discount_threshold_bps: settings::discount_threshold_as_of(conn, shop, at)?.as_u32(),
     })
 }
 
@@ -93,6 +98,34 @@ pub async fn change_regime(
     let all = state
         .blocking(move |c| {
             settings::set_regime(c, shop, user, regime, from)?;
+            read_all(c, shop)
+        })
+        .await?;
+    Ok(Json(all))
+}
+
+/// The discount a cashier may give without asking anyone. Answers the whole
+/// settings page for the reason `change_regime` does, and is dated for the
+/// same reason: a sale refused in March is read against March's threshold,
+/// not against the one the shop moved to in April.
+pub async fn set_discount_threshold(
+    State(state): State<AppState>,
+    who: CurrentUser,
+    body: Result<Json<DiscountThresholdChangeDto>, JsonRejection>,
+) -> Result<Json<SettingsDto>, ApiError> {
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let from = parse_day("valid_from", &dto.valid_from)?.and_time(NaiveTime::MIN);
+    let threshold = Bps::new(dto.threshold_bps).map_err(|_| {
+        CoreError::validation(
+            "threshold_bps",
+            "a discount threshold is a share of a basket, so at most 100 %",
+        )
+    })?;
+    let shop = state.shop_id;
+    let user = who.id;
+    let all = state
+        .blocking(move |c| {
+            settings::set_discount_threshold(c, shop, user, threshold, from)?;
             read_all(c, shop)
         })
         .await?;

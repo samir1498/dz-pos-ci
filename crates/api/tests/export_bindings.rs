@@ -21,7 +21,8 @@ use dzpos_api::dto::{
     NewSaleLineDto, NewSupplierDto, OutgoingsDto, OwedDto, PaidNowDto, PartyKindDto,
     PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, PermissionDto, ProductDto,
     PurchaseDetailDto, PurchaseDto, PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto,
-    PurchaseStatusDto, ReceiveLineDto, RegimeChangeDto, RegimeDto, RestoreDto, RoleDto,
+    DiscountThresholdChangeDto, PurchaseStatusDto, ReceiveLineDto, RegimeChangeDto, RegimeDto,
+    RestoreDto, RoleDto,
     SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto,
     SaleTotalsDto, SaleTvaDto, SaleWarningDto, SessionDto, SessionIdleDto, SettingsDto,
     StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto, SupplierDebtKindDto,
@@ -30,7 +31,7 @@ use dzpos_api::dto::{
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 97] = [
+const FILES: [&str; 98] = [
     "LoginDto.ts",
     "MeDto.ts",
     "SessionDto.ts",
@@ -74,6 +75,7 @@ const FILES: [&str; 97] = [
     "CancelDocumentDto.ts",
     "PartyKindDto.ts",
     "DebtKindDto.ts",
+    "DiscountThresholdChangeDto.ts",
     "CustomerDto.ts",
     "CustomerWriteDto.ts",
     "NewCustomerDto.ts",
@@ -206,6 +208,7 @@ fn export_bindings() {
     ThemeChoiceDto::export_all(&cfg).unwrap();
     SettingsDto::export_all(&cfg).unwrap();
     RegimeChangeDto::export_all(&cfg).unwrap();
+    DiscountThresholdChangeDto::export_all(&cfg).unwrap();
     BackupDto::export_all(&cfg).unwrap();
     BackupsDto::export_all(&cfg).unwrap();
     RestoreDto::export_all(&cfg).unwrap();

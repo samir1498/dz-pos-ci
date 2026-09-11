@@ -200,6 +200,33 @@ pub fn issue(
         // Checked here, before `documents::issue`, so a refusal burns no
         // number; the row it writes is further down, where the document it
         // produced has an id.
+        // A price typed over the product's own is the other way the same
+        // money comes off, so it is gated beside the discount rather than
+        // after it: a cashier refused a 10 % discount and allowed to type
+        // the discounted price is not refused at all (M1 carry-in,
+        // 2026-09-09). Checked before `documents::issue`, so a refusal burns
+        // no number; the row it writes is further down, where the document
+        // has an id.
+        let negotiated: Vec<serde_json::Value> = priced
+            .iter()
+            .filter(|line| line.unit_price != line.stored_price)
+            .map(|line| {
+                serde_json::json!({
+                    "product_id": line.product_id,
+                    "name": line.name,
+                    "card_price_centimes": line.stored_price.as_centimes(),
+                    "charged_centimes": line.unit_price.as_centimes(),
+                    "qty_milli": line.qty_milli,
+                })
+            })
+            .collect();
+        if !negotiated.is_empty() {
+            permissions::require(
+                role_of(conn, shop_id, user_id)?,
+                Permission::ChangePriceAtTheTill,
+            )?;
+        }
+
         let basket = sum_line_gross(&money_lines)?;
         let discount = sum_discounts(&money_lines, new.global_discount)?;
         let threshold = settings::discount_threshold_as_of(conn, shop_id, issued_at)?;
@@ -319,6 +346,31 @@ pub fn issue(
         // was given. Written above the credit block below because a cash
         // sale returns there and a discount is not a thing only a credit
         // sale can carry.
+        // What the product's card says, against what the customer was
+        // actually charged, line by line. One row per document rather than
+        // one per line: the decision was taken once, at the till, over a
+        // basket.
+        if !negotiated.is_empty() {
+            audit::record(
+                conn,
+                shop_id,
+                user_id,
+                audit::Change {
+                    action: audit::ACTION_PRICE_OVERRIDE,
+                    entity: "document",
+                    entity_id: Some(document.id),
+                    before: Some(
+                        serde_json::json!({ "lines": negotiated.len() }).to_string(),
+                    ),
+                    after: Some(serde_json::json!({
+                        "document_id": document.id,
+                        "lines": negotiated,
+                    })
+                    .to_string()),
+                },
+            )?;
+        }
+
         if discounted_past_threshold {
             audit::record(
                 conn,
@@ -692,6 +744,10 @@ pub(crate) struct PricedLine {
     pub(crate) rate_bps: crate::money::Bps,
     pub(crate) line_total: Money,
     cost: Money,
+    /// The price on the product's own card, kept beside the one actually
+    /// charged so the negotiated-price gate and its audit row can say what
+    /// was given away without reading the product a second time.
+    pub(crate) stored_price: Money,
 }
 
 /// Every line of a basket, priced. The one place a caller turns what the till
@@ -786,6 +842,7 @@ fn price(
             .checked_sub(line.line_discount)
             .map_err(too_large("line_discount"))?,
         cost: product.cost,
+        stored_price: product.selling,
     })
 }
 

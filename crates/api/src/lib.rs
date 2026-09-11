@@ -514,6 +514,10 @@ pub fn router_with_origin(
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))
+        .route(
+            "/settings/discount-threshold",
+            post(routes::settings::set_discount_threshold),
+        )
         .route("/settings/theme", put(routes::settings::set_theme))
         .route(
             "/stock/recount",

@@ -48,6 +48,16 @@ pub const ACTION_CREDIT_OVERRIDE: &str = "document.issue_override";
 /// `Permission::DiscountAboveThreshold` can take it (M4 T6).
 pub const ACTION_DISCOUNT_OVERRIDE: &str = "document.discount_override";
 
+/// A line sold at a price that is not the product's own. The entry carries
+/// the product, the price on its card and the price actually charged, so a
+/// reader sees the negotiation rather than a total they cannot account for.
+/// M1 shipped the negotiated price ungated because the till had one user and
+/// asked for this gate in its review (M1 carry-in, 2026-09-09); only a user
+/// holding `Permission::ChangePriceAtTheTill` can take it. Without it the
+/// discount threshold is decoration: the same money comes off by typing a
+/// lower price instead of a discount.
+pub const ACTION_PRICE_OVERRIDE: &str = "document.price_override";
+
 /// A credit note written against a facture. The entry names the facture that
 /// changed, because that is the paper a reader is holding when they ask why it
 /// stopped asking for its amount, and carries the avoir it produced, what the

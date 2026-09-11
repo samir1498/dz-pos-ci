@@ -2317,3 +2317,138 @@ fn a_facture_worth_nothing_is_still_issued_and_still_takes_its_number() {
         "a movement of zero would sit in every statement the customer is handed"
     );
 }
+
+/// A line sold at a price the cashier typed instead of the one on the
+/// product's card. The other way the same money comes off a basket: a
+/// cashier refused a discount and allowed to type the discounted price is
+/// not refused at all.
+fn negotiated(product_id: i32, qty_milli: i64, unit_price: i64, tendered: i64) -> NewSale {
+    NewSale {
+        lines: vec![NewSaleLine {
+            product_id,
+            qty_milli,
+            unit_price: Some(Money::centimes(unit_price)),
+            line_discount: Money::ZERO,
+        }],
+        global_discount: Money::ZERO,
+        payment_mode: PaymentMode::Cash,
+        tendered: Some(Money::centimes(tendered)),
+        customer_id: None,
+        override_credit: false,
+        kind: SaleKind::Ticket,
+        issued_at: Some(at(9)),
+    }
+}
+
+#[test]
+fn a_cashier_cannot_type_a_price_the_product_card_does_not_say() {
+    // Without this the discount threshold is decoration: the cashier who
+    // may not take 10 % off types the price with the 10 % already gone.
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 500); // 5 %, generous, and beside the point
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    let err = issue_sale(&mut conn, SHOP, cashier, negotiated(p, 1_000, 90_000, 200_000))
+        .unwrap_err();
+    assert_eq!(err.code(), "forbidden", "{err:?}");
+    let CoreError::Forbidden { permission } = err else {
+        panic!("a refusal for a permission carries the one it wanted");
+    };
+    assert_eq!(permission, Permission::ChangePriceAtTheTill);
+
+    // Refused before the number was taken, like every other rule here.
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+    assert_eq!(
+        products::get(&mut conn, SHOP, p).unwrap().qty_on_hand_milli,
+        10_000
+    );
+
+    // The same basket at the card's own price goes through, so what was
+    // refused was the price and not the sale.
+    let doc = issue_sale(&mut conn, SHOP, cashier, cash(vec![line(p, 1_000)], 200_000)).unwrap();
+    assert_eq!(doc.number, 1);
+}
+
+#[test]
+fn a_manager_negotiates_a_price_and_the_row_carries_the_card_beside_what_was_charged() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let manager = user(&mut conn, "Karim", Role::Manager);
+
+    let doc = issue_sale(&mut conn, SHOP, manager, negotiated(p, 1_000, 90_000, 200_000)).unwrap();
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "document.price_override")
+        .expect("a price that is not the product's own is logged");
+    assert_eq!(entry.entity_id, Some(doc.id));
+    assert_eq!(entry.user_id, manager);
+    let after: serde_json::Value =
+        serde_json::from_str(entry.after.as_deref().unwrap()).unwrap();
+    let sold = &after["lines"][0];
+    assert_eq!(sold["card_price_centimes"], 100_000);
+    assert_eq!(sold["charged_centimes"], 90_000);
+    assert_eq!(sold["product_id"], p);
+}
+
+#[test]
+fn a_sale_at_the_card_price_asks_nobody_and_writes_no_price_row() {
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    // The same price typed out rather than left to the card: the same price,
+    // so nothing was negotiated and nothing is logged.
+    issue_sale(&mut conn, SHOP, cashier, negotiated(p, 1_000, 100_000, 200_000)).unwrap();
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    assert!(
+        !entries.iter().any(|e| e.action == "document.price_override"),
+        "a sale at the card's own price is not an override"
+    );
+}
+
+#[test]
+fn a_discount_split_so_neither_half_trips_the_threshold_is_still_caught() {
+    // The claim the whole-basket rule rests on. Basket 200,00 and a 2 %
+    // threshold allows 4,00. A 1,50 global and a 3,00 line discount are each
+    // under 2 % of their own line, and together they are 4,50, which is not.
+    // A per-line reading of the rule passes this sale; the basket reading
+    // refuses it.
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 200); // 2 %
+    let p = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    let sale = NewSale {
+        lines: vec![
+            NewSaleLine {
+                product_id: p,
+                qty_milli: 1_000,
+                unit_price: None,
+                line_discount: Money::centimes(300),
+            },
+            NewSaleLine {
+                product_id: p,
+                qty_milli: 1_000,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            },
+        ],
+        global_discount: Money::centimes(150),
+        payment_mode: PaymentMode::Cash,
+        tendered: Some(Money::centimes(20_000)),
+        customer_id: None,
+        override_credit: false,
+        kind: SaleKind::Ticket,
+        issued_at: Some(at(9)),
+    };
+
+    let err = issue_sale(&mut conn, SHOP, cashier, sale).unwrap_err();
+    let CoreError::Forbidden { permission } = err else {
+        panic!("a refusal for a permission carries the one it wanted: {err:?}");
+    };
+    assert_eq!(permission, Permission::DiscountAboveThreshold);
+}
