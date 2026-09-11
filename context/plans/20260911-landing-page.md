@@ -12,7 +12,7 @@ tasks:
     status: 'done'
   - id: 'L1'
     desc: 'The screens as product shots: a script that takes the committed e2e screenshots (`apps/desktop/e2e/screenshots/*.png`, twenty-three of them, French and Arabic) and composes the hero and the section images from them, in the browser frame the mockups use, one collage of several screens and several single shots; no hand-drawn fake UI anywhere on the page, every pixel is the real application. The script is rerun when a screen changes, and the result is committed so a visitor never waits on a build.'
-    status: 'pending'
+    status: 'done'
   - id: 'L2'
     desc: 'The copy, French first, for a shopkeeper and not for a developer: what it is (the till, the facture, the stock, the suppliers, the dashboard), what it is not (no monthly cloud bill, no internet needed at the counter), the fiscal answers an Algerian owner asks first (a numbered facture in its yearly series, the stamp on cash, TVA per rate, the amount in words), and the three languages as a feature rather than a footnote. English and Arabic are translations of the same page, reviewed for Arabic by a native speaker before it goes public (R6 covers the printed words; this is the same rule for the page).'
     status: 'done'
