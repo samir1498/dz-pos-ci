@@ -37,7 +37,9 @@ answer without a checkout. Left for later: the hero ships a 1344-pixel file
 for a 342-pixel render on a phone, which needs width descriptors in the shot
 pipeline.
 
-M4 has eight of its ten tasks on the milestone branch `m4/2026-09-11`.
+M4 has nine of its ten tasks on the milestone branch `m4/2026-09-11`, and
+the tenth is the closing sweep, which is half done. What a person gets:
+
 Migration 000011 adds the five sign-in columns to the `users` table that has
 existed since the first migration, with argon2id hashing, the users service
 writing an audit row per operation, and a wait that doubles from thirty
@@ -46,46 +48,65 @@ sit in one `can(role, permission)` table with a typed refusal carrying the
 permission, and the discount threshold rides the regime fiscal's dated
 history; a manager answers like an owner except on the staff list and the
 audit log. Migration 000012 adds sessions, which replace the seeded owner id
-on every route: a token of 32 random bytes stored as a digest, the desktop's
-own header or an httpOnly cookie, the launch token untouched and still
-first, and one table naming the permission each route will want. The session
-middleware looks that row up by the route's own template and refuses before
-the handler runs, so no handler names a permission twice, and a write on a
-route the table does not name is refused rather than waved through.
+on every route: 32 random bytes stored as a digest, the desktop's own header
+or an httpOnly cookie, the launch token untouched and still first. The
+session middleware looks the route up in one table naming the permission it
+wants and refuses before the handler runs, so no handler names a permission
+twice, and a write on a route the table does not name is refused rather than
+waved through.
 
-On the screens, a person signs in at a PIN pad if they are at the till and
-with a name and a password everywhere else, their name sits in the topbar
-with a way out, and after the idle time a lock covers the app without
-unmounting it, so a half-rung basket is still there when they come back. The
-cover is a real cover: a click, a tab, a barcode scan and the app's own
-attempts to put the cursor back in the search box all fail to reach through
-it, and the keyboard shortcut that pays refuses while it is up. A cashier
-refused a credit block or a discount above the threshold is now refused by
-name, and so is a cashier who tries the other way round it, typing a price
-lower than the one on the product's card; the log carries the card price
-beside what was actually charged. The threshold itself has a route and the
-settings page reads it back, which it did not before, so a shop is no longer
-stuck at zero. The owner has an audit log screen over the rows every service
-has been writing since M1. Settings has a staff list: add someone, rename,
-change a role, reset a PIN, switch someone off and on again, each refused to
-a cashier by the server rather than by a hidden button, with the last owner
-protected from being switched off or moved off the role. A brand-new shop
-can be claimed: one route takes a first PIN with no session, refuses the
-moment any credential exists anywhere in the shop, and hands back a live
-session.
+A person signs in at a PIN pad if they are at the till and with a name and a
+password everywhere else, their name sits in the topbar with a way out, and
+after the idle time a lock covers the app without unmounting it, so a
+half-rung basket is still there when they come back. The cover is a real
+cover: a click, a tab, a barcode scan and the app's own attempts to put the
+cursor back in the search box all fail to reach through it, the keyboard
+shortcut that pays refuses while it is up, and the app underneath stops
+asking the server for anything, so the session finally times out on the
+server as well as on the glass.
 
-Left on M4: hiding cost and margin from a cashier on the screens that show
-them, which is being built now, and the closing sweep (the spec and the
-architecture page rewritten to what shipped, a review of the whole milestone
-with the roles lens deepest, the boss page, the checkpoint PR).
+A cashier cannot see what the shop paid. The purchase and dashboard routes
+refuse them outright; the product list, which they need to ring a sale up,
+hands back its cost and wholesale fields empty instead of being closed. That
+second half is what the closing review found missing: the two permissions
+about seeing cost and seeing reports were written down, tested, and enforced
+by nothing, so a cashier with a session could read every product's cost off
+the API while the screen politely hid the column.
+
+A cashier refused a credit block or a discount above the threshold is
+refused by name, and so is a cashier who tries the other way round it,
+typing a price lower than the one on the product's card; the log carries the
+card price beside what was actually charged. A refused credit sale leaves a
+row now whichever way it was refused, including when the till sent the
+override flag, which is the deliberate attempt and the one the log most
+needs. The threshold itself has a route and the settings page reads it back.
+
+The owner has an audit log screen over the rows every service has been
+writing since M1, read a page at a time from the file rather than whole.
+Settings has a staff list: add someone, rename, change a role, reset a PIN,
+switch someone off and on again, each refused to a cashier by the server
+rather than by a hidden button, with the last owner protected. Resetting a
+PIN or switching somebody off now ends the sessions they were holding, and
+somebody changing their own PIN keeps the screen they are standing at. A
+refused request, an export and a restore each leave a row.
+
+A brand-new shop can be claimed: one route takes a first PIN with no
+session, refuses the moment any credential exists anywhere in the shop, and
+hands back a live session.
+
+Left on M4: the end-to-end suite has no cashier in it. Every one of its
+twenty-one specs signs in as the owner, so deleting every permission check
+in the API today would leave all of them passing. That is being built. Then
+the whole-milestone review is done and the checkpoint PR is what remains.
 
 Open for Samir on M4: the wrong-try counter is one per person and covers the
 PIN and the password together, so a fumbled password locks that person's
-till PIN; and the regime fiscal sits inside the settings permission a manager
-holds. Two shape problems are written down for the sweep rather than fixed:
-a locked screen still refetches when the window regains focus, which keeps
-the session alive on the server while nobody is at the till, and the audit
-log is read whole on every request with nothing pruning it.
+till PIN; the regime fiscal sits inside the settings permission a manager
+holds; and a quotation is not gated, so a cashier can print a proforma
+promising a price and a discount they could not charge at the till. Watch
+for later: a refused request is now a write to the file and nothing prunes
+the audit table, which is fine over loopback and a real question the day a
+phone on the shop LAN can reach the API.
 
 Earlier on 2026-09-11: the mirror workflow reached main (PR #22) and its two
 heavy jobs, Windows and coverage, were cut back to a push to main (PR #24)
