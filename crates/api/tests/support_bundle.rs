@@ -293,9 +293,18 @@ async fn the_bundle_holds_exactly_six_files_shaped_the_way_they_should_be_and_no
 
     let files = unzip(&raw);
     let names: BTreeSet<&str> = files.keys().map(String::as_str).collect();
-    let expected: BTreeSet<&str> = dzpos_core::services::support_bundle::ENTRIES
-        .into_iter()
-        .collect();
+    // Spelled out here rather than read from `ENTRIES`: taking the list from
+    // the constant the writer itself walks would pass for a seventh file as
+    // readily as for six, and the promise this test holds is the list, not
+    // the agreement between two readings of it.
+    let expected: BTreeSet<&str> = BTreeSet::from([
+        "README.txt",
+        "log.txt",
+        "migrations.txt",
+        "schema.txt",
+        "counts.txt",
+        "system.txt",
+    ]);
     assert_eq!(
         names, expected,
         "the archive does not carry exactly the six named files"
@@ -396,7 +405,10 @@ async fn the_bundle_holds_exactly_six_files_shaped_the_way_they_should_be_and_no
     // entry's decompressed text.
     let mut forbidden: Vec<(&str, String)> = vec![
         ("shop name", seed::SHOP_NAME.to_string()),
-        ("owner pin", seed::OWNER_PIN.to_string()),
+        // The seeded PIN is not here and the password is. Neither reaches the
+        // shop file in the clear, so what guards both is the hash below; four
+        // digits, though, collide with any byte count the bundle happens to
+        // print, which would fail this test for a leak that did not happen.
         ("owner password", seed::OWNER_PASSWORD.to_string()),
         ("launch token", TOKEN.to_string()),
         ("session token", common::OWNER_SESSION.to_string()),
