@@ -88,21 +88,22 @@ jobs:
   # Windows costs two minutes of the account's allowance for every minute it
   # runs, and what it proves is that the workspace builds and passes on
   # Windows at all, which no pull request changes on its own. So it runs on
-  # main, after the merge, and on a hand-started run: a break shows within
-  # one merge rather than within one release, at a fifth of the bill.
+  # main, after the merge, and nowhere else: a break shows within one merge
+  # rather than within one release, at a fifth of the bill. A branch run
+  # started by hand (`just ci`) is a branch check, so it skips this too.
   windows:
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
 
-  # Coverage feeds Sonar, which reads main. A pull request's lcov was never
-  # opened by anyone, and building the whole workspace a second time with
-  # instrumentation is the single most expensive step in the file.
+  # Coverage feeds Sonar, which reads main, so it runs only on main. A branch's
+  # lcov was never opened by anyone, and building the whole workspace a second
+  # time with instrumentation is the single most expensive step in the file.
   coverage:
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
