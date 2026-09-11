@@ -24,6 +24,7 @@ const ERROR_KEY: Record<string, Key> = {
   bad_response: "error_bad_response",
   unauthorized: "error_unauthorized",
   unreachable: "error_unreachable",
+  forbidden: "error_forbidden",
 };
 
 export function errorKey(error: unknown): Key {

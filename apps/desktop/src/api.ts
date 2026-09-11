@@ -95,6 +95,10 @@ export const suppliersQueryKey: readonly string[] = ["suppliers"];
  * to the state it left must not go on showing it. */
 export const purchasesQueryKey: readonly string[] = ["purchases"];
 
+/** The owner's audit log (M4 T7). The three filters and the page are
+ * appended by the screen, the same way the purchase list's are. */
+export const auditLogQueryKey: readonly string[] = ["audit-log"];
+
 /** One order with its lines and its deliveries. Its own key rather than a
  * slice of the list's: the list answers a row per order and this answers the
  * whole thing, and a delivery makes both stale. */

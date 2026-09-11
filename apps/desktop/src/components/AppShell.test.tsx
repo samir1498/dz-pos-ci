@@ -131,9 +131,12 @@ describe("AppShell", () => {
     expect(screen.getByTestId("shell-topbar")).toBeInTheDocument();
   });
 
-  test("shows every screen in the sidebar, grouped by section", async () => {
+  test("shows every unconditional screen in the sidebar, grouped by section", async () => {
+    // Nobody is signed in in this suite's default fetch stub, so the one
+    // item that carries a `permission` (the audit log, M4 T7) is left out
+    // here and covered on its own below.
     const { container } = await mount("/till");
-    for (const item of NAV) {
+    for (const item of NAV.filter((item) => item.permission === undefined)) {
       expect(screen.getByTestId(`nav-${item.to.slice(1)}`)).toBeInTheDocument();
     }
     // Read off the group headings rather than searched for by text: the
@@ -144,6 +147,35 @@ describe("AppShell", () => {
       (node) => node.textContent,
     );
     expect(sections).toEqual([fr.nav_section_sales, fr.nav_section_purchases, fr.nav_section_manage]);
+  });
+
+  test("a nav entry gated on a permission is hidden while nobody is signed in", async () => {
+    await mount("/till");
+    expect(screen.queryByTestId("nav-audit")).not.toBeInTheDocument();
+  });
+
+  test("a nav entry gated on a permission shows once the session holds it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/auth/me")) {
+          return Promise.resolve(
+            json(200, {
+              user_id: 1,
+              name: "Yasmine",
+              role: "owner",
+              permissions: ["see_audit_log"],
+            }),
+          );
+        }
+        if (url.endsWith("/clock")) return Promise.resolve(json(200, { today: SHOP_TODAY }));
+        if (url.endsWith("/settings")) return Promise.resolve(json(200, settings));
+        return Promise.resolve(json(404, { error: { code: "not_found", message: "no" } }));
+      }),
+    );
+    await mount("/till");
+    expect(await screen.findByTestId("nav-audit")).toBeInTheDocument();
   });
 
   test("the topbar heads the page with the name the sidebar uses", async () => {

@@ -3,6 +3,9 @@
 export type { ApiErrorDto } from "./generated/ApiErrorDto";
 export type { ApiErrorPayloadDto } from "./generated/ApiErrorPayloadDto";
 export type { AdjustmentDto } from "./generated/AdjustmentDto";
+export type { AuditEntryDto } from "./generated/AuditEntryDto";
+export type { AuditLogDto } from "./generated/AuditLogDto";
+export type { AuditUserDto } from "./generated/AuditUserDto";
 export type { CategoryDto } from "./generated/CategoryDto";
 export type { CustomerDto } from "./generated/CustomerDto";
 export type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";

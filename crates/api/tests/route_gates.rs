@@ -28,7 +28,7 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 use dzpos_api::gates::{gate_for, Gate, ROUTE_GATES};
-use dzpos_core::services::permissions::{can, Role};
+use dzpos_core::services::permissions::{can, Permission, Role};
 
 mod common;
 
@@ -303,7 +303,7 @@ fn every_row_of_the_table_names_a_route_that_is_there() {
 /// The two reads the carry-ins do name (`GET /stock/recount` and the label
 /// routes, both of which a cashier keeps) are open, so no row is wanted.
 #[test]
-fn the_table_is_about_writes_and_the_five_reads_that_carry_the_lists_out() {
+fn the_table_is_about_writes_and_the_six_reads_that_carry_the_lists_out() {
     for gate in ROUTE_GATES {
         assert!(
             matches!(gate.method, "POST" | "PUT" | "GET"),
@@ -333,6 +333,12 @@ fn the_table_is_about_writes_and_the_five_reads_that_carry_the_lists_out() {
             "GET {read} carries a whole list out and has no row"
         );
     }
+    // The sixth: not a whole list out the door, but the log of every
+    // sensitive thing the staff have done, and the owner's alone (M4 T7).
+    assert_eq!(
+        gate_for("GET", "/audit-log").and_then(|g| g.permission),
+        Some(Permission::SeeAuditLog)
+    );
 }
 
 /// The gate's own default when the walk above is not looking.
