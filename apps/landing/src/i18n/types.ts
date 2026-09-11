@@ -36,6 +36,26 @@ export interface Dict {
   };
 
   /**
+   * What the person behind the counter can and cannot do, for a shop with
+   * more than one person working it. Every line has to already be true in
+   * `crates/core/src/services/permissions.rs`'s `can(role, permission)`
+   * table and in `docs/features.md` §5; each field's own comment in fr.ts
+   * names what it is checked against. Placed after the four pieces and
+   * before the fiscal block, per the 2026-09-11 brief that asked for this
+   * section (staff accounts shipped after the landing page's own plan,
+   * context/plans/20260911-landing-page.md, was already marked done).
+   */
+  readonly staff: {
+    readonly heading: string;
+    readonly intro: string;
+    readonly signIn: string;
+    readonly cashierScope: string;
+    readonly cashierLimits: string;
+    readonly manager: string;
+    readonly log: string;
+  };
+
+  /**
    * The fiscal answers an Algerian owner asks first. Every claim here has to
    * already be true in docs/features.md; each field's own comment in fr.ts
    * names the row. Nothing here is a legal opinion, only what the software

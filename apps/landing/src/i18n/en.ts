@@ -34,6 +34,17 @@ export const en: Dict = {
     },
   },
 
+  staff: {
+    heading: "One account for each person in the shop",
+    intro:
+      "A shop with more than one person at the counter doesn't need everyone to see the same things. Each person signs in on their own account, and what they can do depends on their role: owner, manager or cashier.",
+    signIn: "A cashier signs in at the till with a four-to-six-digit code; everyone else, with a name and a password.",
+    cashierScope: "A cashier sells, takes payment and prints the ticket. Nothing more: not what an item cost the shop, not the margin on it, not the suppliers, not the expenses, not the day's cash.",
+    cashierLimits: "A cashier can give a discount up to the threshold the shop has set; past that, it takes the owner or the manager. A cashier can never type a different price on the line, or go past a customer's credit limit.",
+    manager: "A manager can do everything the owner can, except manage the staff and read the audit log.",
+    log: "A price changed, an invoice cancelled, a credit limit overridden: all of it goes in the log with the name of who did it. A blocked attempt goes in too, so the owner can see it happened.",
+  },
+
   fiscal: {
     heading: "What the tax office asks for, already built in",
     intro: "What an Algerian shop owner asks a till first, before anything else:",

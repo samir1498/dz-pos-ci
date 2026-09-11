@@ -14,6 +14,7 @@ import { CARD_FILE, CARD_HEIGHT, CARD_WIDTH } from "../lib/card";
 import { HREFLANG, OG_LOCALE, ROUTE_PATH, SITE_URL } from "../lib/site";
 import Hero from "../components/Hero.astro";
 import Pieces from "../components/Pieces.astro";
+import Staff from "../components/Staff.astro";
 import Fiscal from "../components/Fiscal.astro";
 import Languages from "../components/Languages.astro";
 import Screens from "../components/Screens.astro";
@@ -113,6 +114,7 @@ const heroSrcset = heroShot.sources.map((source) => `/shots/${source.url} ${sour
     <main>
       <Hero locale={locale} hero={dict.hero} />
       <Pieces locale={locale} pieces={dict.pieces} />
+      <Staff staff={dict.staff} />
       <Fiscal fiscal={dict.fiscal} />
       <Languages languages={dict.languages} />
       <Screens locale={locale} screens={dict.screens} />
