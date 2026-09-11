@@ -55,7 +55,8 @@ pub async fn update_store(
 }
 
 /// Records the shop's theme, or forgets it when the body carries `null`,
-/// which puts the app back on the machine's own light or dark preference.
+/// which puts the app back on Comptoir, the default (the machine's own
+/// light or dark preference is not consulted).
 /// Answers the whole settings page for the reason `change_regime` does: the
 /// screen should read one shape back, not patch its own copy.
 pub async fn set_theme(

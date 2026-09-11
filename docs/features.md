@@ -874,12 +874,12 @@ document series in §3 (Numbering), and the barcode label in §4 (Printing).
 
 **Themes.** Four: Comptoir (light, the default), Registre (dark ink),
 Observe (cool grey, emerald brand) and its dark twin Observe-dark. A shop
-picks one from the settings screen or leaves it on "follow the system",
-which is `null` on the wire and in the shop file and picks between Comptoir
-and Registre by the machine's own light or dark preference; Observe and its
-dark twin are reached only by hand. The choice is written to the shop file
-(`PUT /settings/theme`) and not to the browser, so a second machine opens
-the shop on the same theme. The switch is `data-theme` on the document root
+picks one from the settings screen; `null` on the wire and in the shop file
+means it never has, and the app opens on Comptoir, the default (the
+machine's own light-or-dark setting is not consulted). The choice is
+written to the shop file (`PUT /settings/theme`) and not to the browser,
+so a second machine opens the shop on the same theme. The switch is
+`data-theme` on the document root
 and nothing else: no screen branches on which theme is on, a component wears
 `bg-background` and `text-muted-foreground` and reads whichever block of CSS
 variables the attribute selects. `docs/architecture.md` (Design) and

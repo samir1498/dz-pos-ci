@@ -326,20 +326,23 @@ Raised in the 2026-09-08 handoff, still open, each settled before
 
 | What | Tool | Where it runs |
 |---|---|---|
-| Services, ledgers, numbering | `cargo test`, integration tests against a temp SQLite | every push, Linux + Windows |
+| Services, ledgers, numbering | `cargo test`, integration tests against a temp SQLite | Linux, every push and pull request; Windows too on a push to `main` or a manual run |
 | TVA, stamp, rounding, amount in words | property tests (proptest) + fixed fixtures named in features.md | same |
 | Invoice templates | golden files (hand-rolled, `UPDATE_GOLDENS=1` regenerates and fails the run on purpose; insta still not pulled in), every template × language | same |
 | API routes | request tests against an in-process server and temp DB | same |
-| Coverage | `cargo llvm-cov` → lcov artifact; Sonar ingestion once Rust support on the team server is verified | Linux job |
-| React components | vitest + Testing Library, jsdom | every push |
+| Coverage | `cargo llvm-cov` → lcov artifact; Sonar ingestion once Rust support on the team server is verified | Linux, on a push to `main` or a manual run only, not a pull request |
+| React components | vitest + Testing Library, jsdom | every push and pull request |
 | Browser end-to-end | Playwright + chromium against a fresh API and database (`just e2e`); ObserveOne is the recorded tool, Playwright the interim | before a merge, not in CI yet |
 | Mobile | Jest (RN preset), Maestro flows on a real device | later |
 
-Gates (`just gates`, and CI): `cargo fmt --check`, `cargo clippy
---all-targets -D warnings`, the generated TS types diffed against the
-DTOs, `cargo test`, `pnpm -r test`, `pnpm -r build`; CI adds `cargo
-llvm-cov`. A change
-is done when they pass and the behaviour was driven, not when they pass.
+Gates (`just gates`, and CI): `cargo fmt --check`, the desktop's eslint
+(`just lint`), `cargo clippy --all-targets -D warnings`, the generated TS
+types diffed against the DTOs, `cargo test`, `pnpm -r test`, `pnpm -r
+build`; CI adds a Windows run and `cargo llvm-cov` coverage, both only
+outside a pull request, because the organisation's Actions budget is
+capped (`just ci` pushes the branch to a personal mirror and watches the run
+there). A change is done when they pass and the behaviour was driven, not
+when they pass.
 
 ## Local development
 

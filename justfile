@@ -47,7 +47,7 @@ claim:
 default:
     @just --list
 
-# ---- gates (the five in context/processes/quality-gates) ----
+# ---- gates (the six in context/processes/quality-gates) ----
 
 fmt:
     cargo fmt --all --check
@@ -209,8 +209,8 @@ e2e: claim
         pnpm desktop e2e --project "$project"
     done
 
-# only the tests that write a committed screenshot: fr (products.png) and
-# ar (the twelve *-ar.png the e2e README lists); en keeps none.
+# only the tests that write a committed screenshot; the e2e README says
+# which files, under which language.
 screenshot: claim
     #!/usr/bin/env bash
     set -euo pipefail
