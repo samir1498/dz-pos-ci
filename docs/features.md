@@ -847,6 +847,18 @@ migration, so every document, ledger row and audit entry carries a user
 from the first sale (build-order step 2); PIN, roles and permissions
 arrive in step 5.
 
+A PIN is four to six digits and is refused if it counts up or down (1234,
+4321) or repeats one digit (1111); a password is at least eight characters
+and nothing more is asked of it, the floor NIST SP 800-63B sets for a
+memorised secret. Both are stored as argon2id with a per-user salt. A shop
+counter is a public place, so five wrong attempts on one user start a wait
+that doubles from thirty seconds to a quarter of an hour; a correct
+credential clears it, and so does an owner resetting the PIN. A user is
+never deleted, only switched off, because their documents and ledger rows
+name them for good, and the shop's last active owner cannot be switched off
+or moved to another role. This paragraph is what M4 T0 shipped; §5 is
+rewritten to the whole milestone when it closes.
+
 ## 6. LAN mode (v1, after the desktop milestones)
 
 Exactly one desktop is the server; it advertises via mDNS and shows a QR

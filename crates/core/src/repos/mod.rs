@@ -17,6 +17,7 @@ pub mod shops;
 pub mod stock;
 pub mod supplier_debt;
 pub mod suppliers;
+pub mod users;
 
 /// What was typed into a search box, as a LIKE pattern that matches it
 /// anywhere: the escape character first, so escaping it does not escape the
