@@ -10,27 +10,28 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AvoirLineDto, BackupDto, BackupsDto,
-    CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CloseOrderDto, CloseSupplierDto,
-    CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DashboardDto,
-    DashboardFiguresDto, DashboardSeriesDto, DashboardSeriesPointDto, DatedRegimeDto, DebtEntryDto,
-    DebtKindDto, DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto,
-    HealthDto, ImportAppliedDto, ImportDryRunDto, ImportOutcomeDto, ImportRowDto, LabelSheetDto,
-    LastStockRecountDto, LoginDto, LowStockDto, MeDto, NewAvoirDto, NewCustomerDto, NewExpenseDto,
-    NewPaymentDto, NewProductDto, NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto,
-    NewSaleLineDto, NewSupplierDto, OutgoingsDto, OwedDto, PaidNowDto, PartyKindDto,
-    PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, PermissionDto, ProductDto,
-    PurchaseDetailDto, PurchaseDto, PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto,
-    PurchaseStatusDto, ReceiveLineDto, RegimeChangeDto, RegimeDto, RestoreDto, RoleDto,
-    SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto,
-    SaleTotalsDto, SaleTvaDto, SaleWarningDto, SessionDto, SessionIdleDto, SettingsDto,
-    StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto, SupplierDebtKindDto,
-    SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto,
-    TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto,
+    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AuditEntryDto, AuditLogDto, AuditUserDto,
+    AvoirLineDto, BackupDto, BackupsDto, CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto,
+    CloseOrderDto, CloseSupplierDto, CustomerDto, CustomerLedgerDto, CustomerPaymentsDto,
+    CustomerWriteDto, DashboardDto, DashboardFiguresDto, DashboardSeriesDto,
+    DashboardSeriesPointDto, DatedRegimeDto, DebtEntryDto, DebtKindDto, DocumentKindDto,
+    DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto, HealthDto, ImportAppliedDto,
+    ImportDryRunDto, ImportOutcomeDto, ImportRowDto, LabelSheetDto, LastStockRecountDto, LoginDto,
+    LowStockDto, MeDto, NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto, NewProductDto,
+    NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto, NewSaleLineDto, NewSupplierDto,
+    OutgoingsDto, OwedDto, PaidNowDto, PartyKindDto, PaymentAllocationDto, PaymentDto,
+    PaymentMethodDto, PaymentModeDto, PermissionDto, ProductDto, PurchaseDetailDto, PurchaseDto,
+    PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto, PurchaseStatusDto, ReceiveLineDto,
+    RegimeChangeDto, RegimeDto, RestoreDto, RoleDto, SaleBalanceDto, SaleCancelEffectDto,
+    SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
+    SaleWarningDto, SessionDto, SessionIdleDto, SettingsDto, StockDriftDto, StockRecountDto,
+    StoreDto, SupplierAllocationDto, SupplierDebtKindDto, SupplierDto, SupplierEntryDto,
+    SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto, TakingsDto, ThemeChoiceDto,
+    ThemeDto, TopProductDto, UnitDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 97] = [
+const FILES: [&str; 100] = [
     "LoginDto.ts",
     "MeDto.ts",
     "SessionDto.ts",
@@ -128,6 +129,9 @@ const FILES: [&str; 97] = [
     "ImportDryRunDto.ts",
     "ImportAppliedDto.ts",
     "LabelSheetDto.ts",
+    "AuditUserDto.ts",
+    "AuditEntryDto.ts",
+    "AuditLogDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -282,6 +286,9 @@ fn export_bindings() {
     DashboardDto::export_all(&cfg).unwrap();
     DashboardSeriesPointDto::export_all(&cfg).unwrap();
     DashboardSeriesDto::export_all(&cfg).unwrap();
+    AuditUserDto::export_all(&cfg).unwrap();
+    AuditEntryDto::export_all(&cfg).unwrap();
+    AuditLogDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

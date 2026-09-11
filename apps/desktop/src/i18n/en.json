@@ -607,5 +607,20 @@
   "field_blank_is_none": "Blank means “no wholesale price”.",
   "products_add_first": "Add the first product",
   "products_count_one": "product",
-  "close": "Close"
+  "close": "Close",
+  "nav_audit_log": "Audit log",
+  "audit_title": "Audit log",
+  "audit_filter_user": "User",
+  "audit_filter_kind": "Kind",
+  "audit_filter_day": "Day",
+  "audit_filter_any": "Any",
+  "audit_loading": "Loading the audit log…",
+  "audit_empty": "No entries match.",
+  "audit_empty_hint": "Change the filters, or clear them to see the whole log.",
+  "audit_page_prev": "Previous",
+  "audit_page_next": "Next",
+  "col_user": "User",
+  "col_entity": "Record",
+  "col_change": "Change",
+  "error_forbidden": "You do not have permission to see this."
 }

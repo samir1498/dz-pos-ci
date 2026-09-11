@@ -7,12 +7,15 @@
 //! mutating route with no row here fails, and a row naming a route that is not
 //! there fails.
 //!
-//! **Five reads are in it.** The table is otherwise about writes, because a
+//! **Six reads are in it.** The table is otherwise about writes, because a
 //! read of a list a cashier is already looking at needs no permission. The
 //! four exports and the import template are the exception the M3 carry-in
 //! named in words: an export is the whole customer list, the whole supplier
 //! list and every sale the shop ever rang up, walking out on a USB stick.
 //! They carry the same permission as the import that reads the template back.
+//! The sixth is the audit log itself (M4 T7): a read, but one that hands the
+//! owner every price change, override and correction the shop's staff have
+//! made, which is exactly the kind of read this table exists to gate.
 //!
 //! **What T2 ships and what T3 does.** T2 is the mechanism, the table's shape
 //! and the actor. What T2 deliberately does not do is apply it: no handler
@@ -57,6 +60,12 @@ pub struct Gate {
 /// Sorted by path, which is how `lib.rs` lists its routes, so the two read
 /// side by side.
 pub const ROUTE_GATES: &[Gate] = &[
+    Gate {
+        method: "GET",
+        path: "/audit-log",
+        permission: Some(Permission::SeeAuditLog),
+        why: "the log of sensitive actions across the shop; the owner's alone (services::permissions, M4 T7)",
+    },
     Gate {
         method: "POST",
         path: "/auth/login",
@@ -310,7 +319,9 @@ mod tests {
                     gate.path
                 );
                 assert!(
-                    gate.path.starts_with("/export/") || gate.path == "/import/products/template",
+                    gate.path.starts_with("/export/")
+                        || gate.path == "/import/products/template"
+                        || gate.path == "/audit-log",
                     "{} is a read this table was not opened for",
                     gate.path
                 );

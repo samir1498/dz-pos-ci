@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from "./routes/__root"
 import { Route as IndexRouteImport } from "./routes/index"
+import { Route as AuditRouteImport } from "./routes/audit"
 import { Route as CustomersRouteImport } from "./routes/customers"
 import { Route as DashboardRouteImport } from "./routes/dashboard"
 import { Route as DocumentsRouteImport } from "./routes/documents"
@@ -28,6 +29,11 @@ import { Route as SuppliersIdRouteImport } from "./routes/suppliers_.$id"
 const IndexRoute = IndexRouteImport.update({
   id: "/",
   path: "/",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuditRoute = AuditRouteImport.update({
+  id: "/audit",
+  path: "/audit",
   getParentRoute: () => rootRouteImport,
 } as any)
 const CustomersRoute = CustomersRouteImport.update({
@@ -103,6 +109,7 @@ const SuppliersIdRoute = SuppliersIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
+  "/audit": typeof AuditRoute
   "/customers": typeof CustomersRoute
   "/dashboard": typeof DashboardRoute
   "/documents": typeof DocumentsRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
+  "/audit": typeof AuditRoute
   "/customers": typeof CustomersRoute
   "/dashboard": typeof DashboardRoute
   "/documents": typeof DocumentsRoute
@@ -138,6 +146,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   "/": typeof IndexRoute
+  "/audit": typeof AuditRoute
   "/customers": typeof CustomersRoute
   "/dashboard": typeof DashboardRoute
   "/documents": typeof DocumentsRoute
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | "/"
+    | "/audit"
     | "/customers"
     | "/dashboard"
     | "/documents"
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
+    | "/audit"
     | "/customers"
     | "/dashboard"
     | "/documents"
@@ -191,6 +202,7 @@ export interface FileRouteTypes {
   id:
     | "__root__"
     | "/"
+    | "/audit"
     | "/customers"
     | "/dashboard"
     | "/documents"
@@ -209,6 +221,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuditRoute: typeof AuditRoute
   CustomersRoute: typeof CustomersRoute
   DashboardRoute: typeof DashboardRoute
   DocumentsRoute: typeof DocumentsRoute
@@ -232,6 +245,13 @@ declare module "@tanstack/react-router" {
       path: "/"
       fullPath: "/"
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/audit": {
+      id: "/audit"
+      path: "/audit"
+      fullPath: "/audit"
+      preLoaderRoute: typeof AuditRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/customers": {
@@ -337,6 +357,7 @@ declare module "@tanstack/react-router" {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuditRoute: AuditRoute,
   CustomersRoute: CustomersRoute,
   DashboardRoute: DashboardRoute,
   DocumentsRoute: DocumentsRoute,

@@ -5,11 +5,16 @@
 //! It records, it never decides. A caller writes the row in the same
 //! transaction as the change, so an entry without its change cannot exist.
 
+use std::collections::HashMap;
+
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::audit::{AuditEntry, AuditRowWrite};
 use crate::repos::audit as repo;
+use crate::services::clock::SHOP_UTC_OFFSET_SECONDS;
+use crate::services::users;
 
 /// A row that did not exist before, such as a customer fiche.
 pub const ACTION_CREATE: &str = "create";
@@ -173,4 +178,165 @@ pub fn record(
 
 pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<AuditEntry>, CoreError> {
     repo::list(conn, shop_id)
+}
+
+/// Rows a screen reads at a time (M4 T7). One shop's whole day almost never
+/// fills a page; a shop's whole lifetime will, eventually, and this is the
+/// number that keeps a screen open on it from asking for all of it.
+pub const PAGE_SIZE: usize = 50;
+
+/// One entry with the name behind its `user_id`, since there is no `/users`
+/// list route yet for a screen to join it itself the way the purchases
+/// screen joins a supplier's name off its own list (frontend-conventions.md,
+/// "The design package"). Once one exists this becomes a plain `AuditEntry`
+/// again and the screen does the join.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntryWithUser {
+    pub entry: AuditEntry,
+    pub user_name: String,
+}
+
+/// What the owner's screen may narrow the log by. `action` is matched
+/// exactly against what a service actually wrote (`ACTION_*` above): the
+/// screen offers only the values `Facets::actions` says are really in the
+/// log, never a taxonomy invented on top of it.
+#[derive(Debug, Clone, Default)]
+pub struct Filter {
+    pub user_id: Option<i32>,
+    pub action: Option<String>,
+    /// A day on the shop's calendar, not a UTC one: `day_range_utc` below is
+    /// the conversion.
+    pub day: Option<NaiveDate>,
+}
+
+/// What the two dropdowns offer: every user the shop has, whether or not
+/// they wrote a row, and every distinct action the log actually holds.
+#[derive(Debug, Clone)]
+pub struct Facets {
+    pub users: Vec<(i32, String)>,
+    pub actions: Vec<String>,
+}
+
+/// One screenful, and whether asking for the next `page` would answer more.
+#[derive(Debug, Clone)]
+pub struct Page {
+    pub rows: Vec<EntryWithUser>,
+    pub page: i64,
+    pub has_more: bool,
+}
+
+/// `day`'s midnight-to-midnight on the shop's calendar, translated to the
+/// UTC range `audit_log.created_at` is actually stored in. The offset is
+/// fixed (`services::clock`), so this is subtraction and not a timezone
+/// database: a row written at 00:30 in Algiers reads 23:30 the day before in
+/// UTC, the same crossing `ACTION_STOCK_DRIFT`'s doc comment above warns a
+/// naive day filter would miss.
+fn day_range_utc(day: NaiveDate) -> (NaiveDateTime, NaiveDateTime) {
+    let local_midnight = NaiveDateTime::new(day, NaiveTime::MIN);
+    let offset = Duration::seconds(i64::from(SHOP_UTC_OFFSET_SECONDS));
+    let start = local_midnight - offset;
+    (start, start + Duration::days(1))
+}
+
+/// One page of the log, filtered, and the two dropdowns' options, in one
+/// pass over the shop's rows: `list_desc` and the shop's users are each read
+/// once, whatever `filter` narrows and whichever `page` is asked for.
+pub fn read(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    filter: &Filter,
+    page_number: i64,
+) -> Result<(Page, Facets), CoreError> {
+    let all = repo::list_desc(conn, shop_id)?;
+    let names: HashMap<i32, String> = users::list(conn, shop_id)?
+        .into_iter()
+        .map(|u| (u.id, u.name))
+        .collect();
+
+    let mut actions: Vec<String> = all.iter().map(|e| e.action.clone()).collect();
+    actions.sort_unstable();
+    actions.dedup();
+    let mut people: Vec<(i32, String)> =
+        names.iter().map(|(id, name)| (*id, name.clone())).collect();
+    people.sort_by(|a, b| a.1.cmp(&b.1));
+
+    let range = filter.day.map(day_range_utc);
+    let matched: Vec<AuditEntry> = all
+        .into_iter()
+        .filter(|e| filter.user_id.is_none_or(|u| e.user_id == u))
+        .filter(|e| filter.action.as_deref().is_none_or(|a| e.action == a))
+        .filter(|e| range.is_none_or(|(start, end)| e.created_at >= start && e.created_at < end))
+        .collect();
+
+    let page_number = page_number.max(1);
+    let start = (page_number - 1) as usize * PAGE_SIZE;
+    let has_more = matched.len() > start + PAGE_SIZE;
+    let rows = matched
+        .into_iter()
+        .skip(start)
+        .take(PAGE_SIZE)
+        .map(|entry| {
+            let user_name = names.get(&entry.user_id).cloned().unwrap_or_default();
+            EntryWithUser { entry, user_name }
+        })
+        .collect();
+
+    Ok((
+        Page {
+            rows,
+            page: page_number,
+            has_more,
+        },
+        Facets {
+            users: people,
+            actions,
+        },
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    // A test may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    /// `SHOP_UTC_OFFSET_SECONDS` is one hour, so the shop's midnight is
+    /// 23:00 UTC the day before: a row written at 00:30 in Algiers, which
+    /// reads 23:30 UTC the day before in the column, has to fall inside this
+    /// range for `day_range_utc(that_day)`, and outside the range for
+    /// `day_range_utc(the_day_before)` — the exact crossing
+    /// `ACTION_STOCK_DRIFT`'s doc comment names.
+    #[test]
+    fn a_shop_day_is_the_hour_before_midnight_utc_to_the_hour_before_the_next() {
+        let day = NaiveDate::from_ymd_opt(2026, 9, 11).unwrap();
+        let (start, end) = day_range_utc(day);
+        assert_eq!(
+            start,
+            NaiveDate::from_ymd_opt(2026, 9, 10)
+                .unwrap()
+                .and_hms_opt(23, 0, 0)
+                .unwrap()
+        );
+        assert_eq!(
+            end,
+            NaiveDate::from_ymd_opt(2026, 9, 11)
+                .unwrap()
+                .and_hms_opt(23, 0, 0)
+                .unwrap()
+        );
+
+        // 00:30 in Algiers on the 11th is 23:30 UTC on the 10th: inside this
+        // day's range, and outside the day before's.
+        let just_after_midnight_in_algiers = NaiveDate::from_ymd_opt(2026, 9, 10)
+            .unwrap()
+            .and_hms_opt(23, 30, 0)
+            .unwrap();
+        assert!(just_after_midnight_in_algiers >= start && just_after_midnight_in_algiers < end);
+        let (prev_start, prev_end) = day_range_utc(day.pred_opt().unwrap());
+        assert!(
+            !(just_after_midnight_in_algiers >= prev_start
+                && just_after_midnight_in_algiers < prev_end)
+        );
+    }
 }

@@ -607,5 +607,20 @@
   "field_blank_is_none": "Vide veut dire « pas de prix de gros ».",
   "products_add_first": "Ajouter le premier produit",
   "products_count_one": "produit",
-  "close": "Fermer"
+  "close": "Fermer",
+  "nav_audit_log": "Journal d'audit",
+  "audit_title": "Journal d'audit",
+  "audit_filter_user": "Utilisateur",
+  "audit_filter_kind": "Type",
+  "audit_filter_day": "Jour",
+  "audit_filter_any": "Tous",
+  "audit_loading": "Chargement du journal d'audit…",
+  "audit_empty": "Aucune entrée ne correspond.",
+  "audit_empty_hint": "Changez les filtres, ou effacez-les pour voir tout le journal.",
+  "audit_page_prev": "Précédent",
+  "audit_page_next": "Suivant",
+  "col_user": "Utilisateur",
+  "col_entity": "Fiche",
+  "col_change": "Changement",
+  "error_forbidden": "Vous n'avez pas la permission de voir ceci."
 }

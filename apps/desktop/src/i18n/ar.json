@@ -607,5 +607,20 @@
   "field_blank_is_none": "الفراغ يعني «لا سعر جملة».",
   "products_add_first": "إضافة أول منتج",
   "products_count_one": "منتج",
-  "close": "إغلاق"
+  "close": "إغلاق",
+  "nav_audit_log": "سجل التدقيق",
+  "audit_title": "سجل التدقيق",
+  "audit_filter_user": "المستخدم",
+  "audit_filter_kind": "النوع",
+  "audit_filter_day": "اليوم",
+  "audit_filter_any": "الكل",
+  "audit_loading": "جارٍ تحميل سجل التدقيق…",
+  "audit_empty": "لا توجد إدخالات مطابقة.",
+  "audit_empty_hint": "غيّر عوامل التصفية، أو امسحها لرؤية السجل كاملا.",
+  "audit_page_prev": "السابق",
+  "audit_page_next": "التالي",
+  "col_user": "المستخدم",
+  "col_entity": "السجل",
+  "col_change": "التغيير",
+  "error_forbidden": "ليست لديك صلاحية لرؤية هذا."
 }

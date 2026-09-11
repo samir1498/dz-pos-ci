@@ -26,6 +26,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileText,
+  History,
   LayoutDashboard,
   Package,
   Receipt,
@@ -38,6 +39,7 @@ import {
 } from "lucide-react";
 import { Direction } from "radix-ui";
 import type { ComponentType, ReactNode } from "react";
+import type { PermissionDto } from "@dzpos/shared";
 
 import { Icon } from "@/components/Icon";
 import { Wordmark } from "@/components/Wordmark";
@@ -62,6 +64,7 @@ import { api, settingsQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { useShopToday } from "@/lib/clock";
+import { useMe } from "@/lib/me";
 
 /** The three groups the sidebar is divided into, in the order it shows them. */
 const SECTIONS = ["sales", "purchases", "manage"] as const;
@@ -79,6 +82,11 @@ interface NavItem {
   readonly label: Key;
   readonly icon: ComponentType<LucideProps>;
   readonly section: Section;
+  /** Absent for every item but the audit log (M4 T7): the sidebar shows
+   *  this one only once `useMe` says the signed-in session holds it, the
+   *  same rule the route itself is gated by. Nothing else in the sidebar is
+   *  gated yet, which is why this is the first entry to carry one. */
+  readonly permission?: PermissionDto;
 }
 
 /**
@@ -96,6 +104,13 @@ export const NAV: readonly NavItem[] = [
   { to: "/purchases", label: "nav_purchases", icon: ClipboardList, section: "purchases" },
   { to: "/expenses", label: "nav_expenses", icon: Receipt, section: "purchases" },
   { to: "/products", label: "nav_products", icon: Package, section: "manage" },
+  {
+    to: "/audit",
+    label: "nav_audit_log",
+    icon: History,
+    section: "manage",
+    permission: "see_audit_log",
+  },
   { to: "/settings", label: "nav_settings", icon: Settings, section: "manage" },
 ];
 
@@ -114,6 +129,12 @@ function SidebarNav() {
   const { t } = useTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const active = activeItem(pathname);
+  // Read once for the whole sidebar rather than once per item: today only
+  // one item carries a `permission`, but a second gated item must not cost
+  // a second `/auth/me` call.
+  const me = useMe();
+  const visible = (item: NavItem) =>
+    item.permission === undefined || (me.data?.permissions.includes(item.permission) ?? false);
   return (
     <>
       {SECTIONS.map((section) => (
@@ -121,7 +142,7 @@ function SidebarNav() {
           <SidebarGroupLabel>{t(SECTION_LABEL[section])}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {NAV.filter((item) => item.section === section).map((item) => (
+              {NAV.filter((item) => item.section === section && visible(item)).map((item) => (
                 <SidebarMenuItem key={item.to}>
                   <SidebarMenuButton asChild isActive={active?.to === item.to}>
                     <Link to={item.to} data-testid={`nav-${item.to.slice(1)}`}>

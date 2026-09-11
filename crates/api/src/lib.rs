@@ -437,6 +437,7 @@ pub fn router_with_origin(
         .route("/auth/logout", post(routes::auth::logout))
         .route("/auth/me", get(routes::auth::me));
     let guarded = Router::new()
+        .route("/audit-log", get(routes::audit::list))
         .route("/auth/idle", get(routes::auth::idle))
         .route("/backups", get(routes::backups::list))
         .route("/backups", post(routes::backups::create))
