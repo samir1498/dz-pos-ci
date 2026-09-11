@@ -10,7 +10,6 @@
 // what this module produces, so a changed screenshot that nobody reran the
 // script for fails the gates instead of shipping stale art.
 
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import sharp, { type Sharp } from "sharp";
@@ -22,9 +21,6 @@ const SCREENSHOTS_DIR = fileURLToPath(
 );
 
 const screenshotPath = (name: string): string => `${SCREENSHOTS_DIR}${name}.png`;
-
-/** Reads a committed screenshot's own bytes, so a test comparing hashes has one place to look. */
-export const readScreenshot = (name: string): Buffer => readFileSync(screenshotPath(name));
 
 /**
  * The frame: `design/index.html`'s `.frame` class, unchanged, wrapped around
@@ -158,8 +154,6 @@ export const KNOWING: SingleSpec = {
 };
 export const KNOWING_AR_CROP: Crop = { source: "dashboard-ar", top: 0, height: 950 };
 
-export const SINGLE_SHOTS: readonly SingleSpec[] = [HERO, SELLING, INVOICING, STOCK, KNOWING];
-
 /** Several framed screenshots composed side by side, for the band-of-screens section. */
 export interface CollageSpec {
   readonly key: string;
@@ -232,8 +226,12 @@ const renderCollage = async (
   scale: 1 | 2,
 ): Promise<RenderedShot> => {
   const gap = spec.gapPx * scale;
-  const targetWidth = spec.cssWidth * scale;
-  const tileWidth = Math.round((targetWidth - gap * (spec.crops.length - 1)) / spec.crops.length);
+  // Round the @1x tile width once and scale that integer up, rather than
+  // rounding cssWidth*scale independently at each scale: rounding twice can
+  // pick a different pixel at 2x than exactly double the 1x pixel, so the
+  // @2x file would not be a clean 2x render of the @1x one.
+  const tileWidth1x = Math.round((spec.cssWidth - spec.gapPx * (spec.crops.length - 1)) / spec.crops.length);
+  const tileWidth = tileWidth1x * scale;
 
   const tiles = await Promise.all(spec.crops.map((crop) => frameTile(crop, tileWidth, scale)));
   const canvasHeight = Math.max(...tiles.map((t) => t.height));
