@@ -31,7 +31,9 @@ fixtures/        money fixtures read by cargo test and vitest alike;
                  print/{ticket_80mm,facture_a4,statement_a4,debt_slip_80mm}/
                  goldens read by cargo test alone
 docs/            features.md and architecture.md, the spec every task cites;
-                 roadmap.md, the milestones to a first shop
+                 roadmap.md, the milestones to a first shop;
+                 release-checklist.md, what has to be true before v1.0 and
+                 who holds each of them
 ```
 
 Cargo workspace at the root, pnpm workspace over `apps/*`, `packages/*`

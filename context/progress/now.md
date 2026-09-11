@@ -138,16 +138,24 @@ bought, and an update needs a previous release to update from. So every task
 says what can be proven here and what cannot, and a task that says it is
 done and means it compiles is not done.
 
-On main since 2026-09-11 at 21:34 and 22:03: the copy of the shop file
-taken before a new build migrates it, and the version, git short hash and
+Four of the ten are on main as of 2026-09-11 22:40. The copy of the shop
+file taken before a new build migrates it. The version, git short hash and
 build date embedded at build time, shown in About and heading the log file
-beside the shop file.
+beside the shop file. The webview's content security policy with the launch
+token out of the page global, which was the only item in the milestone that
+was a hole rather than machinery. And the release rule, where a tag on
+`main` is the only thing that publishes and a manual run can only build the
+installer and keep it as a download.
 
-In flight: the webview's content security policy with the launch token out
-of the page global, which is the only item in the milestone that is a hole
-rather than machinery; and the release rule, where a tag on `main` is the
-only thing that publishes and a manual run can only build the installer and
-keep it as a download.
+Two things the reviews caught before those last two merged, both of the same
+shape, a guard that could be talked past. The release workflow pasted the
+tag's own name into a shell command, and a git tag may carry a dollar sign,
+a backtick, a quote and a semicolon, so a tag named the right way would have
+run its own commands inside the job that decides whether a release is
+allowed. And the pre-upgrade copy left a half-written file behind for good
+when it was interrupted, because the retry after it used a different name.
+
+In flight: the support bundle.
 
 Two tasks the reviews added on 2026-09-11. A Windows release build has no
 console, so a refusal to start says nothing at all to the shopkeeper: the

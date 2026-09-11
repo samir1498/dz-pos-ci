@@ -9,7 +9,7 @@ priority: 20
 tasks:
   - id: 'T0'
     desc: 'A content security policy on the webview, and the launch token out of the page global it sits in today. `tauri.conf.json` carries `csp: null`, so one link that navigated the main frame to a remote page would hand the token over; no screen has such a link and the policy is what keeps it so. Written first because it is the only release item that is a hole rather than a piece of machinery, and because it is provable here. A test that the built page carries the header, and a test that a navigation away from the app origin is refused.'
-    status: 'pending'
+    status: 'done'
   - id: 'T1'
     desc: 'Version, git short hash and build date embedded in the binary at build time and read back from one place: About shows all three, the log file heads every session with them, and the support bundle carries them. Answers the first of the release questions in `docs/architecture.md` § Release. A test that the three are present and not placeholders, and one that a debug build says so rather than pretending to be a release.'
     status: 'done'
@@ -27,7 +27,7 @@ tasks:
     status: 'pending'
   - id: 'T6'
     desc: 'A tag on `main` is the only thing that builds the installer and publishes the GitHub release. Buildable here and not provable here: the Windows job runs on the organisation''s Actions minutes, which are capped, so it is exercised on the mirror and its first real run is the first tag. The workflow refuses to publish from anything but a tag on main, and says so in its own output rather than silently doing nothing.'
-    status: 'pending'
+    status: 'done'
   - id: 'T7'
     desc: 'The Tauri updater: the endpoint, the signature check, the update flow the shop sees, and the key generated outside the repo with CI signing from a secret. The client half is provable here against a fake endpoint serving a signed and an unsigned manifest, and the test that matters is the second one: an unsigned or wrongly signed update is refused. Who holds the key is Anouar''s and Samir''s to decide before the key exists.'
     status: 'pending'

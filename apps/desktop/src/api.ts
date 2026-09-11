@@ -1,16 +1,41 @@
 // Where the UI finds the API and what it shows to be let in. In the Tauri
-// window the desktop process injects the port it bound and the launch
-// token it made; in a browser (`pnpm desktop dev`) both come from the
+// window the desktop process injects the port it bound; in a browser
+// (`pnpm desktop dev`) both the port and the token come from the
 // environment (`just api` writes the token to .dev/api-token and `just dev`
 // passes it). Same routes either way, so no screen knows which mode it is
 // in (architecture.md rule 1).
+//
+// The launch token is the one thing that does not travel as a page global.
+// A global set once at launch sits there for the rest of the session,
+// readable by anything that later runs in the page, including whatever
+// document the window gets navigated to (`on_navigation` in
+// `src-tauri/src/lib.rs` is the guard against that navigating anywhere
+// that matters, but the token not being there either is a second, cheaper
+// one). The desktop instead asks for it over `invoke` (`launch_token` in
+// `src-tauri/src/lib.rs`, docs/architecture.md § Release). The command
+// hands the same token to every caller rather than one-shotting it: a
+// one-time hand-over was tried first and dropped, because the page can
+// evaluate a second time in the same process -- a reload, WebView2's own
+// accelerator keys, an HMR re-import of this module under `tauri dev` --
+// and a refused second call left every request after that unauthorized
+// until the process restarted. What keeps the token off a document it
+// should not reach is that Tauri injects no IPC bridge into a foreign
+// origin at all, plus `on_navigation`; a script that could ask this module
+// twice is already same-origin and already holds `api`, so one-shotting
+// bought nothing against that. The alternative considered instead of
+// `invoke` altogether was having Rust attach the `Authorization` header
+// itself on every call, which would need the webview's own HTTP requests
+// proxied through Tauri IPC -- the thing rule 2 above says data never
+// does, and CSP's `connect-src` already closes the direct exfiltration
+// path a global was open to.
 
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createClient } from "@dzpos/shared";
 import type { PrintLang, PrintPaper } from "@dzpos/shared";
 
 const FALLBACK = "http://127.0.0.1:4317";
 
-function injected(name: "__DZPOS_API_URL__" | "__DZPOS_API_TOKEN__"): string | null {
+function injected(name: "__DZPOS_API_URL__"): string | null {
   const global: unknown = globalThis;
   if (typeof global !== "object" || global === null) return null;
   if (!(name in global)) return null;
@@ -25,11 +50,23 @@ export function apiBaseUrl(): string {
   return typeof configured === "string" && configured !== "" ? configured : FALLBACK;
 }
 
-/** Undefined in a browser started without one; the API then answers 401
- * and the screen shows the translated "unauthorized" error. */
-export function apiToken(): string | undefined {
-  const value = injected("__DZPOS_API_TOKEN__");
-  if (value !== null) return value;
+/** Asks the Tauri side for the launch token. The command answers every
+ * caller with the same string, but this module still only asks once per
+ * document: `apiToken()`'s function form is called again on every request
+ * the client makes, and memoizing the promise here turns that back into
+ * one `invoke` rather than one per request. */
+let tauriToken: Promise<string | undefined> | undefined;
+function tauriLaunchToken(): Promise<string | undefined> {
+  tauriToken ??= invoke<string>("launch_token").catch(() => undefined);
+  return tauriToken;
+}
+
+/** In the Tauri window, a function the client awaits on each request rather
+ * than a string held here. In a browser started without one, `undefined`;
+ * the API then answers 401 and the screen shows the translated
+ * "unauthorized" error. */
+export function apiToken(): string | undefined | (() => Promise<string | undefined>) {
+  if (isTauri()) return tauriLaunchToken;
   const configured = import.meta.env.VITE_API_TOKEN;
   return typeof configured === "string" && configured !== "" ? configured : undefined;
 }

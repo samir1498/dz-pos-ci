@@ -367,10 +367,30 @@ only caller; `crates/api/tests/upgrade_from_a_previous_version.rs` builds a
 file at the previous version and opens it. Restoring one is a file swap by
 hand today: the restore route takes a daily copy's name and no other kind.
 
+Decided (2026-09-11, M5 T6): a tag matching `v<semver>` on `main` is
+the only thing that publishes the GitHub release
+(`.github/workflows/release.yml`); an off-main tag or a malformed one
+refuses and says why, and a plain push never triggers the workflow at all.
+The tag's version, `Cargo.toml`'s and `tauri.conf.json`'s must all agree,
+since the first is what `build_info.rs` bakes into the binary and About
+shows. A manual dispatch builds the same installer as a run artifact for
+exercising the pipeline early; it can never publish. No certificate yet
+means the release is cut unsigned and left as a draft, not presented as
+finished.
+
+Decided (2026-09-11, M5 T0): the window runs under a policy that admits no
+remote origin and no inline or evaluated script, and a check on the Rust
+side refuses any navigation away from the app's own origins, since the
+directive that would have done it was dropped from the CSP spec before any
+engine shipped it. The launch token is fetched from the Rust side rather
+than left in a page global. What protects it is the policy that stops
+injected script from running at all; keeping it in a module variable buys
+little on its own.
+
 Decided (2026-09-11, M5 T3): the support bundle a shop can send to whoever
 is fixing something is `GET /support-bundle`, gated the same as the
 backups block beside it (`EditSettings`), answering a zip of six plain
-text files and nothing else — `README.txt` (headed by
+text files and nothing else. `README.txt` (headed by
 `build_info::header_line`, then the sentence a shopkeeper is sent in
 French, English and Arabic), `log.txt` (the shop's own `dzpos.log`
 verbatim), `migrations.txt` (applied vs. shipped, off
@@ -401,17 +421,12 @@ backend and another dependency, and become direct dependencies of the one
 crate that reads them rather than a second copy at a different version.
 
 Raised in the 2026-09-08 handoff, still open, each settled before
-`docs/roadmap.md` M5 closes:
+`docs/roadmap.md` M5 closes. `docs/release-checklist.md` is the page that
+tracks them, alongside the release gates and who holds each:
 
 - Tauri updater signing key: who generates it and who holds it; it never
   enters the repo, CI signs with a secret.
 - Windows code-signing certificate: cost and lead time, for Anouar.
-- Whether a tag on `main` is the only thing that builds the installer and
-  publishes the GitHub release.
-- A content security policy on the webview (`tauri.conf.json` has
-  `csp: null`): the launch token sits in a page global, so one link that
-  navigates the main frame to a remote page would hand it over. No screen
-  has such a link today; the policy is what keeps it so.
 
 ## Testing matrix
 
