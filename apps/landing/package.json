@@ -10,7 +10,8 @@
     "typecheck": "astro check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "shots": "DZPOS_SHOTS_WRITE=1 vitest run src/shots.test.ts"
   },
   "dependencies": {
     "@dzpos/design": "workspace:*",
@@ -25,6 +26,7 @@
     "@types/node": "^24.13.3",
     "eslint": "10.10.0",
     "eslint-plugin-astro": "^3.1.0",
+    "sharp": "0.35.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",

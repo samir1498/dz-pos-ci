@@ -1,0 +1,122 @@
+{
+  "hero": {
+    "fr": {
+      "src1x": "hero-1x.webp",
+      "src2x": "hero-2x.webp",
+      "width": 672,
+      "height": 757
+    },
+    "en": {
+      "src1x": "hero-1x.webp",
+      "src2x": "hero-2x.webp",
+      "width": 672,
+      "height": 757
+    },
+    "ar": {
+      "src1x": "hero-1x.webp",
+      "src2x": "hero-2x.webp",
+      "width": 672,
+      "height": 757
+    }
+  },
+  "selling": {
+    "fr": {
+      "src1x": "selling-1x.webp",
+      "src2x": "selling-2x.webp",
+      "width": 512,
+      "height": 430
+    },
+    "en": {
+      "src1x": "selling-1x.webp",
+      "src2x": "selling-2x.webp",
+      "width": 512,
+      "height": 430
+    },
+    "ar": {
+      "src1x": "selling-1x.webp",
+      "src2x": "selling-2x.webp",
+      "width": 512,
+      "height": 430
+    }
+  },
+  "invoicing": {
+    "fr": {
+      "src1x": "invoicing-1x.webp",
+      "src2x": "invoicing-2x.webp",
+      "width": 512,
+      "height": 388
+    },
+    "en": {
+      "src1x": "invoicing-1x.webp",
+      "src2x": "invoicing-2x.webp",
+      "width": 512,
+      "height": 388
+    },
+    "ar": {
+      "src1x": "invoicing-1x.webp",
+      "src2x": "invoicing-2x.webp",
+      "width": 512,
+      "height": 388
+    }
+  },
+  "stock": {
+    "fr": {
+      "src1x": "stock-1x.webp",
+      "src2x": "stock-2x.webp",
+      "width": 512,
+      "height": 332
+    },
+    "en": {
+      "src1x": "stock-1x.webp",
+      "src2x": "stock-2x.webp",
+      "width": 512,
+      "height": 332
+    },
+    "ar": {
+      "src1x": "stock-ar-1x.webp",
+      "src2x": "stock-ar-2x.webp",
+      "width": 512,
+      "height": 332
+    }
+  },
+  "knowing": {
+    "fr": {
+      "src1x": "knowing-1x.webp",
+      "src2x": "knowing-2x.webp",
+      "width": 512,
+      "height": 388
+    },
+    "en": {
+      "src1x": "knowing-1x.webp",
+      "src2x": "knowing-2x.webp",
+      "width": 512,
+      "height": 388
+    },
+    "ar": {
+      "src1x": "knowing-ar-1x.webp",
+      "src2x": "knowing-ar-2x.webp",
+      "width": 512,
+      "height": 388
+    }
+  },
+  "collage": {
+    "fr": {
+      "src1x": "collage-fr-1x.webp",
+      "src2x": "collage-fr-2x.webp",
+      "width": 1215,
+      "height": 255
+    },
+    "en": {
+      "src1x": "collage-fr-1x.webp",
+      "src2x": "collage-fr-2x.webp",
+      "width": 1215,
+      "height": 255
+    },
+    "ar": {
+      "src1x": "collage-ar-1x.webp",
+      "src2x": "collage-ar-2x.webp",
+      "width": 1215,
+      "height": 255
+    }
+  }
+}
