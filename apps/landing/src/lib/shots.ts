@@ -114,25 +114,28 @@ export interface SingleSpec {
 // the cart, the totals and the payment keypad all stay in frame.
 export const HERO: SingleSpec = {
   key: "hero",
-  crop: { source: "till-ar", top: 0, height: 1450 },
+  crop: { source: "till", top: 0, height: 1450 },
   cssWidth: 640,
 };
+export const HERO_AR_CROP: Crop = { source: "till-ar", top: 0, height: 1450 };
 
 // A different till moment from the hero: a credit sale past the customer's
 // limit, warned and then overridden. No crop: the whole screen is the point.
 export const SELLING: SingleSpec = {
   key: "selling",
-  crop: { source: "till-credit-ar", top: 0, height: 1060 },
+  crop: { source: "till-credit", top: 0, height: 1060 },
   cssWidth: 480,
 };
+export const SELLING_AR_CROP: Crop = { source: "till-credit-ar", top: 0, height: 1060 };
 
 // The documents list, cropped above the opened facture panel: one screen,
 // every paper kind the shop issues (facture, avoir, ticket).
 export const INVOICING: SingleSpec = {
   key: "invoicing",
-  crop: { source: "documents-avoir-ar", top: 0, height: 950 },
+  crop: { source: "documents-avoir", top: 0, height: 950 },
   cssWidth: 480,
 };
+export const INVOICING_AR_CROP: Crop = { source: "documents-avoir-ar", top: 0, height: 950 };
 
 // The product catalogue, not the recount panel buried inside Settings: the
 // one screen that answers "how much do I have and what's running low"
@@ -284,15 +287,17 @@ export const buildShots = async (): Promise<ShotsBuild> => {
     return { src1x: r1.file, src2x: r2.file, width: r1.width, height: r1.height };
   };
 
-  // No French (or English) screenshot exists for the till or the documents
-  // list, so all three locales share the Arabic crop for those two and for
-  // the hero (all three built from HERO/SELLING/INVOICING's own crop, which
-  // is already the Arabic source). Only "knowing" and "stock" have a real
-  // French screen to show a French or English visitor instead, so those two
-  // get a second, Arabic-suffixed file alongside the French one.
-  const hero = await single(HERO, HERO.crop);
-  const selling = await single(SELLING, SELLING.crop);
-  const invoicing = await single(INVOICING, INVOICING.crop);
+  // Every single shot now has both a French and an Arabic source screenshot,
+  // so every one of them renders twice: the French file for fr and en, and
+  // a second, Arabic-suffixed file for ar. fr and en are never a French
+  // visitor's or an English visitor's own language, but neither should see
+  // the Arabic build of the app on a page that leads with French.
+  const heroFr = await single(HERO, HERO.crop);
+  const heroAr = await single(HERO, HERO_AR_CROP, "hero-ar");
+  const sellingFr = await single(SELLING, SELLING.crop);
+  const sellingAr = await single(SELLING, SELLING_AR_CROP, "selling-ar");
+  const invoicingFr = await single(INVOICING, INVOICING.crop);
+  const invoicingAr = await single(INVOICING, INVOICING_AR_CROP, "invoicing-ar");
   const knowingFr = await single(KNOWING, KNOWING.crop);
   const knowingAr = await single(KNOWING, KNOWING_AR_CROP, "knowing-ar");
   const stockFr = await single(STOCK, STOCK.crop);
@@ -308,9 +313,9 @@ export const buildShots = async (): Promise<ShotsBuild> => {
   const collageAr = await collage(COLLAGE_AR, "ar");
 
   const manifest: ShotsManifest = {
-    hero: { fr: hero, en: hero, ar: hero },
-    selling: { fr: selling, en: selling, ar: selling },
-    invoicing: { fr: invoicing, en: invoicing, ar: invoicing },
+    hero: { fr: heroFr, en: heroFr, ar: heroAr },
+    selling: { fr: sellingFr, en: sellingFr, ar: sellingAr },
+    invoicing: { fr: invoicingFr, en: invoicingFr, ar: invoicingAr },
     stock: { fr: stockFr, en: stockFr, ar: stockAr },
     knowing: { fr: knowingFr, en: knowingFr, ar: knowingAr },
     collage: { fr: collageFr, en: collageFr, ar: collageAr },
