@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use dzpos_core::error::CoreError;
 use dzpos_core::money::{Bps, Money};
 use dzpos_core::services::permissions::{
-    can, discount_needs_permission, require, Permission, Role,
+    can, discount_needs_permission, require, Permission, Role, ROLES,
 };
 
 fn granted(role: Role) -> HashSet<Permission> {
@@ -34,7 +34,7 @@ fn every_permission_is_answered_for_every_role() {
     // refused and never left unanswered; this asserts the count reaches all
     // 33 rather than trusting the type alone.
     let mut answered = 0;
-    for role in Role::ALL {
+    for role in ROLES {
         for permission in Permission::ALL {
             let first = can(role, permission);
             let second = can(role, permission);
@@ -42,7 +42,7 @@ fn every_permission_is_answered_for_every_role() {
             answered += 1;
         }
     }
-    assert_eq!(answered, Role::ALL.len() * Permission::ALL.len());
+    assert_eq!(answered, ROLES.len() * Permission::ALL.len());
 }
 
 #[test]
@@ -162,7 +162,7 @@ fn as_str_and_the_wire_spelling_never_drift() {
     // is what actually goes over JSON. Nothing else checks the two agree, so
     // a variant renamed on one side and not the other would only show up as
     // a silent mismatch on whatever screen reads it.
-    for role in Role::ALL {
+    for role in ROLES {
         assert_eq!(
             serde_json::to_value(role).unwrap(),
             serde_json::Value::String(role.as_str().to_string())

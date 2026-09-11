@@ -4,55 +4,22 @@
 //! below, rather than comparing a role of its own
 //! (`docs/architecture.md` § Transport and auth).
 //!
-//! `Role` duplicates `models::sql_types::Role`, which M4 T0 is writing on its
-//! own branch at the same time (`m4/t0-users`, migration `2026-09-11-000011`)
-//! for the `users.role` column. T1 must not depend on the users table, so
-//! this is its own type until the branches meet: same three variants, same
-//! stored strings, same shape (`as_str`, `parse`, `Display`). The merge is
-//! expected to delete this one and `pub use` T0's from `models::sql_types`
-//! instead; nothing here is stored anywhere, so nothing else moves.
+//! `Role` is `models::sql_types::Role`, the type the `users.role` column
+//! already stores, re-exported here so a caller of `can` imports one name.
+//! This module carried its own copy while the users table was being written
+//! on another branch; the two met on 2026-09-11 and the copy went.
 
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
 use crate::money::{Bps, Money};
 
-/// What a user is allowed to be. See the module doc for why this is not
-/// `models::sql_types::Role`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Role {
-    Owner,
-    Manager,
-    Cashier,
-}
+pub use crate::models::sql_types::Role;
 
-impl Role {
-    pub const ALL: [Role; 3] = [Role::Owner, Role::Manager, Role::Cashier];
-
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Role::Owner => "owner",
-            Role::Manager => "manager",
-            Role::Cashier => "cashier",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "owner" => Some(Role::Owner),
-            "manager" => Some(Role::Manager),
-            "cashier" => Some(Role::Cashier),
-            _ => None,
-        }
-    }
-}
-
-impl std::fmt::Display for Role {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
+/// The three roles, for a caller that walks them all (the permission table's
+/// own tests, and any screen that offers the list). `models::sql_types::Role`
+/// is a stored enum and its macro writes no such constant.
+pub const ROLES: [Role; 3] = [Role::Owner, Role::Manager, Role::Cashier];
 
 /// What a shopkeeper would call each of the things a role decides
 /// (features.md §5, the M4 team plan and its carry-ins). Named for the
