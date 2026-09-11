@@ -188,6 +188,10 @@ pub fn issue(
     // outlive it to be written down at all.
     let mut refused: Option<Refused> = None;
 
+    // The same thing for the two ways money comes off a price. Same reason,
+    // same lifetime: out here so the rollback below cannot take it.
+    let mut price_refused: Option<PriceRefused> = None;
+
     let issued = conn.transaction(|conn| {
         let issued_at = new.issued_at.unwrap_or_else(clock::now);
         let regime = settings::regime_as_of(conn, shop_id, issued_at)?;
@@ -232,10 +236,14 @@ pub fn issue(
             })
             .collect();
         if !negotiated.is_empty() {
-            permissions::require(
-                role_of(conn, shop_id, user_id)?,
-                Permission::ChangePriceAtTheTill,
-            )?;
+            let role = role_of(conn, shop_id, user_id)?;
+            if !permissions::can(role, Permission::ChangePriceAtTheTill) {
+                price_refused = Some(PriceRefused {
+                    permission: Permission::ChangePriceAtTheTill,
+                    detail: serde_json::json!({ "lines": negotiated.clone() }),
+                });
+            }
+            permissions::require(role, Permission::ChangePriceAtTheTill)?;
         }
 
         let basket = sum_line_gross(&money_lines)?;
@@ -244,10 +252,18 @@ pub fn issue(
         let discounted_past_threshold =
             permissions::discount_needs_permission(basket, discount, threshold)?;
         if discounted_past_threshold {
-            permissions::require(
-                role_of(conn, shop_id, user_id)?,
-                Permission::DiscountAboveThreshold,
-            )?;
+            let role = role_of(conn, shop_id, user_id)?;
+            if !permissions::can(role, Permission::DiscountAboveThreshold) {
+                price_refused = Some(PriceRefused {
+                    permission: Permission::DiscountAboveThreshold,
+                    detail: serde_json::json!({
+                        "basket_centimes": basket.as_centimes(),
+                        "discount_centimes": discount.as_centimes(),
+                        "threshold_bps": threshold.as_u32(),
+                    }),
+                });
+            }
+            permissions::require(role, Permission::DiscountAboveThreshold)?;
         }
         // Every input compute_totals could refuse has been refused above with
         // the field named, so what is left is a basket whose amounts do not
@@ -592,6 +608,7 @@ pub fn issue(
                     serde_json::json!({
                         "customer_id": customer_id,
                         "credit_limit_centimes": refusal.credit_limit.as_centimes(),
+                        "balance_centimes": refusal.balance_before.as_centimes(),
                     })
                     .to_string(),
                 ),
@@ -607,6 +624,36 @@ pub fn issue(
                     })
                     .to_string(),
                 ),
+            },
+        );
+    }
+
+    // The same shape for the two ways money comes off a price, and the same
+    // reason: both checks run inside the transaction above, so a row written
+    // where they refuse would unwind with the sale. Written only when the
+    // sale actually failed, so a refusal captured and then allowed on a later
+    // pass cannot leave a row saying somebody was stopped.
+    if let (Err(_), Some(refusal)) = (&issued, &price_refused) {
+        let _ = audit::record(
+            conn,
+            shop_id,
+            user_id,
+            audit::Change {
+                action: audit::ACTION_PRICE_CUT_BLOCKED,
+                // The customer if the sale named one, and the shop itself if
+                // it did not: a cash sale at the counter has no fiche behind
+                // it, and the refusal is about the person at the till rather
+                // than about whoever is buying. `user_id` on the row is who
+                // tried; that is the column an owner filters on.
+                entity: "sale",
+                entity_id: Some(customer_id.unwrap_or(shop_id)),
+                before: Some(
+                    serde_json::json!({
+                        "permission": refusal.permission.as_str(),
+                    })
+                    .to_string(),
+                ),
+                after: Some(refusal.detail.to_string()),
             },
         );
     }
@@ -724,7 +771,32 @@ struct CreditAsk {
 /// customer's limit and leave nothing behind. These three facts are computed
 /// inside the transaction and read after it, so the row that records the
 /// refusal is written on ground the refusal did not wash away.
+/// A refusal of one of the two ways money comes off a price, carried out of
+/// the transaction the same way `Refused` is and for the same reason. Both
+/// checks sit inside `conn.transaction`, so a row written where they refuse
+/// unwinds with everything else and the log sees nothing. A cashier who
+/// learns that could try a discount on every basket of the day and leave no
+/// trace of a single attempt, which is the hole the credit refusal was
+/// written to close and this is the same hole on the other side of the
+/// total (M4 closing review, 2026-09-11).
+struct PriceRefused {
+    /// Which of the two doors was tried. The two are held by the same roles
+    /// today (`permissions_service.rs` pins that), so the log carries which
+    /// one anyway: an owner reading it wants to know whether somebody typed
+    /// a price over a card or took a percentage off the basket.
+    permission: Permission,
+    /// What the till asked for, already shaped the way the row will show it.
+    detail: serde_json::Value,
+}
+
 struct Refused {
+    /// What the customer owed before the sale was attempted. The row carries
+    /// it beside `balance_after` because the difference between the two is
+    /// the basket, and without it an owner reading the log cannot tell one
+    /// large attempt from twenty small ones against the same limit, which is
+    /// the thing the row exists to show. The override row and the warned row
+    /// have always carried it.
+    balance_before: Money,
     /// What the customer would have owed had the sale landed.
     balance_after: Money,
     /// What they are allowed to owe.
@@ -815,6 +887,7 @@ fn credit_check(
                 // attempt to pass the limit, so it is the case the log most
                 // needs, which is why it is carried in the row.
                 *refused = Some(Refused {
+                    balance_before: old_balance,
                     balance_after: total_debt,
                     credit_limit,
                     asked_to_override: override_credit,

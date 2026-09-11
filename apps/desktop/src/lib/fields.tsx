@@ -46,12 +46,13 @@ const ERROR_KEY: Record<string, Key> = {
  * The wording for a code the server sent, with a screen's own wording for
  * the codes where the general sentence is not the useful one.
  *
- * Seven screens kept a private copy of the whole table until 2026-09-11,
- * each one a full list rather than the handful of lines it actually needed
- * to say differently, and six of the seven had no entry for a refused
- * permission at all. So a cashier refused on products, documents, settings,
- * expenses or a label was told "something went wrong" rather than that they
- * are not allowed. Only the staff screen, written last, knew the word.
+ * Eleven files kept a private copy of this table until 2026-09-11, each one
+ * a full list rather than the handful of lines it actually needed to say
+ * differently, and ten of the eleven had no entry for a refused permission
+ * at all. So a cashier refused on the till, products, documents, settings,
+ * expenses, the exports, the backups, the recount or a label was told
+ * "something went wrong" rather than that they are not allowed. Only the
+ * staff screen, written last in the milestone, knew the word.
  *
  * `overrides` is for the real cases: the label panel means "this product has
  * no barcode" where the general table means "that is not valid". A screen

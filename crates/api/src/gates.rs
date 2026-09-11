@@ -101,6 +101,12 @@ pub const ROUTE_GATES: &[Gate] = &[
         why: "the one door into a shop nobody has ever signed into; services::users::claim_first_pin is the whole rule and it shuts itself the moment any credential in the shop exists, so no permission decides who may call it, only that rule does",
     },
     Gate {
+        method: "GET",
+        path: "/backups",
+        permission: Some(Permission::EditSettings),
+        why: "the list of copies of the shop's whole file, with the day each was taken; it is read by the settings block that takes and restores them and belongs with the two writes beside it (M4 closing review, 2026-09-11)",
+    },
+    Gate {
         method: "POST",
         path: "/backups",
         permission: Some(Permission::EditSettings),
@@ -149,6 +155,18 @@ pub const ROUTE_GATES: &[Gate] = &[
         why: "the chart behind the same dashboard, read separately by the same screen; same permission as the page it draws on (M4 T5 review, 2026-09-11)",
     },
     Gate {
+        method: "GET",
+        path: "/expenses",
+        permission: Some(Permission::SeeReports),
+        why: "every expense the shop has booked in a month, with its total: what the shop spends is the shop's standing, and a cashier who may not read the dashboard may not read the ledger the dashboard sums (M4 closing review, 2026-09-11)",
+    },
+    Gate {
+        method: "GET",
+        path: "/cash",
+        permission: Some(Permission::SeeReports),
+        why: "cash in, cash out and card in over a day or a month, which is the dashboard's cash figure asked for directly; same reasoning and same permission as the page (M4 closing review, 2026-09-11)",
+    },
+    Gate {
         method: "POST",
         path: "/expenses",
         permission: Some(Permission::CommitMoney),
@@ -170,7 +188,7 @@ pub const ROUTE_GATES: &[Gate] = &[
         method: "GET",
         path: "/import/products/template",
         permission: Some(Permission::ExportAndImport),
-        why: "the template carries the shop's own products and their prices, so it walks out the same list an export does (M3 carry-in, 2026-09-10)",
+        why: "the blank workbook the import screen hands out: column headings and one made-up example row, carrying none of the shop's own data. It is gated because it is the import screen's own file and a cashier has no business on that screen, not because it walks anything out; /export/products is the route that does that (reason corrected in the M4 closing review, 2026-09-11)",
     },
     Gate {
         method: "GET",
@@ -305,6 +323,18 @@ pub const ROUTE_GATES: &[Gate] = &[
         why: "a recount rewrites a cached quantity on hand from the ledger (M3 carry-in, 2026-09-10; routes/stock.rs carried the TODO)",
     },
     Gate {
+        method: "GET",
+        path: "/suppliers",
+        permission: Some(Permission::SeeCostAndMargin),
+        why: "the list carries each supplier's balance, which is what the shop owes for goods it has not paid for yet; the buying side is the same side the purchase list sits on and it is gated whole for the same reason, no till flow reads it (M4 closing review, 2026-09-11)",
+    },
+    Gate {
+        method: "GET",
+        path: "/suppliers/{id}/ledger",
+        permission: Some(Permission::SeeCostAndMargin),
+        why: "one supplier's account in full, every invoice and payment behind the balance; same reasoning and same permission as the list (M4 closing review, 2026-09-11)",
+    },
+    Gate {
         method: "POST",
         path: "/suppliers",
         permission: Some(Permission::EditFiches),
@@ -408,11 +438,20 @@ mod tests {
                         || gate.path == "/dashboard"
                         || gate.path == "/dashboard/series"
                         || gate.path == "/purchases"
-                        || gate.path == "/purchases/{id}",
+                        || gate.path == "/purchases/{id}"
+                        || gate.path == "/expenses"
+                        || gate.path == "/cash"
+                        || gate.path == "/suppliers"
+                        || gate.path == "/suppliers/{id}/ledger"
+                        || gate.path == "/backups",
                     "{} is a read this table was not opened for; widen this allow-list deliberately \
                      and say why in ROUTE_GATES's own `why` (M4 T5 review, 2026-09-11: /dashboard, \
                      /dashboard/series, /purchases and /purchases/{{id}} joined the exports, the \
-                     import template, the audit log and /users as reads a cashier does not get)",
+                     import template, the audit log and /users as reads a cashier does not get. \
+                     M4 closing review, same day: /expenses, /cash, /suppliers, \
+                     /suppliers/{{id}}/ledger and /backups joined them, the money the shop spends \
+                     and owes having been readable by a cashier while the pages that sum it were \
+                     not)",
                     gate.path
                 );
             }

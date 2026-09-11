@@ -2497,6 +2497,16 @@ fn an_override_the_party_ids_then_refuse_leaves_no_log_row_and_no_number() {
     assert!(debt::ledger(&mut conn, SHOP, c).unwrap().is_empty());
     assert_eq!(counter(&mut conn, "doc_facture:2026"), 1);
     assert_eq!(counter(&mut conn, "doc_ticket:2026"), 1);
+    // And no blocked row either: the override was granted, so the refusal
+    // captured on the way in has to be forgotten. A row here would say
+    // somebody was stopped by a limit they were in fact allowed past.
+    assert!(
+        !audit::list(&mut conn, SHOP)
+            .unwrap()
+            .iter()
+            .any(|e| e.action == "sale.credit_blocked"),
+        "an override that was granted leaves no row saying it was blocked"
+    );
 }
 
 #[test]
@@ -2703,4 +2713,181 @@ fn a_discount_split_so_neither_half_trips_the_threshold_is_still_caught() {
         panic!("a refusal for a permission carries the one it wanted: {err:?}");
     };
     assert_eq!(permission, Permission::DiscountAboveThreshold);
+}
+
+#[test]
+fn a_refused_discount_leaves_a_row_after_the_sale_unwound() {
+    // The same hole the credit refusal had, on the other side of the total,
+    // found by the closing review on 2026-09-11. The permission check sits
+    // inside the sale's transaction, so a row written where it refuses
+    // unwinds with the sale: a cashier could try a discount on every basket
+    // of the day and leave nothing behind. The row goes down after the
+    // rollback, on the same connection, and this is what proves it survived
+    // one.
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 500); // 5 %
+    let p = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    // 100,00 of basket, 5,01 off: one centime past what 5 % allows.
+    let err = issue_sale(&mut conn, SHOP, cashier, discounted(p, 1_000, 501, 20_000)).unwrap_err();
+    assert_eq!(err.code(), "forbidden", "{err:?}");
+
+    // The sale really did unwind, so a row that is here is a row that
+    // outlived a rollback.
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "sale.price_cut_blocked")
+        .expect("a refused discount leaves a row");
+    assert_eq!(entry.user_id, cashier);
+    let before = entry.before.clone().unwrap_or_default();
+    assert!(
+        before.contains("discount_above_threshold"),
+        "the row says which of the two doors was tried: {before}"
+    );
+    let after = entry.after.clone().unwrap_or_default();
+    assert!(after.contains("\"discount_centimes\":501"), "{after}");
+    assert!(after.contains("\"basket_centimes\":10000"), "{after}");
+
+    // Three tries, three rows: the point is that a shop can see the probing.
+    for _ in 0..2 {
+        let _ = issue_sale(&mut conn, SHOP, cashier, discounted(p, 1_000, 501, 20_000));
+    }
+    let rows = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .filter(|e| e.action == "sale.price_cut_blocked")
+        .count();
+    assert_eq!(rows, 3);
+}
+
+#[test]
+fn a_refused_price_typed_over_the_card_leaves_a_row_too() {
+    // The other door, and the one a cashier reaches for once the discount
+    // box is refused. Both are the same act as far as the shop's money is
+    // concerned, so both are in the log, and the row says which was tried.
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 500);
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        cashier,
+        negotiated(p, 1_000, 90_000, 200_000),
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "forbidden", "{err:?}");
+    assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "sale.price_cut_blocked")
+        .expect("a price typed over the card and refused leaves a row");
+    let before = entry.before.clone().unwrap_or_default();
+    assert!(
+        before.contains("change_price_at_the_till"),
+        "the row tells this apart from a refused discount: {before}"
+    );
+    // The card's own price beside what the till asked to charge, which is
+    // the pair an owner reading the log needs.
+    let after = entry.after.clone().unwrap_or_default();
+    assert!(after.contains("\"card_price_centimes\":100000"), "{after}");
+    assert!(after.contains("\"charged_centimes\":90000"), "{after}");
+}
+
+#[test]
+fn a_discount_the_shop_allows_leaves_no_refusal_row() {
+    // The negative space under the two above: the row is written where
+    // somebody was stopped, not where money came off a price. A log that
+    // fires on every discounted basket is a log nobody reads.
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 500);
+    let p = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
+    let cashier = user(&mut conn, "Nadia", Role::Cashier);
+
+    issue_sale(&mut conn, SHOP, cashier, discounted(p, 1_000, 500, 20_000)).unwrap();
+
+    let refusals = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .filter(|e| e.action == "sale.price_cut_blocked")
+        .count();
+    assert_eq!(refusals, 0);
+}
+
+#[test]
+fn an_allowed_discount_past_the_threshold_leaves_no_refusal_row_either() {
+    // The case the capture-then-refuse shape could get wrong: the manager
+    // holds the permission, so the attempt is written down and then has to
+    // be forgotten. A row here would say somebody was stopped who was not.
+    let (_dir, mut conn) = open_temp();
+    discount_threshold(&mut conn, 500);
+    let p = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
+    let manager = user(&mut conn, "Karim", Role::Manager);
+
+    issue_sale(&mut conn, SHOP, manager, discounted(p, 1_000, 501, 20_000)).unwrap();
+
+    let refusals = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .filter(|e| e.action == "sale.price_cut_blocked")
+        .count();
+    assert_eq!(refusals, 0);
+}
+
+#[test]
+fn the_blocked_row_says_what_the_customer_owed_before_the_try() {
+    // Without the balance the customer already carried, an owner reading the
+    // log cannot tell one large attempt from twenty small ones against the
+    // same limit, which is the thing the row exists to show. The override
+    // row and the warned row have always carried it (M4 closing review).
+    let (_dir, mut conn) = open_temp();
+    let p = product(&mut conn, "Ciment", 100_000, 0, Unit::Piece);
+    let c = customer(&mut conn, "Entreprise Amrani", Some(150_000), None);
+
+    // A first sale on credit that the limit allows, so the customer is
+    // carrying a balance when the second one is refused.
+    issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap();
+
+    let err = issue_sale(
+        &mut conn,
+        SHOP,
+        OWNER,
+        credit(c, vec![line(p, 1_000)], false),
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), "credit_limit", "{err:?}");
+
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let entry = entries
+        .iter()
+        .find(|e| e.action == "sale.credit_blocked")
+        .expect("a refused credit sale leaves a row");
+    let before = entry.before.clone().unwrap_or_default();
+    assert!(
+        before.contains("\"balance_centimes\":100000"),
+        "the row carries what was already owed: {before}"
+    );
+    assert!(
+        before.contains("\"credit_limit_centimes\":150000"),
+        "{before}"
+    );
+    let after = entry.after.clone().unwrap_or_default();
+    // 100 000 already owed plus another 100 000 basket.
+    assert!(
+        after.contains("\"balance_would_be_centimes\":200000"),
+        "{after}"
+    );
 }

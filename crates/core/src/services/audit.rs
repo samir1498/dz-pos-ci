@@ -58,6 +58,17 @@ pub const ACTION_CREDIT_OVERRIDE: &str = "document.issue_override";
 /// leaves the same window and opens a second writer on the same SQLite file.
 pub const ACTION_CREDIT_BLOCKED: &str = "sale.credit_blocked";
 
+/// A sale refused because the till tried to take money off a price and the
+/// person ringing it up may not. Both doors are covered: a price typed over
+/// the one on the product's card, and a discount past the shop's threshold.
+/// Written after the rollback for the same reason as the row above, and found
+/// the same way: the two permission checks sit inside the sale's transaction,
+/// so a row written where they refuse unwinds with the sale and the log sees
+/// nothing at all (M4 closing review, 2026-09-11). The entry carries which of
+/// the two was tried and what was asked for, because a percentage off a
+/// basket and a price typed over a card read differently to an owner.
+pub const ACTION_PRICE_CUT_BLOCKED: &str = "sale.price_cut_blocked";
+
 /// A credit sale that landed at or past the customer's warn threshold. Not a
 /// refusal and not a decision anybody took: the sale went through, and this
 /// says the account crossed the line the shop asked to hear about. Written

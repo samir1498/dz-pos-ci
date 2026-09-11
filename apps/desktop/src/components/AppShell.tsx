@@ -92,7 +92,10 @@ interface NavItem {
    *  own right); dashboard and purchases carry a permission here because
    *  M4 T5's review found the server refuses the route outright, so a
    *  cashier reaching either by a stale link or a typed URL should not see
-   *  a link into it in the first place. */
+   *  a link into it in the first place. Suppliers and expenses carry one
+   *  for the same reason since the closing review: what the shop owes its
+   *  suppliers and what it spends were both readable by a cashier while
+   *  the dashboard that sums them was not. */
   readonly permission?: PermissionDto;
 }
 
@@ -113,7 +116,13 @@ export const NAV: readonly NavItem[] = [
   { to: "/till", label: "nav_till", icon: ShoppingCart, section: "sales" },
   { to: "/customers", label: "nav_customers", icon: Users, section: "sales" },
   { to: "/documents", label: "nav_documents", icon: FileText, section: "sales" },
-  { to: "/suppliers", label: "nav_suppliers", icon: Truck, section: "purchases" },
+  {
+    to: "/suppliers",
+    label: "nav_suppliers",
+    icon: Truck,
+    section: "purchases",
+    permission: "see_cost_and_margin",
+  },
   {
     to: "/purchases",
     label: "nav_purchases",
@@ -121,7 +130,13 @@ export const NAV: readonly NavItem[] = [
     section: "purchases",
     permission: "see_cost_and_margin",
   },
-  { to: "/expenses", label: "nav_expenses", icon: Receipt, section: "purchases" },
+  {
+    to: "/expenses",
+    label: "nav_expenses",
+    icon: Receipt,
+    section: "purchases",
+    permission: "see_reports",
+  },
   { to: "/products", label: "nav_products", icon: Package, section: "manage" },
   {
     to: "/audit",

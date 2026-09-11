@@ -305,8 +305,15 @@ fn every_row_of_the_table_names_a_route_that_is_there() {
 /// (`routes/products.rs::redact_cost`) rather than the route refused.
 /// `/stock/recount` and `/settings` are the same kind of ordinary read a
 /// cashier is already looking at.
+///
+/// The closing review on 2026-09-11 moved five more out of "open" and into
+/// the table, and they are the ones this comment's reasoning had missed:
+/// `/expenses` and `/cash` hand back what the shop spends and what is in the
+/// drawer, `/suppliers` and one supplier's ledger hand back what it owes for
+/// goods, and `/backups` lists copies of the whole file. Each was open while
+/// the screen that sums it was refused, which is the wrong way round.
 #[test]
-fn the_table_is_about_writes_and_the_ten_reads_that_carry_lists_or_reports_out() {
+fn the_table_is_about_writes_and_the_reads_that_carry_lists_or_reports_out() {
     for gate in ROUTE_GATES {
         assert!(
             matches!(gate.method, "POST" | "PUT" | "GET"),
@@ -322,22 +329,29 @@ fn the_table_is_about_writes_and_the_ten_reads_that_carry_lists_or_reports_out()
             "GET {read} has a row; an ordinary read is not this table's business"
         );
     }
-    // The exception the M3 carry-in named in words: a whole list on a USB
-    // stick. If one of these loses its row, a cashier walks out with it.
+    // The exception the M3 carry-in named in words, a whole list on a USB
+    // stick, and the five the closing review added: money out, the cash
+    // position, what the shop owes its suppliers, and the backups. If one of
+    // these loses its row, a cashier reads it.
     for read in [
         "/export/products",
         "/export/sales",
         "/export/customers",
         "/export/suppliers",
         "/import/products/template",
+        "/expenses",
+        "/cash",
+        "/suppliers",
+        "/suppliers/{id}/ledger",
+        "/backups",
     ] {
         assert!(
             gate_for("GET", read).is_some(),
             "GET {read} carries a whole list out and has no row"
         );
     }
-    // The sixth: not a whole list out the door, but the log of every
-    // sensitive thing the staff have done, and the owner's alone (M4 T7).
+    // And the audit log: not a whole list out the door, but the record of
+    // every sensitive thing the staff have done, the owner's alone (M4 T7).
     assert_eq!(
         gate_for("GET", "/audit-log").and_then(|g| g.permission),
         Some(Permission::SeeAuditLog)

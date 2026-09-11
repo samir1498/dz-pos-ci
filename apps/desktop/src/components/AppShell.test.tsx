@@ -16,7 +16,7 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { I18nProvider, type Lang } from "@/i18n";
@@ -212,12 +212,39 @@ describe("AppShell", () => {
   });
 
   test("marks the current screen, and only it", async () => {
-    await mount("/expenses");
+    // Customers, not expenses: expenses carries a permission since the
+    // closing review and the session this mounts with holds none, so the
+    // link it used to look for is not drawn at all.
+    await mount("/customers");
     const current = screen
       .getAllByRole("link")
       .filter((link) => link.getAttribute("data-active") === "true");
     expect(current).toHaveLength(1);
-    expect(current[0]).toHaveTextContent(fr.nav_expenses);
+    expect(current[0]).toHaveTextContent(fr.nav_customers);
+  });
+
+  /**
+   * The closing review found both routes readable by a cashier on the server
+   * while the dashboard that sums them was refused. Now that the server
+   * refuses them, the sidebar stops offering a door that only leads to a
+   * refusal, the same way it already did for the dashboard and purchases.
+   */
+  test("the expenses entry waits for see_reports", async () => {
+    await mount("/till");
+    expect(screen.queryByTestId("nav-expenses")).not.toBeInTheDocument();
+    cleanup();
+    stubSignedIn(["see_reports"]);
+    await mount("/till");
+    expect(await screen.findByTestId("nav-expenses")).toBeInTheDocument();
+  });
+
+  test("the suppliers entry waits for see_cost_and_margin", async () => {
+    await mount("/till");
+    expect(screen.queryByTestId("nav-suppliers")).not.toBeInTheDocument();
+    cleanup();
+    stubSignedIn(["see_cost_and_margin"]);
+    await mount("/till");
+    expect(await screen.findByTestId("nav-suppliers")).toBeInTheDocument();
   });
 
   /**

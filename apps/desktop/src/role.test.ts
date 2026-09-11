@@ -137,27 +137,88 @@ describe("every role's label", () => {
 
 /**
  * The server sends a code and the UI owns the wording, which only works if
- * there is one place that turns a code into wording. There were two until
- * 2026-09-11: `lib/fields.tsx` and a private copy inside `routes/till.tsx`,
- * and they had drifted in both directions. The till's knew about a credit
- * limit and a barcode already taken; the shared one did not. The shared one
- * knew about a refused permission; the till's did not. So a cashier refused
- * a discount at the till, which is the exact refusal this milestone exists
- * to produce, was shown "something went wrong".
+ * there is one place that turns a code into wording. Eleven files kept their
+ * own copy until 2026-09-11 and ten of them had no entry for a refused
+ * permission, so a cashier refused anywhere but the staff screen was shown
+ * "something went wrong". The first cashier spec in the browser suite is
+ * what found it.
  *
- * The first cashier spec in the browser suite is what found it, and this is
- * what stops the second copy coming back. The same shape as the role rule
- * above and for the same reason: a second copy of a table is not a bug on
- * the day it is written, it is a bug on the day one of them is updated.
+ * These two guards match on shape and on content, never on the names the
+ * old copies happened to use. The first version matched `const ERROR_KEY`
+ * and `function errorKey(` literally, and the closing review proved it
+ * useless by writing the same table back into a screen as `CODE_TO_KEY` and
+ * `keyForError` and watching all nine tests pass.
+ *
+ * What is banned is a second table from a *server error code* to a wording
+ * key, and a second place that looks a code up in one. A `Record<string,
+ * Key>` keyed by something else is not that and is not banned: the till maps
+ * the client-side money errors `computeTotals` returns, the expenses screen
+ * maps its seeded categories, the import panel maps its refusal reasons, and
+ * two screens map a field name the server named. The test tells them apart
+ * by reading the shared table's own codes out of `lib/fields.tsx` and asking
+ * whether a candidate map is keyed by two or more of them, so the list
+ * cannot drift from the thing it guards.
  */
+const SHARED_MAP = readFileSync(join(SRC, "lib", "fields.tsx"), "utf8");
+
+/** The server codes the shared table owns, read out of its literal. */
+const SERVER_CODES: readonly string[] = (() => {
+  const literal = SHARED_MAP.slice(
+    SHARED_MAP.indexOf("const ERROR_KEY: Record<string, Key> = {"),
+  );
+  const body = literal.slice(0, literal.indexOf("};"));
+  return [...body.matchAll(/^\s*(\w+):\s*"/gm)].map((match) => match[1]);
+})();
+
+/** Every `Record<string, Key>` literal a file declares, as its body text. */
+const keyMapBodies = (source: string): string[] => {
+  const found: string[] = [];
+  const opener = /Record<\s*string\s*,\s*Key\s*>\s*=\s*\{/g;
+  for (const match of source.matchAll(opener)) {
+    const from = (match.index ?? 0) + match[0].length;
+    const to = source.indexOf("};", from);
+    if (to > from) found.push(source.slice(from, to));
+  }
+  return found;
+};
+
 describe("a server error code becomes wording in one place", () => {
-  it("declares no second error map", () => {
-    const found = offenders(/\bconst ERROR_KEY\s*:\s*Record<string,\s*Key>/, new Set([SELF, "lib/fields.tsx"]));
-    expect(found).toEqual([]);
+  it("reads the shared table's own codes, so this test cannot go hollow", () => {
+    // If `lib/fields.tsx` is renamed or reshaped, the extraction above
+    // silently returns nothing and both guards below pass on every file.
+    // This is what says so instead.
+    expect(SERVER_CODES).toContain("forbidden");
+    expect(SERVER_CODES.length).toBeGreaterThan(10);
   });
 
-  it("writes no second errorKey function", () => {
-    const found = offenders(/function\s+errorKey\s*\(/, new Set([SELF, "lib/fields.tsx"]));
+  it("declares no second table from a server code to wording", () => {
+    const offending = sources(SRC)
+      .filter((file) => {
+        const at = relative(SRC, file);
+        return at !== SELF && at !== join("lib", "fields.tsx");
+      })
+      .flatMap((file) =>
+        keyMapBodies(readFileSync(file, "utf8"))
+          .map((body) => ({
+            file: relative(SRC, file),
+            codes: SERVER_CODES.filter((code) =>
+              new RegExp(`^\\s*${code}:`, "m").test(body),
+            ),
+          }))
+          .filter((map) => map.codes.length > 1)
+          .map((map) => `${map.file}: keyed by ${map.codes.join(", ")}`),
+      );
+    expect(offending).toEqual([]);
+  });
+
+  it("looks a server code up in a table nowhere else", () => {
+    // `errorKey` is the only caller allowed to index by a code. A screen
+    // comparing one code (`error.code === "credit_limit"`) to decide whether
+    // to draw a panel is a different act and stays allowed.
+    const found = offenders(
+      /\[\s*\w+\.code\s*\]/,
+      new Set([SELF, join("lib", "fields.tsx")]),
+    );
     expect(found).toEqual([]);
   });
 });
