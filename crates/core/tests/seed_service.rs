@@ -16,7 +16,9 @@ use std::time::Instant;
 use chrono::NaiveDate;
 use dzpos_core::money::Money;
 use dzpos_core::services::clock::{Month, Period};
-use dzpos_core::services::{cash, dashboard, debt, documents, expenses, products, seed, suppliers};
+use dzpos_core::services::{
+    cash, dashboard, debt, documents, expenses, products, seed, sessions, suppliers, users,
+};
 
 mod common;
 
@@ -267,4 +269,25 @@ fn a_seeded_shop_is_written_in_a_few_seconds_and_not_in_a_minute() {
     // than report a seeder that got slow. Thirty seconds is still an order of
     // magnitude under the minutes an unbatched run would take.
     assert!(took.as_secs() < 30, "the seeder took {took:?}");
+}
+
+// The file a developer opens can be signed in to (M4 T2). The owner the first
+// migration writes carries the `'!unset'` sentinel and no password, and from
+// M4 on every route wants a session, so a seeded file without a credential is
+// a file the API answers 401 to on every request. Both doors are checked,
+// because the sign-in screen offers both.
+#[test]
+fn the_seeded_owner_can_sign_in_by_pin_and_by_password() {
+    let (_dir, mut conn) = open_temp();
+    seed::run(&mut conn, SHOP, OWNER, today()).unwrap();
+    let at = today().and_hms_opt(9, 0, 0).unwrap();
+
+    let by_pin = sessions::sign_in_with_pin(&mut conn, SHOP, OWNER, seed::OWNER_PIN, at).unwrap();
+    assert_eq!(by_pin.actor.user_id, OWNER);
+
+    let owner = users::get(&mut conn, SHOP, OWNER).unwrap();
+    let by_password =
+        sessions::sign_in_with_password(&mut conn, SHOP, &owner.name, seed::OWNER_PASSWORD, at)
+            .unwrap();
+    assert_eq!(by_password.actor.user_id, OWNER);
 }

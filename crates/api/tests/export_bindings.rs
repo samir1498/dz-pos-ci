@@ -10,26 +10,34 @@
 //! what makes a stale checkout fail.
 
 use dzpos_api::dto::{
-    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AvoirLineDto, BackupDto, BackupsDto,
-    CancelDocumentDto, CashPositionDto, CategoryDto, ClockDto, CloseOrderDto, CloseSupplierDto,
-    CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DashboardDto,
-    DashboardFiguresDto, DashboardSeriesDto, DashboardSeriesPointDto, DatedRegimeDto, DebtEntryDto,
-    DebtKindDto, DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto,
-    HealthDto, ImportAppliedDto, ImportDryRunDto, ImportOutcomeDto, ImportRowDto, LabelSheetDto,
-    LastStockRecountDto, LowStockDto, NewAvoirDto, NewCustomerDto, NewExpenseDto, NewPaymentDto,
-    NewProductDto, NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto, NewSaleLineDto,
-    NewSupplierDto, OutgoingsDto, OwedDto, PaidNowDto, PartyKindDto, PaymentAllocationDto,
-    PaymentDto, PaymentMethodDto, PaymentModeDto, ProductDto, PurchaseDetailDto, PurchaseDto,
-    PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto, PurchaseStatusDto, ReceiveLineDto,
-    RegimeChangeDto, RegimeDto, RestoreDto, SaleBalanceDto, SaleCancelEffectDto,
-    SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
-    SaleWarningDto, SettingsDto, StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto,
-    SupplierDebtKindDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto,
-    SupplierWriteDto, TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto,
+    AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AuditEntryDto, AuditLogDto, AuditUserDto,
+    AvoirLineDto, BackupDto, BackupsDto, CancelDocumentDto, CashPositionDto, CategoryDto,
+    ClaimFirstPinDto, ClockDto, CloseOrderDto, CloseSupplierDto, CustomerDto, CustomerLedgerDto,
+    CustomerPaymentsDto, CustomerWriteDto, DashboardDto, DashboardFiguresDto, DashboardSeriesDto,
+    DashboardSeriesPointDto, DatedRegimeDto, DebtEntryDto, DebtKindDto, DiscountThresholdChangeDto,
+    DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto, ExpensesDto, HealthDto,
+    ImportAppliedDto, ImportDryRunDto, ImportOutcomeDto, ImportRowDto, LabelSheetDto,
+    LastStockRecountDto, LoginDto, LowStockDto, MeDto, NewAvoirDto, NewCustomerDto, NewExpenseDto,
+    NewPaymentDto, NewProductDto, NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto,
+    NewSaleLineDto, NewSupplierDto, NewUserDto, OutgoingsDto, OwedDto, PaidNowDto, PartyKindDto,
+    PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto, PermissionDto, ProductDto,
+    PurchaseDetailDto, PurchaseDto, PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto,
+    PurchaseStatusDto, ReceiveLineDto, RegimeChangeDto, RegimeDto, RestoreDto, RoleDto,
+    SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto,
+    SaleTotalsDto, SaleTvaDto, SaleWarningDto, SessionDto, SessionIdleDto, SetPinDto, SettingsDto,
+    StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto, SupplierDebtKindDto,
+    SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto,
+    TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto, UserDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 91] = [
+const FILES: [&str; 105] = [
+    "LoginDto.ts",
+    "MeDto.ts",
+    "SessionDto.ts",
+    "SessionIdleDto.ts",
+    "RoleDto.ts",
+    "PermissionDto.ts",
     "UnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
@@ -67,6 +75,7 @@ const FILES: [&str; 91] = [
     "CancelDocumentDto.ts",
     "PartyKindDto.ts",
     "DebtKindDto.ts",
+    "DiscountThresholdChangeDto.ts",
     "CustomerDto.ts",
     "CustomerWriteDto.ts",
     "NewCustomerDto.ts",
@@ -121,6 +130,13 @@ const FILES: [&str; 91] = [
     "ImportDryRunDto.ts",
     "ImportAppliedDto.ts",
     "LabelSheetDto.ts",
+    "AuditUserDto.ts",
+    "AuditEntryDto.ts",
+    "AuditLogDto.ts",
+    "UserDto.ts",
+    "NewUserDto.ts",
+    "SetPinDto.ts",
+    "ClaimFirstPinDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -178,6 +194,12 @@ fn export_bindings() {
     let dir = out_dir();
     std::fs::create_dir_all(&dir).unwrap();
     let cfg = config(&dir);
+    RoleDto::export_all(&cfg).unwrap();
+    PermissionDto::export_all(&cfg).unwrap();
+    MeDto::export_all(&cfg).unwrap();
+    LoginDto::export_all(&cfg).unwrap();
+    SessionDto::export_all(&cfg).unwrap();
+    SessionIdleDto::export_all(&cfg).unwrap();
     UnitDto::export_all(&cfg).unwrap();
     ProductDto::export_all(&cfg).unwrap();
     NewProductDto::export_all(&cfg).unwrap();
@@ -193,6 +215,7 @@ fn export_bindings() {
     ThemeChoiceDto::export_all(&cfg).unwrap();
     SettingsDto::export_all(&cfg).unwrap();
     RegimeChangeDto::export_all(&cfg).unwrap();
+    DiscountThresholdChangeDto::export_all(&cfg).unwrap();
     BackupDto::export_all(&cfg).unwrap();
     BackupsDto::export_all(&cfg).unwrap();
     RestoreDto::export_all(&cfg).unwrap();
@@ -269,6 +292,13 @@ fn export_bindings() {
     DashboardDto::export_all(&cfg).unwrap();
     DashboardSeriesPointDto::export_all(&cfg).unwrap();
     DashboardSeriesDto::export_all(&cfg).unwrap();
+    AuditUserDto::export_all(&cfg).unwrap();
+    AuditEntryDto::export_all(&cfg).unwrap();
+    AuditLogDto::export_all(&cfg).unwrap();
+    UserDto::export_all(&cfg).unwrap();
+    NewUserDto::export_all(&cfg).unwrap();
+    SetPinDto::export_all(&cfg).unwrap();
+    ClaimFirstPinDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

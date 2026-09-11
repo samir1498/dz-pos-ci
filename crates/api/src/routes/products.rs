@@ -7,21 +7,55 @@ use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
 use dzpos_core::models::product::NewProduct;
 use dzpos_core::print::{render_label, render_label_sheet};
+use dzpos_core::services::permissions::{can, Permission};
 use dzpos_core::services::products as service;
 use serde::Deserialize;
 
 use crate::dto::{LabelSheetDto, NewProductDto, ProductDto, LABEL_SHEET_MAX};
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
-pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<ProductDto>>, ApiError> {
+/// Every answer in this file that carries a product goes through here,
+/// writes included. A create or an update is behind `EditFiches`, which only
+/// a manager or an owner holds today and both of those hold
+/// `SeeCostAndMargin` as well, so redacting the write answers changes
+/// nothing now. It is here so that the day somebody adds a role that may
+/// edit a fiche without seeing what the shop paid, the fiche it hands back
+/// does not quietly tell them (M4 closing review, 2026-09-11).
+///
+/// `GET /products` and `GET /products/{id}` carry the whole catalogue to
+/// every signed-in role, cashier included, because the till needs it to
+/// ring a sale up (`gates.rs` names no row for either read). What the till
+/// does not need is what a product cost the shop, so this is the one field
+/// a route in this file redacts itself rather than leaving to a row in the
+/// gate table, which can only say yes or no to a whole route (M4 T5 review,
+/// 2026-09-11).
+fn redact_cost(mut dto: ProductDto, role: dzpos_core::models::sql_types::Role) -> ProductDto {
+    if !can(role, Permission::SeeCostAndMargin) {
+        dto.cost_centimes = None;
+        dto.wholesale_centimes = None;
+    }
+    dto
+}
+
+pub async fn list(
+    State(state): State<AppState>,
+    who: CurrentUser,
+) -> Result<Json<Vec<ProductDto>>, ApiError> {
     let shop = state.shop_id;
     let found = state.blocking(move |c| service::list(c, shop)).await?;
-    Ok(Json(found.into_iter().map(ProductDto::from).collect()))
+    Ok(Json(
+        found
+            .into_iter()
+            .map(|p| redact_cost(ProductDto::from(p), who.role))
+            .collect(),
+    ))
 }
 
 pub async fn get_one(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
 ) -> Result<Json<ProductDto>, ApiError> {
     // `/products/abc` used to leave as axum's own text/plain 400, which the
@@ -31,11 +65,12 @@ pub async fn get_one(
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
     let shop = state.shop_id;
     let found = state.blocking(move |c| service::get(c, shop, id)).await?;
-    Ok(Json(ProductDto::from(found)))
+    Ok(Json(redact_cost(ProductDto::from(found), who.role)))
 }
 
 pub async fn create(
     State(state): State<AppState>,
+    who: CurrentUser,
     body: Result<Json<NewProductDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ProductDto>), ApiError> {
     // A body that does not parse is the caller's mistake, not a server
@@ -43,11 +78,14 @@ pub async fn create(
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = NewProduct::try_from(dto)?;
     let shop = state.shop_id;
-    let user = state.user_id;
+    let user = who.id;
     let made = state
         .blocking(move |c| service::create(c, shop, user, new))
         .await?;
-    Ok((StatusCode::CREATED, Json(ProductDto::from(made))))
+    Ok((
+        StatusCode::CREATED,
+        Json(redact_cost(ProductDto::from(made), who.role)),
+    ))
 }
 
 /// The whole product again, not a patch: the screen sends every field it
@@ -55,6 +93,7 @@ pub async fn create(
 /// `barcode` null keeps the number the product has (core, `update`).
 pub async fn update(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
     body: Result<Json<NewProductDto>, JsonRejection>,
 ) -> Result<Json<ProductDto>, ApiError> {
@@ -63,11 +102,11 @@ pub async fn update(
     let Json(dto) = body.map_err(ApiError::from)?;
     let new = NewProduct::try_from(dto)?;
     let shop = state.shop_id;
-    let user = state.user_id;
+    let user = who.id;
     let after = state
         .blocking(move |c| service::update(c, shop, user, id, new))
         .await?;
-    Ok(Json(ProductDto::from(after)))
+    Ok(Json(redact_cost(ProductDto::from(after), who.role)))
 }
 
 /// The language on the label, named by the caller on every call the way the

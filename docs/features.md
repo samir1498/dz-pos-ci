@@ -178,12 +178,16 @@ A null warn threshold is no warning; reaching one is enough to warn, and a
 warned sale still goes through, so the answer carries `near_limit` beside
 the document rather than refusing it.
 
-The owner can pass the block by sending the sale again with `override`.
-That sale is written like any other and an audit row records it
-(`document.issue_override`, with the balance, the limit and the document it
-produced). There are no roles in the app until §5 lands, so the API accepts
-an override from anyone; the log is what carries the accountability in the
-meantime.
+A user holding `override_credit_block` (§5) can pass the block by sending
+the sale again with `override`. That sale is written like any other and an
+audit row records it (`document.issue_override`, with the balance, the limit
+and the document it produced, under the user who took the decision). A
+cashier who sends the flag is refused with `forbidden` naming that
+permission, and a cashier who sends none still hears `credit_limit` with the
+two amounts: the block is what stopped them, not a permission they were not
+using
+(`a_cashier_cannot_pass_a_credit_block_and_the_sale_is_written_nowhere`,
+`a_cashier_who_sends_no_override_still_hears_about_the_limit_and_not_about_a_permission`).
 
 A cash or a card sale may also name a customer. The document then carries
 the buyer block and the balance triple with a `remaining_debt` of nothing,
@@ -836,16 +840,162 @@ first release.**
 
 ## 5. Users and roles (v1)
 
-Owner, manager, cashier. Login by PIN on the till, password elsewhere.
-Permissions: sell, give discount above X %, override credit block, see cost
-prices and margins, edit products, edit settings, see reports. Every
-document records the user. Audit log of sensitive actions (price change,
-discount override, delete, settings change, a quantity on hand put back to
-what its ledger sums to), an ISO-27001 control we get
-for nearly free by writing it now. An owner user exists from the first
-migration, so every document, ledger row and audit entry carries a user
-from the first sale (build-order step 2); PIN, roles and permissions
-arrive in step 5.
+Written after M4 shipped, describing what is in the code rather than what
+was planned. Three roles: owner, manager, cashier. A cashier signs in at the
+till with a PIN and everyone else with a name and a password; the same
+person can hold both.
+
+### The permission table
+
+Thirteen permissions, one `can(role, permission)` table in
+`crates/core/src/services/permissions.rs`, and that table is the only place
+in the codebase where a role is compared to decide anything. Every route,
+screen and service asks it.
+
+A cashier may `sell`, and that is the whole list. A manager answers like an
+owner on everything except two things: `manage_users` and `see_audit_log`
+are the owner's alone, because a staff list the staff can add themselves to
+and a log the watched can read are not controls. The milestone's own demo
+line, "the owner sees the audit log of a price change", is where that split
+came from.
+
+The other eleven: `discount_above_threshold` (a discount strictly above the
+shop's own setting), `override_credit_block`, `see_cost_and_margin` (the
+cost and margin columns on products, purchases and the dashboard),
+`edit_fiches` (a product's card and a supplier's, closing and reopening
+included), `edit_settings` (the régime fiscal included), `see_reports`,
+`commit_money` (a supplier payment, a purchase and its receipt, an expense),
+`correct_ledger` (a debt adjustment, a purchase return or close-short, a
+stock recount, and undoing a document already handed to a customer),
+`export_and_import` (the four exports, the product template, both imports;
+a label needs nobody, since a name, a price and a barcode are already on the
+shelf), `change_price_at_the_till` (a line sold at a price that is not the
+product's own), and `see_audit_log`.
+
+The table is matched on the permission first rather than on the pair, so a
+fourteenth permission fails to compile until somebody places it for all
+three roles. Nothing falls through a wildcard.
+
+A permission is applied in one seam and not in each handler.
+`crates/api/src/gates.rs` holds a row per route saying which permission it
+wants and why, the session middleware looks that row up by the route's own
+path template and refuses before the handler runs, and a write on a route
+the table does not name is refused rather than waved through. A test parses
+the router's own source and walks it against the table in both directions,
+so a route added without a row fails the build.
+
+A refusal is HTTP 403 with the code `forbidden` and the permission's name,
+so a screen can say which permission was wanted without guessing.
+
+### PIN and password
+
+A PIN is four to six digits and is refused if it counts up or down (1234,
+4321) or repeats one digit (1111). A password is at least eight characters
+and nothing more is asked of it, the floor NIST SP 800-63B sets for a
+memorised secret. Both are stored as argon2id with a per-user salt.
+
+A shop counter is a public place, so five wrong attempts on one user start a
+wait that doubles from thirty seconds to a quarter of an hour; a correct
+credential clears it, and so does an owner resetting the PIN. The counter is
+one per person and covers the PIN and the password together, which means a
+fumbled password locks that person's till PIN as well. That is open for
+Samir to rule on.
+
+A user is never deleted, only switched off, because their documents and
+ledger rows name them for good. The shop's last active owner cannot be
+switched off or moved to another role.
+
+A shop that has just been installed has an owner row with no credential on
+it, and nobody to sign in as. One route takes a first PIN with no session,
+behind the launch token like everything else. It requires exactly one active
+owner, and it refuses the moment any credential exists anywhere in the shop,
+including on a switched-off cashier, so the door shuts permanently the first
+time anybody sets one. Nothing in the application writes a credential back
+to nothing, so the door cannot reopen from inside. The row it writes in the
+log has its own name, `user.claim_first_pin`, rather than reading as a
+routine PIN reset.
+
+### Sessions
+
+A session is 32 random bytes shown as 64 hex characters, stored as a
+SHA-256 digest and compared in constant time. The desktop sends it in the
+`x-dzpos-session` header and a browser gets an httpOnly `dzpos_session`
+cookie; if both arrive the header wins. The launch token is untouched and
+still outermost: it says the request came from the app, the session says who
+is acting.
+
+The idle time slides off the last request the session carried, not off the
+sign-in, so a cashier working through a queue is never thrown out mid-sale
+and a till nobody has touched since lunch is. It is a shop setting in whole
+minutes (`session_idle_minutes`), between one minute and twelve hours,
+fifteen minutes for a shop that has never set it, and changing it writes an
+audit row because how long a till stays open unattended is a control
+somebody answers for. `GET /auth/me` deliberately does not slide the clock:
+asking who you are is not activity.
+
+Four things end a session and a caller cannot tell them apart: a token
+nobody issued, a sign-out, an idle session, and a session whose user has
+been switched off. The screen has one sentence to say and a stranger learns
+nothing from which of the four it was. A finished session's row is swept
+fourteen days after the last thing it did.
+
+On the screens, the person's name sits in the topbar with a way out, and
+after the idle time a lock covers the app without unmounting it, so a
+half-rung basket is still there when they come back. The cover is a real
+cover: a click, a tab, a barcode scan and the app's own attempts to put the
+cursor back in the search box all fail to reach through it, and the keyboard
+shortcut that pays refuses while it is up. Signing in and unlocking both
+empty the query cache rather than marking it stale, so a cashier signing in
+after an owner on the same machine is never served the owner's rows.
+
+### The audit log
+
+Every document, ledger row and audit entry carries the user who caused it,
+and has since the first migration. Thirty-odd actions write to the log:
+price and discount overrides with the card price beside what was charged,
+credit-block overrides, cancellations and avoirs, settings and régime
+changes, the discount threshold and the idle time, recount drifts, supplier
+and purchase corrections, every user operation, and lockouts.
+
+The owner reads it on one screen, filtered by day, by user and by kind, with
+the before and the after of each change. There is no editing and no
+deleting. One kind reads differently and the filter knows it: a lockout row
+names the person who was locked out in the actor column, because nobody is
+signed in when it is written, so it must not be presented as something that
+person did.
+
+### The discount threshold
+
+"Give discount above X %" is tested on the whole sale and not on a line:
+every line discount is counted with the global one against what the basket
+was worth before anything came off it, so a discount split across the lines
+cannot duck a threshold the same discount would meet in one place
+(`line_discounts_are_counted_with_the_global_one_against_the_basket`). The
+X is the shop's own dated setting (`discount_threshold_bps`, the régime's
+append-only history in another key), and strictly above it is what needs the
+permission: a shop that allows 5 % means the 5 % sale to go through
+untouched (`a_discount_at_the_threshold_asks_nobody_and_writes_no_row`). No
+migration seeds a first row, so a shop that has never set one reads zero and
+until an owner raises it a cashier cannot take a centime off a price
+(`a_shop_that_has_never_set_a_threshold_asks_the_permission_for_any_discount_at_all`).
+The settings screen is where an owner sets it.
+
+A discount past the threshold writes `document.discount_override` beside the
+sale, carrying the basket, the threshold in force that day and what it
+allowed, against the discount actually given
+(`a_manager_discounts_past_the_threshold_and_the_log_says_what_the_rule_allowed`).
+
+There is a second way the same money comes off a basket and it is gated
+beside this one: the till lets a line carry a price the cashier typed
+instead of the one on the product's card, so a cashier refused ten percent
+off could otherwise have typed the price with the ten percent already gone.
+A line priced off the card asks for `change_price_at_the_till` and writes
+`document.price_override`, carrying the card price beside what was actually
+charged, per line, one row per sale.
+
+A proforma is not a sale and is not gated: a quotation moves no stock and no
+money, and the sale it becomes is checked when it is rung up. That means a
+quotation can promise a discount the sale it becomes would refuse.
 
 ## 6. LAN mode (v1, after the desktop milestones)
 

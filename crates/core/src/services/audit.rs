@@ -5,11 +5,16 @@
 //! It records, it never decides. A caller writes the row in the same
 //! transaction as the change, so an entry without its change cannot exist.
 
+use std::collections::HashMap;
+
+use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::audit::{AuditEntry, AuditRowWrite};
 use crate::repos::audit as repo;
+use crate::services::clock::SHOP_UTC_OFFSET_SECONDS;
+use crate::services::users;
 
 /// A row that did not exist before, such as a customer fiche.
 pub const ACTION_CREATE: &str = "create";
@@ -35,8 +40,64 @@ pub const ACTION_ADJUST_DEBT: &str = "debt.adjust";
 /// A credit sale taken past the customer's credit limit on purpose. The
 /// entry carries the balance and the limit the rule refused on, and the
 /// document the decision produced, so the log reads as the decision it was.
-/// Until M4 there are no roles and anyone may take it (features.md §1).
+/// Only a user holding `Permission::OverrideCreditBlock` can take it (M4 T6);
+/// the row's `user_id` is that person.
 pub const ACTION_CREDIT_OVERRIDE: &str = "document.issue_override";
+
+/// A credit sale the customer's limit refused. Written after the sale's
+/// transaction has rolled back, on the same connection, because a row written
+/// inside a transaction that unwinds unwinds with it: that is why the M2
+/// review found a cashier could probe a customer's limit as many times as
+/// they liked and leave nothing behind (M2 carry-in, 2026-09-09). The entry
+/// carries the customer, what they would have owed and what they are allowed
+/// to owe. There is no document to name: the refusal produced none, which is
+/// the point of it.
+///
+/// The window this leaves is one process death wide, between the rollback and
+/// this write. The alternative the M2 ruling proposed, a second connection,
+/// leaves the same window and opens a second writer on the same SQLite file.
+pub const ACTION_CREDIT_BLOCKED: &str = "sale.credit_blocked";
+
+/// A sale refused because the till tried to take money off a price and the
+/// person ringing it up may not. Both doors are covered: a price typed over
+/// the one on the product's card, and a discount past the shop's threshold.
+/// Written after the rollback for the same reason as the row above, and found
+/// the same way: the two permission checks sit inside the sale's transaction,
+/// so a row written where they refuse unwinds with the sale and the log sees
+/// nothing at all (M4 closing review, 2026-09-11). The entry carries which of
+/// the two was tried and what was asked for, because a percentage off a
+/// basket and a price typed over a card read differently to an owner.
+pub const ACTION_PRICE_CUT_BLOCKED: &str = "sale.price_cut_blocked";
+
+/// A credit sale that landed at or past the customer's warn threshold. Not a
+/// refusal and not a decision anybody took: the sale went through, and this
+/// says the account crossed the line the shop asked to hear about. Written
+/// inside the sale's transaction, unlike the blocked row, because a sale that
+/// warns is a sale that happened.
+///
+/// An overridden sale writes `ACTION_CREDIT_OVERRIDE` instead and not both:
+/// that row already carries the warning in its `after`, and a shop reading
+/// its log wants one row per sale, not one per rule the sale touched.
+pub const ACTION_CREDIT_WARNED: &str = "sale.credit_warned";
+
+/// A sale discounted past the shop's dated threshold on purpose
+/// (features.md §5 names "discount override" as its own audited action, so
+/// it is not the credit override's row under another name). The entry
+/// carries the basket before any discount, the threshold in force on the day
+/// and what it allowed, against the discount actually given and how it was
+/// split between the lines and the basket. Only a user holding
+/// `Permission::DiscountAboveThreshold` can take it (M4 T6).
+pub const ACTION_DISCOUNT_OVERRIDE: &str = "document.discount_override";
+
+/// A line sold at a price that is not the product's own. The entry carries
+/// the product, the price on its card and the price actually charged, so a
+/// reader sees the negotiation rather than a total they cannot account for.
+/// M1 shipped the negotiated price ungated because the till had one user and
+/// asked for this gate in its review (M1 carry-in, 2026-09-09); only a user
+/// holding `Permission::ChangePriceAtTheTill` can take it. Without it the
+/// discount threshold is decoration: the same money comes off by typing a
+/// lower price instead of a discount.
+pub const ACTION_PRICE_OVERRIDE: &str = "document.price_override";
 
 /// A credit note written against a facture. The entry names the facture that
 /// changed, because that is the paper a reader is holding when they ask why it
@@ -108,6 +169,68 @@ pub const ACTION_CANCEL_PURCHASE: &str = "purchase.cancel";
 /// written off. A decision, so the reason is in the entry.
 pub const ACTION_CLOSE_SHORT_PURCHASE: &str = "purchase.close_short";
 
+/// A user created.
+pub const ACTION_CREATE_USER: &str = "user.create";
+/// A shop's very first PIN, claimed by its own owner before anybody has ever
+/// signed in (`services::users::claim_first_pin`). Its own action rather
+/// than `ACTION_SET_PIN`: an ordinary reset is a person already inside the
+/// shop changing a credential, and this row is the shop coming into
+/// existence as far as the till is concerned, written with no session open
+/// and no actor but the owner it names. `claim_first_pin` refuses once any
+/// credential exists anywhere in the shop, so a shop's log holds at most
+/// one of these, ever, and never more.
+pub const ACTION_CLAIM_FIRST_PIN: &str = "user.claim_first_pin";
+/// A user renamed. Its own action rather than a generic update, because the
+/// name is what the sign-in screen lists and the audit log prints.
+pub const ACTION_RENAME_USER: &str = "user.rename";
+/// A role changed. The entry carries the role before and after, which is the
+/// whole of what a change of role is.
+pub const ACTION_SET_ROLE: &str = "user.set_role";
+/// A PIN set or reset. The entry says that one was set and never what it is:
+/// a hash in a log is a hash in a backup and in every export of it.
+pub const ACTION_SET_PIN: &str = "user.set_pin";
+/// A password set or reset. The same, on the other credential.
+pub const ACTION_SET_PASSWORD: &str = "user.set_password";
+/// A user switched off. Never a deletion: the rows they wrote name them.
+pub const ACTION_DEACTIVATE_USER: &str = "user.deactivate";
+/// A user switched back on.
+pub const ACTION_REACTIVATE_USER: &str = "user.reactivate";
+/// A user locked out by wrong credentials. Written on the crossing and not on
+/// every attempt, so the log holds the event and not the noise: the entry
+/// carries the count and the moment they may try again, because a lockout
+/// nobody can see afterwards is a shop owner asking why the till would not
+/// open and getting no answer.
+pub const ACTION_LOCK_OUT_USER: &str = "user.locked_out";
+/// A discount threshold change appended to the dated series, the same shape
+/// as `ACTION_SET_REGIME` (M4 T1, features.md §5).
+pub const ACTION_SET_DISCOUNT_THRESHOLD: &str = "set_discount_threshold";
+/// How long a session survives unattended, changed (M4 T2). A preference and
+/// not a dated setting, but still a control somebody answers for: lengthening
+/// it is how a till is left open, and the theme beside it in the same table
+/// writes no row for the reason this one does.
+pub const ACTION_SET_SESSION_IDLE: &str = "set_session_idle";
+
+/// A role was asked for something `services::permissions::can` refuses, on a
+/// route the permission table names. Written once, by the
+/// one seam every gated request passes through
+/// (`crates/api/src/session.rs::require`), and never by a handler: a route
+/// that forgot to ask would forget to log too, which is the same bug twice.
+/// The entry carries the permission that was wanted and the route and method
+/// that wanted it, in `after`; there is no `before` and no `entity_id`,
+/// because a refusal changed no row.
+pub const ACTION_PERMISSION_REFUSED: &str = "permission.refused";
+/// The shop's data walked out on a USB stick: one of the four workbooks
+/// (features.md §5, "walking out on a USB stick" is `Permission::
+/// ExportAndImport`'s own doc). The entry carries which of the four and, when
+/// the route already knows it, how many rows left with it.
+pub const ACTION_EXPORT: &str = "export.download";
+/// The shop file was replaced by one of its own copies. The entry carries the
+/// copy's name, the safety copy taken of what it replaced, and what the
+/// restored file holds; it is written to the file that copy became, after
+/// the swap, because a row written before it would not survive being the
+/// thing overwritten (`services::backup::record_restore`'s own doc says why).
+pub const ACTION_RESTORE_BACKUP: &str = "backup.restore";
+
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,4 +264,188 @@ pub fn record(
 
 pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<AuditEntry>, CoreError> {
     repo::list(conn, shop_id)
+}
+
+/// Rows a screen reads at a time (M4 T7). One shop's whole day almost never
+/// fills a page; a shop's whole lifetime will, eventually, and this is the
+/// number that keeps a screen open on it from asking for all of it.
+pub const PAGE_SIZE: usize = 50;
+
+/// One entry with the name behind its `user_id`, since there is no `/users`
+/// list route yet for a screen to join it itself the way the purchases
+/// screen joins a supplier's name off its own list (frontend-conventions.md,
+/// "The design package"). Once one exists this becomes a plain `AuditEntry`
+/// again and the screen does the join.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntryWithUser {
+    pub entry: AuditEntry,
+    pub user_name: String,
+}
+
+/// What the owner's screen may narrow the log by. `action` is matched
+/// exactly against what a service actually wrote (`ACTION_*` above): the
+/// screen offers only the values `Facets::actions` says are really in the
+/// log, never a taxonomy invented on top of it.
+#[derive(Debug, Clone, Default)]
+pub struct Filter {
+    pub user_id: Option<i32>,
+    pub action: Option<String>,
+    /// A day on the shop's calendar, not a UTC one: `day_range_utc` below is
+    /// the conversion.
+    pub day: Option<NaiveDate>,
+}
+
+/// What the two dropdowns offer: every user the shop has, whether or not
+/// they wrote a row, and every distinct action the log actually holds.
+#[derive(Debug, Clone)]
+pub struct Facets {
+    pub users: Vec<(i32, String)>,
+    pub actions: Vec<String>,
+}
+
+/// One screenful, and whether asking for the next `page` would answer more.
+#[derive(Debug, Clone)]
+pub struct Page {
+    pub rows: Vec<EntryWithUser>,
+    pub page: i64,
+    pub has_more: bool,
+}
+
+/// `day`'s midnight-to-midnight on the shop's calendar, translated to the
+/// UTC range `audit_log.created_at` is actually stored in. The offset is
+/// fixed (`services::clock`), so this is subtraction and not a timezone
+/// database: a row written at 00:30 in Algiers reads 23:30 the day before in
+/// UTC, the same crossing `ACTION_STOCK_DRIFT`'s doc comment above warns a
+/// naive day filter would miss.
+fn day_range_utc(day: NaiveDate) -> (NaiveDateTime, NaiveDateTime) {
+    let local_midnight = NaiveDateTime::new(day, NaiveTime::MIN);
+    let offset = Duration::seconds(i64::from(SHOP_UTC_OFFSET_SECONDS));
+    let start = local_midnight - offset;
+    (start, start + Duration::days(1))
+}
+
+/// One page of the log, filtered in SQL (`WHERE` and `LIMIT`/`OFFSET`, not a
+/// `Vec` sliced afterwards), and the two dropdowns' options. The dropdowns
+/// read off the whole log regardless of `filter` (`repo::distinct_actions`,
+/// `users::list`) — a filter narrow enough to empty the page must not also
+/// empty the choices that would widen it back.
+///
+/// The lockout row is the one filter case worth naming here: `user.locked_out`
+/// is written with `user_id` set to the person the attempts were made on
+/// (`services::users::settle`'s own comment — "The actor is the user the
+/// attempts were made on: nobody knows who was standing there, and claiming
+/// otherwise in an audit log is worse than saying nothing"), because nobody
+/// is signed in when the row is written. That is a plain equality on the
+/// stored column, same as any other row's `user_id`, so a filter by that
+/// person still finds it — filtering it out would be inventing an actor the
+/// row never claimed to have. What keeps the row from reading as something
+/// that person *did* is the action's own name, `user.locked_out`, which
+/// `record` writes the way every service writes it and this function does
+/// not touch.
+pub fn read(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    filter: &Filter,
+    page_number: i64,
+) -> Result<(Page, Facets), CoreError> {
+    let names: HashMap<i32, String> = users::list(conn, shop_id)?
+        .into_iter()
+        .map(|u| (u.id, u.name))
+        .collect();
+    let mut people: Vec<(i32, String)> =
+        names.iter().map(|(id, name)| (*id, name.clone())).collect();
+    people.sort_by(|a, b| a.1.cmp(&b.1));
+    let actions = repo::distinct_actions(conn, shop_id)?;
+
+    let range = filter.day.map(day_range_utc);
+    let repo_filter = repo::SearchFilter {
+        user_id: filter.user_id,
+        action: filter.action.clone(),
+        created_from: range.map(|(start, _)| start),
+        created_to: range.map(|(_, end)| end),
+    };
+
+    // `page_number` comes straight off the query string, so a caller can
+    // send anything up to `i64::MAX`: the multiplication below has to
+    // saturate rather than overflow, or a large enough page answers 500
+    // instead of the empty page it should. Unlike the old in-memory slice,
+    // an absurd offset costs SQLite nothing to refuse: it just matches no
+    // row.
+    let page_number = page_number.max(1);
+    let limit = i64::try_from(PAGE_SIZE).unwrap_or(i64::MAX);
+    let offset = (page_number - 1).saturating_mul(limit);
+
+    // A second query rather than a `COUNT(*) OVER()` window function: both
+    // read the same filter, and writing it once as a plain, typed diesel
+    // query — the house style every other repo in this folder uses — beats
+    // a raw SQL fragment for one extra indexed read on a page the owner
+    // opens by hand, not on a hot path.
+    let total = repo::count(conn, shop_id, &repo_filter)?;
+    let has_more = total > offset.saturating_add(limit);
+    let rows = repo::search(conn, shop_id, &repo_filter, limit, offset)?
+        .into_iter()
+        .map(|entry| {
+            let user_name = names.get(&entry.user_id).cloned().unwrap_or_default();
+            EntryWithUser { entry, user_name }
+        })
+        .collect();
+
+    Ok((
+        Page {
+            rows,
+            page: page_number,
+            has_more,
+        },
+        Facets {
+            users: people,
+            actions,
+        },
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    // A test may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    /// `SHOP_UTC_OFFSET_SECONDS` is one hour, so the shop's midnight is
+    /// 23:00 UTC the day before: a row written at 00:30 in Algiers, which
+    /// reads 23:30 UTC the day before in the column, has to fall inside this
+    /// range for `day_range_utc(that_day)`, and outside the range for
+    /// `day_range_utc(the_day_before)` — the exact crossing
+    /// `ACTION_STOCK_DRIFT`'s doc comment names.
+    #[test]
+    fn a_shop_day_is_the_hour_before_midnight_utc_to_the_hour_before_the_next() {
+        let day = NaiveDate::from_ymd_opt(2026, 9, 11).unwrap();
+        let (start, end) = day_range_utc(day);
+        assert_eq!(
+            start,
+            NaiveDate::from_ymd_opt(2026, 9, 10)
+                .unwrap()
+                .and_hms_opt(23, 0, 0)
+                .unwrap()
+        );
+        assert_eq!(
+            end,
+            NaiveDate::from_ymd_opt(2026, 9, 11)
+                .unwrap()
+                .and_hms_opt(23, 0, 0)
+                .unwrap()
+        );
+
+        // 00:30 in Algiers on the 11th is 23:30 UTC on the 10th: inside this
+        // day's range, and outside the day before's.
+        let just_after_midnight_in_algiers = NaiveDate::from_ymd_opt(2026, 9, 10)
+            .unwrap()
+            .and_hms_opt(23, 30, 0)
+            .unwrap();
+        assert!(just_after_midnight_in_algiers >= start && just_after_midnight_in_algiers < end);
+        let (prev_start, prev_end) = day_range_utc(day.pred_opt().unwrap());
+        assert!(
+            !(just_after_midnight_in_algiers >= prev_start
+                && just_after_midnight_in_algiers < prev_end)
+        );
+    }
 }

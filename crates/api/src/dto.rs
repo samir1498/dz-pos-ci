@@ -28,6 +28,7 @@ use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, 
 use dzpos_core::services::documents::CancelEffect;
 use dzpos_core::services::expenses::{Expense, ExpenseCategory, NewExpense};
 use dzpos_core::services::import::{Applied, DryRun, Outcome, RowReport};
+use dzpos_core::services::permissions::{Permission, Role};
 use dzpos_core::services::preferences::Theme;
 use dzpos_core::services::purchases::{
     NewLine, NewPurchase, Paid, Purchase, PurchaseLine, PurchaseStatus, PurchaseView, ReceiveLine,
@@ -37,6 +38,7 @@ use dzpos_core::services::settings::DatedRegime;
 use dzpos_core::services::stock::{LastRecount, Report};
 use dzpos_core::services::supplier_debt::{SupplierAllocation, SupplierDebtKind};
 use dzpos_core::services::suppliers::{NewSupplier, SupplierWithBalance};
+use dzpos_core::services::users::User;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -74,6 +76,16 @@ impl From<UnitDto> for Unit {
     }
 }
 
+/// `cost_centimes` and `wholesale_centimes` are `Option`, not because either
+/// is ever absent in the row, but because `GET /products` and
+/// `GET /products/{id}` are open reads a cashier needs for the till (M4 T5
+/// review, 2026-09-11: the route cannot be gated the way `GET /purchases`
+/// and `GET /dashboard` are, because ringing a sale up means reading this
+/// list). `routes/products.rs::redact_cost` is the one place that turns
+/// either field back to `None` for a caller who does not hold
+/// `Permission::SeeCostAndMargin`; `From<Product>` below always fills both,
+/// so a missing value on the wire is a decision the handler took, never a
+/// blank the core left.
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export_to = "ProductDto.ts")]
 pub struct ProductDto {
@@ -83,7 +95,7 @@ pub struct ProductDto {
     pub barcode: Option<String>,
     pub category_id: Option<i32>,
     pub unit: UnitDto,
-    pub cost_centimes: i64,
+    pub cost_centimes: Option<i64>,
     pub selling_centimes: i64,
     pub wholesale_centimes: Option<i64>,
     pub qty_on_hand_milli: i64,
@@ -101,7 +113,7 @@ impl From<Product> for ProductDto {
             barcode: p.barcode,
             category_id: p.category_id,
             unit: p.unit.into(),
-            cost_centimes: p.cost.as_centimes(),
+            cost_centimes: Some(p.cost.as_centimes()),
             selling_centimes: p.selling.as_centimes(),
             wholesale_centimes: p.wholesale.map(Money::as_centimes),
             qty_on_hand_milli: p.qty_on_hand_milli,
@@ -275,6 +287,17 @@ pub struct ApiErrorPayloadDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub missing_ids: Option<Vec<String>>,
+    /// Only on `locked_out`: how long the user has to wait before the till
+    /// will look at their PIN again. The sign-in screen counts it down.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub retry_after_seconds: Option<i64>,
+    /// Only on `forbidden`: the permission the route wanted, spelled the way
+    /// `PermissionDto` spells it. The screen says which thing this role may
+    /// not do without working it out from the route (M4 T2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub permission: Option<PermissionDto>,
 }
 
 /// The seller block a ticket prints (features.md §3). Sent whole on every
@@ -424,6 +447,13 @@ pub struct SettingsDto {
     pub regime_planned: Option<DatedRegimeDto>,
     /// `null` when the shop has never chosen one.
     pub theme: Option<ThemeDto>,
+    /// How much a cashier may take off a basket before the sale needs
+    /// someone holding `discount_above_threshold`, in basis points of the
+    /// basket before any discount (250 is 2,5 %). Zero on a shop that has
+    /// never set one, which refuses a cashier every discount: the screen
+    /// should say so rather than leave an owner wondering why the till
+    /// refuses a round number off.
+    pub discount_threshold_bps: u32,
 }
 
 /// A régime change: the régime and the day it applies from. Appended to
@@ -433,6 +463,18 @@ pub struct SettingsDto {
 #[serde(deny_unknown_fields)]
 pub struct RegimeChangeDto {
     pub regime: RegimeDto,
+    pub valid_from: String,
+}
+
+/// A change to the discount a cashier may give without asking anyone: the
+/// threshold in basis points and the day it applies from. Dated and appended
+/// like the régime, never written over, so a sale refused last month can
+/// still be read against the threshold that refused it.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "DiscountThresholdChangeDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct DiscountThresholdChangeDto {
+    pub threshold_bps: u32,
     pub valid_from: String,
 }
 
@@ -2577,4 +2619,289 @@ pub const LABEL_SHEET_MAX: usize = 200;
 #[serde(deny_unknown_fields)]
 pub struct LabelSheetDto {
     pub ids: Vec<i32>,
+}
+
+/// What a sign-in sends. Two shapes and not one struct with four optional
+/// fields: the till's PIN pad picks a row off the list and sends an id, the
+/// office screen asks for a name and a password, and a body carrying a name
+/// beside a PIN is a caller that has not decided which it is doing. Untagged,
+/// so the wire stays the two plain objects a screen would send anyway.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "LoginDto.ts")]
+#[serde(untagged)]
+pub enum LoginDto {
+    /// The till. `user_id` and never a name: a PIN pad has the list in front
+    /// of it, and a name typed at a keypad would be a way to ask the shop
+    /// whether somebody works there.
+    Pin { user_id: i32, pin: String },
+    /// Everywhere else.
+    Password { name: String, password: String },
+}
+
+/// Who is signed in, as every screen reads it: the person, their role, and
+/// what that role may do.
+///
+/// The permission list travels because the permission table lives in the core
+/// (`services::permissions::can`) and a screen that decided for itself which
+/// buttons a manager gets would be a second statement of it
+/// (architecture.md rule 2). T5's `Can` component reads this array and
+/// nothing else; no screen compares a role string.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "MeDto.ts")]
+pub struct MeDto {
+    pub user_id: i32,
+    pub name: String,
+    pub role: RoleDto,
+    pub permissions: Vec<PermissionDto>,
+}
+
+/// A sign-in's answer: who is now acting, and the session token.
+///
+/// The token is in the body because the desktop webview cannot read the
+/// httpOnly cookie the same response sets, and a Tauri window has no other
+/// way to learn it. A browser client ignores this field and lets the cookie
+/// travel; the cookie is what protects a session already open, and an
+/// attacker who could read this body would have had to send the PIN to get
+/// it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "SessionDto.ts")]
+pub struct SessionDto {
+    pub me: MeDto,
+    pub token: String,
+    /// How long the session survives with nothing happening on it, in whole
+    /// minutes. The screen counts the lock screen down against this rather
+    /// than holding a figure of its own (T4).
+    pub idle_minutes: i64,
+}
+
+/// The three roles. One value the screens read, never a comparison they make.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "RoleDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum RoleDto {
+    Owner,
+    Manager,
+    Cashier,
+}
+
+impl From<Role> for RoleDto {
+    fn from(r: Role) -> Self {
+        match r {
+            Role::Owner => RoleDto::Owner,
+            Role::Manager => RoleDto::Manager,
+            Role::Cashier => RoleDto::Cashier,
+        }
+    }
+}
+
+impl From<RoleDto> for Role {
+    fn from(r: RoleDto) -> Self {
+        match r {
+            RoleDto::Owner => Role::Owner,
+            RoleDto::Manager => Role::Manager,
+            RoleDto::Cashier => Role::Cashier,
+        }
+    }
+}
+
+/// The permission list, one variant per `services::permissions::Permission`.
+/// Serialised as the same string `Permission::as_str` writes, which is also
+/// the name a 403 carries, so a screen matches one spelling everywhere.
+///
+/// The `From` below matches on the core enum, so a fourteenth permission
+/// fails to compile here until it is named on the wire too.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "PermissionDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionDto {
+    Sell,
+    DiscountAboveThreshold,
+    OverrideCreditBlock,
+    SeeCostAndMargin,
+    EditFiches,
+    EditSettings,
+    SeeReports,
+    ManageUsers,
+    CommitMoney,
+    CorrectLedger,
+    ExportAndImport,
+    ChangePriceAtTheTill,
+    SeeAuditLog,
+}
+
+impl From<Permission> for PermissionDto {
+    fn from(p: Permission) -> Self {
+        match p {
+            Permission::Sell => PermissionDto::Sell,
+            Permission::DiscountAboveThreshold => PermissionDto::DiscountAboveThreshold,
+            Permission::OverrideCreditBlock => PermissionDto::OverrideCreditBlock,
+            Permission::SeeCostAndMargin => PermissionDto::SeeCostAndMargin,
+            Permission::EditFiches => PermissionDto::EditFiches,
+            Permission::EditSettings => PermissionDto::EditSettings,
+            Permission::SeeReports => PermissionDto::SeeReports,
+            Permission::ManageUsers => PermissionDto::ManageUsers,
+            Permission::CommitMoney => PermissionDto::CommitMoney,
+            Permission::CorrectLedger => PermissionDto::CorrectLedger,
+            Permission::ExportAndImport => PermissionDto::ExportAndImport,
+            Permission::ChangePriceAtTheTill => PermissionDto::ChangePriceAtTheTill,
+            Permission::SeeAuditLog => PermissionDto::SeeAuditLog,
+        }
+    }
+}
+
+/// The idle time a shop has set, in whole minutes. Its own body rather than a
+/// field of the settings block, because T2 ships the mechanism and the
+/// settings screen that edits it is T8's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "SessionIdleDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct SessionIdleDto {
+    pub idle_minutes: i64,
+}
+
+/// One row of the audit log, for the owner's screen (M4 T7, features.md
+/// §5). `before` and `after` are the JSON documents the writing service
+/// gave `services::audit::record`, sent through unparsed: the screen reads
+/// them as the shape the service that wrote the row chose, and this layer
+/// never guesses one.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "AuditEntryDto.ts")]
+pub struct AuditEntryDto {
+    pub id: i32,
+    pub user_id: i32,
+    /// Carried on the row because there is no `/users` list route yet for
+    /// the screen to join it itself (`services::audit::EntryWithUser`).
+    pub user_name: String,
+    pub action: String,
+    pub entity: String,
+    pub entity_id: Option<i32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    /// `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
+    pub created_at: String,
+}
+
+impl From<dzpos_core::services::audit::EntryWithUser> for AuditEntryDto {
+    fn from(e: dzpos_core::services::audit::EntryWithUser) -> Self {
+        AuditEntryDto {
+            id: e.entry.id,
+            user_id: e.entry.user_id,
+            user_name: e.user_name,
+            action: e.entry.action,
+            entity: e.entry.entity,
+            entity_id: e.entry.entity_id,
+            before: e.entry.before,
+            after: e.entry.after,
+            created_at: e.entry.created_at.format(DATE_TIME_FORMAT).to_string(),
+        }
+    }
+}
+
+/// A user the audit log's `user_id` filter offers, whether or not they have
+/// written a row.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "AuditUserDto.ts")]
+pub struct AuditUserDto {
+    pub id: i32,
+    pub name: String,
+}
+
+/// One page of the log, filtered, and what the screen's two dropdowns may
+/// narrow it by. The dropdowns' own options travel with every page rather
+/// than being their own route, because they are cheap beside the rows
+/// (`services::audit::read` reads the shop's users and its distinct actions
+/// once, not once per row) and a screen that filtered down to nothing would
+/// otherwise have no way to offer the other choices back.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "AuditLogDto.ts")]
+pub struct AuditLogDto {
+    pub rows: Vec<AuditEntryDto>,
+    pub page: i64,
+    /// Whether `page + 1` would answer more rows under the same filter.
+    pub has_more: bool,
+    pub users: Vec<AuditUserDto>,
+    pub actions: Vec<String>,
+}
+
+impl AuditLogDto {
+    pub fn from_core(
+        page: dzpos_core::services::audit::Page,
+        facets: dzpos_core::services::audit::Facets,
+    ) -> Self {
+        AuditLogDto {
+            rows: page.rows.into_iter().map(AuditEntryDto::from).collect(),
+            page: page.page,
+            has_more: page.has_more,
+            users: facets
+                .users
+                .into_iter()
+                .map(|(id, name)| AuditUserDto { id, name })
+                .collect(),
+            actions: facets.actions,
+        }
+    }
+}
+
+/// A fiche on the users screen (M4 T8). No hash and no failure counter ever
+/// travel: `has_pin` and `has_password` are the honest answer to "can this
+/// person sign in", and a reset never has an old PIN to show because there
+/// is not one to show (`services::users`' own doc).
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "UserDto.ts")]
+pub struct UserDto {
+    pub id: i32,
+    pub shop_id: i32,
+    pub name: String,
+    pub role: RoleDto,
+    pub has_pin: bool,
+    pub has_password: bool,
+    pub active: bool,
+}
+
+impl From<User> for UserDto {
+    fn from(u: User) -> Self {
+        UserDto {
+            id: u.id,
+            shop_id: u.shop_id,
+            name: u.name,
+            role: RoleDto::from(u.role),
+            has_pin: u.has_pin,
+            has_password: u.has_password,
+            active: u.active,
+        }
+    }
+}
+
+/// A fiche's name and role, the two fields the screen's "add a user" dialog
+/// sends. No credential: a PIN is its own call
+/// (`services::users::create`'s own doc), so `POST /users/{id}/pin` is what
+/// gives a fresh row its first one.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "NewUserDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct NewUserDto {
+    pub name: String,
+    pub role: RoleDto,
+}
+
+/// The body `POST /users/{id}/pin` takes: a PIN alone, on the fiche the path
+/// names. The same call gives a fresh row its first PIN and resets one that
+/// is forgotten; `services::users::set_pin` does not tell the two apart and
+/// neither does this.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "SetPinDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct SetPinDto {
+    pub pin: String,
+}
+
+/// The body `POST /auth/first-pin` takes: a PIN alone and no `user_id`. This
+/// route is the one door into a shop nobody has ever signed into, and
+/// nobody signed in yet is not in a position to name a row; the shop's own
+/// owner is who `services::users::claim_first_pin` finds and acts on.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "ClaimFirstPinDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct ClaimFirstPinDto {
+    pub pin: String,
 }

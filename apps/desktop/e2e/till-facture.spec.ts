@@ -10,7 +10,7 @@
 // the till picks a tile by a piece of a name, so a name another spec also
 // uses would make the click ambiguous.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { formatCentimes, stamp } from "@dzpos/shared";
 import { apiHeaders, apiUrl, printedNumber, seriesOf } from "./api";

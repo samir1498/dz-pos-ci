@@ -160,3 +160,23 @@ export function keyedAmount(current: number | null, key: KeypadKey): number | nu
   if (next.length > MAX_DIGITS) return current;
   return Number(next) * 100;
 }
+
+/**
+ * What a press does to a string of digits typed on this pad: a user id, a
+ * PIN. Not `keyedAmount`, on purpose. That one reads dinars and turns
+ * leading zeros into nothing, which is exactly wrong for a PIN, where
+ * `0512` is a different PIN from `512`; this one keeps every digit typed,
+ * in order, up to `maxDigits`, and never turns the string into a number.
+ *
+ * `00` types two zeros, the same face as `0` pressed twice, rather than
+ * being refused: the pad has no other way to type a second zero in a row
+ * quickly and a PIN of `1200` is an ordinary one. `enter` and `backspace`
+ * past empty behave as `keyedAmount`'s do, for the same reason: the wide
+ * key is never a digit and there is nothing to erase from nothing.
+ */
+export function keyedDigits(current: string, key: KeypadKey, maxDigits: number): string {
+  if (key === "enter") return current;
+  if (key === "backspace") return current.slice(0, -1);
+  const next = current + (key === "00" ? "00" : key);
+  return next.length > maxDigits ? current : next;
+}

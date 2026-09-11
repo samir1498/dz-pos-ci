@@ -28,6 +28,22 @@ pub enum ApiError {
     /// missing route so a stranger cannot map the API by its 404s.
     #[error("this call did not show the launch token")]
     Unauthorized,
+    /// No session, or one that is not standing any more. Its own code beside
+    /// `unauthorized` and `auth_refused`, because the three send a screen
+    /// three different ways: the launch token is the app being started wrong
+    /// and nothing a person can fix, a refused credential is the PIN just
+    /// typed, and this is "sign in again" on a screen that thought it already
+    /// had. Which of the four ways the session died is deliberately not said
+    /// (`services::sessions` says why).
+    #[error("this call carried no session, or one that is no longer standing")]
+    SessionRequired,
+    /// A write reached this API on a route the permission table does not
+    /// name. Nobody can say who is allowed to do it, so nobody is: the gate
+    /// fails closed rather than waving a write through because a row was
+    /// forgotten. `crates/api/tests/route_gates.rs` is what stops this ever
+    /// reaching a shop; this is what happens if it ever does.
+    #[error("this write is on a route no permission has been decided for")]
+    UngatedWrite,
     #[error("no such route")]
     NoRoute,
     #[error("this route does not take that method")]
@@ -88,6 +104,19 @@ struct Payload {
     party_side: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     missing_ids: Option<Vec<&'static str>>,
+    /// How long a locked-out user has to wait, in seconds. The same
+    /// exception, for the same reason: the sign-in screen counts it down and
+    /// the wait is a figure the caller never sent. Absent from every other
+    /// error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    retry_after_seconds: Option<i64>,
+    /// Only on `forbidden`: the name of the permission the route wanted, the
+    /// same spelling `Permission::as_str` writes and `PermissionDto`
+    /// serialises. The same exception for the same reason: a screen that had
+    /// to work out which permission a 403 was about would be restating the
+    /// table in `services::permissions`, and the refusal already knows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    permission: Option<&'static str>,
 }
 
 /// What an error carries besides its code and its sentence. One value per
@@ -101,6 +130,8 @@ struct Figures {
     outstanding_centimes: Option<i64>,
     party_side: Option<&'static str>,
     missing_ids: Option<Vec<&'static str>>,
+    retry_after_seconds: Option<i64>,
+    permission: Option<&'static str>,
 }
 
 impl Figures {
@@ -111,6 +142,8 @@ impl Figures {
         outstanding_centimes: None,
         party_side: None,
         missing_ids: None,
+        retry_after_seconds: None,
+        permission: None,
     };
 }
 
@@ -137,6 +170,8 @@ impl ApiError {
             ApiError::Request(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.code()),
             ApiError::BadRequest(_) => (StatusCode::UNPROCESSABLE_ENTITY, "bad_request"),
             ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
+            ApiError::SessionRequired => (StatusCode::UNAUTHORIZED, "session_required"),
+            ApiError::UngatedWrite => (StatusCode::INTERNAL_SERVER_ERROR, "ungated_write"),
             ApiError::NoRoute => (StatusCode::NOT_FOUND, "not_found"),
             ApiError::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed"),
             ApiError::Unavailable => (StatusCode::INTERNAL_SERVER_ERROR, "storage"),
@@ -196,6 +231,23 @@ impl ApiError {
                 field: Some(field.clone()),
                 ..Figures::NONE
             },
+            ApiError::Core(CoreError::LockedOut {
+                retry_after_seconds,
+            })
+            | ApiError::Request(CoreError::LockedOut {
+                retry_after_seconds,
+            }) => Figures {
+                retry_after_seconds: Some(*retry_after_seconds),
+                ..Figures::NONE
+            },
+            // The permission the route wanted, travelling back out of the
+            // very check that asked for it (M4 T1's `require`), so neither a
+            // route nor a screen restates which one it was.
+            ApiError::Core(CoreError::Forbidden { permission })
+            | ApiError::Request(CoreError::Forbidden { permission }) => Figures {
+                permission: Some(permission.as_str()),
+                ..Figures::NONE
+            },
             ApiError::Core(CoreError::PartyIds { side, missing })
             | ApiError::Request(CoreError::PartyIds { side, missing }) => Figures {
                 party_side: Some(side.as_str()),
@@ -227,6 +279,20 @@ const fn status_for(e: &CoreError) -> StatusCode {
         | CoreError::PaymentAboveDebt { .. }
         | CoreError::PartyIds { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
+        // A credential that did not match. 401 and not 422: nothing in the
+        // request is malformed, and what is missing is an identity the caller
+        // has to establish before the route will answer at all.
+        CoreError::AuthRefused => StatusCode::UNAUTHORIZED,
+        // Too many wrong credentials. 429 is what a screen counting a wait
+        // down reads, and the wait itself is in the payload beside the code:
+        // the caller can act on it, by waiting, and working it out on the
+        // screen would be a second reading of a rule that lives in the core.
+        CoreError::LockedOut { .. } => StatusCode::TOO_MANY_REQUESTS,
+        // A role's own refusal (M4 T1, `services::permissions::can`). The
+        // request is well formed; a different user is what would carry it
+        // out. T2 is what actually asks a session for a role; this arm only
+        // keeps `status_for` exhaustive now that `CoreError` has the variant.
+        CoreError::Forbidden { .. } => StatusCode::FORBIDDEN,
         CoreError::DuplicateBarcode(_)
         | CoreError::Exhausted { .. }
         | CoreError::Conflict { .. } => StatusCode::CONFLICT,
@@ -242,6 +308,9 @@ const fn status_for(e: &CoreError) -> StatusCode {
         | CoreError::Io(_)
         | CoreError::Unstamped { .. }
         | CoreError::UnpricedReversal { .. }
+        // A credential this app could not hash, with parameters and input
+        // shapes it chose itself: its own bug, like the two above.
+        | CoreError::Hash(_)
         // A workbook that will not write is the same: the columns and the
         // rows are both the app's own.
         | CoreError::Render(_)
@@ -291,6 +360,8 @@ impl IntoResponse for ApiError {
             outstanding_centimes,
             party_side,
             missing_ids,
+            retry_after_seconds,
+            permission,
         } = self.figures();
         let mut res = (
             status,
@@ -304,12 +375,25 @@ impl IntoResponse for ApiError {
                     outstanding_centimes,
                     party_side,
                     missing_ids,
+                    retry_after_seconds,
+                    permission,
                 },
             }),
         )
             .into_response();
-        if let ApiError::Unauthorized = self {
-            // RFC 7235: a 401 names the scheme it wants.
+        // RFC 7235: a 401 names the scheme it wants. All three of this API's
+        // 401s do, and they are told apart by the code in the body:
+        // `unauthorized` is the launch token the process was started with,
+        // `auth_refused` is the person standing at the till getting their PIN
+        // wrong, and `session_required` is a screen whose session has stopped
+        // standing. A screen acts differently on each and cannot read the
+        // status alone.
+        if matches!(
+            self,
+            ApiError::Unauthorized
+                | ApiError::SessionRequired
+                | ApiError::Core(CoreError::AuthRefused)
+        ) {
             res.headers_mut()
                 .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
         }

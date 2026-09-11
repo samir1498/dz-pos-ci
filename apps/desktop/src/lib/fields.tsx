@@ -12,23 +12,56 @@ import { ApiError, formatCentimes, parseAmountToCentimes } from "@dzpos/shared";
 import { isKey, useTranslation, type Key } from "@/i18n";
 
 /** What the UI says for a code the server sent. The server sends a code,
- *  never a sentence; the UI owns the wording. */
+ *  never a sentence; the UI owns the wording.
+ *
+ *  Every screen reads this one. The till kept a second copy of it until
+ *  2026-09-11, and the two had drifted in both directions: the till's knew
+ *  about a credit limit and a barcode already taken, this one did not, and
+ *  this one knew about a refused permission, the till's did not. So a
+ *  cashier refused a discount at the till — the exact refusal this
+ *  milestone was built to produce — was shown "something went wrong". The
+ *  first cashier spec in the browser suite is what found it.
+ *  `role.test.ts` holds the app to one map. */
 const ERROR_KEY: Record<string, Key> = {
   validation: "error_validation",
   conflict: "error_conflict",
+  duplicate_barcode: "error_duplicate_barcode",
   not_found: "error_not_found",
   money: "error_money",
+  print: "error_print",
   storage: "error_storage",
+  exhausted: "error_exhausted",
   restart_needed: "error_restart_needed",
+  restore_failed_restart_needed: "error_restore_failed_restart_needed",
   bad_request: "error_bad_request",
+  credit_limit: "error_credit_limit",
+  party_ids: "error_party_ids",
   bad_response: "error_bad_response",
   unauthorized: "error_unauthorized",
   unreachable: "error_unreachable",
+  forbidden: "error_forbidden",
 };
 
-export function errorKey(error: unknown): Key {
+/**
+ * The wording for a code the server sent, with a screen's own wording for
+ * the codes where the general sentence is not the useful one.
+ *
+ * Eleven files kept a private copy of this table until 2026-09-11, each one
+ * a full list rather than the handful of lines it actually needed to say
+ * differently, and ten of the eleven had no entry for a refused permission
+ * at all. So a cashier refused on the till, products, documents, settings,
+ * expenses, the exports, the backups, the recount or a label was told
+ * "something went wrong" rather than that they are not allowed. Only the
+ * staff screen, written last in the milestone, knew the word.
+ *
+ * `overrides` is for the real cases: the label panel means "this product has
+ * no barcode" where the general table means "that is not valid". A screen
+ * passes the one or two lines it means differently and inherits the rest,
+ * so a code added here reaches every screen at once.
+ */
+export function errorKey(error: unknown, overrides?: Readonly<Record<string, Key>>): Key {
   if (error instanceof ApiError) {
-    return ERROR_KEY[error.code] ?? "error_unknown";
+    return overrides?.[error.code] ?? ERROR_KEY[error.code] ?? "error_unknown";
   }
   return "error_unknown";
 }

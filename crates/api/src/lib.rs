@@ -5,7 +5,9 @@
 pub mod daily;
 pub mod dto;
 pub mod error;
+pub mod gates;
 pub mod routes;
+pub mod session;
 pub mod token;
 
 use std::path::{Path, PathBuf};
@@ -23,6 +25,7 @@ use dzpos_core::services::backup::{self, Backup, Summary};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::error::ApiError;
+pub use crate::session::CurrentUser;
 pub use crate::token::LaunchToken;
 
 /// What a restore leaves behind: what the shop file now holds, and the name
@@ -37,10 +40,6 @@ pub struct Restored {
 /// Where backups land when the caller names no folder: beside the shop file.
 /// One folder per shop file, so two tills on one machine never share copies.
 pub const BACKUP_DIR_NAME: &str = "backups";
-/// The owner the first migration seeds. Every document, ledger row and audit
-/// entry carries a user from the first sale (features.md §5).
-/// TODO(M4): the user comes from the request identity, not from here.
-pub const SEEDED_OWNER_USER_ID: i32 = 1;
 
 /// The connection and the one shop this server answers for. A caller never
 /// chooses the shop (rule 3); the process is started with it.
@@ -58,8 +57,6 @@ pub struct AppState {
     db_path: Arc<PathBuf>,
     backup_dir: Arc<PathBuf>,
     pub shop_id: i32,
-    /// Who the writes are recorded under until M4 brings login.
-    pub user_id: i32,
 }
 
 impl AppState {
@@ -79,7 +76,6 @@ impl AppState {
             db_path: Arc::new(db.as_ref().to_path_buf()),
             backup_dir: Arc::new(backup_dir.as_ref().to_path_buf()),
             shop_id,
-            user_id: SEEDED_OWNER_USER_ID,
         })
     }
 
@@ -157,7 +153,7 @@ impl AppState {
     ///   nothing here opens it again. The file names are logged, and by the
     ///   time the app is relaunched step 5 has already made anything left
     ///   over harmless.
-    pub fn restore(&self, backup_path: &Path) -> Result<Restored, ApiError> {
+    pub fn restore(&self, backup_path: &Path, actor_id: i32) -> Result<Restored, ApiError> {
         let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
         let db = self.db_path.as_path();
@@ -246,6 +242,32 @@ impl AppState {
         match dzpos_core::db::open(db) {
             Ok(conn) => {
                 *guard = Some(conn);
+                // Written to the file that was just opened, after the swap
+                // and never before: `backup::record_restore`'s own doc says
+                // why a row against the connection being replaced would not
+                // survive being the thing overwritten. A failure here does
+                // not fail the restore the caller already has: the data is
+                // already replaced, and answering with an error would claim
+                // a restore that succeeded had not.
+                if let Some(live) = guard.as_mut() {
+                    let restored_from = backup_path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
+                    if let Err(e) = dzpos_core::services::backup::record_restore(
+                        live,
+                        self.shop_id,
+                        actor_id,
+                        restored_from,
+                        &safety_copy,
+                        &summary,
+                    ) {
+                        eprintln!(
+                            "dz-pos: the restore of {} finished but its audit row could not be written: {e}",
+                            db.display()
+                        );
+                    }
+                }
                 Ok(Restored {
                     summary,
                     safety_copy,
@@ -425,15 +447,25 @@ pub fn router_with_origin(
     // that holds the launch token. Loopback is not a boundary, any process
     // or page on the machine can open 127.0.0.1, so the token is what says
     // "this is the desktop's own screen". Only /health answers without it.
-    // TODO(M4): which user is calling. Roles arrive with users; the request
-    // identity slot is this middleware, the token stays the outer check.
     // The health route owes the same JSON 405 as every guarded one; the
     // method fallback below is the one on the router inside the guard.
     let open = Router::new().route(
         "/health",
         get(routes::health).fallback(routes::method_not_allowed),
     );
+    // Which person is calling: the session (M4 T2, crate::session). Inside
+    // the launch token and outside these three, because they are how a
+    // session comes to exist; a sign-in behind a session guard would be a
+    // lock with its key inside. They still show the launch token like
+    // everything else.
+    let auth = Router::new()
+        .route("/auth/login", post(routes::auth::login))
+        .route("/auth/logout", post(routes::auth::logout))
+        .route("/auth/me", get(routes::auth::me))
+        .route("/auth/first-pin", post(routes::auth::claim_first_pin));
     let guarded = Router::new()
+        .route("/audit-log", get(routes::audit::list))
+        .route("/auth/idle", get(routes::auth::idle))
         .route("/backups", get(routes::backups::list))
         .route("/backups", post(routes::backups::create))
         .route("/backups/{name}/restore", post(routes::backups::restore))
@@ -510,6 +542,10 @@ pub fn router_with_origin(
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))
+        .route(
+            "/settings/discount-threshold",
+            post(routes::settings::set_discount_threshold),
+        )
         .route("/settings/theme", put(routes::settings::set_theme))
         .route(
             "/stock/recount",
@@ -532,11 +568,24 @@ pub fn router_with_origin(
             "/suppliers/{id}/statement",
             get(routes::suppliers::statement),
         )
+        .route(
+            "/users",
+            get(routes::users::list).post(routes::users::create),
+        )
+        .route("/users/{id}/pin", post(routes::users::set_pin))
+        .route("/users/{id}/deactivate", post(routes::users::deactivate))
+        .route("/users/{id}/reactivate", post(routes::users::reactivate))
+        // Every route above takes its actor from the session; nothing reads a
+        // seeded owner id any more.
+        .layer(from_fn_with_state(state.clone(), session::require));
+
+    let inside_the_launch_token = auth
+        .merge(guarded)
         .fallback(routes::not_found)
         .method_not_allowed_fallback(routes::method_not_allowed)
         .layer(from_fn_with_state(token.clone(), token::require));
 
-    open.merge(guarded)
+    open.merge(inside_the_launch_token)
         // Every browser on the machine can reach 127.0.0.1, so
         // allow_origin(Any) let any page a user happened to open read and
         // write the till. The list is what keeps a stranger's page from
@@ -546,7 +595,20 @@ pub fn router_with_origin(
             CorsLayer::new()
                 .allow_origin(AllowOrigin::list(origins))
                 .allow_methods([Method::GET, Method::POST, Method::PUT])
-                .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
+                .allow_headers([
+                    header::CONTENT_TYPE,
+                    header::AUTHORIZATION,
+                    // The desktop's session token travels in its own header
+                    // (crate::session says why it is not Authorization); a
+                    // header missing from this list is one the preflight
+                    // silently kills.
+                    header::HeaderName::from_static(crate::session::SESSION_HEADER),
+                ])
+                // The browser half of the same session sends an httpOnly
+                // cookie, and a browser only attaches one cross-origin when
+                // the server says it may. The origin list is a fixed list and
+                // never `Any`, which is what makes this safe to turn on.
+                .allow_credentials(true)
                 // A browser hands a page only the few headers it is told to.
                 // Without this the desktop can read the workbook's bytes and
                 // not the name the server gave it, and every export would be

@@ -71,12 +71,37 @@ hosting front door do that, and the core sees a token or a session.
 | Desktop to the hosted core (cloud mode) | HTTPS, terminated at the host's front door, the core behind it on loopback exactly as on a desktop | an account session issued by the host's login; the core receives the shop it answers for and the user from a header the front door sets and a caller cannot | after M6, open decision 1 |
 | Phone to the hosted core | same as the desktop link; the phone never knows which mode it is in (rule 1) | same account session | after M6, open decision 1 |
 
-Roles (M4) sit inside every link, not beside it: the token or session says
-which device or account is asking, the user on the request says which
-person, and the permission list in `docs/features.md` §5 is checked in the
-service layer, so a request that skipped the screen still meets it. The
-middleware that checks the launch token is the request-identity slot; M4
-adds the user to it, it does not add a second gate.
+Roles sit inside every link, not beside it. The token or session says which
+device or account is asking; the session also says which person. The launch
+token still answers first and is unchanged: it says the request came from
+this machine's own screen. Behind it, `crates/api/src/session.rs` reads a
+session token, the `x-dzpos-session` header or the httpOnly `dzpos_session`
+cookie a browser was given, and refuses with 401 `session_required` when
+there is none. Two credentials, two answers, and a refused permission is a
+third thing again: 403 `forbidden` naming the permission.
+
+The permission is checked in one place and not in each handler. The same
+middleware that resolved the session looks the route up in
+`crates/api/src/gates.rs`, a table with one row per route saying which
+permission that route wants and why, and refuses before the handler runs.
+So no handler names a permission, no handler can forget to, and a route
+added without a row does not quietly inherit one. It fails closed instead: a
+POST, PUT, PATCH or DELETE on a route the table does not name is refused
+with `ungated_write`, and a test that parses the router's own source walks it
+against the table in both directions so that refusal never reaches a shop.
+The single statement of who may do what is `can(role, permission)` in
+`crates/core/src/services/permissions.rs`; the API's table says which
+permission, never which role.
+
+Two kinds of rule cannot live in that table and stay in the service layer,
+where they belong. The first is a rule about the request's contents rather
+than its route: a discount is free up to the shop's threshold and needs a
+permission above it, so the check happens where the basket is priced. The
+second is a rule about a row: the shop's last active owner cannot be
+switched off, which is a fact about the `users` table, not about who is
+asking. A screen never decides either. `apps/desktop` hides what a person
+cannot use, and the server refuses it independently; the hiding is
+courtesy, the refusal is the control.
 
 What is out of scope and stays so: the core does not encrypt the SQLite
 file (Data, below), does not rate-limit loopback, and does not defend the

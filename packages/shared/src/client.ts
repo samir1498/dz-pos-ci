@@ -10,6 +10,7 @@
 import { z } from "zod";
 
 import type { AdjustmentDto } from "./generated/AdjustmentDto";
+import type { AuditLogDto } from "./generated/AuditLogDto";
 import type { BackupDto } from "./generated/BackupDto";
 import type { BackupsDto } from "./generated/BackupsDto";
 import type { CategoryDto } from "./generated/CategoryDto";
@@ -26,6 +27,11 @@ import type { ExpenseDto } from "./generated/ExpenseDto";
 import type { ExpensesDto } from "./generated/ExpensesDto";
 import type { NewExpenseDto } from "./generated/NewExpenseDto";
 import type { HealthDto } from "./generated/HealthDto";
+import type { LoginDto } from "./generated/LoginDto";
+import type { MeDto } from "./generated/MeDto";
+import type { PermissionDto } from "./generated/PermissionDto";
+import type { SessionDto } from "./generated/SessionDto";
+import type { SessionIdleDto } from "./generated/SessionIdleDto";
 import type { ImportAppliedDto } from "./generated/ImportAppliedDto";
 import type { ImportDryRunDto } from "./generated/ImportDryRunDto";
 import type { NewAvoirDto } from "./generated/NewAvoirDto";
@@ -41,6 +47,7 @@ import type { ProductDto } from "./generated/ProductDto";
 import type { PurchaseDetailDto } from "./generated/PurchaseDetailDto";
 import type { PurchaseDto } from "./generated/PurchaseDto";
 import type { PurchaseStatusDto } from "./generated/PurchaseStatusDto";
+import type { DiscountThresholdChangeDto } from "./generated/DiscountThresholdChangeDto";
 import type { RegimeChangeDto } from "./generated/RegimeChangeDto";
 import type { RestoreDto } from "./generated/RestoreDto";
 import type { SaleDto } from "./generated/SaleDto";
@@ -56,6 +63,10 @@ import type { SupplierDto } from "./generated/SupplierDto";
 import type { SupplierLedgerDto } from "./generated/SupplierLedgerDto";
 import type { SupplierStatementDto } from "./generated/SupplierStatementDto";
 import type { SupplierWriteDto } from "./generated/SupplierWriteDto";
+import type { ClaimFirstPinDto } from "./generated/ClaimFirstPinDto";
+import type { NewUserDto } from "./generated/NewUserDto";
+import type { SetPinDto } from "./generated/SetPinDto";
+import type { UserDto } from "./generated/UserDto";
 import { categorySchema, productSchema } from "./schemas/catalogue";
 import { dashboardSchema, dashboardSeriesSchema } from "./schemas/dashboard";
 import { importAppliedSchema, importDryRunSchema, labelSheetSchema } from "./schemas/import";
@@ -66,6 +77,7 @@ import {
 } from "./schemas/customer";
 import { apiErrorSchema } from "./schemas/error";
 import { purchaseDetailSchema, purchaseSchema } from "./schemas/purchase";
+import { auditLogSchema } from "./schemas/audit";
 import {
   cashPositionSchema,
   expenseCategorySchema,
@@ -78,6 +90,8 @@ import {
   supplierStatementSchema,
 } from "./schemas/supplier";
 import { saleSchema } from "./schemas/sale";
+import { meSchema, sessionIdleSchema, sessionSchema } from "./schemas/session";
+import { userSchema } from "./schemas/user";
 import { lastStockRecountSchema, stockRecountSchema } from "./schemas/stock";
 import {
   backupSchema,
@@ -101,6 +115,13 @@ export class ApiError extends Error {
    * neither (architecture.md rule 2). */
   readonly partySide?: string;
   readonly missingIds?: readonly string[];
+  /** Only on `locked_out`: how long before the till will look at a PIN
+   * again. The sign-in screen counts it down rather than working it out. */
+  readonly retryAfterSeconds?: number;
+  /** Only on `forbidden`: the permission the route wanted. The screen says
+   * which thing this role may not do without deciding that for itself
+   * (architecture.md rule 2). */
+  readonly permission?: PermissionDto;
 
   constructor(
     code: string,
@@ -113,6 +134,8 @@ export class ApiError extends Error {
       outstandingCentimes?: number;
       partySide?: string;
       missingIds?: readonly string[];
+      retryAfterSeconds?: number;
+      permission?: PermissionDto;
     },
   ) {
     super(message);
@@ -125,6 +148,8 @@ export class ApiError extends Error {
     this.outstandingCentimes = figures?.outstandingCentimes;
     this.partySide = figures?.partySide;
     this.missingIds = figures?.missingIds;
+    this.retryAfterSeconds = figures?.retryAfterSeconds;
+    this.permission = figures?.permission;
   }
 }
 
@@ -139,6 +164,8 @@ function apiError(body: z.output<typeof apiErrorSchema>, status: number): ApiErr
     outstandingCentimes: body.error.outstanding_centimes,
     partySide: body.error.party_side,
     missingIds: body.error.missing_ids,
+    retryAfterSeconds: body.error.retry_after_seconds,
+    permission: body.error.permission,
   });
 }
 
@@ -254,9 +281,23 @@ export interface ClientOptions {
    * every call. The desktop injects it, the browser preview reads
    * VITE_API_TOKEN. Without it every route but /health answers 401. */
   readonly token?: string;
+  /** The session token, if one is already in hand. Two different things
+   * (M4 T2): the launch token above says the caller is this machine's own
+   * screen, this says which person is at it. A browser leaves this alone and
+   * lets the httpOnly cookie the sign-in set travel by itself; the desktop
+   * cannot read that cookie, so it holds the token and `setSession` puts it
+   * here. Without one every route but /health and the auth ones answers 401
+   * `session_required`. */
+  readonly session?: string;
   /** A fetch to use instead of the global one (tests). */
   readonly fetch?: typeof fetch;
 }
+
+/** The header the session token travels in. Not `Authorization`, which
+ * already carries the launch token: one header cannot carry two credentials,
+ * and the two gates are separate on purpose
+ * (`docs/architecture.md` § Transport and auth). */
+export const SESSION_HEADER = "x-dzpos-session";
 
 export function createClient(baseUrl: string, options: ClientOptions | typeof fetch = {}) {
   const base = baseUrl.replace(/\/+$/, "");
@@ -265,13 +306,26 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
   // globalThis.fetch after importing this module must still be seen.
   const send0: typeof fetch = opts.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const token = opts.token;
+  // Mutable, unlike the launch token: a sign-in hands one over and a sign-out
+  // takes it away, both while the same client object is in use.
+  let session = opts.session;
 
-  async function send(path: string, init?: RequestInit): Promise<unknown> {
+  /** Puts the launch token and the session, if there is one, on a request.
+   * One place, so a call added later cannot forget either. `credentials` is
+   * what makes a browser attach the httpOnly cookie across the preview's
+   * origin; the desktop sends the header instead and the server takes the
+   * header first. */
+  function authorised(init?: RequestInit): RequestInit {
     const headers = new Headers(init?.headers);
     if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
+    if (session !== undefined && session !== "") headers.set(SESSION_HEADER, session);
+    return { ...init, headers, credentials: "include" };
+  }
+
+  async function send(path: string, init?: RequestInit): Promise<unknown> {
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, { ...init, headers });
+      res = await send0(`${base}${path}`, authorised(init));
     } catch (cause) {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
@@ -280,11 +334,9 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
 
   /** The same call, for a route that answers a document instead of JSON. */
   async function sendText(path: string, init?: RequestInit): Promise<string> {
-    const headers = new Headers(init?.headers);
-    if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, { ...init, headers });
+      res = await send0(`${base}${path}`, authorised(init));
     } catch {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
@@ -296,11 +348,9 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
    * that name rather than inventing one, which is why the CORS layer
    * exposes `content-disposition`. */
   async function sendFile(path: string, init?: RequestInit): Promise<Download> {
-    const headers = new Headers(init?.headers);
-    if (token !== undefined && token !== "") headers.set("authorization", `Bearer ${token}`);
     let res: Response;
     try {
-      res = await send0(`${base}${path}`, { ...init, headers });
+      res = await send0(`${base}${path}`, authorised(init));
     } catch {
       throw new ApiError("unreachable", `cannot reach ${base}`, 0);
     }
@@ -309,6 +359,89 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
 
   return {
     baseUrl: base,
+
+    /** The session token this client shows from now on, or `null` to stop
+     * showing one. The desktop calls it after a sign-in and after a sign-out
+     * (T4); a browser never needs to, because its cookie travels on its own. */
+    setSession(next: string | null): void {
+      session = next ?? undefined;
+    },
+
+    /** Signs in with a user id and a PIN, or a name and a password.
+     *
+     * The token is returned and deliberately not remembered: a browser got
+     * the same session as an httpOnly cookie, and holding the token in a
+     * variable JavaScript can read would hand back exactly what httpOnly was
+     * for. The desktop, whose webview cannot set a cookie, calls
+     * `setSession(answer.token)` after this (T4). */
+    async login(body: LoginDto): Promise<SessionDto> {
+      return narrow(
+        await send("/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        sessionSchema,
+        "sign-in answer",
+      );
+    },
+
+    /** The one door into a shop nobody has ever signed into: a PIN alone, no
+     * user id. The server finds the shop's own owner and gives them this
+     * PIN, then signs them in the same way `login` does, so a fresh shop
+     * goes from unusable to a session in one call. Refuses once any
+     * credential anywhere in the shop already exists. */
+    async claimFirstPin(body: ClaimFirstPinDto): Promise<SessionDto> {
+      return narrow(
+        await send("/auth/first-pin", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        sessionSchema,
+        "sign-in answer",
+      );
+    },
+
+    /** Ends the session and forgets the token, whether or not the server had
+     * one to end. */
+    async logout(): Promise<void> {
+      try {
+        await send("/auth/logout", { method: "POST" });
+      } finally {
+        session = undefined;
+      }
+    },
+
+    /** Who is signed in. Raises `session_required` when nobody is, which is
+     * what the desktop revalidates on focus against. */
+    async me(): Promise<MeDto> {
+      return narrow(await send("/auth/me"), meSchema, "session answer");
+    },
+
+    /** The owner's audit log (M4 T7): one page, newest first, narrowed to a
+     * user, an action or a day when the screen asks for one, and the two
+     * dropdowns' own options riding along on every page. Answers 403 for
+     * anyone who is not the owner; the caller decides what that looks like. */
+    async listAuditLog(filters?: {
+      userId?: number;
+      action?: string;
+      day?: string;
+      page?: number;
+    }): Promise<AuditLogDto> {
+      const query = new URLSearchParams();
+      if (filters?.userId !== undefined) query.set("user_id", String(filters.userId));
+      if (filters?.action !== undefined) query.set("action", filters.action);
+      if (filters?.day !== undefined) query.set("day", filters.day);
+      if (filters?.page !== undefined) query.set("page", String(filters.page));
+      const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
+      return narrow(await send(`/audit-log${suffix}`), auditLogSchema, "audit log");
+    },
+
+    /** How long a session survives with nothing happening on it. */
+    async sessionIdle(): Promise<SessionIdleDto> {
+      return narrow(await send("/auth/idle"), sessionIdleSchema, "idle answer");
+    },
 
     async health(): Promise<HealthDto> {
       return narrow(await send("/health"), healthSchema, "health answer");
@@ -411,6 +544,18 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
      * again, since the change is current or planned depending on its day. */
     async changeRegime(input: RegimeChangeDto): Promise<SettingsDto> {
       const body = await send("/settings/regime", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, settingsSchema, "settings");
+    },
+
+    /** Appends a dated change to the discount a cashier may give without
+     * asking anyone, in basis points of the basket. Answers the whole
+     * settings page, like the régime change it rides beside. */
+    async setDiscountThreshold(input: DiscountThresholdChangeDto): Promise<SettingsDto> {
+      const body = await send("/settings/discount-threshold", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(input),
@@ -706,6 +851,48 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         supplierStatementSchema,
         "supplier statement",
       );
+    },
+
+    /** The shop's staff, active first then alphabetical: the owner's own
+     * read (M4 T8). */
+    async listUsers(): Promise<UserDto[]> {
+      return narrow(await send("/users"), z.array(userSchema), "user list");
+    },
+
+    /** A fiche, name and role. No credential yet: `setUserPin` is what
+     * gives it a PIN, the first one or a reset alike. */
+    async createUser(input: NewUserDto): Promise<UserDto> {
+      const body = await send("/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, userSchema, "user");
+    },
+
+    /** Gives a fiche its first PIN or resets a forgotten one; the server
+     * does not tell the two apart and neither does this. Never answers with
+     * the PIN it replaces, because there is not one to show. */
+    async setUserPin(id: number, input: SetPinDto): Promise<UserDto> {
+      const body = await send(`/users/${id}/pin`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return narrow(body, userSchema, "user");
+    },
+
+    /** Switches a fiche off. The last-owner and self refusals are the
+     * server's, enforced on the row. */
+    async deactivateUser(id: number): Promise<UserDto> {
+      const body = await send(`/users/${id}/deactivate`, { method: "POST" });
+      return narrow(body, userSchema, "user");
+    },
+
+    /** Switches a fiche back on. */
+    async reactivateUser(id: number): Promise<UserDto> {
+      const body = await send(`/users/${id}/reactivate`, { method: "POST" });
+      return narrow(body, userSchema, "user");
     },
 
     /** One month of expenses and what it came to, `YYYY-MM` on the shop's

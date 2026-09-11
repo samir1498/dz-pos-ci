@@ -6,6 +6,7 @@
 export { day, exactInteger } from "./common";
 export type { Assert, Covers, Equal, Matches, SameKeys } from "./drift";
 export { apiErrorPayloadSchema, apiErrorSchema } from "./error";
+export { auditEntrySchema, auditLogSchema, auditUserSchema } from "./audit";
 export { categorySchema, productSchema, unitSchema } from "./catalogue";
 export {
   importAppliedSchema,
@@ -22,6 +23,13 @@ export {
   owedSchema,
   topProductSchema,
 } from "./dashboard";
+export {
+  meSchema,
+  permissionSchema,
+  roleSchema,
+  sessionIdleSchema,
+  sessionSchema,
+} from "./session";
 export {
   backupSchema,
   backupsSchema,
@@ -91,3 +99,4 @@ export {
   supplierSchema,
   supplierStatementSchema,
 } from "./supplier";
+export { userSchema } from "./user";

@@ -6,11 +6,20 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vi
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
 import { ThemeProvider } from "@/lib/theme";
+import { SessionProvider } from "@/lib/session";
+import { ME_CASHIER, ME_OWNER } from "@/test/session";
 import { SettingsScreen } from "./settings";
 
 const store: StoreDto = {
@@ -33,6 +42,7 @@ const seeded: SettingsDto = {
   regime: { regime: "reel", valid_from: "2026-01-01" },
   regime_planned: null,
   theme: null,
+  discount_threshold_bps: 0,
 };
 
 /**
@@ -93,6 +103,24 @@ function mount(lang: Lang = "fr") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
+  // The staff panel builds a real `Link` to `/settings/users` (M4 T8), and a
+  // `Link` without a router is a screen that cannot render; the second route
+  // is never visited here, so a stub component is enough.
+  const rootRoute = createRootRoute();
+  const settingsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings",
+    component: SettingsScreen,
+  });
+  const usersRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings/users",
+    component: () => null,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([settingsRoute, usersRoute]),
+    history: createMemoryHistory({ initialEntries: ["/settings"] }),
+  });
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
@@ -100,7 +128,13 @@ function mount(lang: Lang = "fr") {
             provider. It shares this screen's settings query key, so the two
             are one fetch and the call counts below are unchanged. */}
         <ThemeProvider>
-          <SettingsScreen />
+          {/* An owner by default: the staff and export/import panels are
+              what this file already tested before M4 T5 gated them on
+              `manage_users` and `export_and_import`. `me` is set to
+              `ME_CASHIER` first by the tests that care who is signed in. */}
+          <SessionProvider>
+            <RouterProvider router={router} />
+          </SessionProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </I18nProvider>,
@@ -112,14 +146,18 @@ let current: SettingsDto;
 let storeAnswer: (() => Response) | null;
 let regimeAnswer: (() => Response) | null;
 let clockAnswer: (() => Response | Promise<Response>) | null;
+let me: typeof ME_OWNER | typeof ME_CASHIER;
 
 beforeEach(() => {
   current = seeded;
   storeAnswer = null;
   regimeAnswer = null;
   clockAnswer = null;
+  me = ME_OWNER;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
+    if (url.endsWith("/auth/me")) return Promise.resolve(json(200, me));
+    if (url.endsWith("/auth/idle")) return Promise.resolve(json(200, { idle_minutes: 30 }));
     if (init?.method === "PUT" && url.endsWith("/settings/store")) {
       if (storeAnswer !== null) return Promise.resolve(storeAnswer());
       const body: unknown = JSON.parse(String(init.body));
@@ -177,7 +215,7 @@ describe("the page", () => {
     expect(await screen.findByLabelText(fr.field_name)).toHaveValue("Superette El Baraka");
     expect(screen.getByLabelText(fr.field_rc)).toHaveValue("16/00-1234567 B 20");
     expect(screen.getByLabelText(fr.field_nif)).toHaveValue("");
-    expect(screen.getByTestId("regime-current")).toHaveTextContent(
+    expect(await screen.findByTestId("regime-current")).toHaveTextContent(
       `${fr.regime_reel} · ${fr.regime_since} 2026-01-01`,
     );
     expect(screen.queryByTestId("regime-planned")).not.toBeInTheDocument();
@@ -197,6 +235,27 @@ describe("the page", () => {
     );
     mount();
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_unauthorized);
+  });
+
+  test("carries a link out to the users screen (M4 T8), not a list of its own", async () => {
+    mount();
+    await screen.findByLabelText(fr.field_name);
+    const link = screen.getByRole("link", { name: fr.users_manage_link });
+    expect(link).toHaveAttribute("href", "/settings/users");
+    expect(screen.getByText(fr.settings_users)).toBeInTheDocument();
+    expect(screen.getByText(fr.settings_users_hint)).toBeInTheDocument();
+  });
+
+  test("hides the staff panel and the export/import block from a cashier", async () => {
+    me = ME_CASHIER;
+    mount();
+    await screen.findByLabelText(fr.field_name);
+    // GET /users and the four exports already refuse a cashier
+    // (`crates/api/src/gates.rs`, `ManageUsers` and `ExportAndImport`); this
+    // is the hidden button, not the defence (M4 T5).
+    expect(screen.queryByText(fr.settings_users)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: fr.users_manage_link })).not.toBeInTheDocument();
+    expect(screen.queryByText(fr.settings_export_import)).not.toBeInTheDocument();
   });
 });
 
@@ -297,7 +356,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     const day = within(regimeForm).getByLabelText(fr.field_valid_from);
     await user.clear(day);
@@ -317,7 +376,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     const day = within(regimeForm).getByLabelText(fr.field_valid_from);
     await user.clear(day);
@@ -335,7 +394,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     await user.clear(within(regimeForm).getByLabelText(fr.field_valid_from));
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
@@ -348,7 +407,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     expect(await within(regimeForm).findByRole("alert")).toHaveTextContent(fr.error_validation);
@@ -358,7 +417,7 @@ describe("the régime form", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByLabelText(fr.field_name);
-    const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
+    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     const apply = within(regimeForm).getByRole("button", { name: fr.action_apply });
     expect(apply).toBeDisabled();
     await user.click(apply);

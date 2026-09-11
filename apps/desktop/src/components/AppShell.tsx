@@ -26,6 +26,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileText,
+  History,
   LayoutDashboard,
   Package,
   Receipt,
@@ -38,10 +39,12 @@ import {
 } from "lucide-react";
 import { Direction } from "radix-ui";
 import type { ComponentType, ReactNode } from "react";
+import type { PermissionDto } from "@dzpos/shared";
 
 import { Icon } from "@/components/Icon";
 import { Wordmark } from "@/components/Wordmark";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { UserMenu } from "@/components/UserMenu";
 import { Toaster } from "@/components/ui/sonner";
 import {
   Sidebar,
@@ -62,6 +65,7 @@ import { api, settingsQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { useShopToday } from "@/lib/clock";
+import { hasPermission, useSession } from "@/lib/session";
 
 /** The three groups the sidebar is divided into, in the order it shows them. */
 const SECTIONS = ["sales", "purchases", "manage"] as const;
@@ -79,6 +83,20 @@ interface NavItem {
   readonly label: Key;
   readonly icon: ComponentType<LucideProps>;
   readonly section: Section;
+  /** Absent for a route open to every signed-in role. Where present, the
+   *  sidebar shows the item only once `hasPermission` says the session
+   *  holds it — the same permission the route itself is gated by
+   *  server-side, not a client-only opinion (`crates/api/src/gates.rs`).
+   *  The settings entry stays visible for everyone and hides only the
+   *  blocks inside it (its two blocks are each owner/manager-only in their
+   *  own right); dashboard and purchases carry a permission here because
+   *  M4 T5's review found the server refuses the route outright, so a
+   *  cashier reaching either by a stale link or a typed URL should not see
+   *  a link into it in the first place. Suppliers and expenses carry one
+   *  for the same reason since the closing review: what the shop owes its
+   *  suppliers and what it spends were both readable by a cashier while
+   *  the dashboard that sums them was not. */
+  readonly permission?: PermissionDto;
 }
 
 /**
@@ -88,14 +106,45 @@ interface NavItem {
  * which is what a route with no place in the navigation should look like.
  */
 export const NAV: readonly NavItem[] = [
-  { to: "/dashboard", label: "nav_dashboard", icon: LayoutDashboard, section: "sales" },
+  {
+    to: "/dashboard",
+    label: "nav_dashboard",
+    icon: LayoutDashboard,
+    section: "sales",
+    permission: "see_reports",
+  },
   { to: "/till", label: "nav_till", icon: ShoppingCart, section: "sales" },
   { to: "/customers", label: "nav_customers", icon: Users, section: "sales" },
   { to: "/documents", label: "nav_documents", icon: FileText, section: "sales" },
-  { to: "/suppliers", label: "nav_suppliers", icon: Truck, section: "purchases" },
-  { to: "/purchases", label: "nav_purchases", icon: ClipboardList, section: "purchases" },
-  { to: "/expenses", label: "nav_expenses", icon: Receipt, section: "purchases" },
+  {
+    to: "/suppliers",
+    label: "nav_suppliers",
+    icon: Truck,
+    section: "purchases",
+    permission: "see_cost_and_margin",
+  },
+  {
+    to: "/purchases",
+    label: "nav_purchases",
+    icon: ClipboardList,
+    section: "purchases",
+    permission: "see_cost_and_margin",
+  },
+  {
+    to: "/expenses",
+    label: "nav_expenses",
+    icon: Receipt,
+    section: "purchases",
+    permission: "see_reports",
+  },
   { to: "/products", label: "nav_products", icon: Package, section: "manage" },
+  {
+    to: "/audit",
+    label: "nav_audit_log",
+    icon: History,
+    section: "manage",
+    permission: "see_audit_log",
+  },
   { to: "/settings", label: "nav_settings", icon: Settings, section: "manage" },
 ];
 
@@ -114,6 +163,12 @@ function SidebarNav() {
   const { t } = useTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const active = activeItem(pathname);
+  // Read once for the whole sidebar: `useHasPermission` is a hook and
+  // cannot be called once per item inside `.filter` below, and `me` is
+  // already the one copy of it the window holds (`lib/session.tsx`).
+  // `hasPermission` is the plain function built for exactly this.
+  const { me } = useSession();
+  const visible = (item: NavItem) => item.permission === undefined || hasPermission(me, item.permission);
   return (
     <>
       {SECTIONS.map((section) => (
@@ -121,7 +176,7 @@ function SidebarNav() {
           <SidebarGroupLabel>{t(SECTION_LABEL[section])}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {NAV.filter((item) => item.section === section).map((item) => (
+              {NAV.filter((item) => item.section === section && visible(item)).map((item) => (
                 <SidebarMenuItem key={item.to}>
                   <SidebarMenuButton asChild isActive={active?.to === item.to}>
                     <Link to={item.to} data-testid={`nav-${item.to.slice(1)}`}>
@@ -140,10 +195,11 @@ function SidebarNav() {
 }
 
 /**
- * The shop at the foot of the sidebar. It stands where the signed-in user
- * will stand once there are users; until then the thing the shop identifies
- * with is its own name, which the settings screen already keeps and which
- * this reads from the same cache the theme provider fills.
+ * The shop at the foot of the sidebar. The brief that added sign-in
+ * (M4 T4) put the signed-in user in the topbar instead (`UserMenu`, in the
+ * `ms-auto` group below) rather than here: this reads the store's own name
+ * from the same cache the theme provider fills, and stays the sidebar's
+ * identity regardless of who is signed in.
  */
 function ShopFooter() {
   const { t } = useTranslation();
@@ -216,6 +272,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <ShopDay />
               <LanguageSwitcher />
               <ThemeSwitcher />
+              <UserMenu />
             </div>
           </header>
           <main className="min-w-0 flex-1 p-4">{children}</main>

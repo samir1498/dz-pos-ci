@@ -11,7 +11,7 @@
 // database), so it hands the shop back to Comptoir, the default, before it
 // leaves, the way the settings spec hands the régime back.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

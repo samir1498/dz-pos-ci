@@ -119,6 +119,21 @@ text_enum! {
 }
 
 text_enum! {
+    /// What a user is allowed to be (features.md §5). The `users.role` CHECK
+    /// has allowed exactly these three since the first migration, and this is
+    /// the same list on the Rust side.
+    ///
+    /// The variants are an identity and never a comparison a screen makes: T1
+    /// puts a `can(role, permission)` table over them and every caller asks
+    /// that, so a rule is written once rather than restated wherever it bites.
+    Role {
+        Owner => "owner",
+        Manager => "manager",
+        Cashier => "cashier",
+    }
+}
+
+text_enum! {
     /// Whether a party is a company or a private consumer. A field on the
     /// fiche, never inferred from whether an RC was typed in: loi 04-02
     /// art. 10 decides ticket against facture by who the buyer is, and

@@ -10,6 +10,8 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+mod common;
+
 const SHOP: i32 = 1;
 const TOKEN: &str = "test-launch-token";
 
@@ -25,6 +27,7 @@ struct Harness {
 fn harness() -> Harness {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     Harness {
         _dir: dir,
@@ -41,7 +44,8 @@ async fn call(
     let req = Request::builder()
         .method(method)
         .uri(uri)
-        .header("authorization", format!("Bearer {TOKEN}"));
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION);
     let req = match body {
         Some(v) => req
             .header("content-type", "application/json")
@@ -98,7 +102,11 @@ async fn the_seeded_shop_reads_as_its_name_reel_and_nothing_planned() {
             },
             "regime": { "regime": "reel", "valid_from": "2026-01-01" },
             "regime_planned": null,
-            "theme": null
+            "theme": null,
+            // A shop that has never set one refuses a cashier every
+            // discount, which is the safe reading of "nobody has decided"
+            // and the reason the settings screen has to offer the field.
+            "discount_threshold_bps": 0
         })
     );
 }
@@ -480,4 +488,40 @@ async fn the_clock_is_behind_the_launch_token_like_every_other_route() {
         .unwrap();
     let res = h.app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+}
+
+/// The threshold an owner sets and a cashier is then judged against. Dated
+/// like the régime, so a sale refused in March is read against March's
+/// threshold rather than the one the shop moved to in April.
+#[tokio::test]
+async fn the_owner_sets_the_discount_threshold_and_the_page_reads_it_back() {
+    let h = harness();
+    let (status, body) = call(
+        &h.app,
+        "POST",
+        "/settings/discount-threshold",
+        Some(json!({ "threshold_bps": 250, "valid_from": "2026-02-01" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["discount_threshold_bps"], 250, "{body}");
+
+    let (status, body) = call(&h.app, "GET", "/settings", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["discount_threshold_bps"], 250, "{body}");
+}
+
+/// A share of a basket cannot be more than the basket.
+#[tokio::test]
+async fn a_threshold_past_a_whole_basket_is_refused() {
+    let h = harness();
+    let (status, body) = call(
+        &h.app,
+        "POST",
+        "/settings/discount-threshold",
+        Some(json!({ "threshold_bps": 10_001, "valid_from": "2026-02-01" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["error"]["code"], "validation", "{body}");
 }

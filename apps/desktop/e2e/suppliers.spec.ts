@@ -13,7 +13,7 @@
 // overlay and nothing else, so every assertion about the list or the ledger
 // here is made once the overlay that wrote it has gone.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { apiHeaders, apiUrl } from "./api";

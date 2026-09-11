@@ -12,6 +12,7 @@ use dzpos_core::services::stock as service;
 
 use crate::dto::{LastStockRecountDto, StockRecountDto};
 use crate::error::ApiError;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 /// Runs a recount now, whether or not the shop has already had one today:
@@ -20,10 +21,12 @@ use crate::AppState;
 ///
 /// A 200 and not a 201. Nothing here is created that a caller can go and
 /// read at an address of its own; the answer is the whole of what happened.
-pub async fn recount(State(state): State<AppState>) -> Result<Json<StockRecountDto>, ApiError> {
+pub async fn recount(
+    State(state): State<AppState>,
+    who: CurrentUser,
+) -> Result<Json<StockRecountDto>, ApiError> {
     let shop = state.shop_id;
-    // TODO(M4): the user comes from the request identity, not from the state.
-    let user = state.user_id;
+    let user = who.id;
     let report = state
         .blocking(move |c| service::recount(c, shop, user))
         .await?;

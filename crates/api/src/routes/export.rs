@@ -18,6 +18,7 @@ use serde::Deserialize;
 
 use crate::error::ApiError;
 use crate::routes::settings::now;
+use crate::session::CurrentUser;
 use crate::AppState;
 
 /// The one media type every spreadsheet reads an .xlsx as. Long, and the
@@ -67,12 +68,14 @@ fn query(q: Result<Query<ExportQuery>, QueryRejection>) -> Result<ExportQuery, A
 
 pub async fn products(
     State(state): State<AppState>,
+    who: CurrentUser,
     q: Result<Query<ExportQuery>, QueryRejection>,
 ) -> Result<Response, ApiError> {
     let lang = query(q)?.lang;
     let shop = state.shop_id;
+    let actor = who.id;
     let bytes = state
-        .blocking(move |c| export::products(c, shop, lang))
+        .blocking(move |c| export::products(c, shop, actor, lang))
         .await?;
     Ok(workbook("produits", now().date(), bytes))
 }
@@ -82,37 +85,43 @@ pub async fn products(
 /// for the year says so with two dates.
 pub async fn sales(
     State(state): State<AppState>,
+    who: CurrentUser,
     q: Result<Query<ExportQuery>, QueryRejection>,
 ) -> Result<Response, ApiError> {
     let ExportQuery { lang, from, to } = query(q)?;
     let range = DayRange { from, to };
     let shop = state.shop_id;
+    let actor = who.id;
     let bytes = state
-        .blocking(move |c| export::sales(c, shop, lang, range))
+        .blocking(move |c| export::sales(c, shop, actor, lang, range))
         .await?;
     Ok(workbook("ventes", now().date(), bytes))
 }
 
 pub async fn customers(
     State(state): State<AppState>,
+    who: CurrentUser,
     q: Result<Query<ExportQuery>, QueryRejection>,
 ) -> Result<Response, ApiError> {
     let lang = query(q)?.lang;
     let shop = state.shop_id;
+    let actor = who.id;
     let bytes = state
-        .blocking(move |c| export::customers(c, shop, lang))
+        .blocking(move |c| export::customers(c, shop, actor, lang))
         .await?;
     Ok(workbook("clients", now().date(), bytes))
 }
 
 pub async fn suppliers(
     State(state): State<AppState>,
+    who: CurrentUser,
     q: Result<Query<ExportQuery>, QueryRejection>,
 ) -> Result<Response, ApiError> {
     let lang = query(q)?.lang;
     let shop = state.shop_id;
+    let actor = who.id;
     let bytes = state
-        .blocking(move |c| export::suppliers(c, shop, lang))
+        .blocking(move |c| export::suppliers(c, shop, actor, lang))
         .await?;
     Ok(workbook("fournisseurs", now().date(), bytes))
 }

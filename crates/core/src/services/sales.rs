@@ -27,8 +27,9 @@ use crate::models::stock::{Movement, MovementKind};
 use crate::money::{
     compute_totals, Bps, Line, Money, MoneyError, PaymentMode, Regime, TotalsOptions,
 };
+use crate::services::permissions::{self, Permission, Role};
 use crate::services::{
-    audit, clock, customers, debt, documents, products, proforma, settings, shops, stock,
+    audit, clock, customers, debt, documents, products, proforma, settings, shops, stock, users,
 };
 
 /// Whether the droit de timbre applies at all. There is no shop setting for
@@ -92,9 +93,11 @@ pub struct NewSale {
     /// on card: a named customer gets a buyer block on the document either
     /// way, and only a credit sale gets a ledger movement.
     pub customer_id: Option<i32>,
-    /// The owner's decision to sell past the customer's credit limit. The
-    /// sale goes through and the audit log carries who did it; until M4
-    /// there are no roles, so anyone may send it (features.md §1).
+    /// The decision to sell past the customer's credit limit. The sale goes
+    /// through and the audit log carries who took it. Sending it is not
+    /// taking it: the flag only means anything on a sale the limit would
+    /// have refused, and there it asks for
+    /// `Permission::OverrideCreditBlock` (features.md §1 and §5).
     pub override_credit: bool,
     /// Ticket or facture, decided at the till before the sale is saved
     /// (features.md §3). Never by a later reprint: the document is due « dès
@@ -174,7 +177,22 @@ pub fn issue(
         ));
     }
 
-    conn.transaction(|conn| {
+    // Read off `new` before the closure takes it: the blocked row below is
+    // written after the transaction has gone, and it names the customer the
+    // limit belongs to.
+    let customer_id = new.customer_id;
+
+    // What the credit limit refused, if it refused. It lives out here, in
+    // memory, precisely because memory does not roll back: the transaction
+    // below unwinds every row it wrote, and the facts of the refusal have to
+    // outlive it to be written down at all.
+    let mut refused: Option<Refused> = None;
+
+    // The same thing for the two ways money comes off a price. Same reason,
+    // same lifetime: out here so the rollback below cannot take it.
+    let mut price_refused: Option<PriceRefused> = None;
+
+    let issued = conn.transaction(|conn| {
         let issued_at = new.issued_at.unwrap_or_else(clock::now);
         let regime = settings::regime_as_of(conn, shop_id, issued_at)?;
         let seller = SellerBlock::from(shops::get(conn, shop_id)?);
@@ -187,6 +205,65 @@ pub fn issue(
                 "global_discount",
                 "a discount above the basket would make the sale negative",
             ));
+        }
+
+        // The discount rule of features.md §5, on the basket and not on a
+        // line: the threshold is a percentage of what the basket was worth
+        // before anything came off it, and every line discount is counted
+        // with the global one, so a discount split across the lines cannot
+        // duck a threshold the same discount would meet in one place.
+        // Checked here, before `documents::issue`, so a refusal burns no
+        // number; the row it writes is further down, where the document it
+        // produced has an id.
+        // A price typed over the product's own is the other way the same
+        // money comes off, so it is gated beside the discount rather than
+        // after it: a cashier refused a 10 % discount and allowed to type
+        // the discounted price is not refused at all (M1 carry-in,
+        // 2026-09-09). Checked before `documents::issue`, so a refusal burns
+        // no number; the row it writes is further down, where the document
+        // has an id.
+        let negotiated: Vec<serde_json::Value> = priced
+            .iter()
+            .filter(|line| line.unit_price != line.stored_price)
+            .map(|line| {
+                serde_json::json!({
+                    "product_id": line.product_id,
+                    "name": line.name,
+                    "card_price_centimes": line.stored_price.as_centimes(),
+                    "charged_centimes": line.unit_price.as_centimes(),
+                    "qty_milli": line.qty_milli,
+                })
+            })
+            .collect();
+        if !negotiated.is_empty() {
+            let role = role_of(conn, shop_id, user_id)?;
+            if !permissions::can(role, Permission::ChangePriceAtTheTill) {
+                price_refused = Some(PriceRefused {
+                    permission: Permission::ChangePriceAtTheTill,
+                    detail: serde_json::json!({ "lines": negotiated.clone() }),
+                });
+            }
+            permissions::require(role, Permission::ChangePriceAtTheTill)?;
+        }
+
+        let basket = sum_line_gross(&money_lines)?;
+        let discount = sum_discounts(&money_lines, new.global_discount)?;
+        let threshold = settings::discount_threshold_as_of(conn, shop_id, issued_at)?;
+        let discounted_past_threshold =
+            permissions::discount_needs_permission(basket, discount, threshold)?;
+        if discounted_past_threshold {
+            let role = role_of(conn, shop_id, user_id)?;
+            if !permissions::can(role, Permission::DiscountAboveThreshold) {
+                price_refused = Some(PriceRefused {
+                    permission: Permission::DiscountAboveThreshold,
+                    detail: serde_json::json!({
+                        "basket_centimes": basket.as_centimes(),
+                        "discount_centimes": discount.as_centimes(),
+                        "threshold_bps": threshold.as_u32(),
+                    }),
+                });
+            }
+            permissions::require(role, Permission::DiscountAboveThreshold)?;
         }
         // Every input compute_totals could refuse has been refused above with
         // the field named, so what is left is a basket whose amounts do not
@@ -212,10 +289,14 @@ pub fn issue(
             Some(customer_id) => Some(credit_check(
                 conn,
                 shop_id,
+                user_id,
                 customer_id,
-                new.payment_mode,
-                totals.net_to_pay,
-                new.override_credit,
+                CreditAsk {
+                    payment_mode: new.payment_mode,
+                    net_to_pay: totals.net_to_pay,
+                    override_credit: new.override_credit,
+                },
+                &mut refused,
             )?),
         };
 
@@ -285,6 +366,76 @@ pub fn issue(
                     unit_cost: p.cost,
                     document_id: Some(document.id),
                     user_id,
+                },
+            )?;
+        }
+
+        // A discount past the threshold is a decision somebody took past a
+        // rule, the same as an override of a credit block, so it is logged
+        // the same way: `before` is what the rule allowed, `after` is what
+        // was given. Written above the credit block below because a cash
+        // sale returns there and a discount is not a thing only a credit
+        // sale can carry.
+        // What the product's card says, against what the customer was
+        // actually charged, line by line. One row per document rather than
+        // one per line: the decision was taken once, at the till, over a
+        // basket.
+        if !negotiated.is_empty() {
+            audit::record(
+                conn,
+                shop_id,
+                user_id,
+                audit::Change {
+                    action: audit::ACTION_PRICE_OVERRIDE,
+                    entity: "document",
+                    entity_id: Some(document.id),
+                    before: Some(serde_json::json!({ "lines": negotiated.len() }).to_string()),
+                    after: Some(
+                        serde_json::json!({
+                            "document_id": document.id,
+                            "lines": negotiated,
+                        })
+                        .to_string(),
+                    ),
+                },
+            )?;
+        }
+
+        if discounted_past_threshold {
+            audit::record(
+                conn,
+                shop_id,
+                user_id,
+                audit::Change {
+                    action: audit::ACTION_DISCOUNT_OVERRIDE,
+                    entity: "document",
+                    entity_id: Some(document.id),
+                    // The threshold in force on the day travels beside the
+                    // amount it allowed: a later change to the setting must
+                    // not make this row unreadable, and a reader asking why
+                    // 5 % was refused should not have to walk the dated
+                    // history to find out it was 2 % that day.
+                    before: Some(
+                        serde_json::json!({
+                            "basket_centimes": basket.as_centimes(),
+                            "threshold_bps": threshold.as_u32(),
+                            "allowed_discount_centimes": basket.pct(threshold)?.as_centimes(),
+                        })
+                        .to_string(),
+                    ),
+                    // Split as well as summed: the threshold is tested on the
+                    // whole, and a reader still wants to see whether it was
+                    // one line or the basket that carried it.
+                    after: Some(
+                        serde_json::json!({
+                            "document_id": document.id,
+                            "discount_centimes": discount.as_centimes(),
+                            "global_discount_centimes": new.global_discount.as_centimes(),
+                            "line_discount_centimes":
+                                discount.checked_sub(new.global_discount)?.as_centimes(),
+                        })
+                        .to_string(),
+                    ),
                 },
             )?;
         }
@@ -391,11 +542,123 @@ pub fn issue(
             )?;
         }
 
+        // A sale that crossed the customer's warn threshold and was not an
+        // override. An override already carries the warning in its own row,
+        // and the log is read one row per sale (M2 carry-in, 2026-09-09).
+        // Inside the transaction, unlike the blocked row below, because a
+        // sale that warns is a sale that happened.
+        if credit.warning.is_some() && !credit.overridden {
+            audit::record(
+                conn,
+                shop_id,
+                user_id,
+                audit::Change {
+                    action: audit::ACTION_CREDIT_WARNED,
+                    entity: "document",
+                    entity_id: Some(document.id),
+                    before: Some(
+                        serde_json::json!({
+                            "customer_id": credit.customer.id,
+                            "balance_centimes": credit.balance.old_balance.as_centimes(),
+                            "warn_threshold_centimes":
+                                credit.customer.warn_threshold.map(Money::as_centimes),
+                            "credit_limit_centimes":
+                                credit.customer.credit_limit.map(Money::as_centimes),
+                        })
+                        .to_string(),
+                    ),
+                    after: Some(
+                        serde_json::json!({
+                            "document_id": document.id,
+                            "balance_after_centimes": credit.balance.total_debt.as_centimes(),
+                            "warning": credit.warning.map(Warning::code),
+                        })
+                        .to_string(),
+                    ),
+                },
+            )?;
+        }
+
         Ok(Sale {
             document,
             warning: credit.warning,
         })
-    })
+    });
+
+    // The refusal the credit limit raised unwound everything the closure
+    // wrote, a row about the refusal included, which is why one was never
+    // written there. A shop that cannot see a cashier trying a customer's
+    // limit over and over has no control at all (M2 carry-in, 2026-09-09),
+    // so the row goes down here, on the same connection, after the rollback.
+    //
+    // The refusal wins if this write fails. A lost row is a lost row; a till
+    // told "the database is unwell" when what actually happened is that the
+    // customer is over their limit sends the cashier to the wrong person.
+    if let (Err(_), Some(refusal)) = (&issued, &refused) {
+        let _ = audit::record(
+            conn,
+            shop_id,
+            user_id,
+            audit::Change {
+                action: audit::ACTION_CREDIT_BLOCKED,
+                // The customer, not a document: the refusal produced none.
+                entity: "customer",
+                entity_id: customer_id,
+                before: Some(
+                    serde_json::json!({
+                        "customer_id": customer_id,
+                        "credit_limit_centimes": refusal.credit_limit.as_centimes(),
+                        "balance_centimes": refusal.balance_before.as_centimes(),
+                    })
+                    .to_string(),
+                ),
+                // `asked_to_override` is the difference between a cashier
+                // who rang a sale up and was stopped, and a cashier who sent
+                // the override flag and was stopped because they are not
+                // allowed to send it. A shop reading its log wants to tell
+                // those two apart.
+                after: Some(
+                    serde_json::json!({
+                        "balance_would_be_centimes": refusal.balance_after.as_centimes(),
+                        "asked_to_override": refusal.asked_to_override,
+                    })
+                    .to_string(),
+                ),
+            },
+        );
+    }
+
+    // The same shape for the two ways money comes off a price, and the same
+    // reason: both checks run inside the transaction above, so a row written
+    // where they refuse would unwind with the sale. Written only when the
+    // sale actually failed, so a refusal captured and then allowed on a later
+    // pass cannot leave a row saying somebody was stopped.
+    if let (Err(_), Some(refusal)) = (&issued, &price_refused) {
+        let _ = audit::record(
+            conn,
+            shop_id,
+            user_id,
+            audit::Change {
+                action: audit::ACTION_PRICE_CUT_BLOCKED,
+                // The customer if the sale named one, and the shop itself if
+                // it did not: a cash sale at the counter has no fiche behind
+                // it, and the refusal is about the person at the till rather
+                // than about whoever is buying. `user_id` on the row is who
+                // tried; that is the column an owner filters on.
+                entity: "sale",
+                entity_id: Some(customer_id.unwrap_or(shop_id)),
+                before: Some(
+                    serde_json::json!({
+                        "permission": refusal.permission.as_str(),
+                    })
+                    .to_string(),
+                ),
+                after: Some(refusal.detail.to_string()),
+            },
+        );
+    }
+
+    issued
 }
 
 /// The customer as the document will print them. Every field the buyer block
@@ -490,6 +753,61 @@ fn unset(value: Option<&str>) -> bool {
     !value.is_some_and(|v| !v.trim().is_empty())
 }
 
+/// What the sale is asking the customer's standing for: how it is being
+/// paid, what it comes to, and whether the till sent the flag that says
+/// somebody means to pass the limit on purpose. Three fields rather than
+/// three arguments because the check already takes the shop, the person and
+/// the customer, and a list that long stops being readable.
+struct CreditAsk {
+    payment_mode: PaymentMode,
+    net_to_pay: Money,
+    override_credit: bool,
+}
+
+/// What a credit limit refused, kept where a rollback cannot reach it.
+///
+/// The sale that was refused unwound, taking any row written inside it with
+/// it, which is the whole reason the M2 review found a cashier could probe a
+/// customer's limit and leave nothing behind. These three facts are computed
+/// inside the transaction and read after it, so the row that records the
+/// refusal is written on ground the refusal did not wash away.
+/// A refusal of one of the two ways money comes off a price, carried out of
+/// the transaction the same way `Refused` is and for the same reason. Both
+/// checks sit inside `conn.transaction`, so a row written where they refuse
+/// unwinds with everything else and the log sees nothing. A cashier who
+/// learns that could try a discount on every basket of the day and leave no
+/// trace of a single attempt, which is the hole the credit refusal was
+/// written to close and this is the same hole on the other side of the
+/// total (M4 closing review, 2026-09-11).
+struct PriceRefused {
+    /// Which of the two doors was tried. The two are held by the same roles
+    /// today (`permissions_service.rs` pins that), so the log carries which
+    /// one anyway: an owner reading it wants to know whether somebody typed
+    /// a price over a card or took a percentage off the basket.
+    permission: Permission,
+    /// What the till asked for, already shaped the way the row will show it.
+    detail: serde_json::Value,
+}
+
+struct Refused {
+    /// What the customer owed before the sale was attempted. The row carries
+    /// it beside `balance_after` because the difference between the two is
+    /// the basket, and without it an owner reading the log cannot tell one
+    /// large attempt from twenty small ones against the same limit, which is
+    /// the thing the row exists to show. The override row and the warned row
+    /// have always carried it.
+    balance_before: Money,
+    /// What the customer would have owed had the sale landed.
+    balance_after: Money,
+    /// What they are allowed to owe.
+    credit_limit: Money,
+    /// Whether the till sent the override flag. False is a cashier who rang
+    /// a sale up and was stopped by the limit. True is a cashier who tried
+    /// to pass it and was stopped because they may not, which is the case a
+    /// shop most wants to see in its log.
+    asked_to_override: bool,
+}
+
 /// What the customer's standing decided: the fiche, the triple the document
 /// stores, whether a limit was passed on purpose, and what the till should
 /// say.
@@ -517,11 +835,16 @@ struct CreditCheck {
 fn credit_check(
     conn: &mut SqliteConnection,
     shop_id: i32,
+    user_id: i32,
     customer_id: i32,
-    payment_mode: PaymentMode,
-    net_to_pay: Money,
-    override_credit: bool,
+    ask: CreditAsk,
+    refused: &mut Option<Refused>,
 ) -> Result<CreditCheck, CoreError> {
+    let CreditAsk {
+        payment_mode,
+        net_to_pay,
+        override_credit,
+    } = ask;
     // Reads through the service, so another shop's fiche is a NotFound here
     // rather than a buyer block printed on this shop's paper (rule 3).
     let customer = customers::get(conn, shop_id, customer_id)?;
@@ -554,12 +877,40 @@ fn credit_check(
     if payment_mode == PaymentMode::Credit {
         if let Some(credit_limit) = customer.credit_limit {
             if total_debt > credit_limit {
+                // Written down before either refusal below, because both of
+                // them are refusals and the log has to see both. The first
+                // version of this only caught the one on the left, so a
+                // cashier who learned to always send the override flag
+                // probed a customer's limit for ever without leaving a row:
+                // the flag turned the refusal into a forbidden, and only the
+                // limit refusal was being logged. The flag is a deliberate
+                // attempt to pass the limit, so it is the case the log most
+                // needs, which is why it is carried in the row.
+                *refused = Some(Refused {
+                    balance_before: old_balance,
+                    balance_after: total_debt,
+                    credit_limit,
+                    asked_to_override: override_credit,
+                });
                 if !override_credit {
                     return Err(CoreError::CreditLimit {
                         balance_after: total_debt,
                         credit_limit,
                     });
                 }
+                // The refusal comes first and the permission second, so a
+                // cashier who sends no flag still hears that the limit is
+                // what stopped them, with the two amounts the till shows,
+                // rather than a forbidden that names a permission they were
+                // not asking for.
+                permissions::require(
+                    role_of(conn, shop_id, user_id)?,
+                    Permission::OverrideCreditBlock,
+                )?;
+                // Allowed. This is an override somebody was entitled to
+                // take, not a refusal, and the override's own row says so
+                // further up.
+                *refused = None;
                 overridden = true;
             }
         }
@@ -613,6 +964,10 @@ pub(crate) struct PricedLine {
     pub(crate) rate_bps: crate::money::Bps,
     pub(crate) line_total: Money,
     cost: Money,
+    /// The price on the product's own card, kept beside the one actually
+    /// charged so the negotiated-price gate and its audit row can say what
+    /// was given away without reading the product a second time.
+    pub(crate) stored_price: Money,
 }
 
 /// Every line of a basket, priced. The one place a caller turns what the till
@@ -707,12 +1062,48 @@ fn price(
             .checked_sub(line.line_discount)
             .map_err(too_large("line_discount"))?,
         cost: product.cost,
+        stored_price: product.selling,
     })
 }
 
 /// The basket's HT, read back to compare the global discount against it.
 /// A sum that does not fit is a basket the caller sent, so it is named as
 /// one rather than raised as a money fault.
+/// The role the permission table is asked about, read from the user the sale
+/// is being written under. Read here rather than taken as an argument so the
+/// role that was checked and the user the document and the audit row name are
+/// the same person: a role handed in beside a `user_id` is a second statement
+/// of who is acting, and two statements can disagree.
+fn role_of(conn: &mut SqliteConnection, shop_id: i32, user_id: i32) -> Result<Role, CoreError> {
+    Ok(users::get(conn, shop_id, user_id)?.role)
+}
+
+/// What the basket was worth before anything came off it: the base the
+/// discount threshold is a percentage of.
+fn sum_line_gross(lines: &[Line]) -> Result<Money, CoreError> {
+    let mut total = Money::ZERO;
+    for line in lines {
+        let gross = line
+            .unit_price
+            .checked_mul_milli(line.qty_milli)
+            .map_err(too_large("qty_milli"))?;
+        total = total.checked_add(gross).map_err(too_large("lines"))?;
+    }
+    Ok(total)
+}
+
+/// Everything the customer is not being asked to pay: every line discount
+/// and the one on the basket.
+fn sum_discounts(lines: &[Line], global_discount: Money) -> Result<Money, CoreError> {
+    let mut total = global_discount;
+    for line in lines {
+        total = total
+            .checked_add(line.line_discount)
+            .map_err(too_large("lines"))?;
+    }
+    Ok(total)
+}
+
 pub(crate) fn sum_line_totals(lines: &[Line]) -> Result<Money, CoreError> {
     let mut total = Money::ZERO;
     for line in lines {

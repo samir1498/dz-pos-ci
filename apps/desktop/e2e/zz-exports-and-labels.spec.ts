@@ -11,7 +11,7 @@
 // from an empty catalogue (`products.spec.ts` does) must have run already.
 // Nothing runs after it, so the row it leaves is nobody's problem.
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./auth";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
