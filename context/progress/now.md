@@ -155,7 +155,25 @@ run its own commands inside the job that decides whether a release is
 allowed. And the pre-upgrade copy left a half-written file behind for good
 when it was interrupted, because the retry after it used a different name.
 
-In flight: the support bundle.
+In flight: the support bundle, written and open for review, waiting on the
+browser suite because it adds a button to the settings screen and the
+committed pictures of that screen are stale until a local run regenerates
+them.
+
+Also on main since 2026-09-11 23:44: `docs/release-checklist.md`, one page
+saying what has to be true before v1.0 and who holds each item, and a
+section on the public page saying what a shop with staff gets.
+
+Blocked since 2026-09-11 22:30 and not by anything in the repository. The
+build machine's Windows disk is at one and a half gigabytes free. Its WSL
+disk image is 141 gigabytes holding 44 gigabytes of files, and an image
+never shrinks on its own, so about a hundred gigabytes are recoverable only
+by compacting it from the Windows side (`wsl --shutdown`, then
+`wsl --manage <distro> --set-sparse true`). Nothing inside can do it. The
+image itself is not growing, which was checked by writing half a gigabyte
+inside the distro and watching the byte count stay put. Anything that does
+not need the browser suite is proven on the mirror instead, which is how
+three pieces landed after the disk ran out.
 
 Two tasks the reviews added on 2026-09-11. A Windows release build has no
 console, so a refusal to start says nothing at all to the shopkeeper: the
