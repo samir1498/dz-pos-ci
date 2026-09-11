@@ -1,19 +1,61 @@
 ---
 title: 'M5 first release v1'
 slug: 'm5-first-release-v1'
-status: 'paused'
+status: 'active'
 category: 'milestone'
 created: 20260908
-tldr: 'Signed installer, updater, versioned migrations, release gates; stub'
+tldr: 'Signed installer, updater, versioned migrations, release gates: ten tasks, written 2026-09-11 when M4 landed'
 priority: 20
-tasks: []
+tasks:
+  - id: 'T0'
+    desc: 'A content security policy on the webview, and the launch token out of the page global it sits in today. `tauri.conf.json` carries `csp: null`, so one link that navigated the main frame to a remote page would hand the token over; no screen has such a link and the policy is what keeps it so. Written first because it is the only release item that is a hole rather than a piece of machinery, and because it is provable here. A test that the built page carries the header, and a test that a navigation away from the app origin is refused.'
+    status: 'pending'
+  - id: 'T1'
+    desc: 'Version, git short hash and build date embedded in the binary at build time and read back from one place: About shows all three, the log file heads every session with them, and the support bundle carries them. Answers the first of the release questions in `docs/architecture.md` § Release. A test that the three are present and not placeholders, and one that a debug build says so rather than pretending to be a release.'
+    status: 'pending'
+  - id: 'T2'
+    desc: 'Migrations tied to the app version, forward only, with an automatic backup of the SQLite file before any migration runs and a refusal to start if the backup could not be written. A previous-version open test: a file written by the last tag opens under the current build, migrates, and its documents and ledger read back identical. This is the task that decides whether an update can lose a shop its books, so it is the one that gets the deepest review.'
+    status: 'pending'
+  - id: 'T3'
+    desc: 'The support bundle: one command from settings that writes a zip a shop can send, carrying the log, the versions from T1, the migration history and the schema, and carrying no customer names, no prices and no credential. A test that lists what went in and refuses anything outside the list, because a support bundle that leaks a customer list is worse than no support bundle.'
+    status: 'pending'
+  - id: 'T4'
+    desc: 'The bon de livraison, the last document kind the spec names and the only one M1 through M4 left unbuilt: a delivery note against a sale, its own yearly series, no money on it, the golden file in three languages beside the others.'
+    status: 'pending'
+  - id: 'T5'
+    desc: 'The Arabic and RTL polish pass over every screen and every printed document: mirrored layouts, the numerals the spec asks for, dates and money reading right, the lock and sign-in screens included because they were the last built. What can be proven here is that nothing is clipped, reversed or left in French; what cannot is whether the wording is right, which is release gate R6 and needs a native speaker.'
+    status: 'pending'
+  - id: 'T6'
+    desc: 'A tag on `main` is the only thing that builds the installer and publishes the GitHub release. Buildable here and not provable here: the Windows job runs on the organisation''s Actions minutes, which are capped, so it is exercised on the mirror and its first real run is the first tag. The workflow refuses to publish from anything but a tag on main, and says so in its own output rather than silently doing nothing.'
+    status: 'pending'
+  - id: 'T7'
+    desc: 'The Tauri updater: the endpoint, the signature check, the update flow the shop sees, and the key generated outside the repo with CI signing from a secret. The client half is provable here against a fake endpoint serving a signed and an unsigned manifest, and the test that matters is the second one: an unsigned or wrongly signed update is refused. Who holds the key is Anouar''s and Samir''s to decide before the key exists.'
+    status: 'pending'
+  - id: 'T8'
+    desc: 'The name, once. The bundle identifier `com.dzpos.app`, the product name in the installer and the window title, the landing page''s copy and its sharing card, and the placeholder in the docs, all changed in one commit so the repo never half-carries two names. Blocked on Anouar; everything else in this milestone can be built before it arrives, and this task is deliberately last so it is a rename and not a rewrite.'
+    status: 'pending'
+  - id: 'T9'
+    desc: 'Closing sweep: the five release questions in `docs/architecture.md` § Release answered in the page itself rather than left as questions, the release gate list turned into a checklist with the state of each gate and who holds it, the `dz-review` pass over the whole milestone with the money and deletion lenses deepest because an update that migrates a shop''s file touches both, the boss page, the checkpoint PR.'
+    status: 'pending'
 acceptance: []
 ---
 # M5: first release, v1.0
 
-Stub. Tasks get added when M4 closes. The milestone text is
-`docs/roadmap.md` § M5; the release mechanics are `docs/architecture.md`
-§ Release.
+Ten tasks, written on 2026-09-11 when M4 landed on main. The milestone text
+is `docs/roadmap.md` § M5 and the release mechanics are
+`docs/architecture.md` § Release.
+
+This milestone is different from the four before it, and the difference is
+worth saying before the tasks: most of what it builds cannot be demonstrated
+from this machine. An installer needs Windows, a signature needs a
+certificate that has not been bought, and an update needs a previous release
+to update from. So each task below says what can be proven here and what
+cannot, and the ones that cannot are built against a stand-in and proven the
+day the real thing exists. A task that says it is done and means it compiles
+is not done.
+
+T0 to T5 are unblocked and can be built now. T6 and T7 are buildable now and
+provable later. T8 waits on the name. Nothing waits on T8 except T8.
 
 Demo that closes it: Anouar installs from a signed Windows installer, reads
 version, git hash and build date in About, updates in place, and a first
