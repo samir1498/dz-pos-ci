@@ -38,6 +38,12 @@ import { useTranslation } from "@/i18n";
 import { errorKey } from "@/lib/fields";
 import type { AuditEntryDto } from "@dzpos/shared";
 
+// No `beforeLoad` guard on this route: a manager who types `/audit` by hand
+// still mounts the screen, and only learns they may not see it once
+// `GET /audit-log` answers 403 and the error alert below shows in its
+// place. Deliberate — the nav entry hiding the link is the sole point where
+// this screen keeps a manager out, and the API refusing the request is the
+// actual control (`crates/api/src/gates.rs`, `Permission::SeeAuditLog`).
 export const Route = createFileRoute("/audit")({ component: AuditScreen });
 
 export { AuditScreen };

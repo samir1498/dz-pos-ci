@@ -297,6 +297,49 @@ mod read {
         assert_eq!(second.rows.len(), 1);
         assert!(!second.has_more);
     }
+
+    /// Exactly a page and not one row more: `has_more` has to read `false`
+    /// here, or the screen offers a next page that comes back empty. The
+    /// paging test above only ever writes `PAGE_SIZE + 1` rows, so it would
+    /// pass whether this boundary read `false` or `true`; this is the test
+    /// that actually pins it.
+    #[test]
+    fn a_shop_with_exactly_a_page_of_rows_has_no_next_page() {
+        let (_dir, mut conn) = open_temp();
+        let p = products::create(&mut conn, SHOP, OWNER, draft(1_000, true))
+            .unwrap()
+            .id;
+        for i in 0..audit::PAGE_SIZE {
+            let selling = 1_000 + i as i64 + 1;
+            products::update(&mut conn, SHOP, OWNER, p, draft(selling, true)).unwrap();
+        }
+
+        let (page, _) = audit::read(&mut conn, SHOP, &Filter::default(), 1).unwrap();
+        assert_eq!(page.rows.len(), audit::PAGE_SIZE);
+        assert!(
+            !page.has_more,
+            "a full first page is not a reason to ask for a second"
+        );
+    }
+
+    /// A page number taken straight off the query string can be anything up
+    /// to `i64::MAX`. `start` used to be `(page_number - 1) as usize *
+    /// PAGE_SIZE`, which overflows and panics under overflow checks once
+    /// `page_number` is large enough — a caller-controlled 500, not a bug
+    /// that needs a caller to have a lot of data. It now saturates instead:
+    /// an absurd page answers empty rather than crashing.
+    #[test]
+    fn an_absurd_page_number_answers_empty_rather_than_panicking() {
+        let (_dir, mut conn) = open_temp();
+        let p = products::create(&mut conn, SHOP, OWNER, draft(1_000, true))
+            .unwrap()
+            .id;
+        products::update(&mut conn, SHOP, OWNER, p, draft(1_500, true)).unwrap();
+
+        let (page, _) = audit::read(&mut conn, SHOP, &Filter::default(), i64::MAX).unwrap();
+        assert!(page.rows.is_empty());
+        assert!(!page.has_more);
+    }
 }
 
 #[test]
@@ -309,4 +352,12 @@ fn the_log_is_scoped_to_its_shop() {
         .unwrap();
     assert_eq!(audit::list(&mut conn, SHOP).unwrap().len(), 1);
     assert!(audit::list(&mut conn, 2).unwrap().is_empty());
+
+    // The owner's screen calls `read`, not `list`: `list`'s own scoping does
+    // not prove `read`'s, which loads the same rows through a different
+    // repo call (`list_desc`) and joins the shop's own users on top.
+    let (page, _) = audit::read(&mut conn, SHOP, &audit::Filter::default(), 1).unwrap();
+    assert_eq!(page.rows.len(), 1);
+    let (other, _) = audit::read(&mut conn, 2, &audit::Filter::default(), 1).unwrap();
+    assert!(other.rows.is_empty());
 }

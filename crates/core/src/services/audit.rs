@@ -268,9 +268,15 @@ pub fn read(
         .filter(|e| range.is_none_or(|(start, end)| e.created_at >= start && e.created_at < end))
         .collect();
 
+    // `page_number` comes straight off the query string, so a caller can
+    // send anything up to `i64::MAX`: the multiplication below has to
+    // saturate rather than overflow, or a large enough page answers 500
+    // instead of the empty page it should.
     let page_number = page_number.max(1);
-    let start = (page_number - 1) as usize * PAGE_SIZE;
-    let has_more = matched.len() > start + PAGE_SIZE;
+    let start = usize::try_from(page_number - 1)
+        .unwrap_or(usize::MAX)
+        .saturating_mul(PAGE_SIZE);
+    let has_more = matched.len() > start.saturating_add(PAGE_SIZE);
     let rows = matched
         .into_iter()
         .skip(start)

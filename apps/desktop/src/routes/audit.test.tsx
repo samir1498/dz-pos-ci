@@ -139,6 +139,61 @@ describe("rows", () => {
     expect(await screen.findByText(fr.audit_empty)).toBeInTheDocument();
   });
 
+  // `before: null` is not an edge case: it is the ordinary shape of a
+  // `create` row (`services/audit.rs`'s own doc comment, "a row that did
+  // not exist before"), so a shop's first user, first expense and first
+  // purchase all write one. `parsed()`'s `text === null` branch is what
+  // this fixture actually exercises.
+  test("a create row, which has no before, still renders", async () => {
+    answer = {
+      ...page,
+      rows: [
+        {
+          id: 42,
+          user_id: 1,
+          user_name: "Anouar",
+          action: "create",
+          entity: "user",
+          entity_id: 5,
+          before: null,
+          after: JSON.stringify({ name: "Yasmine", role: "manager" }),
+          created_at: "2026-09-11 09:00:00",
+        },
+      ],
+    };
+    mount();
+    const table = await screen.findByRole("table", { name: fr.audit_title });
+    const row = within(table).getAllByRole("row")[1];
+    expect(within(row).getByText("name")).toBeInTheDocument();
+    expect(within(row).getByText(/—.*Yasmine/)).toBeInTheDocument();
+  });
+
+  // A row whose `before` or `after` is not JSON is the shape a service bug
+  // would actually produce, not a shape this screen should ever have to
+  // guess at: `parsed()`'s `catch` branch is what this fixture exercises.
+  test("a row whose before is not JSON still renders, reading only after", async () => {
+    answer = {
+      ...page,
+      rows: [
+        {
+          id: 43,
+          user_id: 1,
+          user_name: "Anouar",
+          action: "update",
+          entity: "product",
+          entity_id: 3,
+          before: "not json at all",
+          after: JSON.stringify({ selling_centimes: 1_000 }),
+          created_at: "2026-09-11 09:05:00",
+        },
+      ],
+    };
+    mount();
+    const table = await screen.findByRole("table", { name: fr.audit_title });
+    const row = within(table).getAllByRole("row")[1];
+    expect(within(row).getByText("selling_centimes")).toBeInTheDocument();
+  });
+
   test("a manager who types the address by hand is told, not shown a table", async () => {
     fetchMock = vi.fn(() =>
       Promise.resolve(

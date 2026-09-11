@@ -103,6 +103,31 @@ async fn priced_product(app: &axum::Router) -> (i64, i64, i64) {
     (id, 920, 18_000)
 }
 
+/// A second, unrelated row: a fiche made through `POST /customers`, which
+/// `services::customers::create` logs under `action: "create"`, `entity:
+/// "customer"`. It exists so the filter test below has something the owner
+/// wrote that its filters must exclude, rather than one row that any filter,
+/// even a deleted one, would trivially return.
+async fn other_customer(app: &axum::Router) {
+    let body = json!({
+        "name": "Not This One",
+        "party_kind": "company",
+        "phone": null,
+        "address": null,
+        "rc": null,
+        "nif": null,
+        "nis": null,
+        "ai": null,
+        "credit_limit_centimes": null,
+        "warn_threshold_centimes": null,
+        "notes": null,
+        "active": true,
+        "opening_debt_centimes": null
+    });
+    let (status, made) = call(app, "POST", "/customers", Some(body)).await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+}
+
 #[tokio::test]
 async fn the_owner_sees_the_price_change_a_real_service_wrote() {
     let h = harness();
@@ -119,11 +144,11 @@ async fn the_owner_sees_the_price_change_a_real_service_wrote() {
     assert_eq!(row["entity"], "product");
     assert_eq!(row["entity_id"], id);
     // The name behind the id, not just the id: there is no `/users` route
-    // yet for the screen to join it itself.
-    assert!(
-        row["user_name"].as_str().is_some_and(|s| !s.is_empty()),
-        "{row}"
-    );
+    // yet for the screen to join it itself. The exact name, not merely a
+    // non-empty one, so a join that pulled the wrong person's name off the
+    // shop's users would still fail here. `common::sign_in` seeds the owner
+    // under this name.
+    assert_eq!(row["user_name"], "Propriétaire", "{row}");
 
     let before_json: Value = serde_json::from_str(row["before"].as_str().unwrap()).unwrap();
     let after_json: Value = serde_json::from_str(row["after"].as_str().unwrap()).unwrap();
@@ -143,10 +168,26 @@ async fn the_owner_sees_the_price_change_a_real_service_wrote() {
 async fn filters_narrow_to_the_matching_row_and_refuse_what_does_not_match() {
     let h = harness();
     let (id, ..) = priced_product(&h.app).await;
+    // A second row the same owner wrote, on the same day, that the filters
+    // below must exclude. Without it there is exactly one row in the whole
+    // log, and the positive assertion after this block would pass even with
+    // every `.filter()` in `services::audit::read` deleted.
+    other_customer(&h.app).await;
 
-    let (_, page) = call(&h.app, "GET", "/audit-log", None).await;
-    let user_id = page["rows"][0]["user_id"].as_i64().unwrap();
-    let day = page["rows"][0]["created_at"]
+    let (_, unfiltered) = call(&h.app, "GET", "/audit-log", None).await;
+    assert_eq!(
+        unfiltered["rows"].as_array().map(Vec::len),
+        Some(2),
+        "{unfiltered}"
+    );
+    let price_row = unfiltered["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["action"] == "update")
+        .expect("the price change is in the log");
+    let user_id = price_row["user_id"].as_i64().unwrap();
+    let day = price_row["created_at"]
         .as_str()
         .unwrap()
         .split(' ')
