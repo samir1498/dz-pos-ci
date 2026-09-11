@@ -1,0 +1,30 @@
+/* The Arabic face, one file per weight actually used. Imported only by
+   src/pages/ar/index.astro; see fonts-latin.css for why this is split out
+   of base.css instead of living there unconditionally. */
+@import "@fontsource/ibm-plex-sans-arabic/arabic-400.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-500.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-600.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-700.css";
+
+/* One Latin weight, not a Latin-fetching bug: packages/design's `rtl` token
+   (semantic.ts) puts "IBM Plex Sans" second in the [dir="rtl"] font stack on
+   purpose, for exactly the Western digits src/i18n/ar.ts's fiscal.tva line
+   sets in Arabic body copy ("19 بالمئة أو 9 بالمئة"). Confirmed with
+   `fc-query` on the arabic-400 woff2 that its charset has no bits set for
+   U+0030-0039, so without this import those two digits fall past "IBM Plex
+   Sans" -- declared nowhere else on this route, so unreachable -- straight
+   to system-ui, which is not the fallback `rtl.sans` in
+   packages/design/src/semantic.ts is written to give. With no unicode-range
+   on either face, the browser cannot rule out needing this fallback from
+   the CSS alone, so it fetches "IBM Plex Sans" the moment that text run is
+   laid out; a real Chromium capture over the built /ar route (see
+   src/smoke.test.ts's budget comment) confirms the fetch happens and is
+   this one file, nothing larger. 400 only: every Latin character this
+   route renders sits in body-weight text (Fiscal.astro's <li>), never in a
+   heading or the header <strong> (brandSuffix is Arabic, "بوس", not "POS"
+   -- see src/i18n/ar.ts). Not in src/lib/fonts.ts's preload list: the
+   digits are below the fold, not on the LCP path, and ar already spends
+   the most of any route on fonts (see the budget comment), so this one
+   stays discovered the normal way through the CSS instead of competing
+   with the hero image for bandwidth in the critical path. */
+@import "@fontsource/ibm-plex-sans/latin-400.css";

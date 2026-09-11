@@ -1,5 +1,7 @@
 ---
+import "../../styles/fonts-arabic.css";
 import Base from "../../layouts/Base.astro";
+import { ARABIC_FONT_URLS } from "../../lib/fonts";
 ---
 
-<Base locale="ar" />
+<Base locale="ar" fontUrls={ARABIC_FONT_URLS} />

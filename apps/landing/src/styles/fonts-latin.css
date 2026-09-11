@@ -1,0 +1,11 @@
+/* The Latin face, one file per weight actually used
+   (see the font-weight audit in src/lib/fonts.ts). Imported only by the
+   French and English pages (src/pages/index.astro, src/pages/en/index.astro)
+   so the Arabic page's CSS carries only the Latin weight it has text for
+   (fonts-arabic.css's own latin-400 import, not these four) and a
+   Latin-script visitor is never asked to fetch a face no element on the
+   page requests (context/plans/20260911-landing-page.md, L4). */
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "@fontsource/ibm-plex-sans/latin-700.css";

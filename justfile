@@ -194,13 +194,39 @@ tauri:
 
 # the landing page (apps/landing), dev server only. `just landing-build`
 # builds it; that build already rides `pnpm -r build` via the workspace, so
-# a broken page fails `just gates` without a recipe change here. L5 owns the
-# publish recipe once there is somewhere real to publish to.
+# a broken page fails `just gates` without a recipe change here. `just
+# landing-deploy` is the publish recipe (L5); it is not cleared to run yet.
 landing:
     pnpm --filter dzpos-landing dev
 
 landing-build:
     pnpm --filter dzpos-landing build
+
+# regenerate the committed generated art: the product shots (L1) and the
+# Open Graph / Twitter card (L5), both re-read from @dzpos/design and the
+# desktop's committed screenshots, both then committed as ordinary files.
+landing-art:
+    pnpm --filter dzpos-landing shots
+    pnpm --filter dzpos-landing card
+
+# Publish apps/landing to Cloudflare Pages (project: src/lib/site.ts's
+# PAGES_PROJECT). Refuses to run unless DZPOS_LANDING_PUBLISH=1: the
+# product name is a placeholder, the price does not exist, and the Arabic
+# translation has not been read by a native speaker
+# (context/plans/20260911-landing-page.md, L5 brief).
+# This page is NOT CLEARED TO GO PUBLIC YET.
+landing-deploy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "${DZPOS_LANDING_PUBLISH:-}" != "1" ]; then
+        echo "landing-deploy: refusing. This page is not cleared to go public yet" >&2
+        echo "(placeholder name, no price, unreviewed Arabic). Set DZPOS_LANDING_PUBLISH=1" >&2
+        echo "only once Samir and Anouar have said so." >&2
+        exit 1
+    fi
+    project="$(node -e "import('./apps/landing/src/lib/site.ts').then((m) => console.log(m.PAGES_PROJECT))")"
+    pnpm --filter dzpos-landing build
+    pnpm dlx wrangler@4 pages deploy apps/landing/dist --project-name "$project" --commit-dirty=true
 
 # ---- e2e (headless chromium; starts its own API and Vite) ----
 
@@ -282,11 +308,18 @@ ci branch="":
     git remote get-url ci >/dev/null 2>&1 || git remote add ci git@github.com:samir1498/dz-pos-ci.git
     git push -q --force ci "$b:$b"
     echo "pushed $b to the mirror; starting the run"
+    # The id of the newest run on this branch BEFORE we start one, so the
+    # wait below can tell the new run from an old one. Without this the
+    # poll happily returns a run that finished an hour ago and reports its
+    # result as if it were this push's, which it did on 2026-09-11.
+    was="$(gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
     gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
-    # The run takes a moment to exist; ask for it until it does.
-    for _ in $(seq 1 10); do
-        id="$(gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
-        [ -n "${id:-}" ] && break
+    # The run takes a moment to exist; ask for it until it does, and keep
+    # asking while the answer is still the run that was there before.
+    id=""
+    for _ in $(seq 1 20); do
+        got="$(gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)"
+        if [ -n "${got:-}" ] && [ "$got" != "$was" ]; then id="$got"; break; fi
         sleep 3
     done
     [ -n "${id:-}" ] || { echo "no run appeared; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }

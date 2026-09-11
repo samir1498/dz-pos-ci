@@ -64,6 +64,10 @@ export const fr: Dict = {
     body: "L'écran, le ticket et la facture existent en français, en arabe et en anglais, et chacun choisit librement dans quelle langue il travaille et dans quelle langue il imprime.",
   },
 
+  screens: {
+    heading: "L'application en images",
+  },
+
   audience: {
     heading: "Pour qui",
     body: "Pour un commerce en Algérie qui tient encore sa caisse à la main ou sur un tableur, et qui veut garder ses factures, son stock et ses fournisseurs au même endroit.",
@@ -71,10 +75,11 @@ export const fr: Dict = {
 
   pricing: {
     heading: "Le prix",
-    body: "Le prix n'est pas encore fixé. Laissez vos coordonnées, nous vous recontactons dès qu'il l'est.",
+    body: "Le prix n'est pas encore fixé, et tant qu'il ne l'est pas ce formulaire reste fermé. Il ouvrira ici même, sur cette page.",
     formNameLabel: "Nom",
     formPhoneLabel: "Téléphone",
     formWilayaLabel: "Wilaya",
     formSubmit: "Être recontacté",
+    formDisabledNote: "Fermé jusqu'à ce que le prix soit fixé.",
   },
 };
