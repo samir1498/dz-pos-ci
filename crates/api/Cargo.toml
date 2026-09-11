@@ -26,6 +26,10 @@ chrono = { workspace = true }
 # Test-only: one test plants a row the migration's CHECK refuses, which no
 # service can write. Shipped code in this crate goes through dzpos-core.
 diesel = { workspace = true, features = ["sqlite"] }
+# Test-only: the previous-version open test builds a shop file with every
+# migration but the last, which needs the migrator itself. Already in the
+# lock through dzpos-core, so nothing new compiles.
+diesel_migrations = "2.2"
 tower = { version = "0.5.3", features = ["util"] }
 http-body-util = "0.1.5"
 tempfile = "3"
