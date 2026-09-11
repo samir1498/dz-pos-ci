@@ -11,13 +11,23 @@
 // document the window gets navigated to (`on_navigation` in
 // `src-tauri/src/lib.rs` is the guard against that navigating anywhere
 // that matters, but the token not being there either is a second, cheaper
-// one). The desktop instead asks for it over `invoke`, once: the Rust side
-// hands it out to the first caller and refuses every caller after
-// (docs/architecture.md § Release). The alternative considered was having
-// Rust attach the `Authorization` header itself on every call, which would
-// need the webview's own HTTP requests proxied through Tauri IPC -- the
-// thing rule 2 above says data never does, and CSP's `connect-src` already
-// closes the direct exfiltration path a global was open to.
+// one). The desktop instead asks for it over `invoke` (`launch_token` in
+// `src-tauri/src/lib.rs`, docs/architecture.md § Release). The command
+// hands the same token to every caller rather than one-shotting it: a
+// one-time hand-over was tried first and dropped, because the page can
+// evaluate a second time in the same process -- a reload, WebView2's own
+// accelerator keys, an HMR re-import of this module under `tauri dev` --
+// and a refused second call left every request after that unauthorized
+// until the process restarted. What keeps the token off a document it
+// should not reach is that Tauri injects no IPC bridge into a foreign
+// origin at all, plus `on_navigation`; a script that could ask this module
+// twice is already same-origin and already holds `api`, so one-shotting
+// bought nothing against that. The alternative considered instead of
+// `invoke` altogether was having Rust attach the `Authorization` header
+// itself on every call, which would need the webview's own HTTP requests
+// proxied through Tauri IPC -- the thing rule 2 above says data never
+// does, and CSP's `connect-src` already closes the direct exfiltration
+// path a global was open to.
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { createClient } from "@dzpos/shared";
@@ -40,13 +50,14 @@ export function apiBaseUrl(): string {
   return typeof configured === "string" && configured !== "" ? configured : FALLBACK;
 }
 
-/** Asks the Tauri side for the launch token, once. The command answers
- * exactly one caller; memoized here because this module, not the command,
- * is where "once" has to be kept, since `apiToken()`'s function form is
- * called again on every request the client makes. */
+/** Asks the Tauri side for the launch token. The command answers every
+ * caller with the same string, but this module still only asks once per
+ * document: `apiToken()`'s function form is called again on every request
+ * the client makes, and memoizing the promise here turns that back into
+ * one `invoke` rather than one per request. */
 let tauriToken: Promise<string | undefined> | undefined;
 function tauriLaunchToken(): Promise<string | undefined> {
-  tauriToken ??= invoke<string>("take_launch_token").catch(() => undefined);
+  tauriToken ??= invoke<string>("launch_token").catch(() => undefined);
   return tauriToken;
 }
 

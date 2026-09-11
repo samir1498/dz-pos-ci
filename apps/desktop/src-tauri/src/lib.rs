@@ -27,38 +27,35 @@ pub struct DbState {
 /// fetched over IPC: it is configuration, not data.
 pub struct ApiPort(pub u16);
 
-/// The launch token, held for exactly one hand-over. `take_launch_token`
-/// gives it to the first caller and an error to every caller after, so the
-/// secret never sits somewhere a script running later in the page -- or one
-/// running in whatever document the window was navigated to -- can go back
-/// and read (docs/architecture.md § Release).
-struct TokenHandoff(Mutex<Option<String>>);
-
-fn take(handoff: &TokenHandoff) -> Result<String, String> {
-    handoff
-        .0
-        .lock()
-        .map_err(|_| "the launch token handoff is poisoned".to_owned())?
-        .take()
-        .ok_or_else(|| "the launch token was already taken".to_owned())
-}
+/// The launch token, handed out to whoever asks. An earlier version of this
+/// gave it to the first caller and refused every caller after; that broke
+/// the moment the page evaluated a second time in the same process (a
+/// reload, WebView2's own accelerator keys being on by default, an HMR
+/// re-import of `api.ts` under `tauri dev`) -- the second `launch_token`
+/// call came back refused, its `.catch` turned that into no bearer at all,
+/// and every request went out unauthorized until the process restarted.
+/// What actually keeps the token off a document it should not reach is that
+/// Tauri injects no IPC bridge into a foreign origin in the first place,
+/// plus `on_navigation` below keeping the window on the app's own origins;
+/// a one-time hand-over added nothing on top of that, since a same-origin
+/// script able to ask a second time already holds the `api` client itself
+/// (docs/architecture.md § Release).
+struct TokenHandoff(String);
 
 #[tauri::command]
-fn take_launch_token(state: tauri::State<TokenHandoff>) -> Result<String, String> {
-    take(&state)
+fn launch_token(state: tauri::State<TokenHandoff>) -> String {
+    state.0.clone()
 }
 
 #[cfg(test)]
 mod token_tests {
-    use super::{take, TokenHandoff};
-    use std::sync::Mutex;
+    use super::TokenHandoff;
 
     #[test]
-    fn the_first_caller_gets_the_token_and_every_caller_after_is_refused() {
-        let handoff = TokenHandoff(Mutex::new(Some("the-token".to_owned())));
-        assert_eq!(take(&handoff).as_deref(), Ok("the-token"));
-        assert!(take(&handoff).is_err());
-        assert!(take(&handoff).is_err());
+    fn every_caller_gets_the_same_token() {
+        let handoff = TokenHandoff("the-token".to_owned());
+        assert_eq!(handoff.0, "the-token");
+        assert_eq!(handoff.0, "the-token");
     }
 }
 
@@ -143,7 +140,7 @@ mod csp_tests {
              `ipc://localhost/<cmd>` on Linux and macOS, `http://ipc.localhost/<cmd>` \
              on Windows and Android (wry's custom-protocol workaround, \
              use_https_scheme defaults to false) -- without both, the very \
-             first take_launch_token() call is a CSP violation on whichever \
+             first launch_token() call is a CSP violation on whichever \
              platform is missing: {csp}"
         );
         // Tauri hashes every inline <script>/<style> found in the built
@@ -240,7 +237,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = window.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![take_launch_token])
+        .invoke_handler(tauri::generate_handler![launch_token])
         .setup({
             let token = token.clone();
             move |app| {
@@ -263,7 +260,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 app.manage(DbState { db_path });
                 app.manage(ApiPort(port));
-                app.manage(TokenHandoff(Mutex::new(Some(token.expose().to_owned()))));
+                app.manage(TokenHandoff(token.expose().to_owned()));
 
                 // `tauri.conf.json` sets `create: false` on this window so it
                 // is built here instead of by the builder: `on_navigation`
@@ -287,7 +284,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // The window comes from tauri.conf.json, so the script that tells
         // the page its port is injected by a plugin rather than a window
         // builder. It runs before any of the app's own scripts. The launch
-        // token does not travel this way: see `take_launch_token`.
+        // token does not travel this way: see `launch_token`.
         .plugin(
             tauri::plugin::Builder::<tauri::Wry, ()>::new("dzpos-api-url")
                 .js_init_script(format!(
