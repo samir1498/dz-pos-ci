@@ -192,6 +192,16 @@ dev:
 tauri:
     pnpm desktop tauri dev
 
+# the landing page (apps/landing), dev server only. `just landing-build`
+# builds it; that build already rides `pnpm -r build` via the workspace, so
+# a broken page fails `just gates` without a recipe change here. L5 owns the
+# publish recipe once there is somewhere real to publish to.
+landing:
+    pnpm --filter dzpos-landing dev
+
+landing-build:
+    pnpm --filter dzpos-landing build
+
 # ---- e2e (headless chromium; starts its own API and Vite) ----
 
 # the whole suite, once per UI language project (fr, en, ar). Each

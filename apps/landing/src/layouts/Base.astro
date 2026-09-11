@@ -1,0 +1,43 @@
+---
+// The page shell L0 owns. L3 (context/plans/20260911-landing-page.md) fills
+// <main> with the real sections; this only sets the document up so that work
+// can start without touching routing, tokens or the font stack.
+import "../styles/base.css";
+
+import markUrl from "@dzpos/design/assets/mark.svg?url";
+import { dictionaries } from "../i18n";
+import type { Locale } from "../i18n";
+
+interface Props {
+  readonly locale: Locale;
+}
+
+const { locale } = Astro.props;
+const dict = dictionaries[locale];
+---
+
+<!doctype html>
+<html lang={dict.lang} dir={dict.dir}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{dict.title}</title>
+  </head>
+  <body>
+    <header>
+      {/* alt="" for the same reason as Wordmark.tsx: the word beside the
+          coin is already the accessible name. */}
+      <img src={markUrl} width="28" height="28" alt="" />
+      <span>{dict.brandWord} <strong>{dict.brandSuffix}</strong></span>
+    </header>
+    <main>
+      <h1>{dict.title}</h1>
+      <p>{dict.tagline}</p>
+      <!--
+        L3: hero, the four pieces (sell, invoice, stock, know), the fiscal
+        block, a band of screens, who it is for, and the price/form section
+        attach here, in that order. L1 supplies the product shots they use.
+      -->
+    </main>
+  </body>
+</html>

@@ -7,29 +7,34 @@ Playwright here is the interim local driver.
 
 ```
 just e2e                          # the whole suite, in fr, then en, then ar
-just screenshot                   # writes twenty-two of the twenty-three screenshots
+just screenshot                   # writes twenty-five of the twenty-six screenshots
 pnpm desktop e2e --project ar     # one language, every spec file
 ```
 
 `just screenshot` runs `-g screenshot` (the tests with "screenshot" in
 their title) under `--project fr` then `--project ar`. Under fr that
-writes `products.png`, `customers.png`, `dashboard.png` and the kit's four; the other fourteen
-say "... screenshot(s) in Arabic"
-in their titles, so they match the grep in both runs but write a file only
-when `currentLang()` is `ar`, and the fr run of them does nothing
-observable. Under ar all fifteen write: `products-ar.png`,
-`dashboard-ar.png`, `settings-ar.png`,
-`till-ar.png`, `customers-ar.png`, `suppliers-ar.png`, `supplier-statement-ar.png`, `purchases-ar.png`,
-`expenses-ar.png`, `till-credit-ar.png`, `documents-avoir-ar.png`,
-`stock-recount-ar.png`, and the theme pair `theme-comptoir-ar.png` and
-`theme-observe-ar.png`. The customers test writes two of them: the list and,
-before it walks back to it, `customer-account-ar.png`, the page one row's
-name opens; the suppliers test does the same with `supplier-statement-ar.png`.
+writes `products.png`, `customers.png`, `dashboard.png`, `till.png`,
+`till-credit.png`, `documents-avoir.png` and the kit's four; the other six
+titles either say "... screenshot(s) in Arabic" or, for `purchases.spec.ts`
+and `suppliers.spec.ts`, write an Arabic-only file without saying so, so
+they match the grep in both runs but write a file only when `currentLang()`
+is `ar`, and the fr run of them does nothing observable. Under ar all
+fifteen write: `products-ar.png`, `dashboard-ar.png`, `settings-ar.png`,
+`till-ar.png`, `customers-ar.png`, `suppliers-ar.png`,
+`supplier-statement-ar.png`, `purchases-ar.png`, `expenses-ar.png`,
+`till-credit-ar.png`, `documents-avoir-ar.png`, `stock-recount-ar.png`,
+and the theme pair `theme-comptoir-ar.png` and `theme-observe-ar.png`.
+The customers test writes two of them: the list and, before it walks back
+to it, `customer-account-ar.png`, the page one row's name opens; the
+suppliers test does the same with `supplier-statement-ar.png`.
 
-`products.spec.ts` and `zzz-dashboard.spec.ts` are the two that write under
-both languages, so their titles carry no "in Arabic": the products screen is
-the reference shot of a list, and the dashboard is the one screen whose whole
-point is a picture.
+`products.spec.ts`, `customers.spec.ts`, `zzz-dashboard.spec.ts`,
+`till.spec.ts`, `till-credit.spec.ts` and
+`till-reversals-and-quotations.spec.ts` are the six that write under both
+languages, so their titles carry no "in Arabic": the products screen is
+the reference shot of a list, the dashboard is the one screen whose whole
+point is a picture, and the till, the credit sale and the documents list
+each now show a French visitor the real screen instead of the Arabic one.
 
 The kit's four (`kit-comptoir.png`, `kit-registre.png`, `kit-observe.png`,
 `kit-observe-dark.png`) are the exception to that pattern: they are written
@@ -189,8 +194,9 @@ second language on; use the looped `just e2e` or a single `--project`.
   overlay opened. It runs before the settings and theme specs, so it hands
   the shop back to Comptoir, the default, before it leaves. It writes the four
   kit screenshots under fr.
-- The twenty-three committed screenshots, 1280x800, full page: `products.png`,
-  `customers.png`, `dashboard.png` and the kit's four (`kit-comptoir.png`,
+- The twenty-six committed screenshots, 1280x800, full page: `products.png`,
+  `customers.png`, `dashboard.png`, `till.png`, `till-credit.png`,
+  `documents-avoir.png` and the kit's four (`kit-comptoir.png`,
   `kit-registre.png`, `kit-observe.png`, `kit-observe-dark.png`) in fr; in ar,
   `products-ar.png`, `dashboard-ar.png`, `settings-ar.png`, `till-ar.png`,
   `customers-ar.png`, `customer-account-ar.png`, `suppliers-ar.png`,
@@ -202,7 +208,10 @@ second language on; use the looped `just e2e` or a single `--project`.
   Observe, which is what a theme is for: the same screen, two palettes, one
   stylesheet.
   `en` keeps none; the two languages above are enough to show the layout
-  and the RTL mirror.
+  and the RTL mirror. `till.png`, `till-credit.png` and `documents-avoir.png`
+  exist so `apps/landing`'s generator (`src/lib/shots.ts`) has a French
+  source for the hero and two of the four feature pieces instead of only
+  the Arabic one.
 - `.artifacts/`: gitignored, holding the temp database and failure traces.
   A failure's trace and its Playwright report name the project (the
   language) the failing test ran under.
