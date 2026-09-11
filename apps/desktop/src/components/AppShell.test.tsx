@@ -132,9 +132,11 @@ describe("AppShell", () => {
   });
 
   test("shows every unconditional screen in the sidebar, grouped by section", async () => {
-    // Nobody is signed in in this suite's default fetch stub, so the one
-    // item that carries a `permission` (the audit log, M4 T7) is left out
-    // here and covered on its own below.
+    // Nobody is signed in in this suite's default fetch stub, so the three
+    // items that carry a `permission` (the audit log, M4 T7; the dashboard
+    // and purchases entries, M4 T5) are left out here and covered on their
+    // own below. Each of the three sections keeps at least one unconditional
+    // entry, so the group headings still all render.
     const { container } = await mount("/till");
     for (const item of NAV.filter((item) => item.permission === undefined)) {
       expect(screen.getByTestId(`nav-${item.to.slice(1)}`)).toBeInTheDocument();
@@ -152,30 +154,56 @@ describe("AppShell", () => {
   test("a nav entry gated on a permission is hidden while nobody is signed in", async () => {
     await mount("/till");
     expect(screen.queryByTestId("nav-audit")).not.toBeInTheDocument();
+    // The dashboard and purchases entries joined the audit log on the M4 T5
+    // review (2026-09-11): the server now refuses GET /dashboard and
+    // GET /purchases outright to a cashier, so the link into either has to
+    // go the same way the audit log's already did.
+    expect(screen.queryByTestId("nav-dashboard")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-purchases")).not.toBeInTheDocument();
   });
 
-  test("a nav entry gated on a permission shows once the session holds it", async () => {
+  /** A session holding just the one permission a fetch stub names, the way
+   *  `mount`'s default stub signs nobody in at all. */
+  function stubSignedIn(permissions: string[]) {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
         if (url.endsWith("/auth/me")) {
           return Promise.resolve(
-            json(200, {
-              user_id: 1,
-              name: "Yasmine",
-              role: "owner",
-              permissions: ["see_audit_log"],
-            }),
+            json(200, { user_id: 1, name: "Yasmine", role: "owner", permissions }),
           );
         }
+        // `SessionProvider` awaits both `/auth/me` and `/auth/idle` before it
+        // sets `me`, so a stub that answers the first and 404s the second
+        // never reaches "signed-in" at all (M4 T5, `hasPermission` reads
+        // `me` off this provider now, not a query of its own).
+        if (url.endsWith("/auth/idle")) return Promise.resolve(json(200, { idle_minutes: 30 }));
         if (url.endsWith("/clock")) return Promise.resolve(json(200, { today: SHOP_TODAY }));
         if (url.endsWith("/settings")) return Promise.resolve(json(200, settings));
         return Promise.resolve(json(404, { error: { code: "not_found", message: "no" } }));
       }),
     );
+  }
+
+  test("a nav entry gated on a permission shows once the session holds it", async () => {
+    stubSignedIn(["see_audit_log"]);
     await mount("/till");
     expect(await screen.findByTestId("nav-audit")).toBeInTheDocument();
+  });
+
+  test("the dashboard entry shows once the session holds see_reports, and only then", async () => {
+    stubSignedIn(["see_reports"]);
+    await mount("/till");
+    expect(await screen.findByTestId("nav-dashboard")).toBeInTheDocument();
+    expect(screen.queryByTestId("nav-purchases")).not.toBeInTheDocument();
+  });
+
+  test("the purchases entry shows once the session holds see_cost_and_margin, and only then", async () => {
+    stubSignedIn(["see_cost_and_margin"]);
+    await mount("/till");
+    expect(await screen.findByTestId("nav-purchases")).toBeInTheDocument();
+    expect(screen.queryByTestId("nav-dashboard")).not.toBeInTheDocument();
   });
 
   test("the topbar heads the page with the name the sidebar uses", async () => {

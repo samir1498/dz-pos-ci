@@ -300,10 +300,13 @@ fn every_row_of_the_table_names_a_route_that_is_there() {
 /// A read is not in the table, and that is deliberate rather than an
 /// oversight: what a cashier may see is T5's business on the screens, and
 /// gating a GET is a separate ruling the plan has not taken for most of them.
-/// The two reads the carry-ins do name (`GET /stock/recount` and the label
-/// routes, both of which a cashier keeps) are open, so no row is wanted.
+/// `/products` stays open on purpose even after T5: the till reads it to
+/// ring a sale up, so cost is redacted at the field
+/// (`routes/products.rs::redact_cost`) rather than the route refused.
+/// `/stock/recount` and `/settings` are the same kind of ordinary read a
+/// cashier is already looking at.
 #[test]
-fn the_table_is_about_writes_and_the_six_reads_that_carry_the_lists_out() {
+fn the_table_is_about_writes_and_the_ten_reads_that_carry_lists_or_reports_out() {
     for gate in ROUTE_GATES {
         assert!(
             matches!(gate.method, "POST" | "PUT" | "GET"),
@@ -313,7 +316,7 @@ fn the_table_is_about_writes_and_the_six_reads_that_carry_the_lists_out() {
         );
     }
     // An ordinary read is open: a cashier is already looking at the list.
-    for read in ["/products", "/stock/recount", "/dashboard", "/settings"] {
+    for read in ["/products", "/stock/recount", "/settings"] {
         assert!(
             gate_for("GET", read).is_none(),
             "GET {read} has a row; an ordinary read is not this table's business"
@@ -339,6 +342,24 @@ fn the_table_is_about_writes_and_the_six_reads_that_carry_the_lists_out() {
         gate_for("GET", "/audit-log").and_then(|g| g.permission),
         Some(Permission::SeeAuditLog)
     );
+    // Four more, from the M4 T5 review (2026-09-11): the dashboard and its
+    // chart are the reports `SeeReports` names, and the purchase list and
+    // its detail are nothing but what the shop pays its suppliers, so both
+    // pairs are gated whole rather than redacted at a field.
+    for read in ["/dashboard", "/dashboard/series"] {
+        assert_eq!(
+            gate_for("GET", read).and_then(|g| g.permission),
+            Some(Permission::SeeReports),
+            "GET {read} should carry SeeReports after the M4 T5 review"
+        );
+    }
+    for read in ["/purchases", "/purchases/{id}"] {
+        assert_eq!(
+            gate_for("GET", read).and_then(|g| g.permission),
+            Some(Permission::SeeCostAndMargin),
+            "GET {read} should carry SeeCostAndMargin after the M4 T5 review"
+        );
+    }
 }
 
 /// The gate's own default when the walk above is not looking.

@@ -36,7 +36,9 @@ const SRC = join(process.cwd(), "src");
  * `after` of an audit row, which is the log recording that a person's role
  * was changed: the name there is the thing being logged, not a decision the
  * screen takes. `settings_.users.test.tsx` builds the staff a staff screen
- * lists, and staff have roles.
+ * lists, and staff have roles. `test/session.ts` (M4 T5) is the one
+ * `MeDto` fixture every other screen test's `SessionProvider` renders
+ * behind; the two roles on it are the same kind of data.
  *
  * Named one by one rather than "any test file", so a branch cannot hide in
  * a test either. Adding a file here is a claim that its role name is data;
@@ -48,6 +50,7 @@ const ALLOWED: ReadonlySet<string> = new Set([
   join("lib", "session.test.tsx"),
   join("routes", "audit.test.tsx"),
   join("routes", "settings_.users.test.tsx"),
+  join("test", "session.ts"),
   "role.test.ts",
 ]);
 
@@ -90,6 +93,25 @@ describe("a role is a label, not a branch", () => {
 
   it("switches on nothing called role either", () => {
     expect(offenders(/\bswitch\s*\([^)]*\brole\b[^)]*\)/, new Set([SELF]))).toEqual([]);
+  });
+});
+
+/**
+ * M4 T5's own rule, the same shape as the role one above: a screen asks
+ * `useHasPermission` (or, for the one place that has to check several
+ * permissions against one `me` without breaking the rule that a hook runs
+ * the same number of times on every render, the plain `hasPermission`
+ * function) and never reads `me.permissions` itself. Both live in
+ * `lib/session.tsx`, which is the one place this pattern is data rather
+ * than a second way to ask. `AppShell.tsx`'s sidebar used to read
+ * `me.permissions.includes(...)` inline before it took `hasPermission`,
+ * which is exactly what this test would have caught.
+ */
+describe("a permission is asked once", () => {
+  it("reads `.permissions` only in lib/session.tsx", () => {
+    expect(
+      offenders(/\.permissions\b/, new Set([join("lib", "session.tsx"), SELF])),
+    ).toEqual([]);
   });
 });
 

@@ -65,7 +65,7 @@ import { api, settingsQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { useShopToday } from "@/lib/clock";
-import { useMe } from "@/lib/me";
+import { hasPermission, useSession } from "@/lib/session";
 
 /** The three groups the sidebar is divided into, in the order it shows them. */
 const SECTIONS = ["sales", "purchases", "manage"] as const;
@@ -83,10 +83,16 @@ interface NavItem {
   readonly label: Key;
   readonly icon: ComponentType<LucideProps>;
   readonly section: Section;
-  /** Absent for every item but the audit log (M4 T7): the sidebar shows
-   *  this one only once `useMe` says the signed-in session holds it, the
-   *  same rule the route itself is gated by. Nothing else in the sidebar is
-   *  gated yet, which is why this is the first entry to carry one. */
+  /** Absent for a route open to every signed-in role. Where present, the
+   *  sidebar shows the item only once `hasPermission` says the session
+   *  holds it — the same permission the route itself is gated by
+   *  server-side, not a client-only opinion (`crates/api/src/gates.rs`).
+   *  The settings entry stays visible for everyone and hides only the
+   *  blocks inside it (its two blocks are each owner/manager-only in their
+   *  own right); dashboard and purchases carry a permission here because
+   *  M4 T5's review found the server refuses the route outright, so a
+   *  cashier reaching either by a stale link or a typed URL should not see
+   *  a link into it in the first place. */
   readonly permission?: PermissionDto;
 }
 
@@ -97,12 +103,24 @@ interface NavItem {
  * which is what a route with no place in the navigation should look like.
  */
 export const NAV: readonly NavItem[] = [
-  { to: "/dashboard", label: "nav_dashboard", icon: LayoutDashboard, section: "sales" },
+  {
+    to: "/dashboard",
+    label: "nav_dashboard",
+    icon: LayoutDashboard,
+    section: "sales",
+    permission: "see_reports",
+  },
   { to: "/till", label: "nav_till", icon: ShoppingCart, section: "sales" },
   { to: "/customers", label: "nav_customers", icon: Users, section: "sales" },
   { to: "/documents", label: "nav_documents", icon: FileText, section: "sales" },
   { to: "/suppliers", label: "nav_suppliers", icon: Truck, section: "purchases" },
-  { to: "/purchases", label: "nav_purchases", icon: ClipboardList, section: "purchases" },
+  {
+    to: "/purchases",
+    label: "nav_purchases",
+    icon: ClipboardList,
+    section: "purchases",
+    permission: "see_cost_and_margin",
+  },
   { to: "/expenses", label: "nav_expenses", icon: Receipt, section: "purchases" },
   { to: "/products", label: "nav_products", icon: Package, section: "manage" },
   {
@@ -130,12 +148,12 @@ function SidebarNav() {
   const { t } = useTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const active = activeItem(pathname);
-  // Read once for the whole sidebar rather than once per item: today only
-  // one item carries a `permission`, but a second gated item must not cost
-  // a second `/auth/me` call.
-  const me = useMe();
-  const visible = (item: NavItem) =>
-    item.permission === undefined || (me.data?.permissions.includes(item.permission) ?? false);
+  // Read once for the whole sidebar: `useHasPermission` is a hook and
+  // cannot be called once per item inside `.filter` below, and `me` is
+  // already the one copy of it the window holds (`lib/session.tsx`).
+  // `hasPermission` is the plain function built for exactly this.
+  const { me } = useSession();
+  const visible = (item: NavItem) => item.permission === undefined || hasPermission(me, item.permission);
   return (
     <>
       {SECTIONS.map((section) => (

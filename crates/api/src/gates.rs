@@ -7,17 +7,31 @@
 //! mutating route with no row here fails, and a row naming a route that is not
 //! there fails.
 //!
-//! **Seven reads are in it.** The table is otherwise about writes, because a
+//! **Eleven reads are in it.** The table is otherwise about writes, because a
 //! read of a list a cashier is already looking at needs no permission. The
 //! four exports and the import template are the exception the M3 carry-in
 //! named in words: an export is the whole customer list, the whole supplier
 //! list and every sale the shop ever rang up, walking out on a USB stick.
 //! They carry the same permission as the import that reads the template back.
-//! The other two are the owner's alone. The audit log (M4 T7) hands over
-//! every price change, override and correction the shop's staff have made.
-//! `GET /users` (M4 T8) is who the staff are, which
-//! `services::permissions::can`'s own doc puts with the owner and not with
-//! the ordinary lists a cashier is already looking at.
+//! The audit log (M4 T7) and `GET /users` (M4 T8) are the owner's alone,
+//! which `services::permissions::can`'s own doc puts with the owner and not
+//! with the ordinary lists a cashier is already looking at.
+//!
+//! Four more joined them on M4 T5's own review (2026-09-11), the day the
+//! screens were being hidden from a cashier and the review found the reads
+//! behind them were not: `GET /purchases` and `GET /purchases/{id}` are
+//! nothing but what the shop pays for its stock (`col_extra_costs`,
+//! `col_unit_cost`, `col_landed_cost`), so `Permission::SeeCostAndMargin`
+//! gates the whole route rather than a column a handler would have to strip
+//! out of a `PurchaseDto` the way `routes/products.rs::redact_cost` strips
+//! `ProductDto`'s. `GET /dashboard` and `GET /dashboard/series` are the
+//! screen `Permission::SeeReports`'s own doc names ("read the dashboard and
+//! the reports it links to"), and nothing a cashier's ordinary work reads:
+//! unlike `GET /products`, no till or sale flow calls either. `GET /products`
+//! stayed off this table for exactly that reason — the till needs it — and
+//! is redacted at the field instead (`ProductDto.cost_centimes` and
+//! `.wholesale_centimes`, both `Option`, filled only for a caller who holds
+//! `SeeCostAndMargin`); see that DTO's own doc comment.
 //!
 //! **What T2 ships and what T3 does.** T2 is the mechanism, the table's shape
 //! and the actor. What T2 deliberately does not do is apply it: no handler
@@ -123,6 +137,18 @@ pub const ROUTE_GATES: &[Gate] = &[
         why: "correcting what a customer owes is a ledger the ordinary flow does not write (M2 carry-in)",
     },
     Gate {
+        method: "GET",
+        path: "/dashboard",
+        permission: Some(Permission::SeeReports),
+        why: "the figures, the top-ten cards and the margin line are the reports SeeReports's own doc names; a cashier has no business on this screen at all (M4 T5 review, 2026-09-11)",
+    },
+    Gate {
+        method: "GET",
+        path: "/dashboard/series",
+        permission: Some(Permission::SeeReports),
+        why: "the chart behind the same dashboard, read separately by the same screen; same permission as the page it draws on (M4 T5 review, 2026-09-11)",
+    },
+    Gate {
         method: "POST",
         path: "/expenses",
         permission: Some(Permission::CommitMoney),
@@ -187,6 +213,18 @@ pub const ROUTE_GATES: &[Gate] = &[
         path: "/products/{id}",
         permission: Some(Permission::EditFiches),
         why: "the same fiche: a price, a name, a barcode or a category changed on a product the shop already stocks",
+    },
+    Gate {
+        method: "GET",
+        path: "/purchases",
+        permission: Some(Permission::SeeCostAndMargin),
+        why: "the order list carries nothing but what the shop pays its suppliers (col_extra_costs, col_unit_cost, col_landed_cost); unlike products, no till flow reads it, so the whole route is gated rather than a field redacted (M4 T5 review, 2026-09-11)",
+    },
+    Gate {
+        method: "GET",
+        path: "/purchases/{id}",
+        permission: Some(Permission::SeeCostAndMargin),
+        why: "the same order, one row at a time; same reasoning and same permission as the list (M4 T5 review, 2026-09-11)",
     },
     Gate {
         method: "POST",
@@ -366,8 +404,15 @@ mod tests {
                     gate.path.starts_with("/export/")
                         || gate.path == "/import/products/template"
                         || gate.path == "/audit-log"
-                        || gate.path == "/users",
-                    "{} is a read this table was not opened for",
+                        || gate.path == "/users"
+                        || gate.path == "/dashboard"
+                        || gate.path == "/dashboard/series"
+                        || gate.path == "/purchases"
+                        || gate.path == "/purchases/{id}",
+                    "{} is a read this table was not opened for; widen this allow-list deliberately \
+                     and say why in ROUTE_GATES's own `why` (M4 T5 review, 2026-09-11: /dashboard, \
+                     /dashboard/series, /purchases and /purchases/{{id}} joined the exports, the \
+                     import template, the audit log and /users as reads a cashier does not get)",
                     gate.path
                 );
             }

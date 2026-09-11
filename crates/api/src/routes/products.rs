@@ -7,6 +7,7 @@ use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
 use dzpos_core::models::product::NewProduct;
 use dzpos_core::print::{render_label, render_label_sheet};
+use dzpos_core::services::permissions::{can, Permission};
 use dzpos_core::services::products as service;
 use serde::Deserialize;
 
@@ -15,14 +16,38 @@ use crate::error::ApiError;
 use crate::session::CurrentUser;
 use crate::AppState;
 
-pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<ProductDto>>, ApiError> {
+/// `GET /products` and `GET /products/{id}` carry the whole catalogue to
+/// every signed-in role, cashier included, because the till needs it to
+/// ring a sale up (`gates.rs` names no row for either read). What the till
+/// does not need is what a product cost the shop, so this is the one field
+/// a route in this file redacts itself rather than leaving to a row in the
+/// gate table, which can only say yes or no to a whole route (M4 T5 review,
+/// 2026-09-11).
+fn redact_cost(mut dto: ProductDto, role: dzpos_core::models::sql_types::Role) -> ProductDto {
+    if !can(role, Permission::SeeCostAndMargin) {
+        dto.cost_centimes = None;
+        dto.wholesale_centimes = None;
+    }
+    dto
+}
+
+pub async fn list(
+    State(state): State<AppState>,
+    who: CurrentUser,
+) -> Result<Json<Vec<ProductDto>>, ApiError> {
     let shop = state.shop_id;
     let found = state.blocking(move |c| service::list(c, shop)).await?;
-    Ok(Json(found.into_iter().map(ProductDto::from).collect()))
+    Ok(Json(
+        found
+            .into_iter()
+            .map(|p| redact_cost(ProductDto::from(p), who.role))
+            .collect(),
+    ))
 }
 
 pub async fn get_one(
     State(state): State<AppState>,
+    who: CurrentUser,
     id: Result<Path<i32>, PathRejection>,
 ) -> Result<Json<ProductDto>, ApiError> {
     // `/products/abc` used to leave as axum's own text/plain 400, which the
@@ -32,7 +57,7 @@ pub async fn get_one(
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
     let shop = state.shop_id;
     let found = state.blocking(move |c| service::get(c, shop, id)).await?;
-    Ok(Json(ProductDto::from(found)))
+    Ok(Json(redact_cost(ProductDto::from(found), who.role)))
 }
 
 pub async fn create(

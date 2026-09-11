@@ -21,7 +21,13 @@ export const categorySchema = z.object({
 type _Category = Assert<Matches<CategoryDto, typeof categorySchema>>;
 
 /** The prices and the quantities are exact integers, the ids and the rate are
- *  numbers the client passes through and never adds up. */
+ *  numbers the client passes through and never adds up.
+ *
+ *  `cost_centimes` is nullable, not optional: the field is always on the
+ *  wire, but `GET /products` redacts it to `null` for a caller who does not
+ *  hold `see_cost_and_margin` (crates/api/src/routes/products.rs::redact_cost,
+ *  M4 T5 review, 2026-09-11). A screen that reads it has to handle the
+ *  missing case rather than assume a number. */
 export const productSchema = z.object({
   id: z.number(),
   shop_id: z.number(),
@@ -29,7 +35,7 @@ export const productSchema = z.object({
   barcode: z.string().nullable(),
   category_id: z.number().nullable(),
   unit: unitSchema,
-  cost_centimes: exactInteger,
+  cost_centimes: exactInteger.nullable(),
   selling_centimes: exactInteger,
   wholesale_centimes: exactInteger.nullable(),
   qty_on_hand_milli: exactInteger,

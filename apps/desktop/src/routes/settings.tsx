@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useShopToday } from "@/lib/clock";
+import { useHasPermission } from "@/lib/session";
 import { isKey, useTranslation, type Key } from "@/i18n";
 
 export const Route = createFileRoute("/settings")({ component: SettingsScreen });
@@ -73,6 +74,13 @@ export function SettingsScreen() {
   // Lives here, not in the form: a save refetches the page and the form is
   // remounted on the fresh block (its key), which would drop the message.
   const [storeSaved, setStoreSaved] = useState(false);
+  // `GET /users`, and every route the staff panel's link leads to, already
+  // name `ManageUsers` in gates.rs and refuse a cashier or a manager with a
+  // 403 (services::permissions says the owner alone holds it). Same for
+  // `ExportAndImport` on the four exports and the two import routes: the
+  // panel below is only the hidden button; the server already refuses both.
+  const manageUsers = useHasPermission("manage_users");
+  const exportAndImport = useHasPermission("export_and_import");
 
   return (
     <section className="flex flex-col">
@@ -122,9 +130,9 @@ export function SettingsScreen() {
             />
           )}
           <ThemePanel />
-          <StaffPanel />
+          {manageUsers ? <StaffPanel /> : null}
           <BackupsPanel />
-          <ExportImportPanel />
+          {exportAndImport ? <ExportImportPanel /> : null}
           <StockRecountPanel />
         </div>
       ) : null}
@@ -482,9 +490,11 @@ function ThemePanel() {
  * The link out to the users screen (M4 T8), not the list itself: the fiches
  * and their roles are their own screen because a table, an "add a user"
  * dialog and a PIN reset dialog are a page's worth, not a card's. `crate::
- * gates` names `ManageUsers` on every route behind that screen, so a
- * manager or a cashier who follows this same link is shown the translated
- * 403 there rather than a card that pretended the link was not for them.
+ * gates` names `ManageUsers` on every route behind that screen, so the
+ * owner alone holds it; `SettingsScreen` hides this whole panel from a
+ * manager and a cashier for that reason (M4 T5), and typing `/settings/users`
+ * by hand still meets the server's own refusal there — the panel is the
+ * hidden button, `gates.rs` is the defence.
  */
 function StaffPanel() {
   const { t } = useTranslation();

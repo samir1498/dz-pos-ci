@@ -9,15 +9,23 @@
 // file's, and it is what lets `just e2e` sign in once per run instead of
 // once per spec.
 //
-// The role never reaches a screen as a comparison. Today the only screen
-// that reads it at all is the topbar's `UserMenu`, and it reads it as a
-// single value — a lookup into a label, `ROLE_LABEL[me.role]`, the same
-// shape `ThemeSwitcher` uses for a theme name — never a branch on which
-// role it is; `role.test.ts` holds every file under `src/` to that, the
-// way `theme.test.ts` holds them to never branching on a theme. `GET
+// The role never reaches a screen as a comparison. The topbar's `UserMenu`
+// reads it as a single value — a lookup into a label, `ROLE_LABEL[me.role]`,
+// the same shape `ThemeSwitcher` uses for a theme name — never a branch on
+// which role it is; `role.test.ts` holds every file under `src/` to that,
+// the way `theme.test.ts` holds them to never branching on a theme. `GET
 // /auth/me` and `POST /auth/login` both hand back `permissions` too
-// (architecture.md rule 2), untouched, for the day a screen needs to gate
-// something finer than a label on it; nothing reads that field yet.
+// (architecture.md rule 2), and `useHasPermission` below is the one place a
+// screen asks it: a boolean composes into a filtered column list or a
+// hidden block, which a `Can` wrapper component does not (M4 T5).
+//
+// `useHasPermission` reads this context and not a second fetch of `GET
+// /auth/me`: `apps/desktop/src/lib/me.ts` used to keep its own react-query
+// cache under the key `["me"]`, fetched the same endpoint a second time, and
+// had exactly one caller (`AppShell`'s sidebar). This file already resolves
+// `/auth/me` once per window and every other screen that needs "who is
+// signed in" reads it, so the second fetch was deleted rather than kept
+// alongside a fourth way to ask (M4 T5).
 //
 // Locking is a client-side idea and does not touch the server session: the
 // idle timer here only raises a flag `__root.tsx` reads to show the lock
@@ -26,7 +34,7 @@
 // route's own state, and a route that stayed mounted keeps it).
 
 import { ApiError } from "@dzpos/shared";
-import type { LoginDto, MeDto } from "@dzpos/shared";
+import type { LoginDto, MeDto, PermissionDto } from "@dzpos/shared";
 import { focusManager, useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
@@ -294,4 +302,27 @@ export function useSession(): Ctx {
   const ctx = useContext(SessionContext);
   if (ctx === null) throw new Error("useSession outside SessionProvider");
   return ctx;
+}
+
+/** Whether `me` holds `permission`. `false` for every refusal `me` can be
+ *  (nothing signed in yet, or signed out), not only "the role does not
+ *  hold it": a screen that cannot even tell who is signed in offers
+ *  nothing that needs asking. A plain function and not a hook, so the one
+ *  place that filters a list of items against several permissions
+ *  (`AppShell`'s `NAV`) can call it once per item without breaking the
+ *  rule that a hook is called the same number of times on every render;
+ *  `useHasPermission` below is the hook shape for everywhere else, and
+ *  both read `.permissions` in this one place, which is what
+ *  `role.test.ts` holds every other file under `src/` to never doing. */
+export function hasPermission(me: MeDto | null, permission: PermissionDto): boolean {
+  return me?.permissions.includes(permission) ?? false;
+}
+
+/** `hasPermission`, read off the signed-in session. `__root.tsx` mounts the
+ *  shell only once `status === "signed-in"`, so every screen that reaches
+ *  this hook already has `me`; the null case is for the hook itself, not a
+ *  frame a mounted screen would see. */
+export function useHasPermission(permission: PermissionDto): boolean {
+  const { me } = useSession();
+  return hasPermission(me, permission);
 }

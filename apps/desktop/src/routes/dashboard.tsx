@@ -56,6 +56,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTranslation, type Key } from "@/i18n";
 import { useShopToday } from "@/lib/clock";
 import { errorKey } from "@/lib/fields";
+import { useHasPermission } from "@/lib/session";
 
 /** The window the chart draws, and the one the API defaults to. */
 const CHART_DAYS = 30;
@@ -87,6 +88,18 @@ export function DashboardScreen() {
 
 function Day({ day }: { day: string }) {
   const { t } = useTranslation();
+  // GET /dashboard and GET /dashboard/series now refuse a caller without
+  // SeeReports outright (crates/api/src/gates.rs, M4 T5 review,
+  // 2026-09-11), and AppShell hides the nav entry the same way, so a
+  // cashier never reaches this screen with data to draw. The finer-grained
+  // check below is a second permission, not a second layer of the same one:
+  // SeeReports is "may see this screen at all", SeeCostAndMargin is "may
+  // see the shop's margin on it", and today only a role holding both ever
+  // gets past the route gate to render this component — but the two stay
+  // independent because a custom role could one day hold the first without
+  // the second, and it is this flag, not the route gate, that would still
+  // hide the margin figure and the top-by-margin card from them.
+  const seeCostAndMargin = useHasPermission("see_cost_and_margin");
   const dashboard = useQuery({
     queryKey: dashboardQueryKey(day),
     queryFn: () => api.dashboard(day),
@@ -112,7 +125,7 @@ function Day({ day }: { day: string }) {
 
       {dashboard.isSuccess ? (
         <div className="flex flex-col gap-4">
-          <Figures dashboard={dashboard.data} />
+          <Figures dashboard={dashboard.data} seeCostAndMargin={seeCostAndMargin} />
 
           <Card data-testid="dashboard-chart-card">
             <CardHeader>
@@ -128,7 +141,9 @@ function Day({ day }: { day: string }) {
                   }}
                 />
               ) : null}
-              {series.isSuccess ? <Chart series={series.data} /> : null}
+              {series.isSuccess ? (
+                <Chart series={series.data} seeCostAndMargin={seeCostAndMargin} />
+              ) : null}
             </CardContent>
           </Card>
 
@@ -139,11 +154,15 @@ function Day({ day }: { day: string }) {
               rows={dashboard.data.top_by_quantity}
               testId="dashboard-top-quantity"
             />
-            <TopCard
-              title="dashboard_top_margin"
-              rows={dashboard.data.top_by_margin}
-              testId="dashboard-top-margin"
-            />
+            {/* Nothing but a margin column: hiding the figure and keeping
+                the card would be an empty table with a name on it. */}
+            {seeCostAndMargin ? (
+              <TopCard
+                title="dashboard_top_margin"
+                rows={dashboard.data.top_by_margin}
+                testId="dashboard-top-margin"
+              />
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -169,7 +188,13 @@ function Refusal({ error, onRetry }: { error: unknown; onRetry: () => void }) {
 
 // ---- the figure cards ----
 
-function Figures({ dashboard }: { dashboard: DashboardDto }) {
+function Figures({
+  dashboard,
+  seeCostAndMargin,
+}: {
+  dashboard: DashboardDto;
+  seeCostAndMargin: boolean;
+}) {
   const { t } = useTranslation();
   const { today, this_month: month } = dashboard;
   return (
@@ -183,12 +208,14 @@ function Figures({ dashboard }: { dashboard: DashboardDto }) {
           countLabel={t("dashboard_documents")}
           testId="figure-sales"
         />
-        <FigureCard
-          label="dashboard_margin"
-          centimes={today.margin_centimes}
-          monthCentimes={month.margin_centimes}
-          testId="figure-margin"
-        />
+        {seeCostAndMargin ? (
+          <FigureCard
+            label="dashboard_margin"
+            centimes={today.margin_centimes}
+            monthCentimes={month.margin_centimes}
+            testId="figure-margin"
+          />
+        ) : null}
         <FigureCard
           label="dashboard_expenses"
           centimes={today.expenses_centimes}
@@ -377,7 +404,13 @@ function bucket(point: DashboardSeriesPointDto): Bucket {
 
 type Grain = "days" | "weeks";
 
-function Chart({ series }: { series: DashboardSeriesDto }) {
+function Chart({
+  series,
+  seeCostAndMargin,
+}: {
+  series: DashboardSeriesDto;
+  seeCostAndMargin: boolean;
+}) {
   const { t } = useTranslation();
   const [grain, setGrain] = useState<Grain>("days");
   const points = grain === "days" ? series.days : series.weeks;
@@ -385,11 +418,18 @@ function Chart({ series }: { series: DashboardSeriesDto }) {
 
   // The colours are role variables, so each of the four themes paints its own
   // version of the same three series and no code here learns which is on.
-  const config: ChartConfig = {
-    sales: { label: t("dashboard_sales"), color: "var(--color-primary)" },
-    margin: { label: t("dashboard_margin"), color: "var(--color-money)" },
-    expenses: { label: t("dashboard_expenses"), color: "var(--color-warn)" },
-  };
+  // The margin entry is left out of the config, not just off the plot,
+  // recharts and the legend both read this map for what exists.
+  const config: ChartConfig = seeCostAndMargin
+    ? {
+        sales: { label: t("dashboard_sales"), color: "var(--color-primary)" },
+        margin: { label: t("dashboard_margin"), color: "var(--color-money)" },
+        expenses: { label: t("dashboard_expenses"), color: "var(--color-warn)" },
+      }
+    : {
+        sales: { label: t("dashboard_sales"), color: "var(--color-primary)" },
+        expenses: { label: t("dashboard_expenses"), color: "var(--color-warn)" },
+      };
 
   return (
     <div className="flex flex-col gap-3">
@@ -458,14 +498,16 @@ function Chart({ series }: { series: DashboardSeriesDto }) {
                 maxBarSize={24}
                 isAnimationActive={false}
               />
-              <Line
-                dataKey="margin"
-                stroke="var(--color-margin)"
-                strokeWidth={2}
-                dot={false}
-                type="monotone"
-                isAnimationActive={false}
-              />
+              {seeCostAndMargin ? (
+                <Line
+                  dataKey="margin"
+                  stroke="var(--color-margin)"
+                  strokeWidth={2}
+                  dot={false}
+                  type="monotone"
+                  isAnimationActive={false}
+                />
+              ) : null}
               <Line
                 dataKey="expenses"
                 stroke="var(--color-expenses)"
