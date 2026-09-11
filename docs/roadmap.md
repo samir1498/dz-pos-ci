@@ -109,7 +109,7 @@ and the product import with its template; `barcode_label`.
 
 Blocks: nothing fiscal.
 
-## M4. Team
+## M4. Team (closed 2026-09-11, PR #33)
 
 Demo: a cashier signs in with a PIN, cannot see cost or override a credit
 block; the owner reads the audit log of a price change.

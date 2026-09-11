@@ -28,8 +28,9 @@ const items = [
         items.map((item) => (
           <article class="piece">
             <img
-              src={`/shots/${item.shot.src1x}`}
-              srcset={`/shots/${item.shot.src1x} 1x, /shots/${item.shot.src2x} 2x`}
+              src={`/shots/${item.shot.src}`}
+              srcset={item.shot.sources.map((source) => `/shots/${source.url} ${source.width}w`).join(", ")}
+              sizes={item.shot.sizes}
               width={item.shot.width}
               height={item.shot.height}
               alt=""

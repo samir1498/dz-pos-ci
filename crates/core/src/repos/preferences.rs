@@ -53,7 +53,8 @@ pub fn put(
 }
 
 /// Forgets the preference, so the caller falls back to its own default. The
-/// theme uses this for "follow the machine".
+/// theme uses this to go back to Comptoir, the default, rather than to the
+/// machine's own light or dark preference.
 pub fn clear(conn: &mut SqliteConnection, shop_id: i32, key: &str) -> Result<(), CoreError> {
     diesel::delete(
         preferences::table

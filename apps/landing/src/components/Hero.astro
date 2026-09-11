@@ -12,6 +12,7 @@ interface Props {
 
 const { locale, hero } = Astro.props;
 const shot = shots.hero[locale];
+const srcset = shot.sources.map((source) => `/shots/${source.url} ${source.width}w`).join(", ");
 ---
 
 <section class="hero" aria-labelledby="hero-heading">
@@ -31,8 +32,9 @@ const shot = shots.hero[locale];
         every locale. */}
     <img
       class="hero-shot"
-      src={`/shots/${shot.src1x}`}
-      srcset={`/shots/${shot.src1x} 1x, /shots/${shot.src2x} 2x`}
+      src={`/shots/${shot.src}`}
+      srcset={srcset}
+      sizes={shot.sizes}
       width={shot.width}
       height={shot.height}
       alt=""
