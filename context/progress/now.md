@@ -117,15 +117,28 @@ names twice as well; neither was visible to the translation test, because it
 read the parsed object and JSON keeps the last of a repeated key in silence.
 It reads the files as text now.
 
-Next: M5, the first release, which is the last milestone before a shop can
-run on this. `docs/roadmap.md` § M5 has it: the bundle identifier changed
-once with the final name, the Tauri updater and its signing key, the Windows
-code-signing certificate, migrations tied to the app version with a backup
-before each and a previous-version open test, a tag on main building the
-installer and the GitHub release, the support bundle, the Arabic and RTL
-polish pass, and the delivery note. Five of its release gates are Samir's
-and Anouar's rather than mine, and two of them have lead times: the product
-name and the code-signing certificate.
+**M5, the first release, started on 2026-09-11 at 19:30**
+(`context/plans/20260908-m5-first-release-v1.md`, ten tasks). It is the last
+milestone before a shop can run on this, and it is different from the four
+before it: most of what it builds cannot be demonstrated from this machine.
+An installer needs Windows, a signature needs a certificate nobody has
+bought, and an update needs a previous release to update from. So every task
+says what can be proven here and what cannot, and a task that says it is
+done and means it compiles is not done.
+
+In flight: the webview's content security policy with the launch token out
+of the page global it sits in today, which is the only item in the milestone
+that is a hole rather than machinery; and the version, git short hash and
+build date embedded at build time, shown in About and heading the log.
+
+Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
+bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
+not an effort one, and the two pages now point at each other.
+
+Five release gates are Samir's and Anouar's rather than mine, and two have
+lead times that start when they say so: the product's final name, which is
+baked into the installer, and the Windows code-signing certificate, without
+which every customer sees a warning.
 
 Open for Samir on M4: the wrong-try counter is one per person and covers the
 PIN and the password together, so a fumbled password locks that person's
