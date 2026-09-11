@@ -138,10 +138,25 @@ bought, and an update needs a previous release to update from. So every task
 says what can be proven here and what cannot, and a task that says it is
 done and means it compiles is not done.
 
+On main since 2026-09-11 at 21:34 and 22:03: the copy of the shop file
+taken before a new build migrates it, and the version, git short hash and
+build date embedded at build time, shown in About and heading the log file
+beside the shop file.
+
 In flight: the webview's content security policy with the launch token out
-of the page global it sits in today, which is the only item in the milestone
-that is a hole rather than machinery; and the version, git short hash and
-build date embedded at build time, shown in About and heading the log.
+of the page global, which is the only item in the milestone that is a hole
+rather than machinery; and the release rule, where a tag on `main` is the
+only thing that publishes and a manual run can only build the installer and
+keep it as a download.
+
+Two tasks the reviews added on 2026-09-11. A Windows release build has no
+console, so a refusal to start says nothing at all to the shopkeeper: the
+window never opens. That was already true of a failed migration and is now
+easier to reach, because the app refuses to start when it cannot copy the
+shop file before an upgrade. And the two kinds of copy that sit beside the
+shop file, the one before a restore and the one before an upgrade, are a
+file swap by hand: the restore route takes the name of a daily copy and no
+other kind.
 
 Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
 bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
