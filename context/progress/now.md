@@ -239,9 +239,13 @@ replaced. It goes through `open_and_upgrade` now, the same door startup uses,
 so a pre-upgrade copy is taken first and that kind is never pruned. One more
 way a restore can stop, and it is the intended one: a copy that cannot be
 written refuses the reopen rather than migrating a shop's books with nothing
-to go back to. What is left of that task is the screen, and it grew a row:
-nothing lists a pre-upgrade copy, so an owner can now have one a restore left
-and never see it.
+to go back to. The name of that copy goes into the row the restore
+writes (PR #52), which until the screen exists is the only place either copy
+is named; absent rather than empty when nothing migrated, because the audit
+screen reads a missing key and an empty one as two different things. What is
+left of that task is the screen itself, and it grew a row: nothing lists a
+pre-upgrade copy, so an owner can have one a restore left and never see it,
+and a log of who did what is not where they would look.
 
 Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
 bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
