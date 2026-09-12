@@ -139,12 +139,22 @@ mod tests {
         assert!(text.contains("لم يتمكن"));
     }
 
+    /// The folder is asserted on its own line and not as a substring of the
+    /// text: every folder here is a prefix of the file path above it, so a
+    /// bare `contains` would pass with the folder line deleted.
     #[test]
     fn the_path_and_its_folder_are_named_when_known() {
         let path = Path::new("/home/shop/.local/share/dzpos/dzpos.db");
         let text = message(&Root, Some(path));
-        assert!(text.contains("/home/shop/.local/share/dzpos/dzpos.db"));
-        assert!(text.contains("/home/shop/.local/share/dzpos"));
+        let lines: Vec<&str> = text.lines().collect();
+        assert!(
+            lines.contains(&"Fichier / File / الملف: /home/shop/.local/share/dzpos/dzpos.db"),
+            "{text}"
+        );
+        assert!(
+            lines.contains(&"Dossier / Folder / المجلد: /home/shop/.local/share/dzpos"),
+            "{text}"
+        );
     }
 
     #[test]
