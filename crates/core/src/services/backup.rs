@@ -602,6 +602,7 @@ pub fn record_restore(
     actor_id: i32,
     restored_from: &str,
     safety_copy: &str,
+    upgrade_copy: Option<&str>,
     summary: &Summary,
 ) -> Result<(), CoreError> {
     audit::record(
@@ -617,6 +618,13 @@ pub fn record_restore(
                 serde_json::json!({
                     "restored_from": restored_from,
                     "safety_copy": safety_copy,
+                    // The copy the reopen took of the restored file, when
+                    // that file was behind and had to be migrated. Null on
+                    // the ordinary restore, where nothing migrated and no
+                    // copy was taken. It is here because no screen lists a
+                    // pre-upgrade copy yet (M5 T11), so this row is the only
+                    // place its name is written down.
+                    "upgrade_copy": upgrade_copy,
                     "products": summary.products,
                     "documents": summary.documents,
                 })

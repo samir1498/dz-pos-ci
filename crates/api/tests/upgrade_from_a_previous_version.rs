@@ -23,6 +23,23 @@ struct Count {
     n: i64,
 }
 
+#[derive(QueryableByName)]
+struct Text {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    t: String,
+}
+
+/// What the restore wrote into its own audit row, as the row holds it.
+fn what_the_restore_recorded(db: &std::path::Path) -> serde_json::Value {
+    let mut conn = dzpos_core::db::open_unmigrated(db).unwrap();
+    let row: Text = diesel::sql_query(
+        "SELECT \"after\" AS t FROM audit_log WHERE action = 'backup.restore' ORDER BY id DESC LIMIT 1",
+    )
+    .get_result(&mut conn)
+    .unwrap();
+    serde_json::from_str(&row.t).unwrap()
+}
+
 /// A shop file as the version before this one left it: every migration this
 /// build ships except the last, which is the one the upgrade will run.
 fn a_file_from_the_previous_version(path: &std::path::Path) {
@@ -264,6 +281,21 @@ fn restoring_a_copy_that_is_behind_leaves_a_copy_of_it_before_it_is_migrated() {
     // And it is worth restoring from: the books are in it. A copy of the
     // right shape holding nothing would satisfy the line above.
     assert_eq!(products_in(&copies[0].path), 1);
+
+    // The copy is kept for ever and no screen lists it yet, so the row the
+    // restore writes is the only place its name is written down. Whoever is
+    // helping a shop that restored the wrong copy reads that row.
+    let recorded = what_the_restore_recorded(&path);
+    assert_eq!(
+        recorded["upgrade_copy"],
+        serde_json::json!(copies[0].name),
+        "{recorded}"
+    );
+    assert_eq!(
+        recorded["safety_copy"],
+        serde_json::json!(restored.safety_copy),
+        "{recorded}"
+    );
 
     // And the restore did what it was asked: the shop file is the older
     // copy's data, migrated forward and being served.
