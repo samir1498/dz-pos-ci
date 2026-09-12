@@ -1,7 +1,10 @@
 -- Every row in this table took its moment from the column's own default,
--- SQLite's CURRENT_TIMESTAMP, which is UTC. Every other date in this file is
--- on the shop's calendar, UTC+1 with no daylight saving, so this one column
--- meant something different from all the rest: a row written at 00:30 in
+-- SQLite's CURRENT_TIMESTAMP, which is UTC. Most created_at columns in this
+-- file carry that same default, and on the ones a day filter reads it never
+-- fires: the service stamps from services::clock before the insert, and the
+-- supplier ledger refuses a row that arrives without a moment. The audit log
+-- was the one column read by a filter and left to the default, and the shop
+-- runs on UTC+1 with no daylight saving, so a row written at 00:30 in
 -- Algiers was stored as 23:30 the day before, printed that way on the
 -- owner's screen, and fell outside the day he filtered for.
 --

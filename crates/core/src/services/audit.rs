@@ -121,9 +121,9 @@ pub const ACTION_CREATE_EXPENSE: &str = "expense.create";
 /// id, both quantities and the difference between them, because it is the
 /// only record a recount leaves: there is no table of runs, and the drift
 /// list a shop owner reads is these rows read back. The day the run was
-/// marked under travels in the entry too, since the column's own timestamp
-/// is UTC and a run just after midnight in Algiers would file itself under
-/// yesterday.
+/// marked under travels in the entry too, because `services::stock` finds a
+/// run by reading that day out of the entry rather than off the row's own
+/// moment.
 pub const ACTION_STOCK_DRIFT: &str = "stock.drift";
 
 /// A fiche closed while it was still carrying something: a balance either

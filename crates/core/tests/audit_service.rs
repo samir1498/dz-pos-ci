@@ -289,10 +289,10 @@ mod read {
             .unwrap()
             .id;
         products::update(&mut conn, SHOP, OWNER, p, draft(1_500, true)).unwrap();
-        // The day off the row itself, which is on the shop's calendar since
-        // `record` stamps it from the shop clock. Taken from the row rather
-        // than from `clock::now()` so a test running across midnight asks
-        // for the day the row was actually written on.
+        // The day off the row itself, so a test running across midnight
+        // asks for the day the row was actually written on. This asserts the
+        // filter and not the calendar: the moment the row carries is what
+        // `a_row_is_stamped_from_the_shop_clock_and_not_from_the_file` holds.
         let created_at = audit::list(&mut conn, SHOP).unwrap()[0].created_at;
         let today = created_at.date();
 
@@ -445,10 +445,14 @@ fn a_row_is_stamped_from_the_shop_clock_and_not_from_the_file() {
         row.created_at
     );
 
+    // The shop is an hour ahead of UTC and the two reads are adjacent, so
+    // the gap is one hour to within the time a statement takes. A minute
+    // either side rather than an open window: half an hour of slack would
+    // still pass if the offset were read off a half-hour zone by mistake.
     let utc_now = chrono::Utc::now().naive_utc();
     let ahead = row.created_at - utc_now;
     assert!(
-        ahead.num_seconds() > 3000 && ahead.num_seconds() < 4200,
+        ahead.num_seconds() > 3540 && ahead.num_seconds() < 3660,
         "the row is {} seconds from UTC, so it took the column's own default",
         ahead.num_seconds()
     );

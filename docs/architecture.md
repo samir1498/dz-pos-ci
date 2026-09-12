@@ -325,11 +325,15 @@ the kit's two folders and what the CLI gets wrong on the way in.
   need a data migration alongside the rename, or its old rows would drop out
   of the queries that read the log by name.
 - `audit_log.created_at` is on the shop's calendar like every other date a
-  screen shows, since `2026-09-12-000013_audit_log_shop_clock`. It was the one
-  column in the file that took SQLite's `CURRENT_TIMESTAMP`, which is UTC, so
-  a row written at 00:30 in Algiers was stored as 23:30 the day before and
-  printed that way on the owner's screen while the day filter, which did
-  convert, counted it under the day it was written. The migration shifts the
+  screen shows, since `2026-09-12-000013_audit_log_shop_clock`. Most
+  `created_at` columns in the file carry SQLite's `CURRENT_TIMESTAMP` default,
+  which is UTC; on the ones a day filter reads it never fires, because the
+  service stamps the moment before the insert and the supplier ledger refuses
+  a row that arrives without one. The audit log was the column a filter read
+  and the default still reached, so a row written at 00:30 in Algiers was
+  stored as 23:30 the day before and printed that way on the owner's screen
+  while the day filter, which did convert, counted it under the day it was
+  written. The migration shifts the
   rows already there by an hour and `services::audit::record` stamps from
   `services::clock` from now on, which is why the two have to travel in one
   version: the shift run against a build that already stamps would move those
