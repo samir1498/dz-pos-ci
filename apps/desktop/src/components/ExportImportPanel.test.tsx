@@ -197,6 +197,30 @@ describe("the import", () => {
     expect(saved[0]?.filename).toBe("modele-produits-2026-09-10.xlsx");
   });
 
+  /**
+   * A file input writes its own button and its own "no file chosen", in the
+   * language the machine is in. An Arabic counter on a French Windows read
+   * "Choisir un fichier" there. The input still does the work; what the shop
+   * reads sits beside it and comes from the dictionary.
+   */
+  test("the picker says what was chosen in the shop's own words", async () => {
+    const user = userEvent.setup();
+    mount();
+
+    expect(screen.getByTestId("import-file")).toHaveClass("sr-only");
+    expect(screen.getByTestId("import-pick")).toHaveTextContent(fr.import_pick_file);
+    expect(screen.getByTestId("import-file-name")).toHaveTextContent(fr.import_no_file);
+
+    const opened = vi.spyOn(HTMLInputElement.prototype, "click");
+    await user.click(screen.getByTestId("import-pick"));
+    expect(opened).toHaveBeenCalledTimes(1);
+    opened.mockRestore();
+
+    await user.upload(screen.getByTestId("import-file"), xlsx());
+
+    expect(screen.getByTestId("import-file-name")).toHaveTextContent("produits.xlsx");
+  });
+
   test("a file is checked before it can be imported, and the check writes nothing", async () => {
     const user = userEvent.setup();
     mount();

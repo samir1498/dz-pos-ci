@@ -555,6 +555,7 @@
   "import_title": "Import products",
   "import_hint": "Download the template, fill it in, then check the file before importing it. A barcode the shop already uses updates that product instead of opening a second one.",
   "import_pick_file": "Choose a file",
+  "import_no_file": "No file chosen",
   "action_download_template": "Download the template",
   "action_check_file": "Check the file",
   "action_checking": "Checking…",

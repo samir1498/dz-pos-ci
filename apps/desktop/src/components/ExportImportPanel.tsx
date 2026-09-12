@@ -205,13 +205,20 @@ export function ExportImportPanel() {
           >
             {t("action_download_template")}
           </Button>
+          {/* A file input draws its own button and its own "no file chosen",
+              and it writes both in the language the machine is in, not the
+              one the shop is in: an Arabic counter on a French Windows read
+              "Choisir un fichier" here until 2026-09-12. The input stays in
+              the page and keeps its name, because it is what opens the file
+              dialog and what a test hands a file to; what the shop reads is
+              the button and the line beside it. */}
           <Input
             ref={picker}
             type="file"
             accept=".xlsx"
             aria-label={t("import_pick_file")}
             data-testid="import-file"
-            className="w-auto"
+            className="sr-only"
             onChange={(e) => {
               const chosen = e.target.files?.[0] ?? null;
               setDryRun(null);
@@ -220,6 +227,18 @@ export function ExportImportPanel() {
               setFile(chosen);
             }}
           />
+          <Button
+            variant="outline"
+            type="button"
+            data-testid="import-pick"
+            disabled={busy}
+            onClick={() => picker.current?.click()}
+          >
+            {t("import_pick_file")}
+          </Button>
+          <span data-testid="import-file-name" className="text-sm text-muted-foreground">
+            {file === null ? t("import_no_file") : file.name}
+          </span>
           <Button
             data-testid="import-dry-run"
             disabled={busy || file === null}
