@@ -261,6 +261,9 @@ fn restoring_a_copy_that_is_behind_leaves_a_copy_of_it_before_it_is_migrated() {
             .len(),
         1
     );
+    // And it is worth restoring from: the books are in it. A copy of the
+    // right shape holding nothing would satisfy the line above.
+    assert_eq!(products_in(&copies[0].path), 1);
 
     // And the restore did what it was asked: the shop file is the older
     // copy's data, migrated forward and being served.

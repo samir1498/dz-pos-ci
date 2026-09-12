@@ -307,9 +307,21 @@ impl AppState {
                 // safety copy beside it); what failed is reopening it. The
                 // slot stays empty on purpose, so nothing runs against a
                 // stand-in that would look like an empty shop.
+                //
+                // Both file names go in the line, because this is where a
+                // full disk lands and the audit row that would have named
+                // them is in the arm above: the copy this restore put in
+                // place is not the shop's own file any more, and the one
+                // holding what the shop had an hour ago is the safety copy.
+                // Whoever is helping the shop reads this line and nothing
+                // else, since the relaunch that follows hits the same
+                // refusal and never gets far enough to write a row.
                 eprintln!(
-                    "dz-pos: the shop file at {} could not be reopened after the restore: {e}",
-                    db.display()
+                    "dz-pos: the shop file at {} could not be reopened after the restore of {}: {e}. \
+                     The file it replaced is in {} beside it.",
+                    db.display(),
+                    backup_path.display(),
+                    safety_copy
                 );
                 Err(ApiError::RestartNeeded)
             }
@@ -357,9 +369,14 @@ impl AppState {
 /// for ever; an unchanged file gets none either, since the ordinary daily
 /// copy already describes it.
 ///
-/// A copy that cannot be written stops the app from starting. That is the
-/// point of it: the alternative is a migration running with nothing to go
-/// back to, on a disk that just said it was full.
+/// Both doors into the shop file come through here: the app's startup, and
+/// the reopen at the end of `AppState::restore`, where the copy being put in
+/// place is usually a version behind.
+///
+/// A copy that cannot be written stops the app from starting, and stops a
+/// restore from reopening the file it just put in place. That is the point of
+/// it: the alternative is a migration running with nothing to go back to, on
+/// a disk that just said it was full.
 fn open_and_upgrade(db: &Path) -> Result<Conn, CoreError> {
     let mut conn = dzpos_core::db::open_unmigrated(db)?;
     let pending = dzpos_core::db::pending_migrations(&mut conn)?;
