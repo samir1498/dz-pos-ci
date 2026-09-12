@@ -211,7 +211,12 @@ export function ExportImportPanel() {
               "Choisir un fichier" here until 2026-09-12. The input stays in
               the page and keeps its name, because it is what opens the file
               dialog and what a test hands a file to; what the shop reads is
-              the button and the line beside it. */}
+              the button and the line beside it. It is off the tab order and
+              it closes with the rest while a call is out, so a hidden
+              control is not a second way to swap the file under a check
+              that is already running. The name of the file is `ltr` like
+              every other value the shop did not write: a name in Arabic
+              still ends in `.xlsx`. */}
           <Input
             ref={picker}
             type="file"
@@ -219,6 +224,8 @@ export function ExportImportPanel() {
             aria-label={t("import_pick_file")}
             data-testid="import-file"
             className="sr-only"
+            tabIndex={-1}
+            disabled={busy}
             onChange={(e) => {
               const chosen = e.target.files?.[0] ?? null;
               setDryRun(null);
@@ -236,7 +243,11 @@ export function ExportImportPanel() {
           >
             {t("import_pick_file")}
           </Button>
-          <span data-testid="import-file-name" className="text-sm text-muted-foreground">
+          <span
+            dir="ltr"
+            data-testid="import-file-name"
+            className="text-sm text-muted-foreground"
+          >
             {file === null ? t("import_no_file") : file.name}
           </span>
           <Button

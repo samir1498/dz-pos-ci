@@ -208,6 +208,8 @@ describe("the import", () => {
     mount();
 
     expect(screen.getByTestId("import-file")).toHaveClass("sr-only");
+    expect(screen.getByTestId("import-file")).toHaveAttribute("tabindex", "-1");
+    expect(screen.getByTestId("import-file-name")).toHaveAttribute("dir", "ltr");
     expect(screen.getByTestId("import-pick")).toHaveTextContent(fr.import_pick_file);
     expect(screen.getByTestId("import-file-name")).toHaveTextContent(fr.import_no_file);
 
@@ -219,6 +221,35 @@ describe("the import", () => {
     await user.upload(screen.getByTestId("import-file"), xlsx());
 
     expect(screen.getByTestId("import-file-name")).toHaveTextContent("produits.xlsx");
+  });
+
+  /**
+   * The hidden input is not a second way in. A file picked while a check is
+   * out lands its report under the new name, and the visible button already
+   * closes for that; the input did not until 2026-09-12.
+   */
+  test("nothing can pick a second file while a check is out", async () => {
+    const user = userEvent.setup();
+    let answer: () => void = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = () => resolve(json(200, CLEAN));
+          }),
+      ),
+    );
+    mount();
+
+    await user.upload(screen.getByTestId("import-file"), xlsx());
+    await user.click(screen.getByTestId("import-dry-run"));
+
+    await waitFor(() => expect(screen.getByTestId("import-pick")).toBeDisabled());
+    expect(screen.getByTestId("import-file")).toBeDisabled();
+
+    answer();
+    await screen.findByTestId("import-counts");
   });
 
   test("a file is checked before it can be imported, and the check writes nothing", async () => {
