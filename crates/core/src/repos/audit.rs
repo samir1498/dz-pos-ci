@@ -144,6 +144,10 @@ mod tests {
             entity_id: None,
             before: None,
             after: None,
+            // The shop clock, the same source `services::audit::record`
+            // uses. These rows are read back by page and by filter here,
+            // never for the moment on them.
+            created_at: crate::services::clock::now(),
         }
     }
 
