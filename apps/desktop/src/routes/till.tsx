@@ -57,6 +57,7 @@ import {
   saleTicketQueryKey,
   settingsQueryKey,
 } from "@/api";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Icon } from "@/components/Icon";
 import { Money } from "@/components/Money";
@@ -379,12 +380,25 @@ export function TillScreen() {
   /** The same basket again, past the limit this time. The body is the one
    * the server refused, so the sale that goes through is the sale that was
    * refused and not a second basket the cashier could have edited between
-   * the two calls. */
+   * the two calls.
+   *
+   * The question is asked in a dialog of ours rather than a browser
+   * `confirm()`, which is a box Windows draws in the language Windows is in
+   * and which does not mirror on an Arabic till. */
+  const [forcing, setForcing] = useState(false);
   const override = useCallback(() => {
     if (refusal === null) return;
-    if (!window.confirm(t("till_override_confirm"))) return;
-    pay.mutate({ ...refusal.body, override: true });
-  }, [pay, refusal, t]);
+    setForcing(true);
+  }, [refusal]);
+  const forceThrough = useCallback(async () => {
+    if (refusal === null) return;
+    // The question stays up until the sale has landed or been refused. It
+    // closed first until 2026-09-12, which left the dialog's own pending
+    // state unreachable and a second press on the button able to send a
+    // second sale.
+    await pay.mutateAsync({ ...refusal.body, override: true }).catch(() => undefined);
+    setForcing(false);
+  }, [pay, refusal]);
 
   // F9 pays, the way a till keyboard does. Held in a ref so the listener is
   // installed once and still sees the cart as it is now.
@@ -567,6 +581,18 @@ export function TillScreen() {
           problem={tenderedProblem}
           refusal={refusal}
           onOverride={override}
+          pending={pay.isPending}
+        />
+
+        <ConfirmDialog
+          data-testid="till-override-dialog"
+          open={forcing}
+          onCancel={() => setForcing(false)}
+          onConfirm={() => void forceThrough()}
+          title="till_override"
+          question="till_override_confirm"
+          confirm="till_override"
+          destructive
           pending={pay.isPending}
         />
 

@@ -249,7 +249,9 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let list: CustomerDto[];
 let rows: CustomerLedgerDto;
 let payments: CustomerPaymentsDto;
-let writeAnswer: (() => Response) | null;
+// A write's answer. It may be a promise so a test can hold one open and
+// look at the screen while the call is still out.
+let writeAnswer: (() => Response | Promise<Response>) | null;
 let clockAnswer: (() => Response) | null;
 
 beforeEach(() => {
@@ -258,7 +260,10 @@ beforeEach(() => {
   payments = noPayments;
   writeAnswer = null;
   clockAnswer = null;
-  vi.spyOn(window, "confirm").mockReturnValue(true);
+  // Spied and never stubbed: the screens ask their own questions now, and a
+  // call to the browser's box would come back falsy and fail the test that
+  // expected the write.
+  vi.spyOn(window, "confirm");
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "POST" || init?.method === "PUT") {
@@ -562,6 +567,39 @@ describe("the ledger", () => {
     expect(within(row).getAllByText("1 500,00")).toHaveLength(2);
   });
 
+  /**
+   * The fiche's one line under the name. A phone written in groups is a run
+   * of digits per group as far as the bidi algorithm is concerned, and an
+   * Arabic page lays those groups out right to left: `0770 11 22 33` came
+   * out as `33 22 11 0770`, which is the number a shop would have dialled.
+   */
+  test("the phone on the fiche reads the way a phone is dialled", async () => {
+    mountFiche(3, "ar");
+
+    const phone = await screen.findByTestId("customer-phone");
+    expect(phone).toHaveTextContent("0770 11 22 33");
+    expect(phone).toHaveAttribute("dir", "ltr");
+  });
+
+  /**
+   * The address beside it. It is free text and can be in either script, so it
+   * is isolated rather than forced: what `bdi` stops is an Algerian address's
+   * lot number and postcode coming apart the way the phone did, without
+   * telling an Arabic address to read left to right.
+   */
+  test("the address on the fiche is isolated from the line around it", async () => {
+    const address = "Cité 500 Logts, Bt 12, N°3";
+    list = [{ ...benali, address }];
+    mountFiche(3, "ar");
+
+    // Through the phone, which is the other half of the same line: waiting on
+    // the header alone would find the list's, before the fiche has answered.
+    const line = (await screen.findByTestId("customer-phone")).closest("p");
+    const isolated = line?.querySelector("bdi") ?? null;
+    expect(isolated).not.toBeNull();
+    expect(isolated?.textContent).toBe(address);
+  });
+
   test("an adjustment posts signed centimes and the ledger comes back changed", async () => {
     mountFiche(3);
     await screen.findByRole("row", { name: /solde de départ/ });
@@ -570,12 +608,21 @@ describe("the ledger", () => {
     await userEvent.type(screen.getByLabelText(fr.field_adjust_note), "erreur de saisie");
     await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
 
+    // The question is asked in a dialog of ours, not the box Windows draws,
+    // and it names the figure the shop is agreeing to.
+    const asked = await screen.findByTestId("customer-adjust-dialog");
+    expect(within(asked).getByText(fr.customers_adjust_confirm)).toBeInTheDocument();
+    expect(screen.getByTestId("customer-adjust-asked")).toHaveTextContent("-500,00");
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(() => sent("POST")).toThrow();
+
+    await userEvent.click(screen.getByTestId("customer-adjust-dialog-confirm"));
+
     await waitFor(() => expect(sent("POST").url).toMatch(/\/customers\/3\/adjustments$/));
     expect(sent("POST").body).toEqual({
       amount_centimes: -50_000,
       note: "erreur de saisie",
     });
-    expect(window.confirm).toHaveBeenCalledWith(fr.customers_adjust_confirm);
 
     const adjusted = await screen.findByRole("row", { name: /erreur de saisie/ });
     expect(within(adjusted).getByText(fr.debt_adjustment)).toBeInTheDocument();
@@ -584,14 +631,17 @@ describe("the ledger", () => {
   });
 
   test("a cancelled confirmation posts nothing", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     mountFiche(3);
     await screen.findByRole("row", { name: /solde de départ/ });
 
     await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
     await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
+    await userEvent.click(await screen.findByTestId("customer-adjust-dialog-cancel"));
 
     expect(() => sent("POST")).toThrow();
+    // What was typed is still there: saying no is not the same as starting
+    // the correction again.
+    expect(screen.getByLabelText(fr.field_adjust_amount)).toHaveValue(formatCentimes(-50_000));
   });
 
   test("a refused correction keeps the figure that was typed", async () => {
@@ -603,6 +653,7 @@ describe("the ledger", () => {
     await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
     await userEvent.type(screen.getByLabelText(fr.field_adjust_note), "erreur de saisie");
     await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
+    await userEvent.click(await screen.findByTestId("customer-adjust-dialog-confirm"));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_validation);
     // Emptying the box on a refusal means retyping the figure to find out
@@ -610,6 +661,41 @@ describe("the ledger", () => {
     // integer it understood, which is what MoneyInput leaves behind on blur.
     expect(screen.getByLabelText(fr.field_adjust_amount)).toHaveValue(formatCentimes(-50_000));
     expect(screen.getByLabelText(fr.field_adjust_note)).toHaveValue("erreur de saisie");
+  });
+
+  test("nothing can write a second correction while the first one is out", async () => {
+    mountFiche(3);
+    await screen.findByRole("row", { name: /solde de départ/ });
+
+    // The call never answers, so the screen stays as it is the moment the
+    // shop said yes.
+    let release: (answer: Response) => void = () => {};
+    writeAnswer = () =>
+      new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+
+    await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
+    await userEvent.click(await screen.findByTestId("customer-adjust-dialog-confirm"));
+
+    // The question is still up and neither button answers it again. A
+    // correction to what a customer owes is written once or not at all, and
+    // a box that closed here would read as the correction not happening.
+    await waitFor(() =>
+      expect(screen.getByTestId("customer-adjust-dialog-confirm")).toBeDisabled(),
+    );
+    expect(screen.getByTestId("customer-adjust-dialog-cancel")).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByTestId("customer-adjust-dialog")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter((c) => isInit(c[1]) && c[1].method === "POST")).toHaveLength(
+      1,
+    );
+
+    release(json(201, { ...ledger, balance_centimes: 100_000 }));
+    await waitFor(() =>
+      expect(screen.queryByTestId("customer-adjust-dialog")).not.toBeInTheDocument(),
+    );
   });
 
   test("an adjustment of nothing is refused before it leaves the screen", async () => {

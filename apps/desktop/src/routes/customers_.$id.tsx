@@ -32,6 +32,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Money } from "@/components/Money";
 import { MoneyInput } from "@/components/MoneyInput";
 import { PageHeader } from "@/components/PageHeader";
@@ -141,13 +142,35 @@ export function CustomerFiche({ id }: { id: number }) {
   }
 
   const shown = customer.data;
-  const said = [shown.phone, shown.address].filter((part): part is string => part !== null);
+  /* The phone reads left to right with Western digits whatever the screen's
+     language, the same rule the customers list and the suppliers list already
+     hold. Without it the bidi algorithm takes each group of digits for a run
+     of its own and lays the groups out right to left, so `0770 11 22 33` came
+     out as `33 22 11 0770` on the Arabic fiche and a shop would have dialled
+     it that way. */
+  const said =
+    shown.phone === null && shown.address === null ? undefined : (
+      <>
+        {shown.phone === null ? null : (
+          <span dir="ltr" data-testid="customer-phone" className="font-numeric">
+            {shown.phone}
+          </span>
+        )}
+        {shown.phone === null || shown.address === null ? null : " · "}
+        {/* An address is free text and can be in either script, so it is
+            isolated rather than forced: `bdi` keeps whatever is inside it
+            from reordering the line around it, and an Algerian address
+            carries a lot number and a postcode that would otherwise come
+            apart the way the phone did. */}
+        {shown.address === null ? null : <bdi>{shown.address}</bdi>}
+      </>
+    );
 
   return (
     <section className="flex flex-col gap-6">
       <PageHeader
         title={shown.name}
-        description={said.length === 0 ? undefined : said.join(" · ")}
+        description={said}
         actions={
           <>
             <BackToList />
@@ -757,24 +780,39 @@ function AdjustPanel({ customer }: { customer: CustomerDto }) {
     },
   });
 
+  /** The correction the shop has typed and not yet agreed to. The question
+   * is asked in a dialog of ours rather than a browser `confirm()`, which is
+   * a box Windows draws in the language Windows is in and which does not
+   * mirror on an Arabic screen. Submitting only opens it; the write happens
+   * when the shop says yes, on the values the form was holding then. */
+  const [asking, setAsking] = useState<AdjustValues | null>(null);
+
   const blank: AdjustValues = { amount: null, note: "" };
   const form = useForm({
     defaultValues: blank,
-    onSubmit: async ({ value }) => {
+    onSubmit: ({ value }) => {
       if (value.amount === null || value.amount === 0) return;
-      if (!window.confirm(t("customers_adjust_confirm"))) return;
-      const written = await adjust
-        .mutateAsync({ amount_centimes: value.amount, note: cleared(value.note) })
-        .then(() => true)
-        .catch(() => false);
-      // A refused correction keeps what was typed: the error above says what
-      // to change, and an empty box means typing the figure again to find out
-      // what was wrong with it.
-      if (!written) return;
-      form.setFieldValue("amount", null);
-      form.setFieldValue("note", "");
+      setAsking(value);
     },
   });
+
+  const write = async () => {
+    if (asking === null || asking.amount === null) return;
+    // The question stays up until the correction has landed or been refused,
+    // so a second press cannot write a second correction to what a customer
+    // owes and closing the box cannot be read as having cancelled it.
+    const written = await adjust
+      .mutateAsync({ amount_centimes: asking.amount, note: cleared(asking.note) })
+      .then(() => true)
+      .catch(() => false);
+    setAsking(null);
+    // A refused correction keeps what was typed: the error above says what
+    // to change, and an empty box means typing the figure again to find out
+    // what was wrong with it.
+    if (!written) return;
+    form.setFieldValue("amount", null);
+    form.setFieldValue("note", "");
+  };
 
   return (
     <Card>
@@ -849,6 +887,26 @@ function AdjustPanel({ customer }: { customer: CustomerDto }) {
             </Button>
           </div>
         </form>
+
+        <ConfirmDialog
+          data-testid="customer-adjust-dialog"
+          open={asking !== null}
+          onCancel={() => setAsking(null)}
+          onConfirm={() => void write()}
+          title="customers_adjust"
+          question="customers_adjust_confirm"
+          confirm="action_adjust"
+          pending={adjust.isPending}
+        >
+          {/* The figure itself, because a correction to what a customer owes
+              is the one number the shop is agreeing to. */}
+          {asking?.amount === null || asking === null ? null : (
+            <p className="flex items-center justify-between gap-2 text-sm">
+              <span className="text-muted-foreground">{t("field_adjust_amount")}</span>
+              <Money centimes={asking.amount} data-testid="customer-adjust-asked" />
+            </p>
+          )}
+        </ConfirmDialog>
       </CardContent>
     </Card>
   );
