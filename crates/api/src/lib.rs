@@ -84,7 +84,10 @@ impl AppState {
         if let Err(e) = dzpos_core::log::head_session(&log_path) {
             eprintln!("dz-pos: could not write to {}: {e}", log_path.display());
         }
-        let conn = open_and_upgrade(db.as_ref())?;
+        // Startup takes the copy and says nothing about it: there is no
+        // audit row to write, because nobody is signed in when a new version
+        // opens an old file. The restore below does name the one it takes.
+        let (conn, _upgrade_copy) = open_and_upgrade(db.as_ref())?;
         Ok(AppState {
             conn: Arc::new(Mutex::new(Some(conn))),
             db_path: Arc::new(db.as_ref().to_path_buf()),
@@ -170,8 +173,10 @@ impl AppState {
     /// 8. delete the old file's `-wal` and `-shm`, after the rename and only
     ///    if it happened: until then they are what the shop file still needs
     ///    to be whole;
-    /// 9. reopen through `db::open`, which runs any migration the copy is
-    ///    behind on, and put that connection back into the slot.
+    /// 9. reopen through `open_and_upgrade`, the same door startup uses, so
+    ///    a copy that is behind on migrations gets a pre-upgrade copy of
+    ///    itself taken before any migration changes it, and put that
+    ///    connection back into the slot.
     ///
     /// The ways it can fail, and what each answers:
     ///
@@ -196,7 +201,11 @@ impl AppState {
     ///   SQLite replays whatever `-wal` it finds beside a file it opens, so
     ///   nothing here opens it again. The file names are logged, and by the
     ///   time the app is relaunched step 5 has already made anything left
-    ///   over harmless.
+    ///   over harmless. A copy of the restored file that cannot be written
+    ///   is one of the ways step 9 fails now, and that is the point: it is
+    ///   the same refusal the app makes at startup rather than migrating a
+    ///   shop's books with nothing to go back to. The restore itself stands;
+    ///   the file on disk is the copy the owner asked for, unmigrated.
     pub fn restore(&self, backup_path: &Path, actor_id: i32) -> Result<Restored, ApiError> {
         let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
@@ -283,8 +292,17 @@ impl AppState {
             return Err(ApiError::RestartNeeded);
         }
 
-        match dzpos_core::db::open(db) {
-            Ok(conn) => {
+        // The same door the app starts through, and not `db::open`, which
+        // would migrate the copy where it stands. A copy being restored is
+        // usually behind: that is what an owner reaches for one when the new
+        // version reads the books wrong. The copy itself is still in the
+        // backups folder, but it is a daily one and the prune counts it, so
+        // thirty days later nothing would hold the shape it had before this
+        // migration. A pre-upgrade copy is never pruned. The safety copy
+        // taken at step 3 is not that copy: it holds the file this restore
+        // replaced, not the one it is about to migrate.
+        match open_and_upgrade(db) {
+            Ok((conn, upgrade_copy)) => {
                 *guard = Some(conn);
                 // Written to the file that was just opened, after the swap
                 // and never before: `backup::record_restore`'s own doc says
@@ -304,6 +322,7 @@ impl AppState {
                         actor_id,
                         restored_from,
                         &safety_copy,
+                        upgrade_copy.as_ref().map(|c| c.name.as_str()),
                         &summary,
                     ) {
                         eprintln!(
@@ -322,9 +341,21 @@ impl AppState {
                 // safety copy beside it); what failed is reopening it. The
                 // slot stays empty on purpose, so nothing runs against a
                 // stand-in that would look like an empty shop.
+                //
+                // Both file names go in the line, because this is where a
+                // full disk lands and the audit row that would have named
+                // them is in the arm above: the copy this restore put in
+                // place is not the shop's own file any more, and the one
+                // holding what the shop had an hour ago is the safety copy.
+                // Whoever is helping the shop reads this line and nothing
+                // else, since the relaunch that follows hits the same
+                // refusal and never gets far enough to write a row.
                 eprintln!(
-                    "dz-pos: the shop file at {} could not be reopened after the restore: {e}",
-                    db.display()
+                    "dz-pos: the shop file at {} could not be reopened after the restore of {}: {e}. \
+                     The file it replaced is in {} beside it.",
+                    db.display(),
+                    backup_path.display(),
+                    safety_copy
                 );
                 Err(ApiError::RestartNeeded)
             }
@@ -372,17 +403,29 @@ impl AppState {
 /// for ever; an unchanged file gets none either, since the ordinary daily
 /// copy already describes it.
 ///
-/// A copy that cannot be written stops the app from starting. That is the
-/// point of it: the alternative is a migration running with nothing to go
-/// back to, on a disk that just said it was full.
-fn open_and_upgrade(db: &Path) -> Result<Conn, CoreError> {
+/// Both doors into the shop file come through here: the app's startup, and
+/// the reopen at the end of `AppState::restore`, where the copy being put in
+/// place is usually a version behind. The copy comes back with the
+/// connection, because the restore writes its name into the row it records
+/// and nothing else would know it: startup has nobody to write a row for.
+///
+/// A copy that cannot be written stops the app from starting, and stops a
+/// restore from reopening the file it just put in place. That is the point of
+/// it: the alternative is a migration running with nothing to go back to, on
+/// a disk that just said it was full.
+fn open_and_upgrade(db: &Path) -> Result<(Conn, Option<backup::Backup>), CoreError> {
     let mut conn = dzpos_core::db::open_unmigrated(db)?;
     let pending = dzpos_core::db::pending_migrations(&mut conn)?;
+    let mut copy = None;
     if !pending.is_empty() && dzpos_core::db::has_a_schema(&mut conn)? {
-        backup::before_upgrade(&mut conn, db, dzpos_core::services::clock::now())?;
+        copy = Some(backup::before_upgrade(
+            &mut conn,
+            db,
+            dzpos_core::services::clock::now(),
+        )?);
     }
     dzpos_core::db::migrate(&mut conn)?;
-    Ok(conn)
+    Ok((conn, copy))
 }
 
 /// `<db folder>/backups`. A shop file with no parent (a bare `t.db` on a

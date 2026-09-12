@@ -46,9 +46,9 @@ pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<AuditEntry>
 /// What `search` and `count` narrow the shop's log by. A plain description
 /// rather than a diesel expression: `services::audit` hands this down and
 /// never touches the query builder itself (rule 1 — this file is the only
-/// place that does). `created_from`/`created_to` are a half-open UTC range;
-/// the shop-calendar-to-UTC conversion (`services::audit::day_range_utc`) is
-/// the service's job, not this one's.
+/// place that does). `created_from`/`created_to` are a half-open range on the
+/// shop's calendar, the same clock the column holds; turning a day into that
+/// pair (`services::audit::day_range`) is the service's job, not this one's.
 #[derive(Debug, Clone, Default)]
 pub struct SearchFilter {
     pub user_id: Option<i32>,
@@ -135,7 +135,7 @@ mod tests {
     use super::*;
     use crate::repos::testdb::{open, OWNER, SHOP};
 
-    fn a_row(action: &str) -> AuditRowWrite {
+    fn a_row_at(action: &str, created_at: NaiveDateTime) -> AuditRowWrite {
         AuditRowWrite {
             shop_id: SHOP,
             user_id: OWNER,
@@ -144,7 +144,19 @@ mod tests {
             entity_id: None,
             before: None,
             after: None,
+            created_at,
         }
+    }
+
+    /// The shop clock, the same source `services::audit::record` uses. Most
+    /// of these tests read a page or an action back and never the moment on
+    /// it; the two that do pick their own.
+    fn a_row(action: &str) -> AuditRowWrite {
+        a_row_at(action, crate::services::clock::now())
+    }
+
+    fn at(moment: &str) -> NaiveDateTime {
+        NaiveDateTime::parse_from_str(moment, "%Y-%m-%d %H:%M:%S").unwrap()
     }
 
     /// Five rows, a `limit` of two: what the old `list_desc` could not even
@@ -190,6 +202,36 @@ mod tests {
             1,
             "count must not be confused with a one-row page"
         );
+    }
+
+    /// The range is half open, and which end is which decides whether a row
+    /// written at a shop midnight is counted once or twice. `services::audit`
+    /// hands a day down as midnight and the next midnight, so the day before
+    /// this one ends on the same value this one starts on: a `le` on the
+    /// upper bound would show that row under both days. Those rows are real
+    /// and not a corner case, because the migration onto the shop clock lands
+    /// every row stored at 23:00 exactly on a midnight.
+    #[test]
+    fn a_day_takes_its_own_midnight_and_leaves_the_next_one_to_the_day_after() {
+        let (_dir, mut conn) = open();
+        for (action, moment) in [
+            ("the night before", "2026-09-11 23:59:59"),
+            ("midnight", "2026-09-12 00:00:00"),
+            ("last second", "2026-09-12 23:59:59"),
+            ("the next midnight", "2026-09-13 00:00:00"),
+        ] {
+            insert(&mut conn, &a_row_at(action, at(moment))).unwrap();
+        }
+        let day = SearchFilter {
+            created_from: Some(at("2026-09-12 00:00:00")),
+            created_to: Some(at("2026-09-13 00:00:00")),
+            ..SearchFilter::default()
+        };
+        let found = search(&mut conn, SHOP, &day, 10, 0).unwrap();
+        let mut actions: Vec<&str> = found.iter().map(|e| e.action.as_str()).collect();
+        actions.sort_unstable();
+        assert_eq!(actions, vec!["last second", "midnight"], "{found:?}");
+        assert_eq!(count(&mut conn, SHOP, &day).unwrap(), 2);
     }
 
     #[test]

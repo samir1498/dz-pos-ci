@@ -1,6 +1,6 @@
 ---
 type: 'now'
-updated: '2026-09-11'
+updated: '2026-09-12'
 ---
 ## Active
 
@@ -155,16 +155,97 @@ run its own commands inside the job that decides whether a release is
 allowed. And the pre-upgrade copy left a half-written file behind for good
 when it was interrupted, because the retry after it used a different name.
 
-In flight: the support bundle.
+In flight: the support bundle, written and open for review, waiting on the
+browser suite because it adds a button to the settings screen and the
+committed pictures of that screen are stale until a local run regenerates
+them.
 
-Two tasks the reviews added on 2026-09-11. A Windows release build has no
-console, so a refusal to start says nothing at all to the shopkeeper: the
-window never opens. That was already true of a failed migration and is now
-easier to reach, because the app refuses to start when it cannot copy the
-shop file before an upgrade. And the two kinds of copy that sit beside the
-shop file, the one before a restore and the one before an upgrade, are a
-file swap by hand: the restore route takes the name of a daily copy and no
-other kind.
+Also on main since 2026-09-11 23:44: `docs/release-checklist.md`, one page
+saying what has to be true before v1.0 and who holds each item, and a
+section on the public page saying what a shop with staff gets.
+
+Blocked since 2026-09-11 22:30 and not by anything in the repository. The
+build machine's Windows disk is at one and a half gigabytes free. Its WSL
+disk image is 141 gigabytes holding 44 gigabytes of files, and an image
+never shrinks on its own, so about a hundred gigabytes are recoverable only
+by compacting it from the Windows side (`wsl --shutdown`, then
+`wsl --manage <distro> --set-sparse true`). Nothing inside can do it. The
+image itself is not growing, which was checked by writing half a gigabyte
+inside the distro and watching the byte count stay put. Anything that does
+not need the browser suite is proven on the mirror instead, which is how
+three pieces landed after the disk ran out.
+
+The audit row is stamped from the shop clock since 2026-09-12 (PR #48,
+task T12 of the M5 plan), and migration
+`2026-09-12-000013_audit_log_shop_clock` moved the rows already written by
+the hour they were short. `services::audit::record` left `created_at` off
+the insert, so the column took SQLite's `CURRENT_TIMESTAMP`, which is UTC,
+while the shop runs an hour ahead of it: a row written at 00:30 in Algiers
+was stored as 23:30 the day before, printed that way on the owner's screen
+and fell outside the day he filtered for. The read-side patch that answered
+this on 2026-09-11 (PR #45) is gone with it, because there is nothing left
+to convert. The two halves ship in one version on purpose: the shift run
+against a build that already stamps would push those rows an hour the other
+way. Found by a test that only fails for the hour the bug lives in, on Linux
+and on Windows alike.
+
+Twenty-seven columns in the file carry that same UTC default, and the
+review of T12 corrected the claim that the audit log was the only one. On
+every other column a day filter reads, the default never fires: the service
+stamps the moment before the insert, and `repos::supplier_debt::append`
+refuses a row that arrives without one. The one gap left was the customer debt
+ledger, and it is closed since 2026-09-12 (PR #49, task T13):
+`repos::debt::append` refuses a movement that arrives without a moment, the
+same guard and the same `CoreError::Unstamped` the supplier side has held
+since it was written. Both callers already stamped, so no row in any file
+moved. `debt_allocations.created_at` does take the UTC default and stays
+that way deliberately: nothing reads it by day, an allocation is ordered by
+id and printed from the moment on the payment it settles, and the type now
+says so.
+
+Release gate R3 is closed since 2026-09-12. Décret 05-468 art. 3 names the
+registre du commerce number and the numéro d'identification statistique for
+both parties and never the NIF; the NIF is a facture mention through loi
+04-02 art. 34, whose omission is a défaut de facturation under art. 33, and
+through LF 2006 art. 42. Nothing makes the article d'imposition a facture
+mention: CIDTA art. 183 ter asks a wholesaler to hold each client's AI for
+its état-clients. That last reading is the comptable's to confirm, so it
+sits under R8. The research had been read from the Journal Officiel on
+2026-09-08 and never carried into the spec; it is in `docs/features.md`,
+`docs/release-checklist.md` and `docs/roadmap.md` now.
+
+The support bundle has been through two review lenses and its four findings
+are fixed on the branch: the entry-set assertion no longer reads its
+expectation from the constant the writer walks, the audit row is asserted,
+a log file that was never written has its own test, and the seeded PIN is
+out of the forbidden list where four digits could collide with a byte count.
+One limit is written into the module's doc rather than fixed: `log.txt` is
+copied out verbatim and the leak test only ever sees what this build's own
+startup wrote, so whoever adds a logging framework owes that entry a
+redaction pass.
+
+Both tasks the reviews added on 2026-09-11 are dealt with, one of them
+completely. A Windows release build has no console, so a refusal to start
+used to say nothing at all: the window never opened. A native message box
+names the file, the folder and the whole chain of causes in three languages
+now, and the Windows job compiles and links it (PR #47).
+
+The other was the two kinds of copy beside the shop file. Its data half is
+done on 2026-09-12 (PR #50): the reopen at the end of a restore went through
+`db::open` and migrated an older copy where it stood, with nothing durable
+holding that copy's pre-migration shape, since the copy being restored is a
+daily one the prune deletes and the safety copy holds the file the restore
+replaced. It goes through `open_and_upgrade` now, the same door startup uses,
+so a pre-upgrade copy is taken first and that kind is never pruned. One more
+way a restore can stop, and it is the intended one: a copy that cannot be
+written refuses the reopen rather than migrating a shop's books with nothing
+to go back to. The name of that copy goes into the row the restore
+writes (PR #52), which until the screen exists is the only place either copy
+is named; absent rather than empty when nothing migrated, because the audit
+screen reads a missing key and an empty one as two different things. What is
+left of that task is the screen itself, and it grew a row: nothing lists a
+pre-upgrade copy, so an owner can have one a restore left and never see it,
+and a log of who did what is not where they would look.
 
 Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
 bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
@@ -298,7 +379,7 @@ M0 ran step by step, Samir reviewing between steps. M1 runs as the loop
 described under Active; its tasks and statuses are in the M1 plan, not
 here.
 
-1. [x] Stamp, TVA, rounding, facture mentions, numbering, IFU, words read from primary sources; all in `research/legal-fiscal/2026-09-08-fiscal-sources-and-findings.md` and the Source column of `docs/features.md` (R1, R2, R4, R5 done; R3, R6 partial)
+1. [x] Stamp, TVA, rounding, facture mentions, numbering, IFU, words read from primary sources; all in `research/legal-fiscal/2026-09-08-fiscal-sources-and-findings.md` and the Source column of `docs/features.md` (R1, R2, R3, R4, R5 done; R6 partial; R3's citations are in `research/legal-fiscal/2026-09-08-facture-and-ticket.md` and the party identifiers row of `docs/features.md`)
 2. [x] `Money` newtype and `pct` in `crates/core`, first fixtures, first proptest (money plan T1)
 3. [x] TVA grouping per rate and global discount spread; fixtures shared with `design/shared/money.js` via vitest (T2, T5)
 4. [x] Stamp duty per step 1 (T3, T8)

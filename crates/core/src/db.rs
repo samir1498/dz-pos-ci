@@ -76,10 +76,11 @@ pub fn open(path: impl AsRef<Path>) -> Result<SqliteConnection, DbError> {
 /// pragmas set and nothing migrated.
 ///
 /// [`open`] is this plus [`migrate`], and is what almost everything wants.
-/// This exists for the one caller that has to do something between the two:
-/// the app's startup copies the shop's file before an upgrade touches it, and
-/// it cannot know whether there is anything to copy until the file is open
-/// (`crates/api/src/lib.rs`, `AppState::open_with_backup_dir`).
+/// This exists for the caller that has to do something between the two:
+/// `open_and_upgrade` copies the shop's file before an upgrade touches it,
+/// and it cannot know whether there is anything to copy until the file is
+/// open (`crates/api/src/lib.rs`, reached from both the app's startup and
+/// the reopen at the end of a restore).
 pub fn open_unmigrated(path: impl AsRef<Path>) -> Result<SqliteConnection, DbError> {
     let url = path.as_ref().to_string_lossy();
     let mut conn = SqliteConnection::establish(&url)?;

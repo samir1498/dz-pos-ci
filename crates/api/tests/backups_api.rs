@@ -7,9 +7,29 @@
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use diesel::prelude::*;
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
+
+#[derive(QueryableByName)]
+struct AfterText {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    t: String,
+}
+
+/// What the last restore wrote into its own audit row, read off the shop
+/// file rather than through a route: this test signs in with the launch
+/// token and the log is the owner's screen.
+fn what_the_restore_recorded(db: &std::path::Path) -> Value {
+    let mut conn = dzpos_core::db::open_unmigrated(db).unwrap();
+    let row: AfterText = diesel::sql_query(
+        "SELECT \"after\" AS t FROM audit_log WHERE action = 'backup.restore' ORDER BY id DESC LIMIT 1",
+    )
+    .get_result(&mut conn)
+    .unwrap();
+    serde_json::from_str(&row.t).unwrap()
+}
 
 mod common;
 
@@ -195,6 +215,18 @@ async fn a_restore_puts_the_file_back_and_keeps_what_was_there_in_a_safety_copy(
     assert!(
         h.dir.path().join(&safety_name).is_file(),
         "{safety_name} was named but not written"
+    );
+
+    // Nothing was behind, so the reopen migrated nothing and took no copy,
+    // and the row says nothing about one. A key here carrying "no copy"
+    // would put a line under every ordinary restore on the owner's screen,
+    // which compares the keys whose value moved and reads a missing key and
+    // an empty one as two different things.
+    let recorded = what_the_restore_recorded(&h.db());
+    assert_eq!(recorded["safety_copy"], json!(safety_name), "{recorded}");
+    assert!(
+        recorded.get("upgrade_copy").is_none(),
+        "a restore that migrated nothing named a copy: {recorded}"
     );
 
     // The same running server answers from the file it just swapped in.

@@ -1,0 +1,73 @@
+---
+// What the person behind the counter can and cannot do, for a shop with
+// more than one person working it. Placed after the four pieces and before
+// the fiscal block, per the 2026-09-11 brief that asked for this section
+// (staff accounts shipped after the landing page's own plan was already
+// marked done). Every line is checked against
+// crates/core/src/services/permissions.rs's `can` table, crates/api/src/gates.rs's
+// route rows and docs/features.md §5; see fr.ts's comments for the exact
+// row each one reads. No image: apps/desktop/e2e/screenshots/ has no PIN,
+// role or audit log screen honest enough to show here, and the brief says
+// draw none rather than invent one. Same shape as Fiscal.astro: a heading,
+// an intro, and a short list of concrete lines.
+import type { Dict } from "../i18n";
+
+interface Props {
+  readonly staff: Dict["staff"];
+}
+
+const { staff } = Astro.props;
+const rows = [staff.signIn, staff.cashierScope, staff.cashierLimits, staff.manager, staff.log];
+---
+
+<section class="staff" aria-labelledby="staff-heading">
+  <div class="wrap">
+    <h2 id="staff-heading">{staff.heading}</h2>
+    <p class="staff-intro">{staff.intro}</p>
+    <ul class="staff-list">
+      {rows.map((row) => <li>{row}</li>)}
+    </ul>
+  </div>
+</section>
+
+<style>
+  .staff {
+    padding-block: var(--space-12);
+  }
+
+  .staff h2 {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+  }
+
+  .staff-intro {
+    color: var(--text-secondary);
+    margin-block: var(--space-3) var(--space-6);
+    max-width: 60ch;
+  }
+
+  .staff-list {
+    display: grid;
+    gap: var(--space-3);
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    max-width: 70ch;
+  }
+
+  .staff-list li {
+    position: relative;
+    padding-inline-start: var(--space-5);
+  }
+
+  .staff-list li::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    inset-block-start: 0.6em;
+    width: var(--space-2);
+    height: var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--color-primary);
+  }
+</style>

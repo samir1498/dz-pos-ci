@@ -206,10 +206,17 @@ fn folder_of(file: &Path) -> Option<PathBuf> {
 /// copy is that it is still there months later, when somebody works out that
 /// the trouble started with an update.
 ///
-/// Called from the app's startup and nowhere else. It takes no audit row and
-/// could not: nobody is signed in when a new version opens an old file, and
-/// the act is the new binary's, not a person's. What records it is the copy
-/// itself, whose name carries the moment.
+/// Called on the way into the shop file, from both doors: the app's startup,
+/// and the reopen at the end of a restore, where the copy being restored is
+/// usually the one behind. It takes no audit row and could not: nobody is
+/// signed in when a new version opens an old file, and on the restore path
+/// the file is not open yet. What records it is the copy itself, whose name
+/// carries the moment.
+///
+/// A shop that restores an older copy twice gets two of these, because the
+/// two copies hold different books. Nothing deletes them, which is the point
+/// above, and nothing lists them yet either: putting them on the backups
+/// screen beside the daily ones is its own task (M5 T11).
 ///
 /// The copy is written under a staging name and renamed once SQLite has
 /// finished with it, the same way [`create`] does, so a copy interrupted by
@@ -582,8 +589,30 @@ pub fn record_restore(
     actor_id: i32,
     restored_from: &str,
     safety_copy: &str,
+    upgrade_copy: Option<&str>,
     summary: &Summary,
 ) -> Result<(), CoreError> {
+    let mut after = serde_json::json!({
+        "restored_from": restored_from,
+        "safety_copy": safety_copy,
+        "products": summary.products,
+        "documents": summary.documents,
+    });
+    // The copy the reopen took of the restored file, when that file was
+    // behind and had to be migrated. It is here because no screen lists a
+    // pre-upgrade copy yet (M5 T11), so this row is the only place its name
+    // is written down.
+    //
+    // Absent rather than null when nothing migrated, which is the ordinary
+    // restore. The owner's audit screen lists the keys whose value moved and
+    // reads a missing one and a null one as different things, so a null here
+    // would put a line under every restore saying a copy that was never
+    // taken did not change.
+    if let Some(name) = upgrade_copy {
+        if let Some(fields) = after.as_object_mut() {
+            fields.insert("upgrade_copy".to_string(), serde_json::json!(name));
+        }
+    }
     audit::record(
         conn,
         shop_id,
@@ -593,15 +622,7 @@ pub fn record_restore(
             entity: "backup",
             entity_id: None,
             before: None,
-            after: Some(
-                serde_json::json!({
-                    "restored_from": restored_from,
-                    "safety_copy": safety_copy,
-                    "products": summary.products,
-                    "documents": summary.documents,
-                })
-                .to_string(),
-            ),
+            after: Some(after.to_string()),
         },
     )
 }

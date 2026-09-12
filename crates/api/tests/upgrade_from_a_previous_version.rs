@@ -23,6 +23,23 @@ struct Count {
     n: i64,
 }
 
+#[derive(QueryableByName)]
+struct Text {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    t: String,
+}
+
+/// What the restore wrote into its own audit row, as the row holds it.
+fn what_the_restore_recorded(db: &std::path::Path) -> serde_json::Value {
+    let mut conn = dzpos_core::db::open_unmigrated(db).unwrap();
+    let row: Text = diesel::sql_query(
+        "SELECT \"after\" AS t FROM audit_log WHERE action = 'backup.restore' ORDER BY id DESC LIMIT 1",
+    )
+    .get_result(&mut conn)
+    .unwrap();
+    serde_json::from_str(&row.t).unwrap()
+}
+
 /// A shop file as the version before this one left it: every migration this
 /// build ships except the last, which is the one the upgrade will run.
 fn a_file_from_the_previous_version(path: &std::path::Path) {
@@ -178,6 +195,16 @@ fn the_pre_upgrade_copy_is_not_one_of_the_thirty_daily_ones() {
     assert_eq!(upgrade_copies(&path).len(), 1);
 }
 
+/// Unix only, and not because the refusal is: `open_and_upgrade` propagates
+/// the copy's error with a `?` and has no idea which platform it is on. The
+/// lever is what does not travel. This test makes the folder read-only, and
+/// Windows keeps that flag on a directory without letting it stop a file
+/// from being created inside, so the copy would succeed there and the app
+/// would start, passing an assertion that proves nothing. What actually
+/// stops the copy on a shopkeeper's machine is a full disk, which no test
+/// produces on any platform. Found by the windows job on 2026-09-12, the
+/// first time it ran against this file.
+#[cfg(unix)]
 #[test]
 fn a_copy_that_cannot_be_written_stops_the_app_from_starting() {
     let dir = tempfile::tempdir().unwrap();
@@ -214,4 +241,68 @@ fn a_copy_that_cannot_be_written_stops_the_app_from_starting() {
         1,
         "the shop file was migrated even though the copy failed"
     );
+}
+
+/// A restore is the other way an older file becomes the file the app runs
+/// on, and it migrates that file where it stands. Until this test the copy
+/// being restored was the only thing left holding the shape the shop's books
+/// had before that migration, and it is a daily copy: thirty days of trading
+/// later the prune takes it and nothing holds that shape at all. A restore
+/// that migrates now leaves a pre-upgrade copy behind like a start does, and
+/// a pre-upgrade copy is never pruned.
+#[test]
+fn restoring_a_copy_that_is_behind_leaves_a_copy_of_it_before_it_is_migrated() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let older = dir.path().join("an-older-copy.sqlite");
+    a_file_from_the_previous_version(&older);
+
+    // The shop file itself is brand new and current, so nothing here has
+    // taken a pre-upgrade copy yet: whatever is found at the end was taken
+    // by the restore.
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    assert!(upgrade_copies(&path).is_empty());
+
+    let restored = state.restore(&older, 1).unwrap();
+    assert_eq!(restored.summary.products, 1);
+
+    let copies = upgrade_copies(&path);
+    assert_eq!(copies.len(), 1, "{copies:?}");
+    // The copy is of the file as it arrived, before the migration ran: it is
+    // still one migration short. A copy taken after the migration would pass
+    // every other check here and be worth nothing.
+    let mut copied = dzpos_core::db::open_unmigrated(&copies[0].path).unwrap();
+    assert_eq!(
+        dzpos_core::db::pending_migrations(&mut copied)
+            .unwrap()
+            .len(),
+        1
+    );
+    // And it is worth restoring from: the books are in it. A copy of the
+    // right shape holding nothing would satisfy the line above.
+    assert_eq!(products_in(&copies[0].path), 1);
+
+    // The copy is kept for ever and no screen lists it yet, so the row the
+    // restore writes is the only place its name is written down. Whoever is
+    // helping a shop that restored the wrong copy reads that row.
+    let recorded = what_the_restore_recorded(&path);
+    assert_eq!(
+        recorded["upgrade_copy"],
+        serde_json::json!(copies[0].name),
+        "{recorded}"
+    );
+    assert_eq!(
+        recorded["safety_copy"],
+        serde_json::json!(restored.safety_copy),
+        "{recorded}"
+    );
+
+    // And the restore did what it was asked: the shop file is the older
+    // copy's data, migrated forward and being served.
+    drop(state);
+    assert_eq!(products_in(&path), 1);
+    let mut live = dzpos_core::db::open_unmigrated(&path).unwrap();
+    assert!(dzpos_core::db::pending_migrations(&mut live)
+        .unwrap()
+        .is_empty());
 }

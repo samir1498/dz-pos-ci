@@ -14,6 +14,7 @@ export type AuditEntryDto = { id: number, user_id: number,
  */
 user_name: string, action: string, entity: string, entity_id: number | null, before: string | null, after: string | null, 
 /**
- * `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
+ * `YYYY-MM-DD HH:MM:SS` on the shop's calendar, the same clock every
+ * other date this app shows is read on.
  */
 created_at: string, };
