@@ -47,7 +47,24 @@ fn launch_token(state: tauri::State<TokenHandoff>) -> String {
     state.0.clone()
 }
 
+/// Not on Windows, and the reason is the harness rather than the code. Two
+/// `cfg` attributes rather than one `all(test, not(windows))`, because
+/// clippy reads a literal `#[cfg(test)]` to know a module is a test module
+/// and folding the guard inside `all(...)` hides that: the items below the
+/// last test module then read as items after it and `items_after_test_module`
+/// fails the build.
+///
+/// These drive `tauri::test`'s mock runtime, which links the webview
+/// loader into the test binary; on the windows job that binary refuses to
+/// start at all with `STATUS_ENTRYPOINT_NOT_FOUND` (0xc0000139), a symbol
+/// missing from a DLL it imports, before a single test runs. Left in, the
+/// whole crate's unit tests are lost on Windows, the navigation ones below
+/// included. What this costs: `launch_token` answering over IPC is proven
+/// on Linux only until somebody runs the suite on a real Windows machine,
+/// which the installer work needs anyway. Nothing here is platform
+/// behaviour; the command clones a String.
 #[cfg(test)]
+#[cfg(not(windows))]
 mod token_tests {
     // A test may panic; the deny is for shipped code.
     #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -137,7 +154,10 @@ fn allowed_navigation(url: &Url) -> bool {
 // is every plain `cargo test` otherwise. Without the feature this test
 // would pass for the wrong reason: `csp_header` would be `None` because
 // the policy was never reached, not because it was absent.
+// Not on Windows, for the reason written above `token_tests`: the mock
+// runtime this needs refuses to start the test binary there.
 #[cfg(test)]
+#[cfg(not(windows))]
 mod csp_tests {
     // A test may panic; the deny is for shipped code.
     #![allow(clippy::unwrap_used, clippy::expect_used)]

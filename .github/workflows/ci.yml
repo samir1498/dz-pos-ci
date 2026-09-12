@@ -15,6 +15,11 @@ on:
   # The mirror is pushed branch by branch, so a run has to be startable by
   # hand on a branch that is nobody's pull request.
   workflow_dispatch:
+    inputs:
+      windows:
+        description: "Also run the windows job, for a branch that changes Windows-only code"
+        type: boolean
+        default: false
 
 # A second push to the same branch makes the first run pointless: it is
 # testing a commit nobody will merge. Cancelling it is most of the saving on
@@ -107,7 +112,11 @@ jobs:
   # rather than within one release, at a fifth of the bill. A branch run
   # started by hand (`just ci`) is a branch check, so it skips this too.
   windows:
-    if: github.ref == 'refs/heads/main'
+    # `inputs` is null on a push or a pull request, so this is the main-only
+    # rule plus one lever: a branch whose change lives behind `cfg(windows)`
+    # is asked for by hand with `just ci <branch> windows`, because the
+    # alternative is a first compile that happens on main.
+    if: github.ref == 'refs/heads/main' || inputs.windows
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5

@@ -579,6 +579,14 @@ fn a_second_call_in_the_same_millisecond_does_not_write_the_file_again() {
     );
 }
 
+/// Unix only, for the lever and not for the refusal. `before_upgrade`
+/// returns whatever the write returned and knows nothing about platforms,
+/// but Windows keeps the read-only mark on a directory without letting it
+/// stop a file being created inside, so there the copy would succeed and
+/// this would assert nothing while passing. The same note sits on
+/// `crates/api/tests/upgrade_from_a_previous_version.rs`, the other half of
+/// this guard.
+#[cfg(unix)]
 #[test]
 fn a_folder_that_cannot_be_written_to_stops_the_pre_upgrade_copy() {
     let (dir, mut conn) = open_temp();
