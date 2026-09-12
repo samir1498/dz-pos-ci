@@ -224,14 +224,24 @@ copied out verbatim and the leak test only ever sees what this build's own
 startup wrote, so whoever adds a logging framework owes that entry a
 redaction pass.
 
-Two tasks the reviews added on 2026-09-11. A Windows release build has no
-console, so a refusal to start says nothing at all to the shopkeeper: the
-window never opens. That was already true of a failed migration and is now
-easier to reach, because the app refuses to start when it cannot copy the
-shop file before an upgrade. And the two kinds of copy that sit beside the
-shop file, the one before a restore and the one before an upgrade, are a
-file swap by hand: the restore route takes the name of a daily copy and no
-other kind.
+Both tasks the reviews added on 2026-09-11 are dealt with, one of them
+completely. A Windows release build has no console, so a refusal to start
+used to say nothing at all: the window never opened. A native message box
+names the file, the folder and the whole chain of causes in three languages
+now, and the Windows job compiles and links it (PR #47).
+
+The other was the two kinds of copy beside the shop file. Its data half is
+done on 2026-09-12 (PR #50): the reopen at the end of a restore went through
+`db::open` and migrated an older copy where it stood, with nothing durable
+holding that copy's pre-migration shape, since the copy being restored is a
+daily one the prune deletes and the safety copy holds the file the restore
+replaced. It goes through `open_and_upgrade` now, the same door startup uses,
+so a pre-upgrade copy is taken first and that kind is never pruned. One more
+way a restore can stop, and it is the intended one: a copy that cannot be
+written refuses the reopen rather than migrating a shop's books with nothing
+to go back to. What is left of that task is the screen, and it grew a row:
+nothing lists a pre-upgrade copy, so an owner can now have one a restore left
+and never see it.
 
 Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
 bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
