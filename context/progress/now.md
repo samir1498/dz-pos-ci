@@ -248,10 +248,25 @@ written refuses the reopen rather than migrating a shop's books with nothing
 to go back to. The name of that copy goes into the row the restore
 writes (PR #52), which until the screen exists is the only place either copy
 is named; absent rather than empty when nothing migrated, because the audit
-screen reads a missing key and an empty one as two different things. What is
-left of that task is the screen itself, and it grew a row: nothing lists a
-pre-upgrade copy, so an owner can have one a restore left and never see it,
-and a log of who did what is not where they would look.
+screen reads a missing key and an empty one as two different things. The
+screen half is built on 2026-09-12 and is in review, not yet on main: the
+settings panel has a third list, and
+the two lists beside the daily one carry the restore button they did not
+have, through the same confirmation. The restore route picks its folder from
+the shape of the name rather than from the caller, so the two kinds that sit
+beside the shop file reach the folder no prune walks, and a name is one of
+the three kinds or none.
+
+The Arabic pass over the screens is half done on 2026-09-12: the half a
+reader can do without a browser. Five icons that point somewhere did not
+mirror, four places formatted a number by hand rather than through the one
+formatter, the dialog close button was English in all three languages, and a
+failed Excel write had no wording on this side. The guard that was meant to
+catch a physical side read the whole class string at once and anchored on a
+space, so anything behind a variant prefix walked past it, which is where the
+vertical tabs' active bar was. All six printed templates and both sign-in
+screens were already clean. What is left is what only an eye in a browser
+catches: clipping, overflow, a line that runs off the edge.
 
 Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
 bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
