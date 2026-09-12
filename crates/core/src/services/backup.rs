@@ -522,8 +522,8 @@ pub fn verify(path: &Path) -> Result<Summary, CoreError> {
 }
 
 /// The migrations compiled into this binary. A copy may have fewer (it is
-/// older, and `db::open` migrates it forward on the way in); it may not have
-/// more.
+/// older, and the restore migrates it forward on the way in, taking a
+/// pre-upgrade copy of it first); it may not have more.
 fn embedded_versions() -> Result<Vec<String>, CoreError> {
     use diesel::migration::MigrationSource;
     let migrations = MigrationSource::<diesel::sqlite::Sqlite>::migrations(&MIGRATIONS)

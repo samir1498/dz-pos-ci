@@ -225,3 +225,49 @@ fn a_copy_that_cannot_be_written_stops_the_app_from_starting() {
         "the shop file was migrated even though the copy failed"
     );
 }
+
+/// A restore is the other way an older file becomes the file the app runs
+/// on, and it migrates that file where it stands. Until this test the copy
+/// being restored was the only thing left holding the shape the shop's books
+/// had before that migration, and it is a daily copy: thirty days of trading
+/// later the prune takes it and nothing holds that shape at all. A restore
+/// that migrates now leaves a pre-upgrade copy behind like a start does, and
+/// a pre-upgrade copy is never pruned.
+#[test]
+fn restoring_a_copy_that_is_behind_leaves_a_copy_of_it_before_it_is_migrated() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    let older = dir.path().join("an-older-copy.sqlite");
+    a_file_from_the_previous_version(&older);
+
+    // The shop file itself is brand new and current, so nothing here has
+    // taken a pre-upgrade copy yet: whatever is found at the end was taken
+    // by the restore.
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    assert!(upgrade_copies(&path).is_empty());
+
+    let restored = state.restore(&older, 1).unwrap();
+    assert_eq!(restored.summary.products, 1);
+
+    let copies = upgrade_copies(&path);
+    assert_eq!(copies.len(), 1, "{copies:?}");
+    // The copy is of the file as it arrived, before the migration ran: it is
+    // still one migration short. A copy taken after the migration would pass
+    // every other check here and be worth nothing.
+    let mut copied = dzpos_core::db::open_unmigrated(&copies[0].path).unwrap();
+    assert_eq!(
+        dzpos_core::db::pending_migrations(&mut copied)
+            .unwrap()
+            .len(),
+        1
+    );
+
+    // And the restore did what it was asked: the shop file is the older
+    // copy's data, migrated forward and being served.
+    drop(state);
+    assert_eq!(products_in(&path), 1);
+    let mut live = dzpos_core::db::open_unmigrated(&path).unwrap();
+    assert!(dzpos_core::db::pending_migrations(&mut live)
+        .unwrap()
+        .is_empty());
+}
