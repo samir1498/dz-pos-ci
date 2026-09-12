@@ -130,6 +130,12 @@ pub(crate) struct DebtAllocationRow {
     pub created_at: NaiveDateTime,
 }
 
+/// No `created_at`: the column takes the file's own default, which is UTC,
+/// and that is left alone deliberately. Nothing reads it by day. An
+/// allocation is ordered by id and printed from the moment on the payment it
+/// belongs to (`print::statement`), so the only date a reader ever sees for
+/// it is one on the shop's calendar. A filter over this column would have to
+/// stamp it the way `DebtRowWrite` is stamped.
 #[derive(Debug, Insertable)]
 #[diesel(table_name = debt_allocations)]
 pub(crate) struct DebtAllocationRowWrite {
