@@ -180,6 +180,39 @@ describe("the list", () => {
     expect(screen.queryByTestId("safety-copies-table")).toBeNull();
   });
 
+  test("a copy taken before an update is put back through the same confirmation", async () => {
+    const user = userEvent.setup();
+    listed = { backups: [newest], safety_copies: [], upgrade_copies: [upgrade] };
+    mount();
+    await screen.findByTestId("upgrade-copies-table");
+    const row = upgradeRows()[0];
+    await user.click(within(row ?? document.body).getByRole("button", { name: fr.action_restore }));
+
+    // The confirmation names the list the copy came out of, not only when it
+    // was taken: three lists can each hold a copy from the same minute and
+    // they do three different things to the shop.
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(fr.settings_upgrade_copies);
+    expect(dialog).toHaveTextContent("2026-09-10 08:00");
+    // And this kind alone says the shop goes back to an older shape.
+    expect(dialog).toHaveTextContent(fr.backups_restore_older_shape);
+
+    await user.click(within(dialog).getByRole("button", { name: fr.backups_restore_confirm }));
+    await waitFor(() => {
+      expect(posts()).toContain(
+        `http://127.0.0.1:4317/backups/${encodeURIComponent(upgrade.name)}/restore`,
+      );
+    });
+  });
+
+  test("a daily copy's confirmation says nothing about an older shape", async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByTestId("backups-table");
+    await askToRestore(user, backupRows()[0] ?? document.body, "cancel");
+    expect(screen.queryByText(fr.backups_restore_older_shape)).toBeNull();
+  });
+
   test("shows no update heading before any update has taken one", async () => {
     mount();
     await screen.findByTestId("backups-newest");

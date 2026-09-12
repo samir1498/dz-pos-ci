@@ -213,10 +213,11 @@ fn folder_of(file: &Path) -> Option<PathBuf> {
 /// the file is not open yet. What records it is the copy itself, whose name
 /// carries the moment.
 ///
-/// A shop that restores an older copy twice gets two of these, because the
-/// two copies hold different books. Nothing deletes them, which is the point
-/// above, and nothing lists them yet either: putting them on the backups
-/// screen beside the daily ones is its own task (M5 T11).
+/// A shop that restores an older copy twice gets two of these, one per
+/// restore, and when the same copy was restored both times the two hold the
+/// same books. Nothing deletes them, which is the point above. The backups
+/// screen lists them under their own heading since 2026-09-12, so a copy is
+/// no longer findable only by knowing how this app names a file.
 ///
 /// The copy is written under a staging name and renamed once SQLite has
 /// finished with it, the same way [`create`] does, so a copy interrupted by
@@ -599,9 +600,9 @@ pub fn record_restore(
         "documents": summary.documents,
     });
     // The copy the reopen took of the restored file, when that file was
-    // behind and had to be migrated. It is here because no screen lists a
-    // pre-upgrade copy yet (M5 T11), so this row is the only place its name
-    // is written down.
+    // behind and had to be migrated. The backups screen lists these under
+    // their own heading since 2026-09-12; this row is what says which
+    // restore left which one.
     //
     // Absent rather than null when nothing migrated, which is the ordinary
     // restore. The owner's audit screen lists the keys whose value moved and

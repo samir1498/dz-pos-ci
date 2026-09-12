@@ -36,6 +36,24 @@ import { errorKey } from "@/lib/fields";
 const BYTES_PER_KB = 1024;
 const BYTES_PER_MB = BYTES_PER_KB * 1024;
 
+/** Which of the three lists a copy came out of. The three are kept under
+ *  three rules and put back three different shops, so the confirmation says
+ *  which one it is holding rather than only when it was taken: two lists can
+ *  each hold a copy from the same minute. */
+type Kind = "daily" | "safety" | "upgrade";
+
+const KIND_LABEL: Record<Kind, Key> = {
+  daily: "settings_backups",
+  safety: "settings_safety_copies",
+  upgrade: "settings_upgrade_copies",
+};
+
+/** The copy the confirmation is about, and the list it came from. */
+interface Asked {
+  copy: BackupDto;
+  kind: Kind;
+}
+
 /** `2026-09-08T09:30:00` as `2026-09-08 09:30`. The server already wrote the
  * shop's own calendar into it, so nothing here re-reads a clock. */
 function readableTime(takenAt: string): string {
@@ -66,7 +84,7 @@ export function BackupsPanel() {
   const [serverError, setServerError] = useState<Key | null>(null);
   // The copy the owner asked about, and the whole of the dialog's state: an
   // open dialog with nothing in it would have nothing to restore.
-  const [asking, setAsking] = useState<BackupDto | null>(null);
+  const [asking, setAsking] = useState<Asked | null>(null);
 
   const create = useMutation({
     mutationFn: () => api.createBackup(),
@@ -124,7 +142,7 @@ export function BackupsPanel() {
     },
   ];
 
-  const askToRestore = (row: BackupDto) => (
+  const askToRestore = (kind: Kind) => (copy: BackupDto) => (
     <Button
       type="button"
       variant="outline"
@@ -133,13 +151,13 @@ export function BackupsPanel() {
       onClick={() => {
         setDone(null);
         setServerError(null);
-        setAsking(row);
+        setAsking({ copy, kind });
       }}
     >
       {/* An undo, which the kit mirrors with the page: on the Arabic screen
           "back" is the other way round. */}
       <Icon as={RotateCcw} size={18} flip />
-      {restore.isPending && restore.variables === row.name
+      {restore.isPending && restore.variables === copy.name
         ? t("action_restoring")
         : t("action_restore")}
     </Button>
@@ -196,7 +214,7 @@ export function BackupsPanel() {
                     description={t("backups_empty_hint")}
                   />
                 }
-                actions={askToRestore}
+                actions={askToRestore("daily")}
               />
 
               {/* Kept under their own heading because they are kept under
@@ -220,7 +238,7 @@ export function BackupsPanel() {
                     columns={columns}
                     rows={safetyCopies}
                     rowKey={(row) => row.name}
-                    actions={askToRestore}
+                    actions={askToRestore("safety")}
                   />
                 </section>
               )}
@@ -244,7 +262,7 @@ export function BackupsPanel() {
                     columns={columns}
                     rows={upgradeCopies}
                     rowKey={(row) => row.name}
-                    actions={askToRestore}
+                    actions={askToRestore("upgrade")}
                   />
                 </section>
               )}
@@ -289,12 +307,20 @@ export function BackupsPanel() {
             <DialogDescription>{t("backups_confirm_restore")}</DialogDescription>
           </DialogHeader>
           {asking === null ? null : (
-            <p className="text-sm text-muted-foreground">
-              {t("backups_newest_label")}{" "}
-              <span dir="ltr" className="font-numeric tabular-nums text-foreground">
-                {readableTime(asking.taken_at)}
-              </span>
-            </p>
+            <>
+              {/* Which list the copy came from, not just when it was taken:
+                  three lists can each hold a copy from the same minute, and
+                  the three do different things to the shop. */}
+              <p className="text-sm text-muted-foreground">
+                {t(KIND_LABEL[asking.kind])}{" "}
+                <span dir="ltr" className="font-numeric tabular-nums text-foreground">
+                  {readableTime(asking.copy.taken_at)}
+                </span>
+              </p>
+              {asking.kind === "upgrade" ? (
+                <p className="text-sm text-fg-danger">{t("backups_restore_older_shape")}</p>
+              ) : null}
+            </>
           )}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setAsking(null)}>
@@ -306,7 +332,7 @@ export function BackupsPanel() {
               disabled={restore.isPending}
               onClick={() => {
                 if (asking === null) return;
-                const name = asking.name;
+                const name = asking.copy.name;
                 setAsking(null);
                 restore.mutate(name);
               }}
