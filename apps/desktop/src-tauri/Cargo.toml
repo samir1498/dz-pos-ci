@@ -16,6 +16,15 @@ tauri = { version = "2", features = ["devtools"] }
 # SQLite file is how a till loses a sale.
 tauri-plugin-single-instance = "2.4.4"
 
+# Only for the startup-failure message box (src/startup_failure.rs): the
+# window never opens on a release build (no console either, see main.rs),
+# so a shopkeeper sees nothing unless something native tells them. 0.61 is
+# already in Cargo.lock transitively; rfd would be the ready-made crate
+# for this but pulls in GTK or the xdg portal on Linux, a cost this
+# failure never needs to pay since it is Windows-only by construction.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

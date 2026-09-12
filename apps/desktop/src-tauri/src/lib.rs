@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 
 use tauri::{Manager, Url};
 
+pub mod startup_failure;
+
 /// The task serving the API, shared between `setup` and the run handler that
 /// stops it.
 type ApiTask = Arc<Mutex<Option<tauri::async_runtime::JoinHandle<()>>>>;
@@ -363,7 +365,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn db_path() -> std::io::Result<String> {
+/// `pub` so `main.rs` can name it too: on a startup failure it recomputes
+/// the same path to hand to `startup_failure::show`, since `run()` keeps
+/// its own copy private and is not being restructured to return one out.
+pub fn db_path() -> std::io::Result<String> {
     let base = dirs::data_dir().ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::NotFound, "no user data directory")
     })?;
