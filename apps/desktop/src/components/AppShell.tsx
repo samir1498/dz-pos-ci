@@ -223,11 +223,12 @@ function ShopDay() {
   return (
     <span
       data-testid="shell-day"
-      dir="ltr"
       className="hidden items-center gap-1.5 text-sm text-muted-foreground sm:flex"
     >
       <Icon as={CalendarDays} size={18} />
-      <span className="font-numeric tabular-nums">{today}</span>
+      <span dir="ltr" className="font-numeric tabular-nums">
+        {today}
+      </span>
     </span>
   );
 }
