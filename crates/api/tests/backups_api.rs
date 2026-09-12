@@ -329,17 +329,28 @@ async fn a_copy_taken_on_the_way_into_something_is_listed_and_can_be_put_back() 
     let h = harness();
     call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
 
-    // A copy of the shop as it is now, made by hand under the name an
-    // upgrade would have given it. The route reads the name, not how the
-    // file came to be there.
+    // Through the route, so the copy is the app's own `VACUUM INTO` and not
+    // a file copy: the shop file is open, and a row written a moment ago is
+    // in the `-wal` beside it rather than in the file itself. A plain
+    // `fs::copy` of the shop file here is an empty shop.
+    let (_, made) = call(&h.app, "POST", "/backups", None).await;
+    let daily = made["name"].as_str().unwrap().to_string();
+
+    // The same bytes, beside the shop file, under the name an upgrade would
+    // have given them. The route reads the name, not how the file came to be
+    // there.
     let at = chrono::NaiveDate::from_ymd_opt(2026, 9, 10)
         .unwrap()
         .and_hms_milli_opt(8, 0, 0, 120)
         .unwrap();
     let upgrade = dzpos_core::services::backup::upgrade_name(&h.db(), at);
-    std::fs::copy(h.db(), h.dir.path().join(&upgrade)).unwrap();
+    std::fs::copy(
+        h.dir.path().join("backups").join(&daily),
+        h.dir.path().join(&upgrade),
+    )
+    .unwrap();
 
-    // Something the copy does not have, so a restore that worked is visible.
+    // Something neither copy has, so a restore that worked is visible.
     call(&h.app, "POST", "/products", Some(product("Sucre 1kg"))).await;
     assert_eq!(product_names(&h.app).await.len(), 2);
 
@@ -354,8 +365,10 @@ async fn a_copy_taken_on_the_way_into_something_is_listed_and_can_be_put_back() 
         listed["upgrade_copies"][0]["taken_at"],
         json!("2026-09-10T08:00:00")
     );
-    // Its own list: a prune walks the backup folder and this is not in it.
-    assert_eq!(listed["backups"], json!([]), "{listed}");
+    // Three lists, three rules: the daily copy those same bytes came from is
+    // in the folder a prune walks, and this one is not.
+    assert_eq!(listed["backups"].as_array().unwrap().len(), 1, "{listed}");
+    assert_eq!(listed["backups"][0]["name"], json!(daily));
     assert_eq!(listed["safety_copies"], json!([]), "{listed}");
 
     let (status, back) = call(&h.app, "POST", &format!("/backups/{upgrade}/restore"), None).await;
