@@ -93,9 +93,11 @@ pub(crate) struct DebtRow {
     pub created_at: NaiveDateTime,
 }
 
-/// `None` on the two columns that carry a default leaves the default in
-/// place: a movement written by `append` says nothing about a payment mode
-/// and is stamped by the file's own clock, and `pay` fills both in.
+/// `None` on `payment_mode` leaves the column's default, which is what a
+/// movement that was not handed over in anything wants; `pay` is the one
+/// writer that fills it in. `created_at` is an `Option` for the same diesel
+/// reason and not for the same one in practice: `repos::debt::append`
+/// refuses a row that arrives without a moment.
 #[derive(Debug, Insertable)]
 #[diesel(table_name = debt_ledger)]
 #[diesel(treat_none_as_default_value = true)]
@@ -109,9 +111,10 @@ pub(crate) struct DebtRowWrite {
     pub user_id: i32,
     pub note: Option<String>,
     pub payment_mode: Option<PaymentMethod>,
-    /// The moment the movement is written on the shop's calendar. `None`
-    /// leaves the column's own default, which is what every caller but `pay`
-    /// wants.
+    /// The moment the movement is written, on the shop's calendar, from
+    /// `services::clock`. `None` would leave the column's own default, which
+    /// is UTC and an hour behind every other date this app reads; it never
+    /// reaches the file, because `repos::debt::append` refuses the row.
     pub created_at: Option<NaiveDateTime>,
 }
 
