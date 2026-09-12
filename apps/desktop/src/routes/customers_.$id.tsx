@@ -32,6 +32,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Money } from "@/components/Money";
 import { MoneyInput } from "@/components/MoneyInput";
 import { PageHeader } from "@/components/PageHeader";
@@ -757,24 +758,36 @@ function AdjustPanel({ customer }: { customer: CustomerDto }) {
     },
   });
 
+  /** The correction the shop has typed and not yet agreed to. The question
+   * is asked in a dialog of ours rather than a browser `confirm()`, which is
+   * a box Windows draws in the language Windows is in and which does not
+   * mirror on an Arabic screen. Submitting only opens it; the write happens
+   * when the shop says yes, on the values the form was holding then. */
+  const [asking, setAsking] = useState<AdjustValues | null>(null);
+
   const blank: AdjustValues = { amount: null, note: "" };
   const form = useForm({
     defaultValues: blank,
-    onSubmit: async ({ value }) => {
+    onSubmit: ({ value }) => {
       if (value.amount === null || value.amount === 0) return;
-      if (!window.confirm(t("customers_adjust_confirm"))) return;
-      const written = await adjust
-        .mutateAsync({ amount_centimes: value.amount, note: cleared(value.note) })
-        .then(() => true)
-        .catch(() => false);
-      // A refused correction keeps what was typed: the error above says what
-      // to change, and an empty box means typing the figure again to find out
-      // what was wrong with it.
-      if (!written) return;
-      form.setFieldValue("amount", null);
-      form.setFieldValue("note", "");
+      setAsking(value);
     },
   });
+
+  const write = async () => {
+    if (asking === null || asking.amount === null) return;
+    setAsking(null);
+    const written = await adjust
+      .mutateAsync({ amount_centimes: asking.amount, note: cleared(asking.note) })
+      .then(() => true)
+      .catch(() => false);
+    // A refused correction keeps what was typed: the error above says what
+    // to change, and an empty box means typing the figure again to find out
+    // what was wrong with it.
+    if (!written) return;
+    form.setFieldValue("amount", null);
+    form.setFieldValue("note", "");
+  };
 
   return (
     <Card>
@@ -849,6 +862,26 @@ function AdjustPanel({ customer }: { customer: CustomerDto }) {
             </Button>
           </div>
         </form>
+
+        <ConfirmDialog
+          data-testid="customer-adjust-dialog"
+          open={asking !== null}
+          onCancel={() => setAsking(null)}
+          onConfirm={() => void write()}
+          title="customers_adjust"
+          question="customers_adjust_confirm"
+          confirm="action_adjust"
+          pending={adjust.isPending}
+        >
+          {/* The figure itself, because a correction to what a customer owes
+              is the one number the shop is agreeing to. */}
+          {asking?.amount === null || asking === null ? null : (
+            <p className="flex items-center justify-between gap-2 text-sm">
+              <span className="text-muted-foreground">{t("field_adjust_amount")}</span>
+              <Money centimes={asking.amount} data-testid="customer-adjust-asked" />
+            </p>
+          )}
+        </ConfirmDialog>
       </CardContent>
     </Card>
   );

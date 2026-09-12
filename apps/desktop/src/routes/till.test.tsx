@@ -1005,17 +1005,20 @@ describe("on credit", () => {
     const refused = salePost();
     expect(refused).toMatchObject({ override: false });
 
-    // The override asks first, and a cashier who says no sends nothing.
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    // The override asks first, in a dialog of ours rather than the box
+    // Windows draws, and a cashier who says no sends nothing.
+    const confirm = vi.spyOn(window, "confirm");
     await user.click(screen.getByRole("button", { name: "Forcer la vente" }));
-    expect(confirm).toHaveBeenCalled();
+    await screen.findByTestId("till-override-dialog");
+    expect(confirm).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId("till-override-dialog-cancel"));
     expect(fetchMock.mock.calls.filter((c) => String(c[0]).endsWith("/sales")).length).toBe(1);
 
     // Said yes, the same basket goes again with the flag on.
-    confirm.mockReturnValue(true);
     saleAnswer = () =>
       json(201, { ...sale, payment_mode: "credit", customer_id: amrani.id, tendered_centimes: null });
     await user.click(screen.getByRole("button", { name: "Forcer la vente" }));
+    await user.click(await screen.findByTestId("till-override-dialog-confirm"));
     await screen.findByRole("status");
     const posts = salePosts();
     expect(posts).toHaveLength(2);

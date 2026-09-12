@@ -258,7 +258,10 @@ beforeEach(() => {
   payments = noPayments;
   writeAnswer = null;
   clockAnswer = null;
-  vi.spyOn(window, "confirm").mockReturnValue(true);
+  // Spied and never stubbed: the screens ask their own questions now, and a
+  // call to the browser's box would come back falsy and fail the test that
+  // expected the write.
+  vi.spyOn(window, "confirm");
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
     if (init?.method === "POST" || init?.method === "PUT") {
@@ -570,12 +573,21 @@ describe("the ledger", () => {
     await userEvent.type(screen.getByLabelText(fr.field_adjust_note), "erreur de saisie");
     await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
 
+    // The question is asked in a dialog of ours, not the box Windows draws,
+    // and it names the figure the shop is agreeing to.
+    const asked = await screen.findByTestId("customer-adjust-dialog");
+    expect(within(asked).getByText(fr.customers_adjust_confirm)).toBeInTheDocument();
+    expect(screen.getByTestId("customer-adjust-asked")).toHaveTextContent("-500,00");
+    expect(window.confirm).not.toHaveBeenCalled();
+    expect(() => sent("POST")).toThrow();
+
+    await userEvent.click(screen.getByTestId("customer-adjust-dialog-confirm"));
+
     await waitFor(() => expect(sent("POST").url).toMatch(/\/customers\/3\/adjustments$/));
     expect(sent("POST").body).toEqual({
       amount_centimes: -50_000,
       note: "erreur de saisie",
     });
-    expect(window.confirm).toHaveBeenCalledWith(fr.customers_adjust_confirm);
 
     const adjusted = await screen.findByRole("row", { name: /erreur de saisie/ });
     expect(within(adjusted).getByText(fr.debt_adjustment)).toBeInTheDocument();
@@ -584,14 +596,17 @@ describe("the ledger", () => {
   });
 
   test("a cancelled confirmation posts nothing", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     mountFiche(3);
     await screen.findByRole("row", { name: /solde de départ/ });
 
     await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
     await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
+    await userEvent.click(await screen.findByTestId("customer-adjust-dialog-cancel"));
 
     expect(() => sent("POST")).toThrow();
+    // What was typed is still there: saying no is not the same as starting
+    // the correction again.
+    expect(screen.getByLabelText(fr.field_adjust_amount)).toHaveValue(formatCentimes(-50_000));
   });
 
   test("a refused correction keeps the figure that was typed", async () => {
@@ -603,6 +618,7 @@ describe("the ledger", () => {
     await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
     await userEvent.type(screen.getByLabelText(fr.field_adjust_note), "erreur de saisie");
     await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
+    await userEvent.click(await screen.findByTestId("customer-adjust-dialog-confirm"));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_validation);
     // Emptying the box on a refusal means retyping the figure to find out
