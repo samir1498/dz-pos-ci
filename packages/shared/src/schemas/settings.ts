@@ -92,6 +92,7 @@ type _Backup = Assert<Matches<BackupDto, typeof backupSchema>>;
 export const backupsSchema = z.object({
   backups: z.array(backupSchema),
   safety_copies: z.array(backupSchema),
+  upgrade_copies: z.array(backupSchema),
 }) satisfies z.ZodType<BackupsDto>;
 type _Backups = Assert<Matches<BackupsDto, typeof backupsSchema>>;
 

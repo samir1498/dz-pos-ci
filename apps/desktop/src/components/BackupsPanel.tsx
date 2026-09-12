@@ -99,6 +99,7 @@ export function BackupsPanel() {
   const busy = create.isPending || restore.isPending;
   const rows: BackupDto[] = backups.data?.backups ?? [];
   const safetyCopies: BackupDto[] = backups.data?.safety_copies ?? [];
+  const upgradeCopies: BackupDto[] = backups.data?.upgrade_copies ?? [];
   const newest = rows[0];
 
   const columns: readonly Column<BackupDto>[] = [
@@ -122,6 +123,27 @@ export function BackupsPanel() {
       ),
     },
   ];
+
+  const askToRestore = (row: BackupDto) => (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={busy}
+      onClick={() => {
+        setDone(null);
+        setServerError(null);
+        setAsking(row);
+      }}
+    >
+      {/* An undo, which the kit mirrors with the page: on the Arabic screen
+          "back" is the other way round. */}
+      <Icon as={RotateCcw} size={18} flip />
+      {restore.isPending && restore.variables === row.name
+        ? t("action_restoring")
+        : t("action_restore")}
+    </Button>
+  );
 
   return (
     <section aria-labelledby="settings-backups">
@@ -174,33 +196,18 @@ export function BackupsPanel() {
                     description={t("backups_empty_hint")}
                   />
                 }
-                actions={(row) => (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => {
-                      setDone(null);
-                      setServerError(null);
-                      setAsking(row);
-                    }}
-                  >
-                    {/* An undo, which the kit mirrors with the page: on the
-                        Arabic screen "back" is the other way round. */}
-                    <Icon as={RotateCcw} size={18} flip />
-                    {restore.isPending && restore.variables === row.name
-                      ? t("action_restoring")
-                      : t("action_restore")}
-                  </Button>
-                )}
+                actions={askToRestore}
               />
 
-              {/* Kept under their own heading because they are kept under their
-                  own rule: the daily copies are pruned to thirty, these are
-                  never deleted, and they are the only record of a state the
-                  owner replaced. No restore button: restoring one is a decision
-                  that needs a person who knows the file, not one more click. */}
+              {/* Kept under their own heading because they are kept under
+                  their own rule: the daily copies are pruned to thirty, these
+                  are never deleted, and they are the only record of a state
+                  the owner replaced. They carry the same restore button as
+                  the daily ones, and the same confirmation, which is what
+                  makes putting one back a decision rather than a click. Until
+                  2026-09-12 the route took a daily copy's name and no other,
+                  so undoing a restore meant swapping files by hand on a
+                  machine in a shop. */}
               {safetyCopies.length === 0 ? null : (
                 <section aria-labelledby="settings-safety-copies" className="flex flex-col gap-2">
                   <h4 id="settings-safety-copies" className="font-semibold text-foreground">
@@ -213,6 +220,31 @@ export function BackupsPanel() {
                     columns={columns}
                     rows={safetyCopies}
                     rowKey={(row) => row.name}
+                    actions={askToRestore}
+                  />
+                </section>
+              )}
+
+              {/* The third kind, and the one nothing listed at all until
+                  2026-09-12: an owner found one by knowing how this app
+                  names a file. Restoring one puts the shop back on the data
+                  the older version left, which the app then migrates forward
+                  on its next open, taking one of these copies again. */}
+              {upgradeCopies.length === 0 ? null : (
+                <section aria-labelledby="settings-upgrade-copies" className="flex flex-col gap-2">
+                  <h4 id="settings-upgrade-copies" className="font-semibold text-foreground">
+                    {t("settings_upgrade_copies")}
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    {t("settings_upgrade_copies_hint")}
+                  </p>
+                  <DataTable
+                    data-testid="upgrade-copies-table"
+                    caption={t("settings_upgrade_copies")}
+                    columns={columns}
+                    rows={upgradeCopies}
+                    rowKey={(row) => row.name}
+                    actions={askToRestore}
                   />
                 </section>
               )}

@@ -29,6 +29,14 @@ const safety: BackupDto = {
   bytes: 2_150_400,
 };
 
+/** A copy taken on the way into an update that had migrations to run. Same
+ *  folder as the safety copy, a different word in the middle. */
+const upgrade: BackupDto = {
+  name: "dzpos.db.before-upgrade-20260910-080000-120.sqlite",
+  taken_at: "2026-09-10T08:00:00",
+  bytes: 1_048_576,
+};
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -57,6 +65,11 @@ function backupRows(): HTMLElement[] {
 /** The copies kept before a restore, same shape, their own table. */
 function safetyRows(): HTMLElement[] {
   return within(screen.getByTestId("safety-copies-table")).queryAllByRole("row").slice(1);
+}
+
+/** The copies kept before an update, same shape again, their own table. */
+function upgradeRows(): HTMLElement[] {
+  return within(screen.getByTestId("upgrade-copies-table")).queryAllByRole("row").slice(1);
 }
 
 /** Presses restore on a row and answers the dialog it opens. */
@@ -91,7 +104,7 @@ let createAnswer: (() => Response) | null;
 let restoreAnswer: (() => Response) | null;
 
 beforeEach(() => {
-  listed = { backups: [newest, older], safety_copies: [] };
+  listed = { backups: [newest, older], safety_copies: [], upgrade_copies: [] };
   createAnswer = null;
   restoreAnswer = null;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
@@ -141,7 +154,7 @@ describe("the list", () => {
   });
 
   test("keeps the copies taken before a restore under their own heading", async () => {
-    listed = { backups: [newest], safety_copies: [safety] };
+    listed = { backups: [newest], safety_copies: [safety], upgrade_copies: [] };
     mount();
     expect(
       await screen.findByRole("heading", { name: fr.settings_safety_copies }),
@@ -149,9 +162,28 @@ describe("the list", () => {
     const kept = safetyRows();
     expect(kept).toHaveLength(1);
     expect(kept[0]).toHaveTextContent("2026-09-09 10:15");
-    // They are shown, never offered: restoring one is not one more click.
-    expect(within(kept[0] ?? document.body).queryByRole("button")).toBeNull();
     expect(backupRows()).toHaveLength(1);
+  });
+
+  test("keeps the copies taken before an update under a heading of their own", async () => {
+    listed = { backups: [newest], safety_copies: [], upgrade_copies: [upgrade] };
+    mount();
+    expect(
+      await screen.findByRole("heading", { name: fr.settings_upgrade_copies }),
+    ).toBeInTheDocument();
+    const kept = upgradeRows();
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toHaveTextContent("2026-09-10 08:00");
+    // Its own table: the three kinds are kept under three rules and a
+    // reader choosing between copies is choosing between rules.
+    expect(backupRows()).toHaveLength(1);
+    expect(screen.queryByTestId("safety-copies-table")).toBeNull();
+  });
+
+  test("shows no update heading before any update has taken one", async () => {
+    mount();
+    await screen.findByTestId("backups-newest");
+    expect(screen.queryByRole("heading", { name: fr.settings_upgrade_copies })).toBeNull();
   });
 
   test("shows no safety heading before anything has been restored", async () => {
@@ -161,7 +193,7 @@ describe("the list", () => {
   });
 
   test("says so when the shop has no copy yet", async () => {
-    listed = { backups: [], safety_copies: [] };
+    listed = { backups: [], safety_copies: [], upgrade_copies: [] };
     mount();
     // Twice: the summary line above the list, and the empty state in its
     // place, which is what a shop reads first on the first morning.

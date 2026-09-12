@@ -186,7 +186,7 @@ beforeEach(() => {
     // unanswered call would leave a second alert on the screen these tests
     // read.
     if (url.endsWith("/backups"))
-      return Promise.resolve(json(200, { backups: [], safety_copies: [] }));
+      return Promise.resolve(json(200, { backups: [], safety_copies: [], upgrade_copies: [] }));
     if (url.endsWith("/stock/recount"))
       return Promise.resolve(json(200, { last_run_day: null, drifts: [] }));
     // The régime form dates its default from the shop's calendar, which the

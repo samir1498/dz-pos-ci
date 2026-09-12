@@ -529,15 +529,16 @@ impl From<Backup> for BackupDto {
     }
 }
 
-/// What the settings screen reads: the daily copies, and the copies taken on
-/// the way into a restore. The two are separate lists because they are kept
-/// under different rules: the daily ones are pruned to thirty, the safety
-/// ones are never touched.
+/// What the settings screen reads: the daily copies, the copies taken on the
+/// way into a restore, and the copies taken on the way into an upgrade. The
+/// three are separate lists because they are kept under different rules: the
+/// daily ones are pruned to thirty, the other two are never touched.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[ts(export_to = "BackupsDto.ts")]
 pub struct BackupsDto {
     pub backups: Vec<BackupDto>,
     pub safety_copies: Vec<BackupDto>,
+    pub upgrade_copies: Vec<BackupDto>,
 }
 
 /// What the shop file holds after a restore: the copy it came from and the
