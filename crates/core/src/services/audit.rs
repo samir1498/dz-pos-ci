@@ -13,7 +13,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::audit::{AuditEntry, AuditRowWrite};
 use crate::repos::audit as repo;
-use crate::services::clock::SHOP_UTC_OFFSET_SECONDS;
+use crate::services::clock;
 use crate::services::users;
 
 /// A row that did not exist before, such as a customer fiche.
@@ -121,9 +121,9 @@ pub const ACTION_CREATE_EXPENSE: &str = "expense.create";
 /// id, both quantities and the difference between them, because it is the
 /// only record a recount leaves: there is no table of runs, and the drift
 /// list a shop owner reads is these rows read back. The day the run was
-/// marked under travels in the entry too, since the column's own timestamp
-/// is UTC and a run just after midnight in Algiers would file itself under
-/// yesterday.
+/// marked under travels in the entry too, because `services::stock` finds a
+/// run by reading that day out of the entry rather than off the row's own
+/// moment.
 pub const ACTION_STOCK_DRIFT: &str = "stock.drift";
 
 /// A fiche closed while it was still carrying something: a balance either
@@ -258,6 +258,7 @@ pub fn record(
             entity_id: change.entity_id,
             before: change.before,
             after: change.after,
+            created_at: clock::now(),
         },
     )
 }
@@ -290,8 +291,8 @@ pub struct EntryWithUser {
 pub struct Filter {
     pub user_id: Option<i32>,
     pub action: Option<String>,
-    /// A day on the shop's calendar, not a UTC one: `day_range_utc` below is
-    /// the conversion.
+    /// A day on the shop's calendar, the same clock `record` stamps a row
+    /// with: `day_range` below is the pair of moments it stands for.
     pub day: Option<NaiveDate>,
 }
 
@@ -311,17 +312,14 @@ pub struct Page {
     pub has_more: bool,
 }
 
-/// `day`'s midnight-to-midnight on the shop's calendar, translated to the
-/// UTC range `audit_log.created_at` is actually stored in. The offset is
-/// fixed (`services::clock`), so this is subtraction and not a timezone
-/// database: a row written at 00:30 in Algiers reads 23:30 the day before in
-/// UTC, the same crossing `ACTION_STOCK_DRIFT`'s doc comment above warns a
-/// naive day filter would miss.
-fn day_range_utc(day: NaiveDate) -> (NaiveDateTime, NaiveDateTime) {
-    let local_midnight = NaiveDateTime::new(day, NaiveTime::MIN);
-    let offset = Duration::seconds(i64::from(SHOP_UTC_OFFSET_SECONDS));
-    let start = local_midnight - offset;
-    (start, start + Duration::days(1))
+/// `day`'s midnight to the next midnight, both on the shop's calendar,
+/// which is what the column holds since `record` stamps it from
+/// `services::clock`. It used to subtract the shop's offset here because the
+/// column took SQLite's UTC default, which meant the filter and the date
+/// printed beside it disagreed for the hour before midnight UTC.
+fn day_range(day: NaiveDate) -> (NaiveDateTime, NaiveDateTime) {
+    let midnight = NaiveDateTime::new(day, NaiveTime::MIN);
+    (midnight, midnight + Duration::days(1))
 }
 
 /// One page of the log, filtered in SQL (`WHERE` and `LIMIT`/`OFFSET`, not a
@@ -357,7 +355,7 @@ pub fn read(
     people.sort_by(|a, b| a.1.cmp(&b.1));
     let actions = repo::distinct_actions(conn, shop_id)?;
 
-    let range = filter.day.map(day_range_utc);
+    let range = filter.day.map(day_range);
     let repo_filter = repo::SearchFilter {
         user_id: filter.user_id,
         action: filter.action.clone(),
@@ -410,39 +408,38 @@ mod tests {
 
     use super::*;
 
-    /// `SHOP_UTC_OFFSET_SECONDS` is one hour, so the shop's midnight is
-    /// 23:00 UTC the day before: a row written at 00:30 in Algiers, which
-    /// reads 23:30 UTC the day before in the column, has to fall inside this
-    /// range for `day_range_utc(that_day)`, and outside the range for
-    /// `day_range_utc(the_day_before)` — the exact crossing
-    /// `ACTION_STOCK_DRIFT`'s doc comment names.
+    /// The column is on the shop's calendar, so a day is its own midnight to
+    /// the next, and the row written at 00:30 in Algiers falls in the day it
+    /// was written rather than in the one before. That row is the whole
+    /// reason this function exists: before `record` stamped from the shop
+    /// clock it was stored as 23:30 the previous day and the filter had to
+    /// reach back an hour to find it, while the screen printed the earlier
+    /// date beside it.
     #[test]
-    fn a_shop_day_is_the_hour_before_midnight_utc_to_the_hour_before_the_next() {
+    fn a_shop_day_runs_from_its_own_midnight_to_the_next() {
         let day = NaiveDate::from_ymd_opt(2026, 9, 11).unwrap();
-        let (start, end) = day_range_utc(day);
+        let (start, end) = day_range(day);
         assert_eq!(
             start,
-            NaiveDate::from_ymd_opt(2026, 9, 10)
+            NaiveDate::from_ymd_opt(2026, 9, 11)
                 .unwrap()
-                .and_hms_opt(23, 0, 0)
+                .and_hms_opt(0, 0, 0)
                 .unwrap()
         );
         assert_eq!(
             end,
-            NaiveDate::from_ymd_opt(2026, 9, 11)
+            NaiveDate::from_ymd_opt(2026, 9, 12)
                 .unwrap()
-                .and_hms_opt(23, 0, 0)
+                .and_hms_opt(0, 0, 0)
                 .unwrap()
         );
 
-        // 00:30 in Algiers on the 11th is 23:30 UTC on the 10th: inside this
-        // day's range, and outside the day before's.
-        let just_after_midnight_in_algiers = NaiveDate::from_ymd_opt(2026, 9, 10)
+        let just_after_midnight_in_algiers = NaiveDate::from_ymd_opt(2026, 9, 11)
             .unwrap()
-            .and_hms_opt(23, 30, 0)
+            .and_hms_opt(0, 30, 0)
             .unwrap();
         assert!(just_after_midnight_in_algiers >= start && just_after_midnight_in_algiers < end);
-        let (prev_start, prev_end) = day_range_utc(day.pred_opt().unwrap());
+        let (prev_start, prev_end) = day_range(day.pred_opt().unwrap());
         assert!(
             !(just_after_midnight_in_algiers >= prev_start
                 && just_after_midnight_in_algiers < prev_end)

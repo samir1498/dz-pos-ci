@@ -2258,6 +2258,44 @@ fn a_database_without_the_series_year_takes_the_migration_that_adds_it() {
     assert_eq!(orphan_rows(&mut conn), 0);
 }
 
+/// The audit log is the one table whose moments came from the column's own
+/// default, which is SQLite's UTC, while every other date in the file is on
+/// the shop's calendar. A shop that has been running keeps rows written that
+/// way, so the migration has to move what is already there and not only
+/// change what is written next. The row at 23:30 is the one that mattered on
+/// a screen: it was written at half past midnight in Algiers and printed on
+/// the day before.
+#[test]
+fn the_audit_log_moves_onto_the_shop_clock_with_the_rows_already_in_it() {
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_before_migration("audit_log_shop_clock");
+    diesel::sql_query(
+        "INSERT INTO audit_log (id, shop_id, user_id, action, entity, created_at) VALUES \
+         (1, 1, 1, 'product.update', 'product', '2026-09-11 23:30:00'), \
+         (2, 1, 1, 'price.update', 'product', '2026-09-11 10:00:00')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let pending = conn.pending_migrations(dzpos_core::db::MIGRATIONS).unwrap();
+    conn.run_migration(&pending[0]).unwrap();
+
+    for (id, moment) in [(1, "2026-09-12 00:30:00"), (2, "2026-09-11 11:00:00")] {
+        assert_eq!(
+            count(
+                &mut conn,
+                &format!(
+                    "SELECT COUNT(*) AS n FROM audit_log WHERE id = {id} \
+                     AND created_at = '{moment}'"
+                )
+            ),
+            1,
+            "row {id} is not on the shop's clock"
+        );
+    }
+    assert_eq!(orphan_rows(&mut conn), 0);
+}
+
 #[test]
 fn the_migration_reverts_and_reapplies() {
     // architecture.md, Data: a migration ships with a test that runs it.
@@ -2285,9 +2323,48 @@ fn the_migration_reverts_and_reapplies() {
         1
     );
 
-    // The twelfth is the top of the stack: the sessions table. It adds a
-    // table and two indexes and nothing else, so its down drops all three and
-    // touches no user and no document.
+    // The thirteenth is the top of the stack: the hour the audit log's rows
+    // were short. It is the only migration here that moves data and adds no
+    // table and no column, so what its down has to undo is an arithmetic and
+    // not a shape. One row, written at a moment this test picks, is what
+    // both directions are read off.
+    assert_eq!(
+        diesel::sql_query(
+            "INSERT INTO audit_log (shop_id, user_id, action, entity, created_at) \
+             VALUES (1, 1, 'test.shift', 'test', '2026-09-11 23:30:00')"
+        )
+        .execute(&mut conn)
+        .unwrap(),
+        1
+    );
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM audit_log \
+             WHERE action = 'test.shift' AND created_at = '2026-09-11 22:30:00'"
+        ),
+        1,
+        "the audit clock down.sql did not put the hour back"
+    );
+    conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM audit_log \
+             WHERE action = 'test.shift' AND created_at = '2026-09-11 23:30:00'"
+        ),
+        1,
+        "the audit clock up.sql did not take the hour back"
+    );
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+
+    // The twelfth: the sessions table. It adds a table and two indexes and
+    // nothing else, so its down drops all three and touches no user and no
+    // document.
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     assert_eq!(

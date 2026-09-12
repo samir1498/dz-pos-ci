@@ -45,6 +45,17 @@ pub(crate) struct AuditRowWrite {
     pub entity_id: Option<i32>,
     pub before: Option<String>,
     pub after: Option<String>,
+    /// On the shop's calendar, from `services::clock`, never left to the
+    /// column's own default. SQLite's `CURRENT_TIMESTAMP` is UTC and the shop
+    /// runs on UTC+1, which put a row written at 00:30 in Algiers on the day
+    /// before and out of the day an owner filtered for. Every other column a
+    /// day filter reads is stamped by its service before the insert; this was
+    /// the one that was not.
+    /// Not an `Option` on purpose: the supplier ledger guards the same rule
+    /// at its repo with `CoreError::Unstamped` because a caller there chooses
+    /// the moment, while every audit row is written now, so the type can
+    /// carry the rule instead of a runtime check.
+    pub created_at: NaiveDateTime,
 }
 
 impl From<AuditRow> for AuditEntry {

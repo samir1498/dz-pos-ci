@@ -289,16 +289,12 @@ mod read {
             .unwrap()
             .id;
         products::update(&mut conn, SHOP, OWNER, p, draft(1_500, true)).unwrap();
-        // The shop's calendar day, not the UTC one the column stores
-        // (`services::audit::day_range_utc`): the two agree all but one hour
-        // in twenty-four, and this proves the filter reads the row on the
-        // day it was actually written on, not on whichever the column
-        // happens to spell at the moment the test runs.
+        // The day off the row itself, so a test running across midnight
+        // asks for the day the row was actually written on. This asserts the
+        // filter and not the calendar: the moment the row carries is what
+        // `a_row_is_stamped_from_the_shop_clock_and_not_from_the_file` holds.
         let created_at = audit::list(&mut conn, SHOP).unwrap()[0].created_at;
-        let today = dzpos_core::services::clock::shop_time(
-            chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(created_at, chrono::Utc),
-        )
-        .date();
+        let today = created_at.date();
 
         let filter = Filter {
             day: Some(today.pred_opt().unwrap()),
@@ -408,4 +404,56 @@ fn the_log_is_scoped_to_its_shop() {
     assert_eq!(page.rows.len(), 1);
     let (other, _) = audit::read(&mut conn, 2, &audit::Filter::default(), 1).unwrap();
     assert!(other.rows.is_empty());
+}
+
+/// The column used to take SQLite's own default, which is UTC, while every
+/// other date in the file is on the shop's calendar. That put a row written
+/// at 00:30 in Algiers on the day before, printed it that way on the owner's
+/// screen, and dropped it out of the day he filtered for. The second
+/// assertion is the one that bites: an hour away from UTC is exactly what a
+/// row stamped from the shop clock looks like, and a row that fell back to
+/// the default would sit on UTC instead.
+#[test]
+fn a_row_is_stamped_from_the_shop_clock_and_not_from_the_file() {
+    let (_dir, mut conn) = open_temp();
+
+    let before = dzpos_core::services::clock::now();
+    audit::record(
+        &mut conn,
+        SHOP,
+        OWNER,
+        audit::Change {
+            action: "test.stamp",
+            entity: "test",
+            entity_id: None,
+            before: None,
+            after: None,
+        },
+    )
+    .unwrap();
+    let after = dzpos_core::services::clock::now();
+
+    let row = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .find(|e| e.action == "test.stamp")
+        .expect("the row this test just wrote");
+
+    assert!(
+        row.created_at >= before && row.created_at <= after,
+        "{} is not between {before} and {after}",
+        row.created_at
+    );
+
+    // The shop is an hour ahead of UTC and the two reads are adjacent, so
+    // the gap is one hour to within the time a statement takes. A minute
+    // either side rather than an open window: half an hour of slack would
+    // still pass if the offset were read off a half-hour zone by mistake.
+    let utc_now = chrono::Utc::now().naive_utc();
+    let ahead = row.created_at - utc_now;
+    assert!(
+        ahead.num_seconds() > 3540 && ahead.num_seconds() < 3660,
+        "the row is {} seconds from UTC, so it took the column's own default",
+        ahead.num_seconds()
+    );
 }
