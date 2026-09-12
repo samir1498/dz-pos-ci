@@ -18,7 +18,12 @@
 //
 // The keys are set in the figure face and read left to right in Arabic too,
 // the same decision `Money` takes: a keypad whose 7 and 8 swapped places in
-// one language is a pad nobody can use without looking.
+// one language is a pad nobody can use without looking. That is the grid's
+// job and not the glyph's: a `dir` on each key keeps "00" reading as two
+// zeros but leaves the grid flowing from the page's own side, which is how
+// an Arabic till drew the 1 where a thumb reaches for the 3 until
+// 2026-09-12. The twelve keys sit in a box of their own that is `ltr` in
+// every language; the wide key stays outside it and reads with the page.
 
 import { CornerDownLeft, Delete } from "lucide-react";
 import type { KeyboardEvent } from "react";
@@ -88,37 +93,40 @@ export function Keypad({
       role="group"
       aria-label={t("keypad_label")}
       data-testid={testId}
-      className={cn("grid grid-cols-3 gap-2", className)}
+      className={cn("grid gap-2", className)}
       onKeyDown={onKeyDown}
     >
-      {FACE.map((key) => (
+      <div dir="ltr" className="grid grid-cols-3 gap-2">
+        {FACE.map((key) => (
+          <Button
+            key={key}
+            type="button"
+            variant="secondary"
+            disabled={disabled}
+            className="h-(--control-h-lg) font-numeric text-xl font-medium tabular-nums"
+            onClick={() => onKey(key)}
+          >
+            {key}
+          </Button>
+        ))}
+        {/* The arrow points at the digit it takes off, and the digits run
+            left to right in every language, so this one does not mirror. */}
         <Button
-          key={key}
           type="button"
           variant="secondary"
           disabled={disabled}
-          dir="ltr"
-          className="h-(--control-h-lg) font-numeric text-xl font-medium tabular-nums"
-          onClick={() => onKey(key)}
+          aria-label={t("keypad_backspace")}
+          className="h-(--control-h-lg)"
+          onClick={() => onKey("backspace")}
         >
-          {key}
+          <Icon as={Delete} size={20} />
         </Button>
-      ))}
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={disabled}
-        aria-label={t("keypad_backspace")}
-        className="h-(--control-h-lg)"
-        onClick={() => onKey("backspace")}
-      >
-        <Icon as={Delete} size={20} flip />
-      </Button>
+      </div>
       <Button
         type="button"
         variant="outline"
         disabled={disabled}
-        className="col-span-3 h-(--control-h-lg) text-md font-semibold"
+        className="h-(--control-h-lg) text-md font-semibold"
         onClick={() => onKey("enter")}
       >
         <Icon as={CornerDownLeft} size={20} flip />

@@ -78,6 +78,28 @@ describe("Keypad", () => {
     expect(pressed).toEqual(["5"]);
   });
 
+  /**
+   * The pad on an Arabic till. The page is `rtl`, so a grid left to itself
+   * puts the first key on the right and the cashier's thumb lands on the 3
+   * where the 1 used to be. The assertion is the box the keys are laid out
+   * in, because that is what decides the order: the `dir` nearest a key is
+   * the pad's own `ltr` and not the document's `rtl`.
+   */
+  test("the keys run left to right on an Arabic till too", () => {
+    render(
+      <I18nProvider lang="ar">
+        <Keypad onKey={() => {}} />
+      </I18nProvider>,
+    );
+
+    expect(document.documentElement.dir).toBe("rtl");
+    for (const key of FACE) {
+      expect(screen.getByRole("button", { name: key }).closest("[dir]")?.getAttribute("dir")).toBe(
+        "ltr",
+      );
+    }
+  });
+
   test("sends nothing at all while it is disabled", async () => {
     const user = userEvent.setup();
     const pressed = mount(true);
