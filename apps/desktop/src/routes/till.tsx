@@ -390,10 +390,14 @@ export function TillScreen() {
     if (refusal === null) return;
     setForcing(true);
   }, [refusal]);
-  const forceThrough = useCallback(() => {
-    setForcing(false);
+  const forceThrough = useCallback(async () => {
     if (refusal === null) return;
-    pay.mutate({ ...refusal.body, override: true });
+    // The question stays up until the sale has landed or been refused. It
+    // closed first until 2026-09-12, which left the dialog's own pending
+    // state unreachable and a second press on the button able to send a
+    // second sale.
+    await pay.mutateAsync({ ...refusal.body, override: true }).catch(() => undefined);
+    setForcing(false);
   }, [pay, refusal]);
 
   // F9 pays, the way a till keyboard does. Held in a ref so the listener is
@@ -584,7 +588,7 @@ export function TillScreen() {
           data-testid="till-override-dialog"
           open={forcing}
           onCancel={() => setForcing(false)}
-          onConfirm={forceThrough}
+          onConfirm={() => void forceThrough()}
           title="till_override"
           question="till_override_confirm"
           confirm="till_override"

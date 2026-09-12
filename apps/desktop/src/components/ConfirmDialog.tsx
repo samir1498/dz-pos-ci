@@ -45,6 +45,9 @@ export function ConfirmDialog({
   question: Key;
   /** The wording on the button that goes through with it. */
   confirm: Key;
+  /** The write the shop said yes to is out. The dialog stays up and
+   * neither button goes through, so a second press cannot send a second
+   * one and closing it cannot be read as cancelling it. */
   pending?: boolean;
   destructive?: boolean;
   /** Anything the question needs shown with it: an amount, a name, a date. */
@@ -57,7 +60,11 @@ export function ConfirmDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) onCancel();
+        // Escape and a click outside close a Radix dialog. Neither may close
+        // this one while the write it asked about is out: the shop would see
+        // the question disappear and read that as the write not happening,
+        // and the write would happen anyway.
+        if (!next && !pending) onCancel();
       }}
     >
       <DialogContent data-testid={testId}>
@@ -70,6 +77,7 @@ export function ConfirmDialog({
           <Button
             type="button"
             variant="ghost"
+            disabled={pending}
             data-testid={`${testId}-cancel`}
             onClick={onCancel}
           >

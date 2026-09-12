@@ -249,7 +249,9 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let list: CustomerDto[];
 let rows: CustomerLedgerDto;
 let payments: CustomerPaymentsDto;
-let writeAnswer: (() => Response) | null;
+// A write's answer. It may be a promise so a test can hold one open and
+// look at the screen while the call is still out.
+let writeAnswer: (() => Response | Promise<Response>) | null;
 let clockAnswer: (() => Response) | null;
 
 beforeEach(() => {
@@ -659,6 +661,41 @@ describe("the ledger", () => {
     // integer it understood, which is what MoneyInput leaves behind on blur.
     expect(screen.getByLabelText(fr.field_adjust_amount)).toHaveValue(formatCentimes(-50_000));
     expect(screen.getByLabelText(fr.field_adjust_note)).toHaveValue("erreur de saisie");
+  });
+
+  test("nothing can write a second correction while the first one is out", async () => {
+    mountFiche(3);
+    await screen.findByRole("row", { name: /solde de départ/ });
+
+    // The call never answers, so the screen stays as it is the moment the
+    // shop said yes.
+    let release: (answer: Response) => void = () => {};
+    writeAnswer = () =>
+      new Promise<Response>((resolve) => {
+        release = resolve;
+      });
+
+    await userEvent.type(screen.getByLabelText(fr.field_adjust_amount), "-500");
+    await userEvent.click(screen.getByRole("button", { name: fr.action_adjust }));
+    await userEvent.click(await screen.findByTestId("customer-adjust-dialog-confirm"));
+
+    // The question is still up and neither button answers it again. A
+    // correction to what a customer owes is written once or not at all, and
+    // a box that closed here would read as the correction not happening.
+    await waitFor(() =>
+      expect(screen.getByTestId("customer-adjust-dialog-confirm")).toBeDisabled(),
+    );
+    expect(screen.getByTestId("customer-adjust-dialog-cancel")).toBeDisabled();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByTestId("customer-adjust-dialog")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter((c) => isInit(c[1]) && c[1].method === "POST")).toHaveLength(
+      1,
+    );
+
+    release(json(201, { ...ledger, balance_centimes: 100_000 }));
+    await waitFor(() =>
+      expect(screen.queryByTestId("customer-adjust-dialog")).not.toBeInTheDocument(),
+    );
   });
 
   test("an adjustment of nothing is refused before it leaves the screen", async () => {

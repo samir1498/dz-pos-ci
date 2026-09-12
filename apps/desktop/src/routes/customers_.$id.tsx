@@ -798,11 +798,14 @@ function AdjustPanel({ customer }: { customer: CustomerDto }) {
 
   const write = async () => {
     if (asking === null || asking.amount === null) return;
-    setAsking(null);
+    // The question stays up until the correction has landed or been refused,
+    // so a second press cannot write a second correction to what a customer
+    // owes and closing the box cannot be read as having cancelled it.
     const written = await adjust
       .mutateAsync({ amount_centimes: asking.amount, note: cleared(asking.note) })
       .then(() => true)
       .catch(() => false);
+    setAsking(null);
     // A refused correction keeps what was typed: the error above says what
     // to change, and an empty box means typing the figure again to find out
     // what was wrong with it.
