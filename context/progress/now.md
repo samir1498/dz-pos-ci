@@ -193,11 +193,15 @@ Twenty-seven columns in the file carry that same UTC default, and the
 review of T12 corrected the claim that the audit log was the only one. On
 every other column a day filter reads, the default never fires: the service
 stamps the moment before the insert, and `repos::supplier_debt::append`
-refuses a row that arrives without one. One gap is left and is task T13:
-`DebtRowWrite.created_at` is an `Option` whose doc still says `None` takes
-the default, while `repos::cash` filters `debt_ledger.created_at` against a
-shop-calendar day. Both callers stamp today, so no row anywhere is wrong;
-nothing stops a third.
+refuses a row that arrives without one. The one gap left was the customer debt
+ledger, and it is closed since 2026-09-12 (PR #49, task T13):
+`repos::debt::append` refuses a movement that arrives without a moment, the
+same guard and the same `CoreError::Unstamped` the supplier side has held
+since it was written. Both callers already stamped, so no row in any file
+moved. `debt_allocations.created_at` does take the UTC default and stays
+that way deliberately: nothing reads it by day, an allocation is ordered by
+id and printed from the moment on the payment it settles, and the type now
+says so.
 
 Release gate R3 is closed since 2026-09-12. Décret 05-468 art. 3 names the
 registre du commerce number and the numéro d'identification statistique for

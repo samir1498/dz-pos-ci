@@ -48,7 +48,7 @@ tasks:
     status: 'done'
   - id: 'T13'
     desc: 'The customer debt ledger carries the same hole the audit log just closed. `DebtRowWrite.created_at` is an `Option` whose own doc says `None` leaves the column''s default, which is SQLite''s UTC, and `repos::cash::customer_payments` filters `debt_ledger.created_at` against a day on the shop''s calendar, so an unstamped payment would be counted under the wrong day in the cash position for one hour every night. Both callers in `services::debt` pass a moment today, so no row in any file is wrong and there is nothing to migrate; what is missing is anything stopping a third caller. The supplier ledger already refuses an unstamped row at its repo with `CoreError::Unstamped`. Raised by the data-correctness review of T12, 2026-09-12.'
-    status: 'pending'
+    status: 'done'
 acceptance: []
 ---
 # M5: first release, v1.0
