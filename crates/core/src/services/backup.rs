@@ -206,10 +206,17 @@ fn folder_of(file: &Path) -> Option<PathBuf> {
 /// copy is that it is still there months later, when somebody works out that
 /// the trouble started with an update.
 ///
-/// Called from the app's startup and nowhere else. It takes no audit row and
-/// could not: nobody is signed in when a new version opens an old file, and
-/// the act is the new binary's, not a person's. What records it is the copy
-/// itself, whose name carries the moment.
+/// Called on the way into the shop file, from both doors: the app's startup,
+/// and the reopen at the end of a restore, where the copy being restored is
+/// usually the one behind. It takes no audit row and could not: nobody is
+/// signed in when a new version opens an old file, and on the restore path
+/// the file is not open yet. What records it is the copy itself, whose name
+/// carries the moment.
+///
+/// A shop that restores an older copy twice gets two of these, because the
+/// two copies hold different books. Nothing deletes them, which is the point
+/// above, and nothing lists them yet either: putting them on the backups
+/// screen beside the daily ones is its own task (M5 T11).
 ///
 /// The copy is written under a staging name and renamed once SQLite has
 /// finished with it, the same way [`create`] does, so a copy interrupted by
@@ -522,8 +529,8 @@ pub fn verify(path: &Path) -> Result<Summary, CoreError> {
 }
 
 /// The migrations compiled into this binary. A copy may have fewer (it is
-/// older, and `db::open` migrates it forward on the way in); it may not have
-/// more.
+/// older, and the restore migrates it forward on the way in, taking a
+/// pre-upgrade copy of it first); it may not have more.
 fn embedded_versions() -> Result<Vec<String>, CoreError> {
     use diesel::migration::MigrationSource;
     let migrations = MigrationSource::<diesel::sqlite::Sqlite>::migrations(&MIGRATIONS)
