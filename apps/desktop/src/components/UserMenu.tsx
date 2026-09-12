@@ -53,7 +53,7 @@ export function UserMenu() {
           {t("topbar_lock_now")}
         </DropdownMenuItem>
         <DropdownMenuItem data-testid="user-menu-signout" onSelect={() => void signOut()}>
-          <Icon as={LogOut} size={18} />
+          <Icon as={LogOut} size={18} flip />
           {t("topbar_sign_out")}
         </DropdownMenuItem>
       </DropdownMenuContent>

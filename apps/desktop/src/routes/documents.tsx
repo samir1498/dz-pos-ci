@@ -22,7 +22,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { ApiError, formatCentimes } from "@dzpos/shared";
+import { ApiError, formatCentimes, formatQty } from "@dzpos/shared";
 import type {
   AvoirLineDto,
   DocumentKindDto,
@@ -132,11 +132,6 @@ function day(issuedAt: string): string {
   return issuedAt.slice(0, 10);
 }
 
-/** A quantity as the shop reads it. Thousandths on the wire, units on the
- *  screen; no money is involved, so this is not `Money`. */
-function units(qtyMilli: number): string {
-  return String(qtyMilli / 1000);
-}
 
 export function DocumentsScreen() {
   const { t } = useTranslation();
@@ -164,7 +159,12 @@ export function DocumentsScreen() {
         </Button>
       ),
     },
-    { id: "date", header: t("documents_date"), numeric: true, cell: (d) => day(d.issued_at) },
+    {
+      id: "date",
+      header: t("documents_date"),
+      numeric: true,
+      cell: (d) => <span dir="ltr">{day(d.issued_at)}</span>,
+    },
     {
       id: "kind",
       header: t("documents_kind"),
@@ -269,7 +269,12 @@ function DocumentDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const doc = document.data;
   const lines: readonly Column<SaleDto["lines"][number]>[] = [
     { id: "name", header: t("documents_line"), cell: (l) => l.name },
-    { id: "qty", header: t("documents_qty"), numeric: true, cell: (l) => units(l.qty_milli) },
+    {
+      id: "qty",
+      header: t("documents_qty"),
+      numeric: true,
+      cell: (l) => <span dir="ltr">{formatQty(l.qty_milli)}</span>,
+    },
     {
       id: "unit",
       header: t("documents_unit_price"),
@@ -436,7 +441,7 @@ function AvoirPanel({ facture }: { facture: SaleDto }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <Button variant="outline" size="sm" className="self-start">
-            <Icon as={Undo2} size={18} />
+            <Icon as={Undo2} size={18} flip />
             {t("documents_avoir_new")}
           </Button>
         </DialogTrigger>
@@ -465,7 +470,7 @@ function AvoirPanel({ facture }: { facture: SaleDto }) {
               <FormField
                 key={l.id}
                 label={`${t("documents_avoir_qty")} ${l.name}`}
-                hint={`${t("documents_left")} ${units(left(l.id, l.qty_milli))}`}
+                hint={`${t("documents_left")} ${formatQty(left(l.id, l.qty_milli))}`}
               >
                 {(parts) => (
                   <Input

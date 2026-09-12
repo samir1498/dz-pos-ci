@@ -26,7 +26,7 @@ import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import { SessionProvider } from "@/lib/session";
 import { ME_CASHIER, ME_OWNER } from "@/test/session";
-import { DashboardScreen } from "./dashboard";
+import { DashboardScreen, wholeDinars } from "./dashboard";
 
 /** What the server says the day is. A day the machine is not on, so a screen
  *  that read `new Date()` would fail here. */
@@ -348,5 +348,17 @@ describe("when the server refuses", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(fr.error_storage);
     expect(screen.getByRole("button", { name: fr.action_retry })).toBeInTheDocument();
+  });
+});
+
+describe("the chart's axis", () => {
+  // The axis is a label and not a total, so it rounds to the whole dinar and
+  // groups by hand rather than going through `Money`. It grouped with an
+  // ordinary space until 2026-09-12, which put `1 284` on the axis against
+  // `1 284,00` on the card under it: two separators for the same figure.
+  test("groups with the narrow no-break space the amounts use", () => {
+    expect(wholeDinars(128_400)).toBe("1\u202f284");
+    expect(wholeDinars(-128_400)).toBe("-1\u202f284");
+    expect(wholeDinars(99_900)).toBe("999");
   });
 });

@@ -311,7 +311,7 @@ function DryRunReport({
             <Badge variant={tone(row.outcome)}>{t(outcomeLabel[row.outcome])}</Badge>
             {row.field === null ? null : (
               <span className="text-sm text-muted-foreground">
-                {row.field}
+                <span dir="ltr">{row.field}</span>
                 {": "}
                 {known === undefined ? row.reason : t(known)}
               </span>

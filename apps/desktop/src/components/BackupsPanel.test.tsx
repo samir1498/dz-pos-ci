@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { BackupDto, BackupsDto } from "@dzpos/shared";
 import { I18nProvider } from "@/i18n";
 import fr from "@/i18n/fr.json";
-import { BackupsPanel } from "./BackupsPanel";
+import { BackupsPanel, readableSize } from "./BackupsPanel";
 
 const newest: BackupDto = {
   name: "dzpos-20260908-093000.sqlite",
@@ -271,4 +271,18 @@ describe("restoring one", () => {
     if (first === undefined) throw new Error("no first row");
     await askToRestore(user, first, "confirm");
   }
+});
+
+describe("a file size", () => {
+  // All three dictionaries say "," today, so rendering the panel cannot tell
+  // a threaded separator from the comma that was written into the function
+  // until 2026-09-12. Handing it one nothing uses can.
+  test("points its fraction with the separator it was handed", () => {
+    expect(readableSize(2_150_400, "ko", "Mo", ".")).toBe("2.1 Mo");
+    expect(readableSize(2_150_400, "ko", "Mo", ",")).toBe("2,1 Mo");
+  });
+
+  test("a small copy is whole kilobytes, which point at nothing", () => {
+    expect(readableSize(40_960, "ko", "Mo", ".")).toBe("40 ko");
+  });
 });

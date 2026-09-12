@@ -283,6 +283,19 @@ describe("the document list", () => {
     expect(asked.some((u) => u.includes("kind=facture"))).toBe(true);
   });
 
+  test("half a sack reads with the comma the rest of the shop uses", async () => {
+    // The screen spelled its own quantity with `String(qty_milli / 1000)`
+    // until 2026-09-12, which is the machine's dot, not the shop's comma
+    // (features.md, "Numbers are Western digits in every language").
+    const user = userEvent.setup();
+    list = [{ ...facture, lines: [{ ...facture.lines[0], qty_milli: 2_500 }] }, ticket];
+    mount();
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
+    const line = rowOf(await screen.findByText("Ciment CPJ 45"));
+    expect(within(line).getByText("2,5")).toBeTruthy();
+  });
+
   test("the list reads in Arabic through the same keys", async () => {
     mount("ar");
     await screen.findByText("FA-2026-000004");

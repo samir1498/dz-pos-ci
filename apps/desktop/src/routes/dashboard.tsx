@@ -368,10 +368,14 @@ const CENTIMES_PER_DINAR = 100;
  * integer is exact and this is a label on an axis, never a total; every amount
  * a reader is meant to trust on this screen goes through `Money`.
  */
-function wholeDinars(centimes: number): string {
+export function wholeDinars(centimes: number): string {
   const negative = centimes < 0;
   const dinars = Math.trunc(Math.abs(centimes) / CENTIMES_PER_DINAR);
-  const grouped = String(dinars).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  // U+202F, the narrow no-break space `formatCentimes` groups with
+  // (features.md, "Numbers are Western digits in every language"). An
+  // ordinary space here put `1 284` on the axis against `1 284,00` on the
+  // card below it, two different separators for the same figure.
+  const grouped = String(dinars).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f");
   return `${negative ? "-" : ""}${grouped}`;
 }
 
