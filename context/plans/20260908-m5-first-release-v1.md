@@ -39,7 +39,7 @@ tasks:
     status: 'pending'
   - id: 'T10'
     desc: 'A shopkeeper sees why the app would not start. A Windows release build has no console, so the message that explains a refusal goes nowhere: the window never opens and nothing is said. That was already true of a failed migration and is now much easier to hit, because the pre-upgrade copy refuses to start on a disk that is full. A native message box before the window exists, naming the folder and what could not be written, and the same for a migration that fails. Raised by the data-safety review of the pre-upgrade copy, 2026-09-11.'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T11'
     desc: 'The two kinds of copy that sit beside the shop file, the one taken before a restore and the one taken before an upgrade, are restorable from the settings screen. Today the restore route accepts the name of a daily copy and no other kind, so both are a file swap by hand. Needs a third list on the backups route, wording in three languages and a screen change. Also: the reopen inside a restore migrates an older copy in place without taking a pre-upgrade copy of it, which is a one-line change to a nine-step sequence and deserves its own review. Raised by the data-safety review, 2026-09-11.'
     status: 'pending'
