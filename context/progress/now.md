@@ -175,18 +175,29 @@ inside the distro and watching the byte count stay put. Anything that does
 not need the browser suite is proven on the mirror instead, which is how
 three pieces landed after the disk ran out.
 
-The audit log reads its dates on the shop's calendar since 2026-09-12
-(PR #45). `audit_log.created_at` is the one column in the file stamped by
-SQLite's `CURRENT_TIMESTAMP`, which is UTC, while every date the app shows
-is on the shop's calendar; the day filter beside the screen already
-converted and the screen did not, so between 23:00 UTC and midnight a row
-written at 00:30 in Algiers printed as 23:30 the day before while `day=`
-counted it under the day it was written. The column is unchanged and the
-reading converts. The shape fix underneath it is task T12 of the M5 plan:
-`services::audit::record` should stamp the row from `services::clock` like
-every other row, which `CoreError::Unstamped` already says, and that needs a
-migration for the rows already written. Found by a test that only fails for
-the hour the bug lives in, on Linux and on Windows alike.
+The audit row is stamped from the shop clock since 2026-09-12 (PR #48,
+task T12 of the M5 plan), and migration
+`2026-09-12-000013_audit_log_shop_clock` moved the rows already written by
+the hour they were short. `services::audit::record` left `created_at` off
+the insert, so the column took SQLite's `CURRENT_TIMESTAMP`, which is UTC,
+while the shop runs an hour ahead of it: a row written at 00:30 in Algiers
+was stored as 23:30 the day before, printed that way on the owner's screen
+and fell outside the day he filtered for. The read-side patch that answered
+this on 2026-09-11 (PR #45) is gone with it, because there is nothing left
+to convert. The two halves ship in one version on purpose: the shift run
+against a build that already stamps would push those rows an hour the other
+way. Found by a test that only fails for the hour the bug lives in, on Linux
+and on Windows alike.
+
+Twenty-seven columns in the file carry that same UTC default, and the
+review of T12 corrected the claim that the audit log was the only one. On
+every other column a day filter reads, the default never fires: the service
+stamps the moment before the insert, and `repos::supplier_debt::append`
+refuses a row that arrives without one. One gap is left and is task T13:
+`DebtRowWrite.created_at` is an `Option` whose doc still says `None` takes
+the default, while `repos::cash` filters `debt_ledger.created_at` against a
+shop-calendar day. Both callers stamp today, so no row anywhere is wrong;
+nothing stops a third.
 
 Release gate R3 is closed since 2026-09-12. Décret 05-468 art. 3 names the
 registre du commerce number and the numéro d'identification statistique for

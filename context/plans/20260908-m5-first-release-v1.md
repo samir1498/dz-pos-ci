@@ -45,6 +45,9 @@ tasks:
     status: 'pending'
   - id: 'T12'
     desc: 'The audit row is stamped from the shop clock like every other row, not left to SQLite''s default. `services::audit::record` omits `created_at`, so the column takes `CURRENT_TIMESTAMP`, which is UTC, while every other date in the file is on the shop''s calendar; `CoreError::Unstamped` already says no row may do this and `repos::supplier_debt` refuses it for the supplier ledger. The screen was made right on the read side on 2026-09-12 (PR #45) and this is the shape fix underneath it: stamp at insert, move the rows already written by a migration, then `services::audit::day_range_utc` becomes a plain day range and the conversion in `AuditEntryDto` goes away. Needs a migration, so it is a deliberate pass and not a night fix. Raised by the one-hour-a-day test failure that found the read-side bug.'
+    status: 'done'
+  - id: 'T13'
+    desc: 'The customer debt ledger carries the same hole the audit log just closed. `DebtRowWrite.created_at` is an `Option` whose own doc says `None` leaves the column''s default, which is SQLite''s UTC, and `repos::cash::customer_payments` filters `debt_ledger.created_at` against a day on the shop''s calendar, so an unstamped payment would be counted under the wrong day in the cash position for one hour every night. Both callers in `services::debt` pass a moment today, so no row in any file is wrong and there is nothing to migrate; what is missing is anything stopping a third caller. The supplier ledger already refuses an unstamped row at its repo with `CoreError::Unstamped`. Raised by the data-correctness review of T12, 2026-09-12.'
     status: 'pending'
 acceptance: []
 ---
