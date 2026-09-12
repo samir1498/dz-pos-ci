@@ -40,11 +40,25 @@ import { Input } from "./ui/input";
  * twin means the wrong thing in one of them, and the screen it is wrong on is
  * the Arabic one nobody on this team reads first.
  *
- * `-?` so a negative margin is caught too, and the boundary on each side so
- * `flex` does not report as `-l-`.
+ * Matched against one class at a time with its variants already stripped, so
+ * `after:-right-1` is caught as `-right-1`. The check read the whole class
+ * string at once until 2026-09-12 and anchored on a space, which let every
+ * physical utility behind a variant through: `tabs.tsx` carried the vertical
+ * tabs' active bar on `after:-right-1` and no test said a word.
+ *
+ * `-?` so a negative margin is caught too, and the trailing boundary so
+ * `border-ring` does not report as `border-r`.
  */
 const PHYSICAL =
-  /(^|\s)-?(ml|mr|pl|pr|left|right|border-l|border-r|rounded-l|rounded-r|text-left|text-right)(-|\s|$)/;
+  /^-?(ml|mr|pl|pr|left|right|border-l|border-r|rounded-l|rounded-r|text-left|text-right)(-|$)/;
+
+/** The variant prefixes off a class: `group-data-[state=open]:after:ml-2` is
+ *  an `ml-2`. An arbitrary value can hold a colon of its own, which would
+ *  make this read the wrong half; none in this app does, and a false hit is
+ *  a failing test rather than a wrong screen. */
+function utility(className: string): string {
+  return className.slice(className.lastIndexOf(":") + 1);
+}
 
 /**
  * The thousands separator packages/shared groups with: U+202F, a narrow
@@ -57,8 +71,13 @@ const NARROW = "\u202f";
 function noPhysicalSides(root: HTMLElement): string[] {
   return [root, ...root.querySelectorAll("*")]
     .filter((node): node is HTMLElement => node instanceof HTMLElement)
-    .map((node) => node.className)
-    .filter((name) => typeof name === "string" && PHYSICAL.test(name));
+    .flatMap((node) => (typeof node.className === "string" ? node.className.split(/\s+/) : []))
+    // The sheet and the sidebar keep a physical `side` on purpose: a panel's
+    // edge, its border and the half it slides in from have to agree, and
+    // `AppShell` computes the side from the page direction
+    // (`frontend-conventions`, "content-side physical properties").
+    .filter((name) => name !== "" && !name.includes("[side="))
+    .filter((name) => PHYSICAL.test(utility(name)));
 }
 
 function renderIn(lang: Lang, node: React.ReactNode) {
