@@ -224,13 +224,22 @@ function CustomerPicker({
               className={alert === "over" ? "text-sm text-fg-danger" : "text-sm text-warn"}
             >
               {`${t(alert === "over" ? "till_over_limit" : "till_near_limit")} · `}
-              <Money centimes={picked.balance_centimes} className="text-sm" />
-              {" / "}
-              {picked.credit_limit_centimes === null ? (
-                t("till_no_limit")
-              ) : (
-                <Money centimes={picked.credit_limit_centimes} className="text-sm" />
-              )}
+              {/* Balance over limit is one expression and reads left to
+                  right whole. Each `Money` carries its own `dir` and the
+                  slash between them sits in the sentence, which on an Arabic
+                  till made two islands laid out right to left: the ceiling
+                  came out on the left of the slash and the balance on its
+                  right, so a cashier reading the figures the way figures are
+                  written read the comparison backwards. */}
+              <span dir="ltr" data-testid="till-limit-pair">
+                <Money centimes={picked.balance_centimes} className="text-sm" />
+                {" / "}
+                {picked.credit_limit_centimes === null ? (
+                  t("till_no_limit")
+                ) : (
+                  <Money centimes={picked.credit_limit_centimes} className="text-sm" />
+                )}
+              </span>
             </p>
           ) : null}
         </Card>

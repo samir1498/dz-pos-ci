@@ -965,6 +965,13 @@ describe("on credit", () => {
     // The two amounts, the customer's own balance against their limit.
     expect(banner).toHaveTextContent("6 000,00");
     expect(banner).toHaveTextContent("5 000,00");
+    // The two amounts are one expression, not two islands: each `Money`
+    // brings its own `dir`, and on an Arabic till the slash between them
+    // put the ceiling on the left and the balance on the right, which is
+    // the comparison read backwards.
+    const pair = within(banner).getByTestId("till-limit-pair");
+    expect(pair.getAttribute("dir")).toBe("ltr");
+    expect(pair).toHaveTextContent("6 000,00 / 5 000,00");
   });
 
   test("a closed fiche is never offered", async () => {

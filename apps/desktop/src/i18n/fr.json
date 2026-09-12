@@ -555,6 +555,7 @@
   "import_title": "Importer des produits",
   "import_hint": "Téléchargez le modèle, remplissez-le, puis vérifiez le fichier avant de l'importer. Un code-barres déjà utilisé met à jour le produit au lieu d'en créer un deuxième.",
   "import_pick_file": "Choisir un fichier",
+  "import_no_file": "Aucun fichier choisi",
   "action_download_template": "Télécharger le modèle",
   "action_check_file": "Vérifier le fichier",
   "action_checking": "Vérification…",
