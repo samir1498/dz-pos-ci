@@ -84,7 +84,10 @@ impl AppState {
         if let Err(e) = dzpos_core::log::head_session(&log_path) {
             eprintln!("dz-pos: could not write to {}: {e}", log_path.display());
         }
-        let conn = open_and_upgrade(db.as_ref())?;
+        // Startup takes the copy and says nothing about it: there is no
+        // audit row to write, because nobody is signed in when a new version
+        // opens an old file. The restore below does name the one it takes.
+        let (conn, _upgrade_copy) = open_and_upgrade(db.as_ref())?;
         Ok(AppState {
             conn: Arc::new(Mutex::new(Some(conn))),
             db_path: Arc::new(db.as_ref().to_path_buf()),
@@ -269,7 +272,7 @@ impl AppState {
         // taken at step 3 is not that copy: it holds the file this restore
         // replaced, not the one it is about to migrate.
         match open_and_upgrade(db) {
-            Ok(conn) => {
+            Ok((conn, upgrade_copy)) => {
                 *guard = Some(conn);
                 // Written to the file that was just opened, after the swap
                 // and never before: `backup::record_restore`'s own doc says
@@ -289,6 +292,7 @@ impl AppState {
                         actor_id,
                         restored_from,
                         &safety_copy,
+                        upgrade_copy.as_ref().map(|c| c.name.as_str()),
                         &summary,
                     ) {
                         eprintln!(
@@ -371,20 +375,27 @@ impl AppState {
 ///
 /// Both doors into the shop file come through here: the app's startup, and
 /// the reopen at the end of `AppState::restore`, where the copy being put in
-/// place is usually a version behind.
+/// place is usually a version behind. The copy comes back with the
+/// connection, because the restore writes its name into the row it records
+/// and nothing else would know it: startup has nobody to write a row for.
 ///
 /// A copy that cannot be written stops the app from starting, and stops a
 /// restore from reopening the file it just put in place. That is the point of
 /// it: the alternative is a migration running with nothing to go back to, on
 /// a disk that just said it was full.
-fn open_and_upgrade(db: &Path) -> Result<Conn, CoreError> {
+fn open_and_upgrade(db: &Path) -> Result<(Conn, Option<backup::Backup>), CoreError> {
     let mut conn = dzpos_core::db::open_unmigrated(db)?;
     let pending = dzpos_core::db::pending_migrations(&mut conn)?;
+    let mut copy = None;
     if !pending.is_empty() && dzpos_core::db::has_a_schema(&mut conn)? {
-        backup::before_upgrade(&mut conn, db, dzpos_core::services::clock::now())?;
+        copy = Some(backup::before_upgrade(
+            &mut conn,
+            db,
+            dzpos_core::services::clock::now(),
+        )?);
     }
     dzpos_core::db::migrate(&mut conn)?;
-    Ok(conn)
+    Ok((conn, copy))
 }
 
 /// `<db folder>/backups`. A shop file with no parent (a bare `t.db` on a
