@@ -59,4 +59,5 @@ pub mod shops;
 pub mod stock;
 pub mod supplier_debt;
 pub mod suppliers;
+pub mod support_bundle;
 pub mod users;

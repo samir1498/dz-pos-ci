@@ -150,6 +150,25 @@ async fn a_request_with_no_session_writes_no_row() {
     assert_eq!(audit_rows(&h.app).await, Vec::<Value>::new());
 }
 
+/// The support bundle is a file on its way out of the shop, so the gate
+/// table and the architecture page both promise it leaves a row behind the
+/// same way an export does. Until this test the promise rested on a
+/// constant being defined and called, with nothing reading it back.
+#[tokio::test]
+async fn a_support_bundle_writes_a_row_naming_who_asked_for_it() {
+    let h = harness();
+
+    let (status, _) = owner(&h.app, "GET", "/support-bundle", None).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let rows = audit_rows(&h.app).await;
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let row = &rows[0];
+    assert_eq!(row["action"], "support_bundle.download");
+    assert_eq!(row["entity"], "support_bundle");
+    assert_eq!(row["user_name"], "Propriétaire", "{row}");
+}
+
 /// An export writes a row naming which one and how many rows walked out with
 /// it, so an owner reading the log afterwards sees what left the shop even
 /// when nothing was ever refused.

@@ -230,6 +230,13 @@ pub const ACTION_EXPORT: &str = "export.download";
 /// the swap, because a row written before it would not survive being the
 /// thing overwritten (`services::backup::record_restore`'s own doc says why).
 pub const ACTION_RESTORE_BACKUP: &str = "backup.restore";
+/// A support bundle was built and handed to whoever asked (M5 T3). Its own
+/// action rather than `ACTION_EXPORT`'s, because what leaves the shop is
+/// never a row of its data (`services::support_bundle`'s own doc names what
+/// is in it and what is not) and the two are worth telling apart on the
+/// log. Written for the same reason an export's row is: the file is on its
+/// way out of the shop, and the point of this row is that it is there.
+pub const ACTION_SUPPORT_BUNDLE: &str = "support_bundle.download";
 
 /// What changed, as the log stores it. `before` and `after` are JSON
 /// documents the caller writes; the log never guesses a shape.

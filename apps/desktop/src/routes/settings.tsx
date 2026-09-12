@@ -14,6 +14,7 @@ import { BackupsPanel } from "@/components/BackupsPanel";
 import { ExportImportPanel } from "@/components/ExportImportPanel";
 import { PageHeader } from "@/components/PageHeader";
 import { StockRecountPanel } from "@/components/StockRecountPanel";
+import { SupportBundlePanel } from "@/components/SupportBundlePanel";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { FormField } from "@/components/FormField";
 import { Button } from "@/components/ui/button";
@@ -119,6 +120,7 @@ export function SettingsScreen() {
           <ThemePanel />
           {manageUsers ? <StaffPanel /> : null}
           <BackupsPanel />
+          <SupportBundlePanel />
           {exportAndImport ? <ExportImportPanel /> : null}
           <StockRecountPanel />
           <AboutPanel />

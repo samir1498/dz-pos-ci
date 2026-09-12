@@ -404,6 +404,39 @@ than left in a page global. What protects it is the policy that stops
 injected script from running at all; keeping it in a module variable buys
 little on its own.
 
+Decided (2026-09-11, M5 T3): the support bundle a shop can send to whoever
+is fixing something is `GET /support-bundle`, gated the same as the
+backups block beside it (`EditSettings`), answering a zip of six plain
+text files and nothing else. `README.txt` (headed by
+`build_info::header_line`, then the sentence a shopkeeper is sent in
+French, English and Arabic), `log.txt` (the shop's own `dzpos.log`
+verbatim), `migrations.txt` (applied vs. shipped, off
+`db::applied_versions` and the now-public `db::embedded_versions`),
+`schema.txt` (every table's name and its columns' own names and SQL
+types, read live off `sqlite_master`/`PRAGMA table_info`, never a row),
+`counts.txt` (products, documents, customers, the shop file's byte size,
+backup count and newest date) and `system.txt` (OS, machine language,
+time zone). The shop file itself is never in it, and neither is any
+customer or product name, a price or amount, any part of a document, a
+PIN, a password or a hash of either, the launch token, or the shop's own
+RC/NIF/NIS/AI: `crates/core::services::support_bundle`'s own doc names
+that list, and `crates/api/tests/support_bundle.rs` seeds a shop with all
+of it and fails on any of it turning up anywhere in the zip's bytes,
+entry names included. The cost of that list: a bundle this small cannot
+answer "why is this customer's balance wrong" (a count of customers and
+no row of any of them); it can answer whether the file's schema matches
+the build, whether the last upgrade's migrations ran, whether the file's
+size looks like a month of trading, and whether a backup was ever taken.
+A fault that needs the actual figures still needs the shop to read a
+screen aloud, or a supervised look at the file itself. A row is written
+to the shop's own audit log each time one is built
+(`ACTION_SUPPORT_BUNDLE`), the same reasoning an export's row rests on:
+the file is on its way out of the shop even though what is in it never
+is. No new dependency: `zip` and `iana-time-zone` were already in
+`Cargo.lock`, pulled in transitively through `rust_xlsxwriter`'s own zip
+backend and another dependency, and become direct dependencies of the one
+crate that reads them rather than a second copy at a different version.
+
 Raised in the 2026-09-08 handoff, still open, each settled before
 `docs/roadmap.md` M5 closes. `docs/release-checklist.md` is the page that
 tracks them, alongside the release gates and who holds each:

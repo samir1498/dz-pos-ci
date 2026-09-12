@@ -138,3 +138,37 @@ pub fn pending_migrations(conn: &mut SqliteConnection) -> Result<Vec<String>, Db
         })
         .map_err(|e| DbError::Migrate(e.to_string()))
 }
+
+/// Every migration compiled into this binary, in the order `MIGRATIONS`
+/// carries them. What `services::backup::verify` checks a copy's own applied
+/// migrations against (a copy ahead of this build cannot be restored), and
+/// what `services::support_bundle` names as "what this build ships" beside
+/// what a file has actually applied.
+///
+/// Moved here from `services::backup` (M5 T3): both callers want the same
+/// list read off the same embedded migrations, and a second copy of the walk
+/// would be a second place for the two to drift.
+pub fn embedded_versions() -> Result<Vec<String>, DbError> {
+    use diesel::migration::MigrationSource;
+    let migrations = MigrationSource::<diesel::sqlite::Sqlite>::migrations(&MIGRATIONS)
+        .map_err(|e| DbError::Migrate(e.to_string()))?;
+    Ok(migrations
+        .iter()
+        .map(|m| m.name().version().to_string())
+        .collect())
+}
+
+/// Every migration `conn`'s own file has applied, oldest first. Read off
+/// diesel's own bookkeeping table, the one `has_a_schema` checks for and
+/// `embedded_versions` is compared against.
+pub fn applied_versions(conn: &mut SqliteConnection) -> Result<Vec<String>, DbError> {
+    #[derive(QueryableByName)]
+    struct VersionRow {
+        #[diesel(sql_type = diesel::sql_types::Text)]
+        version: String,
+    }
+    let rows: Vec<VersionRow> =
+        diesel::sql_query("SELECT version FROM __diesel_schema_migrations ORDER BY version")
+            .load(conn)?;
+    Ok(rows.into_iter().map(|r| r.version).collect())
+}
