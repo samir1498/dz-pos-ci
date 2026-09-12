@@ -78,5 +78,7 @@ test("a copy taken before a product is added loses it when it is restored", asyn
   await expect(page.getByRole("heading", { name: t("settings_safety_copies") })).toBeVisible();
   const kept = copiesIn(page.getByTestId("safety-copies-table"));
   await expect(kept).toHaveCount(1);
-  await expect(kept.getByRole("button")).toHaveCount(0);
+  // It carries the same restore button as a daily copy, which is how an
+  // owner undoes the restore they have just made.
+  await expect(kept.getByRole("button", { name: t("action_restore") })).toHaveCount(1);
 });

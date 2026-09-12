@@ -22,12 +22,13 @@ use crate::AppState;
 pub(crate) use crate::routes::settings::now;
 
 pub async fn list(State(state): State<AppState>) -> Result<Json<BackupsDto>, ApiError> {
-    let (daily, safety) = tokio::task::spawn_blocking(move || state.list_backups())
+    let copies = tokio::task::spawn_blocking(move || state.list_backups())
         .await
         .map_err(|_| ApiError::Unavailable)??;
     Ok(Json(BackupsDto {
-        backups: daily.into_iter().map(BackupDto::from).collect(),
-        safety_copies: safety.into_iter().map(BackupDto::from).collect(),
+        backups: copies.daily.into_iter().map(BackupDto::from).collect(),
+        safety_copies: copies.safety.into_iter().map(BackupDto::from).collect(),
+        upgrade_copies: copies.upgrade.into_iter().map(BackupDto::from).collect(),
     }))
 }
 
@@ -41,23 +42,35 @@ pub async fn create(
     Ok((StatusCode::CREATED, Json(BackupDto::from(made))))
 }
 
-/// The name is checked against the pattern the service writes, and only then
-/// joined to the folder the server owns. `..%2Fx` reaches this handler
+/// The name is checked against the patterns the service writes, and only
+/// then joined to a folder the server owns. `..%2Fx` reaches this handler
 /// percent-decoded, as `../x`, so the decoded name is what the check sees:
-/// nothing with a separator, a second dot or a `..` in it parses as a
-/// backup name, and the join never happens.
+/// nothing with a separator, a second dot or a `..` in it parses as any of
+/// the three names, and the join never happens.
+///
+/// Which folder is the name's own answer, not the caller's. A daily copy is
+/// in the backup folder; the two kinds taken on the way into something, a
+/// restore or an upgrade, sit beside the shop file, because the prune walks
+/// the folder and must never reach them. A name is one kind or none: the
+/// three patterns differ by the word in the middle.
 pub async fn restore(
     State(state): State<AppState>,
     who: CurrentUser,
     Path(name): Path<String>,
 ) -> Result<Json<RestoreDto>, ApiError> {
-    if backup::taken_at(&name).is_none() {
+    let db = state.db_path();
+    let path = if backup::taken_at(&name).is_some() {
+        state.backup_dir().join(&name)
+    } else if backup::safety_taken_at(db, &name).is_some()
+        || backup::upgrade_taken_at(db, &name).is_some()
+    {
+        db.with_file_name(&name)
+    } else {
         return Err(ApiError::Request(CoreError::validation(
             "name",
-            "is not the name of a backup this shop wrote",
+            "is not the name of a copy this shop wrote",
         )));
-    }
-    let path = state.backup_dir().join(&name);
+    };
     let restored_from = name;
     let actor = who.id;
     let done = tokio::task::spawn_blocking(move || state.restore(&path, actor))

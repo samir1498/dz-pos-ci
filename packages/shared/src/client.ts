@@ -603,8 +603,9 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     },
 
     /** The copies of the shop file the server keeps, newest first: the daily
-     * ones, and the copies taken on the way into a restore, which are kept
-     * under different rules and so travel in their own list. */
+     * ones, the copies taken on the way into a restore, and the copies taken
+     * on the way into an update. The three are kept under different rules
+     * and so travel in their own lists. */
     async listBackups(): Promise<BackupsDto> {
       return narrow(await send("/backups"), backupsSchema, "backup list");
     },

@@ -2,9 +2,9 @@
 import type { BackupDto } from "./BackupDto";
 
 /**
- * What the settings screen reads: the daily copies, and the copies taken on
- * the way into a restore. The two are separate lists because they are kept
- * under different rules: the daily ones are pruned to thirty, the safety
- * ones are never touched.
+ * What the settings screen reads: the daily copies, the copies taken on the
+ * way into a restore, and the copies taken on the way into an upgrade. The
+ * three are separate lists because they are kept under different rules: the
+ * daily ones are pruned to thirty, the other two are never touched.
  */
-export type BackupsDto = { backups: Array<BackupDto>, safety_copies: Array<BackupDto>, };
+export type BackupsDto = { backups: Array<BackupDto>, safety_copies: Array<BackupDto>, upgrade_copies: Array<BackupDto>, };

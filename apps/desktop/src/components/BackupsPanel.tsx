@@ -36,6 +36,24 @@ import { errorKey } from "@/lib/fields";
 const BYTES_PER_KB = 1024;
 const BYTES_PER_MB = BYTES_PER_KB * 1024;
 
+/** Which of the three lists a copy came out of. The three are kept under
+ *  three rules and put back three different shops, so the confirmation says
+ *  which one it is holding rather than only when it was taken: two lists can
+ *  each hold a copy from the same minute. */
+type Kind = "daily" | "safety" | "upgrade";
+
+const KIND_LABEL: Record<Kind, Key> = {
+  daily: "settings_backups",
+  safety: "settings_safety_copies",
+  upgrade: "settings_upgrade_copies",
+};
+
+/** The copy the confirmation is about, and the list it came from. */
+interface Asked {
+  copy: BackupDto;
+  kind: Kind;
+}
+
 /** `2026-09-08T09:30:00` as `2026-09-08 09:30`. The server already wrote the
  * shop's own calendar into it, so nothing here re-reads a clock. */
 function readableTime(takenAt: string): string {
@@ -66,7 +84,7 @@ export function BackupsPanel() {
   const [serverError, setServerError] = useState<Key | null>(null);
   // The copy the owner asked about, and the whole of the dialog's state: an
   // open dialog with nothing in it would have nothing to restore.
-  const [asking, setAsking] = useState<BackupDto | null>(null);
+  const [asking, setAsking] = useState<Asked | null>(null);
 
   const create = useMutation({
     mutationFn: () => api.createBackup(),
@@ -99,6 +117,7 @@ export function BackupsPanel() {
   const busy = create.isPending || restore.isPending;
   const rows: BackupDto[] = backups.data?.backups ?? [];
   const safetyCopies: BackupDto[] = backups.data?.safety_copies ?? [];
+  const upgradeCopies: BackupDto[] = backups.data?.upgrade_copies ?? [];
   const newest = rows[0];
 
   const columns: readonly Column<BackupDto>[] = [
@@ -122,6 +141,27 @@ export function BackupsPanel() {
       ),
     },
   ];
+
+  const askToRestore = (kind: Kind) => (copy: BackupDto) => (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={busy}
+      onClick={() => {
+        setDone(null);
+        setServerError(null);
+        setAsking({ copy, kind });
+      }}
+    >
+      {/* An undo, which the kit mirrors with the page: on the Arabic screen
+          "back" is the other way round. */}
+      <Icon as={RotateCcw} size={18} flip />
+      {restore.isPending && restore.variables === copy.name
+        ? t("action_restoring")
+        : t("action_restore")}
+    </Button>
+  );
 
   return (
     <section aria-labelledby="settings-backups">
@@ -174,33 +214,18 @@ export function BackupsPanel() {
                     description={t("backups_empty_hint")}
                   />
                 }
-                actions={(row) => (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => {
-                      setDone(null);
-                      setServerError(null);
-                      setAsking(row);
-                    }}
-                  >
-                    {/* An undo, which the kit mirrors with the page: on the
-                        Arabic screen "back" is the other way round. */}
-                    <Icon as={RotateCcw} size={18} flip />
-                    {restore.isPending && restore.variables === row.name
-                      ? t("action_restoring")
-                      : t("action_restore")}
-                  </Button>
-                )}
+                actions={askToRestore("daily")}
               />
 
-              {/* Kept under their own heading because they are kept under their
-                  own rule: the daily copies are pruned to thirty, these are
-                  never deleted, and they are the only record of a state the
-                  owner replaced. No restore button: restoring one is a decision
-                  that needs a person who knows the file, not one more click. */}
+              {/* Kept under their own heading because they are kept under
+                  their own rule: the daily copies are pruned to thirty, these
+                  are never deleted, and they are the only record of a state
+                  the owner replaced. They carry the same restore button as
+                  the daily ones, and the same confirmation, which is what
+                  makes putting one back a decision rather than a click. Until
+                  2026-09-12 the route took a daily copy's name and no other,
+                  so undoing a restore meant swapping files by hand on a
+                  machine in a shop. */}
               {safetyCopies.length === 0 ? null : (
                 <section aria-labelledby="settings-safety-copies" className="flex flex-col gap-2">
                   <h4 id="settings-safety-copies" className="font-semibold text-foreground">
@@ -213,6 +238,31 @@ export function BackupsPanel() {
                     columns={columns}
                     rows={safetyCopies}
                     rowKey={(row) => row.name}
+                    actions={askToRestore("safety")}
+                  />
+                </section>
+              )}
+
+              {/* The third kind, and the one nothing listed at all until
+                  2026-09-12: an owner found one by knowing how this app
+                  names a file. Restoring one puts the shop back on the data
+                  the older version left, which the app then migrates forward
+                  on its next open, taking one of these copies again. */}
+              {upgradeCopies.length === 0 ? null : (
+                <section aria-labelledby="settings-upgrade-copies" className="flex flex-col gap-2">
+                  <h4 id="settings-upgrade-copies" className="font-semibold text-foreground">
+                    {t("settings_upgrade_copies")}
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    {t("settings_upgrade_copies_hint")}
+                  </p>
+                  <DataTable
+                    data-testid="upgrade-copies-table"
+                    caption={t("settings_upgrade_copies")}
+                    columns={columns}
+                    rows={upgradeCopies}
+                    rowKey={(row) => row.name}
+                    actions={askToRestore("upgrade")}
                   />
                 </section>
               )}
@@ -257,12 +307,20 @@ export function BackupsPanel() {
             <DialogDescription>{t("backups_confirm_restore")}</DialogDescription>
           </DialogHeader>
           {asking === null ? null : (
-            <p className="text-sm text-muted-foreground">
-              {t("backups_newest_label")}{" "}
-              <span dir="ltr" className="font-numeric tabular-nums text-foreground">
-                {readableTime(asking.taken_at)}
-              </span>
-            </p>
+            <>
+              {/* Which list the copy came from, not just when it was taken:
+                  three lists can each hold a copy from the same minute, and
+                  the three do different things to the shop. */}
+              <p className="text-sm text-muted-foreground">
+                {t(KIND_LABEL[asking.kind])}{" "}
+                <span dir="ltr" className="font-numeric tabular-nums text-foreground">
+                  {readableTime(asking.copy.taken_at)}
+                </span>
+              </p>
+              {asking.kind === "upgrade" ? (
+                <p className="text-sm text-fg-danger">{t("backups_restore_older_shape")}</p>
+              ) : null}
+            </>
           )}
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setAsking(null)}>
@@ -274,7 +332,7 @@ export function BackupsPanel() {
               disabled={restore.isPending}
               onClick={() => {
                 if (asking === null) return;
-                const name = asking.name;
+                const name = asking.copy.name;
                 setAsking(null);
                 restore.mutate(name);
               }}

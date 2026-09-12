@@ -166,7 +166,10 @@ async fn a_fresh_shop_has_no_copies_and_a_post_makes_one() {
     let h = harness();
     let (status, body) = call(&h.app, "GET", "/backups", None).await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body, json!({ "backups": [], "safety_copies": [] }));
+    assert_eq!(
+        body,
+        json!({ "backups": [], "safety_copies": [], "upgrade_copies": [] })
+    );
 
     let (status, made) = call(&h.app, "POST", "/backups", None).await;
     assert_eq!(status, StatusCode::CREATED, "{made}");
@@ -186,6 +189,7 @@ async fn a_fresh_shop_has_no_copies_and_a_post_makes_one() {
     assert_eq!(listed["backups"].as_array().unwrap().len(), 1);
     assert_eq!(listed["backups"][0], made);
     assert_eq!(listed["safety_copies"], json!([]), "nothing was restored");
+    assert_eq!(listed["upgrade_copies"], json!([]), "nothing was upgraded");
 }
 
 #[tokio::test]
@@ -310,6 +314,84 @@ async fn a_name_that_is_not_one_this_app_wrote_is_refused_and_changes_nothing() 
     let (_, listed) = call(&h.app, "GET", "/backups", None).await;
     assert_eq!(listed["backups"][0]["name"], json!(good));
     assert_eq!(listed["safety_copies"], json!([]));
+    assert_eq!(listed["upgrade_copies"], json!([]));
+}
+
+/// The copies taken on the way into a restore and on the way into an upgrade
+/// are the two an owner reaches for when the restore itself was the mistake,
+/// and the route took neither until 2026-09-12: the name of a daily copy was
+/// the only name it would join to a folder, so putting one back meant
+/// swapping files by hand on a machine in a shop. They are listed and they
+/// are restorable, and which folder a name reaches is the name's own answer:
+/// these two sit beside the shop file, where no prune walks.
+#[tokio::test]
+async fn a_copy_taken_on_the_way_into_something_is_listed_and_can_be_put_back() {
+    let h = harness();
+    call(&h.app, "POST", "/products", Some(product("Semoule 10kg"))).await;
+
+    // Through the route, so the copy is the app's own `VACUUM INTO` and not
+    // a file copy: the shop file is open, and a row written a moment ago is
+    // in the `-wal` beside it rather than in the file itself. A plain
+    // `fs::copy` of the shop file here is an empty shop.
+    let (_, made) = call(&h.app, "POST", "/backups", None).await;
+    let daily = made["name"].as_str().unwrap().to_string();
+
+    // The same bytes, beside the shop file, under the name an upgrade would
+    // have given them. The route reads the name, not how the file came to be
+    // there.
+    let at = chrono::NaiveDate::from_ymd_opt(2026, 9, 10)
+        .unwrap()
+        .and_hms_milli_opt(8, 0, 0, 120)
+        .unwrap();
+    let upgrade = dzpos_core::services::backup::upgrade_name(&h.db(), at);
+    std::fs::copy(
+        h.dir.path().join("backups").join(&daily),
+        h.dir.path().join(&upgrade),
+    )
+    .unwrap();
+
+    // Something neither copy has, so a restore that worked is visible.
+    call(&h.app, "POST", "/products", Some(product("Sucre 1kg"))).await;
+    assert_eq!(product_names(&h.app).await.len(), 2);
+
+    let (_, listed) = call(&h.app, "GET", "/backups", None).await;
+    assert_eq!(
+        listed["upgrade_copies"].as_array().unwrap().len(),
+        1,
+        "{listed}"
+    );
+    assert_eq!(listed["upgrade_copies"][0]["name"], json!(upgrade));
+    assert_eq!(
+        listed["upgrade_copies"][0]["taken_at"],
+        json!("2026-09-10T08:00:00")
+    );
+    // Three lists, three rules: the daily copy those same bytes came from is
+    // in the folder a prune walks, and this one is not.
+    assert_eq!(listed["backups"].as_array().unwrap().len(), 1, "{listed}");
+    assert_eq!(listed["backups"][0]["name"], json!(daily));
+    assert_eq!(listed["safety_copies"], json!([]), "{listed}");
+
+    let (status, back) = call(&h.app, "POST", &format!("/backups/{upgrade}/restore"), None).await;
+    assert_eq!(status, StatusCode::OK, "{back}");
+    assert_eq!(product_names(&h.app).await, vec!["Semoule 10kg"]);
+
+    // The restore kept what it replaced, the same as any other, so the
+    // second product is still reachable from the copy beside the file.
+    let safety = h.safety_copies();
+    assert_eq!(safety.len(), 1, "{safety:?}");
+
+    // And that copy is itself listed and itself restorable.
+    let (_, listed) = call(&h.app, "GET", "/backups", None).await;
+    let kept = listed["safety_copies"][0]["name"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let (status, back) = call(&h.app, "POST", &format!("/backups/{kept}/restore"), None).await;
+    assert_eq!(status, StatusCode::OK, "{back}");
+    assert_eq!(
+        product_names(&h.app).await,
+        vec!["Semoule 10kg", "Sucre 1kg"]
+    );
 }
 
 #[tokio::test]

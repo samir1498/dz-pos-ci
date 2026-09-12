@@ -28,6 +28,20 @@ use crate::error::ApiError;
 pub use crate::session::CurrentUser;
 pub use crate::token::LaunchToken;
 
+/// Every copy of a shop file that exists, by the rule that keeps it.
+pub struct Copies {
+    /// The daily copies, in the backup folder, pruned back to thirty.
+    pub daily: Vec<Backup>,
+    /// Taken on the way into a restore, holding what the restore replaced.
+    /// Beside the shop file rather than in the folder, so no prune reaches
+    /// them.
+    pub safety: Vec<Backup>,
+    /// Taken on the way into an upgrade that has migrations to run, holding
+    /// the file in the shape the older version left it. Beside the shop
+    /// file for the same reason.
+    pub upgrade: Vec<Backup>,
+}
+
 /// What a restore leaves behind: what the shop file now holds, and the name
 /// of the copy of the old one taken on the way. The owner is told that name
 /// because it is the only record of what was replaced, and nothing deletes
@@ -104,13 +118,16 @@ impl AppState {
         &self.backup_dir
     }
 
-    /// Every copy this shop has: the daily ones in the backup folder, and
-    /// the safety copies taken on the way into a restore, which sit beside
-    /// the shop file so pruning cannot reach them.
-    pub fn list_backups(&self) -> Result<(Vec<Backup>, Vec<Backup>), ApiError> {
-        let daily = backup::list(&self.backup_dir).map_err(ApiError::from)?;
-        let safety = backup::list_safety(&self.db_path).map_err(ApiError::from)?;
-        Ok((daily, safety))
+    /// Every copy this shop has. Three kinds, because three rules: the
+    /// daily ones in the backup folder are pruned to thirty, and the two
+    /// kinds beside the shop file are never pruned at all, which is why
+    /// they sit outside the folder the prune walks.
+    pub fn list_backups(&self) -> Result<Copies, ApiError> {
+        Ok(Copies {
+            daily: backup::list(&self.backup_dir).map_err(ApiError::from)?,
+            safety: backup::list_safety(&self.db_path).map_err(ApiError::from)?,
+            upgrade: backup::list_upgrade(&self.db_path).map_err(ApiError::from)?,
+        })
     }
 
     /// A copy of the shop file, taken at `at`, and the folder pruned back to

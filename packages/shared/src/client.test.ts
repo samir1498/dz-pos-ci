@@ -442,19 +442,20 @@ describe("backups", () => {
     bytes: 143_360,
   };
 
-  const both: BackupsDto = { backups: [backup], safety_copies: [] };
+  const all: BackupsDto = { backups: [backup], safety_copies: [], upgrade_copies: [backup] };
 
-  test("lists the copies the server reports, daily and safety apart", async () => {
-    const api = createClient("http://127.0.0.1:4317", stub(200, both));
-    await expect(api.listBackups()).resolves.toEqual(both);
+  test("lists the copies the server reports, the three kinds apart", async () => {
+    const api = createClient("http://127.0.0.1:4317", stub(200, all));
+    await expect(api.listBackups()).resolves.toEqual(all);
   });
 
   test("a copy of the wrong shape is refused, never handed to the UI", async () => {
     for (const bad of [
-      { backups: [{ name: backup.name, taken_at: backup.taken_at }], safety_copies: [] },
-      { backups: [{ ...backup, bytes: 1.5 }], safety_copies: [] },
+      { ...all, backups: [{ name: backup.name, taken_at: backup.taken_at }] },
+      { ...all, backups: [{ ...backup, bytes: 1.5 }] },
       { backups: [backup] },
-      { backups: [backup], safety_copies: {} },
+      { backups: [backup], safety_copies: [] },
+      { ...all, safety_copies: {} },
       [backup],
     ]) {
       const api = createClient("http://x", stub(200, bad));

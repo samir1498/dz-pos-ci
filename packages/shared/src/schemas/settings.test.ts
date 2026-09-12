@@ -46,7 +46,7 @@ const backup: BackupDto = {
   bytes: 143_360,
 };
 
-const backups: BackupsDto = { backups: [backup], safety_copies: [] };
+const backups: BackupsDto = { backups: [backup], safety_copies: [], upgrade_copies: [] };
 
 const restore: RestoreDto = {
   restored_from: backup.name,
