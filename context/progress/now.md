@@ -45,9 +45,9 @@ is built and not published. Three things block it and all three are Samir's
 and Anouar's: the product's name is a placeholder, there is no price, and no
 native speaker has read the Arabic. The three built routes are shot and on
 the boss site at https://dinar-reports.pages.dev/landing/ so Anouar can
-answer without a checkout. Left for later: the hero ships a 1344-pixel file
-for a 342-pixel render on a phone, which needs width descriptors in the shot
-pipeline.
+answer without a checkout. The shots carry a width per tier since 2026-09-10,
+so a phone is served a phone-sized file rather than the desktop one scaled
+down in CSS.
 
 **M4 is on main since 2026-09-11 18:49 (PR #33, cf5236a).** Ten tasks, each
 reviewed and merged on its own, then a whole-milestone review and a second
