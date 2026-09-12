@@ -17,6 +17,9 @@ without it. **open** means it is ours and not started.
 |---|---|---|
 | The version, the commit and the build date, from one place, on the About screen and at the head of the log file | `crates/core/src/build_info.rs`, `crates/api` route `/build-info` | a test that fails if a second spelling of any of the three appears |
 | A copy of the shop's file before a new build migrates it, and a refusal to start if the copy cannot be written | `crates/core/src/services/backup.rs::before_upgrade`, `crates/api/src/lib.rs::open_and_upgrade` | `crates/api/tests/upgrade_from_a_previous_version.rs`, five tests |
+| A shopkeeper is told why the app would not start | `apps/desktop/src-tauri/src/startup_failure.rs`, called from `main.rs` before the window exists | four tests on the message, and the Windows job compiles and links the message box |
+| A restore that has to migrate the copy it puts in place copies it first | `crates/api/src/lib.rs::restore` step 9, through `open_and_upgrade` | `restoring_a_copy_that_is_behind_leaves_a_copy_of_it_before_it_is_migrated` |
+| Every ledger column a day filter reads carries a moment from the shop clock, not the file's UTC default | `crates/core/src/services/audit.rs::record`, `repos::debt::append`, `repos::supplier_debt::append` | the refusal test in each repo, and `a_row_is_stamped_from_the_shop_clock_and_not_from_the_file` |
 | A content security policy on the window and the launch token out of the page global | `apps/desktop/src-tauri/`, `tauri.conf.json` | a test that reads the policy off the real built page, and one that a navigation away is refused |
 | A tag on `main` as the only thing that publishes a release | `.github/workflows/release.yml`, `.github/scripts/release-gate.sh` | fourteen cases in that script's own test |
 | The text that puts the NIF on a facture, and the absence of one for the article d'imposition | `docs/features.md` party identifiers row, from `research/legal-fiscal/2026-09-08-facture-and-ticket.md` | loi 04-02 art. 34 and LF 2006 art. 42, quoted from the Journal Officiel PDFs in that note's `sources/` |
@@ -37,8 +40,7 @@ without it. **open** means it is ours and not started.
 
 | What | Why it matters | Where |
 |---|---|---|
-| A shopkeeper can see why the app would not start | A Windows release build has no console, so a refusal goes nowhere: the window never opens and nothing is said. The pre-upgrade copy made that easier to reach, because a full disk now stops the app. | M5 task T10 |
-| The copies beside the shop file can be restored from a screen | The copy taken before a restore and the copy taken before an upgrade are both a file swap by hand. The restore route accepts the name of a daily copy and no other kind. | M5 task T11 |
+| The copies beside the shop file can be restored from a screen, and listed on one | The copy taken before a restore and the copy taken before an upgrade are both a file swap by hand: the restore route accepts the name of a daily copy and no other kind, and no screen lists either. A restore now leaves a pre-upgrade copy of its own, so an owner can have one and never see it. | M5 task T11 |
 | Sonar quoted as a gate, or dropped | It is only a gate if Rust support on the team server was verified. Until somebody checks, it is neither. | `docs/architecture.md` § Testing matrix |
 
 ## What no gate can cover
