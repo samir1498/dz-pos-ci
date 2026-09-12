@@ -684,5 +684,20 @@
   "audit_page_next": "Suivant",
   "col_user": "Utilisateur",
   "col_entity": "Fiche",
-  "col_change": "Changement"
+  "col_change": "Changement",
+  "date_segment_day": "Jour",
+  "date_segment_month": "Mois",
+  "date_segment_year": "Année",
+  "month_01": "Janvier",
+  "month_02": "Février",
+  "month_03": "Mars",
+  "month_04": "Avril",
+  "month_05": "Mai",
+  "month_06": "Juin",
+  "month_07": "Juillet",
+  "month_08": "Août",
+  "month_09": "Septembre",
+  "month_10": "Octobre",
+  "month_11": "Novembre",
+  "month_12": "Décembre"
 }

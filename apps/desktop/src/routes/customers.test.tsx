@@ -245,6 +245,25 @@ const paid: CustomerPaymentsDto = {
  * on, so a screen that read `new Date()` would fail here. */
 const SHOP_TODAY = "2027-03-04";
 
+/** The statement range is DateField now: three segments each, so a test
+ *  reaches a day by the test id its segments carry rather than by the
+ *  label, which now names the whole group and not one box. */
+function dateFieldSegments(testId: string) {
+  return {
+    day: screen.getByTestId(`${testId}-day`),
+    month: screen.getByTestId(`${testId}-month`),
+    year: screen.getByTestId(`${testId}-year`),
+  };
+}
+
+function expectIsoDate(testId: string, iso: string) {
+  const [year, month, day] = iso.split("-");
+  const segments = dateFieldSegments(testId);
+  expect(segments.day).toHaveValue(day);
+  expect(segments.month).toHaveValue(month);
+  expect(segments.year).toHaveValue(year);
+}
+
 let fetchMock: ReturnType<typeof vi.fn>;
 let list: CustomerDto[];
 let rows: CustomerLedgerDto;
@@ -849,8 +868,9 @@ describe("payments", () => {
     // The stub answers a fixed `/clock`; a screen reading `new Date()` would
     // date the range from whatever zone the machine is in, which is a day
     // either side of the ledger for a shop open past midnight.
-    expect(await screen.findByLabelText(fr.field_statement_to)).toHaveValue(SHOP_TODAY);
-    expect(screen.getByLabelText(fr.field_statement_from)).toHaveValue("2027-01-01");
+    await screen.findByTestId("statement-to-day");
+    expectIsoDate("statement-to", SHOP_TODAY);
+    expectIsoDate("statement-from", "2027-01-01");
     expect(fetched().some((url) => url.endsWith("/clock"))).toBe(true);
   });
 
@@ -863,20 +883,26 @@ describe("payments", () => {
 
     const failed = await screen.findByText(fr.error_storage);
     expect(failed).toHaveAttribute("role", "alert");
-    expect(screen.queryByLabelText(fr.field_statement_to)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("statement-to-day")).not.toBeInTheDocument();
 
     clockAnswer = null;
     await userEvent.click(screen.getByRole("button", { name: fr.action_retry }));
 
-    expect(await screen.findByLabelText(fr.field_statement_to)).toHaveValue(SHOP_TODAY);
+    await screen.findByTestId("statement-to-day");
+    expectIsoDate("statement-to", SHOP_TODAY);
   });
 
   test("a range that ends before it starts asks for nothing", async () => {
     mountFiche(3);
 
-    const from = await screen.findByLabelText(fr.field_statement_from);
-    await userEvent.clear(from);
-    await userEvent.type(from, "2027-12-31");
+    await screen.findByTestId("statement-from-day");
+    const segments = dateFieldSegments("statement-from");
+    await userEvent.clear(segments.day);
+    await userEvent.type(segments.day, "31");
+    await userEvent.clear(segments.month);
+    await userEvent.type(segments.month, "12");
+    await userEvent.clear(segments.year);
+    await userEvent.type(segments.year, "2027");
 
     expect(await screen.findByText(fr.error_statement_range_invalid)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: fr.action_statement })).toBeDisabled();

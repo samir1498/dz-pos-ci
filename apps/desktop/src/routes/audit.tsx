@@ -24,6 +24,7 @@ import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -126,14 +127,11 @@ function AuditScreen() {
         </FormField>
         <FormField label={t("audit_filter_day")} className="min-w-48">
           {(parts) => (
-            <Input
+            <DateField
               {...parts}
-              type="date"
-              dir="ltr"
               data-testid="audit-filter-day"
-              className="font-numeric tabular-nums"
               value={day}
-              onChange={(event) => setFilter(() => setDay(event.target.value))}
+              onChange={(next) => setFilter(() => setDay(next))}
             />
           )}
         </FormField>

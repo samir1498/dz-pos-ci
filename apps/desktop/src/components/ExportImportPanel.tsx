@@ -18,6 +18,7 @@ import { FormField } from "@/components/FormField";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { saveBlob } from "@/lib/download";
@@ -159,26 +160,12 @@ export function ExportImportPanel() {
         <div className="flex flex-wrap items-end gap-4">
           <FormField label={t("field_from")}>
             {(parts) => (
-              <Input
-                {...parts}
-                type="date"
-                dir="ltr"
-                className="font-numeric tabular-nums"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
+              <DateField {...parts} data-testid="export-range-from" value={from} onChange={setFrom} />
             )}
           </FormField>
           <FormField label={t("field_to")}>
             {(parts) => (
-              <Input
-                {...parts}
-                type="date"
-                dir="ltr"
-                className="font-numeric tabular-nums"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
+              <DateField {...parts} data-testid="export-range-to" value={to} onChange={setTo} />
             )}
           </FormField>
           <p className="text-sm text-muted-foreground">{t("export_range_hint")}</p>

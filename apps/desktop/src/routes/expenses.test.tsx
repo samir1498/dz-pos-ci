@@ -187,8 +187,10 @@ function mount(lang: Lang = "fr") {
 describe("the month the screen opens on", () => {
   test("is the shop's, read from the clock and not from the machine", async () => {
     mount();
-    const picker = await screen.findByTestId("expenses-month");
-    expect(picker).toHaveValue(SHOP_MONTH);
+    await screen.findByTestId("expenses-month");
+    const [year, month] = SHOP_MONTH.split("-");
+    expect(screen.getByTestId("expenses-month-month")).toHaveValue(month);
+    expect(screen.getByTestId("expenses-month-year")).toHaveValue(year);
     await waitFor(() => {
       expect(fetched().some((u) => u.includes(`/expenses?month=${SHOP_MONTH}`))).toBe(true);
     });
@@ -198,10 +200,12 @@ describe("the month the screen opens on", () => {
   test("another month is asked of the server rather than filtered on the screen", async () => {
     const user = userEvent.setup();
     mount();
-    const picker = await screen.findByTestId("expenses-month");
+    await screen.findByTestId("expenses-month");
     listed = { month: "2027-02", total_centimes: 0, expenses: [] };
-    await user.clear(picker);
-    await user.type(picker, "2027-02");
+    await user.clear(screen.getByTestId("expenses-month-month"));
+    await user.type(screen.getByTestId("expenses-month-month"), "02");
+    await user.clear(screen.getByTestId("expenses-month-year"));
+    await user.type(screen.getByTestId("expenses-month-year"), "2027");
     await waitFor(() => {
       expect(fetched().some((u) => u.includes("/expenses?month=2027-02"))).toBe(true);
     });

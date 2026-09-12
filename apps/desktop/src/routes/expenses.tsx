@@ -38,7 +38,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
+import { MonthField } from "@/components/ui/month-field";
 import {
   Select,
   SelectContent,
@@ -158,15 +160,7 @@ function Month({
           <>
             <FormField label={t("expenses_month")} className="flex-row items-center gap-2">
               {(parts) => (
-                <Input
-                  {...parts}
-                  type="month"
-                  dir="ltr"
-                  data-testid="expenses-month"
-                  className="w-44 font-numeric tabular-nums"
-                  value={month}
-                  onChange={(event) => onMonth(event.target.value)}
-                />
+                <MonthField {...parts} data-testid="expenses-month" value={month} onChange={onMonth} />
               )}
             </FormField>
             <Button data-testid="expenses-add" onClick={() => setAdding(true)}>
@@ -621,14 +615,11 @@ function ExpenseForm({
             error={message(t, field.state.meta.errors)}
           >
             {(parts) => (
-              <Input
+              <DateField
                 {...parts}
-                type="date"
-                dir="ltr"
                 data-testid="expense-date"
-                className="font-numeric tabular-nums"
                 value={field.state.value}
-                onChange={(event) => field.handleChange(event.target.value)}
+                onChange={field.handleChange}
               />
             )}
           </FormField>

@@ -243,7 +243,9 @@ describe("filters", () => {
     const user = userEvent.setup();
     mount();
     await screen.findByRole("table", { name: fr.audit_title });
-    await user.type(screen.getByTestId("audit-filter-day"), "2026-09-11");
+    await user.type(screen.getByTestId("audit-filter-day-day"), "11");
+    await user.type(screen.getByTestId("audit-filter-day-month"), "09");
+    await user.type(screen.getByTestId("audit-filter-day-year"), "2026");
     await waitFor(() => {
       expect(asked().some((url) => url.includes("day=2026-09-11"))).toBe(true);
     });
