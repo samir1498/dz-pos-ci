@@ -565,6 +565,20 @@ describe("the ledger", () => {
     expect(within(row).getAllByText("1 500,00")).toHaveLength(2);
   });
 
+  /**
+   * The fiche's one line under the name. A phone written in groups is a run
+   * of digits per group as far as the bidi algorithm is concerned, and an
+   * Arabic page lays those groups out right to left: `0770 11 22 33` came
+   * out as `33 22 11 0770`, which is the number a shop would have dialled.
+   */
+  test("the phone on the fiche reads the way a phone is dialled", async () => {
+    mountFiche(3, "ar");
+
+    const phone = await screen.findByTestId("customer-phone");
+    expect(phone).toHaveTextContent("0770 11 22 33");
+    expect(phone).toHaveAttribute("dir", "ltr");
+  });
+
   test("an adjustment posts signed centimes and the ledger comes back changed", async () => {
     mountFiche(3);
     await screen.findByRole("row", { name: /solde de départ/ });

@@ -21,7 +21,10 @@ export function PageHeader({
   className,
 }: {
   title: string;
-  description?: string;
+  /** A node rather than a string: a line that carries a phone number or any
+   *  other value the shop did not write needs that value in its own `dir`,
+   *  and a string cannot hold one. */
+  description?: ReactNode;
   /** Buttons for the page as a whole. A row's own actions go in its row. */
   actions?: ReactNode;
   className?: string;
@@ -33,7 +36,7 @@ export function PageHeader({
     >
       <div className="min-w-0">
         <h2 className="truncate text-xl font-semibold text-foreground">{title}</h2>
-        {description === undefined ? null : (
+        {description === undefined || description === null ? null : (
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         )}
       </div>

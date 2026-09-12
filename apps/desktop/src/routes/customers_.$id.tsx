@@ -142,13 +142,30 @@ export function CustomerFiche({ id }: { id: number }) {
   }
 
   const shown = customer.data;
-  const said = [shown.phone, shown.address].filter((part): part is string => part !== null);
+  /* The phone reads left to right with Western digits whatever the screen's
+     language, the same rule the customers list and the suppliers list already
+     hold. Without it the bidi algorithm takes each group of digits for a run
+     of its own and lays the groups out right to left, so `0770 11 22 33` came
+     out as `33 22 11 0770` on the Arabic fiche and a shop would have dialled
+     it that way. */
+  const said =
+    shown.phone === null && shown.address === null ? undefined : (
+      <>
+        {shown.phone === null ? null : (
+          <span dir="ltr" data-testid="customer-phone" className="font-numeric">
+            {shown.phone}
+          </span>
+        )}
+        {shown.phone === null || shown.address === null ? null : " · "}
+        {shown.address}
+      </>
+    );
 
   return (
     <section className="flex flex-col gap-6">
       <PageHeader
         title={shown.name}
-        description={said.length === 0 ? undefined : said.join(" · ")}
+        description={said}
         actions={
           <>
             <BackToList />
