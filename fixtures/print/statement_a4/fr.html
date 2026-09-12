@@ -10,6 +10,19 @@ body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", A
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; border-block-end: 2px solid #000; padding-block-end: 3mm }
 .head h1 { font-size: 20px; margin: 0 0 1mm }
 .num { white-space: nowrap }
+/* Bidi. A value the shop did not write in Arabic keeps its own order on an
+Arabic page: a phone, an identifier with a space in it, a date beside a time,
+a period running from one day to another, a signed amount, a quantity against
+a unit price. Each of those is one left-to-right run, and the neutral
+characters inside it (a space, a slash, a minus sign) belong to that run and
+not to the Arabic line around it. Without this a phone prints back to front, a
+negative amount carries its sign on the far side, and a period reads from its
+last day to its first. The isolation sits on the inline span and never on the
+box around it, so a cell and a line keep the alignment the page gives them.
+Text the shop typed is wrapped in bdi instead, because an address or a product
+name can be in either script and bdi takes its direction from what is in it.
+Checked with fribidi against these goldens, 2026-09-12. */
+.amount, .num { direction: ltr; unicode-bidi: isolate }
 .party { border: 1px solid #000; padding: 3mm; margin-block-start: 6mm }
 .party h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 2mm }
 .party .who { font-weight: 700 }
@@ -36,9 +49,9 @@ tr.edge td { font-weight: 700; background: #f6f6f6 }
 </header>
 <section class="party">
 <h2>Client</h2>
-<div class="who">Entreprise Benali &#38; Fils</div>
-<div>12 rue Didouche Mourad, Alger</div>
-<div class="num">0770 11 22 33</div>
+<div class="who"><bdi>Entreprise Benali &#38; Fils</bdi></div>
+<div><bdi>12 rue Didouche Mourad, Alger</bdi></div>
+<div><span class="num">0770 11 22 33</span></div>
 <div><span class="label">RC</span> <span class="num">16/00-1234567 B 09</span></div>
 <div><span class="label">NIF</span> <span class="num">000916001234567</span></div>
 <div><span class="label">NIS</span> <span class="num">000916009876543</span></div>
@@ -50,11 +63,11 @@ tr.edge td { font-weight: 700; background: #f6f6f6 }
 <tr><th>Date</th><th>Mouvement</th><th>Document</th><th class="n">Débit</th><th class="n">Crédit</th><th class="n">Solde</th></tr>
 </thead>
 <tbody>
-<tr class="edge"><td class="num">01/09/2026</td><td colspan="2">Solde à l’ouverture</td><td class="n"></td><td class="n"></td><td class="n"><span class="amount amount-opening">1 500,00</span></td></tr>
-<tr><td class="num">05/09/2026</td><td>Vente</td><td class="num">FA-2026-000042</td><td class="n"><span class="amount amount-debit">2 000,00</span></td><td class="n"></td><td class="n"><span class="amount amount-running">3 500,00</span></td></tr>
-<tr><td class="num">12/09/2026</td><td>Paiement</td><td class="num"></td><td class="n"></td><td class="n"><span class="amount amount-credit">2 500,00</span></td><td class="n"><span class="amount amount-running">1 000,00</span></td></tr>
-<tr><td class="num">20/09/2026</td><td>Ajustement</td><td class="num"></td><td class="n"></td><td class="n"><span class="amount amount-credit">100,00</span></td><td class="n"><span class="amount amount-running">900,00</span></td></tr>
-<tr class="edge"><td class="num">30/09/2026</td><td colspan="2">Solde à la clôture</td><td class="n"></td><td class="n"></td><td class="n"><span class="amount amount-closing">900,00</span><span class="cur">DA</span></td></tr>
+<tr class="edge"><td><span class="num">01/09/2026</span></td><td colspan="2">Solde à l’ouverture</td><td class="n"></td><td class="n"></td><td class="n"><span class="amount amount-opening">1 500,00</span></td></tr>
+<tr><td><span class="num">05/09/2026</span></td><td>Vente</td><td><span class="num">FA-2026-000042</span></td><td class="n"><span class="amount amount-debit">2 000,00</span></td><td class="n"></td><td class="n"><span class="amount amount-running">3 500,00</span></td></tr>
+<tr><td><span class="num">12/09/2026</span></td><td>Paiement</td><td><span class="num"></span></td><td class="n"></td><td class="n"><span class="amount amount-credit">2 500,00</span></td><td class="n"><span class="amount amount-running">1 000,00</span></td></tr>
+<tr><td><span class="num">20/09/2026</span></td><td>Ajustement</td><td><span class="num"></span></td><td class="n"></td><td class="n"><span class="amount amount-credit">100,00</span></td><td class="n"><span class="amount amount-running">900,00</span></td></tr>
+<tr class="edge"><td><span class="num">30/09/2026</span></td><td colspan="2">Solde à la clôture</td><td class="n"></td><td class="n"></td><td class="n"><span class="amount amount-closing">900,00</span><span class="cur">DA</span></td></tr>
 </tbody>
 </table>
 </div>

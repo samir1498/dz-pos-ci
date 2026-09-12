@@ -21,6 +21,19 @@ body { margin: 0; background: #fff; color: #000 }
 .row { display: flex; justify-content: space-between; gap: 3mm }
 .row .label { overflow-wrap: anywhere }
 .amount, .num { white-space: nowrap }
+/* Bidi. A value the shop did not write in Arabic keeps its own order on an
+Arabic page: a phone, an identifier with a space in it, a date beside a time,
+a period running from one day to another, a signed amount, a quantity against
+a unit price. Each of those is one left-to-right run, and the neutral
+characters inside it (a space, a slash, a minus sign) belong to that run and
+not to the Arabic line around it. Without this a phone prints back to front, a
+negative amount carries its sign on the far side, and a period reads from its
+last day to its first. The isolation sits on the inline span and never on the
+box around it, so a cell and a line keep the alignment the page gives them.
+Text the shop typed is wrapped in bdi instead, because an address or a product
+name can be in either script and bdi takes its direction from what is in it.
+Checked with fribidi against these goldens, 2026-09-12. */
+.amount, .num { direction: ltr; unicode-bidi: isolate }
 .cur { margin-inline-start: .4em }
 .who { overflow-wrap: anywhere }
 .movement { color: #333 }
@@ -31,12 +44,12 @@ body { margin: 0; background: #fff; color: #000 }
 <body>
 <article class="slip">
 <div class="center">
-<div class="name">{{ seller.name }}</div>
+<div class="name"><bdi>{{ seller.name }}</bdi></div>
 {%- if let Some(address) = seller.address %}
-<div>{{ address }}</div>
+<div><bdi>{{ address }}</bdi></div>
 {%- endif %}
 {%- if let Some(phone) = seller.phone %}
-<div class="num">{{ phone }}</div>
+<div><span class="num">{{ phone }}</span></div>
 {%- endif %}
 {%- for id in seller.ids %}
 <div>{{ id.label }} <span class="num">{{ id.value }}</span></div>
@@ -44,15 +57,15 @@ body { margin: 0; background: #fff; color: #000 }
 </div>
 <div class="dashed"></div>
 <div class="center">{{ title }}</div>
-<div class="center num">{{ printed_at }}</div>
+<div class="center"><span class="num">{{ printed_at }}</span></div>
 <div class="dashed"></div>
 <div>{{ customer.title }}</div>
-<div class="who name">{{ customer.name }}</div>
+<div class="who name"><bdi>{{ customer.name }}</bdi></div>
 {%- if let Some(address) = customer.address %}
-<div class="who">{{ address }}</div>
+<div class="who"><bdi>{{ address }}</bdi></div>
 {%- endif %}
 {%- if let Some(phone) = customer.phone %}
-<div class="num">{{ phone }}</div>
+<div><span class="num">{{ phone }}</span></div>
 {%- endif %}
 {%- for id in customer.ids %}
 <div>{{ id.label }} <span class="num">{{ id.value }}</span></div>

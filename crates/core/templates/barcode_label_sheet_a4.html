@@ -21,13 +21,18 @@ body { margin: 0; background: #fff; color: #000 }
 .label .bars { inline-size: 46mm; block-size: 12mm }
 .label .bars svg { inline-size: 100%; block-size: 100%; display: block }
 .label .code { font-size: 10px; letter-spacing: .12em; white-space: nowrap; font-family: "DejaVu Sans Mono", "Courier New", monospace }
+/* Bidi. The price and the digits under the bars are left-to-right runs of
+their own, so an Arabic label prints them in the order they are read aloud
+rather than back to front. The name is text the shop typed and can be in
+either script, so bdi takes its direction from what is in it. */
+.amount, .code { direction: ltr; unicode-bidi: isolate }
 </style>
 </head>
 <body>
 <section class="sheet">
 {%- for label in labels %}
 <article class="label">
-<div class="name">{{ label.name }}</div>
+<div class="name"><bdi>{{ label.name }}</bdi></div>
 <div class="price"><span class="amount">{{ label.price }}</span><span class="cur">{{ label.currency }}</span></div>
 <div class="bars">{{ label.bars|safe }}</div>
 <div><span class="code">{{ label.code }}</span></div>

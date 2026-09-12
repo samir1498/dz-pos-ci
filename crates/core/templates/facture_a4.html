@@ -25,6 +25,19 @@ body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", A
 .head h1 { font-size: 20px; margin: 0 0 1mm }
 .ident { text-align: end }
 .num { white-space: nowrap }
+/* Bidi. A value the shop did not write in Arabic keeps its own order on an
+Arabic page: a phone, an identifier with a space in it, a date beside a time,
+a period running from one day to another, a signed amount, a quantity against
+a unit price. Each of those is one left-to-right run, and the neutral
+characters inside it (a space, a slash, a minus sign) belong to that run and
+not to the Arabic line around it. Without this a phone prints back to front, a
+negative amount carries its sign on the far side, and a period reads from its
+last day to its first. The isolation sits on the inline span and never on the
+box around it, so a cell and a line keep the alignment the page gives them.
+Text the shop typed is wrapped in bdi instead, because an address or a product
+name can be in either script and bdi takes its direction from what is in it.
+Checked with fribidi against these goldens, 2026-09-12. */
+.amount, .num, .qty, .rate { direction: ltr; unicode-bidi: isolate }
 .annulee { position: absolute; inset-block-start: 92mm; inset-inline: 0; text-align: center }
 .annulee span { display: inline-block; border: 3px solid #949494; color: #949494; font-size: 44px; font-weight: 700; letter-spacing: .15em; padding: 3mm 10mm; transform: rotate(-24deg) }
 .cancelled { margin-block-start: 1mm; font-weight: 700 }
@@ -67,10 +80,10 @@ one failure this mark exists to prevent. #}
 <header class="head">
 <div>
 <h1>{{ title }}</h1>
-<div class="num">{{ number }}</div>
-<div class="num">{{ issued_at }}</div>
+<div><span class="num">{{ number }}</span></div>
+<div><span class="num">{{ issued_at }}</span></div>
 {%- if let Some(cancellation) = cancellation %}
-<div class="cancelled">{{ cancellation.on_label }} <span class="num">{{ cancellation.at }}</span> · {{ cancellation.reason_label }} {{ cancellation.reason }}</div>
+<div class="cancelled">{{ cancellation.on_label }} <span class="num">{{ cancellation.at }}</span> · {{ cancellation.reason_label }} <bdi>{{ cancellation.reason }}</bdi></div>
 {%- endif %}
 {%- if let Some(reference) = reference %}
 <div class="reference">{{ reference.label }} <span class="num">{{ reference.number }}</span> {{ reference.on_label }} <span class="num">{{ reference.issued_at }}</span></div>
@@ -81,7 +94,7 @@ phone and its four identifiers are the seller block below, where décret
 05-468 art. 3 wants them read, and printing them twice on one page would be
 two places for a comptable to check against each other. #}
 <div class="ident">
-<div class="who">{{ seller.name }}</div>
+<div class="who"><bdi>{{ seller.name }}</bdi></div>
 </div>
 </header>
 {%- if let Some(notice) = notice %}
@@ -90,12 +103,12 @@ two places for a comptable to check against each other. #}
 <section class="parties">
 <div class="party">
 <h2>{{ seller.title }}</h2>
-<div class="who">{{ seller.name }}</div>
+<div class="who"><bdi>{{ seller.name }}</bdi></div>
 {%- if let Some(address) = seller.address %}
-<div>{{ address }}</div>
+<div><bdi>{{ address }}</bdi></div>
 {%- endif %}
 {%- if let Some(phone) = seller.phone %}
-<div class="num">{{ phone }}</div>
+<div><span class="num">{{ phone }}</span></div>
 {%- endif %}
 {%- for id in seller.ids %}
 <div><span class="label">{{ id.label }}</span> <span class="num">{{ id.value }}</span></div>
@@ -103,9 +116,9 @@ two places for a comptable to check against each other. #}
 </div>
 <div class="party">
 <h2>{{ buyer.title }}</h2>
-<div class="who">{{ buyer.name }}</div>
+<div class="who"><bdi>{{ buyer.name }}</bdi></div>
 {%- if let Some(address) = buyer.address %}
-<div>{{ address }}</div>
+<div><bdi>{{ address }}</bdi></div>
 {%- endif %}
 {%- for id in buyer.ids %}
 <div><span class="label">{{ id.label }}</span> <span class="num">{{ id.value }}</span></div>
@@ -119,7 +132,7 @@ two places for a comptable to check against each other. #}
 </thead>
 <tbody>
 {%- for line in lines %}
-<tr><td>{{ line.name }}</td><td class="n num"><span class="qty qty-line">{{ line.qty }}</span></td><td class="n"><span class="amount amount-unit-price">{{ line.unit_price }}</span></td>{% if show_line_discount %}<td class="n">{% if let Some(discount) = line.discount %}<span class="amount amount-line-discount">-{{ discount }}</span>{% endif %}</td>{% endif %}{% if let Some(rate) = line.rate %}<td class="n num"><span class="rate rate-line">{{ rate }}</span></td>{% endif %}<td class="n"><span class="amount amount-line">{{ line.total }}</span></td></tr>
+<tr><td><bdi>{{ line.name }}</bdi></td><td class="n"><span class="qty qty-line">{{ line.qty }}</span></td><td class="n"><span class="amount amount-unit-price">{{ line.unit_price }}</span></td>{% if show_line_discount %}<td class="n">{% if let Some(discount) = line.discount %}<span class="amount amount-line-discount">-{{ discount }}</span>{% endif %}</td>{% endif %}{% if let Some(rate) = line.rate %}<td class="n"><span class="rate rate-line">{{ rate }}</span></td>{% endif %}<td class="n"><span class="amount amount-line">{{ line.total }}</span></td></tr>
 {%- endfor %}
 </tbody>
 </table>

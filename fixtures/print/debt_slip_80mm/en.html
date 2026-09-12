@@ -13,6 +13,19 @@ body { margin: 0; background: #fff; color: #000 }
 .row { display: flex; justify-content: space-between; gap: 3mm }
 .row .label { overflow-wrap: anywhere }
 .amount, .num { white-space: nowrap }
+/* Bidi. A value the shop did not write in Arabic keeps its own order on an
+Arabic page: a phone, an identifier with a space in it, a date beside a time,
+a period running from one day to another, a signed amount, a quantity against
+a unit price. Each of those is one left-to-right run, and the neutral
+characters inside it (a space, a slash, a minus sign) belong to that run and
+not to the Arabic line around it. Without this a phone prints back to front, a
+negative amount carries its sign on the far side, and a period reads from its
+last day to its first. The isolation sits on the inline span and never on the
+box around it, so a cell and a line keep the alignment the page gives them.
+Text the shop typed is wrapped in bdi instead, because an address or a product
+name can be in either script and bdi takes its direction from what is in it.
+Checked with fribidi against these goldens, 2026-09-12. */
+.amount, .num { direction: ltr; unicode-bidi: isolate }
 .cur { margin-inline-start: .4em }
 .who { overflow-wrap: anywhere }
 .movement { color: #333 }
@@ -23,9 +36,9 @@ body { margin: 0; background: #fff; color: #000 }
 <body>
 <article class="slip">
 <div class="center">
-<div class="name">Alimentation Générale El Baraka</div>
-<div>5 boulevard Amirouche, Alger</div>
-<div class="num">021 63 44 55</div>
+<div class="name"><bdi>Alimentation Générale El Baraka</bdi></div>
+<div><bdi>5 boulevard Amirouche, Alger</bdi></div>
+<div><span class="num">021 63 44 55</span></div>
 <div>NIF <span class="num">000916007654321</span></div>
 <div>RC <span class="num">16/00-7654321 B 21</span></div>
 <div>NIS <span class="num">000916001112223</span></div>
@@ -33,12 +46,12 @@ body { margin: 0; background: #fff; color: #000 }
 </div>
 <div class="dashed"></div>
 <div class="center">Account balance slip</div>
-<div class="center num">13/09/2026 17:30</div>
+<div class="center"><span class="num">13/09/2026 17:30</span></div>
 <div class="dashed"></div>
 <div>Customer</div>
-<div class="who name">Entreprise Benali &#38; Fils</div>
-<div class="who">12 rue Didouche Mourad, Alger</div>
-<div class="num">0770 11 22 33</div>
+<div class="who name"><bdi>Entreprise Benali &#38; Fils</bdi></div>
+<div class="who"><bdi>12 rue Didouche Mourad, Alger</bdi></div>
+<div><span class="num">0770 11 22 33</span></div>
 <div>RC <span class="num">16/00-1234567 B 09</span></div>
 <div>NIF <span class="num">000916001234567</span></div>
 <div>NIS <span class="num">000916009876543</span></div>

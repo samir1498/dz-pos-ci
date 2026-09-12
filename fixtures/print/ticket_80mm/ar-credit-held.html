@@ -14,6 +14,19 @@ body { margin: 0; background: #fff; color: #000 }
 .row { display: flex; justify-content: space-between; gap: 3mm }
 .row .label { overflow-wrap: anywhere }
 .amount, .num { white-space: nowrap }
+/* Bidi. A value the shop did not write in Arabic keeps its own order on an
+Arabic page: a phone, an identifier with a space in it, a date beside a time,
+a period running from one day to another, a signed amount, a quantity against
+a unit price. Each of those is one left-to-right run, and the neutral
+characters inside it (a space, a slash, a minus sign) belong to that run and
+not to the Arabic line around it. Without this a phone prints back to front, a
+negative amount carries its sign on the far side, and a period reads from its
+last day to its first. The isolation sits on the inline span and never on the
+box around it, so a cell and a line keep the alignment the page gives them.
+Text the shop typed is wrapped in bdi instead, because an address or a product
+name can be in either script and bdi takes its direction from what is in it.
+Checked with fribidi against these goldens, 2026-09-12. */
+.amount, .num, .rate { direction: ltr; unicode-bidi: isolate }
 .cur { margin-inline-start: .4em }
 .item-name { overflow-wrap: anywhere }
 .item-detail { color: #333 }
@@ -23,20 +36,20 @@ body { margin: 0; background: #fff; color: #000 }
 <body>
 <article class="ticket">
 <div class="center">
-<div class="name">Mon magasin</div>
-<div>12 rue Didouche Mourad, Alger</div>
-<div class="num">0555 12 34 56</div>
+<div class="name"><bdi>Mon magasin</bdi></div>
+<div><bdi>12 rue Didouche Mourad, Alger</bdi></div>
+<div><span class="num">0555 12 34 56</span></div>
 <div>NIF <span class="num">000216001234567</span></div>
 <div>RC <span class="num">16/00-1234567 B 25</span></div>
 </div>
 <div class="dashed"></div>
 <div class="row"><span class="num">TK-2026-000123</span><span class="num">09/09/2026 14:05</span></div>
 <div class="dashed"></div>
-<div class="item-name">Café moulu 250 g</div>
+<div class="item-name"><bdi>Café moulu 250 g</bdi></div>
 <div class="row item-detail"><span class="num">2 × 150,00 · <span class="rate rate-line">19 %</span></span><span class="amount amount-line">300,00</span></div>
-<div class="item-name">Farine</div>
+<div class="item-name"><bdi>Farine</bdi></div>
 <div class="row item-detail"><span class="num">1,5 × 320,00 · <span class="rate rate-line">9 %</span></span><span class="amount amount-line">480,00</span></div>
-<div class="item-name">Pain</div>
+<div class="item-name"><bdi>Pain</bdi></div>
 <div class="row item-detail"><span class="num">1 × 80,00 · <span class="rate rate-line">0 %</span></span><span class="amount amount-line">70,00</span></div>
 <div class="row item-detail"><span class="label">تخفيض</span><span class="amount amount-line-discount">-10,00</span></div>
 <div class="dashed"></div>
