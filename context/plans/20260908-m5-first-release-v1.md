@@ -18,7 +18,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'The support bundle: one command from settings that writes a zip a shop can send, carrying the log, the versions from T1, the migration history and the schema, and carrying no customer names, no prices and no credential. A test that lists what went in and refuses anything outside the list, because a support bundle that leaks a customer list is worse than no support bundle.'
-    status: 'in-progress'
+    status: 'done'
   - id: 'T4'
     desc: 'The five release questions in `docs/architecture.md` § Release answered in the page itself rather than left as questions, and the release gate list turned into a checklist that says the state of each gate and who holds it. Five of the gates are Samir''s and Anouar''s rather than mine (the comptable''s confirmation of every fiscal row, a real printed facture seen, a native speaker reading the Arabic, the article citation for NIF and AI on a facture, and Sonar only if Rust support was verified), so what this task produces is the page that says which of them are answered and which are waiting, not the answers.'
     status: 'done'

@@ -23,7 +23,7 @@ tasks:
     desc: 'The page must earn its load: no framework on the client except what a form needs, the fonts subset and preloaded, every image the right size in the right format with an explicit width and height, a Lighthouse pass over 95 on mobile, and the whole thing readable with JavaScript off. A test in the build that refuses an image without dimensions and a page over a size budget.'
     status: 'done'
   - id: 'L5'
-    desc: 'Publish: the Cloudflare Pages project, the domain Anouar picks (or a pages.dev address until then), the sitemap and the Open Graph card drawn from the branding, the analytics question answered (Cloudflare Web Analytics is free and cookieless; nothing else goes on the page), and a line in the README and on the boss site saying where the page lives and how to change it.'
+    desc: 'Publish: the Cloudflare Pages project, the domain Anouar picks (or a pages.dev address until then), the sitemap and the Open Graph card drawn from the branding, the analytics question answered (Cloudflare Web Analytics is free and cookieless; nothing else goes on the page), and a line in the README and on the boss site saying where the page lives and how to change it. Before it publishes, the product shots are retaken: the support bundle added a button to the settings screen on 2026-09-12 and the committed picture of that screen predates it, so `settings-ar.png` and anything the shots script builds from it show a screen that is no longer the app. Nothing compares those pictures, so nothing failed; it needs a machine with disk to run the browser suite.'
     status: 'done'
 acceptance: []
 completed_at: '2026-09-11'
