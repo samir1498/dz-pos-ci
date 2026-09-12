@@ -64,6 +64,12 @@ tempfile = "3"
 # proptest for the money invariants; the fixtures are read with serde_json,
 # which is a normal dependency above.
 proptest = "1.11"
+# The bidi algorithm, for the print goldens. A test that says an Arabic
+# facture prints its phone number in the order it is dialled has to run the
+# algorithm a browser runs; asserting on the markup only says the rule is
+# written, not that it works. This is the implementation rust-url uses, and
+# it is a dev-dependency: nothing shipped links it.
+unicode-bidi = "0.3"
 
 # build.rs reads today's date in UTC to bake into `build_info` (M5 T1). The
 # workspace already carries chrono for the shipped crate; reusing it here

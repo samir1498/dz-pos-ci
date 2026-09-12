@@ -11,6 +11,19 @@ body { margin: 0; background: #fff; color: #000; font: 11px/1.5 "DejaVu Sans", A
 .head h1 { font-size: 20px; margin: 0 0 1mm }
 .ident { text-align: end }
 .num { white-space: nowrap }
+/* Bidi. A value the shop did not write in Arabic keeps its own order on an
+Arabic page: a phone, an identifier with a space in it, a date beside a time,
+a period running from one day to another, a signed amount, a quantity against
+a unit price. Each of those is one left-to-right run, and the neutral
+characters inside it (a space, a slash, a minus sign) belong to that run and
+not to the Arabic line around it. Without this a phone prints back to front, a
+negative amount carries its sign on the far side, and a period reads from its
+last day to its first. The isolation sits on the inline span and never on the
+box around it, so a cell and a line keep the alignment the page gives them.
+Text the shop typed is wrapped in bdi instead, because an address or a product
+name can be in either script and bdi takes its direction from what is in it.
+Checked with fribidi against these goldens, 2026-09-12. */
+.amount, .num, .qty, .rate { direction: ltr; unicode-bidi: isolate }
 .annulee { position: absolute; inset-block-start: 92mm; inset-inline: 0; text-align: center }
 .annulee span { display: inline-block; border: 3px solid #949494; color: #949494; font-size: 44px; font-weight: 700; letter-spacing: .15em; padding: 3mm 10mm; transform: rotate(-24deg) }
 .cancelled { margin-block-start: 1mm; font-weight: 700 }
@@ -46,19 +59,19 @@ td.n, th.n { text-align: end; white-space: nowrap }
 <header class="head">
 <div>
 <h1>INVOICE</h1>
-<div class="num">FA-2026-000042</div>
-<div class="num">09/09/2026</div>
+<div><span class="num">FA-2026-000042</span></div>
+<div><span class="num">09/09/2026</span></div>
 </div>
 <div class="ident">
-<div class="who">Mon magasin</div>
+<div class="who"><bdi>Mon magasin</bdi></div>
 </div>
 </header>
 <section class="parties">
 <div class="party">
 <h2>Seller</h2>
-<div class="who">Mon magasin</div>
-<div>12 rue Didouche Mourad, Alger</div>
-<div class="num">0555 12 34 56</div>
+<div class="who"><bdi>Mon magasin</bdi></div>
+<div><bdi>12 rue Didouche Mourad, Alger</bdi></div>
+<div><span class="num">0555 12 34 56</span></div>
 <div><span class="label">RC</span> <span class="num">16/00-1234567 B 25</span></div>
 <div><span class="label">NIF</span> <span class="num">000216001234567</span></div>
 <div><span class="label">NIS</span> <span class="num">000216001234567 00</span></div>
@@ -66,8 +79,8 @@ td.n, th.n { text-align: end; white-space: nowrap }
 </div>
 <div class="party">
 <h2>Customer</h2>
-<div class="who">Yacine Meziane</div>
-<div>14 rue des Frères Bouadou, Bir Mourad Raïs</div>
+<div class="who"><bdi>Yacine Meziane</bdi></div>
+<div><bdi>14 rue des Frères Bouadou, Bir Mourad Raïs</bdi></div>
 </div>
 </section>
 <div class="lines">
@@ -76,9 +89,9 @@ td.n, th.n { text-align: end; white-space: nowrap }
 <tr><th>Description</th><th class="n">Qty</th><th class="n">Unit price excl. tax</th><th class="n">Discount</th><th class="n">VAT</th><th class="n">Amount excl. tax</th></tr>
 </thead>
 <tbody>
-<tr><td>Huile &#60;Elio&#62; &#38; Co 5 L</td><td class="n num"><span class="qty qty-line">2</span></td><td class="n"><span class="amount amount-unit-price">150,00</span></td><td class="n"></td><td class="n num"><span class="rate rate-line">19 %</span></td><td class="n"><span class="amount amount-line">300,00</span></td></tr>
-<tr><td>Farine</td><td class="n num"><span class="qty qty-line">1,5</span></td><td class="n"><span class="amount amount-unit-price">320,00</span></td><td class="n"></td><td class="n num"><span class="rate rate-line">9 %</span></td><td class="n"><span class="amount amount-line">480,00</span></td></tr>
-<tr><td>Pain</td><td class="n num"><span class="qty qty-line">1</span></td><td class="n"><span class="amount amount-unit-price">80,00</span></td><td class="n"><span class="amount amount-line-discount">-10,00</span></td><td class="n num"><span class="rate rate-line">0 %</span></td><td class="n"><span class="amount amount-line">70,00</span></td></tr>
+<tr><td><bdi>Huile &#60;Elio&#62; &#38; Co 5 L</bdi></td><td class="n"><span class="qty qty-line">2</span></td><td class="n"><span class="amount amount-unit-price">150,00</span></td><td class="n"></td><td class="n"><span class="rate rate-line">19 %</span></td><td class="n"><span class="amount amount-line">300,00</span></td></tr>
+<tr><td><bdi>Farine</bdi></td><td class="n"><span class="qty qty-line">1,5</span></td><td class="n"><span class="amount amount-unit-price">320,00</span></td><td class="n"></td><td class="n"><span class="rate rate-line">9 %</span></td><td class="n"><span class="amount amount-line">480,00</span></td></tr>
+<tr><td><bdi>Pain</bdi></td><td class="n"><span class="qty qty-line">1</span></td><td class="n"><span class="amount amount-unit-price">80,00</span></td><td class="n"><span class="amount amount-line-discount">-10,00</span></td><td class="n"><span class="rate rate-line">0 %</span></td><td class="n"><span class="amount amount-line">70,00</span></td></tr>
 </tbody>
 </table>
 </div>
