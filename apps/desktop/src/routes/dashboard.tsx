@@ -368,7 +368,7 @@ const CENTIMES_PER_DINAR = 100;
  * integer is exact and this is a label on an axis, never a total; every amount
  * a reader is meant to trust on this screen goes through `Money`.
  */
-function wholeDinars(centimes: number): string {
+export function wholeDinars(centimes: number): string {
   const negative = centimes < 0;
   const dinars = Math.trunc(Math.abs(centimes) / CENTIMES_PER_DINAR);
   // U+202F, the narrow no-break space `formatCentimes` groups with

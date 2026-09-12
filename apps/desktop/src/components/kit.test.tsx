@@ -33,6 +33,7 @@ import { PageHeader } from "./PageHeader";
 import { PayButton } from "./PayButton";
 import { StatusPill, type Status } from "./StatusPill";
 import { Input } from "./ui/input";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
 /**
  * Tailwind's physical utilities. A logical one (`ms-2`, `pe-4`, `text-start`,
@@ -53,11 +54,19 @@ const PHYSICAL =
   /^-?(ml|mr|pl|pr|left|right|border-l|border-r|rounded-l|rounded-r|text-left|text-right)(-|$)/;
 
 /** The variant prefixes off a class: `group-data-[state=open]:after:ml-2` is
- *  an `ml-2`. An arbitrary value can hold a colon of its own, which would
- *  make this read the wrong half; none in this app does, and a false hit is
- *  a failing test rather than a wrong screen. */
+ *  an `ml-2`. Only a colon outside brackets separates a variant, so an
+ *  arbitrary property keeps its own: `[grid-template-columns:repeat(...)]`,
+ *  which the till uses, is one class and not a `repeat(...)` utility. */
 function utility(className: string): string {
-  return className.slice(className.lastIndexOf(":") + 1);
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < className.length; i += 1) {
+    const character = className[i];
+    if (character === "[") depth += 1;
+    else if (character === "]") depth -= 1;
+    else if (character === ":" && depth === 0) start = i + 1;
+  }
+  return className.slice(start);
 }
 
 /**
@@ -72,11 +81,15 @@ function noPhysicalSides(root: HTMLElement): string[] {
   return [root, ...root.querySelectorAll("*")]
     .filter((node): node is HTMLElement => node instanceof HTMLElement)
     .flatMap((node) => (typeof node.className === "string" ? node.className.split(/\s+/) : []))
-    // The sheet and the sidebar keep a physical `side` on purpose: a panel's
-    // edge, its border and the half it slides in from have to agree, and
-    // `AppShell` computes the side from the page direction
-    // (`frontend-conventions`, "content-side physical properties").
-    .filter((name) => name !== "" && !name.includes("[side="))
+    // A class that reads a side keeps a physical one on purpose. The sheet
+    // and the sidebar: a panel's edge, its border and the half it slides in
+    // from have to agree, and `AppShell` computes the side from the page
+    // direction (`frontend-conventions`, "content-side physical
+    // properties"). A Radix popper: it picks its own side from the space it
+    // has and the direction it is in. The sidebar spells it both
+    // `group-data-[side=left]` and `[[data-side=left]_&]`, so the test is on
+    // `side=` rather than on either bracket.
+    .filter((name) => name !== "" && !name.includes("side="))
     .filter((name) => PHYSICAL.test(utility(name)));
 }
 
@@ -388,6 +401,41 @@ describe("PayButton", () => {
 
   test("carries nothing left or right", () => {
     const { container } = renderIn("ar", <PayButton>ادفع</PayButton>);
+    expect(noPhysicalSides(container)).toEqual([]);
+  });
+});
+
+// ---- Tabs ----
+//
+// Here rather than left to the screens that use tabs, because the trigger is
+// where the active bar is drawn and the bar is drawn with an inset: the one
+// shape in the kit whose side lives behind a variant prefix. The vertical
+// list carried its bar on the physical right until 2026-09-12 and the check
+// above read past it.
+
+describe("Tabs", () => {
+  test("shows the tab that is open and the ones that are not", () => {
+    renderIn("fr", (
+      <Tabs defaultValue="lines">
+        <TabsList>
+          <TabsTrigger value="lines">Lignes</TabsTrigger>
+          <TabsTrigger value="payments">Règlements</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    ));
+    expect(screen.getByRole("tab", { name: "Lignes" })).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("tab", { name: "Règlements" })).toHaveAttribute("data-state", "inactive");
+  });
+
+  test("carries nothing left or right, standing up or lying down", () => {
+    const { container } = renderIn("ar", (
+      <Tabs defaultValue="lines" orientation="vertical">
+        <TabsList>
+          <TabsTrigger value="lines">السطور</TabsTrigger>
+          <TabsTrigger value="payments">التسديدات</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    ));
     expect(noPhysicalSides(container)).toEqual([]);
   });
 });

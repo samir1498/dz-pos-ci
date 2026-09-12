@@ -46,7 +46,12 @@ function readableTime(takenAt: string): string {
  * it is display only (architecture.md rule 6 is about money). The separator
  * comes from the dictionary like every other number on a screen
  * (`lib/rate.ts` says why it is a key and not a comma written here). */
-function readableSize(bytes: number, kb: string, mb: string, decimalSeparator: string): string {
+export function readableSize(
+  bytes: number,
+  kb: string,
+  mb: string,
+  decimalSeparator: string,
+): string {
   if (bytes >= BYTES_PER_MB) {
     return `${(bytes / BYTES_PER_MB).toFixed(1).replace(".", decimalSeparator)} ${mb}`;
   }
@@ -110,7 +115,11 @@ export function BackupsPanel() {
       id: "size",
       header: t("backups_size_header"),
       numeric: true,
-      cell: (row) => readableSize(row.bytes, t("unit_kb"), t("unit_mb"), t("decimal_separator")),
+      cell: (row) => (
+        <span dir="ltr" className="font-numeric tabular-nums">
+          {readableSize(row.bytes, t("unit_kb"), t("unit_mb"), t("decimal_separator"))}
+        </span>
+      ),
     },
   ];
 
