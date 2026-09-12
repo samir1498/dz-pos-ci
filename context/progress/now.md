@@ -279,8 +279,7 @@ file input draws its own button in the language Windows is in. And a phone
 number on the customer fiche printed backwards, which is the number a shop
 would have dialled.
 
-The part on the printed documents, on the branch
-`fix/the-papers-a-shop-hands-over`. Twenty-four values on the committed
+The part on the printed documents, on main on 2026-09-12. Twenty-four values on the committed
 Arabic goldens laid out in an order no reader can use: phone numbers both
 the shop's and the customer's, a registre de commerce with a space in it, a
 NIS with a trailing establishment number, a street number moved to the end
@@ -299,8 +298,23 @@ with nothing isolating it.
 What no machine here can say is how any of it looks. The goldens hold
 markup and not layout, and nothing in this repo prints a page, so the order
 is proven and the sight of it waits for the real printed facture already on
-the release checklist. Still open on the screens: every date box and the one
-month box are native browser controls, which is its own task below.
+the release checklist.
+
+The date boxes are the app's own since 2026-09-12, on all nine screens. A
+date is three numbered boxes in the order the app chooses, left to right in
+every language; a month is two boxes and the month's name from the
+dictionary, which is the word a native `type="month"` was leaking. The
+calendar arithmetic is written out rather than handed to `Date`, which rolls
+the 31st of April into the 1st of May instead of refusing it, and never to
+`Intl`. A day the month does not have is brought back to the last one it
+does, once the year is complete, because leaving `31/02` on the screen while
+handing back `""` left the screen under it filtering on nothing. The field's
+label names the group of boxes rather than one of them: `htmlFor` reaches a
+single box and the `aria-label` on that box beats the label instead of
+adding to it, so the name of the field was announced nowhere.
+
+What is left of the Arabic pass is the wording, which is release gate R6 and
+needs a native speaker.
 
 Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
 bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
