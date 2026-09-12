@@ -249,8 +249,8 @@ to go back to. The name of that copy goes into the row the restore
 writes (PR #52), which until the screen exists is the only place either copy
 is named; absent rather than empty when nothing migrated, because the audit
 screen reads a missing key and an empty one as two different things. The
-screen half is built on 2026-09-12 and is in review, not yet on main: the
-settings panel has a third list, and
+screen half is on main on 2026-09-12 (PR #54): the settings panel has a
+third list, and
 the two lists beside the daily one carry the restore button they did not
 have, through the same confirmation. The restore route picks its folder from
 the shape of the name rather than from the caller, so the two kinds that sit
