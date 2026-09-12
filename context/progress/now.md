@@ -257,16 +257,50 @@ the shape of the name rather than from the caller, so the two kinds that sit
 beside the shop file reach the folder no prune walks, and a name is one of
 the three kinds or none.
 
-The Arabic pass over the screens is half done on 2026-09-12: the half a
-reader can do without a browser. Five icons that point somewhere did not
-mirror, four places formatted a number by hand rather than through the one
-formatter, the dialog close button was English in all three languages, and a
-failed Excel write had no wording on this side. The guard that was meant to
-catch a physical side read the whole class string at once and anchored on a
-space, so anything behind a variant prefix walked past it, which is where the
-vertical tabs' active bar was. All six printed templates and both sign-in
-screens were already clean. What is left is what only an eye in a browser
-catches: clipping, overflow, a line that runs off the edge.
+The Arabic pass runs in three parts and two of them are on main on
+2026-09-12.
+
+The part a reader can do without a browser (PR #53): five icons that point
+somewhere did not mirror, four places formatted a number by hand rather than
+through the one formatter, the dialog close button was English in all three
+languages, and a failed Excel write had no wording on this side. The guard
+meant to catch a physical side read the whole class string at once and
+anchored on a space, so anything behind a variant prefix walked past it,
+which is where the vertical tabs' active bar was.
+
+The part only a picture catches (PR #56), found by reading the fifteen
+Arabic screenshots the e2e suite commits and had never been read. The
+keypad's grid flowed from the page's side, so on an Arabic till the 1 sat
+where a thumb reaches for the 3, on the same pad a cashier types a PIN into.
+The till's warning banner set a customer's balance against their ceiling
+with a slash between and the two swapped sides, on the one banner whose
+whole job is that comparison. The import button said Choose File, because a
+file input draws its own button in the language Windows is in. And a phone
+number on the customer fiche printed backwards, which is the number a shop
+would have dialled.
+
+The part on the printed documents, on the branch
+`fix/the-papers-a-shop-hands-over`. Twenty-four values on the committed
+Arabic goldens laid out in an order no reader can use: phone numbers both
+the shop's and the customer's, a registre de commerce with a space in it, a
+NIS with a trailing establishment number, a street number moved to the end
+of its address, a slip's time before its date, a statement's period from its
+last day to its first, a TVA rate with the per-cent sign first, a ticket
+line with the unit price before the quantity, and every discount with its
+minus sign on the far side. The six templates isolate each value in the span
+it already sat in and point that span left to right, and text the shop typed
+goes in a `bdi`, which reads its direction off what is in it, because a
+product name or an address can be in either script. The test runs the bidi
+algorithm itself (`unicode-bidi`, a dev-dependency) over all forty-four
+fixture pages rather than reading the markup for a rule, and its third
+assertion is the guard: no text carrying a digit may sit on an Arabic page
+with nothing isolating it.
+
+What no machine here can say is how any of it looks. The goldens hold
+markup and not layout, and nothing in this repo prints a page, so the order
+is proven and the sight of it waits for the real printed facture already on
+the release checklist. Still open on the screens: every date box and the one
+month box are native browser controls, which is its own task below.
 
 Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
 bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
