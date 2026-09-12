@@ -375,7 +375,9 @@ impl AppState {
 ///
 /// Both doors into the shop file come through here: the app's startup, and
 /// the reopen at the end of `AppState::restore`, where the copy being put in
-/// place is usually a version behind.
+/// place is usually a version behind. The copy comes back with the
+/// connection, because the restore writes its name into the row it records
+/// and nothing else would know it: startup has nobody to write a row for.
 ///
 /// A copy that cannot be written stops the app from starting, and stops a
 /// restore from reopening the file it just put in place. That is the point of
