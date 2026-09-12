@@ -43,10 +43,12 @@ function readableTime(takenAt: string): string {
 }
 
 /** A file size, not an amount: this is the one place a fraction is fine, and
- * it is display only (architecture.md rule 6 is about money). */
-function readableSize(bytes: number, kb: string, mb: string): string {
+ * it is display only (architecture.md rule 6 is about money). The separator
+ * comes from the dictionary like every other number on a screen
+ * (`lib/rate.ts` says why it is a key and not a comma written here). */
+function readableSize(bytes: number, kb: string, mb: string, decimalSeparator: string): string {
   if (bytes >= BYTES_PER_MB) {
-    return `${(bytes / BYTES_PER_MB).toFixed(1).replace(".", ",")} ${mb}`;
+    return `${(bytes / BYTES_PER_MB).toFixed(1).replace(".", decimalSeparator)} ${mb}`;
   }
   return `${Math.round(bytes / BYTES_PER_KB)} ${kb}`;
 }
@@ -108,7 +110,7 @@ export function BackupsPanel() {
       id: "size",
       header: t("backups_size_header"),
       numeric: true,
-      cell: (row) => readableSize(row.bytes, t("unit_kb"), t("unit_mb")),
+      cell: (row) => readableSize(row.bytes, t("unit_kb"), t("unit_mb"), t("decimal_separator")),
     },
   ];
 

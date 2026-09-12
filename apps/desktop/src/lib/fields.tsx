@@ -30,6 +30,7 @@ const ERROR_KEY: Record<string, Key> = {
   money: "error_money",
   print: "error_print",
   storage: "error_storage",
+  workbook: "error_workbook",
   exhausted: "error_exhausted",
   restart_needed: "error_restart_needed",
   restore_failed_restart_needed: "error_restore_failed_restart_needed",

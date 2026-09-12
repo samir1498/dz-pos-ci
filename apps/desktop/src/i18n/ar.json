@@ -52,6 +52,7 @@
   "error_duplicate_barcode": "هذا الرمز الشريطي مستعمل من قبل.",
   "error_not_found": "غير موجود.",
   "error_money": "مبلغ أو نسبة غير صالحة.",
+  "error_workbook": "تعذّر كتابة ملف إكسل.",
   "error_storage": "تعذّر الحفظ.",
   "error_exhausted": "لم يتبقَّ أي رقم في هذه السلسلة.",
   "error_bad_request": "طلب غير صالح.",

@@ -237,9 +237,16 @@ function ChartTooltipContent({
                       </div>
                       {item.value === undefined || item.value === null ? null : (
                         <span className="font-numeric font-medium text-foreground tabular-nums">
-                          {typeof item.value === "number"
-                            ? item.value.toLocaleString()
-                            : String(item.value)}
+                          {/* Printed as it stands. `toLocaleString` here
+                              followed the machine's own locale rather than
+                              the app's language, so a shop whose Windows is
+                              set to Arabic would have read these in
+                              Arabic-Indic digits against features.md, which
+                              asks for Western digits in every language. This
+                              tooltip does not know what its numbers mean; a
+                              chart showing money passes its own row, the way
+                              the dashboard does. */}
+                          {String(item.value)}
                         </span>
                       )}
                     </div>
