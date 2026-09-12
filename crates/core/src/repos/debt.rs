@@ -249,8 +249,11 @@ mod tests {
     #[test]
     fn a_stamped_movement_keeps_the_moment_it_was_handed() {
         // The mirror of the test above, so the refusal cannot be read as
-        // this repo refusing every payment: the same row with a moment on it
-        // goes in, and goes in with that moment rather than the file's.
+        // this repo refusing every payment. What it adds over
+        // `debt_service::a_movement_is_stamped_by_the_shops_clock_and_not_by_utc`,
+        // which already holds the calendar a layer up, is exactness: the
+        // moment comes back the same to the nanosecond, so the column keeps
+        // what it was handed rather than something near it.
         let (_dir, mut conn) = open();
         let customer = a_customer(&mut conn, "Cliente Amrani");
         let at = crate::services::clock::now();
