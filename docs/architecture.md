@@ -178,6 +178,7 @@ code and shows the message to nobody.
 | `money` | 500 | stored money a migration's CHECK makes impossible | |
 | `storage` | 500 | the shop file could not complete the operation | |
 | `print` | 500 | a stored row the template will not render | |
+| `workbook` | 500 | an Excel workbook this app was writing could not be finished | |
 | `restart_needed`, `restore_failed_restart_needed` | 500 | the shop file is not open in this process any more | |
 
 `conflict` is a refusal about a row that is already there rather than about

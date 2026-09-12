@@ -742,12 +742,14 @@ first release.**
   the facture récapitulative (see Later); its `kind` stays in the model.
 - Every template × language is pinned by a golden file against a fixed
   fixture, and a template change is a reviewed golden diff.
-  `ticket_80mm` is one basket sold four ways, three languages each:
+  `ticket_80mm` is one basket sold five ways, three languages each:
   `fixtures/print/ticket_80mm/{fr,en,ar}.html` is réel and cash,
   `{fr,en,ar}-ifu.html` is the IFU, `{fr,en,ar}-card.html` is réel and card,
-  which has no stamp row and neither half of the change, and
+  which has no stamp row and neither half of the change,
   `{fr,en,ar}-credit.html` is the credit ticket, which says so, carries no
-  cash row and closes on the debt. Pinned by
+  cash row and closes on the debt, and `{fr,en,ar}-credit-held.html` is a
+  credit ticket whose balance closes below zero, where the recap has to name
+  the customer a creditor rather than a debtor. Pinned by
   `crates/core/tests/print_ticket.rs`, which reads back the TVA rate of
   every recap row and of every line as well as every amount.
   `UPDATE_GOLDENS=1` rewrites the goldens and fails the run on purpose, and
