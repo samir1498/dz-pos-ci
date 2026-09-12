@@ -15,7 +15,21 @@ use crate::models::debt::{
 use crate::money::Money;
 use crate::schema::{debt_allocations, debt_ledger};
 
+/// One movement onto the customer's ledger. A row that arrives without a
+/// moment on it is refused rather than stamped by the file, the same rule
+/// `repos::supplier_debt::append` holds on the other side: the column's
+/// default is SQLite's CURRENT_TIMESTAMP, which is UTC, and every period this
+/// app answers for is a stretch of days on the shop's calendar (UTC+1). A
+/// payment taken at 00:30 in Algiers would then be stored on the day before
+/// and fall out of the day the shop counted its drawer, and out of the cash
+/// position with it (`repos::cash::customer_payments` filters this very
+/// column). The caller stamps it from `services::clock`.
 pub fn append(conn: &mut SqliteConnection, write: &DebtRowWrite) -> Result<DebtEntry, CoreError> {
+    if write.created_at.is_none() {
+        return Err(CoreError::Unstamped {
+            entity: "debt_ledger",
+        });
+    }
     let row: DebtRow = diesel::insert_into(debt_ledger::table)
         .values(write)
         .returning(DebtRow::as_returning())
@@ -81,9 +95,10 @@ pub fn balances(
         .collect())
 }
 
-/// One customer's movements, newest first. `created_at` is whole seconds and
-/// two movements can land inside one, so the id breaks the tie: the later
-/// insert is the later movement.
+/// One customer's movements, newest first. Two movements can carry the same
+/// moment, because a caller hands one in rather than reading it here and two
+/// calls can be handed the same, so the id breaks the tie: the later insert
+/// is the later movement.
 pub fn ledger(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -155,4 +170,98 @@ pub fn allocations(
         .select(DebtAllocationRow::as_select())
         .load(conn)?;
     Ok(rows.into_iter().map(DebtAllocation::from).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    // A test may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+    use crate::models::customer::{CustomerRowWrite, PartyKind};
+    use crate::models::debt::{DebtKind, PaymentMethod};
+    use crate::repos::customers;
+    use crate::repos::testdb::{open, OWNER, SHOP};
+
+    fn a_customer(conn: &mut SqliteConnection, name: &str) -> i32 {
+        customers::insert(
+            conn,
+            &CustomerRowWrite {
+                shop_id: SHOP,
+                name: name.to_string(),
+                party_kind: PartyKind::Consumer,
+                phone: None,
+                address: None,
+                rc: None,
+                nif: None,
+                nis: None,
+                ai: None,
+                credit_limit_centimes: None,
+                warn_threshold_centimes: None,
+                notes: None,
+                active: true,
+                updated_at: crate::services::clock::now(),
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    fn movement(customer_id: i32, kind: DebtKind, debit: i64, credit: i64) -> DebtRowWrite {
+        DebtRowWrite {
+            shop_id: SHOP,
+            customer_id,
+            document_id: None,
+            kind,
+            debit_centimes: debit,
+            credit_centimes: credit,
+            user_id: OWNER,
+            note: None,
+            payment_mode: None,
+            // Stamped from the shop's clock, which is what `append` asks of
+            // every caller.
+            created_at: Some(crate::services::clock::now()),
+        }
+    }
+
+    #[test]
+    fn a_movement_with_no_moment_on_it_is_refused_rather_than_dated_by_the_file() {
+        // The column's default is SQLite's CURRENT_TIMESTAMP, which is UTC,
+        // and the day a shop counts its drawer for is a day on the shop's
+        // calendar (UTC+1). A payment taken at 00:30 in Algiers would land on
+        // the day before in the file and drop out of that count and out of
+        // the cash position, which reads this column through
+        // `repos::cash::customer_payments`. So the caller stamps it from the
+        // clock or the row does not go in.
+        let (_dir, mut conn) = open();
+        let customer = a_customer(&mut conn, "Cliente Sans Heure");
+        let mut unstamped = movement(customer, DebtKind::Payment, 0, 1_000);
+        unstamped.payment_mode = Some(PaymentMethod::Cash);
+        unstamped.created_at = None;
+        match append(&mut conn, &unstamped) {
+            Err(CoreError::Unstamped { entity }) => assert_eq!(entity, "debt_ledger"),
+            other => panic!("expected an unstamped row to be refused, got {other:?}"),
+        }
+        // And nothing was written: a refusal leaves the ledger as it was.
+        assert!(ledger(&mut conn, SHOP, customer).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_stamped_movement_keeps_the_moment_it_was_handed() {
+        // The mirror of the test above, so the refusal cannot be read as
+        // this repo refusing every payment. What it adds over
+        // `debt_service::a_movement_is_stamped_by_the_shops_clock_and_not_by_utc`,
+        // which already holds the calendar a layer up, is exactness: the
+        // moment comes back the same to the nanosecond, so the column keeps
+        // what it was handed rather than something near it.
+        let (_dir, mut conn) = open();
+        let customer = a_customer(&mut conn, "Cliente Amrani");
+        let at = crate::services::clock::now();
+        let mut stamped = movement(customer, DebtKind::Payment, 0, 1_000);
+        stamped.payment_mode = Some(PaymentMethod::Cash);
+        stamped.created_at = Some(at);
+        let written = append(&mut conn, &stamped).unwrap();
+        assert_eq!(written.created_at, at);
+        assert_eq!(ledger(&mut conn, SHOP, customer).unwrap().len(), 1);
+    }
 }
