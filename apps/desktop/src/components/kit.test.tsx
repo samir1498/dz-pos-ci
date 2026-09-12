@@ -23,6 +23,8 @@ import { describe, expect, test } from "vitest";
 
 import { I18nProvider, type Lang } from "@/i18n";
 import ar from "@/i18n/ar.json";
+import en from "@/i18n/en.json";
+import fr from "@/i18n/fr.json";
 
 import { DataTable, type Column } from "./DataTable";
 import { EmptyState } from "./EmptyState";
@@ -32,7 +34,9 @@ import { MoneyInput } from "./MoneyInput";
 import { PageHeader } from "./PageHeader";
 import { PayButton } from "./PayButton";
 import { StatusPill, type Status } from "./StatusPill";
+import { DateField } from "./ui/date-field";
 import { Input } from "./ui/input";
+import { MonthField } from "./ui/month-field";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
 /**
@@ -380,6 +384,183 @@ describe("MoneyInput", () => {
     const field = screen.getByTestId("amount");
     expect(field).toHaveAttribute("dir", "ltr");
     expect(field).toHaveValue("-12,50");
+  });
+});
+
+// ---- DateField ----
+
+function DateHarness({ start }: { start: string }) {
+  const [value, setValue] = useState(start);
+  return (
+    <>
+      <DateField value={value} onChange={setValue} data-testid="date" />
+      <output data-testid="date-value">{value}</output>
+    </>
+  );
+}
+
+describe("DateField", () => {
+  test("shows a complete date across its three boxes", () => {
+    renderIn("fr", <DateHarness start="2026-09-05" />);
+    expect(screen.getByTestId("date-day")).toHaveValue("05");
+    expect(screen.getByTestId("date-month")).toHaveValue("09");
+    expect(screen.getByTestId("date-year")).toHaveValue("2026");
+  });
+
+  test("editing one box hands back the whole date, the others untouched", async () => {
+    const user = userEvent.setup();
+    renderIn("fr", <DateHarness start="2026-09-05" />);
+    await user.clear(screen.getByTestId("date-day"));
+    await user.type(screen.getByTestId("date-day"), "10");
+    expect(screen.getByTestId("date-value")).toHaveTextContent("2026-09-10");
+    expect(screen.getByTestId("date-month")).toHaveValue("09");
+    expect(screen.getByTestId("date-year")).toHaveValue("2026");
+  });
+
+  test("an empty year is not a date yet: it hands back \"\"", async () => {
+    const user = userEvent.setup();
+    renderIn("fr", <DateHarness start="" />);
+    await user.type(screen.getByTestId("date-day"), "15");
+    await user.type(screen.getByTestId("date-month"), "06");
+    expect(screen.getByTestId("date-value")).toHaveTextContent("");
+  });
+
+  /** The standing example of a day and a month that cannot go together.
+   *  Leaving 31/02 on the screen while handing back "" would show a shop a
+   *  date and leave the screen under it filtering on nothing. */
+  test("a day the month does not have is brought back to the last one it does", async () => {
+    const user = userEvent.setup();
+    renderIn("fr", <DateHarness start="" />);
+    await user.type(screen.getByTestId("date-year"), "2026");
+    await user.type(screen.getByTestId("date-month"), "02");
+    await user.type(screen.getByTestId("date-day"), "31");
+    expect(screen.getByTestId("date-day")).toHaveValue("28");
+    expect(screen.getByTestId("date-value")).toHaveTextContent("2026-02-28");
+  });
+
+  /** The correction waits for the year, because February has a 29th in one
+   *  year out of four and the year is the last box typed. */
+  test("the 29th of February stands in a leap year and not in the year before", async () => {
+    const user = userEvent.setup();
+    renderIn("fr", <DateHarness start="" />);
+    await user.type(screen.getByTestId("date-day"), "29");
+    await user.type(screen.getByTestId("date-month"), "02");
+    expect(screen.getByTestId("date-day")).toHaveValue("29");
+    await user.type(screen.getByTestId("date-year"), "2024");
+    expect(screen.getByTestId("date-value")).toHaveTextContent("2024-02-29");
+
+    await user.clear(screen.getByTestId("date-year"));
+    await user.type(screen.getByTestId("date-year"), "2023");
+    expect(screen.getByTestId("date-day")).toHaveValue("28");
+  });
+
+  /** Three boxes cannot be named by one `htmlFor`, and the `aria-label` on
+   *  each box beats the field's label rather than adding to it, so the name
+   *  of the field would be announced nowhere. It sits on the group. */
+  test("the field's own label names the whole control", () => {
+    renderIn(
+      "fr",
+      <FormField label="Date d'échéance">
+        {(parts) => <DateField {...parts} value="2026-09-05" onChange={() => {}} data-testid="due" />}
+      </FormField>,
+    );
+    expect(screen.getByRole("group", { name: "Date d'échéance" })).toBeInTheDocument();
+  });
+
+  test("typing is clamped to what a day or a month can be", async () => {
+    const user = userEvent.setup();
+    renderIn("fr", <DateHarness start="" />);
+    await user.type(screen.getByTestId("date-day"), "99");
+    expect(screen.getByTestId("date-day")).toHaveValue("31");
+    await user.type(screen.getByTestId("date-month"), "13");
+    expect(screen.getByTestId("date-month")).toHaveValue("12");
+  });
+
+  test("reads day, month, year left to right even on an Arabic page", () => {
+    renderIn("ar", <DateHarness start="2026-09-05" />);
+    expect(screen.getAllByRole("textbox").map((box) => box.getAttribute("aria-label"))).toEqual([
+      ar.date_segment_day,
+      ar.date_segment_month,
+      ar.date_segment_year,
+    ]);
+    expect(screen.getByTestId("date")).toHaveAttribute("dir", "ltr");
+  });
+
+  test("carries nothing left or right", () => {
+    const { container } = renderIn("ar", <DateHarness start="2026-09-05" />);
+    expect(noPhysicalSides(container)).toEqual([]);
+  });
+});
+
+// ---- MonthField ----
+
+function MonthHarness({ start }: { start: string }) {
+  const [value, setValue] = useState(start);
+  return (
+    <>
+      <MonthField value={value} onChange={setValue} data-testid="month" />
+      <output data-testid="month-value">{value}</output>
+    </>
+  );
+}
+
+describe("MonthField", () => {
+  test("shows a complete month across its two boxes", () => {
+    renderIn("fr", <MonthHarness start="2026-09" />);
+    expect(screen.getByTestId("month-month")).toHaveValue("09");
+    expect(screen.getByTestId("month-year")).toHaveValue("2026");
+  });
+
+  test("editing one box hands back the whole month", async () => {
+    const user = userEvent.setup();
+    renderIn("fr", <MonthHarness start="2026-09" />);
+    await user.clear(screen.getByTestId("month-month"));
+    await user.type(screen.getByTestId("month-month"), "01");
+    expect(screen.getByTestId("month-value")).toHaveTextContent("2026-01");
+  });
+
+  test("an empty year is not a month yet: it hands back \"\"", async () => {
+    const user = userEvent.setup();
+    renderIn("fr", <MonthHarness start="" />);
+    await user.type(screen.getByTestId("month-month"), "06");
+    expect(screen.getByTestId("month-value")).toHaveTextContent("");
+  });
+
+  test("typing is clamped to what a month can be", async () => {
+    const user = userEvent.setup();
+    renderIn("fr", <MonthHarness start="" />);
+    await user.type(screen.getByTestId("month-month"), "13");
+    expect(screen.getByTestId("month-month")).toHaveValue("12");
+  });
+
+  test("reads month, year left to right even on an Arabic page", () => {
+    renderIn("ar", <MonthHarness start="2026-09" />);
+    expect(screen.getAllByRole("textbox").map((box) => box.getAttribute("aria-label"))).toEqual([
+      ar.date_segment_month,
+      ar.date_segment_year,
+    ]);
+    expect(screen.getByTestId("month")).toHaveAttribute("dir", "ltr");
+  });
+
+  /** The whole point of this control: the caption follows the shop's
+   *  language, not whatever the machine underneath it is set to. */
+  test("names the month in the shop's own language", () => {
+    const fr1 = renderIn("fr", <MonthHarness start="2026-09" />);
+    expect(screen.getByTestId("month-name")).toHaveTextContent(fr.month_09);
+    fr1.unmount();
+
+    const en1 = renderIn("en", <MonthHarness start="2026-09" />);
+    expect(screen.getByTestId("month-name")).toHaveTextContent(en.month_09);
+    en1.unmount();
+
+    const ar1 = renderIn("ar", <MonthHarness start="2026-09" />);
+    expect(screen.getByTestId("month-name")).toHaveTextContent(ar.month_09);
+    ar1.unmount();
+  });
+
+  test("carries nothing left or right", () => {
+    const { container } = renderIn("ar", <MonthHarness start="2026-09" />);
+    expect(noPhysicalSides(container)).toEqual([]);
   });
 });
 

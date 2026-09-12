@@ -18,6 +18,7 @@ import { SupportBundlePanel } from "@/components/SupportBundlePanel";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { FormField } from "@/components/FormField";
 import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -412,13 +413,11 @@ function RegimePanel({
                   error={messageOf(field.state.meta.errors, t)}
                 >
                   {(parts) => (
-                    <Input
+                    <DateField
                       {...parts}
-                      type="date"
-                      dir="ltr"
-                      className="font-numeric tabular-nums"
+                      data-testid="regime-valid-from"
                       value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onChange={field.handleChange}
                       onBlur={field.handleBlur}
                     />
                   )}

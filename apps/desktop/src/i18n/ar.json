@@ -684,5 +684,20 @@
   "audit_page_next": "التالي",
   "col_user": "المستخدم",
   "col_entity": "السجل",
-  "col_change": "التغيير"
+  "col_change": "التغيير",
+  "date_segment_day": "يوم",
+  "date_segment_month": "شهر",
+  "date_segment_year": "سنة",
+  "month_01": "جانفي",
+  "month_02": "فيفري",
+  "month_03": "مارس",
+  "month_04": "أفريل",
+  "month_05": "ماي",
+  "month_06": "جوان",
+  "month_07": "جويلية",
+  "month_08": "أوت",
+  "month_09": "سبتمبر",
+  "month_10": "أكتوبر",
+  "month_11": "نوفمبر",
+  "month_12": "ديسمبر"
 }

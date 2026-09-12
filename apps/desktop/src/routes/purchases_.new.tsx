@@ -31,6 +31,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DateField } from "@/components/ui/date-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -300,15 +301,7 @@ function NewPurchaseScreen() {
               )}
             </FormField>
             <FormField label={t("field_due_date")}>
-              {(parts) => (
-                <Input
-                  {...parts}
-                  type="date"
-                  dir="ltr"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              )}
+              {(parts) => <DateField {...parts} value={dueDate} onChange={setDueDate} />}
             </FormField>
           </CardContent>
         </Card>

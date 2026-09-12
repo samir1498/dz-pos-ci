@@ -22,6 +22,36 @@ import { SessionProvider } from "@/lib/session";
 import { ME_CASHIER, ME_OWNER } from "@/test/session";
 import { SettingsScreen } from "./settings";
 
+/** The régime's "valid from" field is three boxes now, not one native date
+ *  input, so a test reaches it by the day/month/year test ids DateField
+ *  gives its segments rather than by typing a whole ISO string at once. */
+function dateFieldSegments(testId: string) {
+  return {
+    day: screen.getByTestId(`${testId}-day`),
+    month: screen.getByTestId(`${testId}-month`),
+    year: screen.getByTestId(`${testId}-year`),
+  };
+}
+
+async function typeIsoDate(user: ReturnType<typeof userEvent.setup>, testId: string, iso: string) {
+  const [year, month, day] = iso.split("-");
+  const segments = dateFieldSegments(testId);
+  await user.clear(segments.day);
+  await user.type(segments.day, day ?? "");
+  await user.clear(segments.month);
+  await user.type(segments.month, month ?? "");
+  await user.clear(segments.year);
+  await user.type(segments.year, year ?? "");
+}
+
+function expectIsoDate(testId: string, iso: string) {
+  const [year, month, day] = iso.split("-");
+  const segments = dateFieldSegments(testId);
+  expect(segments.day).toHaveValue(day);
+  expect(segments.month).toHaveValue(month);
+  expect(segments.year).toHaveValue(year);
+}
+
 const store: StoreDto = {
   name: "Mon magasin",
   rc: null,
@@ -325,8 +355,8 @@ describe("the régime form", () => {
     // the fork this replaced (the core dates documents on Algeria's
     // calendar, UTC+1, and a browser reads the machine's zone).
     mount();
-    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
-    expect(within(regimeForm).getByLabelText(fr.field_valid_from)).toHaveValue(SHOP_TODAY);
+    await screen.findByRole("form", { name: fr.settings_regime });
+    expectIsoDate("regime-valid-from", SHOP_TODAY);
   });
 
   test("says it is reading the shop's day while it waits, not that products are loading", async () => {
@@ -356,8 +386,8 @@ describe("the régime form", () => {
     clockAnswer = null;
     await user.click(screen.getByRole("button", { name: fr.action_retry }));
 
-    const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
-    expect(within(regimeForm).getByLabelText(fr.field_valid_from)).toHaveValue(SHOP_TODAY);
+    await screen.findByRole("form", { name: fr.settings_regime });
+    expectIsoDate("regime-valid-from", SHOP_TODAY);
   });
 
   test("posts the régime and the day, and shows the planned line the API answers", async () => {
@@ -366,9 +396,7 @@ describe("the régime form", () => {
     await screen.findByLabelText(fr.field_name);
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
-    const day = within(regimeForm).getByLabelText(fr.field_valid_from);
-    await user.clear(day);
-    await user.type(day, "2099-01-01");
+    await typeIsoDate(user, "regime-valid-from", "2099-01-01");
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
 
     expect(await screen.findByTestId("regime-planned")).toHaveTextContent(
@@ -386,9 +414,7 @@ describe("the régime form", () => {
     await screen.findByLabelText(fr.field_name);
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
-    const day = within(regimeForm).getByLabelText(fr.field_valid_from);
-    await user.clear(day);
-    await user.type(day, "2026-06-01");
+    await typeIsoDate(user, "regime-valid-from", "2026-06-01");
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     await waitFor(() =>
       expect(screen.getByTestId("regime-current")).toHaveTextContent(
@@ -404,7 +430,10 @@ describe("the régime form", () => {
     await screen.findByLabelText(fr.field_name);
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
-    await user.clear(within(regimeForm).getByLabelText(fr.field_valid_from));
+    const segments = dateFieldSegments("regime-valid-from");
+    await user.clear(segments.day);
+    await user.clear(segments.month);
+    await user.clear(segments.year);
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
     expect(await within(regimeForm).findByRole("alert")).toHaveTextContent(fr.error_day_invalid);
     expect(countOf("POST")).toBe(0);

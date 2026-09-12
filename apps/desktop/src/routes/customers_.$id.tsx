@@ -38,6 +38,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PayButton } from "@/components/PayButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { DateField } from "@/components/ui/date-field";
 import {
   Dialog,
   DialogContent,
@@ -613,27 +614,11 @@ function StatementRange({ customer, today }: { customer: CustomerDto; today: str
       <div className="flex flex-wrap items-end gap-3">
         <FormField label={t("field_statement_from")}>
           {(parts) => (
-            <Input
-              {...parts}
-              type="date"
-              dir="ltr"
-              className="font-numeric"
-              value={from}
-              onChange={(event) => setFrom(event.target.value)}
-            />
+            <DateField {...parts} data-testid="statement-from" value={from} onChange={setFrom} />
           )}
         </FormField>
         <FormField label={t("field_statement_to")}>
-          {(parts) => (
-            <Input
-              {...parts}
-              type="date"
-              dir="ltr"
-              className="font-numeric"
-              value={to}
-              onChange={(event) => setTo(event.target.value)}
-            />
-          )}
+          {(parts) => <DateField {...parts} data-testid="statement-to" value={to} onChange={setTo} />}
         </FormField>
         <Button
           variant="outline"

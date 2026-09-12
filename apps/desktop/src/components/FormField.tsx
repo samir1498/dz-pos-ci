@@ -26,6 +26,12 @@ export interface FieldParts {
   readonly id: string;
   readonly "aria-invalid": boolean;
   readonly "aria-describedby": string | undefined;
+  /** The label's own id. A control that is one box ignores it, because
+   *  `htmlFor` already names it. A control made of several boxes cannot be
+   *  named that way: `htmlFor` reaches one box and an `aria-label` on that
+   *  box would beat the field's label and hide it, so those controls put
+   *  this on a group around all of them. */
+  readonly "aria-labelledby": string;
 }
 
 export function FormField({
@@ -46,6 +52,7 @@ export function FormField({
   children: (parts: FieldParts) => ReactNode;
 }) {
   const id = useId();
+  const labelId = `${id}-label`;
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
   const described = [error === undefined ? null : errorId, hint === undefined ? null : hintId]
@@ -57,7 +64,9 @@ export function FormField({
       {/* The star sits beside the label, not inside it: a label's text is its
           name to a test and to a screen reader, and "Nom*" is not "Nom". */}
       <div className="flex items-baseline gap-1">
-        <Label htmlFor={id}>{label}</Label>
+        <Label id={labelId} htmlFor={id}>
+          {label}
+        </Label>
         {required ? (
           <span aria-hidden="true" className="text-fg-danger">
             *
@@ -66,6 +75,7 @@ export function FormField({
       </div>
       {children({
         id,
+        "aria-labelledby": labelId,
         "aria-invalid": error !== undefined,
         "aria-describedby": described === "" ? undefined : described,
       })}

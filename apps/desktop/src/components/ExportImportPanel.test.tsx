@@ -23,6 +23,15 @@ function importRows(): HTMLElement[] {
   return within(table).getAllByRole("row").slice(1);
 }
 
+/** The range boxes are DateField now: three segments each, so a test fills
+ *  in the day, the month and the year rather than typing one ISO string. */
+async function typeIsoDate(user: ReturnType<typeof userEvent.setup>, testId: string, iso: string) {
+  const [year, month, day] = iso.split("-");
+  await user.type(screen.getByTestId(`${testId}-day`), day ?? "");
+  await user.type(screen.getByTestId(`${testId}-month`), month ?? "");
+  await user.type(screen.getByTestId(`${testId}-year`), year ?? "");
+}
+
 /** A workbook, as far as this screen is concerned: bytes with the media type
  * and the name the server puts on them. */
 function workbook(filename: string): Response {
@@ -160,8 +169,8 @@ describe("the four exports", () => {
   test("the range rides on the sales export and on nothing else", async () => {
     const user = userEvent.setup();
     mount();
-    await user.type(screen.getByLabelText(fr.field_from), "2026-01-01");
-    await user.type(screen.getByLabelText(fr.field_to), "2026-12-31");
+    await typeIsoDate(user, "export-range-from", "2026-01-01");
+    await typeIsoDate(user, "export-range-to", "2026-12-31");
 
     await user.click(screen.getByTestId("export-sales"));
     await waitFor(() => expect(saved).toHaveLength(1));
@@ -178,8 +187,8 @@ describe("the four exports", () => {
   test("a range the wrong way round is caught before the call", async () => {
     const user = userEvent.setup();
     mount();
-    await user.type(screen.getByLabelText(fr.field_from), "2026-12-31");
-    await user.type(screen.getByLabelText(fr.field_to), "2026-01-01");
+    await typeIsoDate(user, "export-range-from", "2026-12-31");
+    await typeIsoDate(user, "export-range-to", "2026-01-01");
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_statement_range_invalid);
     expect(screen.getByTestId("export-sales")).toBeDisabled();
     // The others are unaffected: the range is the sales export's alone.
