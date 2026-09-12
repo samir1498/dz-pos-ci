@@ -324,6 +324,19 @@ the kit's two folders and what the CLI gets wrong on the way in.
   That is only safe because no shop has data yet: a file with a history would
   need a data migration alongside the rename, or its old rows would drop out
   of the queries that read the log by name.
+- `audit_log.created_at` is on the shop's calendar like every other date a
+  screen shows, since `2026-09-12-000013_audit_log_shop_clock`. It was the one
+  column in the file that took SQLite's `CURRENT_TIMESTAMP`, which is UTC, so
+  a row written at 00:30 in Algiers was stored as 23:30 the day before and
+  printed that way on the owner's screen while the day filter, which did
+  convert, counted it under the day it was written. The migration shifts the
+  rows already there by an hour and `services::audit::record` stamps from
+  `services::clock` from now on, which is why the two have to travel in one
+  version: the shift run against a build that already stamps would move those
+  rows an hour into the future. `AuditRowWrite.created_at` is a plain
+  `NaiveDateTime` rather than an `Option`, so no insert can fall back to the
+  default that is still on the column; the supplier ledger guards the same
+  rule with `CoreError::Unstamped` because a caller there picks the moment.
 - Encryption at rest: OS-level (BitLocker / FileVault) on the shop PC,
   disk encryption on the server; the app does not roll its own. Backups are
   copies of the file, restorable from the settings screen and tested by

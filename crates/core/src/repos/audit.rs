@@ -46,9 +46,9 @@ pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<AuditEntry>
 /// What `search` and `count` narrow the shop's log by. A plain description
 /// rather than a diesel expression: `services::audit` hands this down and
 /// never touches the query builder itself (rule 1 — this file is the only
-/// place that does). `created_from`/`created_to` are a half-open UTC range;
-/// the shop-calendar-to-UTC conversion (`services::audit::day_range_utc`) is
-/// the service's job, not this one's.
+/// place that does). `created_from`/`created_to` are a half-open range on the
+/// shop's calendar, the same clock the column holds; turning a day into that
+/// pair (`services::audit::day_range`) is the service's job, not this one's.
 #[derive(Debug, Clone, Default)]
 pub struct SearchFilter {
     pub user_id: Option<i32>,

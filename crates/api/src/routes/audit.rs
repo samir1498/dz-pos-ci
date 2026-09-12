@@ -25,8 +25,8 @@ pub struct ListQuery {
     user_id: Option<i32>,
     #[serde(default)]
     action: Option<String>,
-    /// `YYYY-MM-DD` on the shop's calendar, not the UTC the column stores
-    /// (`services::audit::day_range_utc`).
+    /// `YYYY-MM-DD` on the shop's calendar, which is what the column holds
+    /// (`services::audit::day_range`).
     #[serde(default)]
     day: Option<String>,
     /// 1-based; left out or under 1 is the first page.
