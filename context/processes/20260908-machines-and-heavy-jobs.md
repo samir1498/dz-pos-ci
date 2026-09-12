@@ -69,6 +69,24 @@ due to potential data corruption" — never pass `--allow-unsafe`). So every
 gigabyte written here is permanent until Samir runs the compact. Writing
 less matters more than cleaning up after.
 
+**Which number actually stops a build, measured on 2026-09-12.** The
+`/mnt/c` figure is a ceiling on how much the VHDX may still *grow*, and the
+VHDX only grows when the write cannot fit in a block it already holds. On
+that day `/mnt/c` read 5.8 GB free, well under the 5 GB line above, while
+the image was 151 GB on disk with 44 GB live inside it: 107 GB of blocks
+already taken from Windows and free for ext4 to hand out again. A 2 GB file
+written inside the distro moved neither number, and the image stayed at the
+same byte count to the byte. `fstrim` reported 926 GB trimmed and Windows
+gained nothing, which is the same fact from the other side.
+
+So read `df -h /` first and `df -h /mnt/c` second. A build whose output
+fits in the slack inside the image costs Windows nothing, however alarming
+`/mnt/c` looks; a build that does not fit comes straight out of what is left
+on `C:`. Prove it rather than assume it when the margin is thin: write a
+file the size of the build you are about to run, `sync`, and read both
+numbers again. Two hours were spent refusing to run the Rust suite on a gate
+that was not binding.
+
 ## Sessions and worktrees
 
 One session per machine is the normal case, so branches in the checkout
