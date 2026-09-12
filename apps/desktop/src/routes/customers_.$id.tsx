@@ -157,7 +157,12 @@ export function CustomerFiche({ id }: { id: number }) {
           </span>
         )}
         {shown.phone === null || shown.address === null ? null : " · "}
-        {shown.address}
+        {/* An address is free text and can be in either script, so it is
+            isolated rather than forced: `bdi` keeps whatever is inside it
+            from reordering the line around it, and an Algerian address
+            carries a lot number and a postcode that would otherwise come
+            apart the way the phone did. */}
+        {shown.address === null ? null : <bdi>{shown.address}</bdi>}
       </>
     );
 

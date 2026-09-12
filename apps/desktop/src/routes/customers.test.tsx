@@ -579,6 +579,25 @@ describe("the ledger", () => {
     expect(phone).toHaveAttribute("dir", "ltr");
   });
 
+  /**
+   * The address beside it. It is free text and can be in either script, so it
+   * is isolated rather than forced: what `bdi` stops is an Algerian address's
+   * lot number and postcode coming apart the way the phone did, without
+   * telling an Arabic address to read left to right.
+   */
+  test("the address on the fiche is isolated from the line around it", async () => {
+    const address = "Cité 500 Logts, Bt 12, N°3";
+    list = [{ ...benali, address }];
+    mountFiche(3, "ar");
+
+    // Through the phone, which is the other half of the same line: waiting on
+    // the header alone would find the list's, before the fiche has answered.
+    const line = (await screen.findByTestId("customer-phone")).closest("p");
+    const isolated = line?.querySelector("bdi") ?? null;
+    expect(isolated).not.toBeNull();
+    expect(isolated?.textContent).toBe(address);
+  });
+
   test("an adjustment posts signed centimes and the ledger comes back changed", async () => {
     mountFiche(3);
     await screen.findByRole("row", { name: /solde de départ/ });
