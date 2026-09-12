@@ -155,10 +155,16 @@ run its own commands inside the job that decides whether a release is
 allowed. And the pre-upgrade copy left a half-written file behind for good
 when it was interrupted, because the retry after it used a different name.
 
-In flight: the support bundle, written and open for review, waiting on the
-browser suite because it adds a button to the settings screen and the
-committed pictures of that screen are stale until a local run regenerates
-them.
+The support bundle is on main since 2026-09-12 (PR #43): one command from
+the settings screen writes a zip a shop can send, holding the log, the
+version the build came from, the migrations the file has actually had
+against the ones the build ships, and the schema, with a test that lists
+what goes in and refuses anything else. It waited a day on the browser
+suite, which was a misreading: adding a button does make the committed
+picture of the settings screen stale, but nothing compares those pictures.
+The suite writes them, no check reads them, and the only consumer is the
+public page, which is not cleared to publish. The retake is written down
+against that page's product shots (landing plan L5).
 
 Also on main since 2026-09-11 23:44: `docs/release-checklist.md`, one page
 saying what has to be true before v1.0 and who holds each item, and a
@@ -214,8 +220,8 @@ sits under R8. The research had been read from the Journal Officiel on
 2026-09-08 and never carried into the spec; it is in `docs/features.md`,
 `docs/release-checklist.md` and `docs/roadmap.md` now.
 
-The support bundle has been through two review lenses and its four findings
-are fixed on the branch: the entry-set assertion no longer reads its
+The support bundle went through two review lenses and its four findings were
+fixed before it merged: the entry-set assertion no longer reads its
 expectation from the constant the writer walks, the audit row is asserted,
 a log file that was never written has its own test, and the seeded PIN is
 out of the forbidden list where four digits could collide with a byte count.
