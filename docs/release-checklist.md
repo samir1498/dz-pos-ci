@@ -22,6 +22,9 @@ without it. **open** means it is ours and not started.
 | Every ledger column a day filter reads carries a moment from the shop clock, not the file's UTC default | `crates/core/src/services/audit.rs::record`, `repos::debt::append`, `repos::supplier_debt::append` | the refusal test in each repo, and `a_row_is_stamped_from_the_shop_clock_and_not_from_the_file` |
 | A content security policy on the window and the launch token out of the page global | `apps/desktop/src-tauri/`, `tauri.conf.json` | a test that reads the policy off the real built page, and one that a navigation away is refused |
 | A tag on `main` as the only thing that publishes a release | `.github/workflows/release.yml`, `.github/scripts/release-gate.sh` | fourteen cases in that script's own test |
+| One command from settings writes a zip a shop can send, carrying the log, the versions and the schema and no customer name, price or credential | `crates/core/src/services/support.rs`, the settings screen's support panel | a test that lists what went in and refuses anything outside the list |
+| All three kinds of copy beside the shop file are listed on the backups screen and any of them can be put back | `apps/desktop/src/components/BackupsPanel.tsx`, `crates/api` restore route | the panel's own tests, and a restore route that picks the folder from the shape of the name rather than from the caller |
+| A value on an Arabic page keeps the order it is read in, on the screens and on the six printed documents | the templates under `crates/core/templates/`, the till, the customer fiche and the Excel panel | `crates/core/tests/print_bidi.rs`, which runs the bidi algorithm over all forty-four golden pages rather than reading the markup for a rule |
 | The text that puts the NIF on a facture, and the absence of one for the article d'imposition | `docs/features.md` party identifiers row, from `research/legal-fiscal/2026-09-08-facture-and-ticket.md` | loi 04-02 art. 34 and LF 2006 art. 42, quoted from the Journal Officiel PDFs in that note's `sources/` |
 
 ## Waiting on somebody
@@ -40,7 +43,7 @@ without it. **open** means it is ours and not started.
 
 | What | Why it matters | Where |
 |---|---|---|
-| The copies beside the shop file can be restored from a screen, and listed on one | The copy taken before a restore and the copy taken before an upgrade are both a file swap by hand: the restore route accepts the name of a daily copy and no other kind, and no screen lists either. A restore now leaves a pre-upgrade copy of its own, so an owner can have one and never see it. | M5 task T11 |
+| Every date box and the one month box read in the shop's language and its date order | They are native browser controls, so they take both from the machine. An Arabic shop on a French Windows reads `septembre 2026` on its own expenses screen, and `09/11/2026` for the day a régime fiscal starts is September or November depending on which machine opened it, with nothing on the page saying which. Nine screens carry one. | M5 task T14 |
 | Sonar quoted as a gate, or dropped | It is only a gate if Rust support on the team server was verified. Until somebody checks, it is neither. | `docs/architecture.md` § Testing matrix |
 
 ## What no gate can cover
