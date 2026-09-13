@@ -355,9 +355,11 @@ jobs:
   # release (and its download URLs, which the updater manifest and the
   # landing page both read) lives on the org repo. Creating a release is an
   # API call, not a runner, so it costs no minutes; it does need a token
-  # with somewhere to come from, which is ORG_RELEASE_TOKEN (a fine-grained
-  # PAT with contents read+write on Dinar-dz/dz-pos, stored as a secret on
-  # the mirror). A private repo's releases are private downloads -- that is
+  # with somewhere to come from, which is ORG_RELEASE_TOKEN (stored as a
+  # secret on the mirror; today Samir's own login token, which has push on
+  # the org repo -- broader than it needs to be, replace with a
+  # fine-grained PAT limited to Dinar-dz/dz-pos when convenient). A private
+  # repo's releases are private downloads -- that is
   # a GitHub rule, not this file's -- so these stay draft/collaborators-only
   # until the code-signing certificate lands and the shop's first public
   # build goes out.
