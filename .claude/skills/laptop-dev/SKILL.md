@@ -19,8 +19,8 @@ from here, look at it with `screenshot-pull`.
 | Repo path | `~/Developer/dz-pos` — same layout as here (`/home/samir/dz-pos`) |
 | Shell quirk | node/pnpm come from nvm and only exist in an interactive login shell. Wrap commands: `ssh laptop 'zsh -lic "cd ~/Developer/dz-pos && pnpm …"'` — a bare `ssh laptop pnpm` says "command not found". |
 | Display | GNOME Wayland on seat0. From SSH set `DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000` before anything that opens a window. |
-| sudo | Needs a password. Anything `dnf` gets handed to Samir to run himself; never wait on it. |
-| Toolchain (2026-09-13) | cargo 1.96, node 22 (nvm), pnpm 11.8, gh + GitHub SSH OK. Clone at `~/Developer/dz-pos` with `pnpm install` done; `dzpos-core` / `dzpos-api` / `dzpos-seed` cargo cache warm. **Missing:** `webkit2gtk4.1-devel` and friends (needed for `tauri dev`), `claude`. |
+| sudo | Needs a password. A bare `sudo` from SSH fails. Package installs go through PackageKit in the graphical session so a password dialog appears on the laptop: `systemd-run --user --wait --pipe --collect -p Slice=session.slice pkcon -y install …`. Set `DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus` and `XAUTHORITY` from gnome-shell's environ. |
+| Toolchain (2026-09-13) | cargo 1.96, node 22 (nvm), pnpm 11.8, gh + GitHub SSH OK. Clone at `~/Developer/dz-pos` on `6790eec`, `pnpm install` done, webkit/gtk devel packages installed, `dzpos-desktop` cargo cache warm. **Missing:** `claude`. |
 
 `ssh laptop` below means `ssh -o BatchMode=yes -o ConnectTimeout=10 samir@100.111.55.62`.
 Check `tailscale status` first if a command hangs; an offline peer waits
@@ -55,23 +55,20 @@ for the full timeout.
 | What | Command (inside `zsh -lic "cd ~/Developer/dz-pos && …"`) | Where it shows |
 |---|---|---|
 | Web UI only | `just api 4317 .dev/dev.db http://100.111.55.62:5173` in one shell, then `just dev` | `http://100.111.55.62:5173` — from the laptop browser and from this box |
-| Native Tauri window | `DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 pnpm desktop tauri dev` | window on the laptop screen; first build is minutes, cached after |
+| Native Tauri window | `DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus just tauri` | window on the laptop screen; first build is minutes, cached after. Pid/log under `.dev/tauri.{pid,log}`. |
 | Expo (later) | `REACT_NATIVE_PACKAGER_HOSTNAME=100.111.55.62 pnpm --filter mobile start` | Expo Go on the phone over Tailscale |
 | Rust / web tests | not on the laptop — run `cargo test` and `pnpm -r test` here; the laptop is for things that need a screen |
 
-`tauri dev` fails immediately without the webkit dev packages. Hand Samir
-this line to run on the laptop once, then continue:
-
-```
-sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel libsoup3-devel javascriptcoregtk4.1-devel
-```
+webkit/gtk devel packages are installed (2026-09-13). `just tauri` from
+`apps/desktop` needs the `tauri` script in that package (`pnpm desktop tauri
+dev` is what the justfile runs).
 
 ## First-time setup
 
-Clone and `pnpm install` are done (2026-09-13). `dzpos-core`, `dzpos-api`
-and `dzpos-seed` have been built once so the cache is warm. The dnf line
-above is still Samir's; `tauri dev` waits on it. After webkit lands, one
-`cargo build` in `apps/desktop/src-tauri` warms the native window.
+Done (2026-09-13): clone, `pnpm install`, webkit/gtk devel, seeded
+`.dev/dev.db`, and one `dzpos-desktop` debug build. Native window has been
+opened. Stop it with `kill $(cat ~/Developer/dz-pos/.dev/tauri.pid)`, never
+`pkill -f`.
 
 ## Why git and not rsync
 
