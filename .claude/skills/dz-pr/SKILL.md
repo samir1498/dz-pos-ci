@@ -22,10 +22,12 @@ just gates   # fmt, lint, clippy, generated types check, cargo test, pnpm test, 
 just e2e     # Playwright against a fresh API and database
 ```
 
-A green CI run is not tested. Say what you drove by hand or by script:
-which screen, which mockup route, which HTTP call. If a gate did not run
-(no display for Tauri, laptop offline), write that in the body rather than
-leaving the checkbox ticked.
+A green CI run is not tested, and pull requests do not start Actions.
+`just gates` on this machine is the PR gate; `just ci` after the merge
+copies main to the personal mirror for the light post-merge check. Say
+what you drove by hand or by script: which screen, which mockup route,
+which HTTP call. If a gate did not run (no display for Tauri, laptop
+offline), write that in the body rather than leaving the checkbox ticked.
 
 `cargo build` of the Tauri app on the WSL box is a heavy job under the
 shared-box rule in `CLAUDE.md`; announce it before running it.

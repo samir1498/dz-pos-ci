@@ -127,16 +127,11 @@ From the architecture notes; the reasons are there.
 
 ## Quality gates
 
-`just gates`: `cargo fmt --check`, the desktop's eslint (`just lint`,
-the rule against a bare input, button, select, textarea or table outside the
-component kit), `cargo clippy --all-targets -D
-warnings`, the generated TypeScript types diffed against the Rust DTOs,
-`cargo test`, `pnpm -r test`, `pnpm -r build`. CI runs the same checks on
-Linux on every push and pull request; Windows and coverage (`cargo
-llvm-cov`) run only outside a pull request, because the organisation's
-Actions budget is capped: `just ci` pushes the branch to a personal mirror
-and watches the run there. `just e2e` runs before a
-merge but not in CI yet; it runs the three language projects one after the
-other, because they share a port pair. Sonar: not wired yet, Rust support on
-the team server is unverified (`rust:S1481` probe returned 404); check
-before promising a gate on the core.
+`just gates` is the PR gate on this machine. GitHub Actions runs on the
+public personal mirror `samir1498/dz-pos-ci` (`just ci` copies the
+branch): Restricted is rustfmt, desktop eslint and the release-gate
+script, on every push; Full is clippy, cargo test, pnpm test and build,
+with Windows and coverage on main. Dinar-dz never starts a runner (org
+budget is capped). `just e2e` runs before a merge but not in CI. Sonar:
+`just sonar` on this machine against sonar.observeone.com (project
+`dz-pos`). Not in CI.

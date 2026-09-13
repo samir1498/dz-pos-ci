@@ -1,19 +1,16 @@
 name: CI
 
-# Where this runs. The organisation's Actions budget is capped for the month
-# (every job since 2026-09-10 16:12 refuses to start), so the same file also
-# runs on the mirror `samir1498/dz-pos-ci` under Samir's own free minutes:
-# `just ci` pushes the branch there and watches the run. One file, both
-# places; nothing here names a repository.
+# Full gates: clippy, cargo test, generated types, pnpm test and build,
+# Windows on main, coverage on main. Runs only on the public personal
+# mirror `samir1498/dz-pos-ci` (Actions are free there). Dinar-dz is
+# capped, so every job is skipped on the org and never asks for a runner.
+#
+# Restricted (fmt, eslint, release-gate) is a separate workflow. This one
+# is the long one: push to main, or `just ci <branch> full`.
 on:
   push:
     branches: [main]
     paths-ignore: ["context/**", "**/*.md"]
-  pull_request:
-    branches: [main]
-    paths-ignore: ["context/**", "**/*.md"]
-  # The mirror is pushed branch by branch, so a run has to be startable by
-  # hand on a branch that is nobody's pull request.
   workflow_dispatch:
     inputs:
       windows:
@@ -21,22 +18,17 @@ on:
         type: boolean
         default: false
 
-# A second push to the same branch makes the first run pointless: it is
-# testing a commit nobody will merge. Cancelling it is most of the saving on
-# a branch that is pushed after every commit, which is how the loop works.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
-  # The runners have two cores; four rustc jobs on them swap.
   CARGO_BUILD_JOBS: "2"
 
 jobs:
-  # Everything a pull request has to pass, on Linux, in one job so one cargo
-  # build serves fmt, clippy, the tests and the generated types.
   rust:
+    if: github.repository == 'samir1498/dz-pos-ci'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -52,10 +44,6 @@ jobs:
           libssl-dev
           patchelf
       - name: Free runner disk before the cache comes back
-        # The cached target dir alone no longer fits beside the preinstalled
-        # SDKs: the cache restore itself died with "No space left on device"
-        # (runs 34378092019, 34378978920). The SDKs below are unused here
-        # and weigh about 30 GB, so they go before anything is restored.
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h / | tail -1
@@ -68,21 +56,10 @@ jobs:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # dzpos-desktop's generate_context!() embeds apps/desktop/dist/index.html
-      # at compile time (M5 T0's custom-protocol dev-dependency feature makes
-      # a plain `cargo test`/`cargo clippy` exercise the real asset-embedding
-      # path rather than Tauri's dev bypass), so both need it built first, the
-      # same reason the `desktop-dist` justfile recipe exists for `just
-      # clippy`/`just test` locally.
       - run: pnpm --filter dzpos-desktop build
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
-      # The committed TypeScript types are regenerated into a temp directory
-      # and compared both ways: a new DTO shows as "Only in $tmp", one that
-      # was deleted leaves an orphan a one-way diff never looks for. Linux
-      # only even when Windows runs, because autocrlf there rewrites the
-      # generated files and the diff would fail on line endings.
       - name: Generated TS types are current
         run: |
           tmp="$(mktemp -d)"
@@ -90,6 +67,7 @@ jobs:
           diff -r "$tmp" packages/shared/src/generated
 
   web:
+    if: github.repository == 'samir1498/dz-pos-ci'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -105,18 +83,8 @@ jobs:
       - run: pnpm -r build
       - run: pnpm -r test
 
-  # Windows costs two minutes of the account's allowance for every minute it
-  # runs, and what it proves is that the workspace builds and passes on
-  # Windows at all, which no pull request changes on its own. So it runs on
-  # main, after the merge, and nowhere else: a break shows within one merge
-  # rather than within one release, at a fifth of the bill. A branch run
-  # started by hand (`just ci`) is a branch check, so it skips this too.
   windows:
-    # `inputs` is null on a push or a pull request, so this is the main-only
-    # rule plus one lever: a branch whose change lives behind `cfg(windows)`
-    # is asked for by hand with `just ci <branch> windows`, because the
-    # alternative is a first compile that happens on main.
-    if: github.ref == 'refs/heads/main' || inputs.windows
+    if: github.repository == 'samir1498/dz-pos-ci' && (github.ref == 'refs/heads/main' || inputs.windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -129,16 +97,11 @@ jobs:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Same reason as the rust job above: dzpos-desktop's compile-time
-      # asset embedding needs apps/desktop/dist/index.html to exist.
       - run: pnpm --filter dzpos-desktop build
       - run: cargo test --workspace
 
-  # Coverage feeds Sonar, which reads main, so it runs only on main. A branch's
-  # lcov was never opened by anyone, and building the whole workspace a second
-  # time with instrumentation is the single most expensive step in the file.
   coverage:
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'samir1498/dz-pos-ci' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -156,14 +119,7 @@ jobs:
       - name: Free runner disk
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - uses: Swatinem/rust-cache@v2
-      # The prebuilt binary. `cargo install cargo-llvm-cov` compiled it from
-      # source on every run, which was minutes before any test ran.
       - uses: taiki-e/install-action@cargo-llvm-cov
-      # Only the crates with tests. The Tauri crate has none and a second
-      # instrumented build of it filled the runner's disk. Its own target
-      # dir, outside the one rust-cache saves: the instrumented build is
-      # rebuilt every run anyway and was the bulk of a cache that stopped
-      # fitting on the runner.
       - run: CARGO_TARGET_DIR=/tmp/llvm-cov-target cargo llvm-cov -p dzpos-core -p dzpos-api --lcov --output-path lcov.info
       - uses: actions/upload-artifact@v4
         with:

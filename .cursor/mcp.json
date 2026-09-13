@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "pc-ctx": {
+      "type": "stdio",
       "command": "npx",
       "args": ["-y", "@pc-ctx/mcp@0.8.0"],
       "env": {
@@ -9,6 +10,7 @@
       }
     },
     "sonarqube": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run",

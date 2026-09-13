@@ -1,0 +1,34 @@
+name: Restricted
+
+# Cheap checks. Public mirror `samir1498/dz-pos-ci` has free Actions, so
+# this runs on every push there (a branch copied by `just ci`, or main).
+# Dinar-dz is capped: the job is skipped there and never asks for a runner.
+on:
+  push:
+    paths-ignore: ["context/**", "**/*.md"]
+  workflow_dispatch:
+
+concurrency:
+  group: restricted-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  light:
+    if: github.repository == 'samir1498/dz-pos-ci'
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --prefer-offline
+      - run: pnpm --filter dzpos-desktop lint
+      - run: .github/scripts/release-gate.test.sh

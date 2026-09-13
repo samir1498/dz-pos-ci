@@ -305,18 +305,14 @@ worktree-rm name:
 
 # ---- CI on the mirror ----
 
-# Push this branch to samir1498/dz-pos-ci and watch the run there.
+# Copy this commit to the public personal mirror samir1498/dz-pos-ci
+# (Actions are free there) and watch the runs. Dinar-dz never starts a
+# runner. Restricted (fmt, eslint, release-gate) runs on every push.
+# Full (clippy, tests, build; Windows and coverage on main) runs on main,
+# or on a branch with `just ci <branch> full`.
 #
-# The organisation's Actions budget is capped for the month, so every job on
-# Dinar-dz refuses to start ("recent account payments have failed or your
-# spending limit needs to be increased", since 2026-09-10 16:12). The mirror
-# is the same repository under Samir's own account, where his free minutes
-# pay for the run. It carries no history of its own: this recipe force-pushes
-# the branch, so the mirror is always a copy and never a place work lives.
-# `windows` as the second argument also runs the windows job, for a branch
-# whose change is behind `cfg(windows)`: that job is main-only otherwise, so
-# without it the first Windows compile of such a change happens on main.
-ci branch="" windows="":
+# The mirror is always a copy: this force-pushes. Work does not live there.
+ci branch="" extra="":
     #!/usr/bin/env bash
     set -euo pipefail
     b="{{branch}}"
@@ -324,46 +320,82 @@ ci branch="" windows="":
     sha="$(git rev-parse "$b")"
     git remote get-url ci >/dev/null 2>&1 || git remote add ci git@github.com:samir1498/dz-pos-ci.git
     git push -q --force ci "$b:$b"
-    echo "pushed $b to the mirror"
+    echo "pushed $b @$sha to the mirror"
     # The run is found by the commit it is testing, never by "the newest run
-    # on this branch": that answer was once an hour old and was reported as
-    # this push's result. A push to main starts a run by itself (the
-    # workflow's `push` trigger names main), so asking for one as well
-    # started two runs a second apart and the concurrency group killed one,
-    # which then looked like a failure. So: wait for a run on this commit,
-    # and only start one by hand if none appears, which is the case on every
-    # branch that is not main and on a main push whose paths were all
-    # ignored.
+    # on this branch". A push starts Restricted itself; Full starts itself
+    # only on main. Asking for a run that already started used to launch a
+    # second one that concurrency then killed.
     find_run() {
-        gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 20 \
+        local workflow="$1"
+        gh run list --repo samir1498/dz-pos-ci --workflow "$workflow" --branch "$b" --limit 20 \
             --json databaseId,headSha \
             --jq "[.[] | select(.headSha == \"$sha\")] | .[0].databaseId" 2>/dev/null
     }
-    id=""
-    for _ in $(seq 1 6); do
-        id="$(find_run || true)"
-        [ -n "${id:-}" ] && [ "$id" != "null" ] && break
-        id=""
-        sleep 5
-    done
-    if [ -z "$id" ]; then
-        echo "no run started itself; asking for one"
-        if [ -n "{{windows}}" ]; then
-            echo "asking for the windows job too"
-            gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b" -f windows=true
-        else
-            gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
-        fi
-        for _ in $(seq 1 12); do
-            id="$(find_run || true)"
+    wait_for() {
+        local workflow="$1"
+        local dispatch="${2:-}"
+        local id=""
+        for _ in $(seq 1 8); do
+            id="$(find_run "$workflow" || true)"
             [ -n "${id:-}" ] && [ "$id" != "null" ] && break
             id=""
             sleep 5
         done
+        if [ -z "$id" ]; then
+            echo "no $workflow run started itself; asking for one"
+            if [ "$dispatch" = "windows" ]; then
+                gh workflow run "$workflow" --repo samir1498/dz-pos-ci --ref "$b" -f windows=true
+            else
+                gh workflow run "$workflow" --repo samir1498/dz-pos-ci --ref "$b"
+            fi
+            for _ in $(seq 1 12); do
+                id="$(find_run "$workflow" || true)"
+                [ -n "${id:-}" ] && [ "$id" != "null" ] && break
+                id=""
+                sleep 5
+            done
+        fi
+        [ -n "$id" ] || { echo "no $workflow run appeared for $sha; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
+        echo "watching $workflow run $id on $sha"
+        gh run watch "$id" --repo samir1498/dz-pos-ci --exit-status
+    }
+    wait_for Restricted
+    if [ "$b" = "main" ] || [ "{{extra}}" = "full" ] || [ "{{extra}}" = "windows" ]; then
+        wait_for CI "{{extra}}"
     fi
-    [ -n "$id" ] || { echo "no run appeared for $sha; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
-    echo "watching run $id on $sha"
-    gh run watch "$id" --repo samir1498/dz-pos-ci --exit-status
+
+# Scan this checkout against sonar.observeone.com. Not CI and not a PR
+# check: same as ObserveOne, run on the machine before merge and again on
+# main after. The Rust plugin shells out to `cargo clippy`, so this has to
+# run on the host (the scanner-cli image is Amazon Linux 2023 and cannot
+# exec our glibc-2.39 cargo). Coverage reports are used if they already
+# exist; this does not regenerate them. Token from SONARQUBE_TOKEN or
+# SONAR_ANALYSIS_TOKEN. Scanner: ~/.local/share/sonar-scanner (8.0.1.6346).
+sonar: claim desktop-dist
+    #!/usr/bin/env bash
+    set -euo pipefail
+    token="${SONARQUBE_TOKEN:-${SONAR_ANALYSIS_TOKEN:-}}"
+    [ -n "$token" ] || { echo "SONARQUBE_TOKEN is unset" >&2; exit 1; }
+    host="${SONARQUBE_URL:-${SONAR_HOST_URL:-https://sonar.observeone.com}}"
+    scanner="${SONAR_SCANNER:-$HOME/.local/share/sonar-scanner/bin/sonar-scanner}"
+    [ -x "$scanner" ] || { echo "sonar-scanner not at $scanner — install sonar-scanner-cli 8.0.1.6346 linux-x64 there" >&2; exit 1; }
+    cwd="$(pwd -P)"
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    extra=()
+    if [ -f "$cwd/.git" ]; then
+        if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+            echo "refusing: only the main checkout may publish the main dashboard" >&2
+            exit 1
+        fi
+        extra+=(-Dsonar.scm.exclusions.disabled=true)
+    fi
+    echo "scanning $cwd as dz-pos on branch $branch"
+    flock "$CARGO_TARGET_DIR/.lock" \
+        env SONAR_TOKEN="$token" SONAR_HOST_URL="$host" \
+        "$scanner" \
+        -Dsonar.javascript.node.maxspace=1536 \
+        -Dsonar.branch.name="$branch" \
+        "${extra[@]}"
 
 # ---- mockups (design/) ----
 
