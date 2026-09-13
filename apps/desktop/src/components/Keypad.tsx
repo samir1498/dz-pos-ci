@@ -9,12 +9,14 @@
 // rule that would otherwise be written twice, what a press does to an amount,
 // is `keyedAmount` at the bottom of this file.
 //
-// The keyboard mirrors the pad rather than competing with it. While the focus
-// is anywhere inside, a digit types that digit, Backspace is the backspace key
-// and Enter is the wide one, so a cashier who reaches for the numeric row of
-// the keyboard gets what the pad would have given them. The one trap that
-// costs a double count: a focused button already fires its own click on Enter,
-// so an Enter that came from a key of this pad is left to the browser.
+// The keyboard mirrors the pad rather than competing with it. A digit types
+// that digit, Backspace is the backspace key and Enter is the wide one. On
+// the till the pad only listens while focus is inside it, so a search box
+// can still take digits. On a screen that is only the pad (sign-in, the
+// lock), `captureWindow` listens on the window so a cashier does not have
+// to tap a key first. The one trap that costs a double count: a focused
+// button already fires its own click on Enter, so an Enter that came from
+// a key of this pad is left to the browser.
 //
 // The keys are set in the figure face and read left to right in Arabic too,
 // the same decision `Money` takes: a keypad whose 7 and 8 swapped places in
@@ -26,7 +28,7 @@
 // every language; the wide key stays outside it and reads with the page.
 
 import { CornerDownLeft, Delete } from "lucide-react";
-import type { KeyboardEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent } from "react";
 
 import { Icon } from "@/components/Icon";
 import { Button } from "@/components/ui/button";
@@ -62,20 +64,30 @@ function typedKey(key: string): KeypadKey | null {
   return DIGITS.find((digit) => digit === key) ?? null;
 }
 
+function isTypingInAField(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.closest("input, textarea, select") !== null || target.isContentEditable;
+}
+
 export function Keypad({
   onKey,
   disabled = false,
+  captureWindow = false,
   className,
   "data-testid": testId = "keypad",
 }: {
   onKey: (key: KeypadKey) => void;
   disabled?: boolean;
+  /** Listen on the window, not only while a key of this pad is focused. */
+  captureWindow?: boolean;
   className?: string;
   "data-testid"?: string;
 }) {
   const { t } = useTranslation();
+  const onKeyRef = useRef(onKey);
+  onKeyRef.current = onKey;
 
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  function take(event: { key: string; target: EventTarget | null; preventDefault: () => void }) {
     if (disabled) return;
     const key = typedKey(event.key);
     if (key === null) return;
@@ -85,7 +97,22 @@ export function Keypad({
     const onAKey = event.target instanceof HTMLElement && event.target.closest("button") !== null;
     if (key === "enter" && onAKey) return;
     event.preventDefault();
-    onKey(key);
+    onKeyRef.current(key);
+  }
+
+  useEffect(() => {
+    if (!captureWindow) return;
+    function onWindowKey(event: globalThis.KeyboardEvent) {
+      if (isTypingInAField(event.target)) return;
+      take(event);
+    }
+    window.addEventListener("keydown", onWindowKey);
+    return () => window.removeEventListener("keydown", onWindowKey);
+  }, [captureWindow, disabled]);
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (captureWindow) return;
+    take(event);
   }
 
   return (

@@ -64,6 +64,21 @@ describe("Keypad", () => {
     expect(pressed).toEqual(["4", "backspace"]);
   });
 
+  test("with captureWindow, a digit types without a key being focused first", async () => {
+    const user = userEvent.setup();
+    const pressed: KeypadKey[] = [];
+    render(
+      <I18nProvider lang="fr">
+        <Keypad captureWindow onKey={(key) => pressed.push(key)} />
+      </I18nProvider>,
+    );
+
+    await user.keyboard("1");
+    await user.keyboard("{Enter}");
+
+    expect(pressed).toEqual(["1", "enter"]);
+  });
+
   /**
    * The double count this test exists for: a focused key already fires its
    * own click on Enter, so the pad must not count that press a second time.

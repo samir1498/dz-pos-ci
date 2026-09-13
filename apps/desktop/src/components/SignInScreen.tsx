@@ -83,7 +83,13 @@ function PinPad() {
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>{stage === "id" ? t("signin_pin_id_label") : t("signin_pin_pin_label")}</span>
         {stage === "pin" ? (
-          <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={backToId}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-auto p-0 text-muted-foreground"
+            onClick={backToId}
+          >
             {t("signin_pin_change_id")}
           </Button>
         ) : null}
@@ -95,7 +101,7 @@ function PinPad() {
       >
         {maskedOrPlain(digits, stage === "pin") || " "}
       </div>
-      <Keypad onKey={onKey} disabled={attempt.locked} />
+      <Keypad onKey={onKey} disabled={attempt.locked} captureWindow />
       <AttemptFeedback attempt={attempt} />
     </div>
   );

@@ -48,7 +48,7 @@ function PinUnlock({ userId }: { userId: number }) {
       >
         {"•".repeat(digits.length) || " "}
       </div>
-      <Keypad onKey={onKey} disabled={attempt.locked} />
+      <Keypad onKey={onKey} disabled={attempt.locked} captureWindow />
       <Feedback attempt={attempt} />
     </div>
   );
