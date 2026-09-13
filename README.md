@@ -137,6 +137,6 @@ this machine. GitHub Actions is a post-merge check on the personal mirror
 desktop eslint, and the release-gate script. Pull requests do not start
 Actions; the organisation's budget is capped. `just e2e` runs before a
 merge but not in CI; it runs the three language projects one after the
-other, because they share a port pair. Sonar: not wired yet, Rust support on
-the team server is unverified (`rust:S1481` probe returned 404); check
-before promising a gate on the core.
+other, because they share a port pair. Sonar: `just sonar` on this machine
+against sonar.observeone.com (project `dz-pos`). The team server has the
+Rust plugin (1.5.0). Not in CI.

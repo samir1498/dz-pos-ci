@@ -22,6 +22,11 @@ machine. After a merge to main, `just ci` copies the commit to the
 personal mirror and watches a light run (rustfmt, desktop eslint, the
 release-gate script). Pull requests do not start Actions.
 
+Sonar is local, same as ObserveOne: `just sonar` against
+sonar.observeone.com (project `dz-pos`, gate "ObserveOne way") on the
+branch before merge and again on main after. Not in CI. Coverage reports
+are ingested if they already exist; the recipe does not rebuild them.
+
 A DTO change without `just types` fails `types-check`; the committed
 `packages/shared/src/generated` is diffed both ways.
 
@@ -51,7 +56,7 @@ so the regression stays even if the generator's seed changes. No
 root-cause claim for a property failure without a repro that actually
 ran; a plausible read of the assertion is not evidence.
 
-Sonar: not set up for this repo yet (plan
-`repo-tooling-skills-and-rules-for-dz-pos`, T4 checks Rust support on the
-team server). Do not quote a Sonar gate until it exists.
+Sonar: `just sonar` on this machine, project `dz-pos` on
+sonar.observeone.com, gate "ObserveOne way". The team server has the Rust
+plugin (1.5.0, 85 rules). Not a CI job.
 

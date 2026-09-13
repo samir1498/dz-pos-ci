@@ -363,6 +363,47 @@ ci branch="":
     echo "watching run $id on $sha"
     gh run watch "$id" --repo samir1498/dz-pos-ci --exit-status
 
+# Scan this checkout against sonar.observeone.com. Not CI and not a PR
+# check: same as ObserveOne, run on the machine before merge and again on
+# main after. Coverage reports are used if they already exist; this does
+# not regenerate them (`cargo llvm-cov` is a heavy job). Token from
+# SONARQUBE_TOKEN or SONAR_ANALYSIS_TOKEN. Override the image with
+# SCANNER_IMAGE if you must; the digest is the same pin oo-sonar uses.
+sonar:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    token="${SONARQUBE_TOKEN:-${SONAR_ANALYSIS_TOKEN:-}}"
+    [ -n "$token" ] || { echo "SONARQUBE_TOKEN is unset" >&2; exit 1; }
+    host="${SONARQUBE_URL:-${SONAR_HOST_URL:-https://sonar.observeone.com}}"
+    cwd="$(pwd -P)"
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    image="${SCANNER_IMAGE:-sonarsource/sonar-scanner-cli@sha256:23ca0f137965d9dff2198074043fd48d386280bc5d0ccac8c8349cea4cf096a9}"
+    git_entry="$cwd/.git"
+    vols=(-v "$cwd:$cwd")
+    scanner_args=()
+    if [ -f "$git_entry" ]; then
+        if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+            echo "refusing: only the main checkout may publish the main dashboard" >&2
+            exit 1
+        fi
+        gitdir="$(sed -n 's/^gitdir: //p' "$git_entry")"
+        main_git="${gitdir%/worktrees/*}"
+        vols+=(-v "$main_git:$main_git:ro")
+        scanner_args+=(-Dsonar.scm.exclusions.disabled=true)
+    fi
+    echo "scanning $cwd as dz-pos on branch $branch"
+    docker run --rm --name dz-pos-sonar --network host \
+        --memory 2264m --memory-swap 2264m \
+        -e "SONAR_TOKEN=$token" \
+        -e "SONAR_HOST_URL=$host" \
+        "${vols[@]}" \
+        -w "$cwd" \
+        "$image" \
+        -Dsonar.scanner.skipJreProvisioning=true \
+        -Dsonar.javascript.node.maxspace=1536 \
+        -Dsonar.branch.name="$branch" \
+        "${scanner_args[@]}"
+
 # ---- mockups (design/) ----
 
 mockup-serve:

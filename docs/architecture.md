@@ -454,7 +454,8 @@ tracks them, alongside the release gates and who holds each:
 | TVA, stamp, rounding, amount in words | property tests (proptest) + fixed fixtures named in features.md | same |
 | Invoice templates | golden files (hand-rolled, `UPDATE_GOLDENS=1` regenerates and fails the run on purpose; insta still not pulled in), every template × language | same |
 | API routes | request tests against an in-process server and temp DB | same |
-| Coverage | `cargo llvm-cov` locally when someone asks; Sonar ingestion once Rust support on the team server is verified | this machine, not in CI |
+| Coverage | `cargo llvm-cov` locally when someone asks; `just sonar` ingests `lcov.info` if it is already there | this machine, not in CI |
+| Sonar | `just sonar` to sonar.observeone.com, project `dz-pos`, gate ObserveOne way | this machine, before merge and again on main; not in CI |
 | React components | vitest + Testing Library, jsdom | this machine, `just gates` |
 | rustfmt, desktop eslint, release-gate script | GitHub Actions on the personal mirror | after a merge to main, `just ci` |
 | Browser end-to-end | Playwright + chromium against a fresh API and database (`just e2e`); ObserveOne is the recorded tool, Playwright the interim | before a merge, not in CI |
