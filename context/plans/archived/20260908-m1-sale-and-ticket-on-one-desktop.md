@@ -1,7 +1,7 @@
 ---
 title: 'M1 sale and ticket on one desktop'
 slug: 'm1-sale-and-ticket-on-one-desktop'
-status: 'active'
+status: 'done'
 category: 'milestone'
 created: 20260908
 tldr: 'Products, till, cash sale, 80mm ticket on a real printer; runs as a loop on m1/2026-09-09'
@@ -27,7 +27,7 @@ tasks:
     status: 'done'
   - id: 'T6'
     desc: 'ESC/POS over USB from the desktop; code and a byte-level golden on the WSL box, the real print needs Samir at the laptop with the thermal printer'
-    status: 'blocked'
+    status: 'cancelled'
   - id: 'T7'
     desc: 'Three languages and RTL on every M1 screen (products, settings, till), a Playwright pass per language'
     status: 'done'
@@ -35,6 +35,7 @@ tasks:
     desc: 'Daily backup of the SQLite file, keep 30, restore from settings, the backup test opens the copy; checkpoint PR to main closes M1 except T6'
     status: 'done'
 acceptance: []
+completed_at: '2026-09-13'
 ---
 # M1: a sale and a ticket on one desktop
 

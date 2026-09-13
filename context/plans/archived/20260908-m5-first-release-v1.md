@@ -1,7 +1,7 @@
 ---
 title: 'M5 first release v1'
 slug: 'm5-first-release-v1'
-status: 'active'
+status: 'done'
 category: 'milestone'
 created: 20260908
 tldr: 'Signed installer, updater, versioned migrations, release gates: ten tasks, written 2026-09-11 when M4 landed'
@@ -30,13 +30,13 @@ tasks:
     status: 'done'
   - id: 'T7'
     desc: 'The Tauri updater: the endpoint, the signature check, the update flow the shop sees, and the key generated outside the repo with CI signing from a secret. The client half is provable here against a fake endpoint serving a signed and an unsigned manifest, and the test that matters is the second one: an unsigned or wrongly signed update is refused. Who holds the key is Anouar''s and Samir''s to decide before the key exists.'
-    status: 'pending'
+    status: 'done'
   - id: 'T8'
     desc: 'The name, once. The bundle identifier `com.dzpos.app`, the product name in the installer and the window title, the landing page''s copy and its sharing card, and the placeholder in the docs, all changed in one commit so the repo never half-carries two names. Blocked on Anouar; everything else in this milestone can be built before it arrives, and this task is deliberately last so it is a rename and not a rewrite.'
-    status: 'pending'
+    status: 'done'
   - id: 'T9'
     desc: 'Closing sweep: `docs/features.md` and `docs/architecture.md` rewritten to what shipped, the release gate checklist from T4 brought up to date with whatever moved while the milestone ran, the `dz-review` pass over the whole milestone with the money and deletion lenses deepest because an update that migrates a shop''s file touches both, the boss page, the checkpoint PR.'
-    status: 'pending'
+    status: 'done'
   - id: 'T10'
     desc: 'A shopkeeper sees why the app would not start. A Windows release build has no console, so the message that explains a refusal goes nowhere: the window never opens and nothing is said. That was already true of a failed migration and is now much easier to hit, because the pre-upgrade copy refuses to start on a disk that is full. A native message box before the window exists, naming the folder and what could not be written, and the same for a migration that fails. Raised by the data-safety review of the pre-upgrade copy, 2026-09-11.'
     status: 'done'
@@ -53,6 +53,7 @@ tasks:
     desc: 'Every date box and the one month box on every screen are native browser controls, so they read in the language and the date order the machine is set to and not the shop''s. The month picker on the expenses screen is the worst of them because what it leaks is a word: an Arabic shop on a French Windows reads `September 2026` or `septembre 2026` where its own screen says `المصاريف`. The date boxes leak only the order of the numbers, which is worse for fiscal dates: `09/11/2026` for the day a régime fiscal starts is September or November depending on the machine. Eight screens carry one (`settings.tsx`, `expenses.tsx` twice, `audit.tsx`, `purchases_.new.tsx`, `customers_.$id.tsx` twice, `ExportImportPanel.tsx` twice). Not done in the 2026-09-12 pass on purpose: the kit''s `Select` is Radix and does not open under jsdom, so swapping the month box for one would move its only test to `just e2e`, which no machine here can run under the disk gate, and a bare `<select>` would add a line to the bare-element allowlist that is supposed to be shrinking. Needs a date control of the app''s own, tested the way the rest of the kit is. Found by reading the committed Arabic screenshots, 2026-09-12. Done the same day: `DateField` is three numbered boxes in the order the app chooses and `MonthField` is two boxes and the month''s name from the dictionary, both in `components/ui/`, both tested the way the rest of the kit is. The calendar arithmetic is written out in `lib/date-segments.ts` rather than handed to `Date`, which rolls the 31st of April into the 1st of May, and never to `Intl`. react-aria has a segmented date field and was not taken: it brings its own translation layer beside ours and is far larger than the thing it replaces.'
     status: 'done'
 acceptance: []
+completed_at: '2026-09-13'
 ---
 # M5: first release, v1.0
 
@@ -97,4 +98,3 @@ a native speaker (R6); the NIF/AI article cited (R3); Sonar only if Rust
 support was verified.
 
 Blocked by: the final name and the certificate (Anouar).
-

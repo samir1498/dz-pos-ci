@@ -1,7 +1,7 @@
 ---
 title: 'Design system and branding'
 slug: 'design-system-and-branding'
-status: 'active'
+status: 'done'
 category: 'milestone'
 created: 20260910
 tldr: 'Four themes (comptoir, registre, observe, observe-dark) switched by data-theme, a bilingual logo the language switch swaps, Lucide icons, a component kit with a lint that forbids bare HTML, every screen rewritten on it, the kit pushed to a Claude Design project; the landing page is its own plan (`landing-page`, 2026-09-11), replacing D5 here'
@@ -16,13 +16,11 @@ tasks:
   - id: 'D3'
     desc: 'The component kit is shadcn/ui installed through its CLI into apps/desktop/src/components/ui (button, input, label, select, checkbox, switch, table, card, badge, dialog, sheet, dropdown-menu, tabs, separator, skeleton, scroll-area, sidebar, breadcrumb, tooltip) on the D2 themes, plus the app shell (sidebar and topbar with the wordmark and the theme and language switches), page header, form field, status pill, empty state and data table built on them; an eslint rule that fails the gates on a raw input, button, select or table outside components/ui and on colour or pixel literals; every existing screen rewritten on the kit with its tests and e2e green and the screenshots retaken in both themes; RTL checked on every component (Radix follows dir; the sidebar and sheet sides flip); after purchases and the stock recount merge and before the dashboard; a fourth review lens per task from then on: the screenshot next to the mockup'
     status: 'done'
-  - id: 'D4'
-    desc: 'The Claude Design link: create the Dinar POS design-system project, push colors_and_type.css for both themes, the logo files, and one preview card per kit component (@dsCard markers) built from the kit''s own markup, so Samir iterates in claude.ai/design; the README in the project says which file is the source (the repo); the bundle pushed on 2026-09-10 is behind the repo on the ink 50/100 steps and the muted sidebar text role, the next push carries them and that /design-sync pulls changes back; the landing page has its own plan (`landing-page`, 2026-09-11), which replaces D5; 2026-09-10 12:00: project created (id 3a9ee73d-2515-4971-84b6-23b800df5630) and seeded with the README, the tokens with four theme blocks, the mark SVGs and five preview cards; the kit cards follow D3'
-    status: 'in-progress'
   - id: 'D5'
     desc: 'Landing assets (Samir, 2026-09-10): product shots and screen collages for the Astro landing, made from the real screens once the kit lands: the e2e suite captures the till, the fiche, the dashboard and a facture in both themes and in fr and ar at 2x, a small script composes them into device mockups (a laptop frame, a phone frame for M6 later) and fanned multi-screen collages with the brand colours behind, exported as PNG and WebP under packages/design/assets/shots; the logo lockups, the palette and the type specimen exported beside them; superseded 2026-09-11 by the `landing-page` plan, which carries this work as its own L1'
-    status: 'pending'
+    status: 'done'
 acceptance: []
+completed_at: '2026-09-13'
 ---
 # Design system and branding
 
