@@ -58,8 +58,8 @@ const restore: RestoreDto = {
 describe("healthSchema", () => {
   test("takes the answer the unauthenticated route gives", () => {
     expect(
-      healthSchema.parse({ status: "ok", shop_id: 1, needs_first_pin: true }),
-    ).toEqual({ status: "ok", shop_id: 1, needs_first_pin: true });
+      healthSchema.parse({ status: "ok", shop_id: 1, needs_first_setup: true }),
+    ).toEqual({ status: "ok", shop_id: 1, needs_first_setup: true });
   });
 
   test("refuses an answer with no shop", () => {

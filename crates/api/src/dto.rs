@@ -231,9 +231,9 @@ pub struct HealthDto {
     pub status: String,
     pub shop_id: i32,
     /// True while nobody in the shop has a PIN or a password. The desktop
-    /// shows the first-PIN pad then, not a sign-in for a user who does not
+    /// shows the first-setup screen then, not a sign-in for a user who does not
     /// exist yet (features.md §5).
-    pub needs_first_pin: bool,
+    pub needs_first_setup: bool,
 }
 
 /// The day the shop is on, `YYYY-MM-DD`. A screen that needs "today" asks

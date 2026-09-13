@@ -3,7 +3,7 @@
 export type HealthDto = { status: string, shop_id: number, 
 /**
  * True while nobody in the shop has a PIN or a password. The desktop
- * shows the first-PIN pad then, not a sign-in for a user who does not
+ * shows the first-setup screen then, not a sign-in for a user who does not
  * exist yet (features.md §5).
  */
-needs_first_pin: boolean, };
+needs_first_setup: boolean, };

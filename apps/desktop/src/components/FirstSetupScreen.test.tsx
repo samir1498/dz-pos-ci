@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { ReactNode } from "react";
@@ -18,7 +18,7 @@ beforeEach(() => {
     vi.fn((input: unknown) => {
       const url = String(input);
       if (url.endsWith("/health")) {
-        return Promise.resolve(json(200, { status: "ok", shop_id: 1, needs_first_pin: true }));
+        return Promise.resolve(json(200, { status: "ok", shop_id: 1, needs_first_setup: true }));
       }
       return Promise.resolve(json(404, { error: { code: "not_found", message: "no" } }));
     }),
@@ -43,7 +43,76 @@ function mount(): void {
   render(<FirstSetupScreen />, { wrapper: Wrapper });
 }
 
+const OWNER_SESSION = {
+  me: { user_id: 1, name: "Anouar", role: "owner", permissions: ["manage_users"] },
+  token: "owner-token",
+  idle_minutes: 15,
+};
+
+function stubFetch(handler: (url: string, init: RequestInit | undefined) => Response): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: unknown, init?: RequestInit) => Promise.resolve(handler(String(input), init))),
+  );
+}
+
 describe("FirstSetupScreen", () => {
+  test("matching passwords post the trimmed name and show no error", async () => {
+    const posted: unknown[] = [];
+    stubFetch((url, init) => {
+      if (url.endsWith("/auth/me")) {
+        return json(401, { error: { code: "session_required", message: "no" } });
+      }
+      if (url.endsWith("/auth/first-setup")) {
+        posted.push(JSON.parse(String(init?.body)));
+        return json(200, OWNER_SESSION);
+      }
+      return json(404, { error: { code: "not_found", message: "no" } });
+    });
+    const user = userEvent.setup();
+    mount();
+    await screen.findByTestId("setup-screen");
+
+    await user.type(screen.getByTestId("setup-name"), "  Anouar  ");
+    await user.type(screen.getByTestId("setup-password"), "huit caracteres");
+    await user.type(screen.getByTestId("setup-confirm"), "huit caracteres");
+    await user.click(screen.getByTestId("setup-submit"));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toEqual({ name: "Anouar", password: "huit caracteres" });
+    expect(screen.queryByTestId("setup-error")).toBeNull();
+  });
+
+  test("a refused claim shows the server sentence", async () => {
+    stubFetch((url) => {
+      if (url.endsWith("/auth/me")) {
+        return json(401, { error: { code: "session_required", message: "no" } });
+      }
+      if (url.endsWith("/auth/first-setup")) {
+        return json(422, { error: { code: "validation", message: "no" } });
+      }
+      return json(404, { error: { code: "not_found", message: "no" } });
+    });
+    const user = userEvent.setup();
+    mount();
+    await screen.findByTestId("setup-screen");
+
+    await user.type(screen.getByTestId("setup-name"), "Anouar");
+    await user.type(screen.getByTestId("setup-password"), "huit caracteres");
+    await user.type(screen.getByTestId("setup-confirm"), "huit caracteres");
+    await user.click(screen.getByTestId("setup-submit"));
+
+    expect(await screen.findByTestId("setup-error")).toHaveTextContent(
+      "Vérifiez les champs saisis.",
+    );
+  });
+
+  test("the submit waits for a name and two long-enough passwords", async () => {
+    mount();
+    await screen.findByTestId("setup-screen");
+    expect(screen.getByTestId("setup-submit")).toBeDisabled();
+  });
+
   test("two different passwords are refused and the confirm box is emptied", async () => {
     const user = userEvent.setup();
     mount();

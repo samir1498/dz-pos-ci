@@ -20,7 +20,7 @@ import type { Assert, Matches } from "./drift";
 export const healthSchema = z.object({
   status: z.string(),
   shop_id: z.number(),
-  needs_first_pin: z.boolean(),
+  needs_first_setup: z.boolean(),
 }) satisfies z.ZodType<HealthDto>;
 type _Health = Assert<Matches<HealthDto, typeof healthSchema>>;
 

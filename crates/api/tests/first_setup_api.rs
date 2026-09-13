@@ -93,7 +93,7 @@ async fn a_virgin_shop_says_so_on_health() {
     let (_dir, app) = virgin_shop();
     let (status, body) = call(&app, "GET", "/health", None).await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["needs_first_pin"], true);
+    assert_eq!(body["needs_first_setup"], true);
 }
 
 /// The whole point of the route: a shop nobody has ever signed into goes
@@ -133,7 +133,7 @@ async fn a_virgin_shop_claims_its_first_owner_and_is_handed_a_session() {
 
     let (status, health) = call(&app, "GET", "/health", None).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(health["needs_first_pin"], false);
+    assert_eq!(health["needs_first_setup"], false);
 }
 
 /// A PIN the shape rule refuses (`services::users::validate_pin`) is refused
@@ -157,13 +157,96 @@ async fn a_badly_shaped_password_is_refused_and_claims_nothing() {
 #[tokio::test]
 async fn the_door_shuts_after_a_second_claim() {
     let (_dir, app) = virgin_shop();
-    let (status, _) = claim(&app, "Anouar", "huit caracteres").await;
-    assert_eq!(status, StatusCode::OK);
+    let (status, first) = claim(&app, "Anouar", "huit caracteres").await;
+    assert_eq!(status, StatusCode::OK, "{first}");
+    let token = first["token"].as_str().unwrap().to_owned();
 
     let (status, body) = claim(&app, "Samir", "autre mot de passe").await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["error"]["code"], "validation");
     assert_eq!(body["error"]["field"], "password");
+
+    // The refused claim changed nothing: the shop is still claimed, the
+    // first password still opens the till, and the owner is still Anouar,
+    // not Samir.
+    let (status, health) = call(&app, "GET", "/health", None).await;
+    assert_eq!(status, StatusCode::OK, "{health}");
+    assert_eq!(health["needs_first_setup"], false);
+
+    let req = Request::builder()
+        .method("GET")
+        .uri("/users")
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header("x-dzpos-session", token)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let listed: Value = serde_json::from_slice(&bytes).unwrap();
+    let names: Vec<&str> = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|u| u["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Anouar"]);
+}
+
+/// Every shape that is not a name and a password is refused before anything
+/// is claimed, and the door is still open afterwards: the old PIN-only
+/// shape, an unknown field, and names with nothing in them all answer 422.
+#[tokio::test]
+async fn badly_shaped_claims_are_refused_over_the_wire_and_claim_nothing() {
+    let (_dir, app) = virgin_shop();
+    for (shape, code) in [
+        (
+            json!({ "name": "", "password": "huit caracteres" }),
+            "validation",
+        ),
+        (
+            json!({ "name": "   ", "password": "huit caracteres" }),
+            "validation",
+        ),
+        (json!({ "pin": "2580" }), "bad_request"),
+        (
+            json!({ "name": "Anouar", "password": "huit caracteres", "pin": "2580" }),
+            "bad_request",
+        ),
+    ] {
+        let (status, body) = call(&app, "POST", "/auth/first-setup", Some(shape)).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        assert_eq!(body["error"]["code"], code, "{body}");
+    }
+    let (status, body) = claim(&app, "Anouar", "huit caracteres").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+}
+
+/// A name somebody in the shop already signs in under is a 409, not a
+/// silent rename of the owner: the planted cashier holds no credential, so
+/// the door is still open, and the good claim still walks through it after.
+#[tokio::test]
+async fn a_taken_name_is_refused_with_conflict_and_claims_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    drop(dzpos_core::db::open(&path).unwrap());
+    {
+        let mut conn = dzpos_core::db::open(&path).expect("the test's shop file will not open");
+        diesel::sql_query("INSERT INTO users (shop_id, name, role) VALUES (?, 'Samir', 'cashier')")
+            .bind::<diesel::sql_types::Integer, _>(SHOP)
+            .execute(&mut conn)
+            .expect("the cashier could not be made");
+    }
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    let app = dzpos_api::router(state, &token());
+
+    let (status, body) = claim(&app, "Samir", "huit caracteres").await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["error"]["code"], "conflict");
+    assert_eq!(body["error"]["field"], "name");
+
+    let (status, body) = claim(&app, "Anouar", "huit caracteres").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
 }
 
 /// `any_credential_set` is proved directly against the service in

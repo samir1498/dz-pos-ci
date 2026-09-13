@@ -62,7 +62,7 @@ describe("a shop nobody has signed into yet", () => {
     fetchMock.mockImplementation((input: unknown) => {
       const url = String(input);
       if (url.endsWith("/health")) {
-        return Promise.resolve(json(200, { status: "ok", shop_id: 1, needs_first_pin: true }));
+        return Promise.resolve(json(200, { status: "ok", shop_id: 1, needs_first_setup: true }));
       }
       return Promise.resolve(notFound());
     });

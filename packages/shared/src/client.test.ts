@@ -151,7 +151,7 @@ describe("createClient", () => {
         return new Response(
           JSON.stringify(
             String(url).endsWith("/health")
-              ? { status: "ok", shop_id: 1, needs_first_pin: true }
+              ? { status: "ok", shop_id: 1, needs_first_setup: true }
               : [],
           ),
           { status: 200 },
