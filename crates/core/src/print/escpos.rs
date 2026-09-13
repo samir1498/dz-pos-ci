@@ -2,10 +2,14 @@
 //!
 //! Same document, same words as `render_ticket`. The HTML page is what a
 //! driver prints on A4 paper and what the e2e photographs; this is what a
-//! cheap thermal head eats. There is no USB in this crate: the caller gets
-//! the bytes. Tests pin a human-readable dump of those bytes
+//! cheap thermal head eats. Tests pin a human-readable dump of those bytes
 //! (`fixtures/print/ticket_80mm_escpos/`), the same golden rule as the HTML
 //! tickets. A real printer is not required to know they are right.
+//!
+//! Two senders move the bytes without a driver: one to a file (a spool
+//! file, a USB-serial device path), one over TCP to a network printer on
+//! port 9100 or to `escpos-emulator` for a look without hardware. USB is
+//! still not wired.
 
 use crate::error::CoreError;
 use crate::lang::Lang;
@@ -32,6 +36,33 @@ pub fn render_ticket_escpos(doc: &Document, lang: Lang) -> Result<Vec<u8>, CoreE
 /// as it will sit on the paper. Regenerated with `UPDATE_GOLDENS=1`.
 pub fn dump_ticket_escpos(bytes: &[u8]) -> String {
     dump(bytes)
+}
+
+/// Write the ticket bytes to a file: a spool file, a USB-serial device
+/// path, or anything else that eats bytes from the filesystem. Fails
+/// closed on a render refusal, so no file is left holding half a ticket:
+/// the bytes are fully rendered before the first write.
+pub fn write_ticket_escpos_to_file(
+    doc: &Document,
+    lang: Lang,
+    path: &std::path::Path,
+) -> Result<(), CoreError> {
+    let bytes = render_ticket_escpos(doc, lang)?;
+    std::fs::write(path, bytes)?;
+    Ok(())
+}
+
+/// Send the ticket bytes to a network printer over TCP, the way a receipt
+/// is pushed to a printer on port 9100 or to `escpos-emulator` for a look
+/// without hardware. The address is `host:port`; a refused connection is
+/// an error, never a silent drop. Like the file sender, this renders first
+/// and connects second, so a refused ticket never opens a connection.
+pub fn send_ticket_escpos_tcp(doc: &Document, lang: Lang, addr: &str) -> Result<(), CoreError> {
+    use std::io::Write as _;
+    let bytes = render_ticket_escpos(doc, lang)?;
+    let mut stream = std::net::TcpStream::connect(addr)?;
+    stream.write_all(&bytes)?;
+    Ok(())
 }
 
 fn encode(view: &TicketView) -> Vec<u8> {
