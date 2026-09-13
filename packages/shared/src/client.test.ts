@@ -149,7 +149,11 @@ describe("createClient", () => {
       fetch: async (url, init) => {
         seen.push(new Headers(init?.headers).get("authorization") ?? undefined);
         return new Response(
-          JSON.stringify(String(url).endsWith("/health") ? { status: "ok", shop_id: 1 } : []),
+          JSON.stringify(
+            String(url).endsWith("/health")
+              ? { status: "ok", shop_id: 1, needs_first_pin: true }
+              : [],
+          ),
           { status: 200 },
         );
       },
