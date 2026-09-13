@@ -14,7 +14,9 @@ use chrono::{Datelike, NaiveDate};
 use dzpos_core::lang::Lang;
 use dzpos_core::money::{compute_totals, Bps, Line, Money, PaymentMode, Regime, TotalsOptions};
 use dzpos_core::print::strings::{text, Key};
-use dzpos_core::print::{dump_ticket_escpos, render_ticket_escpos};
+use dzpos_core::print::{
+    dump_ticket_escpos, render_ticket_escpos, send_ticket_escpos_tcp, write_ticket_escpos_to_file,
+};
 use dzpos_core::services::documents::{
     Document, DocumentKind, DocumentLine, DocumentStatus, SellerBlock,
 };
@@ -243,6 +245,59 @@ fn a_card_escpos_ticket_has_no_stamp_and_no_change() {
         assert!(!dump.contains(text(Key::Change, lang)), "{lang:?}");
         assert!(dump.contains(text(Key::Card, lang)), "{lang:?}");
     }
+}
+
+#[test]
+fn a_ticket_written_to_a_file_is_the_rendered_bytes() {
+    let doc = fixed_sale(Case::Reel);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ticket.bin");
+    for lang in Lang::ALL {
+        write_ticket_escpos_to_file(&doc, lang, &path).unwrap();
+        let on_disk = std::fs::read(&path).unwrap();
+        assert_eq!(
+            on_disk,
+            render_ticket_escpos(&doc, lang).unwrap(),
+            "{lang:?} file is not the rendered bytes"
+        );
+    }
+}
+
+#[test]
+fn a_ticket_sent_over_tcp_is_the_rendered_bytes() {
+    use std::io::Read as _;
+    let doc = fixed_sale(Case::Reel);
+    let lang = Lang::Fr;
+    let expected = render_ticket_escpos(&doc, lang).unwrap();
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    let received = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut buf = Vec::new();
+        stream.read_to_end(&mut buf).unwrap();
+        buf
+    });
+    send_ticket_escpos_tcp(&doc, lang, &addr).unwrap();
+    assert_eq!(received.join().unwrap(), expected);
+}
+
+#[test]
+fn a_refused_ticket_writes_no_file_and_opens_no_connection() {
+    let mut doc = fixed_sale(Case::Ifu);
+    doc.totals.tva_by_rate.push(dzpos_core::money::TvaLine {
+        rate: Bps::new(1900).unwrap(),
+        base: Money::centimes(29_295),
+        amount: Money::centimes(5_566),
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ticket.bin");
+    let err = write_ticket_escpos_to_file(&doc, Lang::Fr, &path).unwrap_err();
+    assert_eq!(err.code(), "print");
+    assert!(!path.exists(), "a refused ticket left a file behind");
+    // A closed port would fail with an io error; the render refusal must
+    // come first, before any connection is attempted.
+    let err = send_ticket_escpos_tcp(&doc, Lang::Fr, "127.0.0.1:9").unwrap_err();
+    assert_eq!(err.code(), "print");
 }
 
 #[test]

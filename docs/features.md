@@ -837,8 +837,11 @@ first release.**
 - Thermal: the 80 mm ticket is HTML and ESC/POS, both golden-filed in three
   languages (`fixtures/print/ticket_80mm/` and `ticket_80mm_escpos/`). The
   ESC/POS golden is a dump of the bytes (`<init>`, the text, `<cut>`), so
-  a reviewer reads it without a printer. Sending those bytes over USB is
-  not wired yet. A4/A5 goes through the OS print dialog.
+  a reviewer reads it without a printer. The bytes move through
+  `write_ticket_escpos_to_file` (spool file, USB-serial device path) and
+  `send_ticket_escpos_tcp` (network printer on port 9100,
+  `escpos-emulator` for a look without hardware); USB is not wired yet.
+  A4/A5 goes through the OS print dialog.
 - Later: a QR code on the ticket, the shop's logo, and a footer text the
   owner sets.
 
