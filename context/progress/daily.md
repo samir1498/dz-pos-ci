@@ -80,4 +80,7 @@ type: 'daily'
 ## 2026-09-13 18:43 UTC
 
 - Release loop shipped as PR #68 (matrix win/mac/linux on mirror, org publish via PAT, stable names, landing Download fr/en/ar with OS sniff). Proven: dry-run built all three, Dinar-Setup.exe pulled off the artifact; branch CI green. Left: Samir creates ORG_RELEASE_TOKEN on the mirror (fine-grained PAT, contents read+write on Dinar-dz/dz-pos), then just release vX. Plan 4/5, T2 pending token. (@release, @landing)
+## 2026-09-13 19:07 UTC
+
+- ORG_RELEASE_TOKEN set on the mirror from Samir's own login (push on the org repo; boss account untouched). Docs corrected to say so + PAT replacement note (PR #69). Plan 5/5. Next: just release vX when Samir names the version. (@release)
 
