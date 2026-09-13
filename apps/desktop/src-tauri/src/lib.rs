@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{Manager, Url};
 
 pub mod startup_failure;
+pub mod updater;
 
 /// The task serving the API, shared between `setup` and the run handler that
 /// stops it.
@@ -257,6 +258,68 @@ mod navigation_tests {
     }
 }
 
+// Reads the checked-in config off disk (`include_str!` at compile time, so
+// it needs no built `dist/` and runs on every platform, unlike the CSP
+// test above): the updater's own `pubkey` and `endpoints`
+// (docs/architecture.md § Release). No `tauri::test` mock runtime is
+// needed for either assertion, so this is not excluded on Windows.
+#[cfg(test)]
+mod updater_config_tests {
+    // A test may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use serde_json::Value;
+
+    /// Named so a real key generated later cannot be mistaken for this:
+    /// anything that does not spell this exact sentinel fails the test
+    /// below, which is what keeps a look-alike string (`"changeme"`, a
+    /// blank one, a key pasted in without updating this constant) from
+    /// shipping as if it were real. `docs/release-checklist.md` names the
+    /// key itself as waiting on Anouar and Samir; the day it exists, this
+    /// constant is what changes.
+    const PLACEHOLDER_PUBKEY: &str =
+        "UNSET-waiting-on-anouar-and-samir-docs/architecture.md#release";
+
+    fn config() -> Value {
+        let raw = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tauri.conf.json"));
+        serde_json::from_str(raw).expect("tauri.conf.json must parse as JSON")
+    }
+
+    #[test]
+    fn the_updater_key_is_still_the_named_placeholder() {
+        let config = config();
+        let pubkey = config["plugins"]["updater"]["pubkey"]
+            .as_str()
+            .expect("plugins.updater.pubkey must be a string");
+        assert_eq!(
+            pubkey, PLACEHOLDER_PUBKEY,
+            "the checked-in pubkey no longer matches the named placeholder; if the real \
+             key has arrived, update PLACEHOLDER_PUBKEY to match it rather than deleting \
+             this assertion"
+        );
+    }
+
+    #[test]
+    fn every_updater_endpoint_is_https() {
+        let config = config();
+        let endpoints = config["plugins"]["updater"]["endpoints"]
+            .as_array()
+            .expect("plugins.updater.endpoints must be an array");
+        assert!(
+            !endpoints.is_empty(),
+            "at least one updater endpoint must be configured"
+        );
+        for endpoint in endpoints {
+            let url = endpoint.as_str().expect("each endpoint must be a string");
+            assert!(
+                url.starts_with("https://"),
+                "endpoint '{url}' is not https; a build shipped with this would trust \
+                 whatever answered on plain http (docs/architecture.md § Release)"
+            );
+        }
+    }
+}
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = db_path()?;
     if let Some(parent) = std::path::Path::new(&db_path).parent() {
@@ -295,7 +358,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = window.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![launch_token])
+        // Config comes from tauri.conf.json's `plugins.updater` (pubkey,
+        // endpoints); `updater.rs` is the only file that calls
+        // `AppHandle::updater()`, behind the two commands below.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![
+            launch_token,
+            updater::check_for_update,
+            updater::install_update
+        ])
         .setup({
             let token = token.clone();
             move |app| {

@@ -16,7 +16,8 @@
 # nothing but plain arguments and two fixture files.
 #
 # Usage:
-#   release-gate.sh EVENT_NAME REF SHA ON_MAIN CARGO_TOML_PATH TAURI_CONF_PATH
+#   release-gate.sh EVENT_NAME REF SHA ON_MAIN CARGO_TOML_PATH TAURI_CONF_PATH \
+#                    [UPDATER_KEY_PRESENT]
 #
 #   EVENT_NAME        "push" or "workflow_dispatch"
 #   REF               e.g. refs/tags/v0.1.0 (ignored for workflow_dispatch)
@@ -27,11 +28,25 @@
 #                     crates/core/src/build_info.rs bakes into the binary)
 #   TAURI_CONF_PATH   path to apps/desktop/src-tauri/tauri.conf.json (reads
 #                     .version, what the bundler names the installer with)
+#   UPDATER_KEY_PRESENT  "true" if the workflow found a
+#                     TAURI_SIGNING_PRIVATE_KEY secret, anything else
+#                     (default: absent) otherwise. Decides UPDATER below; it
+#                     cannot be worked out from the two files above, so the
+#                     workflow reads the secret and hands the answer in the
+#                     same way it hands in ON_MAIN.
 #
-# On success it writes MODE, VERSION and PRERELEASE to $GITHUB_OUTPUT when
-# that variable is set (inside a real workflow step), and always prints a
-# "MODE: ..." line to stdout so a human reading the run's log sees the
-# decision without opening the job summary.
+# On success it writes MODE, VERSION, PRERELEASE and UPDATER to
+# $GITHUB_OUTPUT when that variable is set (inside a real workflow step),
+# and always prints a "MODE: ..." line to stdout so a human reading the
+# run's log sees the decision without opening the job summary.
+#
+# UPDATER is "publish" only for a real release with the signing key present,
+# "skip" otherwise (a dry run, or a release with no key). It never fails the
+# run by itself: a release with no updater manifest still ships an
+# installer a shop can download by hand, which is strictly better than the
+# alternative this guards against -- a manifest signed with nothing, which
+# an existing install would trust as if it were real (docs/architecture.md
+# § Release, "somebody holds the key that signs updates").
 
 set -euo pipefail
 
@@ -46,6 +61,7 @@ sha="${3:-}"
 on_main="${4:-}"
 cargo_toml="${5:-}"
 tauri_conf="${6:-}"
+updater_key_present="${7:-}"
 
 [ -n "$event_name" ] || fail "release-gate.sh: no event name given"
 
@@ -88,6 +104,10 @@ if [ "$event_name" = "workflow_dispatch" ]; then
     emit mode dry-run
     emit version "$cargo_version"
     emit prerelease "false"
+    # A dry run never publishes anything, the manifest included: there is
+    # no tag and no release for a shop's endpoint to ever see this build
+    # at, so signing one here would prove nothing and ship nothing.
+    emit updater skip
     exit 0
 fi
 
@@ -122,3 +142,11 @@ echo "MODE: release (tag $tag on main, version $version, Cargo.toml and tauri.co
 emit mode "release"
 emit version "$version"
 emit prerelease "$prerelease"
+
+if [ "$updater_key_present" = "true" ]; then
+    updater="publish"
+else
+    updater="skip"
+    echo "::warning::no updater signing key; this release ships an installer but no update manifest, so an existing install will not discover it on its own"
+fi
+emit updater "$updater"

@@ -438,6 +438,127 @@ is. No new dependency: `zip` and `iana-time-zone` were already in
 backend and another dependency, and become direct dependencies of the one
 crate that reads them rather than a second copy at a different version.
 
+Decided (2026-09-12, M5 T7): `tauri-plugin-updater` is in
+`apps/desktop/src-tauri`, configured through `tauri.conf.json`'s
+`plugins.updater` block (`pubkey`, `endpoints`) rather than in Rust code,
+which is what lets a test read the checked-in config without building
+anything. The endpoint is the GitHub release manifest,
+`https://github.com/Dinar-dz/dz-pos/releases/latest/download/latest.json`;
+this assumes the repository is public, or the manifest mirrored somewhere
+that is, by the time a shop's copy is old enough to check --
+`releases/latest` on a private repository answers nothing to an
+unauthenticated request, and the plugin carries no credential to be one.
+`pubkey` is the literal string `UNSET-waiting-on-anouar-and-samir-...`
+until the key named in the table below exists; `updater_config_tests`'s
+`the_updater_key_is_still_the_named_placeholder` fails if that string is
+anything but the placeholder, so the commit that lands the real key has
+to retarget this test in the same move rather than the config quietly
+drifting first. A second test in the same module fails if any endpoint
+stops being `https://`, so a build cannot ship trusting a look-alike or a
+plaintext one by accident.
+
+The check is a button on the About screen and nothing else: no interval,
+no check on launch, no check on a schedule. `src-tauri/src/updater.rs`
+exposes exactly two commands, `check_for_update` and `install_update`,
+never the plugin's own IPC commands, so the page cannot reach anything
+wider than these two. `check_for_update` answers one of three values --
+`Newest`, `Newer { version, size }` or `Unreachable` -- rather than a
+rejected promise for the third case, because a shop with no internet today
+is not an error the screen needs to explain twice. `size` is `Some` only
+because the release workflow writes an extra `size` key into `latest.json`,
+beside the `url` and `signature` each `platforms` entry already carries,
+and `size_for_download` in `updater.rs` reads it back off `Update::raw_json`
+by matching `url` against `Update::download_url` -- not by re-deriving the
+`platforms` key, which is `{os}-{arch}` (or with an installer suffix),
+picked by the plugin's own `Updater::get_urls`, and not the same string as
+`Update::target` (the plain OS the endpoint URL was templated with -- an
+earlier version of this file read the field named `target` and assumed it
+was the `platforms` key, which is wrong for Windows the moment an arch is
+in the key at all). A test,
+`size_for_download_reads_the_manifest_the_workflow_actually_writes`, is
+pinned to the exact shape the workflow writes, and a second test proves a
+root-level `size` or an entry for a URL the plugin did not pick is never
+read by mistake. The plugin's own manifest shape carries no byte count
+until a download is already running, which is after
+a shop has already said yes, too late to be "what it weighs" in the sense
+the shop needs before agreeing. `install_update` re-checks, downloads,
+verifies against `pubkey`, then installs. On Windows -- the only platform
+that ships today -- the plugin itself calls `std::process::exit(0)` right
+after launching the installer (`Update::install_inner`); the command's
+`download_and_install` call never returns on that success path, so
+`app.request_restart()` after it is unreached there, and `RunEvent::Exit`
+never fires either. `AppHandle::request_restart` (rather than `restart`,
+which skips `RunEvent::Exit` and the axum task's cleanup in `run()` along
+with it) is the path this line would take on Linux or macOS, where the
+plugin returns instead of exiting the process -- dead code until either
+ships, not a bug in the one platform that does.
+
+A shop navigating from the till to Settings already discards whatever cart
+was on screen: `routes/till.tsx` keeps it in the route's own state, and
+only one route is mounted under `AppShell` at a time (the lock overlay
+covers the till without unmounting it, but does not keep it and About both
+live). The result is that a check cannot coincide with an open sale today,
+by construction rather than by a guard this file added -- there is nothing
+mounted to guard. If the cart is ever moved to state that survives
+navigation, the About screen's check button needs a guard reading that
+state that does not exist yet; this is the day that guard becomes real
+work instead of dead code proving nothing.
+
+The workflow refuses to publish an *unsigned* manifest rather than
+skipping the release: `.github/scripts/release-gate.sh` takes a seventh
+argument, `UPDATER_KEY_PRESENT` (the workflow reads
+`secrets.TAURI_SIGNING_PRIVATE_KEY` and hands in `true`/`false`, the same
+shape `ON_MAIN` already uses), and emits `updater=publish` only for a real
+release with the key present, `updater=skip` for a dry run or a release
+missing it. `release.yml`'s `build` job assembles `latest.json` by hand
+only when `updater=publish` -- `tauri build` writes the installer and its
+`.sig` sidecar, never a combined manifest, so this is where the "size"
+field above gets written, off the installer's own byte count -- and the
+`publish` job attaches it to the release only then. A release with no
+updater manifest still ships an installer a shop can fetch by hand; the
+alternative this guards is a manifest signed with nothing, which an
+existing install would trust as if it were real. Proven by four new cases
+in `release-gate.test.sh` (eighteen total); the manifest-assembly steps
+themselves are written but unexercised, the same as the Windows
+code-signing branch beside them -- there is no real release to run either
+against yet.
+
+A `pubkey` being configured at all, not `createUpdaterArtifacts`, is what
+makes `tauri build` require `TAURI_SIGNING_PRIVATE_KEY` for any installer
+target (nsis included); the check is `tauri-cli`'s own `sign_updaters`,
+which runs whenever `plugins.updater.pubkey` is set and one of
+nsis/msi/appimage/deb/rpm is being built, key or no key. Left alone, this
+would fail every dry run the moment `pubkey` was added, key present or
+not, since the placeholder string is never a valid signing key regardless.
+The `gate` job now reads the secret's presence into its own output,
+`updater_key`, deliberately separate from `updater` (which also asks
+whether this run is a real release): `release.yml`'s "Build the Windows
+installer (unsigned)" step passes `--no-sign` unless `updater_key` is
+`true`, and the "signed" one refuses outright rather than accept
+`--no-sign` at all (below). Gating on key presence rather than on
+`updater == 'publish'` means a manual dry run with the secret configured
+still asks `tauri build` to sign the update payload for real, which is
+the point of a dry run: proving that machinery works before the first tag
+needs it to, the same way the dry run already proves the Windows build
+itself. Nothing from a dry run reaches a release regardless, because the
+manifest-assembly step below stays gated on `updater == 'publish'` alone.
+`sign_updaters` skips decoding the key entirely when `--no-sign` is set,
+so the unresolved placeholder `pubkey` is never asked to be a real
+minisign key until a real one exists to replace it.
+
+The "signed" step (Windows code-signing certificate configured) never
+passes `--no-sign`: the flag skips Authenticode signing along with the
+updater signature (`tauri-cli`'s own log line says so, "Skipping binary
+signing due to --no-sign flag"), so adding it there on a missing updater
+key would import a real certificate and then quietly ship an unsigned
+`.exe` while the `publish` job -- which only reads whether a certificate
+was configured, not whether anything was actually signed with it -- still
+labelled the release "Windows installer, signed." The two keys are
+coupled in practice: a certificate cannot be exercised in this workflow
+until the updater key exists too, so that step stops with an error
+instead, until whoever holds both lands them together
+(docs/release-checklist.md, "the key that signs updates").
+
 Raised in the 2026-09-08 handoff, still open, each settled before
 `docs/roadmap.md` M5 closes. `docs/release-checklist.md` is the page that
 tracks them, alongside the release gates and who holds each:

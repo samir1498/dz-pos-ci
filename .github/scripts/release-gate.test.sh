@@ -166,6 +166,55 @@ else
     echo "FAIL - GITHUB_OUTPUT contents: $(cat "$gh_out")"
     fail=$((fail+1))
 fi
+echo
+
+echo "=== 9. updater manifest: never published without the signing key, never from a dry run ==="
+# A release with the key absent (the 7th argument left out, same as every
+# case above this one already ran the gate without it): ships, but says
+# skip. This is the refusal the brief asks for -- not the gate failing the
+# whole run, but the one output that decides whether release.yml is allowed
+# to sign and attach an update manifest at all. A workflow that published
+# one anyway despite reading "skip" would be the bug this output exists to
+# make visible in a diff, not one this script can stop by itself.
+out="$("$GATE" push refs/tags/v0.1.0 deadbeef true "$cargo_toml" "$tauri_conf" 2>&1)"
+rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^updater=skip$"; then
+    echo "ok   - no signing key means the release still ships, but with no updater manifest"
+    pass=$((pass+1))
+else
+    echo "FAIL - release with no signing key ($rc): $out"
+    fail=$((fail+1))
+fi
+
+out="$("$GATE" push refs/tags/v0.1.0 deadbeef true "$cargo_toml" "$tauri_conf" false 2>&1)"
+rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^updater=skip$"; then
+    echo "ok   - an explicit 'false' for the signing key also skips the manifest"
+    pass=$((pass+1))
+else
+    echo "FAIL - release with signing key explicitly false ($rc): $out"
+    fail=$((fail+1))
+fi
+
+out="$("$GATE" push refs/tags/v0.1.0 deadbeef true "$cargo_toml" "$tauri_conf" true 2>&1)"
+rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^updater=publish$"; then
+    echo "ok   - the signing key present publishes the manifest"
+    pass=$((pass+1))
+else
+    echo "FAIL - release with signing key present ($rc): $out"
+    fail=$((fail+1))
+fi
+
+out="$("$GATE" workflow_dispatch "" deadbeef "" "$cargo_toml" "$tauri_conf" true 2>&1)"
+rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^updater=skip$"; then
+    echo "ok   - a dry run skips the manifest even if the signing key is present"
+    pass=$((pass+1))
+else
+    echo "FAIL - dry run with signing key present ($rc): $out"
+    fail=$((fail+1))
+fi
 
 echo
 echo "==================================="

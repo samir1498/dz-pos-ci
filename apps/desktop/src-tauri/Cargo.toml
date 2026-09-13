@@ -9,12 +9,21 @@ dzpos-core = { path = "../../../crates/core" }
 dzpos-api = { path = "../../../crates/api" }
 axum = "0.8.9"
 serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 dirs = "6.0"
 tauri = { version = "2", features = ["devtools"] }
 # 2.4.4 is the current release, checked on crates.io 2026-09-08. A second
 # launch must focus the window that is already open: two processes on one
 # SQLite file is how a till loses a sale.
 tauri-plugin-single-instance = "2.4.4"
+# 2.11.0, checked on crates.io 2026-09-12, the same day this was added.
+# `src/updater.rs` wraps its `check`/`download_and_install` in two commands
+# of our own rather than exposing the plugin's own IPC commands to the
+# webview, so no `updater:*` permission is added to `capabilities/`: the
+# only door the page gets is `check_for_update` and `install_update`,
+# gated like every other command by `core:default` (docs/architecture.md
+# § Release).
+tauri-plugin-updater = "2.11.0"
 
 # Only for the startup-failure message box (src/startup_failure.rs): the
 # window never opens on a release build (no console either, see main.rs),
@@ -45,6 +54,7 @@ tauri-build = { version = "2", features = [] }
 # disk-read shortcut. It is a dev-dependency only, so a plain `cargo run`
 # is unaffected and still gets the live Vite dev server.
 tauri = { version = "2", features = ["test", "custom-protocol"] }
+minisign-verify = "0.2"
 
 [lints]
 workspace = true

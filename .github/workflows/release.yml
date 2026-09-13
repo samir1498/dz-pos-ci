@@ -38,6 +38,14 @@ jobs:
       mode: ${{ steps.gate.outputs.mode }}
       version: ${{ steps.gate.outputs.version }}
       prerelease: ${{ steps.gate.outputs.prerelease }}
+      updater: ${{ steps.gate.outputs.updater }}
+      # Whether TAURI_SIGNING_PRIVATE_KEY exists at all, independent of
+      # `updater` above: `updater` also folds in "is this a real release",
+      # which is the wrong question for the Windows build job -- a dry run
+      # with the key configured still needs `tauri build` to actually sign
+      # the updater payload (proving the cert and the key both work before
+      # the first tag needs them to), it just must not publish a manifest.
+      updater_key: ${{ steps.updaterkey.outputs.present }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -70,6 +78,23 @@ jobs:
             echo "on_main=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Whether the updater signing key exists, read here rather than left
+      # to the gate script: a secret is only visible to a step that names
+      # it, and the point of asking now is that the answer is a plain
+      # `true`/`false` the script can take as an argument the same way it
+      # already takes ON_MAIN, never the secret's value itself.
+      - name: Is the updater signing key configured
+        id: updaterkey
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Same reasoning as the step above: REF is the tag name on a push and
       # is not trusted text, so both it and EVENT_NAME go through `env:`
       # and reach the gate script as argv, never spliced into the `run:`
@@ -84,6 +109,7 @@ jobs:
           REF: ${{ github.ref }}
           SHA: ${{ steps.onmain.outputs.sha || github.sha }}
           ON_MAIN: ${{ steps.onmain.outputs.on_main }}
+          UPDATER_KEY_PRESENT: ${{ steps.updaterkey.outputs.present }}
         run: |
           .github/scripts/release-gate.sh \
             "$EVENT_NAME" \
@@ -91,7 +117,8 @@ jobs:
             "$SHA" \
             "$ON_MAIN" \
             "Cargo.toml" \
-            "apps/desktop/src-tauri/tauri.conf.json"
+            "apps/desktop/src-tauri/tauri.conf.json" \
+            "$UPDATER_KEY_PRESENT"
 
       - name: Say the decision out loud
         env:
@@ -179,17 +206,65 @@ jobs:
           Remove-Item $path
           "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
 
+      # `TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]` is a second, independent key
+      # from the Windows certificate above: this one signs the update
+      # payload the plugin verifies against `tauri.conf.json`'s `pubkey`,
+      # not the installer's Authenticode signature. `createUpdaterArtifacts`
+      # in `tauri.conf.json` only asks for the `.sig` sidecar, but a `pubkey`
+      # being configured at all is what makes `tauri build` require a
+      # private key for *any* nsis/msi/appimage/deb/rpm target (tauri-cli's
+      # `sign_updaters`, independent of `createUpdaterArtifacts`), so a build
+      # with no updater key needs `--no-sign` or it fails outright the
+      # moment `pubkey` is set, key or not -- this is what the unsigned step
+      # below does. Both steps key off `updater_key` (is the secret present
+      # at all), never off `updater` (is this run allowed to *publish* a
+      # manifest): a manual dry run with both secrets configured is exactly
+      # where signing both the installer and the update payload should be
+      # proven before the first real tag needs them to work, and the
+      # manifest step further down stays the only place gated on
+      # `updater == 'publish'`, so nothing from a dry run is ever attached
+      # to a release. `--no-sign` is not safe to reach for in the signed
+      # step: its own help text and tauri-cli's own log line ("Skipping
+      # binary signing due to --no-sign flag") say it skips Authenticode
+      # signing too, not only the updater sidecar, so silently adding it
+      # here would import a real certificate, then ship an unsigned .exe
+      # while the publish job (reading `has_cert`, not whether anything was
+      # actually signed) still called the release "Windows installer,
+      # signed." The two keys are not independent in practice: a
+      # certificate cannot be used here until the updater key exists too,
+      # so this stops loudly instead, until whoever holds them lands both
+      # (docs/architecture.md § Release; docs/release-checklist.md, "the
+      # key that signs updates").
       - name: Build the Windows installer (signed)
         if: steps.cert.outputs.present == 'true'
         working-directory: apps/desktop
         shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          UPDATER_KEY: ${{ needs.gate.outputs.updater_key }}
+          THUMBPRINT: ${{ steps.import.outputs.thumbprint }}
         run: |
-          pnpm exec tauri build --bundles nsis --config "{\"bundle\":{\"windows\":{\"certificateThumbprint\":\"${{ steps.import.outputs.thumbprint }}\",\"digestAlgorithm\":\"sha256\",\"timestampUrl\":\"http://timestamp.digicert.com\"}}}"
+          set -euo pipefail
+          if [ "$UPDATER_KEY" != "true" ]; then
+            echo "::error::a Windows certificate is configured but no updater signing key is; with plugins.updater.pubkey set, tauri build cannot Authenticode-sign without also being asked to sign the update payload, and --no-sign would silently skip both. Configure TAURI_SIGNING_PRIVATE_KEY (and its password) before this path can ship a signed installer."
+            exit 1
+          fi
+          pnpm exec tauri build --bundles nsis --config "{\"bundle\":{\"windows\":{\"certificateThumbprint\":\"$THUMBPRINT\",\"digestAlgorithm\":\"sha256\",\"timestampUrl\":\"http://timestamp.digicert.com\"}}}"
 
       - name: Build the Windows installer (unsigned)
         if: steps.cert.outputs.present != 'true'
         working-directory: apps/desktop
-        run: pnpm exec tauri build --bundles nsis
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          UPDATER_KEY: ${{ needs.gate.outputs.updater_key }}
+        run: |
+          set -euo pipefail
+          extra=()
+          [ "$UPDATER_KEY" = "true" ] || extra+=(--no-sign)
+          pnpm exec tauri build --bundles nsis "${extra[@]}"
 
       - name: Find the installer
         id: find
@@ -206,6 +281,60 @@ jobs:
         with:
           name: dz-pos-windows-installer-${{ needs.gate.outputs.mode }}-${{ needs.gate.outputs.version }}
           path: ${{ steps.find.outputs.path }}
+          if-no-files-found: error
+
+      # Only when the gate job already decided `updater: publish` (a real
+      # release, signing key present): `tauri build` itself writes only the
+      # installer and its `.sig`, never a combined manifest, so this
+      # assembles `latest.json` by hand from the one platform we build.
+      # `size` is not part of the plugin's own manifest shape at all -- the
+      # About screen's "what it weighs" only exists because this step adds
+      # it, and reads it back off `raw_json` (`src-tauri/src/updater.rs`).
+      # Written but unexercised here, the same as the code-signing cert
+      # path above: there is no real release to run this against yet
+      # (docs/release-checklist.md, "what no gate can cover").
+      - name: Assemble the updater manifest
+        id: manifest
+        if: needs.gate.outputs.updater == 'publish'
+        shell: bash
+        env:
+          EXE_PATH: ${{ steps.find.outputs.path }}
+          VERSION: ${{ needs.gate.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          exe="$EXE_PATH"
+          sig_path="$exe.sig"
+          if [ ! -f "$sig_path" ]; then
+            echo "::error::updater=publish but '$sig_path' was not produced; createUpdaterArtifacts or the signing key may be missing"
+            exit 1
+          fi
+          signature="$(cat "$sig_path")"
+          size="$(wc -c < "$exe" | tr -d '[:space:]')"
+          name="$(basename "$exe")"
+          manifest="$(dirname "$exe")/latest.json"
+          cat > "$manifest" <<JSON
+          {
+            "version": "$VERSION",
+            "notes": "See the GitHub release.",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "windows-x86_64": {
+                "url": "https://github.com/$REPOSITORY/releases/download/$REF_NAME/$name",
+                "signature": "$signature",
+                "size": $size
+              }
+            }
+          }
+          JSON
+          echo "path=$manifest" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        if: needs.gate.outputs.updater == 'publish'
+        with:
+          name: dz-pos-updater-manifest-${{ needs.gate.outputs.version }}
+          path: ${{ steps.manifest.outputs.path }}
           if-no-files-found: error
 
   # Only this job can touch a GitHub release, and only this job has
@@ -228,6 +357,15 @@ jobs:
           name: dz-pos-windows-installer-release-${{ needs.gate.outputs.version }}
           path: dist
 
+      # Only present when the gate job said `updater: publish`; the build
+      # job never uploads this artifact otherwise, so there is nothing to
+      # download and this step is skipped rather than failing.
+      - uses: actions/download-artifact@v4
+        if: needs.gate.outputs.updater == 'publish'
+        with:
+          name: dz-pos-updater-manifest-${{ needs.gate.outputs.version }}
+          path: dist
+
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -235,10 +373,20 @@ jobs:
           TAG: ${{ github.ref_name }}
           PRERELEASE: ${{ needs.gate.outputs.prerelease }}
           HAS_CERT: ${{ needs.build.outputs.has_cert }}
+          UPDATER: ${{ needs.gate.outputs.updater }}
         run: |
           set -euo pipefail
           exe="$(find dist -maxdepth 1 -name '*.exe' | head -n1)"
           [ -n "$exe" ] || { echo "::error::no installer in the downloaded artifact"; exit 1; }
+
+          assets=("$exe")
+          updater_note=""
+          if [ "$UPDATER" = "publish" ]; then
+            [ -f dist/latest.json ] || { echo "::error::updater=publish but no manifest was downloaded"; exit 1; }
+            assets+=("dist/latest.json")
+          else
+            updater_note=$'\n\n'"No updater signing key is configured yet: this release carries no update manifest, so an existing install will not discover it on its own (docs/architecture.md § Release)."
+          fi
 
           flags=(--title "dz-pos $VERSION")
           [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
@@ -250,5 +398,6 @@ jobs:
             notes="No Windows code-signing certificate is configured yet: this installer is **unsigned**. Windows SmartScreen will warn on install. Published as a draft on purpose; review before making it public."
             echo "::warning::publishing an unsigned installer as a draft release, not a public one"
           fi
+          notes="$notes$updater_note"
 
-          gh release create "$TAG" "$exe" "${flags[@]}" --notes "$notes"
+          gh release create "$TAG" "${assets[@]}" "${flags[@]}" --notes "$notes"
