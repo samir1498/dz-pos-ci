@@ -107,9 +107,9 @@ pub const ROUTE_GATES: &[Gate] = &[
     },
     Gate {
         method: "POST",
-        path: "/auth/first-pin",
+        path: "/auth/first-setup",
         permission: None,
-        why: "the one door into a shop nobody has ever signed into; services::users::claim_first_pin is the whole rule and it shuts itself the moment any credential in the shop exists, so no permission decides who may call it, only that rule does",
+        why: "the one door into a shop nobody has ever signed into; services::users::claim_first_owner is the whole rule and it shuts itself the moment any credential in the shop exists, so no permission decides who may call it, only that rule does",
     },
     Gate {
         method: "GET",

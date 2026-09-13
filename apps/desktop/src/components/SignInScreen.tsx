@@ -1,7 +1,8 @@
-// The two doors onto the app: the till's PIN pad, and everyone else's name
-// and password. `__root.tsx` shows this instead of the shell while nobody
+// The two doors onto the app: name and password (the office), and the
+// till's PIN pad. `__root.tsx` shows this instead of the shell while nobody
 // is signed in, so the screen owns the whole window and no route beneath it
-// is reachable past it.
+// is reachable past it. The office door is the default: the owner claimed
+// the shop with a password, and a cashier's PIN is set later.
 //
 // The PIN pad has no list of faces to pick from. `POST /auth/login` takes a
 // user id and a PIN (`LoginDto::Pin`), and no route today hands the desktop
@@ -185,7 +186,7 @@ function AttemptFeedback({
 
 export function SignInScreen() {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<"pin" | "password">("pin");
+  const [mode, setMode] = useState<"pin" | "password">("password");
 
   return (
     <div

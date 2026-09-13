@@ -27,6 +27,7 @@ test.describe("the PIN pad", () => {
   test("refuses a wrong PIN and signs the owner in on the right one", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("signin-screen")).toBeVisible();
+    await page.getByTestId("signin-mode-switch").click();
     await expect(page.getByTestId("signin-pin-display")).toBeVisible();
 
     // The id stage: the pad has no picker to choose the owner off
@@ -51,6 +52,7 @@ test.describe("the PIN pad", () => {
 
   test("backspace on an empty PIN returns to the id stage", async ({ page }) => {
     await page.goto("/");
+    await page.getByTestId("signin-mode-switch").click();
     await pressPad(page, [...OWNER_ID]);
     await pressEnter(page);
     await expect(page.getByText(t("signin_pin_pin_label"), { exact: true })).toBeVisible();
@@ -63,7 +65,6 @@ test.describe("the PIN pad", () => {
 test.describe("the password screen", () => {
   test("refuses a wrong password and signs the owner in on the right one", async ({ page }) => {
     await page.goto("/");
-    await page.getByTestId("signin-mode-switch").click();
     await expect(page.getByTestId("signin-name")).toBeVisible();
 
     await page.getByTestId("signin-name").fill(OWNER_NAME);
@@ -98,6 +99,7 @@ test.describe("the locked-out wait", () => {
     });
 
     await page.goto("/");
+    await page.getByTestId("signin-mode-switch").click();
     await pressPad(page, [...OWNER_ID]);
     await pressEnter(page);
     await pressPad(page, [...OWNER_PIN]);

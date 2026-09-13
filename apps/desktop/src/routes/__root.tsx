@@ -10,7 +10,7 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/AppShell";
-import { FirstPinScreen } from "@/components/FirstPinScreen";
+import { FirstSetupScreen } from "@/components/FirstSetupScreen";
 import { LockScreen } from "@/components/LockScreen";
 import { SignInScreen } from "@/components/SignInScreen";
 import { useTranslation } from "@/i18n";
@@ -27,7 +27,7 @@ function RootLayout() {
     // a test rendering a screen without the document) agrees with the page.
     <div dir={dir} className="min-h-screen">
       {status === "checking" ? null : status === "needs-setup" ? (
-        <FirstPinScreen />
+        <FirstSetupScreen />
       ) : status === "signed-out" ? (
         <SignInScreen />
       ) : (

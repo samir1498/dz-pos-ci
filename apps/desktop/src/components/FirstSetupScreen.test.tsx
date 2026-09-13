@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { I18nProvider } from "@/i18n";
 import { SessionProvider } from "@/lib/session";
 
-import { FirstPinScreen } from "./FirstPinScreen";
+import { FirstSetupScreen } from "./FirstSetupScreen";
 
 const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -40,22 +40,22 @@ function mount(): void {
       </QueryClientProvider>
     );
   }
-  render(<FirstPinScreen />, { wrapper: Wrapper });
+  render(<FirstSetupScreen />, { wrapper: Wrapper });
 }
 
-describe("FirstPinScreen", () => {
-  test("two different PINs are refused and the confirm box is emptied", async () => {
+describe("FirstSetupScreen", () => {
+  test("two different passwords are refused and the confirm box is emptied", async () => {
     const user = userEvent.setup();
     mount();
-    await screen.findByTestId("firstpin-screen");
+    await screen.findByTestId("setup-screen");
 
-    await user.keyboard("2580");
-    await user.keyboard("{Enter}");
-    expect(screen.getByText("Retapez-le")).toBeInTheDocument();
-
-    await user.keyboard("2581");
-    await user.keyboard("{Enter}");
-    expect(screen.getByTestId("firstpin-error")).toHaveTextContent("Les deux codes ne sont pas les mêmes.");
-    expect(screen.getByTestId("firstpin-display").textContent?.replace(/\s/g, "")).toBe("");
+    await user.type(screen.getByTestId("setup-name"), "Anouar");
+    await user.type(screen.getByTestId("setup-password"), "huit caracteres");
+    await user.type(screen.getByTestId("setup-confirm"), "autre mot de passe");
+    await user.click(screen.getByTestId("setup-submit"));
+    expect(screen.getByTestId("setup-error")).toHaveTextContent(
+      "Les deux mots de passe ne sont pas les mêmes.",
+    );
+    expect(screen.getByTestId("setup-confirm")).toHaveValue("");
   });
 });

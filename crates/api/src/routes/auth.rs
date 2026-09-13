@@ -18,7 +18,7 @@ use dzpos_core::services::permissions::{self, Permission};
 use dzpos_core::services::sessions::SignedIn;
 use dzpos_core::services::{preferences, sessions, users};
 
-use crate::dto::{ClaimFirstPinDto, LoginDto, MeDto, PermissionDto, RoleDto, SessionDto};
+use crate::dto::{ClaimFirstOwnerDto, LoginDto, MeDto, PermissionDto, RoleDto, SessionDto};
 use crate::error::ApiError;
 use crate::session::{self, CurrentUser};
 use crate::AppState;
@@ -58,26 +58,23 @@ pub async fn login(
 }
 
 /// The one door into a shop nobody has ever signed into.
-/// `services::users::claim_first_pin` is the whole rule: it acts on the
-/// shop's own owner rather than an id the caller names (nobody signed in
-/// yet is not in a position to choose one), and it refuses the moment any
-/// credential anywhere in the shop already exists, which is how the door
-/// shuts for good the first time an owner sets a PIN the ordinary way.
+/// `services::users::claim_first_owner` is the whole rule: it acts on the
+/// shop's own owner rather than an id the caller names, and it refuses the
+/// moment any credential anywhere in the shop already exists.
 ///
 /// Answers the same `SessionDto` as `login`, so the owner who just claimed
-/// the PIN is standing at the till and not sent back to a sign-in screen to
-/// type the PIN they just chose.
-pub async fn claim_first_pin(
+/// the shop is inside it and not sent back to a sign-in screen.
+pub async fn claim_first_owner(
     State(state): State<AppState>,
-    body: Result<Json<ClaimFirstPinDto>, JsonRejection>,
+    body: Result<Json<ClaimFirstOwnerDto>, JsonRejection>,
 ) -> Result<Response, ApiError> {
-    let Json(ClaimFirstPinDto { pin }) = body.map_err(ApiError::from)?;
+    let Json(ClaimFirstOwnerDto { name, password }) = body.map_err(ApiError::from)?;
     let shop = state.shop_id;
     let at = session::now();
     let (signed_in, idle) = state
         .blocking(move |c| {
-            let owner = users::claim_first_pin(c, shop, &pin)?;
-            let signed_in = sessions::sign_in_with_pin(c, shop, owner.id, &pin, at)?;
+            let owner = users::claim_first_owner(c, shop, &name, &password)?;
+            let signed_in = sessions::sign_in_with_password(c, shop, &owner.name, &password, at)?;
             let idle = preferences::session_idle(c, shop)?.num_minutes();
             Ok((signed_in, idle))
         })

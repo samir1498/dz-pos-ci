@@ -1,7 +1,7 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! `POST /auth/first-pin` over HTTP: the one door into a shop nobody has
+//! `POST /auth/first-setup` over HTTP: the one door into a shop nobody has
 //! ever signed into (M4 T8). No session, unlike every other file in this
 //! folder but `auth_api.rs`'s own three routes: this is why it needs its
 //! own harness rather than `tests/common`, which plants a session before a
@@ -66,8 +66,14 @@ async fn call(
     (status, value)
 }
 
-async fn claim(app: &axum::Router, pin: &str) -> (StatusCode, Value) {
-    call(app, "POST", "/auth/first-pin", Some(json!({ "pin": pin }))).await
+async fn claim(app: &axum::Router, name: &str, password: &str) -> (StatusCode, Value) {
+    call(
+        app,
+        "POST",
+        "/auth/first-setup",
+        Some(json!({ "name": name, "password": password })),
+    )
+    .await
 }
 
 /// A second owner already in the shop before anyone has ever signed in, with
@@ -94,11 +100,12 @@ async fn a_virgin_shop_says_so_on_health() {
 /// from unusable to a live session in one call, and the answer names the
 /// seeded owner the way `login`'s does.
 #[tokio::test]
-async fn a_virgin_shop_claims_its_first_pin_and_is_handed_a_session() {
+async fn a_virgin_shop_claims_its_first_owner_and_is_handed_a_session() {
     let (_dir, app) = virgin_shop();
-    let (status, body) = claim(&app, "2580").await;
+    let (status, body) = claim(&app, "Anouar", "huit caracteres").await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["me"]["user_id"], OWNER);
+    assert_eq!(body["me"]["name"], "Anouar");
     assert_eq!(body["me"]["role"], "owner");
     // An owner holds ManageUsers among the rest, proving the session this
     // route hands back is a real one and not a stand-in.
@@ -133,13 +140,12 @@ async fn a_virgin_shop_claims_its_first_pin_and_is_handed_a_session() {
 /// here too, before anything is claimed: `422 validation`, the same code a
 /// screen already translates.
 #[tokio::test]
-async fn a_badly_shaped_pin_is_refused_and_claims_nothing() {
+async fn a_badly_shaped_password_is_refused_and_claims_nothing() {
     let (_dir, app) = virgin_shop();
-    let (status, body) = claim(&app, "0000").await;
+    let (status, body) = claim(&app, "Anouar", "short").await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["error"]["code"], "validation");
-    // The door is still open: a good PIN right after still claims it.
-    let (status, body) = claim(&app, "2580").await;
+    let (status, body) = claim(&app, "Anouar", "huit caracteres").await;
     assert_eq!(status, StatusCode::OK, "{body}");
 }
 
@@ -151,13 +157,13 @@ async fn a_badly_shaped_pin_is_refused_and_claims_nothing() {
 #[tokio::test]
 async fn the_door_shuts_after_a_second_claim() {
     let (_dir, app) = virgin_shop();
-    let (status, _) = claim(&app, "2580").await;
+    let (status, _) = claim(&app, "Anouar", "huit caracteres").await;
     assert_eq!(status, StatusCode::OK);
 
-    let (status, body) = claim(&app, "3690").await;
+    let (status, body) = claim(&app, "Samir", "autre mot de passe").await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["error"]["code"], "validation");
-    assert_eq!(body["error"]["field"], "pin");
+    assert_eq!(body["error"]["field"], "password");
 }
 
 /// `any_credential_set` is proved directly against the service in
@@ -185,10 +191,10 @@ async fn the_door_shuts_after_a_pin_set_the_ordinary_way() {
     let res = app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 
-    let (status, body) = claim(&app, "3690").await;
+    let (status, body) = claim(&app, "Anouar", "huit caracteres").await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["error"]["code"], "validation");
-    assert_eq!(body["error"]["field"], "pin");
+    assert_eq!(body["error"]["field"], "password");
 }
 
 /// `more_than_one_owner_with_no_credential_yet_is_refused_rather_than_guessed`
@@ -205,10 +211,10 @@ async fn the_door_refuses_a_shop_with_two_owners_and_neither_credentialed() {
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
     let app = dzpos_api::router(state, &token());
 
-    let (status, body) = claim(&app, "2580").await;
+    let (status, body) = claim(&app, "Anouar", "huit caracteres").await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["error"]["code"], "validation");
-    assert_eq!(body["error"]["field"], "pin");
+    assert_eq!(body["error"]["field"], "name");
 }
 
 /// The route needs the launch token like every other one, and answers the
@@ -225,9 +231,11 @@ async fn the_route_still_wants_the_launch_token() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/auth/first-pin")
+                .uri("/auth/first-setup")
                 .header("content-type", "application/json")
-                .body(Body::from(json!({ "pin": "2580" }).to_string()))
+                .body(Body::from(
+                    json!({ "name": "Anouar", "password": "huit caracteres" }).to_string(),
+                ))
                 .unwrap(),
         )
         .await

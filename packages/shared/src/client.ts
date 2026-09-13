@@ -64,7 +64,7 @@ import type { SupplierDto } from "./generated/SupplierDto";
 import type { SupplierLedgerDto } from "./generated/SupplierLedgerDto";
 import type { SupplierStatementDto } from "./generated/SupplierStatementDto";
 import type { SupplierWriteDto } from "./generated/SupplierWriteDto";
-import type { ClaimFirstPinDto } from "./generated/ClaimFirstPinDto";
+import type { ClaimFirstOwnerDto } from "./generated/ClaimFirstOwnerDto";
 import type { NewUserDto } from "./generated/NewUserDto";
 import type { SetPinDto } from "./generated/SetPinDto";
 import type { UserDto } from "./generated/UserDto";
@@ -396,14 +396,14 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       );
     },
 
-    /** The one door into a shop nobody has ever signed into: a PIN alone, no
-     * user id. The server finds the shop's own owner and gives them this
-     * PIN, then signs them in the same way `login` does, so a fresh shop
-     * goes from unusable to a session in one call. Refuses once any
-     * credential anywhere in the shop already exists. */
-    async claimFirstPin(body: ClaimFirstPinDto): Promise<SessionDto> {
+    /** The one door into a shop nobody has ever signed into: a name and a
+     * password. The server finds the shop's own owner, writes those, then
+     * signs them in the same way `login` does. The till PIN is set later
+     * from the users screen. Refuses once any credential anywhere in the
+     * shop already exists. */
+    async claimFirstOwner(body: ClaimFirstOwnerDto): Promise<SessionDto> {
       return narrow(
-        await send("/auth/first-pin", {
+        await send("/auth/first-setup", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body),
