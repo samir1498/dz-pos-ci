@@ -365,44 +365,36 @@ ci branch="":
 
 # Scan this checkout against sonar.observeone.com. Not CI and not a PR
 # check: same as ObserveOne, run on the machine before merge and again on
-# main after. Coverage reports are used if they already exist; this does
-# not regenerate them (`cargo llvm-cov` is a heavy job). Token from
-# SONARQUBE_TOKEN or SONAR_ANALYSIS_TOKEN. Override the image with
-# SCANNER_IMAGE if you must; the digest is the same pin oo-sonar uses.
-sonar:
+# main after. The Rust plugin shells out to `cargo clippy`, so this has to
+# run on the host (the scanner-cli image is Amazon Linux 2023 and cannot
+# exec our glibc-2.39 cargo). Coverage reports are used if they already
+# exist; this does not regenerate them. Token from SONARQUBE_TOKEN or
+# SONAR_ANALYSIS_TOKEN. Scanner: ~/.local/share/sonar-scanner (8.0.1.6346).
+sonar: claim desktop-dist
     #!/usr/bin/env bash
     set -euo pipefail
     token="${SONARQUBE_TOKEN:-${SONAR_ANALYSIS_TOKEN:-}}"
     [ -n "$token" ] || { echo "SONARQUBE_TOKEN is unset" >&2; exit 1; }
     host="${SONARQUBE_URL:-${SONAR_HOST_URL:-https://sonar.observeone.com}}"
+    scanner="${SONAR_SCANNER:-$HOME/.local/share/sonar-scanner/bin/sonar-scanner}"
+    [ -x "$scanner" ] || { echo "sonar-scanner not at $scanner — install sonar-scanner-cli 8.0.1.6346 linux-x64 there" >&2; exit 1; }
     cwd="$(pwd -P)"
     branch="$(git rev-parse --abbrev-ref HEAD)"
-    image="${SCANNER_IMAGE:-sonarsource/sonar-scanner-cli@sha256:23ca0f137965d9dff2198074043fd48d386280bc5d0ccac8c8349cea4cf096a9}"
-    git_entry="$cwd/.git"
-    vols=(-v "$cwd:$cwd")
-    scanner_args=()
-    if [ -f "$git_entry" ]; then
+    extra=()
+    if [ -f "$cwd/.git" ]; then
         if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
             echo "refusing: only the main checkout may publish the main dashboard" >&2
             exit 1
         fi
-        gitdir="$(sed -n 's/^gitdir: //p' "$git_entry")"
-        main_git="${gitdir%/worktrees/*}"
-        vols+=(-v "$main_git:$main_git:ro")
-        scanner_args+=(-Dsonar.scm.exclusions.disabled=true)
+        extra+=(-Dsonar.scm.exclusions.disabled=true)
     fi
     echo "scanning $cwd as dz-pos on branch $branch"
-    docker run --rm --name dz-pos-sonar --network host \
-        --memory 2264m --memory-swap 2264m \
-        -e "SONAR_TOKEN=$token" \
-        -e "SONAR_HOST_URL=$host" \
-        "${vols[@]}" \
-        -w "$cwd" \
-        "$image" \
-        -Dsonar.scanner.skipJreProvisioning=true \
+    flock "$CARGO_TARGET_DIR/.lock" \
+        env SONAR_TOKEN="$token" SONAR_HOST_URL="$host" \
+        "$scanner" \
         -Dsonar.javascript.node.maxspace=1536 \
         -Dsonar.branch.name="$branch" \
-        "${scanner_args[@]}"
+        "${extra[@]}"
 
 # ---- mockups (design/) ----
 
