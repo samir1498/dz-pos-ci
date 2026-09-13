@@ -99,7 +99,7 @@ if [ "$event_name" = "workflow_dispatch" ]; then
     read_versions
     [ "$cargo_version" = "$tauri_version" ] || fail "Cargo.toml has $cargo_version but tauri.conf.json has $tauri_version; these must agree before even a dry-run build carries a meaningful version"
     echo "MODE: dry-run (manual dispatch, no tag involved)"
-    echo "This run builds the Windows installer, version $cargo_version, and uploads it as a run artifact."
+    echo "This run builds all three installers (Windows, macOS, Linux), version $cargo_version, and uploads them as run artifacts."
     echo "It does not create a release and does not touch any tag."
     emit mode dry-run
     emit version "$cargo_version"

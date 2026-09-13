@@ -114,4 +114,29 @@ export interface Dict {
      */
     readonly formDisabledNote: string;
   };
+
+  /**
+   * One button per installer (lib/site.ts DOWNLOAD_FILES), with the OS
+   * sniffing done in the browser: the server renders all three links the
+   * same, a small script marks the visitor's own. Unsigned until the
+   * Windows certificate lands (docs/release-checklist.md), said plainly
+   * under the buttons rather than hidden. Last section on the page, after
+   * pricing.
+   */
+  readonly download: {
+    readonly heading: string;
+    readonly body: string;
+    readonly windowsLabel: string;
+    readonly windowsNote: string;
+    readonly macosLabel: string;
+    readonly macosNote: string;
+    readonly linuxLabel: string;
+    readonly linuxNote: string;
+    /** Badge on the button matching the visitor's OS. */
+    readonly recommended: string;
+    /** Shown while no release is signed (see site.ts: drafts never move
+     * `releases/latest`). */
+    readonly unsignedNote: string;
+    readonly allLink: string;
+  };
 }

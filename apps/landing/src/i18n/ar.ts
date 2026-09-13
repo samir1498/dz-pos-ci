@@ -97,4 +97,20 @@ export const ar: Dict = {
     formSubmit: "طلب التواصل",
     formDisabledNote: "مغلق حتى يُحدَّد السعر.",
   },
+
+  // Arabic here is mine, not a native speaker's (research R6): short
+  // factual lines only, to keep the review small when it happens.
+  download: {
+    heading: "تحميل",
+    body: "يُثبَّت دينار على حاسوب الصندوق، بالفرنسية والإنجليزية والعربية. اختر ملف نظامك.",
+    windowsLabel: "ويندوز",
+    windowsNote: "مثبّت .exe",
+    macosLabel: "ماك",
+    macosNote: "صورة .dmg",
+    linuxLabel: "لينكس",
+    linuxNote: "AppImage، اجعله قابلًا للتنفيذ",
+    recommended: "لنظامك",
+    unsignedNote: "الإصدارات الأولى غير موقّعة: سيُظهر ويندوز تحذيرًا وسيطلب ماك النقر بالزر الأيمن ثم فتح.",
+    allLink: "كل الإصدارات",
+  },
 };

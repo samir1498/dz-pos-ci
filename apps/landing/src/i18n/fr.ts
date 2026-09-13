@@ -114,4 +114,21 @@ export const fr: Dict = {
     formSubmit: "Être recontacté",
     formDisabledNote: "Fermé jusqu'à ce que le prix soit fixé.",
   },
+
+  // lib/site.ts DOWNLOAD_FILES: one stable filename per OS, so these
+  // labels never carry a version.
+  download: {
+    heading: "Télécharger",
+    body: "Dinar s'installe sur le poste de la caisse, en français, en anglais et en arabe. Choisissez le fichier de votre système.",
+    windowsLabel: "Windows",
+    windowsNote: "Installeur .exe",
+    macosLabel: "macOS",
+    macosNote: "Image .dmg, Apple Silicon",
+    linuxLabel: "Linux",
+    linuxNote: "AppImage, à rendre exécutable",
+    recommended: "Pour votre système",
+    unsignedNote:
+      "Premières versions non signées : Windows affichera un avertissement SmartScreen, macOS demandera un clic droit puis Ouvrir. Cela disparaîtra avec le certificat.",
+    allLink: "Toutes les versions",
+  },
 };

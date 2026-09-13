@@ -118,6 +118,23 @@ describe("the three routes render", () => {
 
   const ROUTES = ["index.html", join("en", "index.html"), join("ar", "index.html")];
 
+  describe("the download section links all three installers (Download.astro)", () => {
+    // Stable filenames from lib/site.ts: the build job renames each
+    // installer before upload, so these URLs never carry a version.
+    const ASSETS = ["Dinar-Setup.exe", "Dinar.dmg", "Dinar.AppImage"];
+    it.each(ROUTES)("%s carries one button per OS with a stable URL", (file) => {
+      const html = read(file);
+      for (const asset of ASSETS) {
+        expect(html).toContain(
+          `https://github.com/Dinar-dz/dz-pos/releases/latest/download/${asset}`,
+        );
+      }
+      for (const os of ["windows", "macos", "linux"]) {
+        expect(html).toContain(`data-os="${os}"`);
+      }
+    });
+  });
+
   describe("every <img> ships explicit width and height (L4)", () => {
     // An image with no intrinsic size reserved in the markup lets the
     // browser lay it out at zero height until the file arrives, which is

@@ -391,10 +391,24 @@ the only thing that publishes the GitHub release
 refuses and says why, and a plain push never triggers the workflow at all.
 The tag's version, `Cargo.toml`'s and `tauri.conf.json`'s must all agree,
 since the first is what `build_info.rs` bakes into the binary and About
-shows. A manual dispatch builds the same installer as a run artifact for
+shows. A manual dispatch builds the same installers as run artifacts for
 exercising the pipeline early; it can never publish. No certificate yet
 means the release is cut unsigned and left as a draft, not presented as
 finished.
+
+Decided (2026-09-13, Samir): the organisation's Actions minutes are
+capped, so tags are pushed to both remotes (`just release vX.Y.Z`) and the
+minutes are spent on the public mirror, while the release itself is created
+on Dinar-dz/dz-pos by API call (no runner, no minutes) with a
+fine-grained PAT (`ORG_RELEASE_TOKEN`, contents read+write on the org
+repo, stored as a secret on the mirror). A private repo's releases are
+private downloads -- a GitHub rule, not this file's -- so org releases
+stay draft/collaborators-only until the certificate lands. The build is a
+matrix of three installers (Windows nsis, macOS dmg on Apple Silicon,
+Linux appimage); the build job renames each to a stable filename
+(`Dinar-Setup.exe`, `Dinar.dmg`, `Dinar.AppImage`, the version living in
+the tag) so the landing page links never carry a version and the updater
+manifest points at files that do not move between releases.
 
 Decided (2026-09-11, M5 T0): the window runs under a policy that admits no
 remote origin and no inline or evaluated script, and a check on the Rust
@@ -510,12 +524,13 @@ argument, `UPDATER_KEY_PRESENT` (the workflow reads
 `secrets.TAURI_SIGNING_PRIVATE_KEY` and hands in `true`/`false`, the same
 shape `ON_MAIN` already uses), and emits `updater=publish` only for a real
 release with the key present, `updater=skip` for a dry run or a release
-missing it. `release.yml`'s `build` job assembles `latest.json` by hand
-only when `updater=publish` -- `tauri build` writes the installer and its
-`.sig` sidecar, never a combined manifest, so this is where the "size"
-field above gets written, off the installer's own byte count -- and the
-`publish` job attaches it to the release only then. A release with no
-updater manifest still ships an installer a shop can fetch by hand; the
+missing it. `release.yml`'s `publish` job assembles `latest.json` by hand
+across all three installers only when `updater=publish` -- `tauri build`
+writes each installer and its `.sig` sidecar, never a combined manifest,
+so this is where the "size" field above gets written, off each
+installer's own byte count -- and attaches it to the org release only
+then. A release with no updater manifest still ships installers a shop
+can fetch by hand; the
 alternative this guards is a manifest signed with nothing, which an
 existing install would trust as if it were real. Proven by four new cases
 in `release-gate.test.sh` (eighteen total); the manifest-assembly steps
@@ -532,8 +547,8 @@ would fail every dry run the moment `pubkey` was added, key present or
 not, since the placeholder string is never a valid signing key regardless.
 The `gate` job now reads the secret's presence into its own output,
 `updater_key`, deliberately separate from `updater` (which also asks
-whether this run is a real release): `release.yml`'s "Build the Windows
-installer (unsigned)" step passes `--no-sign` unless `updater_key` is
+whether this run is a real release): `release.yml`'s "Build the installer
+(unsigned)" step passes `--no-sign` unless `updater_key` is
 `true`, and the "signed" one refuses outright rather than accept
 `--no-sign` at all (below). Gating on key presence rather than on
 `updater == 'publish'` means a manual dry run with the secret configured
