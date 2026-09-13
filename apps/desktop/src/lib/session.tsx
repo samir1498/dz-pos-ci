@@ -120,7 +120,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       try {
         const health = await api.health();
         if (cancelled) return;
-        if (health.needs_first_pin) {
+        if (health.needs_first_setup) {
           setStatus("needs-setup");
           return;
         }

@@ -28,13 +28,13 @@ use crate::AppState;
 
 pub async fn health(State(state): State<AppState>) -> Result<Json<HealthDto>, ApiError> {
     let shop = state.shop_id;
-    let needs_first_pin = state
-        .blocking(move |c| dzpos_core::services::users::shop_needs_first_pin(c, shop))
+    let needs_first_setup = state
+        .blocking(move |c| dzpos_core::services::users::shop_needs_first_setup(c, shop))
         .await?;
     Ok(Json(HealthDto {
         status: "ok".to_string(),
         shop_id: shop,
-        needs_first_pin,
+        needs_first_setup,
     }))
 }
 

@@ -329,11 +329,11 @@ fn a_user_of_another_shop_is_not_found() {
 const FIRST_PASSWORD: &str = "huit caracteres";
 
 #[test]
-fn a_virgin_shop_still_needs_its_first_pin() {
+fn a_virgin_shop_still_needs_its_first_setup() {
     let (_dir, mut conn) = open_temp();
-    assert!(users::shop_needs_first_pin(&mut conn, SHOP).unwrap());
+    assert!(users::shop_needs_first_setup(&mut conn, SHOP).unwrap());
     users::claim_first_owner(&mut conn, SHOP, "Anouar", FIRST_PASSWORD).unwrap();
-    assert!(!users::shop_needs_first_pin(&mut conn, SHOP).unwrap());
+    assert!(!users::shop_needs_first_setup(&mut conn, SHOP).unwrap());
 }
 
 #[test]
