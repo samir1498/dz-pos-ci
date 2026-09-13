@@ -77,4 +77,7 @@ type: 'daily'
 ## 2026-09-13 17:27 UTC
 
 - MCP rebound to dz-pos via local opencode.json (global pc-ctx removed; observeone got its own local). ESC/POS T2 shipped as PR #66 (file + TCP:9100 senders, USB/route later). dz-review of first-setup (fc08f0a) done via 3 lenses: 1 real gap (no password reset route over HTTP — staff office passwords unsettable, owner password unrotatable; needs product call), rename residue + 6 test gaps fixed as PR #67 (mirror green; role guard needed one allowlist entry). Research still 6/9, M6 paused. (@mcp, @escpos, @review, @auth)
+## 2026-09-13 18:43 UTC
+
+- Release loop shipped as PR #68 (matrix win/mac/linux on mirror, org publish via PAT, stable names, landing Download fr/en/ar with OS sniff). Proven: dry-run built all three, Dinar-Setup.exe pulled off the artifact; branch CI green. Left: Samir creates ORG_RELEASE_TOKEN on the mirror (fine-grained PAT, contents read+write on Dinar-dz/dz-pos), then just release vX. Plan 4/5, T2 pending token. (@release, @landing)
 
