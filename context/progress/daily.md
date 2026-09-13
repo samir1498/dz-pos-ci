@@ -83,4 +83,7 @@ type: 'daily'
 ## 2026-09-13 19:07 UTC
 
 - ORG_RELEASE_TOKEN set on the mirror from Samir's own login (push on the org repo; boss account untouched). Docs corrected to say so + PAT replacement note (PR #69). Plan 5/5. Next: just release vX when Samir names the version. (@release)
+## 2026-09-13 19:26 UTC
+
+- Mirror-detour-temporary recorded (PR #70); release plan 5/5 archived. Store: research 6/9 active, M6 paused. Everything a session can do without humans is done except print route, M6 scope, emulator eyeball, R9 verdicts. (@release, @archive)
 
