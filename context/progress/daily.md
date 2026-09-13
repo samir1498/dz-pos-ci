@@ -74,4 +74,7 @@ type: 'daily'
 ## 2026-09-13 14:10 UTC
 
 - Nine finished plans archived (money, M1–M5, tooling, design, landing). Left in the store: research 6/9 (R6 native Arabic, R8 comptable, R9 tooling trials) and M6 paused. M5 tasks are done; a signed installer is not. Landing is built, not published. (@archive)
+## 2026-09-13 17:27 UTC
+
+- MCP rebound to dz-pos via local opencode.json (global pc-ctx removed; observeone got its own local). ESC/POS T2 shipped as PR #66 (file + TCP:9100 senders, USB/route later). dz-review of first-setup (fc08f0a) done via 3 lenses: 1 real gap (no password reset route over HTTP — staff office passwords unsettable, owner password unrotatable; needs product call), rename residue + 6 test gaps fixed as PR #67 (mirror green; role guard needed one allowlist entry). Research still 6/9, M6 paused. (@mcp, @escpos, @review, @auth)
 
