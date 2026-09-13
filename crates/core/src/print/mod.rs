@@ -13,6 +13,7 @@
 
 pub mod barcode_label;
 pub mod debt_slip;
+pub mod escpos;
 pub mod facture;
 pub mod statement;
 pub mod strings;
@@ -25,6 +26,7 @@ pub use facture::{
     Paper,
 };
 pub use statement::render_statement;
+pub use escpos::{dump_ticket_escpos, render_ticket_escpos};
 pub use ticket::render_ticket;
 
 use crate::models::document::Document;

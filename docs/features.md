@@ -834,9 +834,11 @@ first release.**
   quietly stripped. The facture
   drops its "Total TTC" row for the same reason, and prints "Prix unitaire"
   where the réel one prints "Prix unitaire HT".
-- Thermal: the 80 mm ticket is HTML, proven against golden files in three
-  languages. Live ESC/POS over USB was dropped on 2026-09-13: there is no
-  thermal printer. A4/A5 goes through the OS print dialog.
+- Thermal: the 80 mm ticket is HTML and ESC/POS, both golden-filed in three
+  languages (`fixtures/print/ticket_80mm/` and `ticket_80mm_escpos/`). The
+  ESC/POS golden is a dump of the bytes (`<init>`, the text, `<cut>`), so
+  a reviewer reads it without a printer. Sending those bytes over USB is
+  not wired yet. A4/A5 goes through the OS print dialog.
 - Later: a QR code on the ticket, the shop's logo, and a footer text the
   owner sets.
 

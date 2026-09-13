@@ -28,28 +28,28 @@ const STAMP_FORMAT: &str = "%d/%m/%Y %H:%M";
 /// ones the document snapshotted appear: a ticket carries the seller
 /// identity and no empty rows (features.md, party identifiers row; a
 /// facture carries the fuller block of both parties).
-struct SellerId {
-    label: &'static str,
-    value: String,
+pub(crate) struct SellerId {
+    pub(crate) label: &'static str,
+    pub(crate) value: String,
 }
 
-struct SellerView {
-    name: String,
-    address: Option<String>,
-    phone: Option<String>,
-    ids: Vec<SellerId>,
+pub(crate) struct SellerView {
+    pub(crate) name: String,
+    pub(crate) address: Option<String>,
+    pub(crate) phone: Option<String>,
+    pub(crate) ids: Vec<SellerId>,
 }
 
-struct LineView {
-    name: String,
-    qty: String,
-    unit_price: String,
+pub(crate) struct LineView {
+    pub(crate) name: String,
+    pub(crate) qty: String,
+    pub(crate) unit_price: String,
     /// The line's TVA rate, under the réel only. Under the IFU there is no
     /// rate column at all, not a column of zeroes
     /// (`an_ifu_ticket_names_no_tax_in_any_language`).
-    rate: Option<String>,
-    discount: Option<String>,
-    total: String,
+    pub(crate) rate: Option<String>,
+    pub(crate) discount: Option<String>,
+    pub(crate) total: String,
 }
 
 /// One line of the TVA recap. The word and the rate are two fields rather
@@ -57,10 +57,10 @@ struct LineView {
 /// and the suite can read it back the way the facture's does: a recap row
 /// that slid onto the wrong rate is caught by the rate and not only by the
 /// amount beside it.
-struct TvaRow {
-    label: &'static str,
-    rate: String,
-    amount: String,
+pub(crate) struct TvaRow {
+    pub(crate) label: &'static str,
+    pub(crate) rate: String,
+    pub(crate) amount: String,
 }
 
 /// The three amounts of the debt as they stood when the ticket was issued.
@@ -68,45 +68,45 @@ struct TvaRow {
 /// balance without the closing one is a figure the reader cannot check. The
 /// two papers say the same thing in the same words, so a customer holding
 /// both does not find two spellings of what they owe.
-struct BalanceView {
-    title: &'static str,
-    old_label: &'static str,
-    old: String,
-    this_label: &'static str,
-    this: String,
-    total_label: &'static str,
-    total: String,
+pub(crate) struct BalanceView {
+    pub(crate) title: &'static str,
+    pub(crate) old_label: &'static str,
+    pub(crate) old: String,
+    pub(crate) this_label: &'static str,
+    pub(crate) this: String,
+    pub(crate) total_label: &'static str,
+    pub(crate) total: String,
 }
 
 #[derive(Template)]
 #[template(path = "ticket_80mm.html")]
-struct TicketView {
-    lang_tag: &'static str,
-    dir: &'static str,
-    arabic_unreviewed: bool,
-    title: &'static str,
-    seller: SellerView,
-    number: String,
-    issued_at: String,
-    lines: Vec<LineView>,
-    total_label: &'static str,
-    total_amount: String,
-    discount_label: &'static str,
-    discount: Option<String>,
-    tva_rows: Vec<TvaRow>,
-    stamp_label: &'static str,
-    stamp: Option<String>,
-    net_to_pay_label: &'static str,
-    net_to_pay: String,
-    payment_mode_label: &'static str,
-    payment_mode: &'static str,
-    tendered_label: &'static str,
-    tendered: Option<String>,
-    change_label: &'static str,
-    change: Option<String>,
-    balance: Option<BalanceView>,
-    currency: &'static str,
-    thank_you: &'static str,
+pub(crate) struct TicketView {
+    pub(crate) lang_tag: &'static str,
+    pub(crate) dir: &'static str,
+    pub(crate) arabic_unreviewed: bool,
+    pub(crate) title: &'static str,
+    pub(crate) seller: SellerView,
+    pub(crate) number: String,
+    pub(crate) issued_at: String,
+    pub(crate) lines: Vec<LineView>,
+    pub(crate) total_label: &'static str,
+    pub(crate) total_amount: String,
+    pub(crate) discount_label: &'static str,
+    pub(crate) discount: Option<String>,
+    pub(crate) tva_rows: Vec<TvaRow>,
+    pub(crate) stamp_label: &'static str,
+    pub(crate) stamp: Option<String>,
+    pub(crate) net_to_pay_label: &'static str,
+    pub(crate) net_to_pay: String,
+    pub(crate) payment_mode_label: &'static str,
+    pub(crate) payment_mode: &'static str,
+    pub(crate) tendered_label: &'static str,
+    pub(crate) tendered: Option<String>,
+    pub(crate) change_label: &'static str,
+    pub(crate) change: Option<String>,
+    pub(crate) balance: Option<BalanceView>,
+    pub(crate) currency: &'static str,
+    pub(crate) thank_you: &'static str,
 }
 
 /// The 80 mm ticket for `doc`, in `lang`, as one standalone HTML page.
@@ -134,7 +134,7 @@ pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, CoreError> {
     view(doc, lang).render().map_err(CoreError::from)
 }
 
-fn view(doc: &Document, lang: Lang) -> TicketView {
+pub(crate) fn view(doc: &Document, lang: Lang) -> TicketView {
     let reel = doc.regime == Regime::Reel;
     let totals = &doc.totals;
     // Cash is the only mode that takes a note and gives coins back. A card
