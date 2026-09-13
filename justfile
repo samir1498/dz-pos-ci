@@ -305,19 +305,14 @@ worktree-rm name:
 
 # ---- CI on the mirror ----
 
-# After a merge to main: copy this commit to samir1498/dz-pos-ci and watch
-# the light run there (fmt, desktop eslint, release-gate script).
+# Copy this commit to the public personal mirror samir1498/dz-pos-ci
+# (Actions are free there) and watch the runs. Dinar-dz never starts a
+# runner. Restricted (fmt, eslint, release-gate) runs on every push.
+# Full (clippy, tests, build; Windows and coverage on main) runs on main,
+# or on a branch with `just ci <branch> full`.
 #
-# Pull requests do not start Actions. Compiles, clippy, tests and builds
-# ran on this machine already (`just gates`). The organisation's budget is
-# capped, so Dinar-dz jobs refuse to start; the mirror is Samir's account
-# and his free minutes. It carries no history of its own: this recipe
-# force-pushes, so the mirror is always a copy and never a place work lives.
-#
-# A feature branch is copied too, so the mirror stays reachable, but no run
-# is started. CI is a post-merge check. To force one anyway:
-#   gh workflow run CI --repo samir1498/dz-pos-ci --ref <branch>
-ci branch="":
+# The mirror is always a copy: this force-pushes. Work does not live there.
+ci branch="" extra="":
     #!/usr/bin/env bash
     set -euo pipefail
     b="{{branch}}"
@@ -326,42 +321,48 @@ ci branch="":
     git remote get-url ci >/dev/null 2>&1 || git remote add ci git@github.com:samir1498/dz-pos-ci.git
     git push -q --force ci "$b:$b"
     echo "pushed $b @$sha to the mirror"
-    if [ "$b" != "main" ]; then
-        echo "CI runs on the mirror after a merge to main, not on a feature branch."
-        echo "just gates on this machine is the PR gate."
-        exit 0
-    fi
     # The run is found by the commit it is testing, never by "the newest run
-    # on this branch": that answer was once an hour old and was reported as
-    # this push's result. A push to main starts a run by itself, so asking
-    # for one as well started two runs a second apart and the concurrency
-    # group killed one, which then looked like a failure. Wait for a run on
-    # this commit; only start one by hand if none appears (paths-ignore).
+    # on this branch". A push starts Restricted itself; Full starts itself
+    # only on main. Asking for a run that already started used to launch a
+    # second one that concurrency then killed.
     find_run() {
-        gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 20 \
+        local workflow="$1"
+        gh run list --repo samir1498/dz-pos-ci --workflow "$workflow" --branch "$b" --limit 20 \
             --json databaseId,headSha \
             --jq "[.[] | select(.headSha == \"$sha\")] | .[0].databaseId" 2>/dev/null
     }
-    id=""
-    for _ in $(seq 1 6); do
-        id="$(find_run || true)"
-        [ -n "${id:-}" ] && [ "$id" != "null" ] && break
-        id=""
-        sleep 5
-    done
-    if [ -z "$id" ]; then
-        echo "no run started itself; asking for one"
-        gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
-        for _ in $(seq 1 12); do
-            id="$(find_run || true)"
+    wait_for() {
+        local workflow="$1"
+        local dispatch="${2:-}"
+        local id=""
+        for _ in $(seq 1 8); do
+            id="$(find_run "$workflow" || true)"
             [ -n "${id:-}" ] && [ "$id" != "null" ] && break
             id=""
             sleep 5
         done
+        if [ -z "$id" ]; then
+            echo "no $workflow run started itself; asking for one"
+            if [ "$dispatch" = "windows" ]; then
+                gh workflow run "$workflow" --repo samir1498/dz-pos-ci --ref "$b" -f windows=true
+            else
+                gh workflow run "$workflow" --repo samir1498/dz-pos-ci --ref "$b"
+            fi
+            for _ in $(seq 1 12); do
+                id="$(find_run "$workflow" || true)"
+                [ -n "${id:-}" ] && [ "$id" != "null" ] && break
+                id=""
+                sleep 5
+            done
+        fi
+        [ -n "$id" ] || { echo "no $workflow run appeared for $sha; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
+        echo "watching $workflow run $id on $sha"
+        gh run watch "$id" --repo samir1498/dz-pos-ci --exit-status
+    }
+    wait_for Restricted
+    if [ "$b" = "main" ] || [ "{{extra}}" = "full" ] || [ "{{extra}}" = "windows" ]; then
+        wait_for CI "{{extra}}"
     fi
-    [ -n "$id" ] || { echo "no run appeared for $sha; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
-    echo "watching run $id on $sha"
-    gh run watch "$id" --repo samir1498/dz-pos-ci --exit-status
 
 # Scan this checkout against sonar.observeone.com. Not CI and not a PR
 # check: same as ObserveOne, run on the machine before merge and again on

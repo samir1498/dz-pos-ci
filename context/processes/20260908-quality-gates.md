@@ -17,10 +17,11 @@ just gates   # cargo fmt --check, clippy --all-targets -D warnings,
 just e2e     # Playwright against a fresh API and database
 ```
 
-GitHub Actions is not the PR gate. Compiles and tests stay on this
-machine. After a merge to main, `just ci` copies the commit to the
-personal mirror and watches a light run (rustfmt, desktop eslint, the
-release-gate script). Pull requests do not start Actions.
+GitHub Actions is not the PR gate. `just ci` copies the commit to the
+public personal mirror: Restricted (rustfmt, desktop eslint, release-gate
+script) on every push, Full (clippy, tests, build; Windows and coverage
+on main) on main or `just ci <branch> full`. Dinar-dz never starts a
+runner.
 
 Sonar is local, same as ObserveOne: `just sonar` against
 sonar.observeone.com (project `dz-pos`, gate "ObserveOne way") on the

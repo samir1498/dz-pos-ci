@@ -454,20 +454,21 @@ tracks them, alongside the release gates and who holds each:
 | TVA, stamp, rounding, amount in words | property tests (proptest) + fixed fixtures named in features.md | same |
 | Invoice templates | golden files (hand-rolled, `UPDATE_GOLDENS=1` regenerates and fails the run on purpose; insta still not pulled in), every template × language | same |
 | API routes | request tests against an in-process server and temp DB | same |
-| Coverage | `cargo llvm-cov` locally when someone asks; `just sonar` ingests `lcov.info` if it is already there | this machine, not in CI |
+| Coverage | `cargo llvm-cov` on the personal mirror, main only; `just sonar` ingests `lcov.info` if it is already there | Full CI on `samir1498/dz-pos-ci`; this machine when someone asks |
 | Sonar | `just sonar` to sonar.observeone.com, project `dz-pos`, gate ObserveOne way | this machine, before merge and again on main; not in CI |
-| React components | vitest + Testing Library, jsdom | this machine, `just gates` |
-| rustfmt, desktop eslint, release-gate script | GitHub Actions on the personal mirror | after a merge to main, `just ci` |
+| React components | vitest + Testing Library, jsdom | this machine, `just gates`; Full CI on the personal mirror |
+| Restricted CI | rustfmt, desktop eslint, release-gate script | every `just ci` push to `samir1498/dz-pos-ci` |
+| Full CI | clippy, cargo test, pnpm test and build; Windows and coverage on main | `just ci` of main, or `just ci <branch> full` |
 | Browser end-to-end | Playwright + chromium against a fresh API and database (`just e2e`); ObserveOne is the recorded tool, Playwright the interim | before a merge, not in CI |
 | Mobile | Jest (RN preset), Maestro flows on a real device | later |
 
 Gates (`just gates`): `cargo fmt --check`, the desktop's eslint
 (`just lint`), `cargo clippy --all-targets -D warnings`, the generated TS
 types diffed against the DTOs, `cargo test`, `pnpm -r test`, `pnpm -r
-build`. That is the PR gate. GitHub Actions is not: it runs after merge,
-on `samir1498/dz-pos-ci`, because the organisation's budget is capped.
-A change is done when the gates pass and the behaviour was driven, not
-when a check is green.
+build`. That is the PR gate on this machine. GitHub Actions runs on the
+public personal mirror (`just ci`): Restricted on every push, Full on
+main. Dinar-dz never starts a runner. A change is done when the gates
+pass and the behaviour was driven, not when a check is green.
 
 ## Local development
 
