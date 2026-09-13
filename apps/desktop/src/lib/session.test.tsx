@@ -57,6 +57,21 @@ function wrapper(client: QueryClient) {
   };
 }
 
+describe("a shop nobody has signed into yet", () => {
+  test("opens on setup, not on a sign-in for a user who does not exist", async () => {
+    fetchMock.mockImplementation((input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/health")) {
+        return Promise.resolve(json(200, { status: "ok", shop_id: 1, needs_first_pin: true }));
+      }
+      return Promise.resolve(notFound());
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useSession(), { wrapper: wrapper(client) });
+    await waitFor(() => expect(result.current.status).toBe("needs-setup"));
+  });
+});
+
 describe("the query cache does not survive a change of who is signed in", () => {
   test("signing in clears it — the next person is not served the last person's cache", async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

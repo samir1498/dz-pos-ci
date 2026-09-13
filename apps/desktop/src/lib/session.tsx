@@ -56,7 +56,7 @@ import { api } from "@/api";
  * the same door back. */
 export type AuthMethod = "pin" | "password";
 
-type Status = "checking" | "signed-out" | "signed-in";
+type Status = "checking" | "needs-setup" | "signed-out" | "signed-in";
 
 interface SessionAnswer {
   readonly me: MeDto;
@@ -72,6 +72,7 @@ interface Ctx {
   readonly locked: boolean;
   readonly signInWithPin: (userId: number, pin: string) => Promise<void>;
   readonly signInWithPassword: (name: string, password: string) => Promise<void>;
+  readonly claimFirstPin: (pin: string) => Promise<void>;
   readonly signOut: () => Promise<void>;
   readonly lockNow: () => void;
 }
@@ -116,6 +117,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      try {
+        const health = await api.health();
+        if (cancelled) return;
+        if (health.needs_first_pin) {
+          setStatus("needs-setup");
+          return;
+        }
+      } catch {
+        // A failed probe is not a sign-in; /auth/me still decides.
+      }
       try {
         const answer = await api.me();
         const idle = await api.sessionIdle();
@@ -171,6 +182,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (name: string, password: string) => {
       const session = await api.login({ name, password } satisfies LoginDto);
       establish(session, "password");
+    },
+    [establish],
+  );
+
+  const claimFirstPin = useCallback(
+    async (pin: string) => {
+      const session = await api.claimFirstPin({ pin });
+      establish(session, "pin");
     },
     [establish],
   );
@@ -289,10 +308,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       locked,
       signInWithPin,
       signInWithPassword,
+      claimFirstPin,
       signOut,
       lockNow,
     }),
-    [status, me, method, idleMinutes, locked, signInWithPin, signInWithPassword, signOut, lockNow],
+    [
+      status,
+      me,
+      method,
+      idleMinutes,
+      locked,
+      signInWithPin,
+      signInWithPassword,
+      claimFirstPin,
+      signOut,
+      lockNow,
+    ],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -327,6 +327,14 @@ fn a_user_of_another_shop_is_not_found() {
 // ---- the first pin, before anybody has signed in ----
 
 #[test]
+fn a_virgin_shop_still_needs_its_first_pin() {
+    let (_dir, mut conn) = open_temp();
+    assert!(users::shop_needs_first_pin(&mut conn, SHOP).unwrap());
+    users::claim_first_pin(&mut conn, SHOP, "2580").unwrap();
+    assert!(!users::shop_needs_first_pin(&mut conn, SHOP).unwrap());
+}
+
+#[test]
 fn a_virgin_shop_gives_its_seeded_owner_the_first_pin_and_it_signs_them_in() {
     let (_dir, mut conn) = open_temp();
     let owner = users::claim_first_pin(&mut conn, SHOP, "2580").unwrap();

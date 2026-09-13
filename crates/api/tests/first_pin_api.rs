@@ -82,6 +82,14 @@ fn add_a_second_owner(db: &std::path::Path, shop: i32) {
         .expect("the second owner could not be made");
 }
 
+#[tokio::test]
+async fn a_virgin_shop_says_so_on_health() {
+    let (_dir, app) = virgin_shop();
+    let (status, body) = call(&app, "GET", "/health", None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["needs_first_pin"], true);
+}
+
 /// The whole point of the route: a shop nobody has ever signed into goes
 /// from unusable to a live session in one call, and the answer names the
 /// seeded owner the way `login`'s does.
@@ -115,6 +123,10 @@ async fn a_virgin_shop_claims_its_first_pin_and_is_handed_a_session() {
         .unwrap();
     let res = app.clone().oneshot(req).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
+
+    let (status, health) = call(&app, "GET", "/health", None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(health["needs_first_pin"], false);
 }
 
 /// A PIN the shape rule refuses (`services::users::validate_pin`) is refused

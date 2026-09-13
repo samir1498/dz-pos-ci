@@ -10,6 +10,7 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 
 import { AppShell } from "@/components/AppShell";
+import { FirstPinScreen } from "@/components/FirstPinScreen";
 import { LockScreen } from "@/components/LockScreen";
 import { SignInScreen } from "@/components/SignInScreen";
 import { useTranslation } from "@/i18n";
@@ -25,7 +26,9 @@ function RootLayout() {
     // it on the tree so a component reading its own inherited direction (and
     // a test rendering a screen without the document) agrees with the page.
     <div dir={dir} className="min-h-screen">
-      {status === "checking" ? null : status === "signed-out" ? (
+      {status === "checking" ? null : status === "needs-setup" ? (
+        <FirstPinScreen />
+      ) : status === "signed-out" ? (
         <SignInScreen />
       ) : (
         // The shell and the route inside it stay mounted whether or not the

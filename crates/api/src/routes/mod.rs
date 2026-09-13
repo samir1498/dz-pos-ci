@@ -26,11 +26,16 @@ use crate::dto::{BuildInfoDto, ClockDto, HealthDto};
 use crate::error::ApiError;
 use crate::AppState;
 
-pub async fn health(State(state): State<AppState>) -> Json<HealthDto> {
-    Json(HealthDto {
+pub async fn health(State(state): State<AppState>) -> Result<Json<HealthDto>, ApiError> {
+    let shop = state.shop_id;
+    let needs_first_pin = state
+        .blocking(move |c| dzpos_core::services::users::shop_needs_first_pin(c, shop))
+        .await?;
+    Ok(Json(HealthDto {
         status: "ok".to_string(),
-        shop_id: state.shop_id,
-    })
+        shop_id: shop,
+        needs_first_pin,
+    }))
 }
 
 /// The About screen's one source (M5 T1): the version, the git short hash

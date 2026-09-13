@@ -128,6 +128,7 @@ async fn health_is_ok() {
     let (status, body) = call(&h.app, "GET", "/health", None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["status"], "ok");
+    assert_eq!(body["needs_first_pin"], true);
 }
 
 #[tokio::test]
