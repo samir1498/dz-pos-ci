@@ -399,9 +399,13 @@ finished.
 Decided (2026-09-13, Samir): the organisation's Actions minutes are
 capped, so tags are pushed to both remotes (`just release vX.Y.Z`) and the
 minutes are spent on the public mirror, while the release itself is created
-on Dinar-dz/dz-pos by API call (no runner, no minutes) with a
-fine-grained PAT (`ORG_RELEASE_TOKEN`, contents read+write on the org
-repo, stored as a secret on the mirror). A private repo's releases are
+on Dinar-dz/dz-pos by API call (no runner, no minutes) with
+`ORG_RELEASE_TOKEN` (today Samir's login token, stored as a secret on the
+mirror). Decided the same day: this mirror detour is temporary -- next
+month the release is cut directly in the org repo's own CI, and the mirror
+goes back to being CI-only. Nothing in the workflow needs rewriting for
+that day except retiring the mirror tag push: the same tag on the org
+already starts the same jobs there. A private repo's releases are
 private downloads -- a GitHub rule, not this file's -- so org releases
 stay draft/collaborators-only until the certificate lands. The build is a
 matrix of three installers (Windows nsis, macOS dmg on Apple Silicon,
