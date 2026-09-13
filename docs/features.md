@@ -913,14 +913,15 @@ ledger rows name them for good. The shop's last active owner cannot be
 switched off or moved to another role.
 
 A shop that has just been installed has an owner row with no credential on
-it, and nobody to sign in as. One route takes a first PIN with no session,
-behind the launch token like everything else. It requires exactly one active
-owner, and it refuses the moment any credential exists anywhere in the shop,
-including on a switched-off cashier, so the door shuts permanently the first
-time anybody sets one. Nothing in the application writes a credential back
-to nothing, so the door cannot reopen from inside. The row it writes in the
-log has its own name, `user.claim_first_pin`, rather than reading as a
-routine PIN reset.
+it, and nobody to sign in as. One route takes a name and a password with no
+session, behind the launch token like everything else. It requires exactly
+one active owner, and it refuses the moment any credential exists anywhere
+in the shop, including on a switched-off cashier, so the door shuts
+permanently the first time anybody sets one. The PIN for the till is set
+later from the users screen. Nothing in the application writes a credential
+back to nothing, so the door cannot reopen from inside. The row it writes
+in the log has its own name, `user.claim_first_owner`, rather than reading
+as a routine password reset.
 
 ### Sessions
 

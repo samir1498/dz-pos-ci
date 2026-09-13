@@ -72,7 +72,7 @@ interface Ctx {
   readonly locked: boolean;
   readonly signInWithPin: (userId: number, pin: string) => Promise<void>;
   readonly signInWithPassword: (name: string, password: string) => Promise<void>;
-  readonly claimFirstPin: (pin: string) => Promise<void>;
+  readonly claimFirstOwner: (name: string, password: string) => Promise<void>;
   readonly signOut: () => Promise<void>;
   readonly lockNow: () => void;
 }
@@ -186,10 +186,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [establish],
   );
 
-  const claimFirstPin = useCallback(
-    async (pin: string) => {
-      const session = await api.claimFirstPin({ pin });
-      establish(session, "pin");
+  const claimFirstOwner = useCallback(
+    async (name: string, password: string) => {
+      const session = await api.claimFirstOwner({ name, password });
+      establish(session, "password");
     },
     [establish],
   );
@@ -308,7 +308,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       locked,
       signInWithPin,
       signInWithPassword,
-      claimFirstPin,
+      claimFirstOwner,
       signOut,
       lockNow,
     }),
@@ -320,7 +320,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       locked,
       signInWithPin,
       signInWithPassword,
-      claimFirstPin,
+      claimFirstOwner,
       signOut,
       lockNow,
     ],

@@ -230,59 +230,57 @@ pub fn set_pin(
     })
 }
 
-/// The one door into a shop nobody has ever signed into. `ManageUsers` is
-/// the owner's alone, and the owner cannot hold a session to use it before
-/// somebody has set their PIN, which is what this call is for: it needs no
-/// actor and no session, and it acts on the shop's own owner rather than on
-/// an id a caller names, because nobody signed in yet is who is supposed to
-/// choose one.
-///
-/// Whether the first-PIN door is still open: nobody in the shop has a
+/// Whether the first-setup door is still open: nobody in the shop has a
 /// credential yet. The desktop asks this of `/health` so it can show the
-/// onboarding pad instead of a sign-in for a user who does not exist.
+/// name-and-password screen instead of a sign-in for a user who does not
+/// exist.
 pub fn shop_needs_first_pin(conn: &mut SqliteConnection, shop_id: i32) -> Result<bool, CoreError> {
     Ok(!repo::any_credential_set(conn, shop_id)?)
 }
 
-/// Two refusals, and each is the whole of a rule that would otherwise be
-/// argued over in an API handler:
+/// The one door into a shop nobody has ever signed into. It needs no actor
+/// and no session, and it acts on the shop's own owner rather than on an
+/// id a caller names. The PIN for the till is set later, from the users
+/// screen, once somebody is already inside.
 ///
-/// - any credential anywhere in the shop already exists. The door shuts for
-///   good the moment an owner signs in the ordinary way and sets or resets a
-///   PIN through `set_pin`, which is `ManageUsers`, behind a session. A
-///   second call here after that is not a retry, it is a stranger with the
-///   launch token (the desktop process on this machine) trying the door
-///   again after it closed;
-/// - the shop does not have exactly one active owner to give the PIN to.
-///   Nothing to act on, or more than one candidate, and this call refuses
-///   rather than guess which row a caller meant.
-pub fn claim_first_pin(
+/// Two refusals:
+///
+/// - any credential anywhere in the shop already exists. The door shuts
+///   for good the first time this call succeeds, or the first time an
+///   owner sets a PIN or a password the ordinary way;
+/// - the shop does not have exactly one active owner to give the name and
+///   password to.
+pub fn claim_first_owner(
     conn: &mut SqliteConnection,
     shop_id: i32,
-    pin: &str,
+    name: &str,
+    password: &str,
 ) -> Result<User, CoreError> {
-    validate_pin(pin)?;
-    let hash = hash(pin)?;
+    let name = validated_name(name)?;
+    validate_password(password)?;
+    let hash = hash(password)?;
     conn.transaction(|conn| {
         if repo::any_credential_set(conn, shop_id)? {
             return Err(CoreError::validation(
-                "pin",
-                "this shop has already been signed into; an owner resets a PIN from the users screen",
+                "password",
+                "this shop has already been signed into; an owner resets a password from the users screen",
             ));
         }
         let owner = repo::sole_active_owner(conn, shop_id)?.ok_or_else(|| {
             CoreError::validation(
-                "pin",
-                "this shop has no single active owner to give the first PIN to",
+                "name",
+                "this shop has no single active owner to give the first password to",
             )
         })?;
-        let after = repo::set_pin_hash(conn, shop_id, owner.id, &hash, stamp())?;
+        refuse_taken_name(conn, shop_id, &name, Some(owner.id))?;
+        let renamed = write_fiche(conn, shop_id, owner.id, name, owner.role, owner.active)?;
+        let after = repo::set_password_hash(conn, shop_id, renamed.id, &hash, stamp())?;
         record(
             conn,
             shop_id,
-            owner.id,
-            audit::ACTION_CLAIM_FIRST_PIN,
-            owner.id,
+            after.id,
+            audit::ACTION_CLAIM_FIRST_OWNER,
+            after.id,
             Some(&owner),
             Some(&after),
         )?;

@@ -12,7 +12,7 @@
 use dzpos_api::dto::{
     AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AuditEntryDto, AuditLogDto, AuditUserDto,
     AvoirLineDto, BackupDto, BackupsDto, BuildInfoDto, CancelDocumentDto, CashPositionDto,
-    CategoryDto, ClaimFirstPinDto, ClockDto, CloseOrderDto, CloseSupplierDto, CustomerDto,
+    CategoryDto, ClaimFirstOwnerDto, ClockDto, CloseOrderDto, CloseSupplierDto, CustomerDto,
     CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DashboardDto, DashboardFiguresDto,
     DashboardSeriesDto, DashboardSeriesPointDto, DatedRegimeDto, DebtEntryDto, DebtKindDto,
     DiscountThresholdChangeDto, DocumentKindDto, DocumentStatusDto, ExpenseCategoryDto, ExpenseDto,
@@ -138,7 +138,7 @@ const FILES: [&str; 106] = [
     "UserDto.ts",
     "NewUserDto.ts",
     "SetPinDto.ts",
-    "ClaimFirstPinDto.ts",
+    "ClaimFirstOwnerDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -301,7 +301,7 @@ fn export_bindings() {
     UserDto::export_all(&cfg).unwrap();
     NewUserDto::export_all(&cfg).unwrap();
     SetPinDto::export_all(&cfg).unwrap();
-    ClaimFirstPinDto::export_all(&cfg).unwrap();
+    ClaimFirstOwnerDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

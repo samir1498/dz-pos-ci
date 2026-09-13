@@ -324,62 +324,60 @@ fn a_user_of_another_shop_is_not_found() {
     ));
 }
 
-// ---- the first pin, before anybody has signed in ----
+// ---- the first owner, before anybody has signed in ----
+
+const FIRST_PASSWORD: &str = "huit caracteres";
 
 #[test]
 fn a_virgin_shop_still_needs_its_first_pin() {
     let (_dir, mut conn) = open_temp();
     assert!(users::shop_needs_first_pin(&mut conn, SHOP).unwrap());
-    users::claim_first_pin(&mut conn, SHOP, "2580").unwrap();
+    users::claim_first_owner(&mut conn, SHOP, "Anouar", FIRST_PASSWORD).unwrap();
     assert!(!users::shop_needs_first_pin(&mut conn, SHOP).unwrap());
 }
 
 #[test]
-fn a_virgin_shop_gives_its_seeded_owner_the_first_pin_and_it_signs_them_in() {
+fn a_virgin_shop_gives_its_seeded_owner_the_first_password_and_it_signs_them_in() {
     let (_dir, mut conn) = open_temp();
-    let owner = users::claim_first_pin(&mut conn, SHOP, "2580").unwrap();
+    let owner = users::claim_first_owner(&mut conn, SHOP, "Anouar", FIRST_PASSWORD).unwrap();
     assert_eq!(owner.id, OWNER);
-    assert!(owner.has_pin);
+    assert_eq!(owner.name, "Anouar");
+    assert!(owner.has_password);
+    assert!(!owner.has_pin);
     assert!(
-        users::verify_pin(&mut conn, SHOP, OWNER, "2580", noon()).is_ok(),
-        "the PIN this call set does not sign the owner in"
+        users::verify_password(&mut conn, SHOP, "Anouar", FIRST_PASSWORD, noon()).is_ok(),
+        "the password this call set does not sign the owner in"
     );
-    assert_eq!(audit_actions(&mut conn), vec!["user.claim_first_pin"]);
+    assert_eq!(audit_actions(&mut conn), vec!["user.claim_first_owner"]);
 }
 
 #[test]
-fn a_pin_the_shape_rule_refuses_is_refused_here_too_and_nothing_is_claimed() {
+fn a_password_the_shape_rule_refuses_is_refused_here_too_and_nothing_is_claimed() {
     let (_dir, mut conn) = open_temp();
-    assert!(users::claim_first_pin(&mut conn, SHOP, "0000").is_err());
-    assert!(!users::get(&mut conn, SHOP, OWNER).unwrap().has_pin);
+    assert!(users::claim_first_owner(&mut conn, SHOP, "Anouar", "short").is_err());
+    assert!(!users::get(&mut conn, SHOP, OWNER).unwrap().has_password);
 }
 
 #[test]
 fn the_door_shuts_for_good_once_any_credential_in_the_shop_exists() {
     let (_dir, mut conn) = open_temp();
-    users::claim_first_pin(&mut conn, SHOP, "2580").unwrap();
-    // A second call, as if a stranger with the launch token tried the door
-    // again after the owner already walked through it.
-    let refused = users::claim_first_pin(&mut conn, SHOP, "3690");
+    users::claim_first_owner(&mut conn, SHOP, "Anouar", FIRST_PASSWORD).unwrap();
+    let refused = users::claim_first_owner(&mut conn, SHOP, "Samir", "autre mot de passe");
     assert!(
-        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "pin"),
+        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "password"),
         "{refused:?}"
     );
-    // The owner's PIN is still the first one; the refused call wrote nothing.
-    assert!(users::verify_pin(&mut conn, SHOP, OWNER, "2580", noon()).is_ok());
-    assert_eq!(audit_actions(&mut conn), vec!["user.claim_first_pin"]);
+    assert!(users::verify_password(&mut conn, SHOP, "Anouar", FIRST_PASSWORD, noon()).is_ok());
+    assert_eq!(audit_actions(&mut conn), vec!["user.claim_first_owner"]);
 }
 
 #[test]
-fn a_password_set_the_ordinary_way_shuts_the_door_too() {
+fn a_pin_set_the_ordinary_way_shuts_the_door_too() {
     let (_dir, mut conn) = open_temp();
-    // The owner reached their office screen some other way (a future task's
-    // business, not this one's) and set a password before ever touching a
-    // PIN. The door is about any credential, not the PIN column alone.
-    users::set_password(&mut conn, SHOP, OWNER, OWNER, "huit caracteres", None).unwrap();
-    let refused = users::claim_first_pin(&mut conn, SHOP, "2580");
+    users::set_pin(&mut conn, SHOP, OWNER, OWNER, "2580", None).unwrap();
+    let refused = users::claim_first_owner(&mut conn, SHOP, "Anouar", FIRST_PASSWORD);
     assert!(
-        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "pin"),
+        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "password"),
         "{refused:?}"
     );
 }
@@ -399,29 +397,24 @@ fn more_than_one_owner_with_no_credential_yet_is_refused_rather_than_guessed() {
     .unwrap();
     users::set_role(&mut conn, SHOP, OWNER, manager.id, Role::Owner).unwrap();
     // Two active owners, and neither has a credential yet: nothing here says
-    // which one this PIN was meant for.
-    let refused = users::claim_first_pin(&mut conn, SHOP, "2580");
+    // which one this password was meant for.
+    let refused = users::claim_first_owner(&mut conn, SHOP, "Anouar", FIRST_PASSWORD);
     assert!(
-        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "pin"),
+        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "name"),
         "{refused:?}"
     );
 }
 
 #[test]
-fn a_shop_with_no_active_owner_at_all_has_nobody_to_give_the_pin_to() {
+fn a_shop_with_no_active_owner_at_all_has_nobody_to_give_the_password_to() {
     let (_dir, mut conn) = open_temp();
-    // Not reachable through the service: `deactivate` and `set_role` both
-    // refuse to take the shop's last owner off the role. Forced here with a
-    // raw write, the way `stored_pin_hash` reads one, to prove this branch
-    // fails closed instead of panicking on a shop file nothing in this crate
-    // can actually produce.
     diesel::sql_query("UPDATE users SET role = 'cashier' WHERE id = ?")
         .bind::<diesel::sql_types::Integer, _>(OWNER)
         .execute(&mut conn)
         .unwrap();
-    let refused = users::claim_first_pin(&mut conn, SHOP, "2580");
+    let refused = users::claim_first_owner(&mut conn, SHOP, "Anouar", FIRST_PASSWORD);
     assert!(
-        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "pin"),
+        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "name"),
         "{refused:?}"
     );
 }

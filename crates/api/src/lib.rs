@@ -603,7 +603,7 @@ pub fn router_with_origin(
         .route("/auth/login", post(routes::auth::login))
         .route("/auth/logout", post(routes::auth::logout))
         .route("/auth/me", get(routes::auth::me))
-        .route("/auth/first-pin", post(routes::auth::claim_first_pin));
+        .route("/auth/first-setup", post(routes::auth::claim_first_owner));
     let guarded = Router::new()
         .route("/audit-log", get(routes::audit::list))
         .route("/auth/idle", get(routes::auth::idle))

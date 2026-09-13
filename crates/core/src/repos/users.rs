@@ -216,7 +216,7 @@ pub fn count_active_with_role(
 }
 
 /// Whether any user of this shop has ever had a PIN or a password set.
-/// `services::users::claim_first_pin` is the one caller: it is the shop-wide
+/// `services::users::claim_first_owner` is the one caller: it is the shop-wide
 /// half of "nobody has ever signed into this shop", the fact that keeps the
 /// bootstrap door from reopening once an owner has set a credential the
 /// ordinary way.
@@ -236,7 +236,7 @@ pub fn any_credential_set(conn: &mut SqliteConnection, shop_id: i32) -> Result<b
 
 /// The shop's one active owner, when there is exactly one. Every other
 /// caller in this crate is handed an id by a session or by a caller who
-/// already has one; `claim_first_pin` is the one place nothing has signed in
+/// already has one; `claim_first_owner` is the one place nothing has signed in
 /// yet to say which row it means, so it asks for the row instead of the id.
 pub fn sole_active_owner(
     conn: &mut SqliteConnection,

@@ -2925,15 +2925,16 @@ pub struct SetPinDto {
     pub pin: String,
 }
 
-/// The body `POST /auth/first-pin` takes: a PIN alone and no `user_id`. This
-/// route is the one door into a shop nobody has ever signed into, and
-/// nobody signed in yet is not in a position to name a row; the shop's own
-/// owner is who `services::users::claim_first_pin` finds and acts on.
+/// The body `POST /auth/first-setup` takes: a name and a password, no
+/// `user_id`. Nobody signed in yet is not in a position to name a row; the
+/// shop's own owner is who `services::users::claim_first_owner` finds and
+/// acts on. The PIN for the till is set later from the users screen.
 #[derive(Debug, Clone, Deserialize, TS)]
-#[ts(export_to = "ClaimFirstPinDto.ts")]
+#[ts(export_to = "ClaimFirstOwnerDto.ts")]
 #[serde(deny_unknown_fields)]
-pub struct ClaimFirstPinDto {
-    pub pin: String,
+pub struct ClaimFirstOwnerDto {
+    pub name: String,
+    pub password: String,
 }
 
 #[cfg(test)]
