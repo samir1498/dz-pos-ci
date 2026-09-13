@@ -450,23 +450,23 @@ tracks them, alongside the release gates and who holds each:
 
 | What | Tool | Where it runs |
 |---|---|---|
-| Services, ledgers, numbering | `cargo test`, integration tests against a temp SQLite | Linux, every push and pull request; Windows too on a push to `main` or a manual run |
+| Services, ledgers, numbering | `cargo test`, integration tests against a temp SQLite | this machine, `just gates` |
 | TVA, stamp, rounding, amount in words | property tests (proptest) + fixed fixtures named in features.md | same |
 | Invoice templates | golden files (hand-rolled, `UPDATE_GOLDENS=1` regenerates and fails the run on purpose; insta still not pulled in), every template × language | same |
 | API routes | request tests against an in-process server and temp DB | same |
-| Coverage | `cargo llvm-cov` → lcov artifact; Sonar ingestion once Rust support on the team server is verified | Linux, on a push to `main` or a manual run only, not a pull request |
-| React components | vitest + Testing Library, jsdom | every push and pull request |
-| Browser end-to-end | Playwright + chromium against a fresh API and database (`just e2e`); ObserveOne is the recorded tool, Playwright the interim | before a merge, not in CI yet |
+| Coverage | `cargo llvm-cov` locally when someone asks; Sonar ingestion once Rust support on the team server is verified | this machine, not in CI |
+| React components | vitest + Testing Library, jsdom | this machine, `just gates` |
+| rustfmt, desktop eslint, release-gate script | GitHub Actions on the personal mirror | after a merge to main, `just ci` |
+| Browser end-to-end | Playwright + chromium against a fresh API and database (`just e2e`); ObserveOne is the recorded tool, Playwright the interim | before a merge, not in CI |
 | Mobile | Jest (RN preset), Maestro flows on a real device | later |
 
-Gates (`just gates`, and CI): `cargo fmt --check`, the desktop's eslint
+Gates (`just gates`): `cargo fmt --check`, the desktop's eslint
 (`just lint`), `cargo clippy --all-targets -D warnings`, the generated TS
 types diffed against the DTOs, `cargo test`, `pnpm -r test`, `pnpm -r
-build`; CI adds a Windows run and `cargo llvm-cov` coverage, both only
-outside a pull request, because the organisation's Actions budget is
-capped (`just ci` pushes the branch to a personal mirror and watches the run
-there). A change is done when they pass and the behaviour was driven, not
-when they pass.
+build`. That is the PR gate. GitHub Actions is not: it runs after merge,
+on `samir1498/dz-pos-ci`, because the organisation's budget is capped.
+A change is done when the gates pass and the behaviour was driven, not
+when a check is green.
 
 ## Local development
 
@@ -491,7 +491,7 @@ line somebody edits:
    on it, so no release build and no bundle can produce the binary; the API
    has no `--seed` flag and no seed route.
    `crates/api/tests/no_seed_entrypoint.rs` fails the moment any of that
-   changes, and CI runs it with the rest of `cargo test --workspace`.
+   changes, and `just gates` runs it with the rest of `cargo test --workspace`.
 2. The binary refuses to run unless `DZPOS_DEV=1` is set, refuses any file
    that is not directly inside a `.dev/` directory, and refuses one whose
    settings carry a shop's own name and identifiers unless `--force` says

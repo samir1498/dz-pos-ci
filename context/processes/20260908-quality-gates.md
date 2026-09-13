@@ -17,6 +17,11 @@ just gates   # cargo fmt --check, clippy --all-targets -D warnings,
 just e2e     # Playwright against a fresh API and database
 ```
 
+GitHub Actions is not the PR gate. Compiles and tests stay on this
+machine. After a merge to main, `just ci` copies the commit to the
+personal mirror and watches a light run (rustfmt, desktop eslint, the
+release-gate script). Pull requests do not start Actions.
+
 A DTO change without `just types` fails `types-check`; the committed
 `packages/shared/src/generated` is diffed both ways.
 

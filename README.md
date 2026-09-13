@@ -127,16 +127,16 @@ From the architecture notes; the reasons are there.
 
 ## Quality gates
 
-`just gates`: `cargo fmt --check`, the desktop's eslint (`just lint`,
-the rule against a bare input, button, select, textarea or table outside the
-component kit), `cargo clippy --all-targets -D
+`just gates` is the PR gate: `cargo fmt --check`, the desktop's eslint
+(`just lint`, the rule against a bare input, button, select, textarea or
+table outside the component kit), `cargo clippy --all-targets -D
 warnings`, the generated TypeScript types diffed against the Rust DTOs,
-`cargo test`, `pnpm -r test`, `pnpm -r build`. CI runs the same checks on
-Linux on every push and pull request; Windows and coverage (`cargo
-llvm-cov`) run only outside a pull request, because the organisation's
-Actions budget is capped: `just ci` pushes the branch to a personal mirror
-and watches the run there. `just e2e` runs before a
-merge but not in CI yet; it runs the three language projects one after the
+`cargo test`, `pnpm -r test`, `pnpm -r build`. Compiles and tests stay on
+this machine. GitHub Actions is a post-merge check on the personal mirror
+`samir1498/dz-pos-ci` (`just ci` after merging to main): rustfmt, the
+desktop eslint, and the release-gate script. Pull requests do not start
+Actions; the organisation's budget is capped. `just e2e` runs before a
+merge but not in CI; it runs the three language projects one after the
 other, because they share a port pair. Sonar: not wired yet, Rust support on
 the team server is unverified (`rust:S1481` probe returned 404); check
 before promising a gate on the core.

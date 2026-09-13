@@ -305,18 +305,19 @@ worktree-rm name:
 
 # ---- CI on the mirror ----
 
-# Push this branch to samir1498/dz-pos-ci and watch the run there.
+# After a merge to main: copy this commit to samir1498/dz-pos-ci and watch
+# the light run there (fmt, desktop eslint, release-gate script).
 #
-# The organisation's Actions budget is capped for the month, so every job on
-# Dinar-dz refuses to start ("recent account payments have failed or your
-# spending limit needs to be increased", since 2026-09-10 16:12). The mirror
-# is the same repository under Samir's own account, where his free minutes
-# pay for the run. It carries no history of its own: this recipe force-pushes
-# the branch, so the mirror is always a copy and never a place work lives.
-# `windows` as the second argument also runs the windows job, for a branch
-# whose change is behind `cfg(windows)`: that job is main-only otherwise, so
-# without it the first Windows compile of such a change happens on main.
-ci branch="" windows="":
+# Pull requests do not start Actions. Compiles, clippy, tests and builds
+# ran on this machine already (`just gates`). The organisation's budget is
+# capped, so Dinar-dz jobs refuse to start; the mirror is Samir's account
+# and his free minutes. It carries no history of its own: this recipe
+# force-pushes, so the mirror is always a copy and never a place work lives.
+#
+# A feature branch is copied too, so the mirror stays reachable, but no run
+# is started. CI is a post-merge check. To force one anyway:
+#   gh workflow run CI --repo samir1498/dz-pos-ci --ref <branch>
+ci branch="":
     #!/usr/bin/env bash
     set -euo pipefail
     b="{{branch}}"
@@ -324,16 +325,18 @@ ci branch="" windows="":
     sha="$(git rev-parse "$b")"
     git remote get-url ci >/dev/null 2>&1 || git remote add ci git@github.com:samir1498/dz-pos-ci.git
     git push -q --force ci "$b:$b"
-    echo "pushed $b to the mirror"
+    echo "pushed $b @$sha to the mirror"
+    if [ "$b" != "main" ]; then
+        echo "CI runs on the mirror after a merge to main, not on a feature branch."
+        echo "just gates on this machine is the PR gate."
+        exit 0
+    fi
     # The run is found by the commit it is testing, never by "the newest run
     # on this branch": that answer was once an hour old and was reported as
-    # this push's result. A push to main starts a run by itself (the
-    # workflow's `push` trigger names main), so asking for one as well
-    # started two runs a second apart and the concurrency group killed one,
-    # which then looked like a failure. So: wait for a run on this commit,
-    # and only start one by hand if none appears, which is the case on every
-    # branch that is not main and on a main push whose paths were all
-    # ignored.
+    # this push's result. A push to main starts a run by itself, so asking
+    # for one as well started two runs a second apart and the concurrency
+    # group killed one, which then looked like a failure. Wait for a run on
+    # this commit; only start one by hand if none appears (paths-ignore).
     find_run() {
         gh run list --repo samir1498/dz-pos-ci --branch "$b" --limit 20 \
             --json databaseId,headSha \
@@ -348,12 +351,7 @@ ci branch="" windows="":
     done
     if [ -z "$id" ]; then
         echo "no run started itself; asking for one"
-        if [ -n "{{windows}}" ]; then
-            echo "asking for the windows job too"
-            gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b" -f windows=true
-        else
-            gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
-        fi
+        gh workflow run CI --repo samir1498/dz-pos-ci --ref "$b"
         for _ in $(seq 1 12); do
             id="$(find_run || true)"
             [ -n "${id:-}" ] && [ "$id" != "null" ] && break

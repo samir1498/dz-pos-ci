@@ -8,11 +8,11 @@ name: Release
 # is and says so in its own output; `.github/scripts/release-gate.sh` holds
 # the actual decision logic and can be run and proven off this file.
 #
-# Windows minutes are the same capped organisation budget `docs/architecture.md`
-# § Testing matrix talks about for CI. The dry-run path is what `just ci`
-# exercises on the mirror before the first real tag: push the branch, then
-# `gh workflow run Release --repo samir1498/dz-pos-ci --ref <branch>`. See
-# the PR description for what is proven here and what is not.
+# Windows minutes are the same capped organisation budget. Until that
+# budget is restored, a tag on Dinar-dz will not start a runner; dispatch
+# the dry-run on the mirror (same file, Samir's minutes):
+#   gh workflow run Release --repo samir1498/dz-pos-ci --ref <branch-or-tag>
+# See the PR description for what is proven here and what is not.
 on:
   push:
     tags: ["v*"]
