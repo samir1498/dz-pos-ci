@@ -37,3 +37,28 @@ export const OG_LOCALE: Readonly<Record<Locale, string>> = {
   en: "en_US",
   ar: "ar_AR",
 };
+
+/**
+ * Where the installers live: releases on the org repo, cut by the release
+ * workflow (docs/architecture.md § Release) from tags built on the public
+ * mirror. The filenames are the stable names the build job renames each
+ * installer to before upload, so these URLs never carry a version and the
+ * landing page needs no update per release. `releases/latest` resolves to
+ * the newest non-draft, non-prerelease release -- which is why the first
+ * builds (unsigned, draft while the certificate is missing) do not move
+ * these links: drafts are invisible to `latest` by design.
+ */
+export const RELEASE_ORG = "Dinar-dz/dz-pos";
+
+export const DOWNLOAD_FILES = {
+  windows: "Dinar-Setup.exe",
+  macos: "Dinar.dmg",
+  linux: "Dinar.AppImage",
+} as const;
+
+export type DownloadOs = keyof typeof DOWNLOAD_FILES;
+
+export const downloadUrl = (os: DownloadOs): string =>
+  `https://github.com/${RELEASE_ORG}/releases/latest/download/${DOWNLOAD_FILES[os]}`;
+
+export const RELEASE_PAGE = `https://github.com/${RELEASE_ORG}/releases/latest`;

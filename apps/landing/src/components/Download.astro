@@ -1,0 +1,123 @@
+---
+// One button per installer. The server renders all three links the same on
+// every route; a small script marks the visitor's own system with a badge,
+// highlighting rather than reordering, so RTL order never shifts under the
+// reader. URLs are the stable filenames from lib/site.ts (the build job
+// renames each installer before upload), never a version.
+import type { Dict } from "../i18n";
+import { DOWNLOAD_FILES, RELEASE_PAGE, downloadUrl, type DownloadOs } from "../lib/site";
+
+interface Props {
+  readonly download: Dict["download"];
+}
+
+const { download } = Astro.props;
+
+const SYSTEMS: ReadonlyArray<{
+  readonly os: DownloadOs;
+  readonly label: string;
+  readonly note: string;
+}> = [
+  { os: "windows", label: download.windowsLabel, note: download.windowsNote },
+  { os: "macos", label: download.macosLabel, note: download.macosNote },
+  { os: "linux", label: download.linuxLabel, note: download.linuxNote },
+];
+---
+
+<section class="download" id="download" aria-labelledby="download-heading">
+  <div class="wrap download-inner">
+    <h2 id="download-heading">{download.heading}</h2>
+    <p>{download.body}</p>
+    <div class="download-buttons">
+      {
+        SYSTEMS.map(({ os, label, note }) => (
+          <a class="btn-primary download-btn" data-os={os} href={downloadUrl(os)} rel="noopener">
+            <span class="download-label">{label}</span>
+            <span class="download-note">{note} · {DOWNLOAD_FILES[os]}</span>
+            <span class="download-badge">{download.recommended}</span>
+          </a>
+        ))
+      }
+    </div>
+    <p class="download-unsigned">{download.unsignedNote}</p>
+    <p class="download-all">
+      <a href={RELEASE_PAGE} rel="noopener">{download.allLink}</a>
+    </p>
+  </div>
+</section>
+
+<script>
+  // `userAgentData.platform` is Chromium-only; everything else falls back
+  // to `navigator.platform` ("Win32", "MacIntel", "Linux x86_64"). Unknown
+  // stays unmarked: all three buttons are always there.
+  const agent = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = (agent.userAgentData?.platform ?? navigator.platform ?? "").toLowerCase();
+  const os = platform.includes("win")
+    ? "windows"
+    : platform.includes("mac")
+      ? "macos"
+      : platform.includes("linux")
+        ? "linux"
+        : null;
+  if (os !== null) {
+    document.querySelector(`[data-os="${os}"]`)?.setAttribute("data-recommended", "true");
+  }
+</script>
+
+<style>
+  .download {
+    padding-block: var(--space-12);
+  }
+
+  .download-inner {
+    max-width: 640px;
+  }
+
+  .download h2 {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+  }
+
+  .download p {
+    color: var(--text-secondary);
+    margin-block-start: var(--space-2);
+  }
+
+  .download-buttons {
+    margin-block-start: var(--space-6);
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .download-btn {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    text-decoration: none;
+  }
+
+  .download-note {
+    font-size: var(--text-sm);
+    font-weight: 400;
+    opacity: 0.8;
+  }
+
+  .download-badge {
+    display: none;
+    margin-block-start: var(--space-1);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .download-btn[data-recommended="true"] .download-badge {
+    display: inline;
+  }
+
+  .download-unsigned {
+    font-size: var(--text-sm);
+  }
+
+  .download-all {
+    font-size: var(--text-sm);
+  }
+</style>

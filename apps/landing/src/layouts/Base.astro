@@ -20,6 +20,7 @@ import Languages from "../components/Languages.astro";
 import Screens from "../components/Screens.astro";
 import Audience from "../components/Audience.astro";
 import Pricing from "../components/Pricing.astro";
+import Download from "../components/Download.astro";
 
 interface Props {
   readonly locale: Locale;
@@ -120,6 +121,7 @@ const heroSrcset = heroShot.sources.map((source) => `/shots/${source.url} ${sour
       <Screens locale={locale} screens={dict.screens} />
       <Audience audience={dict.audience} />
       <Pricing pricing={dict.pricing} />
+      <Download download={dict.download} />
     </main>
   </body>
 </html>

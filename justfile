@@ -363,6 +363,38 @@ ci branch="" extra="":
         wait_for CI "{{extra}}"
     fi
 
+# Cut a release: tags main as vX.Y.Z and pushes the tag to the org and to
+# the public mirror. The mirror tag run is what builds (org minutes are
+# capped); the publish job then creates the release on Dinar-dz/dz-pos.
+# Versions must already agree (Cargo.toml, tauri.conf.json) or the gate
+# refuses the run. Usage: just release v0.1.0
+release tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ] || { echo "release: run from main, not $(git rev-parse --abbrev-ref HEAD)" >&2; exit 1; }
+    [ -z "$(git status --porcelain)" ] || { echo "release: working tree is not clean" >&2; exit 1; }
+    [[ "{{tag}}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] || { echo "release: '{{tag}}' is not v<major>.<minor>.<patch>[-pre][+build]" >&2; exit 1; }
+    git fetch -q origin main
+    [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || { echo "release: main is behind origin/main; pull first" >&2; exit 1; }
+    git tag "{{tag}}"
+    git push origin "{{tag}}"
+    git remote get-url ci >/dev/null 2>&1 || git remote add ci git@github.com:samir1498/dz-pos-ci.git
+    # Explicit tag refspec: a bare `git push ci <tag>` can resolve as a
+    # branch push, which would silently create a branch named like a
+    # version and never trigger the release workflow (tags: ["v*"]).
+    git push ci "refs/tags/{{tag}}:refs/tags/{{tag}}"
+    echo "tag {{tag}} on origin and mirror; watching the mirror release run"
+    sha="$(git rev-parse "{{tag}}^{commit}")"
+    id=""
+    for _ in $(seq 1 12); do
+        id="$(gh run list --repo samir1498/dz-pos-ci --workflow Release --limit 20 --json databaseId,headSha --jq "[.[] | select(.headSha == \"$sha\")] | .[0].databaseId" 2>/dev/null || true)"
+        [ -n "${id:-}" ] && [ "$id" != "null" ] && break
+        id=""
+        sleep 10
+    done
+    [ -n "$id" ] || { echo "no Release run appeared for $sha; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
+    gh run watch "$id" --repo samir1498/dz-pos-ci --exit-status
+
 # Scan this checkout against sonar.observeone.com. Not CI and not a PR
 # check: same as ObserveOne, run on the machine before merge and again on
 # main after. The Rust plugin shells out to `cargo clippy`, so this has to
