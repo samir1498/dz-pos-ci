@@ -28,17 +28,19 @@ const SRC = join(process.cwd(), "src");
  * fixtures need a real `role` value the same way a fixture needs a real
  * `name` — data, never a comparison.
  *
- * `lib/roles.ts` is where the three names are written down, once, for the
- * whole app. `session.test.tsx` builds two different people to prove the
- * query cache does not survive the change between them; which two roles
- * they hold is incidental. `AppShell.test.tsx` answers `/auth/me` with
- * somebody, and a person has a role. `audit.test.tsx` spells one inside the
- * `after` of an audit row, which is the log recording that a person's role
- * was changed: the name there is the thing being logged, not a decision the
- * screen takes. `settings_.users.test.tsx` builds the staff a staff screen
- * lists, and staff have roles. `test/session.ts` (M4 T5) is the one
- * `MeDto` fixture every other screen test's `SessionProvider` renders
- * behind; the two roles on it are the same kind of data.
+ *  `lib/roles.ts` is where the three names are written down, once, for the
+ *  whole app. `session.test.tsx` builds two different people to prove the
+ *  query cache does not survive the change between them; which two roles
+ *  they hold is incidental. `AppShell.test.tsx` answers `/auth/me` with
+ *  somebody, and a person has a role. `audit.test.tsx` spells one inside the
+ *  `after` of an audit row, which is the log recording that a person's role
+ *  was changed: the name there is the thing being logged, not a decision the
+ *  screen takes. `settings_.users.test.tsx` builds the staff a staff screen
+ *  lists, and staff have roles. `test/session.ts` (M4 T5) is the one
+ *  `MeDto` fixture every other screen test's `SessionProvider` renders
+ *  behind; the two roles on it are the same kind of data.
+ *  `FirstSetupScreen.test.tsx` answers `/auth/first-setup` with a session,
+ *  and a session carries the new owner's role the same way.
  *
  * Named one by one rather than "any test file", so a branch cannot hide in
  * a test either. Adding a file here is a claim that its role name is data;
@@ -47,6 +49,7 @@ const SRC = join(process.cwd(), "src");
 const ALLOWED: ReadonlySet<string> = new Set([
   join("lib", "roles.ts"),
   join("components", "AppShell.test.tsx"),
+  join("components", "FirstSetupScreen.test.tsx"),
   join("lib", "session.test.tsx"),
   join("routes", "audit.test.tsx"),
   join("routes", "settings_.users.test.tsx"),

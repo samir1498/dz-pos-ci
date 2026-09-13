@@ -234,7 +234,10 @@ pub fn set_pin(
 /// credential yet. The desktop asks this of `/health` so it can show the
 /// name-and-password screen instead of a sign-in for a user who does not
 /// exist.
-pub fn shop_needs_first_setup(conn: &mut SqliteConnection, shop_id: i32) -> Result<bool, CoreError> {
+pub fn shop_needs_first_setup(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+) -> Result<bool, CoreError> {
     Ok(!repo::any_credential_set(conn, shop_id)?)
 }
 

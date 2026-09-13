@@ -355,7 +355,9 @@ fn a_virgin_shop_gives_its_seeded_owner_the_first_password_and_it_signs_them_in(
 fn a_password_the_shape_rule_refuses_is_refused_here_too_and_nothing_is_claimed() {
     let (_dir, mut conn) = open_temp();
     assert!(users::claim_first_owner(&mut conn, SHOP, "Anouar", "short").is_err());
-    assert!(!users::get(&mut conn, SHOP, OWNER).unwrap().has_password);
+    let owner = users::get(&mut conn, SHOP, OWNER).unwrap();
+    assert!(!owner.has_password);
+    assert_eq!(owner.name, "Propriétaire");
 }
 
 #[test]
@@ -380,6 +382,40 @@ fn a_pin_set_the_ordinary_way_shuts_the_door_too() {
         matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "password"),
         "{refused:?}"
     );
+}
+
+#[test]
+fn a_password_set_the_ordinary_way_shuts_the_door_too() {
+    let (_dir, mut conn) = open_temp();
+    users::set_password(&mut conn, SHOP, OWNER, OWNER, FIRST_PASSWORD, None).unwrap();
+    let refused = users::claim_first_owner(&mut conn, SHOP, "Anouar", "un autre mot de passe");
+    assert!(
+        matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "password"),
+        "{refused:?}"
+    );
+}
+
+#[test]
+fn a_taken_name_is_refused_and_claims_nothing() {
+    let (_dir, mut conn) = open_temp();
+    users::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewUser {
+            name: "Samir".to_string(),
+            role: Role::Cashier,
+        },
+    )
+    .unwrap();
+    let refused = users::claim_first_owner(&mut conn, SHOP, "Samir", FIRST_PASSWORD);
+    assert!(
+        matches!(&refused, Err(CoreError::Conflict { field, .. }) if field == "name"),
+        "{refused:?}"
+    );
+    let owner = users::get(&mut conn, SHOP, OWNER).unwrap();
+    assert!(!owner.has_password);
+    assert_eq!(owner.name, "Propriétaire");
 }
 
 #[test]
