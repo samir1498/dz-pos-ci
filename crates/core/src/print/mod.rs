@@ -21,12 +21,12 @@ pub mod ticket;
 
 pub use barcode_label::{render_label, render_label_sheet};
 pub use debt_slip::render_debt_slip;
+pub use escpos::{dump_ticket_escpos, render_ticket_escpos};
 pub use facture::{
     render_facture, render_facture_with, render_facture_with_reference, Cancellation, FactureInput,
     Paper,
 };
 pub use statement::render_statement;
-pub use escpos::{dump_ticket_escpos, render_ticket_escpos};
 pub use ticket::render_ticket;
 
 use crate::models::document::Document;

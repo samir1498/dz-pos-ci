@@ -240,10 +240,7 @@ pub fn set_pin(
 /// Whether the first-PIN door is still open: nobody in the shop has a
 /// credential yet. The desktop asks this of `/health` so it can show the
 /// onboarding pad instead of a sign-in for a user who does not exist.
-pub fn shop_needs_first_pin(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-) -> Result<bool, CoreError> {
+pub fn shop_needs_first_pin(conn: &mut SqliteConnection, shop_id: i32) -> Result<bool, CoreError> {
     Ok(!repo::any_credential_set(conn, shop_id)?)
 }
 

@@ -181,7 +181,8 @@ fn each_language_of(case: Case) {
         let rendered = dump_ticket_escpos(&bytes);
         let expected = golden(lang, case, &rendered, &mut updated);
         assert_eq!(
-            rendered, expected,
+            rendered,
+            expected,
             "{} is not what the encoder dumps",
             golden_name(lang, case)
         );
