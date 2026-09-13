@@ -20,7 +20,7 @@ from here, look at it with `screenshot-pull`.
 | Shell quirk | node/pnpm come from nvm and only exist in an interactive login shell. Wrap commands: `ssh laptop 'zsh -lic "cd ~/Developer/dz-pos && pnpm …"'` — a bare `ssh laptop pnpm` says "command not found". |
 | Display | GNOME Wayland on seat0. From SSH set `DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000` before anything that opens a window. |
 | sudo | Needs a password. Anything `dnf` gets handed to Samir to run himself; never wait on it. |
-| Toolchain (2026-09-08) | cargo 1.96, node 22 (nvm), pnpm 11.8, gh + GitHub SSH OK. **Missing:** `webkit2gtk4.1-devel` and friends (needed for `tauri dev`), the dz-pos clone, `claude`. |
+| Toolchain (2026-09-13) | cargo 1.96, node 22 (nvm), pnpm 11.8, gh + GitHub SSH OK. Clone at `~/Developer/dz-pos` with `pnpm install` done; `dzpos-core` / `dzpos-api` / `dzpos-seed` cargo cache warm. **Missing:** `webkit2gtk4.1-devel` and friends (needed for `tauri dev`), `claude`. |
 
 `ssh laptop` below means `ssh -o BatchMode=yes -o ConnectTimeout=10 samir@100.111.55.62`.
 Check `tailscale status` first if a command hangs; an offline peer waits
@@ -66,14 +66,12 @@ this line to run on the laptop once, then continue:
 sudo dnf install -y webkit2gtk4.1-devel gtk3-devel libappindicator-gtk3-devel librsvg2-devel libsoup3-devel javascriptcoregtk4.1-devel
 ```
 
-## First-time setup (do the parts that need no sudo)
+## First-time setup
 
-```
-ssh laptop 'git clone -q git@github.com:Dinar-dz/dz-pos.git ~/Developer/dz-pos && zsh -lic "cd ~/Developer/dz-pos && pnpm install"'
-```
-
-Then the dnf line above (Samir), then one `cargo build` in
-`apps/desktop/src-tauri` to warm the cache before he is waiting for a window.
+Clone and `pnpm install` are done (2026-09-13). `dzpos-core`, `dzpos-api`
+and `dzpos-seed` have been built once so the cache is warm. The dnf line
+above is still Samir's; `tauri dev` waits on it. After webkit lands, one
+`cargo build` in `apps/desktop/src-tauri` warms the native window.
 
 ## Why git and not rsync
 

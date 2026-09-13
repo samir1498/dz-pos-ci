@@ -224,16 +224,15 @@ landing-art:
 
 # Publish apps/landing to Cloudflare Pages (project: src/lib/site.ts's
 # PAGES_PROJECT). Refuses to run unless DZPOS_LANDING_PUBLISH=1: the
-# product name is a placeholder, the price does not exist, and the Arabic
-# translation has not been read by a native speaker
-# (context/plans/20260911-landing-page.md, L5 brief).
+# price does not exist, and the Arabic translation has not been read by a
+# native speaker (context/plans/20260911-landing-page.md, L5 brief).
 # This page is NOT CLEARED TO GO PUBLIC YET.
 landing-deploy:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "${DZPOS_LANDING_PUBLISH:-}" != "1" ]; then
         echo "landing-deploy: refusing. This page is not cleared to go public yet" >&2
-        echo "(placeholder name, no price, unreviewed Arabic). Set DZPOS_LANDING_PUBLISH=1" >&2
+        echo "(no price, unreviewed Arabic). Set DZPOS_LANDING_PUBLISH=1" >&2
         echo "only once Samir and Anouar have said so." >&2
         exit 1
     fi

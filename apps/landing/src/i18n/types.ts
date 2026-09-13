@@ -5,9 +5,8 @@ export interface Dict {
   readonly dir: "ltr" | "rtl";
   readonly title: string;
   /** Same two words as apps/desktop/src/components/Wordmark.tsx's brand_word
-   *  and brand_suffix: the coin never changes, the word beside it does.
-   *  "Dinar POS" is a placeholder pending Anouar's final name
-   *  (docs/features.md, open decision 2). */
+   *  and brand_suffix: the coin is Dinar, the word beside it is the
+   *  category (POS / بوس). */
   readonly brandWord: string;
   readonly brandSuffix: string;
   /**

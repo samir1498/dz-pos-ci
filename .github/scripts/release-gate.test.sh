@@ -25,9 +25,9 @@ edition = "2021"
 EOF
 cat > "$tauri_conf" <<'EOF'
 {
-  "productName": "dz-pos",
+  "productName": "Dinar",
   "version": "0.1.0",
-  "identifier": "com.dzpos.app"
+  "identifier": "com.dinar.app"
 }
 EOF
 
@@ -64,7 +64,7 @@ echo
 
 echo "=== 1b. manual dispatch, Cargo.toml and tauri.conf.json disagree: refused ==="
 cat > "$tauri_conf.mismatch" <<'EOF'
-{ "productName": "dz-pos", "version": "0.2.0" }
+{ "productName": "Dinar", "version": "0.2.0" }
 EOF
 check "dispatch refuses when the two version files disagree" 1 \
     "$GATE" workflow_dispatch "" "deadbeef" "" "$cargo_toml" "$tauri_conf.mismatch"

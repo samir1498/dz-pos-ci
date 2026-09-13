@@ -351,9 +351,9 @@ the kit's two folders and what the CLI gets wrong on the way in.
 
 Decided (Samir, 2026-09-08): the version is semver plus the git short hash
 plus the build date, all three embedded in the binary at build time and
-shown in About. The bundle identifier `com.dzpos.app` changes exactly
-once, with the final name, before the first tag (open decision 2 in
-`features.md`).
+shown in About. The product name is Dinar and the bundle identifier is
+`com.dinar.app` (Samir, 2026-09-13). It does not change after the first
+tag: a second change would be a data-path migration for every shop.
 
 Decided (2026-09-11, M5 T1): the version also heads the log file and will
 head the support bundle. `crates/core::build_info::BUILD_INFO` is the one

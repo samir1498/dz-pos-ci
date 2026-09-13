@@ -27,13 +27,15 @@ without it. **open** means it is ours and not started.
 | One command from settings writes a zip a shop can send, carrying the log, the versions and the schema and no customer name, price or credential | `crates/core/src/services/support.rs`, the settings screen's support panel | a test that lists what went in and refuses anything outside the list |
 | All three kinds of copy beside the shop file are listed on the backups screen and any of them can be put back | `apps/desktop/src/components/BackupsPanel.tsx`, `crates/api` restore route | the panel's own tests, and a restore route that picks the folder from the shape of the name rather than from the caller |
 | A value on an Arabic page keeps the order it is read in, on the screens and on the six printed documents | the templates under `crates/core/templates/`, the till, the customer fiche and the Excel panel | `crates/core/tests/print_bidi.rs`, which runs the bidi algorithm over all forty-four golden pages rather than reading the markup for a rule |
+| The product name is Dinar and the bundle identifier is `com.dinar.app` | `apps/desktop/src-tauri/tauri.conf.json`, window title, landing copy, `docs/features.md` decision 2 | crate and path names stay `dz-pos`; changing the identifier after a tag would be a data-path migration |
+| Every date box and the one month box read in the shop's language and the shop's order | `apps/desktop/src/components/ui/date-field.tsx` and `month-field.tsx`, with the calendar arithmetic in `apps/desktop/src/lib/date-segments.ts` | the kit's own tests: a day the month does not have is brought back to the last one it does, the 29th of February stands in a leap year and not in the year before, and the field's label names the whole control rather than one box of it |
+| Sonar on the team server with the official Rust plugin | `just sonar` to sonar.observeone.com, project `dz-pos`, gate ObserveOne way | Rust plugin 1.5.0; runs on this machine, not in CI |
 | The text that puts the NIF on a facture, and the absence of one for the article d'imposition | `docs/features.md` party identifiers row, from `research/legal-fiscal/2026-09-08-facture-and-ticket.md` | loi 04-02 art. 34 and LF 2006 art. 42, quoted from the Journal Officiel PDFs in that note's `sources/` |
 
 ## Waiting on somebody
 
 | What has to be true | Who holds it | Why it cannot start without them | Where the answer goes |
 |---|---|---|---|
-| The product has its final name | Anouar | The name is baked into the installer and the bundle identifier. Changing it after the first release means every shop reinstalls rather than updates, so it has to be right before the first tag. | `features.md` open decision 2, then one commit that renames everything at once |
 | A Windows code-signing certificate is bought | Anouar | Without one, every customer who installs sees a warning that the software is from an unknown publisher. Buying one takes days, which is why it sits at the top of this list rather than at the end. | the release workflow's secrets; the workflow already builds unsigned and marks the release a draft when the secret is absent |
 | Somebody holds the key that signs updates | Anouar and Samir | The key never enters the repository and the build signs with a secret. Until it exists there is no update to sign, and until somebody owns it there is nobody to regenerate it if it leaks. | `docs/architecture.md` § Release |
 | A comptable has confirmed every fiscal row | Samir, through a comptable | The rows are read off the texts and the fixtures agree with each other, which is not the same as an Algerian accountant saying they match practice. The article d'imposition is the sharpest of them: it prints on every facture in circulation and no text asks for it, so only an accountant can say whether leaving it off would cost a shop anything. | `docs/features.md`, each row's own note (gate R8) |
@@ -43,10 +45,7 @@ without it. **open** means it is ours and not started.
 
 ## Ours and not started
 
-| What | Why it matters | Where |
-|---|---|---|
-| Every date box and the one month box read in the shop's language and its date order | They are native browser controls, so they take both from the machine. An Arabic shop on a French Windows reads `septembre 2026` on its own expenses screen, and `09/11/2026` for the day a régime fiscal starts is September or November depending on which machine opened it, with nothing on the page saying which. Nine screens carry one. | M5 task T14 |
-| Sonar quoted as a gate, or dropped | It is only a gate if Rust support on the team server was verified. Until somebody checks, it is neither. | `docs/architecture.md` § Testing matrix |
+Nothing in this milestone. What is left is waiting on somebody, above.
 
 ## What no gate can cover
 

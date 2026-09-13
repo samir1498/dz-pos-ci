@@ -36,7 +36,7 @@ Fixtures: `money_no_float`, `tva_rounding_once_per_rate`,
 Blocks: nothing. The half-dinar case at the 1,5 DA band stays an open
 fixture until the accountant answers (R8).
 
-## M1. A sale and a ticket on one desktop (closed 2026-09-09; the printer run waits for Samir at the laptop)
+## M1. A sale and a ticket on one desktop (closed 2026-09-09; live thermal print dropped 2026-09-13)
 
 Demo: Anouar sells three products at the till, cash or card on a payment
 terminal (TPE), and an 80 mm ticket comes out of a real thermal printer.
@@ -52,9 +52,10 @@ append-only audit log for price changes, discount overrides, deletions and
 settings changes; the store block in settings with RC, NIF, NIS, AI; the
 régime fiscal control in settings; `ticket_80mm` golden files in three
 languages, each with and without the stamp line (cash versus card);
-ESC/POS over USB from the desktop; three languages on every screen, RTL
-from the first one; daily backup, keep 30, restore from settings. The
-first native window on the laptop is where the Tauri MCP trial (R9) runs.
+three languages on every screen, RTL from the first one; daily backup,
+keep 30, restore from settings. Live ESC/POS over USB was dropped on
+2026-09-13: there is no thermal printer. The first native window on the
+laptop is where the Tauri MCP trial (R9) runs.
 
 Tests: `two_tickets_take_the_number_after_the_last` and
 `a_refused_line_burns_no_number` for the ticket series;
@@ -126,7 +127,7 @@ Blocks: nothing.
 Demo: Anouar installs from a signed Windows installer, reads version, git
 hash and build date in About, updates in place, and a first shop runs on it.
 
-In: the bundle identifier changed once, with the final name; the Tauri
+In: the bundle identifier is `com.dinar.app` (product name Dinar); the Tauri
 updater and its signing key; the Windows code-signing certificate; the
 previous-version migration test enforced from the first tag onward; an
 Arabic and RTL polish pass; and the five release questions listed as open

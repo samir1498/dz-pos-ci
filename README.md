@@ -1,10 +1,9 @@
 # dz-pos
 
-Inventory, sales and invoicing for Algerian shops. **`dz-pos` is a
-placeholder name**; the product name, GitHub org and bundle identifier
-(`com.dzpos.app`) all change once, together, when the real name lands.
-Changing the identifier after a release means a data-path migration, so it
-does not change twice.
+Inventory, sales and invoicing for Algerian shops. The product name is
+**Dinar**; the repo, crates and paths stay `dz-pos`. The installer bundle
+identifier is `com.dinar.app`. Changing that identifier after a release
+means a data-path migration, so it does not change twice.
 
 Research (law, tooling, competitor teardown, market) lives in
 `research/` in this repo; the Lumina teardown is under
@@ -60,9 +59,8 @@ build already rides `pnpm -r build`, so a broken page fails `just gates`);
 card from the design package. `just landing-deploy` would publish it to the
 Cloudflare Pages project named in `apps/landing/src/lib/site.ts`, but
 refuses to run unless `DZPOS_LANDING_PUBLISH=1` is set. It is blocked on
-Anouar: the product name is still the `dz-pos` placeholder, the price is not
-set, and the Arabic copy has not been read by a native speaker
-(`context/plans/20260911-landing-page.md`).
+Anouar: the price is not set, and the Arabic copy has not been read by a
+native speaker (`context/plans/20260911-landing-page.md`).
 
 ## Commands
 

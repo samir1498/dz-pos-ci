@@ -72,7 +72,7 @@ function shell(inner, title) {
     `<a href="#/${id}" class="${r === id ? "is-active" : ""}"><span class="ico"></span>${t(key)}</a>`;
   return `
   <aside class="side">
-    <div class="brand"><span class="brand-mark">dz</span>${t("app_name")}</div>
+    <div class="brand"><span class="brand-mark">D</span>${t("app_name")}</div>
     <nav class="nav">
       ${nav("till", "till")}
       ${nav("dashboard", "dashboard")}

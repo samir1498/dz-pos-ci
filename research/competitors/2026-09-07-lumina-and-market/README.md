@@ -2,11 +2,12 @@
 
 New product line, separate from ObserveOne. Anouar asked for an inventory
 management product for the Algerian market, built against an incumbent that is
-selling well. Working codename **dz-pos** — placeholder, not the product name.
+selling well. Product name **Dinar**; repo and crate paths stay **dz-pos**.
 Code: [Dinar-dz/dz-pos](https://github.com/Dinar-dz/dz-pos) (private,
 scaffolded 2026-09-07 from MonStock `33d2ab0`). Decided 2026-09-08: the org
-was created and the repo transferred into it (Anouar, `context/progress/now.md`);
-the product name itself is still open, see below.
+was created and the repo transferred into it (Anouar, `context/progress/now.md`).
+Decided 2026-09-13 (Samir): the product name is Dinar, bundle identifier
+`com.dinar.app`.
 
 Started 2026-09-07.
 
@@ -56,9 +57,9 @@ Started 2026-09-07.
   `docs/architecture.md` parks the SaaS-vs-offline choice as "open decision 1,
   after M6" (checked 2026-09-11).
 - Product name and whether a new GitHub org gets created. Decided 2026-09-08:
-  the org question is closed (`context/progress/now.md`). The name is not:
-  Anouar proposed "Dinar" the same day, but the repo is still
-  placeholder-named (`CLAUDE.md`, "Placeholder-named product").
+  the org is `Dinar-dz`. Decided 2026-09-13 (Samir): the product name is
+  Dinar, bundle identifier `com.dinar.app`; crate and path names stay
+  `dz-pos`.
 - Who sells it and to whom. MonStock shipped five releases and got no feedback;
   Lumina's moat is a phone number in Oum El Bouaghi, not its code. Still open.
 

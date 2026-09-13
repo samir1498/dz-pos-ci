@@ -1,7 +1,7 @@
 // Tiny i18n for the mockups. Keys are the ones the real app will need.
 const D = {
   fr: {
-    app_name: "dz-pos",
+    app_name: "Dinar",
     dashboard: "Tableau de bord",
     till: "Caisse",
     products: "Produits",
@@ -134,7 +134,7 @@ const D = {
     today: "Aujourd'hui",
   },
   ar: {
-    app_name: "dz-pos",
+    app_name: "Dinar",
     dashboard: "لوحة التحكم",
     till: "الصندوق",
     products: "المنتجات",
@@ -267,7 +267,7 @@ const D = {
     today: "اليوم",
   },
   en: {
-    app_name: "dz-pos",
+    app_name: "Dinar",
     dashboard: "Dashboard",
     till: "Till",
     products: "Products",

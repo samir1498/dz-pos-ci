@@ -1,6 +1,7 @@
 # CLAUDE.md for dz-pos
 
-Placeholder-named product. Read `README.md` first. Every rule lives in
+Product name Dinar; repo and crate paths stay `dz-pos`. Read `README.md`
+first. Every rule lives in
 `context/` (the pc-ctx store) so the laptop clone and every session read
 the same pages; this file is the index.
 

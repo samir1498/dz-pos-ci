@@ -834,9 +834,9 @@ first release.**
   quietly stripped. The facture
   drops its "Total TTC" row for the same reason, and prints "Prix unitaire"
   where the réel one prints "Prix unitaire HT".
-- Thermal: ESC/POS over USB or Bluetooth from the desktop; from the phone
-  via the desktop in LAN mode. "Any printer" means the OS print dialog for
-  A4/A5 and raw ESC/POS for 80mm.
+- Thermal: the 80 mm ticket is HTML, proven against golden files in three
+  languages. Live ESC/POS over USB was dropped on 2026-09-13: there is no
+  thermal printer. A4/A5 goes through the OS print dialog.
 - Later: a QR code on the ticket, the shop's logo, and a footer text the
   owner sets.
 
@@ -1085,9 +1085,9 @@ the rule is enforced.
 
 1. **SaaS with an account, offline licence, or both.** Anouar. Changes
    pricing, hosting and step 8 only.
-2. **Product name.** Anouar; "Dinar" proposed and the org `Dinar-dz` created
-   on 2026-09-08. The name changes the bundle identifier once, before the
-   first release.
+2. ~~Product name.~~ **Decided 2026-09-13 (Samir): Dinar.** Org `Dinar-dz`,
+   bundle identifier `com.dinar.app`. Crate and path names stay `dz-pos`.
+   The identifier does not change after the first tag.
 3. ~~TVA per product or one global rate.~~ **Decided 2026-09-08 (Samir):
    per product, defaulted from the category.** CTCA art. 23 lists the 9 %
    goods by customs tariff line, so the rate is a property of the product.

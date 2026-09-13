@@ -1,4 +1,4 @@
-//! What a shopkeeper sees when dz-pos cannot start.
+//! What a shopkeeper sees when Dinar cannot start.
 //!
 //! A release build on Windows carries no console
 //! (`windows_subsystem = "windows"`, main.rs), so `eprintln!` in `main`
@@ -34,9 +34,9 @@ use std::path::Path;
 /// path by the time it reaches here, because `run()` computes it first.
 pub fn message(err: &dyn Error, db_path: Option<&Path>) -> String {
     let mut out = String::new();
-    out.push_str("dz-pos n'a pas pu démarrer.\n");
-    out.push_str("dz-pos could not start.\n");
-    out.push_str("لم يتمكن dz-pos من بدء التشغيل.\n");
+    out.push_str("Dinar n'a pas pu démarrer.\n");
+    out.push_str("Dinar could not start.\n");
+    out.push_str("لم يتمكن دينار من بدء التشغيل.\n");
 
     if let Some(path) = db_path {
         let file = path.display();
@@ -84,7 +84,7 @@ pub fn show(err: &dyn Error, db_path: Option<&Path>) {
     }
 
     let text = to_wide(&message(err, db_path));
-    let caption = to_wide("dz-pos");
+    let caption = to_wide("Dinar");
     // Safety: both buffers are null-terminated UTF-16 and live until the
     // call returns; a null HWND means the box has no owner window, which
     // is the only option here since the app's own window never opened.

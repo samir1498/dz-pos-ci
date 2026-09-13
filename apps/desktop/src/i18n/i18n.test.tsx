@@ -11,7 +11,7 @@ function Probe() {
 }
 
 /** Renders a key that actually differs by language; app_name does not
- * (it is "dz-pos" in all three dictionaries on purpose). */
+ * (it is "Dinar" in all three dictionaries on purpose). */
 function TitleProbe() {
   const { t } = useTranslation();
   return <span data-testid="title">{t("products_title")}</span>;
@@ -29,7 +29,7 @@ test("arabic is rtl, others ltr", () => {
 test("french is the default and ltr", () => {
   render(<I18nProvider><Probe /></I18nProvider>);
   expect(screen.getByTestId("p")).toHaveAttribute("dir", "ltr");
-  expect(screen.getByTestId("p")).toHaveTextContent("dz-pos");
+  expect(screen.getByTestId("p")).toHaveTextContent("Dinar");
 });
 
 test("the switcher changes lang, dir and the document attributes", async () => {
