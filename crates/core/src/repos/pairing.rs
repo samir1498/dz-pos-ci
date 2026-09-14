@@ -65,3 +65,51 @@ pub(crate) fn device_by_hash(
         .first(conn)
         .optional()?)
 }
+
+pub(crate) fn list_devices(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+) -> Result<Vec<PairedDeviceRow>, CoreError> {
+    Ok(paired_devices::table
+        .filter(paired_devices::shop_id.eq(shop_id))
+        .order(paired_devices::created_at.desc())
+        .select(PairedDeviceRow::as_select())
+        .load(conn)?)
+}
+
+pub(crate) fn device_by_id(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    id: i32,
+) -> Result<Option<PairedDeviceRow>, CoreError> {
+    Ok(paired_devices::table
+        .filter(paired_devices::shop_id.eq(shop_id))
+        .filter(paired_devices::id.eq(id))
+        .select(PairedDeviceRow::as_select())
+        .first(conn)
+        .optional()?)
+}
+
+pub(crate) fn revoke_device(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    id: i32,
+    now: NaiveDateTime,
+) -> Result<PairedDeviceRow, CoreError> {
+    let row = device_by_id(conn, shop_id, id)?.ok_or(CoreError::NotFound {
+        entity: "paired_device",
+        id,
+    })?;
+    if row.revoked_at.is_some() {
+        return Err(CoreError::validation(
+            "revoked_at",
+            "device already revoked",
+        ));
+    }
+    Ok(
+        diesel::update(paired_devices::table.filter(paired_devices::id.eq(id)))
+            .set(paired_devices::revoked_at.eq(now))
+            .returning(PairedDeviceRow::as_returning())
+            .get_result(conn)?,
+    )
+}

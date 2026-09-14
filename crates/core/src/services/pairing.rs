@@ -111,6 +111,36 @@ pub fn claim_pairing_token(
     })
 }
 
+pub fn list_devices(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+) -> Result<Vec<PairedDeviceRow>, CoreError> {
+    repo::list_devices(conn, shop_id)
+}
+
+pub fn revoke_device(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    actor_id: i32,
+    device_id: i32,
+    now: NaiveDateTime,
+) -> Result<PairedDeviceRow, CoreError> {
+    let row = repo::revoke_device(conn, shop_id, device_id, now)?;
+    crate::services::audit::record(
+        conn,
+        shop_id,
+        actor_id,
+        crate::services::audit::Change {
+            action: crate::services::audit::ACTION_DEVICE_REVOKED,
+            entity: "paired_device",
+            entity_id: Some(device_id),
+            before: None,
+            after: None,
+        },
+    )?;
+    Ok(row)
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used, clippy::expect_used)]
