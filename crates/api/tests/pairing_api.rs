@@ -90,7 +90,10 @@ async fn an_owner_can_create_a_pairing_qr_and_a_phone_can_claim_it_once() {
     assert_eq!(status, StatusCode::OK, "{body}");
     let pairing_token = body["pairing_token"].as_str().unwrap();
     assert_eq!(pairing_token.len(), 64);
-    assert_eq!(body["expires_in_seconds"], 60);
+    assert_eq!(
+        body["expires_in_seconds"],
+        dzpos_core::services::pairing::PAIRING_TTL_SECONDS
+    );
 
     // Phone claims with pairing token, no session, just launch token.
     let (status, body) = call_no_session(

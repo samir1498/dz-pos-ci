@@ -15,7 +15,7 @@ use crate::models::pairing::{DeviceToken, PairedDeviceRow, PairingToken};
 use crate::repos::pairing as repo;
 
 /// How long a QR lives: 60 seconds, single-use, as the mockup shows.
-const PAIRING_TTL_SECONDS: i64 = 60;
+pub const PAIRING_TTL_SECONDS: i64 = 60;
 const TOKEN_BYTES: usize = 32;
 
 fn mint_hex() -> Result<String, CoreError> {

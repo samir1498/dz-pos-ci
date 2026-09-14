@@ -155,23 +155,27 @@ Blocks: the final name (Anouar); the certificate's cost and lead time
 (Anouar); who holds the updater signing key (Anouar or Samir, decided
 before the key exists).
 
-## M6. The phone in the shop
+## M6. The phone in the shop — T1–T8 shipped, T9 sweep next
 
-Demo: a phone pairs by QR, sells from the shop floor, and the ticket prints
-on the desktop.
+Demo: a phone pairs by QR (60s, `EditSettings`), sells from the shop floor
+(`POST /sales` via `queue.ts` retry), and the ticket prints on the desktop
+(`POST /sales/{id}/print` → `spool/ticket-*.bin` + optional `9100`).
 
-In: LAN mode, one desktop serves; mDNS discovery; pairing by QR with a
-short-lived token (the mockup shows 60 seconds); the Windows Firewall
-banner; the Expo thin client (pair, till, cart, pay, ticket, products,
-customers, more) with its retry queue; printing through the desktop;
-Maestro flows on a real phone over Tailscale. The Expo plugin and the
-Expo MCP (R9) are installed here, not before. Three controls proposed
-here and written into `features.md` §6 when the milestone starts: the
-token is single-use, only an owner or manager shows the QR, and settings
-list paired devices with a revoke.
+In: LAN mode (`bind_lan` `0.0.0.0`, `mdns` `_dzpos._tcp`, `architecture.md`
+decides HTTP on trusted Wi-Fi, TLS fingerprint stays candidate, Firewall
+banner); QR pairing `60s` single-use (`pairing_tokens`/`paired_devices` STRICT,
+`POST /pairing/qr` `EditSettings`, `POST /pairing/claim` no session, second
+claim `401`); Expo thin client `dinar-mobile` (`App.tsx` → `Till.tsx`,
+`pair•till•cart•pay•ticket•products•customers`, `queue.ts` `AsyncStorage`);
+paired devices list+revoke `GET /pairing/devices` / `POST …/revoke`
+(`EditSettings`, `Seventeen` reads, `device.revoked` audit, `PairedDeviceDto`);
+print through desktop (`POST /sales/{id}/print` `Sell`, `spool/`); Maestro
+`apps/mobile/maestro/pair-and-sell.yaml` over Tailscale; office password
+reset `POST /users/{id}/password` (`ManageUsers`, same as PIN, `SetPasswordDto`);
+Expo plugin + MCP still for later when mobile work begins (R9), but scaffold
+already `pnpm -r build` via placeholder.
 
-Blocks: whether LAN traffic needs TLS or the Wi-Fi is trusted; decided in
-`docs/architecture.md` before a second device writes to the ledger.
+Blocks: none for T9. TLS decision is `http` for v1, reversible via QR `fp`.
 
 ## After M6, when Anouar decides
 

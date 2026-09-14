@@ -29,7 +29,7 @@ pub async fn create_qr(
         .await?;
     Ok(Json(PairingQrDto {
         pairing_token: token.expose().to_string(),
-        expires_in_seconds: 60,
+        expires_in_seconds: dzpos_core::services::pairing::PAIRING_TTL_SECONDS,
     }))
 }
 
