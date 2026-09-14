@@ -1,8 +1,5 @@
-# apps/mobile
+# Dinar Mobile (M6 T3 scaffold)
 
-Expo / React Native app. Not started. Lives here so the pnpm workspace,
-`.npmrc` (`node-linker=hoisted`) and CI are already shaped for it.
+Expo thin client, placeholder. Talks the same HTTP contract as the desktop (`packages/shared`), never knows which mode it is in (rule 1). Screens: `pair` (QR), `till`, `cart`, `pay`, `ticket`, `products`, `customers`, `more` + retry queue (T5). Printing through desktop (T6). Maestro over Tailscale (T7).
 
-It will speak the same HTTP contract as the desktop UI and never know
-whether the server is a shop PC or hosted — see the architecture notes
-linked from the root README.
+`expo` + `expo-router` + Expo MCP installed here, not before (R9). `pnpm install` from the workspace root pulls this package too (`pnpm-workspace.yaml` `apps/*`).
