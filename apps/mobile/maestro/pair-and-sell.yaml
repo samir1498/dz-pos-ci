@@ -1,0 +1,14 @@
+# Maestro flow (M6 T7): phone pairs by QR, sells from shop floor, ticket prints on desktop.
+# Run on a real phone over Tailscale: `maestro test apps/mobile/maestro/pair-and-sell.yaml`
+# The desktop must be in LAN mode (bind_lan + mDNS) and show the QR (POST /pairing/qr).
+appId: com.dinar.app # placeholder, Expo dev client
+---
+- launchApp
+- assertVisible: "Dinar — thin client"
+# Pair: scan QR (manual step, Maestro cannot scan real QR, so we assert the pair screen exists)
+- assertVisible: "pair"
+# Till: add product, pay
+- tapOn: "Add"
+- tapOn: "Pay.*cash"
+# Ticket: assert ticket printed on desktop spool (manual check on desktop: spool/ticket-*.bin exists)
+- assertVisible: "Queued: 0"
