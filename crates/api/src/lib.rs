@@ -6,6 +6,7 @@ pub mod daily;
 pub mod dto;
 pub mod error;
 pub mod gates;
+pub mod mdns;
 pub mod routes;
 pub mod session;
 pub mod token;
@@ -771,6 +772,17 @@ pub fn router_with_origin(
 /// deliberate, separate decision.
 pub async fn bind(port: u16) -> std::io::Result<(tokio::net::TcpListener, u16)> {
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
+    let bound = listener.local_addr()?.port();
+    Ok((listener, bound))
+}
+
+/// Binds on all interfaces for LAN mode (M6 T1). The phone on the same
+/// Wi-Fi finds the desktop via mDNS (`mdns::register`), then talks to this
+/// port. The caller must still show the launch token and a session; the
+/// network being reachable is not the permission (docs/architecture.md,
+/// "Transport and auth" + M6 TLS decision). `0` still lets the OS pick.
+pub async fn bind_lan(port: u16) -> std::io::Result<(tokio::net::TcpListener, u16)> {
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
     let bound = listener.local_addr()?.port();
     Ok((listener, bound))
 }

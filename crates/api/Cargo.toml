@@ -21,6 +21,9 @@ thiserror = "2"
 getrandom = "0.3.4"
 # Days on the wire (a régime change is dated); the core already uses it.
 chrono = { workspace = true }
+# M6 T1: mDNS for LAN discovery (phone finds desktop on same Wi-Fi).
+# mdns-sd is the maintained Bonjour/mDNS crate (Avahi compatible).
+mdns-sd = "0.11"
 
 [dev-dependencies]
 # Test-only: one test plants a row the migration's CHECK refuses, which no
