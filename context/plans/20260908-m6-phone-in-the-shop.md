@@ -12,7 +12,7 @@ tasks:
     status: 'done'
   - id: 'T2'
     desc: 'QR pairing: 60s single-use short-lived token, stored with expiry, owner|manager may show QR, token is single-use and revoked after pair'
-    status: 'pending'
+    status: 'done'
   - id: 'T3'
     desc: 'Expo thin client scaffold: apps/mobile from placeholder, navigation (pair, till, cart, pay, ticket, products, customers), packages/shared types, Expo plugin + MCP installed here'
     status: 'pending'
