@@ -8,7 +8,9 @@ use axum::response::Html;
 use axum::Json;
 use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
-use dzpos_core::print::{render_facture_with, render_ticket, Cancellation, FactureInput, Paper};
+use dzpos_core::print::{
+    render_facture_with, render_ticket, render_ticket_escpos, Cancellation, FactureInput, Paper,
+};
 use dzpos_core::services::documents::DocumentKind;
 use dzpos_core::services::sales::{NewSale, SaleKind};
 use dzpos_core::services::{avoir, documents, sales};
@@ -103,6 +105,42 @@ pub async fn ticket(
         .blocking(move |c| documents::get_of_kind(c, shop, id, DocumentKind::Ticket))
         .await?;
     Ok(Html(render_ticket(&found, lang)?))
+}
+
+/// The same ticket as ESC/POS bytes for a thermal printer.
+///
+/// Same document, same `lang`, same refusal as the HTML route when the
+/// row is not a ticket or carries an IFU TVA recap. Returns the raw bytes
+/// the head eats, so the desktop can write them to a file, a USB-serial
+/// device or a TCP printer on port 9100. The transport stays out of the
+/// API: the caller here decides whether those bytes go to a spool file or
+/// over the wire, and `crates/core/src/print/escpos.rs` is what that caller
+/// calls next.
+pub async fn ticket_escpos(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    lang: Result<Query<TicketQuery>, QueryRejection>,
+) -> Result<axum::response::Response, ApiError> {
+    use axum::http::{header, HeaderValue};
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let Query(TicketQuery { lang }) =
+        lang.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
+    let shop = state.shop_id;
+    let found = state
+        .blocking(move |c| documents::get_of_kind(c, shop, id, DocumentKind::Ticket))
+        .await?;
+    let bytes = render_ticket_escpos(&found, lang)?;
+    let mut res = axum::response::Response::new(axum::body::Body::from(bytes));
+    res.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    res.headers_mut().insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static("attachment; filename=\"ticket.bin\""),
+    );
+    Ok(res)
 }
 
 /// The language and the sheet, both named by the caller on every call. The
