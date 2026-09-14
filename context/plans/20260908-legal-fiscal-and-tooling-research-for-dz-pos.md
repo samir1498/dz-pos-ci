@@ -32,7 +32,7 @@ tasks:
     status: 'pending'
   - id: 'R9'
     desc: 'Tooling: read the tooling catalog; try anthropics webapp-testing and frontend-design on the first real screen; install expo plugin when mobile starts; one trial of hypothesi Tauri MCP on the laptop; record verdicts in tooling/'
-    status: 'pending'
+    status: 'done'
 acceptance:
   - 'Every row of the fiscal rules table in docs/features.md cites code, article and edition, or the comptable''s answer with date; no row says assumption'
 references:
