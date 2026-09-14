@@ -1383,3 +1383,108 @@ async fn a_read_of_one_document_says_what_cancelling_it_would_do() {
     let (_, listed) = call(&app, "GET", "/sales", None).await;
     assert!(listed[0]["cancel_effect"].is_null(), "{listed}");
 }
+
+#[tokio::test]
+async fn the_ticket_escpos_is_the_same_ticket_the_html_route_names() {
+    let (_dir, app) = app();
+    let p = product(&app, "Sucre", 11_000, 1900).await;
+    let (status, ticket) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 20_000,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{ticket}");
+    let ticket_id = ticket["id"].as_i64().unwrap();
+
+    // Every signed-in role may print the slip: owner, manager and cashier
+    // all hold Sell, and this is the thermal bytes of the sale they just
+    // rang up (M1 carry-in). The HTML ticket needs no permission at all,
+    // but the bytes do, so the gate is Sell rather than open.
+    for session in [
+        common::OWNER_SESSION,
+        common::MANAGER_SESSION,
+        common::CASHIER_SESSION,
+    ] {
+        let req = Request::builder()
+            .method("GET")
+            .uri(format!("/sales/{ticket_id}/ticket/escpos?lang=fr"))
+            .header("authorization", format!("Bearer {TOKEN}"))
+            .header(common::SESSION_HEADER, session)
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(
+            res.status(),
+            StatusCode::OK,
+            "session {session} was refused"
+        );
+        assert_eq!(
+            res.headers().get("content-type").unwrap(),
+            "application/octet-stream"
+        );
+        let bytes = res.into_body().collect().await.unwrap().to_bytes();
+        // ESC @ (init) is the first two bytes every ticket starts with; a
+        // 200 that carried HTML or JSON would not start this way, and an
+        // empty body would not contain the ticket's number.
+        assert!(bytes.starts_with(&[0x1b, 0x40]), "no ESC @ at the start");
+        assert!(
+            bytes.windows(3).any(|w| w == b"TK-"),
+            "no ticket number in the bytes"
+        );
+    }
+
+    // A facture's id answers 404 on the ticket route, thermal included.
+    // A facture needs a customer and a complete seller block, so reuse the
+    // helpers that already know how to make one.
+    seller_ready(&app).await;
+    let c = party(
+        &app,
+        "Sarl Facture Client",
+        "company",
+        Some("16/00-7654321 B 20"),
+        Some("098216007654321"),
+        Some("05 boulevard Krim Belkacem, Alger"),
+    )
+    .await;
+    let (status, facture) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "kind": "facture",
+            "customer_id": c,
+            "tendered_centimes": 200_000,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{facture}");
+    let facture_id = facture["id"].as_i64().unwrap();
+    let req = Request::builder()
+        .method("GET")
+        .uri(format!("/sales/{facture_id}/ticket/escpos?lang=fr"))
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    // Bad lang is 422 in the envelope, like the HTML ticket.
+    let req = Request::builder()
+        .method("GET")
+        .uri(format!("/sales/{ticket_id}/ticket/escpos?lang=zz"))
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
+        .body(Body::empty())
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}
