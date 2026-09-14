@@ -9,7 +9,7 @@ priority: 10
 tasks:
   - id: 'T1'
     desc: 'LAN mode: desktop binds to LAN (not just 127.0.0.1), mDNS discovery (Bonjour/Avahi), one desktop serves, Windows Firewall banner, TLS decision (http on trusted Wi-Fi vs self-signed + fingerprint in QR) written to docs/architecture.md'
-    status: 'pending'
+    status: 'done'
   - id: 'T2'
     desc: 'QR pairing: 60s single-use short-lived token, stored with expiry, owner|manager may show QR, token is single-use and revoked after pair'
     status: 'pending'
