@@ -27,7 +27,7 @@ tasks:
     status: 'done'
   - id: 'T7'
     desc: 'Maestro flows on real phone over Tailscale: pair, sell from shop floor, ticket prints on desktop, verified on fedora laptop via 100.111.55.62'
-    status: 'pending'
+    status: 'done'
   - id: 'T8'
     desc: 'Password-reset follow-up: POST /users/{id}/password (ManageUsers), mirrors set_pin, ends other sessions, audit row — pulled into M6 as T8 or separate if you prefer'
     status: 'pending'
