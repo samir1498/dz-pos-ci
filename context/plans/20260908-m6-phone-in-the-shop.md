@@ -30,7 +30,7 @@ tasks:
     status: 'done'
   - id: 'T8'
     desc: 'Password-reset follow-up: POST /users/{id}/password (ManageUsers), mirrors set_pin, ends other sessions, audit row — pulled into M6 as T8 or separate if you prefer'
-    status: 'pending'
+    status: 'done'
   - id: 'T9'
     desc: 'Closing sweep: docs/features.md §6, docs/architecture.md, docs/roadmap.md M6 demo, dz-review (roles+money+fixture) before checkpoint PR'
     status: 'pending'
