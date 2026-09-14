@@ -729,6 +729,7 @@ pub fn router_with_origin(
             post(routes::pairing::revoke_device),
         )
         .route("/users/{id}/pin", post(routes::users::set_pin))
+        .route("/users/{id}/password", post(routes::users::set_password))
         .route("/users/{id}/deactivate", post(routes::users::deactivate))
         .route("/users/{id}/reactivate", post(routes::users::reactivate))
         // Every route above takes its actor from the session; nothing reads a

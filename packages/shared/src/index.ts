@@ -29,6 +29,7 @@ export type { SessionIdleDto } from "./generated/SessionIdleDto";
 export type { UserDto } from "./generated/UserDto";
 export type { NewUserDto } from "./generated/NewUserDto";
 export type { SetPinDto } from "./generated/SetPinDto";
+export type { SetPasswordDto } from "./generated/SetPasswordDto";
 export type { ClaimFirstOwnerDto } from "./generated/ClaimFirstOwnerDto";
 export type { PairingQrDto } from "./generated/PairingQrDto";
 export type { DeviceTokenDto } from "./generated/DeviceTokenDto";

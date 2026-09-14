@@ -17,7 +17,7 @@ use axum::http::StatusCode;
 use axum::Json;
 use dzpos_core::services::users::{self as service, NewUser};
 
-use crate::dto::{NewUserDto, SetPinDto, UserDto};
+use crate::dto::{NewUserDto, SetPasswordDto, SetPinDto, UserDto};
 use crate::error::ApiError;
 use crate::session::CurrentUser;
 use crate::AppState;
@@ -74,6 +74,29 @@ pub async fn set_pin(
     let acting_session_id = who.session_id;
     let after = state
         .blocking(move |c| service::set_pin(c, shop, actor, id, &dto.pin, Some(acting_session_id)))
+        .await?;
+    Ok(Json(UserDto::from(after)))
+}
+
+/// Gives a fiche its first password or resets a forgotten one (M6 T8).
+/// Same shape as `set_pin` but for the office credential, and the same
+/// session rule: resetting your own password keeps you signed in, every
+/// other open session for that name is ended.
+pub async fn set_password(
+    State(state): State<AppState>,
+    who: CurrentUser,
+    id: Result<Path<i32>, PathRejection>,
+    body: Result<Json<SetPasswordDto>, JsonRejection>,
+) -> Result<Json<UserDto>, ApiError> {
+    let id = path_id(id)?;
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let shop = state.shop_id;
+    let actor = who.id;
+    let acting_session_id = who.session_id;
+    let after = state
+        .blocking(move |c| {
+            service::set_password(c, shop, actor, id, &dto.password, Some(acting_session_id))
+        })
         .await?;
     Ok(Json(UserDto::from(after)))
 }

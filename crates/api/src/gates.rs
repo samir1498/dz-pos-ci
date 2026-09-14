@@ -431,6 +431,12 @@ pub const ROUTE_GATES: &[Gate] = &[
     },
     Gate {
         method: "POST",
+        path: "/users/{id}/password",
+        permission: Some(Permission::ManageUsers),
+        why: "the same for a password (M6 T8): an office credential, owner's alone, and the session rule mirrors the PIN's — resetting your own keeps you signed in, every other session for that name is ended",
+    },
+    Gate {
+        method: "POST",
         path: "/users/{id}/deactivate",
         permission: Some(Permission::ManageUsers),
         why: "switching a fiche off; the last-owner and self refusals are T0's, enforced on the row (services::users::deactivate)",

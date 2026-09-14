@@ -342,3 +342,47 @@ async fn resetting_your_own_pin_keeps_you_signed_in_and_ends_your_other_sessions
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{refused}");
     assert_eq!(refused["error"]["code"], "session_required");
 }
+
+#[tokio::test]
+async fn an_owner_can_set_a_password_and_the_user_can_sign_in_with_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    let app = dzpos_api::router(state, &token());
+
+    // Create a cashier.
+    let (status, body) = owner(
+        &app,
+        "POST",
+        "/users",
+        Some(json!({ "name": "Samir", "role": "cashier" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let cashier_id = body["id"].as_i64().unwrap();
+
+    // Owner sets a password for the cashier (M6 T8).
+    let (status, body) = owner(
+        &app,
+        "POST",
+        &format!("/users/{cashier_id}/password"),
+        Some(json!({ "password": "huit caracteres" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body["has_password"].as_bool().unwrap());
+
+    // Cashier signs in with that password (no session, just launch token).
+    let req = Request::builder()
+        .method("POST")
+        .uri("/auth/login")
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "name": "Samir", "password": "huit caracteres" }).to_string(),
+        ))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
