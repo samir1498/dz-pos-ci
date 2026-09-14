@@ -25,14 +25,14 @@ use dzpos_api::dto::{
     PurchaseDetailDto, PurchaseDto, PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto,
     PurchaseStatusDto, ReceiveLineDto, RegimeChangeDto, RegimeDto, RestoreDto, RoleDto,
     SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto,
-    SaleTotalsDto, SaleTvaDto, SaleWarningDto, SessionDto, SessionIdleDto, SetPinDto, SettingsDto,
-    StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto, SupplierDebtKindDto,
-    SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto,
-    TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto, UserDto,
+    SaleTotalsDto, SaleTvaDto, SaleWarningDto, SessionDto, SessionIdleDto, SetPasswordDto,
+    SetPinDto, SettingsDto, StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto,
+    SupplierDebtKindDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto,
+    SupplierWriteDto, TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto, UserDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 109] = [
+const FILES: [&str; 110] = [
     "LoginDto.ts",
     "MeDto.ts",
     "SessionDto.ts",
@@ -138,6 +138,7 @@ const FILES: [&str; 109] = [
     "UserDto.ts",
     "NewUserDto.ts",
     "SetPinDto.ts",
+    "SetPasswordDto.ts",
     "ClaimFirstOwnerDto.ts",
     "PairingQrDto.ts",
     "DeviceTokenDto.ts",
@@ -304,6 +305,7 @@ fn export_bindings() {
     UserDto::export_all(&cfg).unwrap();
     NewUserDto::export_all(&cfg).unwrap();
     SetPinDto::export_all(&cfg).unwrap();
+    SetPasswordDto::export_all(&cfg).unwrap();
     ClaimFirstOwnerDto::export_all(&cfg).unwrap();
     PairingQrDto::export_all(&cfg).unwrap();
     DeviceTokenDto::export_all(&cfg).unwrap();

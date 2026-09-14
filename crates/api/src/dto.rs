@@ -2925,6 +2925,13 @@ pub struct SetPinDto {
     pub pin: String,
 }
 
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "SetPasswordDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct SetPasswordDto {
+    pub password: String,
+}
+
 /// The body `POST /auth/first-setup` takes: a name and a password, no
 /// `user_id`. Nobody signed in yet is not in a position to name a row; the
 /// shop's own owner is who `services::users::claim_first_owner` finds and
