@@ -313,3 +313,52 @@ fn an_ifu_document_with_a_tva_recap_is_refused_as_escpos_too() {
         assert_eq!(err.code(), "print", "{lang:?}");
     }
 }
+
+#[test]
+fn the_french_wire_is_one_byte_per_column_not_utf8() {
+    // "Café" is 4 columns: 0x43 0x61 0x66 0xE9, not 5 bytes 0x43 0x61 0x66
+    // 0xC3 0xA9 that the first eyeball showed as "CafÃ©". The head eats one
+    // byte per column (WIDTH = 42), so the wire must be ISO 8859-15.
+    let doc = fixed_sale(Case::Reel);
+    let bytes = render_ticket_escpos(&doc, Lang::Fr).unwrap();
+    assert!(
+        bytes.windows(2).any(|w| w == [0x43, 0x61]) && bytes.contains(&0xE9),
+        "no single-byte é (0xE9) in the French wire"
+    );
+    assert!(
+        !bytes.windows(2).any(|w| w == [0xC3, 0xA9]),
+        "French wire still carries UTF-8 C3 A9 for é"
+    );
+    // Narrow NBSP U+202F the money formatter uses is 0xE2 0x80 0xAF in UTF-8;
+    // the thermal wire must be 0x20, otherwise "19 % with 0x20" and "1 000"
+    // drift from WIDTH and the emulator splits them.
+    assert!(
+        !bytes.windows(3).any(|w| w == [0xE2, 0x80, 0xAF]),
+        "French wire still carries UTF-8 narrow NBSP"
+    );
+    assert!(
+        bytes.windows(3).any(|w| w == *b"1 0"),
+        "no 0x20 space where the narrow NBSP should be (1 000)"
+    );
+}
+
+#[test]
+fn the_arabic_wire_keeps_utf8_for_script_outside_the_table() {
+    // Arabic "تذكرة" (Ticket) is outside 0xFF, so it is sent as UTF-8 and the
+    // dump decodes it back; "?????" would be the old "?" fallback.
+    let doc = fixed_sale(Case::Reel);
+    let bytes = render_ticket_escpos(&doc, Lang::Ar).unwrap();
+    let dump = dump_ticket_escpos(&bytes);
+    assert!(dump.contains("تذكرة"), "Arabic Ticket title not in dump");
+    assert!(
+        !dump.contains("?????"),
+        "Arabic still ?????: wire is ? fallback"
+    );
+    // The UTF-8 bytes themselves are on the wire, not single-byte ?
+    assert!(
+        bytes
+            .windows(2)
+            .any(|w| w == [0xD8, 0xAA] || w == [0xD8, 0xAA]),
+        "no UTF-8 Arabic bytes on the wire"
+    );
+}
