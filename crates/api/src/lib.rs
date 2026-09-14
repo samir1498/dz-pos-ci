@@ -604,7 +604,8 @@ pub fn router_with_origin(
         .route("/auth/login", post(routes::auth::login))
         .route("/auth/logout", post(routes::auth::logout))
         .route("/auth/me", get(routes::auth::me))
-        .route("/auth/first-setup", post(routes::auth::claim_first_owner));
+        .route("/auth/first-setup", post(routes::auth::claim_first_owner))
+        .route("/pairing/claim", post(routes::pairing::claim));
     let guarded = Router::new()
         .route("/audit-log", get(routes::audit::list))
         .route("/auth/idle", get(routes::auth::idle))
@@ -720,6 +721,7 @@ pub fn router_with_origin(
             "/users",
             get(routes::users::list).post(routes::users::create),
         )
+        .route("/pairing/qr", post(routes::pairing::create_qr))
         .route("/users/{id}/pin", post(routes::users::set_pin))
         .route("/users/{id}/deactivate", post(routes::users::deactivate))
         .route("/users/{id}/reactivate", post(routes::users::reactivate))

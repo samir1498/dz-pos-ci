@@ -130,6 +130,8 @@ fn migration_creates_every_table() {
             "expense_categories",
             "expenses",
             "jobs",
+            "paired_devices",
+            "pairing_tokens",
             "preferences",
             "products",
             "purchase_lines",
@@ -166,12 +168,15 @@ fn every_table_carries_shop_id() {
         "expense_categories",
         "expenses",
         "jobs",
+        "paired_devices",
+        "pairing_tokens",
         "preferences",
         "products",
         "purchase_lines",
         "purchase_receipt_lines",
         "purchase_receipts",
         "purchases",
+        "sessions",
         "settings",
         "stock_movements",
         "supplier_allocations",
@@ -259,6 +264,9 @@ fn every_table_is_strict() {
         "expense_categories",
         "expenses",
         "jobs",
+        "paired_devices",
+        "pairing_tokens",
+        "sessions",
     ] {
         let strict = count(
             &mut conn,
@@ -2323,11 +2331,12 @@ fn the_migration_reverts_and_reapplies() {
         1
     );
 
-    // The thirteenth is the top of the stack: the hour the audit log's rows
-    // were short. It is the only migration here that moves data and adds no
-    // table and no column, so what its down has to undo is an arithmetic and
-    // not a shape. One row, written at a moment this test picks, is what
-    // both directions are read off.
+    // The fourteenth (pairing) is now the top of the stack, the thirteenth
+    // (audit clock) just below it: the hour the audit log's rows were short.
+    // Pairing is the only migration here that adds tables and the audit clock
+    // is the only one that moves data and adds no table, so what its down
+    // has to undo is an arithmetic and not a shape. One row, written at a
+    // moment this test picks, is what both directions are read off.
     assert_eq!(
         diesel::sql_query(
             "INSERT INTO audit_log (shop_id, user_id, action, entity, created_at) \
@@ -2337,6 +2346,9 @@ fn the_migration_reverts_and_reapplies() {
         .unwrap(),
         1
     );
+    // Pairing is on top, so revert it first to get back to the audit clock.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     assert_eq!(
@@ -2359,6 +2371,9 @@ fn the_migration_reverts_and_reapplies() {
         1,
         "the audit clock up.sql did not take the hour back"
     );
+    // Pairing (14) is now on top, so drop it before the sessions check.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
 

@@ -6,6 +6,7 @@ pub mod debt;
 pub mod document;
 pub mod expense;
 pub mod job;
+pub mod pairing;
 pub mod product;
 pub mod purchase;
 pub mod session;

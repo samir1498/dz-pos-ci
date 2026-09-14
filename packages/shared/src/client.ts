@@ -28,8 +28,10 @@ import type { ExpenseDto } from "./generated/ExpenseDto";
 import type { ExpensesDto } from "./generated/ExpensesDto";
 import type { NewExpenseDto } from "./generated/NewExpenseDto";
 import type { HealthDto } from "./generated/HealthDto";
+import type { DeviceTokenDto } from "./generated/DeviceTokenDto";
 import type { LoginDto } from "./generated/LoginDto";
 import type { MeDto } from "./generated/MeDto";
+import type { PairingQrDto } from "./generated/PairingQrDto";
 import type { PermissionDto } from "./generated/PermissionDto";
 import type { SessionDto } from "./generated/SessionDto";
 import type { SessionIdleDto } from "./generated/SessionIdleDto";
@@ -410,6 +412,29 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
         }),
         sessionSchema,
         "sign-in answer",
+      );
+    },
+
+    /** The QR the desktop shows (M6 T2): 60s single-use, owner|manager only. */
+    async createPairingQr(): Promise<PairingQrDto> {
+      const schema = z.object({
+        pairing_token: z.string(),
+        expires_in_seconds: z.number(),
+      }) satisfies z.ZodType<PairingQrDto>;
+      return narrow(await send("/pairing/qr", { method: "POST" }), schema, "pairing QR");
+    },
+
+    /** The phone trades the QR's pairing token for a device token (M6 T2). */
+    async claimPairing(body: { pairing_token: string; device_name: string }): Promise<DeviceTokenDto> {
+      const schema = z.object({ device_token: z.string() }) satisfies z.ZodType<DeviceTokenDto>;
+      return narrow(
+        await send("/pairing/claim", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        schema,
+        "pairing claim",
       );
     },
 

@@ -9,6 +9,7 @@ pub mod debt;
 pub mod documents;
 pub mod expenses;
 pub mod jobs;
+pub mod pairing;
 pub mod preferences;
 pub mod products;
 pub mod purchases;

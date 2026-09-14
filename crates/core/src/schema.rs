@@ -414,6 +414,31 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    pairing_tokens (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        token_hash -> Text,
+        created_at -> Timestamp,
+        expires_at -> Timestamp,
+        used_at -> Nullable<Timestamp>,
+        created_by -> Integer,
+    }
+}
+
+diesel::table! {
+    paired_devices (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        token_hash -> Text,
+        name -> Text,
+        created_at -> Timestamp,
+        last_seen_at -> Nullable<Timestamp>,
+        revoked_at -> Nullable<Timestamp>,
+        created_by -> Integer,
+    }
+}
+
 diesel::joinable!(categories -> shops (shop_id));
 diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
@@ -469,6 +494,10 @@ diesel::joinable!(expenses -> shops (shop_id));
 diesel::joinable!(expenses -> expense_categories (category_id));
 diesel::joinable!(expenses -> users (user_id));
 diesel::joinable!(jobs -> shops (shop_id));
+diesel::joinable!(pairing_tokens -> shops (shop_id));
+diesel::joinable!(pairing_tokens -> users (created_by));
+diesel::joinable!(paired_devices -> shops (shop_id));
+diesel::joinable!(paired_devices -> users (created_by));
 
 diesel::allow_tables_to_appear_in_same_query!(
     audit_log,
@@ -483,6 +512,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     expense_categories,
     expenses,
     jobs,
+    paired_devices,
+    pairing_tokens,
     products,
     purchase_lines,
     purchase_receipt_lines,

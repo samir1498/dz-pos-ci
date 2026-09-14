@@ -2937,6 +2937,23 @@ pub struct ClaimFirstOwnerDto {
     pub password: String,
 }
 
+/// The QR the desktop shows for the phone to scan (M6 T2). The token is
+/// 64 hex, 60s single-use; the phone trades it for a device token.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PairingQrDto.ts")]
+pub struct PairingQrDto {
+    pub pairing_token: String,
+    pub expires_in_seconds: i64,
+}
+
+/// The long-lived device token the phone keeps after pairing (M6 T2). Like
+/// `SessionDto.token`, 64 hex, stored as hash, shown once.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "DeviceTokenDto.ts")]
+pub struct DeviceTokenDto {
+    pub device_token: String,
+}
+
 #[cfg(test)]
 mod audit_dto_tests {
     // A test may panic; the deny is for shipped code.

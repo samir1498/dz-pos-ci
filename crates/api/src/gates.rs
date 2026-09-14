@@ -112,6 +112,18 @@ pub const ROUTE_GATES: &[Gate] = &[
         why: "the one door into a shop nobody has ever signed into; services::users::claim_first_owner is the whole rule and it shuts itself the moment any credential in the shop exists, so no permission decides who may call it, only that rule does",
     },
     Gate {
+        method: "POST",
+        path: "/pairing/claim",
+        permission: None,
+        why: "the phone trades a QR's 60s pairing token for a device token; the pairing token itself is the credential, not a session, so no permission decides who may call it, only whether that token is still live and unused",
+    },
+    Gate {
+        method: "POST",
+        path: "/pairing/qr",
+        permission: Some(Permission::EditSettings),
+        why: "only an owner or manager shows the QR that pairs a phone on the shop floor (M6, docs/roadmap.md); EditSettings is the permission managers hold, and the same gate lists and revokes devices",
+    },
+    Gate {
         method: "GET",
         path: "/backups",
         permission: Some(Permission::EditSettings),
