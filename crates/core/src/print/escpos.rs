@@ -155,6 +155,13 @@ impl Buf {
 
     fn init(&mut self) {
         self.bytes.extend_from_slice(&[ESC, b'@']);
+        // PC858 (code page 19) is the one the cheap 80 mm heads actually
+        // carry for French: it is ISO 8859-15 with the eight bytes at
+        // 0xA4/0xA6/0xA8/0xB4/0xB8/0xBC/0xBD/0xBE mapped to € Š š Ž ž Œ œ Ÿ
+        // (see the emulator's ISO_8859_15_MAP and Epson's ESC t table).
+        // The emulator ignores ESC t but a real head does not, and the dump
+        // below skips the two bytes so the golden stays readable either way.
+        self.bytes.extend_from_slice(&[ESC, b't', 19]);
     }
 
     fn align(&mut self, align: Align) {
@@ -178,7 +185,35 @@ impl Buf {
     }
 
     fn text(&mut self, s: &str) {
-        self.bytes.extend_from_slice(s.as_bytes());
+        // The head eats one byte per column (WIDTH = 42), not one UTF-8
+        // scalar per column: "Café" is 4 columns, not 5 bytes. For French the
+        // wire is ISO 8859-15 (the emulator's `String.fromCharCode(byte)` with
+        // the eight 0xA4…0xBE overrides), so every char that fits there is one
+        // byte; the narrow no-break space U+202F the money formatter uses is a
+        // plain space. For Arabic script (and any other scalar outside 0xFF)
+        // there is no single-byte table, so it is sent as UTF-8 — the dump
+        // below decodes both, trying UTF-8 first and falling back to the
+        // single-byte table, so "Café" stays 4 bytes and "قهوة" stays
+        // readable.
+        for ch in s.chars() {
+            match ch {
+                '\u{202f}' => self.bytes.push(b' '),
+                '\u{20ac}' => self.bytes.push(0xA4),
+                '\u{0160}' => self.bytes.push(0xA6),
+                '\u{0161}' => self.bytes.push(0xA8),
+                '\u{017d}' => self.bytes.push(0xB4),
+                '\u{017e}' => self.bytes.push(0xB8),
+                '\u{0152}' => self.bytes.push(0xBC),
+                '\u{0153}' => self.bytes.push(0xBD),
+                '\u{0178}' => self.bytes.push(0xBE),
+                c if (c as u32) <= 0xFF => self.bytes.push(c as u8),
+                c => {
+                    let mut buf = [0u8; 4];
+                    let encoded = c.encode_utf8(&mut buf);
+                    self.bytes.extend_from_slice(encoded.as_bytes());
+                }
+            }
+        }
     }
 
     fn lf(&mut self) {
@@ -249,6 +284,11 @@ fn dump(bytes: &[u8]) -> String {
                     i += 3;
                     continue;
                 }
+                b't' if i + 2 < bytes.len() => {
+                    out.push_str(&format!("<codepage {}>\n", bytes[i + 2]));
+                    i += 3;
+                    continue;
+                }
                 _ => {}
             }
         }
@@ -262,29 +302,49 @@ fn dump(bytes: &[u8]) -> String {
             i += 1;
             continue;
         }
-        // Take one UTF-8 scalar, so a golden of Café is not three replacement
-        // characters. A byte that is not UTF-8 is shown as hex so a protocol
-        // slip cannot hide inside a dump a reviewer reads as text.
-        match std::str::from_utf8(&bytes[i..]) {
-            Ok(rest) => {
-                if let Some(ch) = rest.chars().next() {
+        // The wire is mostly ISO 8859-15 (one byte per column, so "Café"
+        // is 0x43 0x61 0x66 0xE9, not 0xC3 0xA9), but Arabic and any other
+        // scalar outside 0xFF is sent as UTF-8. Try UTF-8 first so an Arabic
+        // word decodes as one char; a single 0xE9 is invalid UTF-8 on its
+        // own and falls through to the single-byte table, which is exactly
+        // how the head and the emulator both see it. The first eyeball
+        // showed the UTF-8 bytes split into "CafÃ©" because the French path
+        // was still UTF-8.
+        if let Ok(rest) = std::str::from_utf8(&bytes[i..]) {
+            if let Some(ch) = rest.chars().next() {
+                let len = ch.len_utf8();
+                if len > 1 {
                     out.push(ch);
-                    i += ch.len_utf8();
+                    i += len;
                     continue;
                 }
             }
-            Err(err) if err.valid_up_to() > 0 => {
+        } else if let Err(err) = std::str::from_utf8(&bytes[i..]) {
+            if err.valid_up_to() > 0 {
                 if let Ok(rest) = std::str::from_utf8(&bytes[i..i + err.valid_up_to()]) {
                     if let Some(ch) = rest.chars().next() {
-                        out.push(ch);
-                        i += ch.len_utf8();
-                        continue;
+                        let len = ch.len_utf8();
+                        if len > 1 {
+                            out.push(ch);
+                            i += len;
+                            continue;
+                        }
                     }
                 }
             }
-            Err(_) => {}
         }
-        out.push_str(&format!("<{:02x}>", bytes[i]));
+        let ch = match bytes[i] {
+            0xA4 => '€',
+            0xA6 => 'Š',
+            0xA8 => 'š',
+            0xB4 => 'Ž',
+            0xB8 => 'ž',
+            0xBC => 'Œ',
+            0xBD => 'œ',
+            0xBE => 'Ÿ',
+            b => b as char,
+        };
+        out.push(ch);
         i += 1;
     }
     out
@@ -305,7 +365,7 @@ mod tests {
         buf.cut();
         assert_eq!(
             dump(&buf.into_bytes()),
-            "<init>\n<align center>\n<bold on>\nCafé\n<bold off>\n<cut>\n"
+            "<init>\n<codepage 19>\n<align center>\n<bold on>\nCafé\n<bold off>\n<cut>\n"
         );
     }
 }

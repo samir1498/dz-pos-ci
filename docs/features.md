@@ -836,12 +836,18 @@ first release.**
   where the réel one prints "Prix unitaire HT".
 - Thermal: the 80 mm ticket is HTML and ESC/POS, both golden-filed in three
   languages (`fixtures/print/ticket_80mm/` and `ticket_80mm_escpos/`). The
-  ESC/POS golden is a dump of the bytes (`<init>`, the text, `<cut>`), so
-  a reviewer reads it without a printer. The bytes move through
+  ESC/POS golden is a dump of the bytes (`<init>`, `<codepage 19>`, the text,
+  `<cut>`), so a reviewer reads it without a printer. The wire is
+  `ESC t 19` (PC858 / ISO 8859-15, the emulator's own table) with `U+202F`
+  → space, so `Café` is 4 columns (one `0xE9`) and the emulator shows
+  `Café` instead of the UTF-8 split `CafÃ©`; Arabic outside that table is
+  sent as UTF-8 and the dump decodes it, but a cheap head will need a
+  different codepage — the bytes move through
   `write_ticket_escpos_to_file` (spool file, USB-serial device path) and
   `send_ticket_escpos_tcp` (network printer on port 9100,
   `escpos-emulator` for a look without hardware); USB is not wired yet.
-  A4/A5 goes through the OS print dialog.
+  `GET /sales/{id}/ticket/escpos?lang=` returns the same bytes. A4/A5 goes
+  through the OS print dialog.
 - Later: a QR code on the ticket, the shop's logo, and a footer text the
   owner sets.
 

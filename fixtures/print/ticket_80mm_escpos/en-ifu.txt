@@ -1,4 +1,5 @@
 <init>
+<codepage 19>
 <align center>
 <bold on>
 Receipt
@@ -27,7 +28,7 @@ Stamp duty                            9,00
 Net to pay                          839,00
 <bold off>
 Payment mode                          Cash
-Amount received                   1 000,00
+Amount received                   1 000,00
 Change                              161,00
 <align center>
 <feed 1>
