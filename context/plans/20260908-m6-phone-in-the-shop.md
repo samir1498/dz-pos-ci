@@ -24,7 +24,7 @@ tasks:
     status: 'done'
   - id: 'T6'
     desc: 'Print through desktop: phone POST /sales/{id}/ticket/escpos proxied, desktop spools to file / TCP 9100 (write_ticket_escpos_to_file / send_ticket_escpos_tcp)'
-    status: 'pending'
+    status: 'done'
   - id: 'T7'
     desc: 'Maestro flows on real phone over Tailscale: pair, sell from shop floor, ticket prints on desktop, verified on fedora laptop via 100.111.55.62'
     status: 'pending'
