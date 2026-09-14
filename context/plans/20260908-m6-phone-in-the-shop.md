@@ -15,7 +15,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'Expo thin client scaffold: apps/mobile from placeholder, navigation (pair, till, cart, pay, ticket, products, customers), packages/shared types, Expo plugin + MCP installed here'
-    status: 'pending'
+    status: 'done'
   - id: 'T4'
     desc: 'Paired devices: settings lists paired devices with revoke, ManageUsers gate for QR, audit row for pair/revoke'
     status: 'pending'
