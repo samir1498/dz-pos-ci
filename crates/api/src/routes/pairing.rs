@@ -11,7 +11,7 @@ use axum::Json;
 use chrono::Utc;
 use serde::Deserialize;
 
-use crate::dto::{DeviceTokenDto, PairingQrDto};
+use crate::dto::{DeviceTokenDto, PairedDeviceDto, PairingQrDto};
 use crate::error::ApiError;
 use crate::session::CurrentUser;
 use crate::AppState;
@@ -68,4 +68,34 @@ pub async fn claim(
             device_token: token.expose().to_string(),
         }),
     ))
+}
+
+/// The settings screen lists paired phones (M6 T4). Owner|manager only, same
+/// gate as the QR.
+pub async fn list_devices(
+    State(state): State<AppState>,
+    _who: CurrentUser,
+) -> Result<Json<Vec<PairedDeviceDto>>, ApiError> {
+    let shop = state.shop_id;
+    let rows = state
+        .blocking(move |c| dzpos_core::services::pairing::list_devices(c, shop))
+        .await?;
+    Ok(Json(rows.into_iter().map(PairedDeviceDto::from).collect()))
+}
+
+/// Revoke a paired phone from settings (M6 T4). Owner|manager only.
+pub async fn revoke_device(
+    State(state): State<AppState>,
+    who: CurrentUser,
+    id: Result<axum::extract::Path<i32>, axum::extract::rejection::PathRejection>,
+) -> Result<Json<PairedDeviceDto>, ApiError> {
+    let axum::extract::Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let shop = state.shop_id;
+    let actor = who.id;
+    let now = Utc::now().naive_utc();
+    let row = state
+        .blocking(move |c| dzpos_core::services::pairing::revoke_device(c, shop, actor, id, now))
+        .await?;
+    Ok(Json(PairedDeviceDto::from(row)))
 }

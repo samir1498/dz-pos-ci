@@ -2954,6 +2954,32 @@ pub struct DeviceTokenDto {
     pub device_token: String,
 }
 
+/// A paired phone as the settings screen lists it (M6 T4). The token hash
+/// never leaves the server; the row is what the screen revokes.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export_to = "PairedDeviceDto.ts")]
+pub struct PairedDeviceDto {
+    pub id: i32,
+    pub name: String,
+    pub created_at: String,
+    pub revoked_at: Option<String>,
+    pub created_by: i32,
+}
+
+impl From<dzpos_core::models::pairing::PairedDeviceRow> for PairedDeviceDto {
+    fn from(row: dzpos_core::models::pairing::PairedDeviceRow) -> Self {
+        Self {
+            id: row.id,
+            name: row.name,
+            created_at: row.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+            revoked_at: row
+                .revoked_at
+                .map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()),
+            created_by: row.created_by,
+        }
+    }
+}
+
 #[cfg(test)]
 mod audit_dto_tests {
     // A test may panic; the deny is for shipped code.

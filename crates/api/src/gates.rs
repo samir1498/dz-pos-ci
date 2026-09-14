@@ -7,7 +7,7 @@
 //! mutating route with no row here fails, and a row naming a route that is not
 //! there fails.
 //!
-//! **Sixteen reads are in it.** The table is otherwise about writes, because a
+//! **Seventeen reads are in it.** The table is otherwise about writes, because a
 //! read of a list a cashier is already looking at needs no permission. The
 //! four exports and the import template are the exception the M3 carry-in
 //! named in words: an export is the whole customer list, the whole supplier
@@ -122,6 +122,18 @@ pub const ROUTE_GATES: &[Gate] = &[
         path: "/pairing/qr",
         permission: Some(Permission::EditSettings),
         why: "only an owner or manager shows the QR that pairs a phone on the shop floor (M6, docs/roadmap.md); EditSettings is the permission managers hold, and the same gate lists and revokes devices",
+    },
+    Gate {
+        method: "GET",
+        path: "/pairing/devices",
+        permission: Some(Permission::EditSettings),
+        why: "the settings screen lists paired phones; same gate as the QR that created them, and the same audit that revoking one writes",
+    },
+    Gate {
+        method: "POST",
+        path: "/pairing/devices/{id}/revoke",
+        permission: Some(Permission::EditSettings),
+        why: "revoking a phone is the same control as pairing one, and the audit row it writes is the only record the shop has that the phone is no longer trusted",
     },
     Gate {
         method: "GET",
@@ -473,7 +485,8 @@ mod tests {
                         || gate.path == "/suppliers"
                         || gate.path == "/suppliers/{id}/ledger"
                         || gate.path == "/backups"
-                        || gate.path == "/support-bundle",
+                        || gate.path == "/support-bundle"
+                        || gate.path == "/pairing/devices",
                     "{} is a read this table was not opened for; widen this allow-list deliberately \
                      and say why in ROUTE_GATES's own `why` (M4 T5 review, 2026-09-11: /dashboard, \
                      /dashboard/series, /purchases and /purchases/{{id}} joined the exports, the \

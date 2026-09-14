@@ -722,6 +722,11 @@ pub fn router_with_origin(
             get(routes::users::list).post(routes::users::create),
         )
         .route("/pairing/qr", post(routes::pairing::create_qr))
+        .route("/pairing/devices", get(routes::pairing::list_devices))
+        .route(
+            "/pairing/devices/{id}/revoke",
+            post(routes::pairing::revoke_device),
+        )
         .route("/users/{id}/pin", post(routes::users::set_pin))
         .route("/users/{id}/deactivate", post(routes::users::deactivate))
         .route("/users/{id}/reactivate", post(routes::users::reactivate))

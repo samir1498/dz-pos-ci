@@ -32,6 +32,7 @@ export type { SetPinDto } from "./generated/SetPinDto";
 export type { ClaimFirstOwnerDto } from "./generated/ClaimFirstOwnerDto";
 export type { PairingQrDto } from "./generated/PairingQrDto";
 export type { DeviceTokenDto } from "./generated/DeviceTokenDto";
+export type { PairedDeviceDto } from "./generated/PairedDeviceDto";
 export type { HealthDto } from "./generated/HealthDto";
 export type { NewProductDto } from "./generated/NewProductDto";
 export type { ProductDto } from "./generated/ProductDto";

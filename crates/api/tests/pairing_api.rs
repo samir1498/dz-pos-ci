@@ -135,3 +135,75 @@ async fn a_pairing_qr_needs_a_session() {
     let (status, body) = call_no_session(&app, "POST", "/pairing/qr", None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
 }
+
+#[tokio::test]
+async fn paired_devices_are_listed_and_revocable_by_an_owner() {
+    let (_dir, app) = app();
+    // Owner creates QR, phone claims.
+    let (status, body) = call(&app, "POST", "/pairing/qr", None, common::OWNER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let pairing_token = body["pairing_token"].as_str().unwrap().to_string();
+    let (status, body) = call_no_session(
+        &app,
+        "POST",
+        "/pairing/claim",
+        Some(json!({ "pairing_token": pairing_token, "device_name": "Phone" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+
+    // List shows the phone, newest first, with no token hash.
+    let (status, body) = call(&app, "GET", "/pairing/devices", None, common::OWNER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let list = body.as_array().unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0]["name"], "Phone");
+    assert!(list[0]["revoked_at"].is_null());
+    let device_id = list[0]["id"].as_i64().unwrap();
+
+    // Revoke.
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/pairing/devices/{device_id}/revoke"),
+        None,
+        common::OWNER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(!body["revoked_at"].is_null());
+
+    // Second revoke is 422 (already revoked).
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/pairing/devices/{device_id}/revoke"),
+        None,
+        common::OWNER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+}
+
+#[tokio::test]
+async fn a_cashier_cannot_list_or_revoke_devices() {
+    let (_dir, app) = app();
+    let (status, body) = call(
+        &app,
+        "GET",
+        "/pairing/devices",
+        None,
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/pairing/devices/1/revoke",
+        None,
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+}

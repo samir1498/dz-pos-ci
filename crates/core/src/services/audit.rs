@@ -195,6 +195,11 @@ pub const ACTION_SET_PASSWORD: &str = "user.set_password";
 pub const ACTION_DEACTIVATE_USER: &str = "user.deactivate";
 /// A user switched back on.
 pub const ACTION_REACTIVATE_USER: &str = "user.reactivate";
+/// A phone paired via QR (M6 T2). The device token is never logged, only the
+/// device row id and its name — the token itself is a credential.
+pub const ACTION_DEVICE_PAIRED: &str = "device.paired";
+/// A paired phone revoked from settings (M6 T4).
+pub const ACTION_DEVICE_REVOKED: &str = "device.revoked";
 /// A user locked out by wrong credentials. Written on the crossing and not on
 /// every attempt, so the log holds the event and not the noise: the entry
 /// carries the count and the moment they may try again, because a lockout
