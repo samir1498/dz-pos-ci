@@ -15,8 +15,8 @@ webapp-testing, xlsx.
 
 | Skill | Use for dz-pos | Verdict |
 |---|---|---|
-| `frontend-design` | the Tauri screens once real code replaces the mockups | try on the first real screen; compare with the mockup's tokens. Installed 2026-09-11 (`~/.claude/plugins/installed_plugins.json`), currently disabled in `~/.claude/settings.json`; the trial itself is still R9, unrecorded |
-| `webapp-testing` | Playwright discipline for the desktop webview and the mockups | yes; our `dz-mockup` drive scripts do this by hand today |
+| `frontend-design` | the Tauri screens once real code replaces the mockups | **no** — 2026-09-14 verdict: `@dzpos/design` + shadcn kit + `theme.test.ts` already is the system; skill kept disabled, see `2026-09-14-frontend-design-verdict.md` |
+| `webapp-testing` | Playwright discipline for the desktop webview and the mockups | **no** — 2026-09-14 verdict: keep ObserveOne e2e (`just e2e`, `e2e/screenshots`), see `2026-09-14-webapp-testing-verdict.md` |
 | `pdf` | reading the DGI code PDFs (`legal-fiscal/sources/`) | useful for research sessions |
 | `mcp-builder` | only if we expose the localhost API to agents later | not now |
 | `skill-creator` | already installed as a plugin | — |
@@ -53,10 +53,7 @@ No official Tauri skill or MCP from the Tauri project. Community options:
 | P3GLEG `tauri-plugin-mcp` | similar, plugin-side | smaller |
 | EpicenterHQ `tauri` skill (mcp.directory/skills/tauri) | prose skill, no runtime | cheap to read |
 
-Verdict: evaluate hypothesi on the laptop once the first real screen
-exists; our architecture routes the webview through the localhost HTTP API,
-so Playwright against `pnpm desktop dev` covers most of what the MCP bridge
-would, without a plugin in the binary. Decide after one trial.
+Verdict 2026-09-14: **not adopted** — one trial on the laptop with a debug Dinar window confirms Playwright over `just dev` + `just api` covers the flows without `tauri-plugin-mcp-bridge` in the binary; see `2026-09-14-tauri-mcp-verdict.md`. Re-trial only for a webview-only bug.
 
 ## Rust side
 
