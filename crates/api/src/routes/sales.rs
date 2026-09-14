@@ -143,6 +143,53 @@ pub async fn ticket_escpos(
     Ok(res)
 }
 
+/// Print through desktop (M6 T6): the phone POSTs, the desktop spools the
+/// same bytes `ticket_escpos` would return. Spool is `spool/ticket-<id>-<lang>.bin`
+/// beside the shop file (never pruned), and if `DZPOS_PRINTER_ADDR` (e.g.
+/// `192.168.1.50:9100`) is set the bytes are also pushed to that TCP printer.
+/// Idempotent: re-printing overwrites the same spool file.
+pub async fn print_ticket(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    lang: Result<Query<TicketQuery>, QueryRejection>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    use serde_json::json;
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let Query(TicketQuery { lang }) =
+        lang.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
+    let shop = state.shop_id;
+    let found = state
+        .blocking(move |c| documents::get_of_kind(c, shop, id, DocumentKind::Ticket))
+        .await?;
+    let bytes = render_ticket_escpos(&found, lang)?;
+    let spool_dir = state
+        .db_path()
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join("spool");
+    std::fs::create_dir_all(&spool_dir).map_err(|e| ApiError::from(CoreError::from(e)))?;
+    let spool_path = spool_dir.join(format!("ticket-{}-{}.bin", id, lang.tag()));
+    std::fs::write(&spool_path, &bytes).map_err(|e| ApiError::from(CoreError::from(e)))?;
+    if let Ok(addr) = std::env::var("DZPOS_PRINTER_ADDR") {
+        if !addr.is_empty() {
+            let _ = tokio::task::spawn_blocking({
+                let found = found.clone();
+                let addr = addr.clone();
+                move || {
+                    let _ = dzpos_core::print::send_ticket_escpos_tcp(&found, lang, &addr);
+                }
+            })
+            .await;
+        }
+    }
+    Ok(Json(json!({
+        "spooled": spool_path.display().to_string(),
+        "bytes": bytes.len(),
+        "lang": lang.tag(),
+    })))
+}
+
 /// The language and the sheet, both named by the caller on every call. The
 /// sheet is not a setting either: the same facture goes on A4 in the office
 /// and on A5 at the counter, and the till is the only place that knows which
