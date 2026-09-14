@@ -6,14 +6,16 @@
   "scripts": {
     "build": "echo 'mobile build placeholder — expo scaffold'",
     "lint": "echo 'mobile lint placeholder'",
-    "test": "echo 'mobile test placeholder'"
+    "test": "vitest run"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.0.0",
     "expo": "^52.0.0",
     "react": "18.3.1",
     "react-native": "0.76.5"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0"
   }
 }
