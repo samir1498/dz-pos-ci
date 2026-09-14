@@ -21,7 +21,7 @@ tasks:
     status: 'done'
   - id: 'T5'
     desc: 'Thin client till: cart, pay, ticket via API (Sell, SeeCost redaction reused), retry queue for offline LAN'
-    status: 'pending'
+    status: 'done'
   - id: 'T6'
     desc: 'Print through desktop: phone POST /sales/{id}/ticket/escpos proxied, desktop spools to file / TCP 9100 (write_ticket_escpos_to_file / send_ticket_escpos_tcp)'
     status: 'pending'
