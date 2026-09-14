@@ -686,6 +686,7 @@ pub fn router_with_origin(
             "/sales/{id}/ticket/escpos",
             get(routes::sales::ticket_escpos),
         )
+        .route("/sales/{id}/print", post(routes::sales::print_ticket))
         .route("/sales/{id}/facture", get(routes::sales::facture))
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))

@@ -45,6 +45,13 @@ export function Till({ apiBase }: { apiBase: string }) {
         body,
       });
       if (!res.ok) throw new Error(String(res.status));
+      const sale = (await res.json()) as { id: number };
+      // Print through desktop (M6 T6): same bytes the desktop's own till prints,
+      // spooled beside the shop file and optionally pushed to TCP 9100.
+      fetch(`${apiBase}/sales/${sale.id}/print?lang=fr`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.EXPO_PUBLIC_API_TOKEN ?? ""}` },
+      }).catch(() => {});
       setCart([]);
     } catch {
       await enqueue({ method: "POST", url: `${apiBase}/sales`, body });

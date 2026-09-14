@@ -317,6 +317,12 @@ pub const ROUTE_GATES: &[Gate] = &[
     },
     Gate {
         method: "POST",
+        path: "/sales/{id}/print",
+        permission: Some(Permission::Sell),
+        why: "print through desktop (M6 T6): the same ticket bytes the till just rang up, spooled beside the shop file and optionally pushed to TCP 9100; every role that may sell may print",
+    },
+    Gate {
+        method: "POST",
         path: "/sales/{id}/avoir",
         permission: Some(Permission::CorrectLedger),
         why: "an avoir undoes a document already handed to a customer (M2 carry-in, 2026-09-09)",
