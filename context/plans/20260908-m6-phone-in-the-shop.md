@@ -18,7 +18,7 @@ tasks:
     status: 'done'
   - id: 'T4'
     desc: 'Paired devices: settings lists paired devices with revoke, ManageUsers gate for QR, audit row for pair/revoke'
-    status: 'pending'
+    status: 'done'
   - id: 'T5'
     desc: 'Thin client till: cart, pay, ticket via API (Sell, SeeCost redaction reused), retry queue for offline LAN'
     status: 'pending'
