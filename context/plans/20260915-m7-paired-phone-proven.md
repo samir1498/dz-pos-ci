@@ -8,7 +8,7 @@ tldr: 'Close the three M6 review gaps on the shop floor: atomic QR claim, device
 tasks:
   - id: 'T1'
     desc: 'QR claim atomicity (core): conditional mark-used with rows-affected check inside one transaction; two concurrent claims, second is AuthRefused'
-    status: 'pending'
+    status: 'done'
   - id: 'T2'
     desc: 'Device middleware (api): X-Dzpos-Device required off loopback, unknown/revoked is 401, last_seen bump; device_by_hash comes alive with tests'
     status: 'pending'
