@@ -20,7 +20,7 @@ tasks:
     status: 'in-progress'
   - id: 'T5'
     desc: 'Mobile auth cleanup: EXPO_PUBLIC_API_TOKEN bearer misuse gone, device token + session stored and sent'
-    status: 'pending'
+    status: 'done'
   - id: 'T6'
     desc: 'Maestro proof on a real phone over Tailscale: pair, sign in, sell, kill Wi-Fi, retry rings once, revoke, next call 401s'
     status: 'pending'
