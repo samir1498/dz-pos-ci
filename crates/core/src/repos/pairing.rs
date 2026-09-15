@@ -31,15 +31,24 @@ pub(crate) fn pairing_by_hash(
         .optional()?)
 }
 
+/// Flips an unused pairing token to used. Conditional on `used_at` still
+/// being null: two claims racing the same QR serialize on the write lock
+/// and only the first flips a row, so the row count is the verdict — the
+/// caller treats zero flipped rows as already-claimed. Answers whether a
+/// row flipped.
 pub(crate) fn mark_pairing_used(
     conn: &mut SqliteConnection,
     id: i32,
     now: NaiveDateTime,
-) -> Result<(), CoreError> {
-    diesel::update(pairing_tokens::table.filter(pairing_tokens::id.eq(id)))
-        .set(pairing_tokens::used_at.eq(now))
-        .execute(conn)?;
-    Ok(())
+) -> Result<bool, CoreError> {
+    let flipped = diesel::update(
+        pairing_tokens::table
+            .filter(pairing_tokens::id.eq(id))
+            .filter(pairing_tokens::used_at.is_null()),
+    )
+    .set(pairing_tokens::used_at.eq(now))
+    .execute(conn)?;
+    Ok(flipped == 1)
 }
 
 pub(crate) fn insert_device(
