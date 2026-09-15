@@ -50,7 +50,7 @@ product"). Resume by setting this plan `active` and starting T1.
   as a last resort, never for dated reports.
 - Same visual language, same no-JS-lib rule (the `<dialog>` preview trick
   stays vanilla).
-- The report folder is NOT git-tracked today; decide its home before T2
-  (own private repo, or move the source under `dz-pos/`).
+- The report folder lives in `Dinar-dz/dinar-reports` (private, created
+  2026-09-15); commit and push there with every site change.
 - Production sits behind Cloudflare Access now; preview URLs stay the
   verification path.

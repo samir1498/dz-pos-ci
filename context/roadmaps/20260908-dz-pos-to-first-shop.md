@@ -35,6 +35,9 @@ entries:
   - ref: 'm6-phone-in-the-shop'
     status: 'done'
     note: 'M6 closed 2026-09-15 (PR #83, c7ad157, 9/9): LAN+mdns, QR 60s single-use, Expo scaffold, list/revoke, thin till+queue, print spool, Maestro pair-and-sell, password reset, closing sweep. Full CI green on mirror before merge. Open unknowns: queue idempotency, device middleware, QR TOCTOU.'
+  - ref: 'm7-paired-phone-proven'
+    status: 'planned'
+    note: 'M7 scoped 2026-09-15 (7 tasks T1-T7): atomic QR claim, device middleware, phone session story, sale idempotency, mobile auth cleanup, Maestro proof over Tailscale, closing sweep. Roadmap section on PR #85.'
 ---
 # dz-pos: from the money core to a first shop
 
