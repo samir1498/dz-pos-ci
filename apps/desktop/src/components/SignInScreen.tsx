@@ -23,6 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Wordmark } from "@/components/Wordmark";
 import { useTranslation } from "@/i18n";
+import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { useLoginAttempt } from "@/lib/useLoginAttempt";
 import { useSession } from "@/lib/session";
 
@@ -191,9 +192,12 @@ export function SignInScreen() {
   return (
     <div
       data-testid="signin-screen"
-      className="flex min-h-screen items-center justify-center bg-background p-4"
+      className="flex min-h-screen flex-col items-center justify-center bg-background p-4"
     >
-      <Card className="w-full max-w-sm">
+      <div className="w-full max-w-sm self-end sm:self-center">
+        <LanguageSwitcher className="ms-auto" />
+      </div>
+      <Card className="mt-4 w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <Wordmark className="mb-2" />
           <CardTitle>{mode === "pin" ? t("signin_pin_title") : t("signin_password_title")}</CardTitle>

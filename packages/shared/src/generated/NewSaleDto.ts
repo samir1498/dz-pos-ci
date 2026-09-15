@@ -26,4 +26,11 @@ override: boolean,
  * the ordinary case and asks nothing of the buyer, so a caller written
  * before this field existed keeps issuing what it always did.
  */
-kind: SaleKindDto, };
+kind: SaleKindDto, 
+/**
+ * Retry key (M7 T4). A caller that got no answer posts the same basket
+ * with the same key and gets the original sale back instead of ringing
+ * twice. Left out means no promise: today's desktop keeps ringing like
+ * it always did.
+ */
+idempotency_key: string | null, };

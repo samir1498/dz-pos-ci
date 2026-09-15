@@ -17,7 +17,7 @@ tasks:
     status: 'done'
   - id: 'T4'
     desc: 'Sale idempotency (core+api+mobile): client key per sale, server dedupe with unique constraint, same-key retry returns the original, print follows a retried ring'
-    status: 'pending'
+    status: 'in-progress'
   - id: 'T5'
     desc: 'Mobile auth cleanup: EXPO_PUBLIC_API_TOKEN bearer misuse gone, device token + session stored and sent'
     status: 'pending'

@@ -13,6 +13,7 @@ pub mod pairing;
 pub mod preferences;
 pub mod products;
 pub mod purchases;
+pub mod sale_idempotency;
 pub mod sessions;
 pub mod settings;
 pub mod shops;

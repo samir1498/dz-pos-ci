@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, FlatList, Text, TextInput, View } from "react-native";
 
-import { enqueue, list, retry } from "../lib/queue";
+import { enqueue, list, newIdempotencyKey, retry } from "../lib/queue";
 import type { Session } from "../lib/session";
 
 type Product = { id: number; name: string; selling_centimes: number };
@@ -26,6 +26,7 @@ export function Till({
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<{ product: Product; qty: number }[]>([]);
   const [queued, setQueued] = useState(0);
+  const [skipped, setSkipped] = useState(0);
 
   const headers = (): Record<string, string> => ({
     "content-type": "application/json",
@@ -52,10 +53,13 @@ export function Till({
 
   const pay = async () => {
     if (cart.length === 0) return;
+    // The key is minted before the first try so the try and every retry
+    // promise the same sale; the server answers the original on a replay.
     const body = JSON.stringify({
       lines: cart.map((c) => ({ product_id: c.product.id, qty_milli: c.qty * 1000 })),
       payment_mode: "cash",
       tendered_centimes: cart.reduce((s, c) => s + c.product.selling_centimes * c.qty, 0),
+      idempotency_key: newIdempotencyKey(),
     });
     try {
       const res = await fetch(`${apiBase}/sales`, {
@@ -73,29 +77,46 @@ export function Till({
       }).catch(() => {});
       setCart([]);
     } catch {
-      await enqueue({ method: "POST", url: `${apiBase}/sales`, body });
+      await enqueue({
+        method: "POST",
+        url: `${apiBase}/sales`,
+        sessionToken: session.sessionToken,
+        body,
+      });
       const q = await list();
       setQueued(q.length);
     }
   };
 
   const retryAll = async () => {
-    const { succeeded } = await retry(async (req) => {
-      try {
-        const res = await fetch(req.url, {
-          method: req.method,
-          headers: headers(),
-          body: req.body,
-        });
-        return res.ok;
-      } catch {
-        return false;
-      }
-    });
-    if (succeeded > 0) {
-      const q = await list();
-      setQueued(q.length);
-    }
+    const outcome = await retry(
+      async (req) => {
+        try {
+          const res = await fetch(req.url, {
+            method: req.method,
+            headers: headers(),
+            body: req.body,
+          });
+          if (!res.ok) return false;
+          // The ring went through on retry: print it like a first try
+          // would have. Best-effort — the sale stands either way.
+          const sale = (await res.json()) as { id?: number };
+          if (typeof sale.id === "number") {
+            fetch(`${apiBase}/sales/${sale.id}/print?lang=fr`, {
+              method: "POST",
+              headers: headers(),
+            }).catch(() => {});
+          }
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      session.sessionToken,
+    );
+    const q = await list();
+    setQueued(q.length);
+    setSkipped(outcome.skipped);
   };
 
   return (
@@ -108,6 +129,7 @@ export function Till({
         <Button title="Sign out" onPress={onSignOut} />
       </View>
       <Text>Queued: {queued}</Text>
+      {skipped > 0 && <Text>{skipped} waiting — queued under another sign-in</Text>}
       {queued > 0 && <Button title="Retry queued" onPress={retryAll} />}
       <FlatList
         data={products}

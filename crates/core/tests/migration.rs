@@ -138,6 +138,7 @@ fn migration_creates_every_table() {
             "purchase_receipt_lines",
             "purchase_receipts",
             "purchases",
+            "sale_idempotency_keys",
             "sessions",
             "settings",
             "shops",
@@ -176,6 +177,7 @@ fn every_table_carries_shop_id() {
         "purchase_receipt_lines",
         "purchase_receipts",
         "purchases",
+        "sale_idempotency_keys",
         "sessions",
         "settings",
         "stock_movements",
@@ -266,6 +268,7 @@ fn every_table_is_strict() {
         "jobs",
         "paired_devices",
         "pairing_tokens",
+        "sale_idempotency_keys",
         "sessions",
     ] {
         let strict = count(
@@ -2331,12 +2334,14 @@ fn the_migration_reverts_and_reapplies() {
         1
     );
 
-    // The fourteenth (pairing) is now the top of the stack, the thirteenth
-    // (audit clock) just below it: the hour the audit log's rows were short.
-    // Pairing is the only migration here that adds tables and the audit clock
-    // is the only one that moves data and adds no table, so what its down
-    // has to undo is an arithmetic and not a shape. One row, written at a
-    // moment this test picks, is what both directions are read off.
+    // The fifteenth (sale idempotency keys) is now the top of the stack,
+    // the fourteenth (pairing) just below it and the thirteenth (audit
+    // clock) below that: the hour the audit log's rows were short. The
+    // fifteenth adds one table and moves no data; pairing is the other
+    // migration here that adds tables and the audit clock is the only one
+    // that moves data and adds no table, so what its down has to undo is an
+    // arithmetic and not a shape. One row, written at a moment this test
+    // picks, is what both directions are read off.
     assert_eq!(
         diesel::sql_query(
             "INSERT INTO audit_log (shop_id, user_id, action, entity, created_at) \
@@ -2346,7 +2351,10 @@ fn the_migration_reverts_and_reapplies() {
         .unwrap(),
         1
     );
-    // Pairing is on top, so revert it first to get back to the audit clock.
+    // Idempotency keys are on top, pairing below: revert both to get back
+    // to the audit clock.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
@@ -2371,7 +2379,10 @@ fn the_migration_reverts_and_reapplies() {
         1,
         "the audit clock up.sql did not take the hour back"
     );
-    // Pairing (14) is now on top, so drop it before the sessions check.
+    // Idempotency keys (15) and pairing (14) are now on top, so drop both
+    // before the sessions check.
+    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+        .unwrap();
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
         .unwrap();
     conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
@@ -2816,6 +2827,15 @@ fn the_migration_reverts_and_reapplies() {
         ),
         7,
         "the suppliers migration did not reapply with its seeded categories"
+    );
+    assert_eq!(
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' \
+             AND name = 'sale_idempotency_keys'"
+        ),
+        1,
+        "sale_idempotency_keys did not reapply"
     );
 }
 

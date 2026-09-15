@@ -439,6 +439,17 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    sale_idempotency_keys (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        key -> Text,
+        sale_id -> Integer,
+        request_hash -> Text,
+        created_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(categories -> shops (shop_id));
 diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
@@ -498,6 +509,8 @@ diesel::joinable!(pairing_tokens -> shops (shop_id));
 diesel::joinable!(pairing_tokens -> users (created_by));
 diesel::joinable!(paired_devices -> shops (shop_id));
 diesel::joinable!(paired_devices -> users (created_by));
+diesel::joinable!(sale_idempotency_keys -> shops (shop_id));
+diesel::joinable!(sale_idempotency_keys -> documents (sale_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     audit_log,

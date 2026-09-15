@@ -267,6 +267,7 @@ pub async fn create(
     body: Result<Json<NewSaleDto>, JsonRejection>,
 ) -> Result<(StatusCode, Json<SaleDto>), ApiError> {
     let Json(dto) = body.map_err(ApiError::from)?;
+    let key = dto.idempotency_key.clone();
     let new = NewSale::try_from(dto)?;
     let shop = state.shop_id;
     let user = who.id;
@@ -274,9 +275,20 @@ pub async fn create(
     // it is about the moment the sale was rung up, and a later read of the
     // same document carries none.
     let made = state
-        .blocking(move |c| sales::issue(c, shop, user, new))
+        .blocking(move |c| match key {
+            Some(key) => sales::issue_idempotent(c, shop, user, new, key),
+            None => sales::issue(c, shop, user, new),
+        })
         .await?;
-    Ok((StatusCode::CREATED, Json(SaleDto::from(made))))
+    // A replay answers the stored paper with 200: the ring happened on an
+    // earlier call, and 201 would claim this one rang it. Only a fresh ring
+    // is 201.
+    let status = if made.replayed {
+        StatusCode::OK
+    } else {
+        StatusCode::CREATED
+    };
+    Ok((status, Json(SaleDto::from(made))))
 }
 
 /// Writes a credit note against the facture in the path (features.md §3).
