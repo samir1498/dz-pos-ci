@@ -1,6 +1,8 @@
 //! Standalone API server. The desktop starts the same routes in-process;
 //! this binary is what `just api` runs for the browser preview.
 
+use std::net::SocketAddr;
+
 use clap::Parser;
 
 #[derive(Parser)]
@@ -97,9 +99,12 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     }
     // The e2e harness waits on this line to know the port is live.
     println!("dzpos-api listening on http://127.0.0.1:{port}");
+    // With the peer address attached: the device gate tells the desktop on
+    // loopback from a phone on the LAN by it (M7 T2).
     axum::serve(
         listener,
-        dzpos_api::router_with_origin(state, &token, extra_origin),
+        dzpos_api::router_with_origin(state, &token, extra_origin)
+            .into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;
     Ok(())

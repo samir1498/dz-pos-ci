@@ -130,6 +130,30 @@ pub fn claim_pairing_token(
     }
 }
 
+/// The phone a request claims to come from, for the API's device gate. A
+/// token nobody issued and a revoked one are the same `AuthRefused` the
+/// claim path answers, so a scanner learns nothing either way. A live token
+/// slides `last_seen_at` forward — "which phones are still around" is read
+/// off that column, not off the audit log.
+pub fn device_for_request(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    token_hash: &str,
+    now: NaiveDateTime,
+) -> Result<PairedDeviceRow, CoreError> {
+    let row = repo::device_by_hash(conn, shop_id, token_hash)?.ok_or(CoreError::AuthRefused)?;
+    if row.revoked_at.is_some() {
+        return Err(CoreError::AuthRefused);
+    }
+    repo::touch_device_last_seen(conn, row.id, now)?;
+    // The row as it stands now that the touch landed, not as the lookup
+    // found it a statement earlier.
+    Ok(PairedDeviceRow {
+        last_seen_at: Some(now),
+        ..row
+    })
+}
+
 pub fn list_devices(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -246,6 +270,42 @@ mod tests {
         );
         let mut check = crate::db::open(&path).unwrap();
         assert_eq!(list_devices(&mut check, shop).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_live_device_passes_and_slides_last_seen_forward() {
+        let (_dir, mut conn) = crate::repos::testdb::open();
+        let shop = crate::repos::testdb::SHOP;
+        let owner = crate::repos::testdb::OWNER;
+        let t = create_pairing_token(&mut conn, shop, owner, noon()).unwrap();
+        let (dev, _) = claim_pairing_token(&mut conn, shop, t.expose(), noon(), "Phone").unwrap();
+        let hash = token_digest(dev.expose());
+        let seen = device_for_request(&mut conn, shop, &hash, later(30)).unwrap();
+        assert_eq!(seen.last_seen_at, Some(later(30)));
+        // And the column, not just the returned struct: the touch landed.
+        let stored = repo::device_by_hash(&mut conn, shop, &hash)
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.last_seen_at, Some(later(30)));
+    }
+
+    #[test]
+    fn an_unknown_device_and_a_revoked_one_are_refused_alike() {
+        let (_dir, mut conn) = crate::repos::testdb::open();
+        let shop = crate::repos::testdb::SHOP;
+        let owner = crate::repos::testdb::OWNER;
+        assert!(matches!(
+            device_for_request(&mut conn, shop, &"0".repeat(64), noon()),
+            Err(CoreError::AuthRefused)
+        ));
+        let t = create_pairing_token(&mut conn, shop, owner, noon()).unwrap();
+        let (dev, row) = claim_pairing_token(&mut conn, shop, t.expose(), noon(), "Phone").unwrap();
+        revoke_device(&mut conn, shop, owner, row.id, noon()).unwrap();
+        let hash = token_digest(dev.expose());
+        assert!(matches!(
+            device_for_request(&mut conn, shop, &hash, later(30)),
+            Err(CoreError::AuthRefused)
+        ));
     }
 
     #[test]
