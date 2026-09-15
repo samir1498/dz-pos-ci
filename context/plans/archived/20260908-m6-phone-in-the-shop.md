@@ -1,10 +1,10 @@
 ---
 title: 'M6 phone in the shop'
 slug: 'm6-phone-in-the-shop'
-status: 'active'
+status: 'done'
 category: 'milestone'
 created: 20260908
-tldr: 'LAN mode, QR pairing, Expo thin client; stub'
+tldr: 'LAN mode, QR pairing, Expo thin client with queue, print spool, Maestro flow, password reset: nine tasks, closed 2026-09-15 in PR #83'
 priority: 10
 tasks:
   - id: 'T1'
@@ -35,6 +35,7 @@ tasks:
     desc: 'Closing sweep: docs/features.md §6, docs/architecture.md, docs/roadmap.md M6 demo, dz-review (roles+money+fixture) before checkpoint PR'
     status: 'done'
 acceptance: []
+completed_at: '2026-09-15'
 ---
 # M6: the phone in the shop
 
