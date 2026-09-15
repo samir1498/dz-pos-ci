@@ -26,7 +26,7 @@ tasks:
     status: 'done'
   - id: 'T7'
     desc: 'Closing sweep: docs/features.md §6, docs/architecture.md transport table, docs/roadmap.md M7 demo, dz-review (money+roles) before checkpoint PR'
-    status: 'pending'
+    status: 'done'
 acceptance: []
 ---
 # M7: the paired phone, proven
