@@ -4,14 +4,15 @@ updated: '2026-09-15'
 ---
 ## Active
 
-**2026-09-15: M7 scoped, the paired phone proven.** The three T9 review
-gaps were dug into and all three proved real — one QR pairs two phones
-(unconditional mark-used outside the claim transaction), no request path
-ever checks a device token (`device_by_hash` is dead code, no header
-exists), and the phone as built cannot complete a sale (build-time bearer
-vs per-boot launch token, no session) while a retried ring double-charges.
-Evidence and 7 tasks in `context/plans/20260915-m7-paired-phone-proven.md`;
-roadmap section on PR #85. Next: open T1 or pick another opening.
+**2026-09-15: M7 closed, the paired phone proven (PRs #89-#92).** Loop
+`20260915-m7-loop` built T4 (retry key + print on retry), T5 (mobile
+auth already clean), T6 (Maestro pair-and-sell on a real phone over
+Tailscale), T7 (docs sweep) — each with `dz-review` + `Restricted` green
+before merge. Laptop `tmux dz` api/dev/mobile all 200, sign-in switcher
+live, Vite warning gone. No manual test until green is now green — see
+the manual test matrix in `context/plans/archived/20260915-m7-paired-phone-proven.md`
+and the loop file for the `tmux` health check. Next: pick the next
+milestone or polish.
 
 **2026-09-15: M0–M6 closed (PR #83, c7ad157).** Name is Dinar
 (`com.dinar.app`, decided 2026-09-13); cert and updater key are Samir's

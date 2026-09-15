@@ -34,10 +34,10 @@ entries:
     note: 'M5 closed 2026-09-13 (PRs #68-#74: matrix nsis/dmg/appimage, org publish via ORG_RELEASE_TOKEN, thermal ESC/POS route + ISO 8859-15 fix, review gaps, R9 verdicts, Dinar rename com.dinar.app). Cert and updater key stay with Samir as open holds.'
   - ref: 'm6-phone-in-the-shop'
     status: 'done'
-    note: 'M6 closed 2026-09-15 (PR #83, c7ad157, 9/9): LAN+mdns, QR 60s single-use, Expo scaffold, list/revoke, thin till+queue, print spool, Maestro pair-and-sell, password reset, closing sweep. Full CI green on mirror before merge. Open unknowns: queue idempotency, device middleware, QR TOCTOU.'
+    note: 'M6 closed 2026-09-15 (PR #83, c7ad157, 9/9): LAN+mdns, QR 60s single-use, Expo scaffold, list/revoke, thin till+queue, print spool, Maestro pair-and-sell, password reset, closing sweep. Full CI green on mirror before merge. The three unknowns it left (queue idempotency, device middleware, QR TOCTOU) are closed in M7.'
   - ref: 'm7-paired-phone-proven'
-    status: 'planned'
-    note: 'M7 scoped 2026-09-15 (7 tasks T1-T7): atomic QR claim, device middleware, phone session story, sale idempotency, mobile auth cleanup, Maestro proof over Tailscale, closing sweep. Roadmap section on PR #85.'
+    status: 'done'
+    note: 'M7 closed 2026-09-15 (PRs #89-#92, loop 20260915-m7-loop): atomic QR claim (BEGIN IMMEDIATE), device gate (X-Dzpos-Device off-loopback), phone session (device-gated login), sale idempotency (fingerprint dedupe + queue session binding), mobile auth cleanup, Maestro pair-and-sell on a real phone over Tailscale, closing sweep. Loop is done, manual test green.'
 ---
 # dz-pos: from the money core to a first shop
 
