@@ -11,13 +11,13 @@ the short form every task cites.
 | Core | Rust, diesel + SQLite (bundled) | `crates/core/Cargo.toml` |
 | API | Rust HTTP server in `crates/api` (axum), embedded in the desktop, standalone when hosted | `crates/api/Cargo.toml` |
 | Desktop | Tauri 2, React 19, Vite, Tailwind 4, TanStack Router/Query | `apps/desktop` |
-| Mobile | Expo / React Native | `apps/mobile`, not started |
+| Mobile | Expo thin client (pair, till, queue, print) | `apps/mobile` (M6) |
 | Shared TS | `packages/shared`: API client, generated types, money formatting | `packages/shared/package.json` |
 | Design tokens | `packages/design`: primitives, semantic roles, CSS output | `packages/design/package.json` |
 
 In use and pinned in their Cargo.toml: axum and tokio for the API, ts-rs
 for the TS types, proptest for property tests. Checked on crates.io on
-2026-09-07 and not yet chosen: mdns-sd 0.21.2 for LAN discovery. T5 needed
+2026-09-07; chosen in M6 T1 for LAN discovery: mdns-sd 0.11 (`crates/api/Cargo.toml`). T5 needed
 golden files before that insta decision was made and hand-rolled them
 instead (`crates/core/tests/print_ticket.rs`, `UPDATE_GOLDENS=1`); insta
 stays unpinned unless a later template makes the hand-rolled version

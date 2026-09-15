@@ -23,7 +23,7 @@ commit.
 crates/core      Rust: models, diesel repos, services, migrations (SQLite)
 crates/api       Rust: axum HTTP server over core; launch token; the only door
 apps/desktop     Tauri 2 + React 19 + Vite; Rust side in src-tauri/; e2e/
-apps/mobile      Expo / React Native, placeholder, not started
+apps/mobile      Expo thin client: pair, till, queue, print (M6)
 packages/shared  TS: API client, types generated from crates/api, money display
 packages/design  TS: design tokens in three tiers
 fixtures/        money fixtures read by cargo test and vitest alike;
@@ -59,8 +59,8 @@ build already rides `pnpm -r build`, so a broken page fails `just gates`);
 card from the design package. `just landing-deploy` would publish it to the
 Cloudflare Pages project named in `apps/landing/src/lib/site.ts`, but
 refuses to run unless `DZPOS_LANDING_PUBLISH=1` is set. It is blocked on
-Anouar: the price is not set, and the Arabic copy has not been read by a
-native speaker (`context/plans/20260911-landing-page.md`).
+Samir: the price is not set, and the Arabic copy has not been read by a
+native speaker (`context/plans/archived/20260911-landing-page.md`).
 
 ## Commands
 
