@@ -4,16 +4,18 @@ updated: '2026-09-15'
 ---
 ## Active
 
-**2026-09-15: M0–M5 closed, M6 at 8/9.** Name is Dinar (`com.dinar.app`,
-decided 2026-09-13); cert and updater key are Samir's holds. M6 T1–T8 on
-main (LAN + mDNS, QR 60s single-use, Expo scaffold, list/revoke, thin
-till + queue, print spool, Maestro pair-and-sell, password reset). T9
-closing sweep lives on `feat/m6-t9-closing-sweep` (fixture gaps `b769c8d`,
-docs owner-rename + 21 screenshots `721ee4a`, e2e dialog fix `3f818e8`
-with 13/13 screenshots green, full CI pending). Report site ships favicon
-+ OG card + click-to-preview and today's standup; its roadmap page now
-reads 8/9 and all screens are fresh. Still open: the review criticals
-(queue idempotency, device middleware, QR TOCTOU).
+**2026-09-15: M0–M6 closed (PR #83, c7ad157).** Name is Dinar
+(`com.dinar.app`, decided 2026-09-13); cert and updater key are Samir's
+holds. M6 9/9: LAN + mDNS, QR 60s single-use, Expo scaffold, list/revoke,
+thin till + queue, print spool, Maestro pair-and-sell, password reset, and
+the closing sweep (pairing TTL constant, queue/spool fixtures, owner
+rename, e2e dialog fix with 13/13 screenshots green, landing shots
+regenerated). Full CI green on the mirror before merge. Report site ships
+favicon + OG card + click-to-preview and today's standup, all screens
+fresh. Next: decide what works and what does not — the three review
+criticals (queue idempotency, device middleware, QR TOCTOU) are the known
+unknowns, plus the human-held items (comptable, Arabic read, cert, key,
+price).
 
 **Resumed 2026-09-11** after the 2026-09-10 23:01 pause ("see ya next week
 time to rest"); the loop restarts today as 20-minute ticks working M4 and

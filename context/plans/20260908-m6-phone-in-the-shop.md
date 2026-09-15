@@ -33,7 +33,7 @@ tasks:
     status: 'done'
   - id: 'T9'
     desc: 'Closing sweep: docs/features.md §6, docs/architecture.md, docs/roadmap.md M6 demo, dz-review (roles+money+fixture) before checkpoint PR'
-    status: 'pending'
+    status: 'done'
 acceptance: []
 ---
 # M6: the phone in the shop
