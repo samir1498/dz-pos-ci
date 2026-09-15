@@ -14,7 +14,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'Phone session story (api+mobile): a person signs in on a paired phone, device+session both required, desktop permission gates apply unchanged'
-    status: 'pending'
+    status: 'done'
   - id: 'T4'
     desc: 'Sale idempotency (core+api+mobile): client key per sale, server dedupe with unique constraint, same-key retry returns the original, print follows a retried ring'
     status: 'pending'
