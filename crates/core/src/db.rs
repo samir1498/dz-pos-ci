@@ -84,7 +84,14 @@ pub fn open(path: impl AsRef<Path>) -> Result<SqliteConnection, DbError> {
 pub fn open_unmigrated(path: impl AsRef<Path>) -> Result<SqliteConnection, DbError> {
     let url = path.as_ref().to_string_lossy();
     let mut conn = SqliteConnection::establish(&url)?;
-    conn.batch_execute("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
+    // A writer that finds another writer waits instead of failing at once:
+    // without this, two requests racing one write (two phones claiming one
+    // QR) answer SQLITE_BUSY, and a deferred BEGIN that already holds a
+    // read lock can never upgrade, so the timeout is what lets BEGIN
+    // IMMEDIATE serialize contenders instead of refusing them.
+    conn.batch_execute(
+        "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout = 5000;",
+    )?;
     Ok(conn)
 }
 

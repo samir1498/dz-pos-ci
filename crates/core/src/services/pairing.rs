@@ -7,7 +7,7 @@
 
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use chrono::{Duration, NaiveDateTime};
-use diesel::prelude::*;
+use diesel::connection::SimpleConnection;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
@@ -84,17 +84,26 @@ pub fn claim_pairing_token(
         ));
     }
     let hash = token_digest(pairing_token);
-    let row = repo::pairing_by_hash(conn, shop_id, &hash)?.ok_or(CoreError::AuthRefused)?;
-    if row.used_at.is_some() {
-        return Err(CoreError::AuthRefused);
-    }
-    if now > row.expires_at {
-        return Err(CoreError::AuthRefused);
-    }
-    // Mark used first, inside the same transaction the device is inserted
-    // in, so a concurrent claim cannot both succeed.
-    conn.transaction::<_, CoreError, _>(|conn| {
-        repo::mark_pairing_used(conn, row.id, now)?;
+    // BEGIN IMMEDIATE, not diesel's deferred begin: two claims racing one
+    // QR both take a read lock under a deferred begin and neither upgrade
+    // ever clears, so SQLite answers BUSY instead of serializing them.
+    // Immediate takes the write lock up front; the loser waits out the
+    // winner (busy_timeout, `db::open`) and then reads `used_at` set.
+    // The flip stays conditional on top of that, so a zero-row flip is
+    // already-claimed even if the read ever races again — answered the same
+    // indistinguishable way as every other refusal here.
+    conn.batch_execute("BEGIN IMMEDIATE")?;
+    let claimed = (|| -> Result<(DeviceToken, PairedDeviceRow), CoreError> {
+        let row = repo::pairing_by_hash(conn, shop_id, &hash)?.ok_or(CoreError::AuthRefused)?;
+        if row.used_at.is_some() {
+            return Err(CoreError::AuthRefused);
+        }
+        if now > row.expires_at {
+            return Err(CoreError::AuthRefused);
+        }
+        if !repo::mark_pairing_used(conn, row.id, now)? {
+            return Err(CoreError::AuthRefused);
+        }
         let device_token = DeviceToken::new(mint_hex()?);
         let device_hash = token_digest(device_token.expose());
         let write = crate::models::pairing::PairedDeviceWrite {
@@ -108,7 +117,17 @@ pub fn claim_pairing_token(
         };
         let device_row = repo::insert_device(conn, &write)?;
         Ok((device_token, device_row))
-    })
+    })();
+    match claimed {
+        Ok(out) => {
+            conn.batch_execute("COMMIT")?;
+            Ok(out)
+        }
+        Err(refused) => {
+            let _ = conn.batch_execute("ROLLBACK");
+            Err(refused)
+        }
+    }
 }
 
 pub fn list_devices(
@@ -186,6 +205,47 @@ mod tests {
             Err(CoreError::AuthRefused)
         ));
         assert!(claim_pairing_token(&mut conn, shop, t.expose(), later(60), "Phone").is_ok());
+    }
+
+    #[test]
+    fn two_concurrent_claims_pair_only_one_phone() {
+        use std::sync::Barrier;
+        let (dir, mut first) = crate::repos::testdb::open();
+        let path = dir.path().join("t.db");
+        let mut second = crate::db::open(&path).unwrap();
+        let shop = crate::repos::testdb::SHOP;
+        let owner = crate::repos::testdb::OWNER;
+        let secret = create_pairing_token(&mut first, shop, owner, noon())
+            .unwrap()
+            .expose()
+            .to_string();
+        let gate = Barrier::new(2);
+        let (a, b) = std::thread::scope(|s| {
+            let gate = &gate;
+            let one = s.spawn(|| {
+                gate.wait();
+                match claim_pairing_token(&mut first, shop, &secret, noon(), "Phone A") {
+                    Ok(_) => "paired",
+                    Err(CoreError::AuthRefused) => "refused",
+                    Err(other) => panic!("loser must fail closed, not {other:?}"),
+                }
+            });
+            let two = s.spawn(|| {
+                gate.wait();
+                match claim_pairing_token(&mut second, shop, &secret, noon(), "Phone B") {
+                    Ok(_) => "paired",
+                    Err(CoreError::AuthRefused) => "refused",
+                    Err(other) => panic!("loser must fail closed, not {other:?}"),
+                }
+            });
+            (one.join().unwrap(), two.join().unwrap())
+        });
+        assert!(
+            (a == "paired") ^ (b == "paired"),
+            "exactly one of two concurrent claims pairs: {a:?} vs {b:?}"
+        );
+        let mut check = crate::db::open(&path).unwrap();
+        assert_eq!(list_devices(&mut check, shop).unwrap().len(), 1);
     }
 
     #[test]
