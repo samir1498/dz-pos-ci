@@ -149,6 +149,9 @@ second language on; use the looped `just e2e` or a single `--project`.
   `first-paint.spec.ts`, that `lang` and `dir` are right on
   `documentElement` before React mounts, read off the DOM rather than
   through an auto-retrying matcher;
+  `launch-token.spec.ts`, that a token planted in the page global is not
+  honoured (M5 T0 moved the launch token out of the page): every request
+  carries `VITE_API_TOKEN`, and a wrong planted value 401s even sign-in;
   `products.spec.ts`, three tests on the products screen;
   `purchases.spec.ts`, an order of two products with extra costs received in
   two deliveries and then partly returned, and a cancellation refused once
@@ -287,17 +290,20 @@ here. These are all of them.
 | `till-document-number` | `till.tsx` | The number as the paper spells it, inside a translated confirmation. |
 | `till-party-ids` | `till.tsx` | The buyer identifiers block; absent until a customer is picked. |
 | `till-party-ids-missing` | `till.tsx` | Absent until an identifier a facture needs is missing. |
+| `till-override-dialog` | `till.tsx` | The ask before forcing a credit-blocked sale through; the spec confirms it rather than answering a browser box. |
 | `documents-sheet` | `documents.tsx` | The iframe holding the page the core rendered; an iframe has no accessible text. |
 | `customer-fiche` | `-customers/fiche.tsx` | The panel the form opens in; a test waits for it before it types into a field the list also has. |
 | `customer-close-reason` | `-customers/fiche.tsx` | Absent until a fiche with an account behind it is being closed, so a test counts it. |
 | `customer-balance` | `customers_.$id.tsx` | The card carrying what is owed; the same figure appears again in the ledger below it. |
 | `customer-payment` | `customers_.$id.tsx` | One payment row; the amounts inside it are numbers in three locales. |
 | `customer-pay-dialog` | `customers_.$id.tsx` | The dialog the payment is typed into, waited on before the amount field. |
+| `customer-adjust-dialog` | `customers_.$id.tsx` | The ask before a debt correction is written; the spec confirms it rather than answering a browser box. |
 | `customer-statement` | `customers_.$id.tsx` | The statement iframe; same reason as the sheet above. |
 | `customer-debt-slip` | `customers_.$id.tsx` | The debt slip iframe. |
 | `customer-debt-slip-button` | `customers_.$id.tsx` | The button that opens it, beside a second button with a translated label. |
 | `purchase-status` | `purchases_.$id.tsx` | The state the order is in; its word and a column header of the lines table read the same in English ("Received"). |
-| `expenses-month` | `expenses.tsx` | The month picker; its rendered text is the browser's own, in the browser's locale. |
+| `expenses-month` | `expenses.tsx` | The month group: two number boxes plus the month's name from the dictionary, never the browser's own picker. |
+| `expenses-month-month`, `expenses-month-year` | `expenses.tsx` | The two boxes a flow fills; one month input cannot be asserted per segment. |
 | `expenses-total` | `expenses.tsx` | An amount, so its text is a number in three locales. |
 | `expenses-add` | `expenses.tsx` | Opens the entry panel. The empty state offers a second button with the same words, so the name is ambiguous and the id is not. |
 | `expenses-table` | `expenses.tsx` | The month's list, or the empty state in its place. The rows are the second `rowgroup` inside it; `DataTable` has no id of its own per row. |

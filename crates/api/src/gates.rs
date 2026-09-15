@@ -7,7 +7,7 @@
 //! mutating route with no row here fails, and a row naming a route that is not
 //! there fails.
 //!
-//! **Seventeen reads are in it.** The table is otherwise about writes, because a
+//! **Eighteen reads are in it.** The table is otherwise about writes, because a
 //! read of a list a cashier is already looking at needs no permission. The
 //! four exports and the import template are the exception the M3 carry-in
 //! named in words: an export is the whole customer list, the whole supplier
@@ -507,7 +507,7 @@ mod tests {
                      /suppliers/{{id}}/ledger and /backups joined them, the money the shop spends \
                      and owes having been readable by a cashier while the pages that sum it were \
                      not. M5 T3: /support-bundle joined them, the zip a shop sends out gated the \
-                     same way the backups block beside it is)",
+                     same way the backups block beside it is). M6 T4: /pairing/devices joined them, same gate as the QR.",
                     gate.path
                 );
             }

@@ -122,7 +122,7 @@ from owner-only to the permission.
 
 Blocks: nothing.
 
-## M5. First release, v1.0
+## M5. First release, v1.0 (closed 2026-09-13)
 
 Demo: The owner installs from a signed Windows installer, reads version, git
 hash and build date in About, updates in place, and a first shop runs on it.
@@ -155,7 +155,7 @@ Blocks: the final name (Samir, decided 2026-09-13); the certificate's cost and l
 (Samir); who holds the updater signing key (Samir, decided
 before the key exists).
 
-## M6. The phone in the shop — T1–T8 shipped, T9 sweep next
+## M6. The phone in the shop (closed 2026-09-15, PR #83)
 
 Demo: a phone pairs by QR (60s, `EditSettings`), sells from the shop floor
 (`POST /sales` via `queue.ts` retry), and the ticket prints on the desktop
@@ -168,14 +168,14 @@ banner); QR pairing `60s` single-use (`pairing_tokens`/`paired_devices` STRICT,
 claim `401`); Expo thin client `dinar-mobile` (`App.tsx` → `Till.tsx`,
 `pair•till•cart•pay•ticket•products•customers`, `queue.ts` `AsyncStorage`);
 paired devices list+revoke `GET /pairing/devices` / `POST …/revoke`
-(`EditSettings`, `Seventeen` reads, `device.revoked` audit, `PairedDeviceDto`);
+(`EditSettings`, `Eighteen` reads, `device.revoked` audit, `PairedDeviceDto`);
 print through desktop (`POST /sales/{id}/print` `Sell`, `spool/`); Maestro
 `apps/mobile/maestro/pair-and-sell.yaml` over Tailscale; office password
 reset `POST /users/{id}/password` (`ManageUsers`, same as PIN, `SetPasswordDto`);
 Expo plugin + MCP still for later when mobile work begins (R9), but scaffold
-already `pnpm -r build` via placeholder.
+already `pnpm -r build` as a real workspace package.
 
-Blocks: none for T9. TLS decision is `http` for v1, reversible via QR `fp`.
+Blocks: none. TLS decision is `http` for v1, reversible via QR `fp`. Open unknowns: queue idempotency, device middleware, QR claim TOCTOU.
 
 ## After M6
 

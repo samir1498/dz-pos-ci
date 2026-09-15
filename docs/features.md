@@ -1016,7 +1016,7 @@ A proforma is not a sale and is not gated: a quotation moves no stock and no
 money, and the sale it becomes is checked when it is rung up. That means a
 quotation can promise a discount the sale it becomes would refuse.
 
-## 6. LAN mode (v1, after the desktop milestones) — M6 shipped T1–T8
+## 6. LAN mode (v1, after the desktop milestones) — M6 shipped T1–T9
 
 Exactly one desktop is the server (`bind_lan` on `0.0.0.0`, `crates/api/src/mdns.rs`
 `_dzpos._tcp.local.` `Dinar-<shop_id>`, `docs/architecture.md` transport table
