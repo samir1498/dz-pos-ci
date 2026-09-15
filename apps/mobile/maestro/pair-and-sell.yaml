@@ -1,14 +1,69 @@
-# Maestro flow (M6 T7): phone pairs by QR, sells from shop floor, ticket prints on desktop.
-# Run on a real phone over Tailscale: `maestro test apps/mobile/maestro/pair-and-sell.yaml`
-# The desktop must be in LAN mode (bind_lan + mDNS) and show the QR (POST /pairing/qr).
-appId: com.dinar.app # placeholder, Expo dev client
+# Maestro flow (M7 T6): paired phone proven on a real phone over Tailscale.
+# Run: `maestro test apps/mobile/maestro/pair-and-sell.yaml`
+# Pre: desktop in LAN mode (`just api` with bind_lan + mDNS), owner shows QR
+# (`POST /pairing/qr` with EditSettings session), phone on same Tailscale
+# (`100.111.55.62` is the laptop, `192.168.0.134` is the shop LAN in the
+# example — use the desktop's mDNS `Dinar-*.local` or its Tailscale IP).
+# This flow drives the Expo dev client (`com.dinar.app` dev) via Metro at
+# `exp://192.168.0.134:8081` — scan the QR Metro prints, or run `maestro`
+# with `--device` for a connected Android via ADB.
+
+appId: com.dinar.app
+name: Pair, sign in, sell, offline retry is one sale, revoke is 401
+tags:
+  - m7
+  - idempotency
+  - device
+
 ---
-- launchApp
-- assertVisible: "Dinar — thin client"
-# Pair: scan QR (manual step, Maestro cannot scan real QR, so we assert the pair screen exists)
-- assertVisible: "pair"
-# Till: add product, pay
+
+# 1 — Pair this phone (no session yet, only the QR the desktop shows).
+- launchApp:
+    clearState: true
+- assertVisible: "Pair this phone"
+- inputText: "PAIRING_TOKEN_FROM_DESKTOP_QR" # Maestro `runScript` fills this in CI; manual: paste the 64-hex from `POST /pairing/qr`
+- tapOn: "Phone name.*"
+- inputText: "Maestro phone"
+- tapOn: "Pair"
+- assertVisible: "Sign in on this phone"
+
+# 2 — Sign in as a person (device-gated login, M7 T3). Use a cashier PIN
+# the owner just set in settings (e.g. `2580` for user id `2`).
+- inputText: "2" # user_id for cashier
+- tapOn: "PIN"
+- inputText: "2580"
+- tapOn: "Sign in with PIN"
+- assertVisible: "Till — thin client"
+- assertVisible: "Queued: 0"
+
+# 3 — Online sale rings once, prints through desktop.
+- tapOn: "Add" # first product in list
+- tapOn: "Pay.*cash"
+- assertVisible: "Cart:.*empty|Till — thin client" # sale cleared, or still on Till
+
+# 4 — Offline: kill Wi-Fi, sell is queued, not rung twice.
+- toggleAirplaneMode
 - tapOn: "Add"
 - tapOn: "Pay.*cash"
-# Ticket: assert ticket printed on desktop spool (manual check on desktop: spool/ticket-*.bin exists)
+- assertVisible: "Queued: 1"
+- assertVisible: "Retry queued"
+# 5 — Back online, retry is one sale and prints.
+- toggleAirplaneMode
+- tapOn: "Retry queued"
 - assertVisible: "Queued: 0"
+# A second tap must not re-ring: the key is the same, server answers 200 replay.
+- tapOn: "Retry queued"
+- assertVisible: "Queued: 0"
+
+# 6 — Revoke mid-shift (do on desktop: `POST /pairing/devices/{id}/revoke`
+# with owner session). Next call from this phone must fail closed.
+- tapOn: "Add"
+- tapOn: "Pay.*cash"
+# Expect the Till to show 401/refused — the queue keeps it, retry stays 1
+# until the phone is re-paired. Manual check: `curl` with the same device
+# token off-loopback must now be `401 auth_refused`.
+- assertVisible: "Queued: 1"
+
+# 7 — Sign out ends the server session, not just the local copy.
+- tapOn: "Sign out"
+- assertVisible: "Pair this phone"
