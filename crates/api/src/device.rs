@@ -43,7 +43,9 @@ use crate::AppState;
 pub const DEVICE_HEADER: &str = "x-dzpos-device";
 
 /// The phone this request arrived from, resolved by the middleware below.
-/// Handlers that need it take one of these; T3's audit rows will name it.
+/// Handlers that need it take one of these. Audit rows do not name it yet:
+/// they are written in services without request context, so plumbing the
+/// device through is its own change, tracked open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PairedPhone {
     pub id: i32,

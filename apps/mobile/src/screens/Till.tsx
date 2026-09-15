@@ -2,18 +2,40 @@ import { useEffect, useState } from "react";
 import { Button, FlatList, Text, TextInput, View } from "react-native";
 
 import { enqueue, list, retry } from "../lib/queue";
+import type { Session } from "../lib/session";
 
 type Product = { id: number; name: string; selling_centimes: number };
 
-export function Till({ apiBase }: { apiBase: string }) {
+/** The thin till (M6 T5, sessions M7 T3). Every call carries three
+ * credentials, each proving one thing: the launch token (build-time env,
+ * the server operator's secret, same one the desktop's own window shows)
+ * says the caller may reach the server; the device token says which paired
+ * phone; the session token says which signed-in person. A 401 names which
+ * of the three failed, in the server's error code. */
+export function Till({
+  apiBase,
+  launch,
+  session,
+  onSignOut,
+}: {
+  apiBase: string;
+  launch: string;
+  session: Session;
+  onSignOut: () => void;
+}) {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<{ product: Product; qty: number }[]>([]);
   const [queued, setQueued] = useState(0);
 
+  const headers = (): Record<string, string> => ({
+    "content-type": "application/json",
+    Authorization: `Bearer ${launch}`,
+    "x-dzpos-device": session.deviceToken,
+    "x-dzpos-session": session.sessionToken,
+  });
+
   useEffect(() => {
-    fetch(`${apiBase}/products`, {
-      headers: { Authorization: `Bearer ${process.env.EXPO_PUBLIC_API_TOKEN ?? ""}` },
-    })
+    fetch(`${apiBase}/products`, { headers: headers() })
       .then((r) => r.json())
       .then((data) => setProducts(Array.isArray(data) ? data : []))
       .catch(() => setProducts([]));
@@ -38,10 +60,7 @@ export function Till({ apiBase }: { apiBase: string }) {
     try {
       const res = await fetch(`${apiBase}/sales`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          Authorization: `Bearer ${process.env.EXPO_PUBLIC_API_TOKEN ?? ""}`,
-        },
+        headers: headers(),
         body,
       });
       if (!res.ok) throw new Error(String(res.status));
@@ -50,7 +69,7 @@ export function Till({ apiBase }: { apiBase: string }) {
       // spooled beside the shop file and optionally pushed to TCP 9100.
       fetch(`${apiBase}/sales/${sale.id}/print?lang=fr`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${process.env.EXPO_PUBLIC_API_TOKEN ?? ""}` },
+        headers: headers(),
       }).catch(() => {});
       setCart([]);
     } catch {
@@ -65,10 +84,7 @@ export function Till({ apiBase }: { apiBase: string }) {
       try {
         const res = await fetch(req.url, {
           method: req.method,
-          headers: {
-            "content-type": "application/json",
-            Authorization: `Bearer ${process.env.EXPO_PUBLIC_API_TOKEN ?? ""}`,
-          },
+          headers: headers(),
           body: req.body,
         });
         return res.ok;
@@ -85,6 +101,12 @@ export function Till({ apiBase }: { apiBase: string }) {
   return (
     <View style={{ flex: 1, padding: 16 }}>
       <Text style={{ fontWeight: "600" }}>Till — thin client (M6 T5)</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text>
+          {session.name} · {session.role}
+        </Text>
+        <Button title="Sign out" onPress={onSignOut} />
+      </View>
       <Text>Queued: {queued}</Text>
       {queued > 0 && <Button title="Retry queued" onPress={retryAll} />}
       <FlatList
