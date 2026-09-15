@@ -602,11 +602,21 @@ pub fn router_with_origin(
     // lock with its key inside. They still show the launch token like
     // everything else.
     let auth = Router::new()
+        .route("/auth/first-setup", post(routes::auth::claim_first_owner))
+        .route("/pairing/claim", post(routes::pairing::claim));
+    // Signing in as a person, behind the device gate but outside the
+    // session one (M7 T3): a sign-in behind a session guard would be a lock
+    // with its key inside, but a LAN holder of only the launch token mints
+    // no sessions and reads no me — the phone shows its pairing first, then
+    // the person's PIN or password. `/auth/logout` and `/auth/me` read the
+    // session token by hand rather than taking `CurrentUser`, and still
+    // answer without one; the device layer, not the session one, is what
+    // guards them. The desktop on loopback passes bare, exactly as before.
+    let phone_auth = Router::new()
         .route("/auth/login", post(routes::auth::login))
         .route("/auth/logout", post(routes::auth::logout))
         .route("/auth/me", get(routes::auth::me))
-        .route("/auth/first-setup", post(routes::auth::claim_first_owner))
-        .route("/pairing/claim", post(routes::pairing::claim));
+        .layer(from_fn_with_state(state.clone(), device::require));
     let guarded = Router::new()
         .route("/audit-log", get(routes::audit::list))
         .route("/auth/idle", get(routes::auth::idle))
@@ -743,6 +753,7 @@ pub fn router_with_origin(
         .layer(from_fn_with_state(state.clone(), device::require));
 
     let inside_the_launch_token = auth
+        .merge(phone_auth)
         .merge(guarded)
         .fallback(routes::not_found)
         .method_not_allowed_fallback(routes::method_not_allowed)

@@ -133,6 +133,7 @@ async fn pair_phone(app: &axum::Router) -> (String, i64) {
     let device_token = body["device_token"].as_str().unwrap().to_string();
     let (status, body) = call(app, "GET", "/pairing/devices", None, common::OWNER_SESSION).await;
     assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body.as_array().unwrap().len(), 1);
     let device_id = body[0]["id"].as_i64().unwrap();
     (device_token, device_id)
 }
@@ -417,6 +418,122 @@ async fn a_device_from_another_shop_is_refused() {
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
     assert_eq!(body["error"]["code"], "auth_refused");
+}
+
+/// A PIN on the cashier, set directly on the test file: the phone signs a
+/// person in with the same credentials as the till, so the test does what
+/// a shop does (owner sets the PIN in settings) rather than what the API
+/// cannot do for itself.
+fn pin_cashier(db: &std::path::Path) -> i32 {
+    use diesel::prelude::*;
+    use diesel::sql_types::Integer;
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = Integer)]
+        id: i32,
+    }
+    let mut conn = dzpos_core::db::open(db).unwrap();
+    let owner: Id = diesel::sql_query(
+        "SELECT id FROM users WHERE shop_id = ? AND role = 'owner' AND active = 1 \
+         ORDER BY id LIMIT 1",
+    )
+    .bind::<Integer, _>(SHOP)
+    .get_result(&mut conn)
+    .unwrap();
+    let cashier: Id = diesel::sql_query(
+        "SELECT id FROM users WHERE shop_id = ? AND role = 'cashier' AND active = 1 \
+         ORDER BY id LIMIT 1",
+    )
+    .bind::<Integer, _>(SHOP)
+    .get_result(&mut conn)
+    .unwrap();
+    dzpos_core::services::users::set_pin(&mut conn, SHOP, owner.id, cashier.id, "2580", None)
+        .unwrap();
+    cashier.id
+}
+
+#[tokio::test]
+async fn a_phone_signs_a_person_in_with_pin_and_device() {
+    let (dir, app) = app();
+    let (device_token, _) = pair_phone(&app).await;
+    let cashier = pin_cashier(&dir.path().join("t.db"));
+    // No session yet, but a paired device: the sign-in answers a session.
+    let (status, body) = call_lan(
+        &app,
+        "POST",
+        "/auth/login",
+        Some(json!({ "user_id": cashier, "pin": "2580" })),
+        None,
+        Some(&device_token),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let session = body["token"].as_str().unwrap().to_string();
+    assert_eq!(body["me"]["role"], "cashier");
+    // And that session acts, with the device alongside: the phone sells
+    // through the same gates as the desktop.
+    let (status, body) = call_lan(
+        &app,
+        "GET",
+        "/products",
+        None,
+        Some(&session),
+        Some(&device_token),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+}
+
+#[tokio::test]
+async fn a_phone_cannot_sign_in_without_its_device() {
+    let (dir, app) = app();
+    pair_phone(&app).await;
+    let cashier = pin_cashier(&dir.path().join("t.db"));
+    // Right PIN, no device: the launch token alone mints no sessions.
+    let (status, body) = call_lan(
+        &app,
+        "POST",
+        "/auth/login",
+        Some(json!({ "user_id": cashier, "pin": "2580" })),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    assert_eq!(body["error"]["code"], "session_required");
+}
+
+#[tokio::test]
+async fn a_cashier_on_a_phone_is_refused_by_name_like_on_the_desktop() {
+    // The permission gates do not know or care which glass the call came
+    // through: a cashier's phone is refused the manager routes with the
+    // permission named, like the cashier specs prove for the desktop.
+    let (dir, app) = app();
+    let (device_token, _) = pair_phone(&app).await;
+    let cashier = pin_cashier(&dir.path().join("t.db"));
+    let (status, body) = call_lan(
+        &app,
+        "POST",
+        "/auth/login",
+        Some(json!({ "user_id": cashier, "pin": "2580" })),
+        None,
+        Some(&device_token),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let session = body["token"].as_str().unwrap();
+    let (status, body) = call_lan(
+        &app,
+        "POST",
+        "/pairing/qr",
+        None,
+        Some(session),
+        Some(&device_token),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert_eq!(body["error"]["code"], "forbidden");
+    assert_eq!(body["error"]["permission"], "edit_settings");
 }
 
 #[tokio::test]
