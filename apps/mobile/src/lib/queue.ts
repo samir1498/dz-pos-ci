@@ -11,7 +11,18 @@ export type QueuedRequest = {
   url: string;
   body: string | null;
   createdAt: string;
+  /** The session that queued it, or null for items from before sessions.
+   * A retry under a different signer skips the item rather than ringing
+   * one person's sale as another (M7 T4). */
+  sessionToken: string | null;
 };
+
+/** A fresh client retry key (M7 T4): doubles as the sale's idempotency key
+ * when the queued request is a ring, so the first try and every retry
+ * promise the same sale. */
+export function newIdempotencyKey(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 const STORAGE_KEY = "dzpos:retry-queue";
 
@@ -47,7 +58,7 @@ async function save(queue: QueuedRequest[]): Promise<void> {
 
 export async function enqueue(req: Omit<QueuedRequest, "id" | "createdAt">): Promise<string> {
   const queue = await load();
-  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = newIdempotencyKey();
   queue.push({ ...req, id, createdAt: new Date().toISOString() });
   await save(queue);
   return id;
@@ -66,14 +77,22 @@ export async function clear(): Promise<void> {
   await save([]);
 }
 
-/** Try each queued request with `sender`; on success remove it, on failure keep it. */
+/** Try each queued request with `sender`; on success remove it, on failure keep it.
+ * Items queued under another session are skipped, never sent: `current` is
+ * the signer's session token now, and a null one signs nothing out. */
 export async function retry(
   sender: (req: QueuedRequest) => Promise<boolean>,
-): Promise<{ succeeded: number; failed: number }> {
+  currentSessionToken?: string | null,
+): Promise<{ succeeded: number; failed: number; skipped: number }> {
   const queue = await load();
   let succeeded = 0;
   let failed = 0;
+  let skipped = 0;
   for (const req of [...queue]) {
+    if (req.sessionToken !== null && req.sessionToken !== currentSessionToken) {
+      skipped += 1;
+      continue;
+    }
     try {
       const ok = await sender(req);
       if (ok) {
@@ -86,5 +105,5 @@ export async function retry(
       failed += 1;
     }
   }
-  return { succeeded, failed };
+  return { succeeded, failed, skipped };
 }

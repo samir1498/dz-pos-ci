@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 
-import { clear, enqueue, list, retry } from "./queue";
+import { clear, enqueue, list, newIdempotencyKey, retry } from "./queue";
 
 beforeEach(async () => {
   await clear();
@@ -8,7 +8,7 @@ beforeEach(async () => {
 
 describe("retry queue (M6 T5)", () => {
   it("enqueues a failed sale and retries it", async () => {
-    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", body: "{}" });
+    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", sessionToken: null, body: "{}" });
     expect((await list()).length).toBe(1);
     const queued = await list();
     expect(queued[0]?.id).toBeTruthy();
@@ -19,7 +19,7 @@ describe("retry queue (M6 T5)", () => {
   });
 
   it("keeps a request that still fails", async () => {
-    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", body: "{}" });
+    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", sessionToken: null, body: "{}" });
     const { succeeded, failed } = await retry(async () => false);
     expect(succeeded).toBe(0);
     expect(failed).toBe(1);
@@ -27,9 +27,9 @@ describe("retry queue (M6 T5)", () => {
   });
 
   it("keeps order and handles partial success", async () => {
-    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", body: "1" });
-    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", body: "2" });
-    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", body: "3" });
+    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", sessionToken: null, body: "1" });
+    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", sessionToken: null, body: "2" });
+    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", sessionToken: null, body: "3" });
     const calls: string[] = [];
     const { succeeded, failed } = await retry(async (req) => {
       calls.push(req.body ?? "");
@@ -42,7 +42,7 @@ describe("retry queue (M6 T5)", () => {
   });
 
   it("keeps a request whose sender throws", async () => {
-    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", body: "{}" });
+    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", sessionToken: null, body: "{}" });
     const { succeeded, failed } = await retry(async () => {
       throw new Error("offline");
     });
@@ -51,8 +51,44 @@ describe("retry queue (M6 T5)", () => {
     expect((await list()).length).toBe(1);
   });
 
+  it("mints distinct retry keys", async () => {
+    expect(newIdempotencyKey()).not.toBe(newIdempotencyKey());
+  });
+
+  it("skips another signer's sale instead of ringing it as you", async () => {
+    await enqueue({
+      method: "POST",
+      url: "http://127.0.0.1:4317/sales",
+      sessionToken: "anna",
+      body: "{}",
+    });
+    await enqueue({
+      method: "POST",
+      url: "http://127.0.0.1:4317/sales",
+      sessionToken: null,
+      body: "{}",
+    });
+    let calls = 0;
+    const { succeeded, failed, skipped } = await retry(
+      async () => {
+        calls += 1;
+        return true;
+      },
+      "yacine",
+    );
+    expect(calls).toBe(1);
+    expect(succeeded).toBe(1);
+    expect(failed).toBe(0);
+    expect(skipped).toBe(1);
+    expect((await list()).length).toBe(1);
+    // Her own retry sends it.
+    const again = await retry(async () => true, "anna");
+    expect(again).toEqual({ succeeded: 1, failed: 0, skipped: 0 });
+    expect((await list()).length).toBe(0);
+  });
+
   it("is empty after clear", async () => {
-    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", body: "{}" });
+    await enqueue({ method: "POST", url: "http://127.0.0.1:4317/sales", sessionToken: null, body: "{}" });
     await clear();
     expect((await list()).length).toBe(0);
     const { succeeded, failed } = await retry(async () => true);

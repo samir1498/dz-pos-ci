@@ -27,6 +27,7 @@ use crate::models::stock::{Movement, MovementKind};
 use crate::money::{
     compute_totals, Bps, Line, Money, MoneyError, PaymentMode, Regime, TotalsOptions,
 };
+use crate::repos::sale_idempotency as idempotency;
 use crate::services::permissions::{self, Permission, Role};
 use crate::services::{
     audit, clock, customers, debt, documents, products, proforma, settings, shops, stock, users,
@@ -129,24 +130,130 @@ impl Warning {
 pub struct Sale {
     pub document: Document,
     pub warning: Option<Warning>,
+    /// True when no new ring happened: the key was seen before and the
+    /// stored paper is answered again. A replay answers the paper, not the
+    /// chatter — the warning travels on the first ring only.
+    pub replayed: bool,
+}
+
+/// Client retry keys live at most this long on the wire. Longer is not more
+/// unique, only more room for a pasted secret to travel in.
+pub const MAX_IDEMPOTENCY_KEY_LEN: usize = 128;
+
+/// The edge calls this for a presented key: present, non-empty, short.
+pub fn validate_idempotency_key(key: &str) -> Result<(), CoreError> {
+    if key.is_empty() {
+        return Err(CoreError::validation(
+            "idempotency_key",
+            "a retry key is the client's promise this ring is one sale; an empty one promises nothing",
+        ));
+    }
+    if key.len() > MAX_IDEMPOTENCY_KEY_LEN {
+        return Err(CoreError::validation(
+            "idempotency_key",
+            "a retry key is at most 128 characters",
+        ));
+    }
+    Ok(())
+}
+
+/// The ring a key was first seen with, fingerprinted. Same key plus same
+/// fingerprint replays the stored paper; same key plus a different one is a
+/// client reusing a key across sales and is refused. Only the request is
+/// hashed, never the stamped answer: `issued_at` unset on both tries is the
+/// ordinary retry and must match.
+fn fingerprint(new: &NewSale) -> String {
+    use sha2::{Digest, Sha256};
+    let mut parts = String::new();
+    for line in &new.lines {
+        parts.push_str(&format!(
+            "{}:{}:{}:{};",
+            line.product_id,
+            line.qty_milli,
+            line.unit_price.map(Money::as_centimes).unwrap_or(-1),
+            line.line_discount.as_centimes()
+        ));
+    }
+    let mode = match new.payment_mode {
+        PaymentMode::Cash => "cash",
+        PaymentMode::Card => "card",
+        PaymentMode::Credit => "credit",
+    };
+    let kind = match new.kind {
+        SaleKind::Ticket => "ticket",
+        SaleKind::Facture => "facture",
+        SaleKind::Proforma => "proforma",
+    };
+    parts.push_str(&format!(
+        "{}|{}|{}|{}|{}|{}|{:?}",
+        new.global_discount.as_centimes(),
+        mode,
+        new.tendered.map(Money::as_centimes).unwrap_or(-1),
+        new.customer_id.unwrap_or(-1),
+        new.override_credit,
+        kind,
+        new.issued_at
+    ));
+    let mut hex = String::with_capacity(64);
+    for b in Sha256::digest(parts.as_bytes()) {
+        use std::fmt::Write;
+        let _ = write!(hex, "{b:02x}");
+    }
+    hex
 }
 
 /// Issues the ticket: totals, numbering, the document with its lines and TVA
 /// recap, one stock movement per line, and on credit the customer's ledger
 /// movement, all in one transaction.
+/// Rings one basket, no promise attached: today's desktop behavior. A call
+/// that got no answer and carries a retry key goes through
+/// [`issue_idempotent`] instead, which is this with the dedup around it.
 pub fn issue(
     conn: &mut SqliteConnection,
     shop_id: i32,
     user_id: i32,
     new: NewSale,
 ) -> Result<Sale, CoreError> {
+    issue_inner(conn, shop_id, user_id, new, None)
+}
+
+/// Rings one basket, promising it is one sale (M7 T4): a retry after a lost
+/// answer carries the same key and gets the original sale back instead of
+/// ringing twice. A key on a quotation is refused — it moves no money, so
+/// there is nothing to dedupe, and dropping the promise in silence would be
+/// worse.
+pub fn issue_idempotent(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    new: NewSale,
+    idempotency_key: String,
+) -> Result<Sale, CoreError> {
+    validate_idempotency_key(&idempotency_key)?;
+    issue_inner(conn, shop_id, user_id, new, Some(idempotency_key))
+}
+
+fn issue_inner(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    new: NewSale,
+    idempotency_key: Option<String>,
+) -> Result<Sale, CoreError> {
     // A quotation is not a sale: it writes the document and stops. Handed
     // over before any of the rules below, because none of them is about it,
     // and it never warns about a credit limit it does not move.
     if new.kind == SaleKind::Proforma {
+        if idempotency_key.is_some() {
+            return Err(CoreError::validation(
+                "idempotency_key",
+                "a quotation takes no retry key; only ticket and facture rings do",
+            ));
+        }
         return proforma::issue(conn, shop_id, user_id, new).map(|document| Sale {
             document,
             warning: None,
+            replayed: false,
         });
     }
     if new.lines.is_empty() {
@@ -194,6 +301,29 @@ pub fn issue(
 
     let issued = conn.transaction(|conn| {
         let issued_at = new.issued_at.unwrap_or_else(clock::now);
+        // A retry after a lost answer carries the key of a ring already
+        // stored: answer the stored paper instead of ringing twice. Same key
+        // on a different ring is a client reusing keys and is refused —
+        // handing back a neighbor's sale in silence is the bug this table
+        // exists to prevent. First, so a replay burns no number and writes
+        // no row of any kind.
+        if let Some(key) = &idempotency_key {
+            let hash = fingerprint(&new);
+            if let Some(hit) = idempotency::find(conn, shop_id, key)? {
+                if hit.request_hash != hash {
+                    return Err(CoreError::conflict(
+                        "idempotency_key",
+                        "this retry key already rang a different sale",
+                    ));
+                }
+                let document = documents::get(conn, shop_id, hit.sale_id)?;
+                return Ok(Sale {
+                    document,
+                    warning: None,
+                    replayed: true,
+                });
+            }
+        }
         let regime = settings::regime_as_of(conn, shop_id, issued_at)?;
         let seller = SellerBlock::from(shops::get(conn, shop_id)?);
 
@@ -347,6 +477,21 @@ pub fn issue(
             },
         )?;
 
+        // The key lands in the same transaction as the sale: a crash between
+        // the two is a sale with no key, which a retry would ring again.
+        // Lost the race with a same-key ring (UNIQUE) means the winner
+        // committed first — answer 409 and let the client read that sale
+        // with the same key rather than inventing a second one here.
+        if let Some(key) = &idempotency_key {
+            let hash = fingerprint(&new);
+            if !idempotency::record(conn, shop_id, key, document.id, &hash, issued_at)? {
+                return Err(CoreError::conflict(
+                    "idempotency_key",
+                    "this key just rang on another call; send it again to read that sale",
+                ));
+            }
+        }
+
         // Stock leaves after the document exists, so every movement names the
         // document that moved it. The count may end up below zero: a shop's
         // count is often wrong before its first inventory, and refusing the
@@ -444,6 +589,7 @@ pub fn issue(
             return Ok(Sale {
                 document,
                 warning: None,
+                replayed: false,
             });
         };
 
@@ -582,6 +728,7 @@ pub fn issue(
         Ok(Sale {
             document,
             warning: credit.warning,
+            replayed: false,
         })
     });
 

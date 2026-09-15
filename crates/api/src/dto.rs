@@ -972,6 +972,12 @@ pub struct NewSaleDto {
     /// before this field existed keeps issuing what it always did.
     #[serde(default)]
     pub kind: SaleKindDto,
+    /// Retry key (M7 T4). A caller that got no answer posts the same basket
+    /// with the same key and gets the original sale back instead of ringing
+    /// twice. Left out means no promise: today's desktop keeps ringing like
+    /// it always did.
+    #[serde(default)]
+    pub idempotency_key: Option<String>,
 }
 
 impl TryFrom<NewSaleDto> for NewSale {
