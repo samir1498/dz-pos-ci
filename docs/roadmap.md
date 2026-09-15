@@ -177,6 +177,23 @@ already `pnpm -r build` as a real workspace package.
 
 Blocks: none. TLS decision is `http` for v1, reversible via QR `fp`. Open unknowns: queue idempotency, device middleware, QR claim TOCTOU.
 
+## M7. The paired phone, proven
+
+Demo: pair a phone, sign in as cashier, kill the Wi-Fi mid-sale, retry
+and the sale rings once; revoke the phone mid-shift, its next call fails
+closed; scan one QR twice at once, the second claim fails.
+
+In: atomic QR claim (checks plus a conditional mark-used in one
+transaction); device auth actually checked (`X-Dzpos-Device` required off
+loopback, revoked is 401); a session story for the phone so the desktop's
+permission gates apply unchanged; idempotent sale ring (client key,
+server dedupe) with the print following a retried ring; Maestro proof on
+a real phone over Tailscale. Full task list with the evidence behind each
+in `context/plans/20260915-m7-paired-phone-proven.md`.
+
+Blocks: a real phone over Tailscale for the proof run (Samir's), as in
+M6 T7. No new money rules.
+
 ## After M6
 
 Cloud mode waits on open decision 1 (SaaS with an account, offline licence,

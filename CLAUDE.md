@@ -29,7 +29,7 @@ the same pages; this file is the index.
 ## Skills (`.claude/skills/`, symlinked into `~/.claude/skills/` on the WSL box)
 `step-by-step` (one step per message when Samir drives by hand; M1 runs
 as a loop instead, see `context/progress/now.md`) · `dz-context` · `dz-money` · `dz-review` · `dz-pr` ·
-`dz-mockup` · `laptop-dev` · `git-commit-convention` · `dont-sound-like-ai`.
+`dz-mockup` · `dz-standup` · `laptop-dev` · `git-commit-convention` · `dont-sound-like-ai`.
 User-level `stale-check` (any repo) reads `.claude/stale-homes.md` here for
 where each duplicated fact lives and how a fix is routed.
 
