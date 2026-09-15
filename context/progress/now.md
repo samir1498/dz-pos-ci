@@ -54,9 +54,9 @@ route over 678 KiB), and the publish preparation (#30: canonical and
 alternate links, the sitemap, the sharing card drawn from `@dzpos/design`,
 Cloudflare Web Analytics written in and switched off, and `just
 landing-deploy` refusing to run without `DZPOS_LANDING_PUBLISH=1`). The page
-is built and not published. Three things block it and all three are Samir's
-and Anouar's: the product's name is a placeholder, there is no price, and no
-native speaker has read the Arabic. The three built routes are shot and on
+is built and not published. Two things block it and both are Samir's: there is no price, and no
+native speaker has read the Arabic. The product's name is decided
+(Dinar, 2026-09-13). The three built routes are shot and on
 the boss site at https://dinar-reports.pages.dev/landing/ so Anouar can
 answer without a checkout. The shots carry a width per tier since 2026-09-10,
 so a phone is served a phone-sized file rather than the desktop one scaled
@@ -333,8 +333,8 @@ Not in the milestone, though `docs/roadmap.md` said so until 2026-09-11: the
 bon de livraison. `docs/features.md` § Later parks it for a fiscal reason,
 not an effort one, and the two pages now point at each other.
 
-Five release gates are Samir's and Anouar's rather than mine, and two have
-lead times that start when they say so: the product's final name, which is
+Five release gates are Samir's rather than mine, and two have
+lead times that start when he says so: the product's final name, which is
 baked into the installer, and the Windows code-signing certificate, without
 which every customer sees a warning.
 
@@ -408,6 +408,14 @@ Run `just status` from the repo root for the ladder and the plans.
 Run `just ctx show <slug>` for plan details.
 
 ## Done recently
+- 2026-09-15: stale sweep post-M6 (skill, two lenses, 16 findings). M6
+  plan done + archived; roadmap/features/architecture/README closed-tag
+  fixes on PR #84; report roadmap + file-structure + architecture pages
+  at M6 done with 22 specs, redeployed; gates.rs reads 17 → 18
+  (`/pairing/devices` was uncounted); new stale-homes rows for landing
+  shots + e2e test ids. Left out: dated history bodies, and
+  `opencode.json` (untracked, load-bearing, no agreed home — needs an
+  owner decision).
 - 2026-09-15: e2e timeouts fixed on the T9 branch (`3f818e8`, specs only).
   Specs listened for a native `dialog` that never fires; the app asks in
   its own `ConfirmDialog`, so the confirm sat open. Customers/till-credit/
