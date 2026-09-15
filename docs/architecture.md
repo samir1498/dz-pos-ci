@@ -584,7 +584,7 @@ tracks them, alongside the release gates and who holds each:
 
 - Tauri updater signing key: who generates it and who holds it; it never
   enters the repo, CI signs with a secret.
-- Windows code-signing certificate: cost and lead time, for Anouar.
+- Windows code-signing certificate: cost and lead time, for the owner.
 
 ## Testing matrix
 

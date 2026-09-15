@@ -200,13 +200,13 @@ test("sells on credit, warns at the threshold, is refused past the limit, overri
     });
   }
 
-  // The owner takes the decision. The browser's confirm is accepted once,
-  // for this click only.
-  page.once("dialog", (dialog) => void dialog.accept());
+  // The owner takes the decision. The override asks first in our own
+  // dialog, not the browser's box.
   const overridden = page.waitForResponse(
     (res) => res.url().endsWith("/sales") && res.request().method() === "POST",
   );
   await page.getByRole("button", { name: t("till_override"), exact: true }).click();
+  await page.getByTestId("till-override-dialog-confirm").click();
   expect((await overridden).status()).toBe(201);
 
   const afterOverride = await ledger(request, customerId);

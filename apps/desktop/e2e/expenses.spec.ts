@@ -103,8 +103,11 @@ test("files two expenses in two categories and shows the month's total and the c
 
   await page.goto("/expenses");
   await expect(page.getByRole("main").getByRole("heading", { name: t("expenses_title") })).toBeVisible();
-  // The month the screen opens on is the shop's, read from /clock.
-  await expect(page.getByTestId("expenses-month")).toHaveValue(month);
+  // The month the screen opens on is the shop's, read from /clock. It is
+  // two boxes now instead of one month input, so each segment is read on
+  // its own.
+  await expect(page.getByTestId("expenses-month-month")).toHaveValue(today.slice(5, 7));
+  await expect(page.getByTestId("expenses-month-year")).toHaveValue(today.slice(0, 4));
   await expect(page.getByText(t("expenses_empty"))).toBeVisible();
 
   await fileOne(page, "expense_category_rent", RENT_INPUT, "loyer");

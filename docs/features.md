@@ -37,7 +37,7 @@ what blocks it; this list is the order in one glance.
 5. Users and roles.
 6. First release: installer, updater, signing, versioned migrations.
 7. LAN mode: one desktop serves, phones and second tills pair by QR.
-8. Cloud mode, only after Anouar decides (open decision 1).
+8. Cloud mode, only after the owner decides (open decision 1).
 
 The sections below keep their original numbering; it names the area, not
 the order.
@@ -1016,14 +1016,37 @@ A proforma is not a sale and is not gated: a quotation moves no stock and no
 money, and the sale it becomes is checked when it is rung up. That means a
 quotation can promise a discount the sale it becomes would refuse.
 
-## 6. LAN mode (v1, after the desktop milestones)
+## 6. LAN mode (v1, after the desktop milestones) — M6 shipped T1–T8
 
-Exactly one desktop is the server; it advertises via mDNS and shows a QR
-(host, port, short-lived pairing token). A phone or a second till scans it
-and is a client from then on. Clients never own stock; a client that loses
-the server queues writes and replays them, server answer wins. Windows
-Firewall is the known trap: detect the blocked listener on first run and
-show one instruction.
+Exactly one desktop is the server (`bind_lan` on `0.0.0.0`, `crates/api/src/mdns.rs`
+`_dzpos._tcp.local.` `Dinar-<shop_id>`, `docs/architecture.md` transport table
+decides HTTP on a trusted shop Wi-Fi for v1, TLS fingerprint in the QR stays
+the candidate). It shows a QR (`POST /pairing/qr`, `EditSettings`, 60s
+single-use, stored as SHA-256, `expires_in_seconds` 60) that carries a
+pairing token; a phone or second till scans it and trades it (`POST
+/pairing/claim` with `pairing_token` + `device_name`, no session, launch token
+only) for a long-lived device token (`paired_devices`, `token_hash` unique,
+`revoked_at` nullable, `200` then `201` then `401` on second claim). Clients
+never own stock; a client that loses the server queues writes and replays
+them, server answer wins (thin client `apps/mobile/src/lib/queue.ts` with
+`AsyncStorage` + memory fallback, `retry`).
+
+Settings lists paired devices (`GET /pairing/devices`, `EditSettings`) and
+revokes one (`POST /pairing/devices/{id}/revoke`, same gate, `device.revoked`
+audit, second revoke `422`, cashier `403`, `PairedDeviceDto` never carries a
+hash). The Expo thin client (`apps/mobile`, `dinar-mobile`, `expo` + `react-native`,
+`App.tsx` → `src/screens/Till.tsx`) talks the same HTTP contract as the
+desktop (rule 1), never knows which mode it is in: `pair` (QR), `till` (fetch
+`GET /products`, `POST /sales` with `Sell`, `SeeCost` redaction reused), `cart`,
+`pay`, `ticket` (print through desktop `POST /sales/{id}/print?lang=` → `spool/ticket-<id>-<lang>.bin`
+beside the shop file, never pruned, and optionally `DZPOS_PRINTER_ADDR` TCP
+`9100` via `write_ticket_escpos_to_file` / `send_ticket_escpos_tcp`), `products`,
+`customers`, `more`, with Maestro `apps/mobile/maestro/pair-and-sell.yaml` over
+Tailscale (`100.111.55.62`). Windows Firewall is the known trap: detect the
+blocked listener on first run and show one instruction. Office passwords are
+now resettable (`POST /users/{id}/password`, `ManageUsers`, same 8+ validation
+and session rule as PIN, `SetPasswordDto`, `users_api` test) — the review-found
+hole where a forgotten owner password was file surgery.
 
 ## 7. Cloud mode (open)
 
@@ -1095,7 +1118,7 @@ the rule is enforced.
 
 ## Open decisions
 
-1. **SaaS with an account, offline licence, or both.** Anouar. Changes
+1. **SaaS with an account, offline licence, or both.** The owner decides. Changes
    pricing, hosting and step 8 only.
 2. ~~Product name.~~ **Decided 2026-09-13 (Samir): Dinar.** Org `Dinar-dz`,
    bundle identifier `com.dinar.app`. Crate and path names stay `dz-pos`.

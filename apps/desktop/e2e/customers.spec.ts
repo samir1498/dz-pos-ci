@@ -58,9 +58,6 @@ test("opens a company fiche with an opening debt, adjusts it, and saves the cust
   request,
 }) => {
   const name = customerName();
-  // Confirmed rather than dismissed: the adjustment asks first, and a
-  // browser answers "no" to a dialog nobody handles.
-  page.on("dialog", (dialog) => void dialog.accept());
 
   await page.goto("/customers");
   await expect(page.getByRole("main").getByRole("heading", { name: t("customers_title") })).toBeVisible();
@@ -110,6 +107,8 @@ test("opens a company fiche with an opening debt, adjusts it, and saves the cust
   await page.getByLabel(t("field_adjust_amount"), { exact: true }).fill(ADJUST_INPUT);
   await page.getByLabel(t("field_adjust_note"), { exact: true }).fill("erreur de saisie");
   await page.getByRole("button", { name: t("action_adjust"), exact: true }).click();
+  // The adjustment asks first in our own dialog, not the browser's box.
+  await page.getByTestId("customer-adjust-dialog-confirm").click();
 
   // The new movement and the balance it left behind, on the screen.
   await expect(page.getByText(t("customers_adjusted"))).toBeVisible();

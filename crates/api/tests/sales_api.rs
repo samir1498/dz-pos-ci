@@ -1516,11 +1516,16 @@ async fn the_ticket_print_spools_the_same_bytes_the_get_returns() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert!(body["spooled"]
-        .as_str()
-        .unwrap()
-        .contains(&format!("ticket-{ticket_id}-fr.bin")));
+    let spooled_path = body["spooled"].as_str().unwrap().to_string();
+    assert!(spooled_path.contains(&format!("ticket-{ticket_id}-fr.bin")));
     assert!(body["bytes"].as_i64().unwrap() > 0);
+    // The spool file exists and is the same bytes the GET would return.
+    let file_bytes = std::fs::read(&spooled_path).expect("spool file not found");
+    assert!(file_bytes.starts_with(&[0x1b, 0x40]), "spool missing ESC @");
+    assert!(
+        file_bytes.windows(3).any(|w| w == b"TK-"),
+        "spool missing TK-"
+    );
 
     // The spooled bytes are the same the GET would return.
     let req = Request::builder()
@@ -1534,6 +1539,19 @@ async fn the_ticket_print_spools_the_same_bytes_the_get_returns() {
     assert_eq!(res.status(), StatusCode::OK);
     let bytes = res.into_body().collect().await.unwrap().to_bytes();
     assert_eq!(bytes.len() as i64, body["bytes"].as_i64().unwrap());
+    assert_eq!(file_bytes, bytes.to_vec(), "spool file != GET bytes");
+    // Second print overwrites same file, same bytes.
+    let (status, body2) = call(
+        &app,
+        "POST",
+        &format!("/sales/{ticket_id}/print?lang=fr"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body2}");
+    assert_eq!(body2["spooled"].as_str().unwrap(), spooled_path);
+    let file_bytes2 = std::fs::read(&spooled_path).unwrap();
+    assert_eq!(file_bytes2, file_bytes);
 
     // A facture id is still 404 on the print route.
     let c = party(
