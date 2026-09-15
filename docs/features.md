@@ -37,7 +37,7 @@ what blocks it; this list is the order in one glance.
 5. Users and roles.
 6. First release: installer, updater, signing, versioned migrations.
 7. LAN mode: one desktop serves, phones and second tills pair by QR.
-8. Cloud mode, only after Anouar decides (open decision 1).
+8. Cloud mode, only after the owner decides (open decision 1).
 
 The sections below keep their original numbering; it names the area, not
 the order.
@@ -1118,7 +1118,7 @@ the rule is enforced.
 
 ## Open decisions
 
-1. **SaaS with an account, offline licence, or both.** Anouar. Changes
+1. **SaaS with an account, offline licence, or both.** The owner decides. Changes
    pricing, hosting and step 8 only.
 2. ~~Product name.~~ **Decided 2026-09-13 (Samir): Dinar.** Org `Dinar-dz`,
    bundle identifier `com.dinar.app`. Crate and path names stay `dz-pos`.
