@@ -1,8 +1,19 @@
 ---
 type: 'now'
-updated: '2026-09-12'
+updated: '2026-09-15'
 ---
 ## Active
+
+**2026-09-15: M0–M5 closed, M6 at 8/9.** Name is Dinar (`com.dinar.app`,
+decided 2026-09-13); cert and updater key are Samir's holds. M6 T1–T8 on
+main (LAN + mDNS, QR 60s single-use, Expo scaffold, list/revoke, thin
+till + queue, print spool, Maestro pair-and-sell, password reset). T9
+closing sweep lives on `feat/m6-t9-closing-sweep` (fixture gaps `b769c8d`,
+docs owner-rename + 21 screenshots `721ee4a`, full CI pending). Report
+site ships favicon + OG card + click-to-preview and today's standup; its
+roadmap page now reads 8/9. Still red: `customers` / `expenses`
+screenshots (adjust-dialog timeouts, Sep 11–12 shots) and the review
+criticals (queue idempotency, device middleware, QR TOCTOU).
 
 **Resumed 2026-09-11** after the 2026-09-10 23:01 pause ("see ya next week
 time to rest"); the loop restarts today as 20-minute ticks working M4 and
@@ -395,6 +406,17 @@ Run `just status` from the repo root for the ladder and the plans.
 Run `just ctx show <slug>` for plan details.
 
 ## Done recently
+- 2026-09-15: stale sweep closed. Roadmap entry M5 done / M6 in-progress
+  (8/9, T9 on `feat/m6-t9-closing-sweep`); `now.md` Active rewritten from
+  the 2026-09-12 M4/M5 text; report `reference/roadmap.html` 5/9 → 8/9
+  with M5 done / M6 now and redeployed. Left red on purpose: `customers`
+  / `expenses` screenshots (adjust-dialog timeouts) and the three T9
+  review criticals.
+- 2026-09-14: T9 branch work — fixture gaps `b769c8d` (pairing TTL
+  constant, queue order/partial/throw/clear, print spool bytes +
+  idempotent reprint) and stale rename + 21 screenshots `721ee4a`
+  (Anouar → owner/Samir across `docs/`). Report standup rebuilt short
+  with no codes, favicon + OG card, click-to-preview dialog, deployed.
 - 2026-09-11: stale-info sweep after the M4 checkpoint (roles, PINs,
   permissions, sessions, audit log; PR #33). Two context items fixed on
   `main` (70fa841, folded into PR #35's squash when the worktree fetched
