@@ -387,12 +387,13 @@ test("a credit sale past the limit is refused, and refused again — differently
 
   // The till's own override button: no permission hides it (nothing in
   // `apps/desktop/src` gates it on the client), so a cashier can press it.
-  // What answers is the point of this half of the test.
-  page.once("dialog", (dialog) => void dialog.accept());
+  // What answers is the point of this half of the test. The override asks
+  // first in our own dialog, not the browser's box.
   const secondRefusal = page.waitForResponse(
     (res) => res.url().endsWith("/sales") && res.request().method() === "POST",
   );
   await page.getByRole("button", { name: t("till_override"), exact: true }).click();
+  await page.getByTestId("till-override-dialog-confirm").click();
   const second = await secondRefusal;
   expect(second.status()).toBe(403);
   const secondBody: ErrorBody = await second.json();
