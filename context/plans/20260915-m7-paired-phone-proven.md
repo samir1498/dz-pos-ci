@@ -11,7 +11,7 @@ tasks:
     status: 'done'
   - id: 'T2'
     desc: 'Device middleware (api): X-Dzpos-Device required off loopback, unknown/revoked is 401, last_seen bump; device_by_hash comes alive with tests'
-    status: 'pending'
+    status: 'done'
   - id: 'T3'
     desc: 'Phone session story (api+mobile): a person signs in on a paired phone, device+session both required, desktop permission gates apply unchanged'
     status: 'pending'
