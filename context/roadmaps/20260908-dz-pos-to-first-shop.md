@@ -34,7 +34,7 @@ entries:
     note: 'M5 closed 2026-09-13 (PRs #68-#74: matrix nsis/dmg/appimage, org publish via ORG_RELEASE_TOKEN, thermal ESC/POS route + ISO 8859-15 fix, review gaps, R9 verdicts, Dinar rename com.dinar.app). Cert and updater key stay with Samir as open holds.'
   - ref: 'm6-phone-in-the-shop'
     status: 'in-progress'
-    note: 'M6: T1-T8 on main (LAN+mdns, QR 60s single-use, Expo scaffold, list/revoke, thin till+queue, print spool, Maestro pair-and-sell, password reset). T9 closing sweep on feat/m6-t9-closing-sweep (fixture gaps b769c8d, docs owner-rename + 21 screenshots 721ee4a, full CI pending).'
+    note: 'M6: T1-T8 on main (LAN+mdns, QR 60s single-use, Expo scaffold, list/revoke, thin till+queue, print spool, Maestro pair-and-sell, password reset). T9 closing sweep on feat/m6-t9-closing-sweep (fixture gaps b769c8d, docs owner-rename + 21 screenshots 721ee4a, e2e dialog fix 3f818e8 with 13/13 screenshots green, full CI pending).'
 ---
 # dz-pos: from the money core to a first shop
 
