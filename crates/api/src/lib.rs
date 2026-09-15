@@ -3,6 +3,7 @@
 //! so these routes and their tests are the product's contract.
 
 pub mod daily;
+pub mod device;
 pub mod dto;
 pub mod error;
 pub mod gates;
@@ -734,7 +735,12 @@ pub fn router_with_origin(
         .route("/users/{id}/reactivate", post(routes::users::reactivate))
         // Every route above takes its actor from the session; nothing reads a
         // seeded owner id any more.
-        .layer(from_fn_with_state(state.clone(), session::require));
+        .layer(from_fn_with_state(state.clone(), session::require))
+        // Which phone is asking, before which person (M7 T2): the last
+        // layer added runs first, so a revoked phone fails before any
+        // session is even looked up, and the desktop on loopback — which
+        // shows no device token — passes bare.
+        .layer(from_fn_with_state(state.clone(), device::require));
 
     let inside_the_launch_token = auth
         .merge(guarded)
@@ -760,6 +766,9 @@ pub fn router_with_origin(
                     // header missing from this list is one the preflight
                     // silently kills.
                     header::HeaderName::from_static(crate::session::SESSION_HEADER),
+                    // A paired phone's device token travels in its own too
+                    // (M7 T2); same fate at preflight if it is missing here.
+                    header::HeaderName::from_static(crate::device::DEVICE_HEADER),
                 ])
                 // The browser half of the same session sends an httpOnly
                 // cookie, and a browser only attaches one cross-origin when

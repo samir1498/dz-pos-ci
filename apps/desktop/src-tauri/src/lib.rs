@@ -3,6 +3,7 @@
 //! and, later, the phone are the same callers over the same routes
 //! (architecture.md rule 2 and its consequence).
 
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use tauri::{Manager, Url};
@@ -379,7 +380,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 tauri::async_runtime::spawn(dzpos_api::daily::run(chores));
                 let router = dzpos_api::router(state, &token);
                 let task = tauri::async_runtime::spawn(async move {
-                    if let Err(e) = axum::serve(listener, router).await {
+                    // With the peer address attached, like the standalone
+                    // server: the device gate tells loopback from LAN by it.
+                    if let Err(e) = axum::serve(
+                        listener,
+                        router.into_make_service_with_connect_info::<SocketAddr>(),
+                    )
+                    .await
+                    {
                         eprintln!("dz-pos API stopped: {e}");
                     }
                 });
