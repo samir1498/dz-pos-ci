@@ -411,7 +411,10 @@ Run `just ctx show <slug>` for plan details.
   its own `ConfirmDialog`, so the confirm sat open. Customers/till-credit/
   cashier specs click the dialog confirm by test id now, expenses asserts
   the two month boxes. `just screenshot` 13/13 fr+ar, stale Sep 11–12
-  shots retaken, report redeployed with all screens fresh.
+  shots retaken, report redeployed with all screens fresh. The retake
+  staled the 26 landing webp shots, fixed by `just landing-art`
+  (`76e31c7`). Full CI green on the mirror (run 34944844022, 8m14s);
+  branch pushed to origin, T9 ready to merge.
 - 2026-09-15: stale sweep closed. Roadmap entry M5 done / M6 in-progress
   (8/9, T9 on `feat/m6-t9-closing-sweep`); `now.md` Active rewritten from
   the 2026-09-12 M4/M5 text; report `reference/roadmap.html` 5/9 → 8/9
