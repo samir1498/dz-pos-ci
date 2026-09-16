@@ -719,5 +719,21 @@
   "month_09": "Septembre",
   "month_10": "Octobre",
   "month_11": "Novembre",
-  "month_12": "Décembre"
+  "month_12": "Décembre",
+  "settings_phones": "Téléphones appairés",
+  "settings_phones_hint": "Un téléphone scanne le code ci-dessous une fois et reste autorisé jusqu'à révocation.",
+  "phones_show_qr": "Afficher le code",
+  "phones_qr_expires": "Ce code expire dans",
+  "phones_none": "Aucun téléphone appairé",
+  "phones_none_hint": "Affichez le code sur cet écran et scannez-le avec le téléphone.",
+  "phones_name_header": "Téléphone",
+  "phones_paired_header": "Appairé le",
+  "phones_state_header": "État",
+  "phones_state_trusted": "Autorisé",
+  "phones_state_revoked": "Révoqué",
+  "phones_trusted_count": "téléphones autorisés actuellement",
+  "phones_revoke": "Révoquer",
+  "phones_revoke_title": "Révoquer ce téléphone ?",
+  "phones_revoke_confirm": "Oui, révoquer",
+  "phones_revoke_confirm_hint": "Il cesse de vendre dès sa prochaine action et devra être appairé à nouveau avec un nouveau code."
 }

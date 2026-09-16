@@ -14,6 +14,7 @@ import { ThemeProvider } from "../design/theme";
 import { CartProvider } from "../providers/CartProvider";
 import { QueryProvider } from "../providers/QueryProvider";
 import { SessionProvider } from "../providers/SessionProvider";
+import { SplashGate } from "../providers/SplashGate";
 
 export default function RootLayout() {
   return (
@@ -23,7 +24,9 @@ export default function RootLayout() {
           <SessionProvider>
             <CartProvider>
               <StatusBar style="auto" />
-              <Stack screenOptions={{ headerShown: false }} />
+              <SplashGate>
+                <Stack screenOptions={{ headerShown: false }} />
+              </SplashGate>
             </CartProvider>
           </SessionProvider>
         </QueryProvider>

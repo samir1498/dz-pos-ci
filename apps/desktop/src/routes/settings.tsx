@@ -13,6 +13,7 @@ import { api, settingsQueryKey } from "@/api";
 import { BackupsPanel } from "@/components/BackupsPanel";
 import { ExportImportPanel } from "@/components/ExportImportPanel";
 import { PageHeader } from "@/components/PageHeader";
+import { PairedPhonesPanel } from "@/components/PairedPhonesPanel";
 import { StockRecountPanel } from "@/components/StockRecountPanel";
 import { SupportBundlePanel } from "@/components/SupportBundlePanel";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
@@ -70,6 +71,11 @@ export function SettingsScreen() {
   // panel below is only the hidden button; the server already refuses both.
   const manageUsers = useHasPermission("manage_users");
   const exportAndImport = useHasPermission("export_and_import");
+  // Minting a pairing QR, listing phones and revoking one are all
+  // `EditSettings` in `crates/api/src/gates.rs`, enforced by the session
+  // middleware on the route itself. This boolean only hides a block a
+  // cashier would be refused at anyway.
+  const editSettings = useHasPermission("edit_settings");
 
   return (
     <section className="flex min-w-0 w-full max-w-full flex-col">
@@ -120,6 +126,7 @@ export function SettingsScreen() {
           )}
           <ThemePanel />
           {manageUsers ? <StaffPanel /> : null}
+          {editSettings ? <PairedPhonesPanel /> : null}
           <BackupsPanel />
           <SupportBundlePanel />
           {exportAndImport ? <ExportImportPanel /> : null}

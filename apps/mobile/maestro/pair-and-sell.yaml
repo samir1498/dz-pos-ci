@@ -31,12 +31,16 @@ tags:
 
 ---
 
-# 1 — Pair this phone (no session yet, only the QR the desktop shows).
+# 1 — Pair this phone (no session yet, only the code the desktop shows).
+# The screen opens on the camera, which Maestro cannot point at a monitor, so
+# the flow takes the typed path the screen keeps for a dead lens or a refused
+# permission. Both post the same `/pairing/claim`.
 # HUMAN: mint the QR now (`POST /pairing/qr` as owner) — it lives 60 seconds,
 # so do it when this screen is already up, and paste the 64-hex below.
 - launchApp:
     clearState: true
 - assertVisible: "Pair this phone"
+- tapOn: "Type the code instead"
 - tapOn: "Code from the QR"
 - inputText: "PAIRING_TOKEN_FROM_DESKTOP_QR"
 - tapOn: "Name for this phone"

@@ -5,20 +5,53 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "dinar",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Dinar uses the camera once, to read the pairing code off the till computer's screen."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#f8f7f4",
+          "dark": {
+            "image": "./assets/splash.png",
+            "backgroundColor": "#09090b"
+          }
+        }
+      ]
+    ],
     "android": {
-      "package": "com.dinar.app"
+      "package": "com.dinar.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#f8f7f4"
+      }
     },
     "ios": {
       "bundleIdentifier": "com.dinar.app",
       "supportsTablet": true
+    },
+    "icon": "./assets/icon.png",
+    "web": {
+      "favicon": "./assets/favicon.png"
     }
   }
 }

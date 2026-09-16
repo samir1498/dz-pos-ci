@@ -85,6 +85,11 @@ export const buildInfoQueryKey: readonly string[] = ["build-info"];
  * one changes on its own at midnight. */
 export const clockQueryKey: readonly string[] = ["clock"];
 export const backupsQueryKey: readonly string[] = ["backups"];
+
+/** The phones this shop has paired (M6 T4). Invalidated by minting a QR as
+ *  well as by revoking, because a phone that scans one appears in this list
+ *  without the desktop doing anything. */
+export const pairedDevicesQueryKey: readonly string[] = ["paired-devices"];
 /** The last stock recount: the day it ran and what it corrected. Its own key
  * rather than a slice of the products': a recount changes the quantities the
  * product list carries, so running one invalidates both. */

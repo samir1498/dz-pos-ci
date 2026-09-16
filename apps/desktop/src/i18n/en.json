@@ -719,5 +719,21 @@
   "month_09": "September",
   "month_10": "October",
   "month_11": "November",
-  "month_12": "December"
+  "month_12": "December",
+  "settings_phones": "Paired phones",
+  "settings_phones_hint": "A phone scans the code below once and is trusted until you revoke it.",
+  "phones_show_qr": "Show the code",
+  "phones_qr_expires": "This code stops working in",
+  "phones_none": "No phone paired",
+  "phones_none_hint": "Show the code on this screen and scan it with the phone.",
+  "phones_name_header": "Phone",
+  "phones_paired_header": "Paired on",
+  "phones_state_header": "State",
+  "phones_state_trusted": "Trusted",
+  "phones_state_revoked": "Revoked",
+  "phones_trusted_count": "phones trusted right now",
+  "phones_revoke": "Revoke",
+  "phones_revoke_title": "Revoke this phone?",
+  "phones_revoke_confirm": "Yes, revoke",
+  "phones_revoke_confirm_hint": "It stops selling on its next action and has to be paired again with a fresh code."
 }

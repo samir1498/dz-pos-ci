@@ -719,5 +719,21 @@
   "month_09": "سبتمبر",
   "month_10": "أكتوبر",
   "month_11": "نوفمبر",
-  "month_12": "ديسمبر"
+  "month_12": "ديسمبر",
+  "settings_phones": "الهواتف المقترنة",
+  "settings_phones_hint": "يمسح الهاتف الرمز أدناه مرّة واحدة ويبقى موثوقًا حتى تُلغي إذنه.",
+  "phones_show_qr": "إظهار الرمز",
+  "phones_qr_expires": "ينتهي هذا الرمز خلال",
+  "phones_none": "لا يوجد هاتف مقترن",
+  "phones_none_hint": "أظهر الرمز على هذه الشاشة وامسحه بالهاتف.",
+  "phones_name_header": "الهاتف",
+  "phones_paired_header": "تاريخ الاقتران",
+  "phones_state_header": "الحالة",
+  "phones_state_trusted": "موثوق",
+  "phones_state_revoked": "ملغى",
+  "phones_trusted_count": "هاتفًا موثوقًا الآن",
+  "phones_revoke": "إلغاء الإذن",
+  "phones_revoke_title": "إلغاء إذن هذا الهاتف؟",
+  "phones_revoke_confirm": "نعم، ألغِ",
+  "phones_revoke_confirm_hint": "سيتوقّف عن البيع عند أول إجراء تالٍ وسيحتاج إلى اقتران جديد برمز جديد."
 }

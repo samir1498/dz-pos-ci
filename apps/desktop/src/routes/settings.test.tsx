@@ -219,6 +219,11 @@ beforeEach(() => {
       return Promise.resolve(json(200, { backups: [], safety_copies: [], upgrade_copies: [] }));
     if (url.endsWith("/stock/recount"))
       return Promise.resolve(json(200, { last_run_day: null, drifts: [] }));
+    // The paired phones block is on this page too and asks for its list the
+    // moment the settings arrive. Same reason as the two above: a 404 here
+    // puts a second alert on the screen and every assertion below reads
+    // "found multiple elements with the role alert".
+    if (url.endsWith("/pairing/devices")) return Promise.resolve(json(200, []));
     // The régime form dates its default from the shop's calendar, which the
     // server owns; a fixed day here so the field is assertable.
     if (url.endsWith("/clock")) {
