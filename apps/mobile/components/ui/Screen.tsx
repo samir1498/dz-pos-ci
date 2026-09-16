@@ -27,7 +27,10 @@ export function Screen({
     flex: 1,
     backgroundColor: theme.colors.surface.bg,
     paddingTop: insets.top,
-    paddingBottom: insets.bottom,
+    // The inset alone puts the last button flush against the gesture bar;
+    // one gutter above it, the same one the sides get, is what a thumb
+    // needs to hit the bottom row without hitting the system's.
+    paddingBottom: insets.bottom + theme.space[4],
     paddingHorizontal: theme.space[4],
   };
 
