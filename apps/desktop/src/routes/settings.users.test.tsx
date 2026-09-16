@@ -226,12 +226,62 @@ describe("adding a user", () => {
     await user.type(within(dialog).getByLabelText(fr.field_name), "Karim");
     await user.click(within(dialog).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: fr.role_manager }));
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2468");
     await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
 
     await waitFor(() => expect(userRows()).toHaveLength(3));
     const made = posts().find((p) => p.url.endsWith("/users"));
     expect(made?.body).toEqual({ name: "Karim", role: "manager" });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // The PIN rides in the same dialog and lands on the new fiche's own
+    // path, so a fiche is never listed without a way to sign in.
+    const pinned = posts().find((p) => p.url.endsWith("/pin"));
+    expect(pinned?.url).toMatch(/\/users\/3\/pin$/);
+    expect(pinned?.body).toEqual({ pin: "2468" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(within(userRows()[2] ?? document.body).queryByText(fr.users_no_pin)).not.toBeInTheDocument();
+  });
+
+  test("a PIN the server refuses after the fiche was made is retried without a second fiche", async () => {
+    pinAnswer = () =>
+      json(422, { error: { code: "validation", field: "pin", message: "the first one anybody tries" } });
+    const user = userEvent.setup();
+    app();
+    await screen.findByTestId("users-table");
+    await user.click(screen.getByRole("button", { name: fr.users_add }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText(fr.field_name), "Karim");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2580");
+    await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_pin_weak);
+
+    // The second try, with the server now content: the fiche is not
+    // created again (that would be refused as a name already used), only
+    // the PIN is sent, to the row the first try made.
+    pinAnswer = null;
+    await user.clear(within(dialog).getByLabelText(fr.field_pin));
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "1379");
+    await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    const creates = posts().filter((p) => p.url.endsWith("/users"));
+    const pins = posts().filter((p) => p.url.endsWith("/pin"));
+    expect(creates).toHaveLength(1);
+    expect(pins.map((p) => p.body)).toEqual([{ pin: "2580" }, { pin: "1379" }]);
+    expect(pins.every((p) => /\/users\/3\/pin$/.test(p.url))).toBe(true);
+  });
+
+  test("a PIN that is not four digits is refused before anything is posted", async () => {
+    const user = userEvent.setup();
+    app();
+    await screen.findByTestId("users-table");
+    await user.click(screen.getByRole("button", { name: fr.users_add }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText(fr.field_name), "Karim");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "12");
+    await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_pin_shape);
+    expect(posts()).toEqual([]);
   });
 
   test("a blank name is refused before anything is posted", async () => {
@@ -242,7 +292,9 @@ describe("adding a user", () => {
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_name_required);
+    // Two fields complain at once now (the PIN box is blank too), so the
+    // name's refusal is read by its text and not as the one alert.
+    expect(await within(dialog).findByText(fr.error_name_required)).toBeInTheDocument();
     expect(posts().filter((p) => p.url.endsWith("/users"))).toEqual([]);
   });
 
@@ -254,6 +306,7 @@ describe("adding a user", () => {
     await user.click(screen.getByRole("button", { name: fr.users_add }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByLabelText(fr.field_name), "Amel");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "1357");
     await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_conflict);
@@ -272,17 +325,41 @@ describe("resetting a PIN", () => {
     // Blank, whether the fiche already had a PIN or not: there is no old
     // one to show, so the box never carries one in.
     expect(within(dialog).getByLabelText(fr.field_pin)).toHaveValue("");
-    await user.type(within(dialog).getByLabelText(fr.field_pin), "4321");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2580");
     await user.click(within(dialog).getByRole("button", { name: fr.action_reset_pin }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     const sent = posts().find((p) => p.url.endsWith("/pin"));
     expect(sent?.url).toMatch(/\/users\/1\/pin$/);
-    expect(sent?.body).toEqual({ pin: "4321" });
+    expect(sent?.body).toEqual({ pin: "2580" });
   });
 
-  test("a badly shaped PIN is refused by the server and shown translated", async () => {
-    pinAnswer = () => json(422, { error: { code: "validation", message: "shape" } });
+  test("a fiche with no PIN is offered a first PIN, not a reset", async () => {
+    // Row two is the cashier the fixture lists with `has_pin: false`. The
+    // word "reset" over a person who never had a PIN read as if something
+    // was lost; the row and the dialog both say "set" until one exists.
+    const user = userEvent.setup();
+    app();
+    await screen.findByTestId("users-table");
+    const row = userRows()[1];
+    if (row === undefined) throw new Error("no second row");
+    expect(within(row).queryByRole("button", { name: fr.action_reset_pin })).not.toBeInTheDocument();
+    await user.click(within(row).getByRole("button", { name: fr.action_set_pin }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(fr.users_set_pin_title)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2468");
+    await user.click(within(dialog).getByRole("button", { name: fr.action_set_pin }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // Once it has one, the same row offers a reset.
+    await waitFor(() =>
+      expect(within(userRows()[1] ?? document.body).getByRole("button", { name: fr.action_reset_pin })).toBeInTheDocument(),
+    );
+  });
+
+  test("a PIN the server finds weak is named as such, not as 'check the fields'", async () => {
+    pinAnswer = () =>
+      json(422, { error: { code: "validation", field: "pin", message: "the first one anybody tries" } });
     const user = userEvent.setup();
     app();
     await screen.findByTestId("users-table");
@@ -290,10 +367,27 @@ describe("resetting a PIN", () => {
     if (row === undefined) throw new Error("no first row");
     await user.click(within(row).getByRole("button", { name: fr.action_reset_pin }));
     const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText(fr.field_pin), "12");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2580");
     await user.click(within(dialog).getByRole("button", { name: fr.action_reset_pin }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_validation);
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_pin_weak);
+  });
+
+  test("1234 and 1111 are refused before anything is posted, with the reason", async () => {
+    const user = userEvent.setup();
+    app();
+    await screen.findByTestId("users-table");
+    const row = userRows()[0];
+    if (row === undefined) throw new Error("no first row");
+    await user.click(within(row).getByRole("button", { name: fr.action_reset_pin }));
+    const dialog = await screen.findByRole("dialog");
+    for (const weak of ["1234", "1111"]) {
+      await user.clear(within(dialog).getByLabelText(fr.field_pin));
+      await user.type(within(dialog).getByLabelText(fr.field_pin), weak);
+      await user.click(within(dialog).getByRole("button", { name: fr.action_reset_pin }));
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_pin_weak);
+    }
+    expect(posts().filter((p) => p.url.endsWith("/pin"))).toEqual([]);
   });
 });
 

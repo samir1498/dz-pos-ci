@@ -28,6 +28,7 @@ export type ApiError = { code?: string; message?: string } | null;
 
 const SIGN_IN_AGAIN = "Session expired — sign in again.";
 const PAIR_AGAIN = "This phone is no longer paired. Ask a manager for a new QR.";
+const WRONG_SECRET = "That is not the right PIN or password.";
 
 /**
  * Sorts one HTTP answer.
@@ -36,10 +37,12 @@ const PAIR_AGAIN = "This phone is no longer paired. Ask a manager for a new QR."
  * airplane mode, the desktop asleep, Wi-Fi gone. That, and only that, plus
  * a server that could not answer at all (5xx), is what the queue is for.
  *
- * A 401 names which of the three credentials failed in its error code
- * (`auth_refused` is the device; anything else is the person's session),
- * so the phone can clear exactly what died instead of signing the cashier
- * out of a shift they are still in the middle of.
+ * A 401 names which credential failed in its error code: `device_refused`
+ * is the pairing (re-pair), `auth_refused` is the PIN or password just
+ * typed (type it again, nothing is cleared), anything else is the person's
+ * session. So the phone clears exactly what died instead of signing the
+ * cashier out of a shift they are still in the middle of, or, as it did
+ * on 2026-09-16, wiping its pairing over one mistyped digit.
  */
 export function outcomeOf(status: number | null, error: ApiError): Outcome {
   if (status === null) return { kind: "queue" };
@@ -48,9 +51,9 @@ export function outcomeOf(status: number | null, error: ApiError): Outcome {
 
   const message = error?.message ?? "";
   if (status === 401) {
-    return error?.code === "auth_refused"
-      ? { kind: "pair-again", message: message || PAIR_AGAIN }
-      : { kind: "sign-in-again", message: message || SIGN_IN_AGAIN };
+    if (error?.code === "device_refused") return { kind: "pair-again", message: message || PAIR_AGAIN };
+    if (error?.code === "auth_refused") return { kind: "refused", message: message || WRONG_SECRET };
+    return { kind: "sign-in-again", message: message || SIGN_IN_AGAIN };
   }
   if (status === 403) {
     // The person is signed in; their role does not reach this. Neither

@@ -18,7 +18,9 @@ use dzpos_core::services::permissions::{self, Permission};
 use dzpos_core::services::sessions::SignedIn;
 use dzpos_core::services::{preferences, sessions, users};
 
-use crate::dto::{ClaimFirstOwnerDto, LoginDto, MeDto, PermissionDto, RoleDto, SessionDto};
+use crate::dto::{
+    ClaimFirstOwnerDto, LoginDto, MeDto, PermissionDto, RoleDto, SessionDto, StaffDto,
+};
 use crate::error::ApiError;
 use crate::session::{self, CurrentUser};
 use crate::AppState;
@@ -55,6 +57,26 @@ pub async fn login(
         .await?;
 
     Ok(session_response(signed_in, idle))
+}
+
+/// The names on the sign-in picker: every active fiche, active first then
+/// alphabetical the way `services::users::list` orders them, cut down to
+/// `StaffDto`. Inside the device gate and outside the session one, beside
+/// `login`, because it is read before anyone is signed in: a cashier taps
+/// their name here and types only their PIN, instead of a row id nobody
+/// standing at a counter knows.
+///
+/// Deactivated fiches are dropped rather than greyed: a name that used to
+/// work here is not a door, and a picker that showed it would say who left.
+pub async fn staff(State(state): State<AppState>) -> Result<Json<Vec<StaffDto>>, ApiError> {
+    let shop = state.shop_id;
+    let rows = state.blocking(move |c| users::list(c, shop)).await?;
+    Ok(Json(
+        rows.into_iter()
+            .filter(|u| u.active)
+            .map(StaffDto::from)
+            .collect(),
+    ))
 }
 
 /// The one door into a shop nobody has ever signed into.

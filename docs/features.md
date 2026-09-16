@@ -905,7 +905,7 @@ so a screen can say which permission was wanted without guessing.
 
 ### PIN and password
 
-A PIN is four to six digits and is refused if it counts up or down (1234,
+A PIN is four digits and is refused if it counts up or down (1234,
 4321) or repeats one digit (1111). A password is at least eight characters
 and nothing more is asked of it, the floor NIST SP 800-63B sets for a
 memorised secret. Both are stored as argon2id with a per-user salt.

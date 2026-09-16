@@ -14,7 +14,7 @@
 // the rail that lists the rooms, which is why it heads itself at `h3` and
 // carries no link back — the rail is the way back and it never left.
 
-import { ApiError } from "@dzpos/shared";
+import { ApiError, pinProblem } from "@dzpos/shared";
 import type { NewUserDto, RoleDto, UserDto } from "@dzpos/shared";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,12 +22,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { KeyRound, UserPlus, Users as UsersIcon } from "lucide-react";
 import { useState } from "react";
 
-import { api, usersQueryKey } from "@/api";
+import { api, staffQueryKey, usersQueryKey } from "@/api";
 import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
 import { PageHeader } from "@/components/PageHeader";
+import { PinBoxes } from "@/components/PinBoxes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -179,7 +180,7 @@ export function UsersScreen() {
                   }}
                 >
                   <Icon as={KeyRound} size={18} />
-                  {t("action_reset_pin")}
+                  {t(row.has_pin ? "action_reset_pin" : "action_set_pin")}
                 </Button>
                 <Button
                   type="button"
@@ -210,10 +211,32 @@ export function UsersScreen() {
   );
 }
 
+
+/** The dialog's own word on a PIN before the round trip, as an i18n key. */
+function pinComplaint(pin: string): Key | undefined {
+  const problem = pinProblem(pin);
+  if (problem === "shape") return "error_pin_shape";
+  if (problem === "weak") return "error_pin_weak";
+  return undefined;
+}
+
+/** The server's refusal of a PIN, told apart from any other validation
+ *  error: a PIN the client let through is one the server found weak
+ *  (`services::users::validate_pin` names the field), and "check the
+ *  fields" sent an owner away thinking the save had gone through. */
+function pinRefusal(error: unknown): Key {
+  if (error instanceof ApiError && error.code === "validation" && error.field === "pin") {
+    return "error_pin_weak";
+  }
+  return errorKey(error);
+}
+
 interface NewUserValues {
   name: string;
   role: string;
+  pin: string;
 }
+
 
 function AddUserDialog({
   open,
@@ -227,31 +250,53 @@ function AddUserDialog({
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<Key | null>(null);
 
+  // One dialog, two calls: the fiche and then its PIN, because a fiche
+  // without a PIN cannot sign in and the gap between "added" and "given a
+  // PIN" is exactly where an owner walks away and a cashier is left with a
+  // name on the picker that opens nothing. The API keeps them separate
+  // (`NewUserDto` carries no credential, `SetPinDto` is its own route with
+  // its own rules), so this sequences them rather than growing a third
+  // shape. A create that succeeds and a PIN the server refuses leaves the
+  // fiche listed with its "no PIN" badge and the dialog open on the
+  // refusal: nothing is hidden. The created row's id is kept so that a
+  // second try from the same dialog only resends the PIN; creating again
+  // would be refused as a name already used and strand the owner.
+  const [madeId, setMadeId] = useState<number | null>(null);
   const create = useMutation({
-    mutationFn: (input: NewUserDto) => api.createUser(input),
+    mutationFn: async (input: { fiche: NewUserDto; pin: string }) => {
+      let id = madeId;
+      if (id === null) {
+        id = (await api.createUser(input.fiche)).id;
+        setMadeId(id);
+        await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      }
+      return api.setUserPin(id, { pin: input.pin });
+    },
     onSuccess: async () => {
       setServerError(null);
+      setMadeId(null);
       onOpenChange(false);
       await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: staffQueryKey });
     },
     onError: (error: unknown) => {
-      setServerError(errorKey(error));
+      setServerError(pinRefusal(error));
     },
   });
 
-  const blank: NewUserValues = { name: "", role: DEFAULT_ROLE };
+  const blank: NewUserValues = { name: "", role: DEFAULT_ROLE, pin: "" };
   const form = useForm({
     defaultValues: blank,
     onSubmit: async ({ value }) => {
       const name = value.name.trim();
-      if (name === "") return;
+      if (name === "" || pinComplaint(value.pin) !== undefined) return;
       const role = toRole(value.role);
       if (role === undefined) {
         setServerError("error_validation");
         return;
       }
       const written = await create
-        .mutateAsync({ name, role })
+        .mutateAsync({ fiche: { name, role }, pin: value.pin })
         .then(() => true)
         .catch(() => false);
       if (!written) return;
@@ -265,6 +310,7 @@ function AddUserDialog({
       onOpenChange={(next) => {
         if (!next) {
           setServerError(null);
+          setMadeId(null);
           form.reset();
         }
         onOpenChange(next);
@@ -327,6 +373,25 @@ function AddUserDialog({
             )}
           </form.Field>
 
+          <form.Field
+            name="pin"
+            validators={{
+              onSubmit: ({ value }) => pinComplaint(value),
+            }}
+          >
+            {(field) => (
+              <FormField label={t("field_pin")} error={said(field.state.meta.errors)}>
+                {(parts) => (
+                  <PinBoxes
+                    {...parts}
+                    value={field.state.value}
+                    onChange={field.handleChange}
+                  />
+                )}
+              </FormField>
+            )}
+          </form.Field>
+
           {serverError === null ? null : (
             <p role="alert" className="text-sm text-fg-danger">
               {t(serverError)}
@@ -374,9 +439,11 @@ function ResetPinDialog({
       setServerError(null);
       onOpenChange(false);
       await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      // The sign-in picker reads `has_pin` off its own list.
+      await queryClient.invalidateQueries({ queryKey: staffQueryKey });
     },
     onError: (error: unknown) => {
-      setServerError(errorKey(error));
+      setServerError(pinRefusal(error));
     },
   });
 
@@ -407,9 +474,16 @@ function ResetPinDialog({
     >
       <DialogContent data-testid="reset-pin-dialog">
         <DialogHeader>
-          <DialogTitle>{t("users_reset_pin_title")}</DialogTitle>
+          {/* "Reset" is the wrong word for a fiche that never had one: the
+              row's badge already says so, and a dialog titled "new PIN"
+              over a person with no PIN read as if something was lost. */}
+          <DialogTitle>
+            {t(user?.has_pin === true ? "users_reset_pin_title" : "users_set_pin_title")}
+          </DialogTitle>
           <DialogDescription>
-            {user === null ? "" : `${user.name} · ${t("users_reset_pin_hint")}`}
+            {user === null
+              ? ""
+              : `${user.name} · ${t(user.has_pin ? "users_reset_pin_hint" : "users_set_pin_hint")}`}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -423,7 +497,7 @@ function ResetPinDialog({
           <form.Field
             name="pin"
             validators={{
-              onSubmit: ({ value }) => (value.trim() === "" ? "error_validation" : undefined),
+              onSubmit: ({ value }) => pinComplaint(value),
             }}
           >
             {(field) => (
@@ -433,14 +507,10 @@ function ResetPinDialog({
                   // (`UserDto` carries `has_pin`, never a hash), so the box
                   // opens blank whether this is the fiche's first PIN or a
                   // reset of a forgotten one.
-                  <Input
+                  <PinBoxes
                     {...parts}
-                    type="password"
-                    inputMode="numeric"
-                    dir="ltr"
-                    className="font-numeric"
                     value={field.state.value}
-                    onChange={(event) => field.handleChange(event.target.value)}
+                    onChange={field.handleChange}
                   />
                 )}
               </FormField>
@@ -458,7 +528,9 @@ function ResetPinDialog({
               {t("action_cancel")}
             </Button>
             <Button type="submit" disabled={setPin.isPending}>
-              {setPin.isPending ? t("action_saving") : t("action_reset_pin")}
+              {setPin.isPending
+                ? t("action_saving")
+                : t(user?.has_pin === true ? "action_reset_pin" : "action_set_pin")}
             </Button>
           </DialogFooter>
         </form>

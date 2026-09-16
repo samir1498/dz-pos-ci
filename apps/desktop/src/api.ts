@@ -140,6 +140,11 @@ export const suppliersQueryKey: readonly string[] = ["suppliers"];
  * gets the translated 403 rather than a list. */
 export const usersQueryKey: readonly string[] = ["users"];
 
+/** The names on the sign-in picker (`GET /auth/staff`). Read before anyone
+ * is signed in, so it is never invalidated by a session ending; the sign-in
+ * screen mounts fresh each time and refetches. */
+export const staffQueryKey: readonly string[] = ["staff"];
+
 /** The order list. The two filters are appended by the screen, so an
  * invalidation of this key refreshes every filter that is in the cache: a
  * delivery moves an order from one state to another, and the list narrowed

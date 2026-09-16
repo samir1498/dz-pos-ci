@@ -483,6 +483,11 @@ async fn a_body_that_is_neither_shape_is_a_bad_request() {
         json!({ "user_id": OWNER }),
         json!({ "name": "Karim" }),
         json!({ "pin": "2580" }),
+        // Both shapes at once: the caller has not decided which door it is
+        // at, and untagged serde would otherwise take the first that fits
+        // and drop the rest on the floor.
+        json!({ "user_id": OWNER, "pin": "2580", "name": "Karim", "password": "developpement" }),
+        json!({ "user_id": OWNER, "pin": "2580", "name": "Karim" }),
     ] {
         let (status, answered, _) = login(&h.app, body.clone()).await;
         assert_eq!(

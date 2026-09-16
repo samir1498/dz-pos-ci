@@ -291,7 +291,7 @@ async fn an_unknown_device_off_loopback_is_refused() {
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
-    assert_eq!(body["error"]["code"], "auth_refused");
+    assert_eq!(body["error"]["code"], "device_refused");
 }
 
 #[tokio::test]
@@ -324,7 +324,7 @@ async fn a_live_device_without_a_session_is_still_session_required() {
 
 #[tokio::test]
 async fn a_revoked_device_is_refused_before_any_session() {
-    // No session on the call on purpose: auth_refused (not session_required)
+    // No session on the call on purpose: device_refused (not session_required)
     // proves the device layer runs before the session layer.
     let (_dir, app) = app();
     let (device_token, device_id) = pair_phone(&app).await;
@@ -339,7 +339,7 @@ async fn a_revoked_device_is_refused_before_any_session() {
     assert_eq!(status, StatusCode::OK, "{body}");
     let (status, body) = call_lan(&app, "GET", "/products", None, None, Some(&device_token)).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
-    assert_eq!(body["error"]["code"], "auth_refused");
+    assert_eq!(body["error"]["code"], "device_refused");
 }
 
 #[tokio::test]
@@ -417,7 +417,7 @@ async fn a_device_from_another_shop_is_refused() {
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
-    assert_eq!(body["error"]["code"], "auth_refused");
+    assert_eq!(body["error"]["code"], "device_refused");
 }
 
 /// A PIN on the cashier, set directly on the test file: the phone signs a
@@ -640,4 +640,81 @@ async fn first_setup_off_loopback_needs_a_paired_device() {
     // already has an owner, which would be `validation` and `conflict`.
     // The loopback path still works: `first_setup_api.rs` drives it.
     assert_eq!(body["error"]["code"], "session_required", "{body}");
+}
+
+/// The names a sign-in screen offers, read before anyone is signed in. A
+/// paired phone gets them; a LAN caller with only the launch token does not,
+/// which is the whole point of putting the route inside the device gate
+/// rather than beside `/health`. What travels is `StaffDto`: no hash, no
+/// failure counter, no deactivated fiche.
+#[tokio::test]
+async fn a_paired_phone_reads_the_staff_names_and_a_bare_lan_caller_does_not() {
+    let (_dir, app) = app();
+    let (device_token, _) = pair_phone(&app).await;
+
+    // No device header: the gate refuses before the handler runs, with the
+    // same `session_required` a caller that presented nothing gets.
+    let (status, body) = call_lan(&app, "GET", "/auth/staff", None, None, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    assert_eq!(body["error"]["code"], "session_required", "{body}");
+
+    // A device nobody issued is `device_refused`, indistinguishable from a
+    // revoked one, and never the `auth_refused` a wrong PIN earns.
+    let (status, body) = call_lan(&app, "GET", "/auth/staff", None, None, Some("nope")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    assert_eq!(body["error"]["code"], "device_refused", "{body}");
+
+    // The paired phone, with no session at all, reads the list.
+    let (status, body) =
+        call_lan(&app, "GET", "/auth/staff", None, None, Some(&device_token)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let rows = body.as_array().expect("a list");
+    // `app()` signs an owner, a cashier and a manager in; all three are
+    // active, so all three are offered.
+    assert_eq!(rows.len(), 3, "{body}");
+    for row in rows {
+        for key in ["id", "name", "role", "has_pin", "has_password"] {
+            assert!(row.get(key).is_some(), "{key} missing from {row}");
+        }
+        // The fields that must never leave the shop on a stolen phone.
+        for key in [
+            "pin_hash",
+            "password_hash",
+            "pin_failures",
+            "locked_until",
+            "shop_id",
+        ] {
+            assert!(row.get(key).is_none(), "{key} leaked in {row}");
+        }
+    }
+    // The two doors are reported as booleans and never as the hash behind
+    // them. `common::sign_in` seeds sessions straight into the table, so the
+    // fixture's owner holds neither credential; what is proved here is the
+    // shape, not this fixture's choice.
+    let owner = rows
+        .iter()
+        .find(|r| r["role"] == "owner")
+        .expect("the owner is on the picker");
+    assert!(owner["has_password"].is_boolean(), "{owner}");
+    assert!(owner["has_pin"].is_boolean(), "{owner}");
+
+    // A deactivated fiche is not a door: it is dropped, not greyed.
+    let cashier_id = rows
+        .iter()
+        .find(|r| r["role"] == "cashier")
+        .and_then(|r| r["id"].as_i64())
+        .expect("the cashier is on the picker");
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/users/{cashier_id}/deactivate"),
+        None,
+        common::OWNER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let (status, body) =
+        call_lan(&app, "GET", "/auth/staff", None, None, Some(&device_token)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body.as_array().unwrap().len(), 2, "{body}");
 }

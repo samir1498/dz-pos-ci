@@ -2664,6 +2664,9 @@ pub struct LabelSheetDto {
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(export_to = "LoginDto.ts")]
 #[serde(untagged)]
+// Both shapes at once is a caller that has not decided which door it is at,
+// refused as malformed rather than tried as the first shape that fits.
+#[serde(deny_unknown_fields)]
 pub enum LoginDto {
     /// The till. `user_id` and never a name: a PIN pad has the list in front
     /// of it, and a name typed at a keypad would be a way to ask the shop
@@ -2904,6 +2907,39 @@ impl From<User> for UserDto {
             has_pin: u.has_pin,
             has_password: u.has_password,
             active: u.active,
+        }
+    }
+}
+
+/// One name on the sign-in picker. `GET /auth/staff` answers a list of these
+/// to a caller that is inside the device gate and has no session yet, so a
+/// cashier taps their name and types only their PIN: the user id is a row
+/// number nobody standing at a counter knows, and the screens that asked
+/// for it were asking for the database's key.
+///
+/// The fields are chosen for what leaves the shop if a paired phone is
+/// stolen: a name, a role, and which door opens for that name. No id of the
+/// shop, no `active` (the list holds only active fiches), and no hash, the
+/// same rule `UserDto` keeps. `has_pin` decides which box the picker shows
+/// after the tap; `has_password` is what the owner's door needs to know.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "StaffDto.ts")]
+pub struct StaffDto {
+    pub id: i32,
+    pub name: String,
+    pub role: RoleDto,
+    pub has_pin: bool,
+    pub has_password: bool,
+}
+
+impl From<User> for StaffDto {
+    fn from(u: User) -> Self {
+        StaffDto {
+            id: u.id,
+            name: u.name,
+            role: RoleDto::from(u.role),
+            has_pin: u.has_pin,
+            has_password: u.has_password,
         }
     }
 }

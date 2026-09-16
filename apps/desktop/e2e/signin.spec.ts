@@ -10,8 +10,6 @@ import { apiUrl } from "./api";
 import { OWNER_NAME, OWNER_PASSWORD, OWNER_PIN } from "./auth";
 import { t } from "./messages";
 
-const OWNER_ID = "1";
-
 async function pressPad(page: import("@playwright/test").Page, keys: readonly string[]): Promise<void> {
   const pad = page.getByTestId("keypad");
   for (const key of keys) {
@@ -28,12 +26,12 @@ test.describe("the PIN pad", () => {
     await page.goto("/");
     await expect(page.getByTestId("signin-screen")).toBeVisible();
     await page.getByTestId("signin-mode-switch").click();
-    await expect(page.getByTestId("signin-pin-display")).toBeVisible();
+    await expect(page.getByTestId("signin-staff")).toBeVisible();
 
-    // The id stage: the pad has no picker to choose the owner off
-    // (open item, see the report), so the id is typed the way the PIN is.
-    await pressPad(page, [...OWNER_ID]);
-    await pressEnter(page);
+    // The pad opens on the staff list: the owner is tapped by name, never
+    // by the row id nobody at a counter knows.
+    await page.getByTestId("signin-staff").getByRole("button", { name: OWNER_NAME }).click();
+    await expect(page.getByTestId("signin-picked")).toHaveText(OWNER_NAME);
     await expect(page.getByText(t("signin_pin_pin_label"), { exact: true })).toBeVisible();
 
     // A PIN that is not the owner's.
@@ -50,15 +48,14 @@ test.describe("the PIN pad", () => {
     await expect(page.getByTestId("user-menu-trigger")).toContainText(OWNER_NAME);
   });
 
-  test("backspace on an empty PIN returns to the id stage", async ({ page }) => {
+  test("backspace on an empty PIN returns to the staff list", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("signin-mode-switch").click();
-    await pressPad(page, [...OWNER_ID]);
-    await pressEnter(page);
+    await page.getByTestId("signin-staff").getByRole("button", { name: OWNER_NAME }).click();
     await expect(page.getByText(t("signin_pin_pin_label"), { exact: true })).toBeVisible();
 
     await page.getByTestId("keypad").getByRole("button", { name: t("keypad_backspace") }).click();
-    await expect(page.getByText(t("signin_pin_id_label"), { exact: true })).toBeVisible();
+    await expect(page.getByTestId("signin-staff")).toBeVisible();
   });
 });
 
@@ -100,8 +97,7 @@ test.describe("the locked-out wait", () => {
 
     await page.goto("/");
     await page.getByTestId("signin-mode-switch").click();
-    await pressPad(page, [...OWNER_ID]);
-    await pressEnter(page);
+    await page.getByTestId("signin-staff").getByRole("button", { name: OWNER_NAME }).click();
     await pressPad(page, [...OWNER_PIN]);
     await pressEnter(page);
 

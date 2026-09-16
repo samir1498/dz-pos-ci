@@ -34,6 +34,7 @@ export type { ClaimFirstOwnerDto } from "./generated/ClaimFirstOwnerDto";
 export type { PairingQrDto } from "./generated/PairingQrDto";
 export type { DeviceTokenDto } from "./generated/DeviceTokenDto";
 export type { PairedDeviceDto } from "./generated/PairedDeviceDto";
+export type { StaffDto } from "./generated/StaffDto";
 export type { HealthDto } from "./generated/HealthDto";
 export type { NewProductDto } from "./generated/NewProductDto";
 export type { ProductDto } from "./generated/ProductDto";
@@ -120,6 +121,7 @@ export type { ImportOutcomeDto } from "./generated/ImportOutcomeDto";
 export type { ImportRowDto } from "./generated/ImportRowDto";
 export type { LabelSheetDto } from "./generated/LabelSheetDto";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";
+export { PIN_DIGITS, PIN_SHAPE, pinProblem } from "./pin";
 export {
   BPS_PER_WHOLE,
   MILLI_PER_UNIT,

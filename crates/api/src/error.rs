@@ -37,6 +37,15 @@ pub enum ApiError {
     /// (`services::sessions` says why).
     #[error("this call carried no session, or one that is no longer standing")]
     SessionRequired,
+    /// The device token a LAN caller showed names no paired phone of this
+    /// shop, or one that was revoked. Its own code and not the core's
+    /// `auth_refused`: a phone reads the two differently (a dead pairing
+    /// is "ask a manager for a new QR", a wrong PIN is "type it again"),
+    /// and on 2026-09-16 a mistyped PIN on the phone wiped its pairing
+    /// because both came back as the same code. Which of the two the token
+    /// is, unissued or revoked, is still not said.
+    #[error("this phone is not paired with this shop, or its pairing was revoked")]
+    DeviceRefused,
     /// A write reached this API on a route the permission table does not
     /// name. Nobody can say who is allowed to do it, so nobody is: the gate
     /// fails closed rather than waving a write through because a row was
@@ -171,6 +180,7 @@ impl ApiError {
             ApiError::BadRequest(_) => (StatusCode::UNPROCESSABLE_ENTITY, "bad_request"),
             ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             ApiError::SessionRequired => (StatusCode::UNAUTHORIZED, "session_required"),
+            ApiError::DeviceRefused => (StatusCode::UNAUTHORIZED, "device_refused"),
             ApiError::UngatedWrite => (StatusCode::INTERNAL_SERVER_ERROR, "ungated_write"),
             ApiError::NoRoute => (StatusCode::NOT_FOUND, "not_found"),
             ApiError::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed"),
@@ -381,17 +391,18 @@ impl IntoResponse for ApiError {
             }),
         )
             .into_response();
-        // RFC 7235: a 401 names the scheme it wants. All three of this API's
+        // RFC 7235: a 401 names the scheme it wants. All four of this API's
         // 401s do, and they are told apart by the code in the body:
         // `unauthorized` is the launch token the process was started with,
         // `auth_refused` is the person standing at the till getting their PIN
-        // wrong, and `session_required` is a screen whose session has stopped
-        // standing. A screen acts differently on each and cannot read the
-        // status alone.
+        // wrong, `session_required` is a screen whose session has stopped
+        // standing, and `device_refused` is a phone whose pairing is gone. A
+        // screen acts differently on each and cannot read the status alone.
         if matches!(
             self,
             ApiError::Unauthorized
                 | ApiError::SessionRequired
+                | ApiError::DeviceRefused
                 | ApiError::Core(CoreError::AuthRefused)
         ) {
             res.headers_mut()
