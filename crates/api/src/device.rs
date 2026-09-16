@@ -12,10 +12,12 @@
 //!
 //! No device header where one is due is `session_required`, the same 401 a
 //! caller with no credential at all gets: nothing presented, nothing to
-//! check. A token nobody issued and a revoked one are `auth_refused`, the
-//! same indistinguishable refusal the claim path answers, so a scanner
-//! learns nothing either way. A live token slides `last_seen_at` forward,
-//! on UTC like the session's own idle clock.
+//! check. A token nobody issued and a revoked one are both `device_refused`,
+//! one code for the two so a scanner learns nothing either way, and a code
+//! of its own rather than the core's `auth_refused` so a phone can tell a
+//! dead pairing (re-pair) from a wrong PIN on `/auth/login` (type it
+//! again). A live token slides `last_seen_at` forward, on UTC like the
+//! session's own idle clock.
 //!
 //! `ConnectInfo` is only present when the server installs it (both serve
 //! sites do); its absence means a test harness driving the router
@@ -30,6 +32,7 @@ use axum::http::header;
 use axum::http::request::Parts;
 use axum::middleware::Next;
 use axum::response::Response;
+use dzpos_core::error::CoreError;
 use dzpos_core::services::pairing;
 
 use crate::error::ApiError;
@@ -87,7 +90,11 @@ pub async fn require(
     let digest = pairing::token_digest(&shown);
     let row = state
         .blocking(move |c| pairing::device_for_request(c, shop, &digest, at))
-        .await?;
+        .await
+        .map_err(|e| match e {
+            ApiError::Core(CoreError::AuthRefused) => ApiError::DeviceRefused,
+            other => other,
+        })?;
     req.extensions_mut().insert(PairedPhone { id: row.id });
     Ok(next.run(req).await)
 }

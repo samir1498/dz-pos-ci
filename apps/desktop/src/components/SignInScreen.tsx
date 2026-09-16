@@ -102,7 +102,9 @@ function PinPad() {
   function onKey(key: KeypadKey) {
     if (attempt.locked || person === null) return;
     if (key === "enter") {
-      if (pinDigits === "") return;
+      // Nothing shorter than the four boxes goes out: a short PIN can never
+      // match and would only spend one of the five tries before the wait.
+      if (pinDigits.length !== PIN_DIGITS) return;
       // Cleared before the call, not after: `attempt.run()` still submits
       // this render's PIN (the callback closed over it), and a right guess
       // unmounts this whole screen before an "after" would ever run, which

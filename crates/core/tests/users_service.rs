@@ -459,6 +459,26 @@ fn a_shop_with_no_active_owner_at_all_has_nobody_to_give_the_password_to() {
 // ---- the lockout ----
 
 #[test]
+fn one_cashiers_wrong_pins_never_lock_another() {
+    let (_dir, mut conn) = open_temp();
+    let karim = a_cashier(&mut conn, "Karim", "1357");
+    let nadia = a_cashier(&mut conn, "Nadia", "2580");
+    for _ in 0..5 {
+        assert!(matches!(
+            users::verify_pin(&mut conn, SHOP, karim, "9999", noon()),
+            Err(CoreError::AuthRefused)
+        ));
+    }
+    assert!(matches!(
+        users::verify_pin(&mut conn, SHOP, karim, "1357", noon()),
+        Err(CoreError::LockedOut { .. })
+    ));
+    // The counter is the fiche's own: a stranger hammering Karim's row from
+    // a paired phone does not shut Nadia out of her till.
+    users::verify_pin(&mut conn, SHOP, nadia, "2580", noon()).unwrap();
+}
+
+#[test]
 fn five_wrong_pins_make_the_user_wait_and_the_right_one_is_refused_while_they_do() {
     let (_dir, mut conn) = open_temp();
     let id = a_cashier(&mut conn, "Karim", "1357");

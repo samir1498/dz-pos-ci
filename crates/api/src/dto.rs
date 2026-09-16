@@ -2664,6 +2664,9 @@ pub struct LabelSheetDto {
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(export_to = "LoginDto.ts")]
 #[serde(untagged)]
+// Both shapes at once is a caller that has not decided which door it is at,
+// refused as malformed rather than tried as the first shape that fits.
+#[serde(deny_unknown_fields)]
 pub enum LoginDto {
     /// The till. `user_id` and never a name: a PIN pad has the list in front
     /// of it, and a name typed at a keypad would be a way to ask the shop

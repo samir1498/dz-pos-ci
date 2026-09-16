@@ -27,7 +27,9 @@ function PinUnlock({ userId }: { userId: number }) {
   function onKey(key: KeypadKey) {
     if (attempt.locked) return;
     if (key === "enter") {
-      if (digits === "") return;
+      // A short PIN can never match and would only spend a try (the
+      // sign-in pad says the same).
+      if (digits.length !== PIN_DIGITS) return;
       // Cleared before the call: `attempt.run()` still submits this
       // render's PIN, and a right one unlocks (this component stays
       // mounted, unlike the sign-in screen's) but clearing after would

@@ -241,6 +241,35 @@ describe("adding a user", () => {
     expect(within(userRows()[2] ?? document.body).queryByText(fr.users_no_pin)).not.toBeInTheDocument();
   });
 
+  test("a PIN the server refuses after the fiche was made is retried without a second fiche", async () => {
+    pinAnswer = () =>
+      json(422, { error: { code: "validation", field: "pin", message: "the first one anybody tries" } });
+    const user = userEvent.setup();
+    app();
+    await screen.findByTestId("users-table");
+    await user.click(screen.getByRole("button", { name: fr.users_add }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText(fr.field_name), "Karim");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2580");
+    await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_pin_weak);
+
+    // The second try, with the server now content: the fiche is not
+    // created again (that would be refused as a name already used), only
+    // the PIN is sent, to the row the first try made.
+    pinAnswer = null;
+    await user.clear(within(dialog).getByLabelText(fr.field_pin));
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "1379");
+    await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    const creates = posts().filter((p) => p.url.endsWith("/users"));
+    const pins = posts().filter((p) => p.url.endsWith("/pin"));
+    expect(creates).toHaveLength(1);
+    expect(pins.map((p) => p.body)).toEqual([{ pin: "2580" }, { pin: "1379" }]);
+    expect(pins.every((p) => /\/users\/3\/pin$/.test(p.url))).toBe(true);
+  });
+
   test("a PIN that is not four digits is refused before anything is posted", async () => {
     const user = userEvent.setup();
     app();

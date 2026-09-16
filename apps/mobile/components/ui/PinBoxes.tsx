@@ -7,6 +7,8 @@
 //
 // Masked because a phone is read over a shoulder at a counter, and never
 // `secureTextEntry`: that flag makes iOS offer a saved password over a PIN.
+// Nor `textContentType="oneTimeCode"`: that is iOS's hook for lifting a
+// code out of an incoming SMS, and a till PIN is not one.
 
 import { PIN_DIGITS } from "@dzpos/shared";
 import { useRef, useState } from "react";
@@ -84,7 +86,7 @@ export function PinBoxes({
           keyboardType="number-pad"
           maxLength={PIN_DIGITS}
           autoComplete="off"
-          textContentType="oneTimeCode"
+          textContentType="none"
           caretHidden
           autoFocus={autoFocus}
           style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}

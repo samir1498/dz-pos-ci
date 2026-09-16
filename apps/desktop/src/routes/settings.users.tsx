@@ -22,7 +22,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { KeyRound, UserPlus, Users as UsersIcon } from "lucide-react";
 import { useState } from "react";
 
-import { api, usersQueryKey } from "@/api";
+import { api, staffQueryKey, usersQueryKey } from "@/api";
 import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
@@ -258,17 +258,26 @@ function AddUserDialog({
   // its own rules), so this sequences them rather than growing a third
   // shape. A create that succeeds and a PIN the server refuses leaves the
   // fiche listed with its "no PIN" badge and the dialog open on the
-  // refusal: nothing is hidden, and the key icon on the row finishes it.
+  // refusal: nothing is hidden. The created row's id is kept so that a
+  // second try from the same dialog only resends the PIN; creating again
+  // would be refused as a name already used and strand the owner.
+  const [madeId, setMadeId] = useState<number | null>(null);
   const create = useMutation({
     mutationFn: async (input: { fiche: NewUserDto; pin: string }) => {
-      const made = await api.createUser(input.fiche);
-      await queryClient.invalidateQueries({ queryKey: usersQueryKey });
-      return api.setUserPin(made.id, { pin: input.pin });
+      let id = madeId;
+      if (id === null) {
+        id = (await api.createUser(input.fiche)).id;
+        setMadeId(id);
+        await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      }
+      return api.setUserPin(id, { pin: input.pin });
     },
     onSuccess: async () => {
       setServerError(null);
+      setMadeId(null);
       onOpenChange(false);
       await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: staffQueryKey });
     },
     onError: (error: unknown) => {
       setServerError(pinRefusal(error));
@@ -301,6 +310,7 @@ function AddUserDialog({
       onOpenChange={(next) => {
         if (!next) {
           setServerError(null);
+          setMadeId(null);
           form.reset();
         }
         onOpenChange(next);
@@ -429,6 +439,8 @@ function ResetPinDialog({
       setServerError(null);
       onOpenChange(false);
       await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      // The sign-in picker reads `has_pin` off its own list.
+      await queryClient.invalidateQueries({ queryKey: staffQueryKey });
     },
     onError: (error: unknown) => {
       setServerError(pinRefusal(error));

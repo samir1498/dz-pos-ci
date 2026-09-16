@@ -27,10 +27,17 @@ describe("a call the server refused", () => {
   });
 
   it("sends the phone back to pairing when the device was revoked", () => {
-    // `auth_refused` is the device gate, not the person: signing in again
+    // `device_refused` is the device gate, not the person: signing in again
     // would not help, a manager has to hand over a new QR.
-    const outcome = outcomeOf(401, { code: "auth_refused", message: "revoked" });
+    const outcome = outcomeOf(401, { code: "device_refused", message: "revoked" });
     expect(outcome.kind).toBe("pair-again");
+  });
+
+  it("shows a wrong PIN and clears nothing", () => {
+    // The bug of 2026-09-16: `auth_refused` used to read as the device gate,
+    // and one mistyped digit sent the phone back to the QR.
+    const outcome = outcomeOf(401, { code: "auth_refused", message: "no" });
+    expect(outcome).toEqual({ kind: "refused", message: "no" });
   });
 
   it("shows a role refusal without signing anyone out", () => {

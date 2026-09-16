@@ -171,6 +171,7 @@ code and shows the message to nobody.
 | `unauthorized` | 401 | no launch token, or the wrong one; the answer carries `WWW-Authenticate: Bearer` | |
 | `session_required` | 401 | no session, or one that has stopped standing; carries `WWW-Authenticate: Bearer` | |
 | `auth_refused` | 401 | a wrong PIN or password; carries `WWW-Authenticate: Bearer` | |
+| `device_refused` | 401 | a LAN caller's device token names no paired phone of this shop, or a revoked one; carries `WWW-Authenticate: Bearer` | |
 | `locked_out` | 429 | too many wrong credentials against the same person in a row | `retry_after_seconds` |
 | `forbidden` | 403 | a signed-in role the permission table refuses on this route | `permission` |
 | `method_not_allowed` | 405 | a route that does not take that method | |

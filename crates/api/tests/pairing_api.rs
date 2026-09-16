@@ -291,7 +291,7 @@ async fn an_unknown_device_off_loopback_is_refused() {
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
-    assert_eq!(body["error"]["code"], "auth_refused");
+    assert_eq!(body["error"]["code"], "device_refused");
 }
 
 #[tokio::test]
@@ -324,7 +324,7 @@ async fn a_live_device_without_a_session_is_still_session_required() {
 
 #[tokio::test]
 async fn a_revoked_device_is_refused_before_any_session() {
-    // No session on the call on purpose: auth_refused (not session_required)
+    // No session on the call on purpose: device_refused (not session_required)
     // proves the device layer runs before the session layer.
     let (_dir, app) = app();
     let (device_token, device_id) = pair_phone(&app).await;
@@ -339,7 +339,7 @@ async fn a_revoked_device_is_refused_before_any_session() {
     assert_eq!(status, StatusCode::OK, "{body}");
     let (status, body) = call_lan(&app, "GET", "/products", None, None, Some(&device_token)).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
-    assert_eq!(body["error"]["code"], "auth_refused");
+    assert_eq!(body["error"]["code"], "device_refused");
 }
 
 #[tokio::test]
@@ -417,7 +417,7 @@ async fn a_device_from_another_shop_is_refused() {
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
-    assert_eq!(body["error"]["code"], "auth_refused");
+    assert_eq!(body["error"]["code"], "device_refused");
 }
 
 /// A PIN on the cashier, set directly on the test file: the phone signs a
@@ -658,11 +658,11 @@ async fn a_paired_phone_reads_the_staff_names_and_a_bare_lan_caller_does_not() {
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
     assert_eq!(body["error"]["code"], "session_required", "{body}");
 
-    // A device nobody issued is `auth_refused`, indistinguishable from a
-    // revoked one.
+    // A device nobody issued is `device_refused`, indistinguishable from a
+    // revoked one, and never the `auth_refused` a wrong PIN earns.
     let (status, body) = call_lan(&app, "GET", "/auth/staff", None, None, Some("nope")).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
-    assert_eq!(body["error"]["code"], "auth_refused", "{body}");
+    assert_eq!(body["error"]["code"], "device_refused", "{body}");
 
     // The paired phone, with no session at all, reads the list.
     let (status, body) =

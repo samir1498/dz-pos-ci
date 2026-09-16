@@ -36,10 +36,16 @@ export default function SignIn() {
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Never served from the cache: the owner sets a new cashier's PIN on the
+  // desktop while this screen sits open, and a five-minute-old list would
+  // still open the password box for them. Every return to the list reads
+  // it again.
   const staff = useQuery({
     queryKey: ["staff", device],
     queryFn: () => get<StaffDto[]>("/auth/staff", { deviceToken: device }),
     enabled: ready && device !== null,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   function pick(next: StaffDto | null) {
@@ -47,6 +53,7 @@ export default function SignIn() {
     setPin("");
     setPassword("");
     setProblem(null);
+    if (next === null) void staff.refetch();
   }
 
   // The two bodies are built here and nowhere else: a body carrying a name
