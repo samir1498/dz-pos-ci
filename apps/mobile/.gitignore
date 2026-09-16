@@ -1,0 +1,8 @@
+# Expo's own working directory: the dev server's caches and the generated
+# typed-route declarations. Regenerated on every `expo start`.
+.expo/
+
+# Native projects, when someone runs `expo prebuild` locally. The app ships
+# from EAS, which generates them fresh.
+/android
+/ios

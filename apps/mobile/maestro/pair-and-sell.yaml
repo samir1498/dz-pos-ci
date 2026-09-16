@@ -18,6 +18,9 @@
 # run as written: it tapped a "Retry queued" button that the Till unmounts
 # the moment the queue empties, and its revoke step was a comment rather
 # than a step, so nothing after it meant anything.
+#
+# Relabelled 2026-09-16 for the expo-router rewrite: the screens are the same
+# three, but every string this flow taps moved into the design system.
 
 appId: com.dinar.app
 name: Pair, sign in, sell, offline retry is one sale, revoke is 401
@@ -34,62 +37,64 @@ tags:
 - launchApp:
     clearState: true
 - assertVisible: "Pair this phone"
+- tapOn: "Code from the QR"
 - inputText: "PAIRING_TOKEN_FROM_DESKTOP_QR"
-- tapOn: "Phone name.*"
+- tapOn: "Name for this phone"
 - inputText: "Maestro phone"
 - tapOn: "Pair"
 - assertVisible: "Sign in on this phone"
 
 # 2 — Sign in as a person (device-gated login, M7 T3). Use a cashier PIN
 # the owner just set in settings (e.g. `2580` for user id `2`).
-- inputText: "2" # user_id for cashier
+- tapOn: "Your number"
+- inputText: "2"
 - tapOn: "PIN"
 - inputText: "2580"
-- tapOn: "Sign in with PIN"
-- assertVisible: "Till — thin client"
-- assertVisible: "Queued: 0"
+- tapOn: "Sign in"
+# The till's own resting state: nothing queued, nothing in the basket. The
+# cashier's name is on this screen too, but it comes from the shop file and
+# would pin this flow to one seed.
+- assertVisible: "Basket empty"
 
-# 3 — Online sale rings once and prints through the desktop. The till now
-# prices the basket the way the core does, so what it asks for is TTC plus
-# the stamp, not the sum of the price tags. "Pay exact" fills the box with
-# that amount; the change the screen shows afterwards is the server's
-# answer, not the phone's arithmetic.
-- tapOn: "Add" # first product in list
-- assertVisible: "To pay:.*"
-- tapOn: "Pay exact"
-- tapOn: "Pay \\(cash\\)"
+# 3 — Online sale rings once and prints through the desktop. The till prices
+# the basket the way the core does, so what it asks for is TTC plus the
+# stamp, not the sum of the price tags. "Exact" fills the box with that
+# amount; the change shown afterwards is the server's answer, not the
+# phone's arithmetic.
+- tapOn: "Add .*" # first product in the list
+- assertVisible: "1 item"
+- tapOn: "Exact"
+- tapOn: "Pay cash"
 - assertVisible: "Change:.*"
-- assertVisible: "Cart: empty"
+- assertVisible: "Basket empty"
 # HUMAN: the desktop's documents list must show exactly one new ticket, and
 # a ticket must have come out of the spool. Neither is visible from here.
 
 # 4 — Offline: the sale is queued, and only because the call got no answer.
 - toggleAirplaneMode
-- tapOn: "Add"
-- tapOn: "Pay exact"
-- tapOn: "Pay \\(cash\\)"
-- assertVisible: "Queued: 1"
-- assertVisible: "Retry queued"
+- tapOn: "Add .*"
+- tapOn: "Exact"
+- tapOn: "Pay cash"
+- assertVisible: "1 sale waiting to be sent"
+- assertVisible: "Send now"
 
-# 5 — Back online, the retry rings once and prints. The button disappears
-# with the queue it drains, so there is no second tap to make here: the
-# proof that a replay does not re-ring is the desktop's documents list,
-# which must still show one ticket for this basket, not two.
+# 5 — Back online, the retry rings once and prints. The row disappears with
+# the queue it drains, so there is no second tap to make here: the proof
+# that a replay does not re-ring is the desktop's documents list, which must
+# still show one ticket for this basket, not two.
 - toggleAirplaneMode
-- tapOn: "Retry queued"
-- assertVisible: "Queued: 0"
-- assertNotVisible: "Retry queued"
+- tapOn: "Send now"
+- assertNotVisible: "Send now"
 # HUMAN: desktop documents list — one new ticket for step 4's basket.
 
 # 6 — Revoke mid-shift. HUMAN: on the desktop, settings → paired phones →
 # revoke this one (or `POST /pairing/devices/{id}/revoke` with an owner
 # session). Then continue: the phone's next call fails closed, and because
-# a revoked device is a refusal and not a dropped connection, the till now
-# sends the cashier back to pairing instead of queueing a sale nobody can
-# deliver.
-- tapOn: "Add"
-- tapOn: "Pay exact"
-- tapOn: "Pay \\(cash\\)"
+# a revoked device is a refusal and not a dropped connection, the till sends
+# the cashier back to pairing instead of queueing a sale nobody can deliver.
+- tapOn: "Add .*"
+- tapOn: "Exact"
+- tapOn: "Pay cash"
 - assertVisible: "Pair this phone"
 - assertVisible: "no longer paired|not paired"
 

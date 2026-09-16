@@ -4,7 +4,21 @@
     "slug": "dinar-mobile",
     "version": "0.1.0",
     "orientation": "portrait",
+    "scheme": "dinar",
     "platforms": ["ios", "android", "web"],
-    "scheme": "dinar"
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "plugins": ["expo-router"],
+    "android": {
+      "package": "com.dinar.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.dinar.app",
+      "supportsTablet": true
+    }
   }
 }
