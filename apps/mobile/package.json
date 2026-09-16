@@ -11,10 +11,10 @@
   },
   "dependencies": {
     "@dzpos/shared": "workspace:*",
-    "@react-native-async-storage/async-storage": "^2.0.0",
+    "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "^52.0.0",
     "react": "18.3.1",
-    "react-native": "0.76.5"
+    "react-native": "0.76.9"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
