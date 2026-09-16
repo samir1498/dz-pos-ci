@@ -2908,6 +2908,39 @@ impl From<User> for UserDto {
     }
 }
 
+/// One name on the sign-in picker. `GET /auth/staff` answers a list of these
+/// to a caller that is inside the device gate and has no session yet, so a
+/// cashier taps their name and types only their PIN: the user id is a row
+/// number nobody standing at a counter knows, and the screens that asked
+/// for it were asking for the database's key.
+///
+/// The fields are chosen for what leaves the shop if a paired phone is
+/// stolen: a name, a role, and which door opens for that name. No id of the
+/// shop, no `active` (the list holds only active fiches), and no hash, the
+/// same rule `UserDto` keeps. `has_pin` decides which box the picker shows
+/// after the tap; `has_password` is what the owner's door needs to know.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export_to = "StaffDto.ts")]
+pub struct StaffDto {
+    pub id: i32,
+    pub name: String,
+    pub role: RoleDto,
+    pub has_pin: bool,
+    pub has_password: bool,
+}
+
+impl From<User> for StaffDto {
+    fn from(u: User) -> Self {
+        StaffDto {
+            id: u.id,
+            name: u.name,
+            role: RoleDto::from(u.role),
+            has_pin: u.has_pin,
+            has_password: u.has_password,
+        }
+    }
+}
+
 /// A fiche's name and role, the two fields the screen's "add a user" dialog
 /// sends. No credential: a PIN is its own call
 /// (`services::users::create`'s own doc), so `POST /users/{id}/pin` is what

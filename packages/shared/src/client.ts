@@ -70,6 +70,7 @@ import type { SupplierWriteDto } from "./generated/SupplierWriteDto";
 import type { ClaimFirstOwnerDto } from "./generated/ClaimFirstOwnerDto";
 import type { NewUserDto } from "./generated/NewUserDto";
 import type { SetPinDto } from "./generated/SetPinDto";
+import type { StaffDto } from "./generated/StaffDto";
 import type { UserDto } from "./generated/UserDto";
 import { categorySchema, productSchema } from "./schemas/catalogue";
 import { dashboardSchema, dashboardSeriesSchema } from "./schemas/dashboard";
@@ -96,6 +97,7 @@ import {
 import { saleSchema } from "./schemas/sale";
 import { deviceTokenSchema, pairedDeviceSchema, pairingQrSchema } from "./schemas/pairing";
 import { meSchema, sessionIdleSchema, sessionSchema } from "./schemas/session";
+import { staffSchema } from "./schemas/staff";
 import { userSchema } from "./schemas/user";
 import { lastStockRecountSchema, stockRecountSchema } from "./schemas/stock";
 import {
@@ -922,6 +924,14 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
 
     /** The shop's staff, active first then alphabetical: the owner's own
      * read (M4 T8). */
+    /** The names a sign-in screen offers before anyone is signed in
+     * (`GET /auth/staff`): a cashier taps one and types only a PIN. Inside
+     * the device gate and outside the session one, like `login`, so it
+     * answers a signed-out desktop on loopback and a paired phone on the
+     * LAN, and nobody else. */
+    async listStaff(): Promise<StaffDto[]> {
+      return narrow(await send("/auth/staff"), z.array(staffSchema), "staff list");
+    },
     async listUsers(): Promise<UserDto[]> {
       return narrow(await send("/users"), z.array(userSchema), "user list");
     },

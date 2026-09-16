@@ -619,6 +619,13 @@ pub fn router_with_origin(
         // fresh shop's owner without pairing first.
         .route("/auth/first-setup", post(routes::auth::claim_first_owner))
         .route("/auth/login", post(routes::auth::login))
+        // The names a sign-in screen offers before anyone is signed in, so a
+        // cashier taps one and types only a PIN. Same layer as `login` for
+        // the same reason: it is read by a caller who has no session yet,
+        // and the device gate is what says the caller is the shop's own
+        // phone. What it hands out is `StaffDto` — names and which door
+        // opens, never a hash or a failure counter.
+        .route("/auth/staff", get(routes::auth::staff))
         .route("/auth/logout", post(routes::auth::logout))
         .route("/auth/me", get(routes::auth::me))
         .layer(from_fn_with_state(state.clone(), device::require));

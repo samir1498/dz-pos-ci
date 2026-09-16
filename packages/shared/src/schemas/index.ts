@@ -9,6 +9,7 @@ export { apiErrorPayloadSchema, apiErrorSchema } from "./error";
 export { auditEntrySchema, auditLogSchema, auditUserSchema } from "./audit";
 export { categorySchema, productSchema, unitSchema } from "./catalogue";
 export { deviceTokenSchema, pairedDeviceSchema, pairingQrSchema } from "./pairing";
+export { staffSchema } from "./staff";
 export {
   importAppliedSchema,
   importDryRunSchema,

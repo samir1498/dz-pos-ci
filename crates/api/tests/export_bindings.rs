@@ -26,13 +26,14 @@ use dzpos_api::dto::{
     PurchaseStatusDto, ReceiveLineDto, RegimeChangeDto, RegimeDto, RestoreDto, RoleDto,
     SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto,
     SaleTotalsDto, SaleTvaDto, SaleWarningDto, SessionDto, SessionIdleDto, SetPasswordDto,
-    SetPinDto, SettingsDto, StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto,
-    SupplierDebtKindDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto,
-    SupplierWriteDto, TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto, UserDto,
+    SetPinDto, SettingsDto, StaffDto, StockDriftDto, StockRecountDto, StoreDto,
+    SupplierAllocationDto, SupplierDebtKindDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto,
+    SupplierStatementDto, SupplierWriteDto, TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto,
+    UnitDto, UserDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 110] = [
+const FILES: [&str; 111] = [
     "LoginDto.ts",
     "MeDto.ts",
     "SessionDto.ts",
@@ -143,6 +144,7 @@ const FILES: [&str; 110] = [
     "PairingQrDto.ts",
     "DeviceTokenDto.ts",
     "PairedDeviceDto.ts",
+    "StaffDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -310,6 +312,7 @@ fn export_bindings() {
     PairingQrDto::export_all(&cfg).unwrap();
     DeviceTokenDto::export_all(&cfg).unwrap();
     PairedDeviceDto::export_all(&cfg).unwrap();
+    StaffDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");
