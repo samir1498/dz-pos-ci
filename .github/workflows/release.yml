@@ -36,6 +36,15 @@ jobs:
   # later job depends on this one, so a refusal here (non-zero exit) stops
   # the build and the publish from running at all.
   gate:
+    # The header above says a tag on Dinar-dz starts no runner. Nothing
+    # enforced that: `ci.yml` guards every job on the mirror, this file
+    # guarded none, so `just release` — which pushes the tag to both
+    # remotes — ran the whole three-OS build on the org's paid minutes as
+    # well as on the mirror's free ones, macOS at ten times the Linux rate.
+    # Found 2026-09-16. `build` and `publish` need this job, so a skip here
+    # skips them too; they carry the same guard so the reason is readable
+    # from either one.
+    if: github.repository == 'samir1498/dz-pos-ci'
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.gate.outputs.mode }}
@@ -152,6 +161,7 @@ jobs:
   # itself.
   build:
     needs: gate
+    if: github.repository == 'samir1498/dz-pos-ci'
     strategy:
       fail-fast: false
       matrix:
@@ -366,6 +376,7 @@ jobs:
   publish:
     needs: [gate, build]
     if: >
+      github.repository == 'samir1498/dz-pos-ci' &&
       github.event_name == 'push' &&
       needs.gate.outputs.mode == 'release'
     runs-on: ubuntu-latest
