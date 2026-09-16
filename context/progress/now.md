@@ -4,6 +4,19 @@ updated: '2026-09-16'
 ---
 ## Active
 
+**2026-09-16 evening: sign-in by name, four-digit PIN, phone proven on
+Samir's phone (PRs #97-#99).** The pairing plan is closed: scan the QR,
+tap the name, four boxes, a real sale (ticket 2, twelve coffees) in the
+shop file. A three-lens review of the sign-in path shipped with it
+(device gate answers `device_refused`, phone reads the staff list fresh,
+add-user retries without a second fiche, mixed login bodies refused).
+Standup and the reworked home board are live on the status site. Open for
+Samir: shared lockout across PIN and password. Now running: the demo loop
+(`context/loops/20260916-demo-loop.md`), desktop scenes recorded by
+Playwright, the phone on an Android emulator with Maestro, Remotion to
+cut.
+
+
 **2026-09-15: M7 closed, the paired phone proven (PRs #89-#92).** Loop
 `20260915-m7-loop` built T4 (retry key + print on retry), T5 (mobile
 auth already clean), T6 (Maestro pair-and-sell on a real phone over

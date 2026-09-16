@@ -1,7 +1,7 @@
 ---
 title: 'Pairing a phone without typing 64 characters'
 slug: 'pairing-a-phone-without-typing-64-characters'
-status: 'active'
+status: 'done'
 category: 'feature'
 created: 20260916
 tldr: 'The desktop has no pairing UI at all, so the phone''s only way in is a hand-typed 64-hex token. Build the QR on the desktop, scan it on the phone with expo-camera (in Expo Go, no dev build), and give the app a splash and an icon.'
@@ -104,3 +104,12 @@ and iOS want.
 - `PairingQrDto` is `{ pairing_token: string, expires_in_seconds: number }`.
 - `expo-camera ~57.0.5` and `expo-splash-screen ~57.0.9` are both in SDK 57's
   bundled modules, so both run under Expo Go.
+
+## Closed 2026-09-16
+
+All four tasks on `main` (PRs #97, #98, #99). Proven on Samir's own phone
+the same evening: scan the QR, tap the name, type the four-digit code,
+ring twelve coffees; ticket 2 and the stock movement are in the shop file.
+Sign-in by name and the four-box PIN were not in this plan's tasks; they
+came out of the walkthrough (the phone asked for a row id) and shipped in
+#99 with the three-lens review of the path.

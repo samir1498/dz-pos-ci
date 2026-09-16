@@ -8,13 +8,19 @@ tldr: 'Record the real app with the Playwright suite that already drives it, the
 priority: 70
 tasks:
   - id: 'T0'
-    desc: 'compact the WSL VHDX from Windows; /mnt/c at 9.2 GB free blocks pnpm install in dinar-remotion and every render'
-    status: 'blocked'
+    desc: 'disk: /mnt/c at 60 GB free on 2026-09-16 evening, enough for pnpm install in dinar-remotion, one Android system image and the renders; just disk before every heavy step'
+    status: 'done'
   - id: 'T1'
     desc: 'a demo Playwright project: 1920x1080 video on, fr only, slower pace, own testDir, ignored by the three language projects'
     status: 'pending'
   - id: 'T2'
-    desc: 'five scene specs — ring a sale, the ticket, credit, the day, Arabic — plus a hand-made phone screen recording the pipeline cannot produce'
+    desc: 'five scene specs: ring a sale, the ticket, credit, the day, Arabic; recorded not asserted, fr, 1920x1080'
+    status: 'pending'
+  - id: 'T2b'
+    desc: 'an Android emulator on the Windows SDK (Anwender, cmdline-tools 3.0, no system image yet): one x86_64 image, one AVD named dinar, adb reachable from WSL over the host address; Expo Go on it loading Metro from this box'
+    status: 'pending'
+  - id: 'T2c'
+    desc: 'a Maestro flow for the demo (pair by the typed path, tap the name, four digits, ring a sale) run against the emulator with adb screenrecord around it; the clip lands beside the Playwright ones'
     status: 'pending'
   - id: 'T3'
     desc: 'just demo-clips: run the project, ffmpeg webm to mp4, stable names under dinar-remotion/public/clips, gitignored'
@@ -82,10 +88,17 @@ as a gap in coverage.
 5. **Arabic.** The same till, switched, right to left. One shot, no
    narration needed.
 
-The phone is the one thing Playwright cannot record. That clip is a screen
-recording off the device (`adb shell screenrecord`, or scrcpy on the
-laptop), dropped into the same folder by hand. Say so in the README rather
-than pretending the pipeline covers it.
+The phone is the one thing Playwright cannot record. Samir's call on
+2026-09-16: an Android emulator on this box's Windows side (Android Studio
+is installed there), driven by Maestro, with `adb shell screenrecord`
+around the flow. The recording is then one command like the others, not a
+hand-held clip. What exists today: the SDK under
+`C:\Users\Anwender\AppData\Local\Android\Sdk` with cmdline-tools 3.0,
+platform-tools, the emulator binary, platforms up to 29, and no system
+image and no AVD. `sdkmanager.bat` wants a JDK 17; there is one at
+`C:\Users\collaborator\.jdks\corretto-17.0.13`. WSL reaches the
+Windows host at the default route (`172.25.192.1` today); the Windows adb
+server listens on localhost only unless started with `-a`.
 
 ## T3 — Clips into the Remotion project
 
@@ -114,13 +127,12 @@ that is one of the ObserveOne mistakes the agent already wrote down in
 No voiceover in v1. Captions read fine muted, which is how a video on a
 landing page is watched.
 
-## Blocked on disk
+## Disk
 
-`/mnt/c` was at 9.2 GB free on 2026-09-16, so `dinar-remotion` has never had
-`pnpm install` run in it and nothing has rendered. Compacting the WSL VHDX
-from Windows is the prerequisite for the whole plan — freeing space inside
-WSL does not give it back, because the VHDX is a sparse file that grows and
-never shrinks on its own.
+`/mnt/c` was at 9.2 GB free on the morning of 2026-09-16 and 60 GB free by
+the evening, so the plan is unblocked. `dinar-remotion` has still never had
+`pnpm install` run in it. `just disk` before every heavy step; a system
+image is about 1.5 GB, a render a few hundred MB.
 
 ## Why not just screen-record it by hand
 
