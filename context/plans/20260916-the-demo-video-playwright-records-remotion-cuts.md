@@ -12,16 +12,16 @@ tasks:
     status: 'done'
   - id: 'T1'
     desc: 'a demo Playwright project: 1920x1080 video on, fr only, slower pace, own testDir, ignored by the three language projects'
-    status: 'pending'
+    status: 'done'
   - id: 'T2'
     desc: 'five scene specs: ring a sale, the ticket, credit, the day, Arabic; recorded not asserted, fr, 1920x1080'
-    status: 'pending'
+    status: 'done'
   - id: 'T2b'
     desc: 'an Android emulator on the Windows SDK (Anwender, cmdline-tools 3.0, no system image yet): one x86_64 image, one AVD named dinar, adb reachable from WSL over the host address; Expo Go on it loading Metro from this box'
-    status: 'pending'
+    status: 'done'
   - id: 'T2c'
     desc: 'a Maestro flow for the demo (pair by the typed path, tap the name, four digits, ring a sale) run against the emulator with adb screenrecord around it; the clip lands beside the Playwright ones'
-    status: 'pending'
+    status: 'done'
   - id: 'T3'
     desc: 'just demo-clips: run the project, ffmpeg webm to mp4, stable names under dinar-remotion/public/clips, gitignored'
     status: 'pending'
@@ -89,16 +89,52 @@ as a gap in coverage.
    narration needed.
 
 The phone is the one thing Playwright cannot record. Samir's call on
-2026-09-16: an Android emulator on this box's Windows side (Android Studio
-is installed there), driven by Maestro, with `adb shell screenrecord`
-around the flow. The recording is then one command like the others, not a
-hand-held clip. What exists today: the SDK under
-`C:\Users\Anwender\AppData\Local\Android\Sdk` with cmdline-tools 3.0,
-platform-tools, the emulator binary, platforms up to 29, and no system
-image and no AVD. `sdkmanager.bat` wants a JDK 17; there is one at
-`C:\Users\collaborator\.jdks\corretto-17.0.13`. WSL reaches the
-Windows host at the default route (`172.25.192.1` today); the Windows adb
-server listens on localhost only unless started with `-a`.
+2026-09-16: an Android emulator on this box's Windows side, driven by
+Maestro, with `adb shell screenrecord` around the flow. The recording is
+then one command like the others, `just demo-phone`, not a hand-held clip.
+
+What it took on this box, evening of 2026-09-16, so nobody rediscovers it:
+
+- The SDK under `C:\Users\Anwender\AppData\Local\Android\Sdk` had
+  cmdline-tools 3.0 and no image. `sdkmanager.bat` with `JAVA_HOME` at
+  `C:\Users\collaborator\.jdks\corretto-17.0.13` installed
+  `system-images;android-34;google_apis;x86_64`, `platforms;android-34`,
+  `emulator` (37.1.11) and `platform-tools`; the licence prompts need a
+  file of `y` lines piped in, and the package names only keep their quotes
+  when the call is in a `.cmd` file, not on a `cmd.exe /c` line from WSL.
+- The AVD is `dinar`, profile `pixel_4` (this SDK has no `pixel_6`
+  profile). WHPX is usable on this AMD box; `emulator.exe -avd dinar
+  -gpu swiftshader_indirect` boots in under a minute.
+- WSL cannot reach the Windows adb server: even started with `-a` it is
+  behind the Windows firewall, and there is no admin to open it. So adb is
+  `adb.exe` called from WSL (the Windows PATH is on WSL's PATH), and
+  Maestro runs on the Windows side too: the Linux install copied to
+  `C:\Users\Anwender\.maestro`, `maestro.bat` with the same JDK 17
+  (`C:\Users\Anwender\dz-maestro.cmd` sets it up; `.dev/maestro-win.sh`
+  is the wrapper `DZPOS_MAESTRO` points at). Maestro 2.10.0 runs fine there.
+- `10.0.2.2` from the emulator reaches Windows, not WSL. `adb reverse`
+  does, through WSL's localhost relay, with one catch: Metro listens on a
+  dual-stack `::` socket, which the relay mirrors onto Windows as `[::1]`
+  only, and `adb reverse` connects to `127.0.0.1`. `.dev/fwd4.py 8082 8081`
+  is an IPv4 listener in front of Metro; `adb reverse tcp:8081 tcp:8082`
+  and `adb reverse tcp:4317 tcp:4317` make `localhost` on the device mean
+  this box. Metro runs with `REACT_NATIVE_PACKAGER_HOSTNAME=localhost` and
+  `EXPO_PUBLIC_API_URL=http://localhost:4317`.
+- Expo Go 57.0.9 from `expo-go-releases` on GitHub (the versions API at
+  `exp.host/--/api/v2/versions` names the apk), `adb install`, opened with
+  `am start -a android.intent.action.VIEW -d exp://localhost:8081`. The
+  first open shows Expo's developer-menu card over the app, and the card
+  hides the screen from the accessibility tree; the flow taps `Continue`
+  before reading anything.
+- This box's `.dev/dev.db` had no credential set (the seed predates
+  passwords); `POST /auth/first-setup` claimed the owner with the seed's
+  password and `POST /users/1/pin` gave them the seed PIN, so the flow's
+  defaults hold here as on the laptop.
+
+One blemish to deal with in the cut: Expo Go draws its own floating
+"Tools" button over the top right of every frame. A development client
+built without the dev menu would remove it, which is a bigger job than
+masking that corner in Remotion.
 
 ## T3 — Clips into the Remotion project
 
