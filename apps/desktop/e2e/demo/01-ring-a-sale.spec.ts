@@ -6,54 +6,13 @@
 // till specs do it, the steps are the ones a cashier makes, and the few
 // assertions only wait for the screen to catch up.
 
-import type { APIRequestContext } from "@playwright/test";
-
-import { apiHeaders, apiUrl } from "../api";
 import { t } from "../messages";
 import { beat, expect, keepClip, test } from "./scene";
-
-const CAFE = { name: "Café moulu 250g", barcode: "6130000000017", price: 42_000, rate: 1900 };
-const LAIT = { name: "Lait 1L", barcode: "6130000000024", price: 14_000, rate: 900 };
-const PAIN = { name: "Pain", barcode: "6130000000031", price: 1_500, rate: 0 };
-
-async function seed(request: APIRequestContext, p: typeof CAFE): Promise<void> {
-  const res = await request.post(`${apiUrl()}/products`, {
-    headers: apiHeaders(),
-    data: {
-      name: p.name,
-      barcode: p.barcode,
-      category_id: 1,
-      unit: "piece",
-      cost_centimes: 0,
-      selling_centimes: p.price,
-      wholesale_centimes: null,
-      qty_on_hand_milli: 50_000,
-      low_stock_at_milli: 0,
-      rate_bps: p.rate,
-      active: true,
-    },
-  });
-  // 201 on an empty shop, 409 when the previous scene already put it there.
-  expect([201, 409]).toContain(res.status());
-}
-
-/** Under the réel a ticket shows its TVA; the IFU shows none. Stated here
- * rather than inherited from whatever ran before. */
-async function reel(request: APIRequestContext): Promise<void> {
-  const current = await request.get(`${apiUrl()}/settings`, { headers: apiHeaders() });
-  const settings: { regime: { regime: string } } = await current.json();
-  if (settings.regime.regime === "reel") return;
-  const today = new Date(Date.now() + 3_600_000).toISOString().slice(0, 10);
-  const res = await request.post(`${apiUrl()}/settings/regime`, {
-    headers: apiHeaders(),
-    data: { regime: "reel", valid_from: today },
-  });
-  expect(res.ok()).toBe(true);
-}
+import { CAFE, LAIT, PAIN, reel, seedProduct } from "./shop";
 
 test("ring a sale", async ({ page, request }, testInfo) => {
   await reel(request);
-  for (const p of [CAFE, LAIT, PAIN]) await seed(request, p);
+  for (const p of [CAFE, LAIT, PAIN]) await seedProduct(request, p);
 
   await page.goto("/");
   await expect(page).toHaveURL(/\/till$/);

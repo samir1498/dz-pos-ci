@@ -52,7 +52,12 @@ export function currentLang(): LangCode {
 
 /** The current project's translated string for `key`. */
 export function t(key: string): string {
-  const lang = currentLang();
+  return tIn(currentLang(), key);
+}
+
+/** `key` in a named language, for the moment a test switches the screen
+ * away from the project's own and has to read what it now says. */
+export function tIn(lang: LangCode, key: string): string {
   const value = readDictionary(lang)[key];
   if (value === undefined) throw new Error(`${lang}.json has no key ${key}`);
   return value;
