@@ -1,7 +1,7 @@
 ---
 title: 'ESC/POS 80 mm ticket'
 slug: 'esc-pos-80-mm-ticket'
-status: 'active'
+status: 'done'
 category: 'other'
 created: 20260913
 tldr: 'Thermal ticket as ESC/POS bytes with dump goldens; USB send later. No printer required to prove the bytes.'
@@ -14,6 +14,7 @@ tasks:
     desc: 'File and TCP senders for the ESC/POS bytes (write_ticket_escpos_to_file, send_ticket_escpos_tcp) with round-trip tests against a temp file and a local listener; no USB, no API route yet'
     status: 'done'
 acceptance: []
+completed_at: '2026-09-13'
 ---
 # ESC/POS 80 mm ticket
 
