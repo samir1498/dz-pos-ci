@@ -20,7 +20,7 @@ import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { KeyRound, UserPlus, Users as UsersIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 
 import { api, usersQueryKey } from "@/api";
 import { DataTable, type Column } from "@/components/DataTable";
@@ -210,6 +210,40 @@ export function UsersScreen() {
   );
 }
 
+/**
+ * The PIN box both dialogs share. Masked, because a shoulder behind the
+ * counter should read dots; never `type="number"`, which unmasks, grows
+ * spinner arrows and turns `0512` into `512`, a different PIN. Told to the
+ * browser as a one-time code rather than a password: a password field is
+ * what makes Brave and Chrome offer the shop's saved login over a PIN box,
+ * and `autoComplete="off"` alone is ignored by both for password fields.
+ * Anything that is not a digit is dropped as it is typed, so the numeric
+ * keyboard the phone raises and the server's own rule agree on the shape.
+ */
+function PinInput({
+  value,
+  onChange,
+  ...parts
+}: Omit<ComponentProps<typeof Input>, "value" | "onChange"> & {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <Input
+      {...parts}
+      type="password"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      autoComplete="one-time-code"
+      maxLength={6}
+      dir="ltr"
+      className="font-numeric tracking-widest"
+      value={value}
+      onChange={(event) => onChange(event.target.value.replace(/\D/g, ""))}
+    />
+  );
+}
+
 interface NewUserValues {
   name: string;
   role: string;
@@ -355,15 +389,10 @@ function AddUserDialog({
             {(field) => (
               <FormField label={t("field_pin")} error={said(field.state.meta.errors)}>
                 {(parts) => (
-                  <Input
+                  <PinInput
                     {...parts}
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    dir="ltr"
-                    className="font-numeric"
                     value={field.state.value}
-                    onChange={(event) => field.handleChange(event.target.value)}
+                    onChange={field.handleChange}
                   />
                 )}
               </FormField>
@@ -483,14 +512,10 @@ function ResetPinDialog({
                   // (`UserDto` carries `has_pin`, never a hash), so the box
                   // opens blank whether this is the fiche's first PIN or a
                   // reset of a forgotten one.
-                  <Input
+                  <PinInput
                     {...parts}
-                    type="password"
-                    inputMode="numeric"
-                    dir="ltr"
-                    className="font-numeric"
                     value={field.state.value}
-                    onChange={(event) => field.handleChange(event.target.value)}
+                    onChange={field.handleChange}
                   />
                 )}
               </FormField>
