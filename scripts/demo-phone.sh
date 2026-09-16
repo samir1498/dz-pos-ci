@@ -64,6 +64,22 @@ else
   $maestro test apps/mobile/maestro/demo-open.yaml
 fi
 
+# Expo Go draws a floating "Tools" button over the app, and `pm clear`
+# above resets the switch that hides it. Its own developer menu has the
+# switch: shake (keyevent 82), scroll, tap. The coordinates are for the
+# `dinar` AVD's 1080x2280 screen and this is best effort, because a miss
+# costs a grey circle in one corner of the film and nothing else.
+if [[ -z "${DZPOS_KEEP_DEV_BUTTON:-}" ]]; then
+  "$adb" shell input keyevent 82 || true
+  sleep 2
+  "$adb" shell input swipe 540 1800 540 900 300 || true
+  sleep 2
+  "$adb" shell input tap 897 1656 || true
+  sleep 1
+  "$adb" shell input keyevent 4 || true
+  sleep 2
+fi
+
 # Record while the flow runs. screenrecord stops on SIGINT and finalises the
 # file; a killed one leaves an mp4 nothing can open.
 "$adb" shell rm -f /sdcard/dinar-demo.mp4
