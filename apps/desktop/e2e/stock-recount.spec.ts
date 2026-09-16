@@ -79,7 +79,7 @@ test("a shop that has only traded has nothing to correct, and saves the recount 
   });
   expect(sold.status()).toBe(201);
 
-  await page.goto("/settings");
+  await page.goto("/settings/data");
   await expect(page.getByRole("heading", { name: t("settings_stock_recount") })).toBeVisible();
   // Nothing has run yet in this database, so the panel says the shop has
   // never been recounted rather than claiming its stock is right.

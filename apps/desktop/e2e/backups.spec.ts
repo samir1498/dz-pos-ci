@@ -27,7 +27,7 @@ function copiesIn(table: Locator): Locator {
 }
 
 test("a copy taken before a product is added loses it when it is restored", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/backups");
   await expect(page.getByRole("heading", { name: t("settings_backups") })).toBeVisible();
   // A fresh run starts with no copy at all.
   await expect(page.getByTestId("backups-newest")).toHaveText(t("backups_none"));
@@ -53,7 +53,7 @@ test("a copy taken before a product is added loses it when it is restored", asyn
   await page.getByRole("button", { name: t("action_save") }).click();
   await expect(page.getByRole("row").filter({ hasText: PRODUCT_NAME })).toBeVisible();
 
-  await page.goto("/settings");
+  await page.goto("/settings/backups");
   const listed = copiesIn(page.getByTestId("backups-table"));
   await expect(listed).toHaveCount(1);
   // The restore asks before it throws anything away, in the app's own dialog
@@ -73,7 +73,7 @@ test("a copy taken before a product is added loses it when it is restored", asyn
   // The copy that was restored is still there, and the copy of what it
   // replaced is listed under its own heading rather than left unmentioned
   // on the disk.
-  await page.goto("/settings");
+  await page.goto("/settings/backups");
   await expect(copiesIn(page.getByTestId("backups-table"))).toHaveCount(1);
   await expect(page.getByRole("heading", { name: t("settings_safety_copies") })).toBeVisible();
   const kept = copiesIn(page.getByTestId("safety-copies-table"));

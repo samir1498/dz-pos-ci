@@ -4,9 +4,8 @@
 // three come from. This file shows and translates; it holds no copy of any
 // of the three itself.
 //
-// Same trailing-underscore file name `settings_.users.tsx` uses, and the
-// same reason: `/settings` is its own whole page, not a layout this one
-// nests inside.
+// One of the settings rooms: it renders inside `/settings`'s layout, beside
+// the rail, so it heads itself at `h3` and carries no link back.
 //
 // The update check (M5 T7) lives on this screen and nowhere else, and only
 // ever runs because the button below was pressed: a shop on a phone
@@ -16,13 +15,11 @@
 // it; this file reads a plain three-answer value.
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { api, buildInfoQueryKey } from "@/api";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { Icon } from "@/components/Icon";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,25 +30,13 @@ import { useTranslation } from "@/i18n";
 import { errorKey } from "@/lib/fields";
 import { checkForUpdate, formatUpdateSize, installUpdate } from "@/lib/updater";
 
-export const Route = createFileRoute("/settings_/about")({ component: AboutScreen });
-
-function BackToSettings() {
-  const { t } = useTranslation();
-  return (
-    <Button variant="ghost" asChild>
-      <Link to="/settings">
-        <Icon as={ArrowLeft} size={18} flip />
-        {t("action_back_to_settings")}
-      </Link>
-    </Button>
-  );
-}
+export const Route = createFileRoute("/settings/about")({ component: AboutScreen });
 
 /** The three answers named in docs/architecture.md § Release, plus the
  * install step the "newer" answer leads to. Rendered below the build-info
  * `<dl>` in the same card, but a separate component from `AboutScreen` so
  * that `<dl>` keeps reading only `GET /build-info`, the boundary
- * `settings_.about.test.tsx` already relies on. */
+ * `settings.about.test.tsx` already relies on. */
 function UpdateCheckPanel() {
   const { t } = useTranslation();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -154,7 +139,7 @@ export function AboutScreen() {
 
   return (
     <section className="flex flex-col gap-4">
-      <PageHeader title={t("about_title")} description={t("about_hint")} actions={<BackToSettings />} />
+      <PageHeader title={t("about_title")} level={3} description={t("about_hint")} />
 
       {info.isPending ? (
         <div className="flex flex-col gap-3" aria-busy="true">

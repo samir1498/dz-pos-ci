@@ -10,17 +10,16 @@
 // it replaces, because the server never sends one back to show
 // (`UserDto` carries `has_pin`, never a hash).
 //
-// The trailing underscore on `settings_` keeps this out from under the
-// settings screen's own route rather than nesting inside it, the same
-// convention `customers_.$id.tsx` uses: `/settings` is a whole page of its
-// own and not a layout with an outlet.
+// One of the settings rooms: it renders inside `/settings`'s layout, beside
+// the rail that lists the rooms, which is why it heads itself at `h3` and
+// carries no link back — the rail is the way back and it never left.
 
 import { ApiError } from "@dzpos/shared";
 import type { NewUserDto, RoleDto, UserDto } from "@dzpos/shared";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, KeyRound, UserPlus, Users as UsersIcon } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { KeyRound, UserPlus, Users as UsersIcon } from "lucide-react";
 import { useState } from "react";
 
 import { api, usersQueryKey } from "@/api";
@@ -52,7 +51,7 @@ import { isKey, useTranslation, type Key } from "@/i18n";
 import { errorKey } from "@/lib/fields";
 import { DEFAULT_ROLE, ROLE_LABEL, ROLES } from "@/lib/roles";
 
-export const Route = createFileRoute("/settings_/users")({ component: UsersScreen });
+export const Route = createFileRoute("/settings/users")({ component: UsersScreen });
 
 /** The staff screen shows a role the same way the topbar does. */
 const ROLE_KEY = ROLE_LABEL;
@@ -76,18 +75,6 @@ function useFieldError(): (messages: readonly unknown[]) => string | undefined {
     if (key === undefined) return undefined;
     return t(isKey(key) ? key : "error_unknown");
   };
-}
-
-function BackToSettings() {
-  const { t } = useTranslation();
-  return (
-    <Button variant="ghost" asChild>
-      <Link to="/settings">
-        <Icon as={ArrowLeft} size={18} flip />
-        {t("action_back_to_settings")}
-      </Link>
-    </Button>
-  );
 }
 
 export function UsersScreen() {
@@ -129,10 +116,10 @@ export function UsersScreen() {
     <section className="flex flex-col gap-4">
       <PageHeader
         title={t("users_title")}
+        level={3}
         description={t("users_hint")}
         actions={
           <>
-            <BackToSettings />
             <Button
               onClick={() => {
                 setRowError(null);

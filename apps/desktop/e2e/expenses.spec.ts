@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { apiHeaders, apiUrl } from "./api";
 import { currentLang, t } from "./messages";
+import { fillMonth } from "./date-field";
 
 // `new URL(".", ...)` is already this file's directory (apps/desktop/e2e).
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -182,7 +183,7 @@ test("a month the shop spent nothing in shows no rows, a total of zero and a cas
   const quiet = `${Number(today.slice(0, 4)) - 1}-01`;
 
   await page.goto("/expenses");
-  await page.getByTestId("expenses-month").fill(quiet);
+  await fillMonth(page, "expenses-month", quiet);
   await expect(page.getByText(t("expenses_empty"))).toBeVisible();
   await expect(page.getByTestId("expenses-total")).toHaveText("0,00");
   await expect(page.getByTestId("cash-net")).toHaveText("0,00");

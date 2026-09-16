@@ -1,7 +1,7 @@
 // The shop-initiated update check and install (M5 T7, docs/architecture.md
 // § Release). The only file that knows `invoke()` reaches an updater
 // command at all, the same reason `api.ts` is the one file that knows
-// `launch_token` does: `settings_.about.tsx` and its test read a plain
+// `launch_token` does: `settings.about.tsx` and its test read a plain
 // three-answer value, never Tauri's IPC shape directly.
 //
 // A browser preview (`pnpm dev`, `just e2e`) has no window running the
@@ -14,7 +14,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 
 /** Mirrors `UpdateCheck` in `src-tauri/src/updater.rs`, kept in sync by hand
  * against `the_three_answers_serialize_to_the_shape_the_frontend_reads` on
- * that side; `settings_.about.test.tsx`'s `UpdateCheckPanel` tests exercise
+ * that side; `settings.about.test.tsx`'s `UpdateCheckPanel` tests exercise
  * all three shapes through this module's mock, so a drift here shows up as
  * a failing screen test even though it mocks past the wire itself. `size`
  * is bytes, and is `null` unless the release workflow wrote one into the
@@ -43,7 +43,7 @@ export async function installUpdate(): Promise<void> {
 
 /** One decimal place, one unit, always left-to-right: the same rule
  * `about-version`, `about-git-hash` and `about-build-date` already follow
- * in `settings_.about.tsx`, because a byte count is a number and not a
+ * in `settings.about.tsx`, because a byte count is a number and not a
  * word that changes with the shop's language. */
 export function formatUpdateSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

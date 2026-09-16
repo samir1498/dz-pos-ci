@@ -1,11 +1,14 @@
 // The paired phones block. What the routes refuse is the Rust suite's
 // business (`crates/api/tests/pairing_api.rs` already proves a cashier is
-// forbidden on all three); this checks the three things only the screen can
-// get wrong.
+// forbidden on all three); this checks what only the screen can get wrong.
 //
 // The countdown test is the one that matters. A pairing token lives sixty
 // seconds and is single use, so a QR left on screen after it lapsed is a QR
 // an owner shows a cashier who then cannot pair and has no idea why.
+//
+// Nothing below clicks "show the code" to get the first one: the panel mints
+// on arrival, and a test that clicked first would still pass if that stopped
+// working.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -45,6 +48,11 @@ let revoked: number[];
  *  lapse without faking a clock that testing-library also reads. */
 let ttl: number;
 
+/** How many codes the panel has asked the server for. */
+function mintCount(): number {
+  return fetchMock.mock.calls.filter((call) => String(call[0]).includes("/pairing/qr")).length;
+}
+
 beforeEach(() => {
   devices = [
     { id: 7, name: "Caisse 2", created_at: "2026-09-16 09:00:00", revoked_at: null, created_by: 1 },
@@ -81,13 +89,35 @@ afterEach(() => {
 });
 
 describe("the paired phones block", () => {
-  test("shows a QR carrying the token the server minted, and the token in full", async () => {
-    const user = userEvent.setup();
+  test("mints on arrival, and shows a QR carrying that token and the token in full", async () => {
     mount();
-    await user.click(screen.getByRole("button", { name: fr.phones_show_qr }));
     // react-qr-code draws an <svg>; what is asserted is the token, because a
     // QR of the wrong string is a QR that scans and then fails to pair.
     expect(await screen.findByText(TOKEN)).toBeInTheDocument();
+    expect(mintCount()).toBe(1);
+  });
+
+  test("mints once, not once per render", async () => {
+    // The mutation object is new on every render, so an effect that listed
+    // it as a dependency would mint again on each one; every extra token is
+    // one more live credential on the shop's LAN.
+    mount();
+    await screen.findByText(TOKEN);
+    await waitFor(() => expect(screen.getByText("Caisse 2")).toBeInTheDocument());
+    expect(mintCount()).toBe(1);
+  });
+
+  test("the button mints another once the first has lapsed", async () => {
+    ttl = 1;
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText(TOKEN);
+    await waitFor(() => expect(screen.queryByText(TOKEN)).not.toBeInTheDocument(), {
+      timeout: 4000,
+    });
+    await user.click(screen.getByRole("button", { name: fr.phones_show_qr }));
+    expect(await screen.findByText(TOKEN)).toBeInTheDocument();
+    expect(mintCount()).toBe(2);
   });
 
   test("the QR disappears when the server's seconds are up", async () => {
@@ -95,9 +125,7 @@ describe("the paired phones block", () => {
     // one: testing-library's own waiting runs on the same timers, so faking
     // them makes every `find` hang instead of the token lapsing.
     ttl = 1;
-    const user = userEvent.setup();
     mount();
-    await user.click(screen.getByRole("button", { name: fr.phones_show_qr }));
     expect(await screen.findByText(TOKEN)).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText(TOKEN)).not.toBeInTheDocument(), {
       timeout: 4000,

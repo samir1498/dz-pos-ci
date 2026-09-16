@@ -1,6 +1,11 @@
-// The settings screen is checked for rendering and wiring: what it shows
+// The settings rooms are checked for rendering and wiring: what each shows
 // from the API's answer and what it sends. The rules (a blank name, a bad
 // day) are the API crate's tests.
+//
+// Settings is a layout with a rail and one room open beside it, so `mount`
+// takes the address to open at and builds the same parent/child shape the
+// generated route tree has. A test that wants the régime says so; the shop
+// block is the default because `/settings` redirects there.
 
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -13,6 +18,7 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
@@ -20,7 +26,12 @@ import ar from "@/i18n/ar.json";
 import { ThemeProvider } from "@/lib/theme";
 import { SessionProvider } from "@/lib/session";
 import { ME_CASHIER, ME_OWNER } from "@/test/session";
-import { SettingsScreen } from "./settings";
+import { SettingsLayout } from "./settings";
+import { BackupsRoom } from "./settings.backups";
+import { DataRoom } from "./settings.data";
+import { RegimeRoom } from "./settings.regime";
+import { ShopRoom } from "./settings.shop";
+import { ThemePanel } from "@/components/settings/ThemePanel";
 
 /** The régime's "valid from" field is three boxes now, not one native date
  *  input, so a test reaches it by the day/month/year test ids DateField
@@ -129,37 +140,45 @@ function countOf(method: string): number {
   }).length;
 }
 
-function mount(lang: Lang = "fr") {
+function mount(lang: Lang = "fr", path = "/settings/shop") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  // The staff panel builds a real `Link` to `/settings/users` (M4 T8), and a
-  // `Link` without a router is a screen that cannot render; the second route
-  // is never visited here, so a stub component is enough.
+  // The rail builds a real `Link` per room, and a `Link` to an address the
+  // router does not know throws. Every room is therefore a route here; the
+  // three whose panels have tests of their own are stubbed, because what
+  // this file checks is the rail and the four rooms below it.
   const rootRoute = createRootRoute();
   const settingsRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/settings",
-    component: SettingsScreen,
+    component: SettingsLayout,
   });
-  const usersRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/settings/users",
-    component: () => null,
-  });
+  const room = (child: string, component: () => ReactNode) =>
+    createRoute({ getParentRoute: () => settingsRoute, path: child, component });
+  const rooms = [
+    room("/shop", ShopRoom),
+    room("/regime", RegimeRoom),
+    room("/appearance", ThemePanel),
+    room("/users", () => null),
+    room("/phones", () => null),
+    room("/backups", BackupsRoom),
+    room("/data", DataRoom),
+    room("/about", () => null),
+  ];
   const router = createRouter({
-    routeTree: rootRoute.addChildren([settingsRoute, usersRoute]),
-    history: createMemoryHistory({ initialEntries: ["/settings"] }),
+    routeTree: rootRoute.addChildren([settingsRoute.addChildren(rooms)]),
+    history: createMemoryHistory({ initialEntries: [path] }),
   });
   return render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
-        {/* The screen carries the theme panel, whose control reads the
-            provider. It shares this screen's settings query key, so the two
+        {/* The appearance room's control reads the provider. It shares the
+            settings query key with the shop and régime rooms, so the two
             are one fetch and the call counts below are unchanged. */}
         <ThemeProvider>
-          {/* An owner by default: the staff and export/import panels are
-              what this file already tested before M4 T5 gated them on
+          {/* An owner by default: the staff and export/import rooms are what
+              this file already tested before M4 T5 gated them on
               `manage_users` and `export_and_import`. `me` is set to
               `ME_CASHIER` first by the tests that care who is signed in. */}
           <SessionProvider>
@@ -240,8 +259,46 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("the page", () => {
-  test("shows the store block and the régime in force with its date", async () => {
+describe("the rail", () => {
+  test("lists every room, and opening one leaves the others closed", async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByLabelText(fr.field_name);
+    expect(screen.getByTestId("settings-room-users")).toHaveAttribute("href", "/settings/users");
+    expect(screen.getByTestId("settings-room-about")).toHaveAttribute("href", "/settings/about");
+    expect(screen.getByTestId("settings-room-phones")).toHaveAttribute("href", "/settings/phones");
+
+    await user.click(screen.getByTestId("settings-room-regime"));
+    await screen.findByTestId("regime-current");
+    // The room that was open is gone, which is the whole point of the
+    // split: one panel at a time, not eight stacked.
+    expect(screen.queryByLabelText(fr.field_name)).not.toBeInTheDocument();
+  });
+
+  test("hides the rooms a cashier would be refused at", async () => {
+    me = ME_CASHIER;
+    mount();
+    await screen.findByLabelText(fr.field_name);
+    // GET /users and the four exports already refuse a cashier
+    // (`crates/api/src/gates.rs`, `ManageUsers` and `ExportAndImport`); this
+    // is the hidden button, not the defence (M4 T5).
+    expect(screen.queryByTestId("settings-room-users")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("settings-room-phones")).not.toBeInTheDocument();
+    // The data room stays: the stock recount inside it is open to every
+    // role, and only the export/import block is hidden.
+    expect(screen.getByTestId("settings-room-data")).toBeInTheDocument();
+  });
+
+  test("the data room hides the export/import block from a cashier and keeps the recount", async () => {
+    me = ME_CASHIER;
+    mount("fr", "/settings/data");
+    expect(await screen.findByText(fr.settings_stock_recount)).toBeInTheDocument();
+    expect(screen.queryByText(fr.settings_export_import)).not.toBeInTheDocument();
+  });
+});
+
+describe("the shop room", () => {
+  test("shows the store block the API answers", async () => {
     current = {
       ...seeded,
       store: { ...store, name: "Superette El Baraka", rc: "16/00-1234567 B 20" },
@@ -250,18 +307,6 @@ describe("the page", () => {
     expect(await screen.findByLabelText(fr.field_name)).toHaveValue("Superette El Baraka");
     expect(screen.getByLabelText(fr.field_rc)).toHaveValue("16/00-1234567 B 20");
     expect(screen.getByLabelText(fr.field_nif)).toHaveValue("");
-    expect(await screen.findByTestId("regime-current")).toHaveTextContent(
-      `${fr.regime_reel} · ${fr.regime_since} 2026-01-01`,
-    );
-    expect(screen.queryByTestId("regime-planned")).not.toBeInTheDocument();
-  });
-
-  test("shows a planned change when the API reports one", async () => {
-    current = { ...seeded, regime_planned: { regime: "ifu", valid_from: "2027-01-01" } };
-    mount();
-    expect(await screen.findByTestId("regime-planned")).toHaveTextContent(
-      `${fr.regime_ifu} · ${fr.regime_from} 2027-01-01`,
-    );
   });
 
   test("a server refusal on load is shown translated", async () => {
@@ -270,35 +315,6 @@ describe("the page", () => {
     );
     mount();
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_unauthorized);
-  });
-
-  test("carries a link out to the users screen (M4 T8), not a list of its own", async () => {
-    mount();
-    await screen.findByLabelText(fr.field_name);
-    const link = screen.getByRole("link", { name: fr.users_manage_link });
-    expect(link).toHaveAttribute("href", "/settings/users");
-    expect(screen.getByText(fr.settings_users)).toBeInTheDocument();
-    expect(screen.getByText(fr.settings_users_hint)).toBeInTheDocument();
-  });
-
-  test("carries a link out to the about screen (M5 T1)", async () => {
-    mount();
-    await screen.findByLabelText(fr.field_name);
-    const link = screen.getByRole("link", { name: fr.about_open_link });
-    expect(link).toHaveAttribute("href", "/settings/about");
-    expect(screen.getByText(fr.settings_about)).toBeInTheDocument();
-  });
-
-  test("hides the staff panel and the export/import block from a cashier", async () => {
-    me = ME_CASHIER;
-    mount();
-    await screen.findByLabelText(fr.field_name);
-    // GET /users and the four exports already refuse a cashier
-    // (`crates/api/src/gates.rs`, `ManageUsers` and `ExportAndImport`); this
-    // is the hidden button, not the defence (M4 T5).
-    expect(screen.queryByText(fr.settings_users)).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: fr.users_manage_link })).not.toBeInTheDocument();
-    expect(screen.queryByText(fr.settings_export_import)).not.toBeInTheDocument();
   });
 });
 
@@ -352,14 +368,30 @@ describe("the store form", () => {
   });
 });
 
-describe("the régime form", () => {
+describe("the régime room", () => {
+  test("shows the régime in force with its date, and no planned line when there is none", async () => {
+    mount("fr", "/settings/regime");
+    expect(await screen.findByTestId("regime-current")).toHaveTextContent(
+      `${fr.regime_reel} · ${fr.regime_since} 2026-01-01`,
+    );
+    expect(screen.queryByTestId("regime-planned")).not.toBeInTheDocument();
+  });
+
+  test("shows a planned change when the API reports one", async () => {
+    current = { ...seeded, regime_planned: { regime: "ifu", valid_from: "2027-01-01" } };
+    mount("fr", "/settings/regime");
+    expect(await screen.findByTestId("regime-planned")).toHaveTextContent(
+      `${fr.regime_ifu} · ${fr.regime_from} 2027-01-01`,
+    );
+  });
+
   test("dates its default from the shop's calendar and not the machine's", async () => {
     // The one thing this asserts is where the day came from. The stub
     // answers a fixed day for `/clock`; a screen reading `new Date()` would
     // fill in whatever the box running the suite happens to be on, which is
     // the fork this replaced (the core dates documents on Algeria's
     // calendar, UTC+1, and a browser reads the machine's zone).
-    mount();
+    mount("fr", "/settings/regime");
     await screen.findByRole("form", { name: fr.settings_regime });
     expectIsoDate("regime-valid-from", SHOP_TODAY);
   });
@@ -369,10 +401,9 @@ describe("the régime form", () => {
     // panel that borrowed the products' string would say something the
     // screen cannot back up.
     clockAnswer = () => new Promise<Response>(() => undefined);
-    mount();
+    mount("fr", "/settings/regime");
 
-    await screen.findByLabelText(fr.field_name);
-    expect(screen.getByText(fr.regime_loading)).toBeInTheDocument();
+    expect(await screen.findByText(fr.regime_loading)).toBeInTheDocument();
     expect(screen.queryByRole("form", { name: fr.settings_regime })).not.toBeInTheDocument();
   });
 
@@ -383,7 +414,7 @@ describe("the régime form", () => {
     // nothing on the screen saying why.
     clockAnswer = () => json(500, { error: { code: "storage", message: "no" } });
     const user = userEvent.setup();
-    mount();
+    mount("fr", "/settings/regime");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.error_storage);
     expect(screen.queryByRole("form", { name: fr.settings_regime })).not.toBeInTheDocument();
@@ -397,8 +428,7 @@ describe("the régime form", () => {
 
   test("posts the régime and the day, and shows the planned line the API answers", async () => {
     const user = userEvent.setup();
-    mount();
-    await screen.findByLabelText(fr.field_name);
+    mount("fr", "/settings/regime");
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     await typeIsoDate(user, "regime-valid-from", "2099-01-01");
@@ -415,8 +445,7 @@ describe("the régime form", () => {
 
   test("a change dated in the past becomes the régime in force", async () => {
     const user = userEvent.setup();
-    mount();
-    await screen.findByLabelText(fr.field_name);
+    mount("fr", "/settings/regime");
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     await typeIsoDate(user, "regime-valid-from", "2026-06-01");
@@ -431,8 +460,7 @@ describe("the régime form", () => {
 
   test("an empty day is refused on the screen and nothing is posted", async () => {
     const user = userEvent.setup();
-    mount();
-    await screen.findByLabelText(fr.field_name);
+    mount("fr", "/settings/regime");
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     const segments = dateFieldSegments("regime-valid-from");
@@ -447,8 +475,7 @@ describe("the régime form", () => {
   test("a refusal from the API is shown translated", async () => {
     regimeAnswer = () => json(422, { error: { code: "validation", message: "valid_from" } });
     const user = userEvent.setup();
-    mount();
-    await screen.findByLabelText(fr.field_name);
+    mount("fr", "/settings/regime");
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     await chooseRegime(user, regimeForm, fr.regime_ifu);
     await user.click(within(regimeForm).getByRole("button", { name: fr.action_apply }));
@@ -457,8 +484,7 @@ describe("the régime form", () => {
 
   test("apply is off while the régime chosen is the one in force, on again once it differs", async () => {
     const user = userEvent.setup();
-    mount();
-    await screen.findByLabelText(fr.field_name);
+    mount("fr", "/settings/regime");
     const regimeForm = await screen.findByRole("form", { name: fr.settings_regime });
     const apply = within(regimeForm).getByRole("button", { name: fr.action_apply });
     expect(apply).toBeDisabled();
@@ -470,7 +496,7 @@ describe("the régime form", () => {
 
   test("with a change planned, re-applying the régime in force stays possible: it cancels the plan", async () => {
     current = { ...seeded, regime_planned: { regime: "ifu", valid_from: "2099-01-01" } };
-    mount();
+    mount("fr", "/settings/regime");
     await screen.findByTestId("regime-planned");
     const regimeForm = screen.getByRole("form", { name: fr.settings_regime });
     expect(within(regimeForm).getByRole("button", { name: fr.action_apply })).toBeEnabled();
@@ -494,7 +520,7 @@ describe("in Arabic", () => {
 
   test("the régime dates stay left to right inside the RTL panel", async () => {
     current = { ...seeded, regime_planned: { regime: "ifu", valid_from: "2027-01-01" } };
-    mount("ar");
+    mount("ar", "/settings/regime");
     const current_ = await screen.findByTestId("regime-current");
     expect(within(current_).getByText("2026-01-01")).toHaveAttribute("dir", "ltr");
     const planned = screen.getByTestId("regime-planned");

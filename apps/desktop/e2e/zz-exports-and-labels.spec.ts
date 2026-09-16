@@ -41,7 +41,7 @@ const IMPORTED = "Café importé 250 g";
 const ZIP = [0x50, 0x4b, 0x03, 0x04];
 
 test("the four workbooks come out as spreadsheets a shop can open", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/data");
   await expect(page.getByRole("heading", { name: t("settings_export_import") })).toBeVisible();
 
   // Through the buttons, not around them: the answer read here is the one
@@ -68,7 +68,7 @@ test("the four workbooks come out as spreadsheets a shop can open", async ({ pag
 test("the template downloads, a filled file is checked, and applying it creates the product", async ({
   page,
 }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/data");
   await expect(page.getByRole("heading", { name: t("settings_export_import") })).toBeVisible();
 
   // The template leaves through the browser's own download, the way the
@@ -98,7 +98,7 @@ test("the template downloads, a filled file is checked, and applying it creates 
   await page.goto("/products");
   await expect(page.getByRole("row").filter({ hasText: IMPORTED })).toHaveCount(0);
 
-  await page.goto("/settings");
+  await page.goto("/settings/data");
   await page
     .getByTestId("import-file")
     .setInputFiles(path.join(here, "fixtures", "products-import.xlsx"));

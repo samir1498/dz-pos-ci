@@ -35,7 +35,7 @@ const SRC = join(process.cwd(), "src");
  *  somebody, and a person has a role. `audit.test.tsx` spells one inside the
  *  `after` of an audit row, which is the log recording that a person's role
  *  was changed: the name there is the thing being logged, not a decision the
- *  screen takes. `settings_.users.test.tsx` builds the staff a staff screen
+ *  screen takes. `settings.users.test.tsx` builds the staff a staff screen
  *  lists, and staff have roles. `test/session.ts` (M4 T5) is the one
  *  `MeDto` fixture every other screen test's `SessionProvider` renders
  *  behind; the two roles on it are the same kind of data.
@@ -52,7 +52,7 @@ const ALLOWED: ReadonlySet<string> = new Set([
   join("components", "FirstSetupScreen.test.tsx"),
   join("lib", "session.test.tsx"),
   join("routes", "audit.test.tsx"),
-  join("routes", "settings_.users.test.tsx"),
+  join("routes", "settings.users.test.tsx"),
   join("test", "session.ts"),
   "role.test.ts",
 ]);

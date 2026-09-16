@@ -40,7 +40,10 @@ const NAV: readonly { readonly testId: string; readonly key: string; readonly pa
   { testId: "nav-purchases", key: "nav_purchases", path: "/purchases" },
   { testId: "nav-expenses", key: "nav_expenses", path: "/expenses" },
   { testId: "nav-products", key: "nav_products", path: "/products" },
-  { testId: "nav-settings", key: "nav_settings", path: "/settings" },
+  // `/settings` redirects to its first room, so the address the click lands
+  // on is that room's, not the bare one in `NAV`.
+  { testId: "nav-settings", key: "nav_settings", path: "/settings/shop" },
+  { testId: "nav-settings/phones", key: "nav_phones", path: "/settings/phones" },
 ];
 
 test("the sidebar reaches every screen and the topbar names it", async ({ page }) => {

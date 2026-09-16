@@ -16,11 +16,16 @@ import { cn } from "@/lib/utils";
 
 export function PageHeader({
   title,
+  level = 2,
   description,
   actions,
   className,
 }: {
   title: string;
+  /** `h2` on a screen of its own. A settings room renders inside the
+   *  settings layout, which already wrote the page's `h2`, so those pass
+   *  `3` and keep the outline one heading deep rather than two abreast. */
+  level?: 2 | 3;
   /** A node rather than a string: a line that carries a phone number or any
    *  other value the shop did not write needs that value in its own `dir`,
    *  and a string cannot hold one. */
@@ -29,13 +34,14 @@ export function PageHeader({
   actions?: ReactNode;
   className?: string;
 }) {
+  const Heading = level === 2 ? "h2" : "h3";
   return (
     <div
       data-testid="page-header"
       className={cn("flex flex-wrap items-start gap-4 pb-4", className)}
     >
       <div className="min-w-0">
-        <h2 className="truncate text-xl font-semibold text-foreground">{title}</h2>
+        <Heading className="truncate text-xl font-semibold text-foreground">{title}</Heading>
         {description === undefined || description === null ? null : (
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         )}

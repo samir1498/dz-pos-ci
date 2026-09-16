@@ -32,6 +32,7 @@ import {
   Receipt,
   Settings,
   ShoppingCart,
+  Smartphone,
   Store,
   Truck,
   Users,
@@ -87,9 +88,9 @@ interface NavItem {
    *  sidebar shows the item only once `hasPermission` says the session
    *  holds it — the same permission the route itself is gated by
    *  server-side, not a client-only opinion (`crates/api/src/gates.rs`).
-   *  The settings entry stays visible for everyone and hides only the
-   *  blocks inside it (its two blocks are each owner/manager-only in their
-   *  own right); dashboard and purchases carry a permission here because
+   *  The settings entry stays visible for everyone: its rail lists only
+   *  the rooms the session may open and `/settings` itself redirects to the
+   *  shop block, which every role may read. Dashboard and purchases carry a permission here because
    *  M4 T5's review found the server refuses the route outright, so a
    *  cashier reaching either by a stale link or a typed URL should not see
    *  a link into it in the first place. Suppliers and expenses carry one
@@ -144,6 +145,18 @@ export const NAV: readonly NavItem[] = [
     icon: History,
     section: "manage",
     permission: "see_audit_log",
+  },
+  // Pairing a phone is why this entry exists. It is a room inside
+  // `/settings`, but it was unreachable in practice: a shop looking for it
+  // scrolled past five other blocks first, and half the time gave up. A
+  // second door into one room is cheaper than the hunt. `EditSettings` is
+  // the permission `gates.rs` names on all three pairing routes.
+  {
+    to: "/settings/phones",
+    label: "nav_phones",
+    icon: Smartphone,
+    section: "manage",
+    permission: "edit_settings",
   },
   { to: "/settings", label: "nav_settings", icon: Settings, section: "manage" },
 ];

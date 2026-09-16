@@ -99,7 +99,7 @@ test("each theme is kept in the shop file and survives a reload", async ({ page 
 test("the settings screen offers the same switch, and saves the Arabic screenshots", async ({
   page,
 }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/appearance");
   await expect(page.getByRole("main").getByRole("heading", { name: t("settings_title") })).toBeVisible();
   const panel = page.getByRole("region", { name: t("settings_theme") });
   await expect(panel).toBeVisible();

@@ -22,7 +22,7 @@ import {
 import type { UserDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
-import { UsersScreen } from "./settings_.users";
+import { UsersScreen } from "./settings.users";
 
 const owner: UserDto = {
   id: 1,
@@ -214,13 +214,6 @@ describe("the list", () => {
     expect(screen.queryByTestId("users-table")).not.toBeInTheDocument();
   });
 
-  test("the back link returns to settings", async () => {
-    const user = userEvent.setup();
-    app();
-    await screen.findByTestId("users-table");
-    await user.click(screen.getByRole("link", { name: fr.action_back_to_settings }));
-    expect(await screen.findByText(fr.settings_title)).toBeInTheDocument();
-  });
 });
 
 describe("adding a user", () => {

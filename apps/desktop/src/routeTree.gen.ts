@@ -24,8 +24,15 @@ import { Route as TillRouteImport } from "./routes/till"
 import { Route as CustomersIdRouteImport } from "./routes/customers_.$id"
 import { Route as PurchasesIdRouteImport } from "./routes/purchases_.$id"
 import { Route as PurchasesNewRouteImport } from "./routes/purchases_.new"
-import { Route as SettingsAboutRouteImport } from "./routes/settings_.about"
-import { Route as SettingsUsersRouteImport } from "./routes/settings_.users"
+import { Route as SettingsIndexRouteImport } from "./routes/settings.index"
+import { Route as SettingsAboutRouteImport } from "./routes/settings.about"
+import { Route as SettingsAppearanceRouteImport } from "./routes/settings.appearance"
+import { Route as SettingsBackupsRouteImport } from "./routes/settings.backups"
+import { Route as SettingsDataRouteImport } from "./routes/settings.data"
+import { Route as SettingsPhonesRouteImport } from "./routes/settings.phones"
+import { Route as SettingsRegimeRouteImport } from "./routes/settings.regime"
+import { Route as SettingsShopRouteImport } from "./routes/settings.shop"
+import { Route as SettingsUsersRouteImport } from "./routes/settings.users"
 import { Route as SuppliersIdRouteImport } from "./routes/suppliers_.$id"
 
 const IndexRoute = IndexRouteImport.update({
@@ -103,15 +110,50 @@ const PurchasesNewRoute = PurchasesNewRouteImport.update({
   path: "/purchases/new",
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsAboutRoute = SettingsAboutRouteImport.update({
-  id: "/settings_/about",
-  path: "/settings/about",
-  getParentRoute: () => rootRouteImport,
+  id: "/about",
+  path: "/about",
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
+  id: "/appearance",
+  path: "/appearance",
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsBackupsRoute = SettingsBackupsRouteImport.update({
+  id: "/backups",
+  path: "/backups",
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsDataRoute = SettingsDataRouteImport.update({
+  id: "/data",
+  path: "/data",
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsPhonesRoute = SettingsPhonesRouteImport.update({
+  id: "/phones",
+  path: "/phones",
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsRegimeRoute = SettingsRegimeRouteImport.update({
+  id: "/regime",
+  path: "/regime",
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsShopRoute = SettingsShopRouteImport.update({
+  id: "/shop",
+  path: "/shop",
+  getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsUsersRoute = SettingsUsersRouteImport.update({
-  id: "/settings_/users",
-  path: "/settings/users",
-  getParentRoute: () => rootRouteImport,
+  id: "/users",
+  path: "/users",
+  getParentRoute: () => SettingsRoute,
 } as any)
 const SuppliersIdRoute = SuppliersIdRouteImport.update({
   id: "/suppliers_/$id",
@@ -129,15 +171,22 @@ export interface FileRoutesByFullPath {
   "/kit": typeof KitRoute
   "/products": typeof ProductsRoute
   "/purchases": typeof PurchasesRoute
-  "/settings": typeof SettingsRoute
+  "/settings": typeof SettingsRouteWithChildren
   "/suppliers": typeof SuppliersRoute
   "/till": typeof TillRoute
   "/customers/$id": typeof CustomersIdRoute
   "/purchases/$id": typeof PurchasesIdRoute
   "/purchases/new": typeof PurchasesNewRoute
   "/settings/about": typeof SettingsAboutRoute
+  "/settings/appearance": typeof SettingsAppearanceRoute
+  "/settings/backups": typeof SettingsBackupsRoute
+  "/settings/data": typeof SettingsDataRoute
+  "/settings/phones": typeof SettingsPhonesRoute
+  "/settings/regime": typeof SettingsRegimeRoute
+  "/settings/shop": typeof SettingsShopRoute
   "/settings/users": typeof SettingsUsersRoute
   "/suppliers/$id": typeof SuppliersIdRoute
+  "/settings/": typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
@@ -149,15 +198,21 @@ export interface FileRoutesByTo {
   "/kit": typeof KitRoute
   "/products": typeof ProductsRoute
   "/purchases": typeof PurchasesRoute
-  "/settings": typeof SettingsRoute
   "/suppliers": typeof SuppliersRoute
   "/till": typeof TillRoute
   "/customers/$id": typeof CustomersIdRoute
   "/purchases/$id": typeof PurchasesIdRoute
   "/purchases/new": typeof PurchasesNewRoute
   "/settings/about": typeof SettingsAboutRoute
+  "/settings/appearance": typeof SettingsAppearanceRoute
+  "/settings/backups": typeof SettingsBackupsRoute
+  "/settings/data": typeof SettingsDataRoute
+  "/settings/phones": typeof SettingsPhonesRoute
+  "/settings/regime": typeof SettingsRegimeRoute
+  "/settings/shop": typeof SettingsShopRoute
   "/settings/users": typeof SettingsUsersRoute
   "/suppliers/$id": typeof SuppliersIdRoute
+  "/settings": typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -170,15 +225,22 @@ export interface FileRoutesById {
   "/kit": typeof KitRoute
   "/products": typeof ProductsRoute
   "/purchases": typeof PurchasesRoute
-  "/settings": typeof SettingsRoute
+  "/settings": typeof SettingsRouteWithChildren
   "/suppliers": typeof SuppliersRoute
   "/till": typeof TillRoute
   "/customers_/$id": typeof CustomersIdRoute
   "/purchases_/$id": typeof PurchasesIdRoute
   "/purchases_/new": typeof PurchasesNewRoute
-  "/settings_/about": typeof SettingsAboutRoute
-  "/settings_/users": typeof SettingsUsersRoute
+  "/settings/about": typeof SettingsAboutRoute
+  "/settings/appearance": typeof SettingsAppearanceRoute
+  "/settings/backups": typeof SettingsBackupsRoute
+  "/settings/data": typeof SettingsDataRoute
+  "/settings/phones": typeof SettingsPhonesRoute
+  "/settings/regime": typeof SettingsRegimeRoute
+  "/settings/shop": typeof SettingsShopRoute
+  "/settings/users": typeof SettingsUsersRoute
   "/suppliers_/$id": typeof SuppliersIdRoute
+  "/settings/": typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -199,8 +261,15 @@ export interface FileRouteTypes {
     | "/purchases/$id"
     | "/purchases/new"
     | "/settings/about"
+    | "/settings/appearance"
+    | "/settings/backups"
+    | "/settings/data"
+    | "/settings/phones"
+    | "/settings/regime"
+    | "/settings/shop"
     | "/settings/users"
     | "/suppliers/$id"
+    | "/settings/"
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
@@ -212,15 +281,21 @@ export interface FileRouteTypes {
     | "/kit"
     | "/products"
     | "/purchases"
-    | "/settings"
     | "/suppliers"
     | "/till"
     | "/customers/$id"
     | "/purchases/$id"
     | "/purchases/new"
     | "/settings/about"
+    | "/settings/appearance"
+    | "/settings/backups"
+    | "/settings/data"
+    | "/settings/phones"
+    | "/settings/regime"
+    | "/settings/shop"
     | "/settings/users"
     | "/suppliers/$id"
+    | "/settings"
   id:
     | "__root__"
     | "/"
@@ -238,9 +313,16 @@ export interface FileRouteTypes {
     | "/customers_/$id"
     | "/purchases_/$id"
     | "/purchases_/new"
-    | "/settings_/about"
-    | "/settings_/users"
+    | "/settings/about"
+    | "/settings/appearance"
+    | "/settings/backups"
+    | "/settings/data"
+    | "/settings/phones"
+    | "/settings/regime"
+    | "/settings/shop"
+    | "/settings/users"
     | "/suppliers_/$id"
+    | "/settings/"
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -253,14 +335,12 @@ export interface RootRouteChildren {
   KitRoute: typeof KitRoute
   ProductsRoute: typeof ProductsRoute
   PurchasesRoute: typeof PurchasesRoute
-  SettingsRoute: typeof SettingsRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   SuppliersRoute: typeof SuppliersRoute
   TillRoute: typeof TillRoute
   CustomersIdRoute: typeof CustomersIdRoute
   PurchasesIdRoute: typeof PurchasesIdRoute
   PurchasesNewRoute: typeof PurchasesNewRoute
-  SettingsAboutRoute: typeof SettingsAboutRoute
-  SettingsUsersRoute: typeof SettingsUsersRoute
   SuppliersIdRoute: typeof SuppliersIdRoute
 }
 
@@ -371,19 +451,68 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof PurchasesNewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    "/settings_/about": {
-      id: "/settings_/about"
-      path: "/settings/about"
+    "/settings/": {
+      id: "/settings/"
+      path: "/"
+      fullPath: "/settings/"
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    "/settings/about": {
+      id: "/settings/about"
+      path: "/about"
       fullPath: "/settings/about"
       preLoaderRoute: typeof SettingsAboutRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SettingsRoute
     }
-    "/settings_/users": {
-      id: "/settings_/users"
-      path: "/settings/users"
+    "/settings/appearance": {
+      id: "/settings/appearance"
+      path: "/appearance"
+      fullPath: "/settings/appearance"
+      preLoaderRoute: typeof SettingsAppearanceRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    "/settings/backups": {
+      id: "/settings/backups"
+      path: "/backups"
+      fullPath: "/settings/backups"
+      preLoaderRoute: typeof SettingsBackupsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    "/settings/data": {
+      id: "/settings/data"
+      path: "/data"
+      fullPath: "/settings/data"
+      preLoaderRoute: typeof SettingsDataRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    "/settings/phones": {
+      id: "/settings/phones"
+      path: "/phones"
+      fullPath: "/settings/phones"
+      preLoaderRoute: typeof SettingsPhonesRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    "/settings/regime": {
+      id: "/settings/regime"
+      path: "/regime"
+      fullPath: "/settings/regime"
+      preLoaderRoute: typeof SettingsRegimeRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    "/settings/shop": {
+      id: "/settings/shop"
+      path: "/shop"
+      fullPath: "/settings/shop"
+      preLoaderRoute: typeof SettingsShopRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    "/settings/users": {
+      id: "/settings/users"
+      path: "/users"
       fullPath: "/settings/users"
       preLoaderRoute: typeof SettingsUsersRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SettingsRoute
     }
     "/suppliers_/$id": {
       id: "/suppliers_/$id"
@@ -395,6 +524,34 @@ declare module "@tanstack/react-router" {
   }
 }
 
+interface SettingsRouteChildren {
+  SettingsAboutRoute: typeof SettingsAboutRoute
+  SettingsAppearanceRoute: typeof SettingsAppearanceRoute
+  SettingsBackupsRoute: typeof SettingsBackupsRoute
+  SettingsDataRoute: typeof SettingsDataRoute
+  SettingsPhonesRoute: typeof SettingsPhonesRoute
+  SettingsRegimeRoute: typeof SettingsRegimeRoute
+  SettingsShopRoute: typeof SettingsShopRoute
+  SettingsUsersRoute: typeof SettingsUsersRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsAboutRoute: SettingsAboutRoute,
+  SettingsAppearanceRoute: SettingsAppearanceRoute,
+  SettingsBackupsRoute: SettingsBackupsRoute,
+  SettingsDataRoute: SettingsDataRoute,
+  SettingsPhonesRoute: SettingsPhonesRoute,
+  SettingsRegimeRoute: SettingsRegimeRoute,
+  SettingsShopRoute: SettingsShopRoute,
+  SettingsUsersRoute: SettingsUsersRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuditRoute: AuditRoute,
@@ -405,14 +562,12 @@ const rootRouteChildren: RootRouteChildren = {
   KitRoute: KitRoute,
   ProductsRoute: ProductsRoute,
   PurchasesRoute: PurchasesRoute,
-  SettingsRoute: SettingsRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   SuppliersRoute: SuppliersRoute,
   TillRoute: TillRoute,
   CustomersIdRoute: CustomersIdRoute,
   PurchasesIdRoute: PurchasesIdRoute,
   PurchasesNewRoute: PurchasesNewRoute,
-  SettingsAboutRoute: SettingsAboutRoute,
-  SettingsUsersRoute: SettingsUsersRoute,
   SuppliersIdRoute: SuppliersIdRoute,
 }
 export const routeTree = rootRouteImport

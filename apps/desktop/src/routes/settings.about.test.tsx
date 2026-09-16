@@ -5,10 +5,9 @@
 // of the three instead of reading the query would fail here rather than
 // pass by coincidence.
 //
-// Mounted through a memory router carrying `/settings` and `/settings/about`,
-// the same shape `settings_.users.test.tsx` uses, because the back link
-// builds a real `Link` and a `Link` without a router is a screen that
-// cannot render.
+// Mounted through a memory router, the same shape `settings.users.test.tsx`
+// uses: the screen builds real `Link`s and a `Link` without a router is a
+// screen that cannot render.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -24,7 +23,7 @@ import {
 import type { BuildInfoDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
-import { AboutScreen } from "./settings_.about";
+import { AboutScreen } from "./settings.about";
 
 // Only `checkForUpdate` and `installUpdate` are mocked, never
 // `formatUpdateSize` (a pure function): the point of these tests is the
@@ -119,13 +118,6 @@ describe("AboutScreen", () => {
     expect(await screen.findByTestId("about-debug-badge")).toBeInTheDocument();
   });
 
-  test("the back link returns to settings", async () => {
-    const user = userEvent.setup();
-    app();
-    await screen.findByTestId("about-version");
-    await user.click(screen.getByRole("link", { name: fr.action_back_to_settings }));
-    expect(await screen.findByText(fr.settings_title)).toBeInTheDocument();
-  });
 });
 
 // The check never runs on its own: every test below presses the button

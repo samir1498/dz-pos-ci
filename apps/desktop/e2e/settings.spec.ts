@@ -9,6 +9,7 @@ import type { Locator, Page } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { currentLang, t } from "./messages";
+import { fillDate } from "./date-field";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -80,18 +81,17 @@ test("saves the store block, reads it back after a reload, and saves the setting
 });
 
 test("a régime change dated ahead is planned; dated back it is in force", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/regime");
   const current = page.getByTestId("regime-current");
   await expect(current).toContainText(t("regime_reel"));
   await expect(page.getByTestId("regime-planned")).toHaveCount(0);
 
   const regimeForm = page.getByRole("form", { name: t("settings_regime") });
-  const from = regimeForm.getByLabel(t("field_valid_from"), { exact: true });
   const apply = regimeForm.getByRole("button", { name: t("action_apply") });
 
   // Tomorrow: the change is planned, réel stays in force.
   await chooseRegime(page, regimeForm, t("regime_ifu"));
-  await from.fill(day(1));
+  await fillDate(regimeForm, "regime-valid-from", day(1));
   await apply.click();
   const planned = page.getByTestId("regime-planned");
   await expect(planned).toContainText(t("regime_ifu"));
@@ -101,7 +101,7 @@ test("a régime change dated ahead is planned; dated back it is in force", async
   // Yesterday: in force at once, and the planned line is gone after the
   // reload because the server's answer, not the screen, decides.
   await chooseRegime(page, regimeForm, t("regime_ifu"));
-  await from.fill(day(-1));
+  await fillDate(regimeForm, "regime-valid-from", day(-1));
   await apply.click();
   await expect(current).toContainText(`${t("regime_ifu")} · ${t("regime_since")} ${day(-1)}`);
   await page.reload();
@@ -114,7 +114,7 @@ test("a régime change dated ahead is planned; dated back it is in force", async
   // is the point of a dated régime, so the two changes above are still on
   // the record.
   await chooseRegime(page, regimeForm, t("regime_reel"));
-  await regimeForm.getByLabel(t("field_valid_from"), { exact: true }).fill(day(0));
+  await fillDate(regimeForm, "regime-valid-from", day(0));
   await regimeForm.getByRole("button", { name: t("action_apply") }).click();
   await expect(page.getByTestId("regime-current")).toContainText(t("regime_reel"));
 });

@@ -5,7 +5,15 @@
 // had `/pairing/qr` since M6 and no screen ever called it, so there was no QR
 // anywhere for a phone to scan.
 //
-// Two things here are deliberate.
+// Three things here are deliberate.
+//
+// The code is minted on arrival, not on a button. The clock should start
+// while the code is on the screen and being looked at, never while it is
+// being hunted for: minting first and then walking off to find the cashier
+// is how the sixty seconds were spent before a phone ever saw the QR. The
+// cost is that opening this room spawns a live token every visit — single
+// use, sixty seconds, `EditSettings` to reach — and the button below is
+// what mints the next one once this one lapses.
 //
 // The countdown is not decoration. A pairing token lives sixty seconds and is
 // single use, so an owner who mints one and then walks off to find the
@@ -20,13 +28,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Smartphone } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 import { ApiError } from "@dzpos/shared";
 import type { PairedDeviceDto } from "@dzpos/shared";
 import { api, pairedDevicesQueryKey } from "@/api";
 import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
+import { PanelHeading } from "@/components/settings/PanelHeading";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from "@/components/ui/card";
 import {
@@ -71,6 +80,16 @@ export function PairedPhonesPanel() {
     },
   });
 
+  // Once per mount, and a ref rather than a dependency list: `mint` is a new
+  // object on every render, so listing it would mint again on each one, and
+  // every extra token is one more live credential on the LAN.
+  const minted = useRef(false);
+  useEffect(() => {
+    if (minted.current) return;
+    minted.current = true;
+    mint.mutate();
+  }, [mint]);
+
   // One interval while a token is live, cleared the moment it lapses. The
   // list is refetched at the same time: a phone that scanned the QR is in it
   // now, and nothing else on this screen would have gone looking.
@@ -103,6 +122,7 @@ export function PairedPhonesPanel() {
   return (
     <Card>
       <CardHeader>
+        <PanelHeading id="settings-phones">{t("settings_phones")}</PanelHeading>
         <CardDescription>{t("settings_phones_hint")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
