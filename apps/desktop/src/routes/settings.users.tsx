@@ -179,7 +179,7 @@ export function UsersScreen() {
                   }}
                 >
                   <Icon as={KeyRound} size={18} />
-                  {t("action_reset_pin")}
+                  {t(row.has_pin ? "action_reset_pin" : "action_set_pin")}
                 </Button>
                 <Button
                   type="button"
@@ -450,9 +450,16 @@ function ResetPinDialog({
     >
       <DialogContent data-testid="reset-pin-dialog">
         <DialogHeader>
-          <DialogTitle>{t("users_reset_pin_title")}</DialogTitle>
+          {/* "Reset" is the wrong word for a fiche that never had one: the
+              row's badge already says so, and a dialog titled "new PIN"
+              over a person with no PIN read as if something was lost. */}
+          <DialogTitle>
+            {t(user?.has_pin === true ? "users_reset_pin_title" : "users_set_pin_title")}
+          </DialogTitle>
           <DialogDescription>
-            {user === null ? "" : `${user.name} · ${t("users_reset_pin_hint")}`}
+            {user === null
+              ? ""
+              : `${user.name} · ${t(user.has_pin ? "users_reset_pin_hint" : "users_set_pin_hint")}`}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -501,7 +508,9 @@ function ResetPinDialog({
               {t("action_cancel")}
             </Button>
             <Button type="submit" disabled={setPin.isPending}>
-              {setPin.isPending ? t("action_saving") : t("action_reset_pin")}
+              {setPin.isPending
+                ? t("action_saving")
+                : t(user?.has_pin === true ? "action_reset_pin" : "action_set_pin")}
             </Button>
           </DialogFooter>
         </form>

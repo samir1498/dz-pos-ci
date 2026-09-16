@@ -305,6 +305,29 @@ describe("resetting a PIN", () => {
     expect(sent?.body).toEqual({ pin: "4321" });
   });
 
+  test("a fiche with no PIN is offered a first PIN, not a reset", async () => {
+    // Row two is the cashier the fixture lists with `has_pin: false`. The
+    // word "reset" over a person who never had a PIN read as if something
+    // was lost; the row and the dialog both say "set" until one exists.
+    const user = userEvent.setup();
+    app();
+    await screen.findByTestId("users-table");
+    const row = userRows()[1];
+    if (row === undefined) throw new Error("no second row");
+    expect(within(row).queryByRole("button", { name: fr.action_reset_pin })).not.toBeInTheDocument();
+    await user.click(within(row).getByRole("button", { name: fr.action_set_pin }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(fr.users_set_pin_title)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2468");
+    await user.click(within(dialog).getByRole("button", { name: fr.action_set_pin }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // Once it has one, the same row offers a reset.
+    await waitFor(() =>
+      expect(within(userRows()[1] ?? document.body).getByRole("button", { name: fr.action_reset_pin })).toBeInTheDocument(),
+    );
+  });
+
   test("a badly shaped PIN is refused by the server and shown translated", async () => {
     pinAnswer = () => json(422, { error: { code: "validation", message: "shape" } });
     const user = userEvent.setup();
