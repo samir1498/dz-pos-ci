@@ -241,7 +241,7 @@ describe("adding a user", () => {
     expect(within(userRows()[2] ?? document.body).queryByText(fr.users_no_pin)).not.toBeInTheDocument();
   });
 
-  test("a PIN that is not four to six digits is refused before anything is posted", async () => {
+  test("a PIN that is not four digits is refused before anything is posted", async () => {
     const user = userEvent.setup();
     app();
     await screen.findByTestId("users-table");

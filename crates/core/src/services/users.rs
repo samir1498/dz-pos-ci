@@ -31,14 +31,13 @@ use crate::services::{audit, bounded_field, sessions};
 
 pub use crate::models::user::{NewUser, Role, User};
 
-/// Shortest PIN the till accepts. Four digits is what a bank card asks for and
-/// what a cashier will actually use; anything shorter and the lockout below is
-/// the only thing between a stranger and the drawer.
-pub const MIN_PIN_DIGITS: usize = 4;
-/// Longest. Six is the other length a person is used to typing; past that the
-/// PIN pad stops being faster than a password, which is the only reason a PIN
-/// exists here.
-pub const MAX_PIN_DIGITS: usize = 6;
+/// The one length a PIN has. Four digits is what a bank card asks for and
+/// what a cashier will actually use; anything shorter and the lockout below
+/// is the only thing between a stranger and the drawer. One length and not a
+/// range (it was four to six until 2026-09-16): a range has to be explained
+/// on every screen that takes a PIN, and a fixed length lets the pad and the
+/// phone draw four boxes and refuse a short one before the round trip.
+pub const PIN_DIGITS: usize = 4;
 /// Shortest password. Eight characters, the floor NIST SP 800-63B sets for a
 /// memorised secret, and it is a floor and not a pattern: no rule here asks
 /// for a capital or a digit, because those push people to `Password1!` and
@@ -610,14 +609,12 @@ fn matches(secret: &str, stored: &str) -> bool {
     hasher().verify_password(secret.as_bytes(), &parsed).is_ok()
 }
 
-/// Four to six digits, and not one of the two shapes everybody picks first.
-/// Refused here rather than on the keypad: the API and the mobile app will
-/// both set a PIN and neither may decide this for itself (architecture.md
-/// rule 2).
+/// Four digits, and not one of the two shapes everybody picks first. Refused
+/// here rather than on the keypad: the API and the mobile app will both set
+/// a PIN and neither may decide this for itself (architecture.md rule 2).
 pub fn validate_pin(pin: &str) -> Result<(), CoreError> {
-    let digits = pin.chars().count();
-    if !(MIN_PIN_DIGITS..=MAX_PIN_DIGITS).contains(&digits) {
-        return Err(CoreError::validation("pin", "a PIN is four to six digits"));
+    if pin.chars().count() != PIN_DIGITS {
+        return Err(CoreError::validation("pin", "a PIN is four digits"));
     }
     if !pin.chars().all(|c| c.is_ascii_digit()) {
         return Err(CoreError::validation(

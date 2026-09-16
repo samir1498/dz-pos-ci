@@ -19,6 +19,13 @@ Element.prototype.setPointerCapture = () => {};
 Element.prototype.releasePointerCapture = () => {};
 Element.prototype.scrollIntoView = () => {};
 
+// input-otp (the PIN boxes) asks, on a timer after focus, what element sits
+// where a password manager would draw its badge, so it can widen the box
+// when one is there. jsdom lays nothing out and has no `elementFromPoint`;
+// "nothing there" is the honest answer, and it is what a shop till without
+// a password manager would say too.
+document.elementFromPoint = () => null;
+
 // Radix measures its trigger with a ResizeObserver before it places a
 // popover, and jsdom has none. A stub that observes nothing is enough: there
 // is no layout to react to here, only the question of what the popover

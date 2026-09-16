@@ -15,13 +15,13 @@
 // by `has_pin` up front rather than let a door that cannot open read as a
 // mistyped PIN.
 
-import type { SessionDto, StaffDto } from "@dzpos/shared";
+import { PIN_DIGITS, type SessionDto, type StaffDto } from "@dzpos/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 
-import { Button, Callout, Field, Screen, Text } from "../components/ui";
+import { Button, Callout, Field, PinBoxes, Screen, Text } from "../components/ui";
 import { call, get } from "../lib/api";
 import { useTheme } from "../design/theme";
 import { useSession } from "../providers/SessionProvider";
@@ -53,7 +53,7 @@ export default function SignIn() {
   // beside a PIN is a caller that has not decided which door it is at, and
   // the server refuses that as malformed rather than as a wrong secret.
   const usesPin = person?.has_pin === true;
-  const filled = usesPin ? pin !== "" : password !== "";
+  const filled = usesPin ? pin.length === PIN_DIGITS : password !== "";
 
   async function signIn() {
     if (device === null || person === null) return;
@@ -85,6 +85,9 @@ export default function SignIn() {
       router.replace("/pair");
       return;
     }
+    // A refused PIN empties the boxes: the next try starts from the first
+    // box rather than from a full row that has to be deleted first.
+    setPin("");
     setProblem(
       outcome.kind === "queue"
         ? "No answer from the till computer. Check the Wi-Fi and try again."
@@ -151,15 +154,7 @@ export default function SignIn() {
         ) : (
           <>
             {usesPin ? (
-              <Field
-                label="PIN"
-                placeholder="••••"
-                keyboardType="number-pad"
-                secureTextEntry
-                autoFocus
-                value={pin}
-                onChangeText={setPin}
-              />
+              <PinBoxes label="PIN" value={pin} onChange={setPin} autoFocus />
             ) : (
               <Field
                 label="Password"

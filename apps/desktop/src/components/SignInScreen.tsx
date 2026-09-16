@@ -22,12 +22,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { KeyRound, User } from "lucide-react";
 import { useState } from "react";
-import type { StaffDto } from "@dzpos/shared";
+import { PIN_DIGITS, type StaffDto } from "@dzpos/shared";
 
 import { api, staffQueryKey } from "@/api";
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
 import { Keypad, keyedDigits, type KeypadKey } from "@/components/Keypad";
+import { PinDots } from "@/components/PinBoxes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,8 +38,6 @@ import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { errorKey } from "@/lib/fields";
 import { useLoginAttempt } from "@/lib/useLoginAttempt";
 import { useSession } from "@/lib/session";
-
-const MAX_PIN_DIGITS = 6;
 
 /** The list of names to tap. Its own component so the pad below it keeps a
  * fixed hook count whichever of the three answers the query is in. */
@@ -116,7 +115,7 @@ function PinPad() {
       backToList();
       return;
     }
-    setPinDigits((current) => keyedDigits(current, key, MAX_PIN_DIGITS));
+    setPinDigits((current) => keyedDigits(current, key, PIN_DIGITS));
   }
 
   if (person === null) {
@@ -145,15 +144,7 @@ function PinPad() {
       {person.has_pin ? (
         <>
           <span className="text-sm text-muted-foreground">{t("signin_pin_pin_label")}</span>
-          {/* Masked: a shoulder behind the counter reads a row of dots and
-              not the four digits it is made of. */}
-          <div
-            data-testid="signin-pin-display"
-            dir="ltr"
-            className="rounded-md border border-border bg-muted px-3 py-2 text-end font-numeric text-2xl tabular-nums"
-          >
-            {"•".repeat(pinDigits.length) || " "}
-          </div>
+          <PinDots filled={pinDigits.length} testId="signin-pin-display" />
           <Keypad onKey={onKey} disabled={attempt.locked} captureWindow />
           <AttemptFeedback attempt={attempt} />
         </>

@@ -14,13 +14,13 @@
 // the rail that lists the rooms, which is why it heads itself at `h3` and
 // carries no link back — the rail is the way back and it never left.
 
-import { ApiError } from "@dzpos/shared";
+import { ApiError, PIN_SHAPE } from "@dzpos/shared";
 import type { NewUserDto, RoleDto, UserDto } from "@dzpos/shared";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { KeyRound, UserPlus, Users as UsersIcon } from "lucide-react";
-import { useState, type ComponentProps } from "react";
+import { useState } from "react";
 
 import { api, usersQueryKey } from "@/api";
 import { DataTable, type Column } from "@/components/DataTable";
@@ -28,6 +28,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
 import { PageHeader } from "@/components/PageHeader";
+import { PinBoxes } from "@/components/PinBoxes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -210,39 +211,6 @@ export function UsersScreen() {
   );
 }
 
-/**
- * The PIN box both dialogs share. Masked, because a shoulder behind the
- * counter should read dots; never `type="number"`, which unmasks, grows
- * spinner arrows and turns `0512` into `512`, a different PIN. Told to the
- * browser as a one-time code rather than a password: a password field is
- * what makes Brave and Chrome offer the shop's saved login over a PIN box,
- * and `autoComplete="off"` alone is ignored by both for password fields.
- * Anything that is not a digit is dropped as it is typed, so the numeric
- * keyboard the phone raises and the server's own rule agree on the shape.
- */
-function PinInput({
-  value,
-  onChange,
-  ...parts
-}: Omit<ComponentProps<typeof Input>, "value" | "onChange"> & {
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <Input
-      {...parts}
-      type="password"
-      inputMode="numeric"
-      pattern="[0-9]*"
-      autoComplete="one-time-code"
-      maxLength={6}
-      dir="ltr"
-      className="font-numeric tracking-widest"
-      value={value}
-      onChange={(event) => onChange(event.target.value.replace(/\D/g, ""))}
-    />
-  );
-}
 
 interface NewUserValues {
   name: string;
@@ -250,10 +218,6 @@ interface NewUserValues {
   pin: string;
 }
 
-/** What the till accepts as a PIN, mirrored from `services::users`
- *  (`MIN_PIN_DIGITS`..`MAX_PIN_DIGITS`) so the dialog can say "4 to 6
- *  digits" before the round trip; the server still decides. */
-const PIN_SHAPE = /^\d{4,6}$/;
 
 function AddUserDialog({
   open,
@@ -389,7 +353,7 @@ function AddUserDialog({
             {(field) => (
               <FormField label={t("field_pin")} error={said(field.state.meta.errors)}>
                 {(parts) => (
-                  <PinInput
+                  <PinBoxes
                     {...parts}
                     value={field.state.value}
                     onChange={field.handleChange}
@@ -512,7 +476,7 @@ function ResetPinDialog({
                   // (`UserDto` carries `has_pin`, never a hash), so the box
                   // opens blank whether this is the fiche's first PIN or a
                   // reset of a forgotten one.
-                  <PinInput
+                  <PinBoxes
                     {...parts}
                     value={field.state.value}
                     onChange={field.handleChange}

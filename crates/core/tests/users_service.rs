@@ -174,10 +174,11 @@ fn a_pin_that_is_the_wrong_shape_is_refused_and_nothing_is_stored() {
     let id = a_cashier(&mut conn, "Karim", "1357");
     let before = stored_pin_hash(&mut conn, id);
     for bad in [
-        // Too short, too long.
-        "123", "1234567", // A repeat.
-        "1111", "000000", // A run, up and down.
-        "1234", "4321", "345678", "987654", // Not digits.
+        // Too short, too long: five and six were taken until 2026-09-16 and
+        // are refused now, the pad draws exactly four boxes.
+        "123", "12345", "123456", "1234567", // A repeat.
+        "1111", "0000", // A run, up and down.
+        "1234", "4321", "3456", "9876", // Not digits.
         "12a4", "12 4", "١٢٣٤", "",
     ] {
         let refused = users::set_pin(&mut conn, SHOP, OWNER, id, bad, None);
@@ -194,10 +195,10 @@ fn a_pin_that_is_the_wrong_shape_is_refused_and_nothing_is_stored() {
 }
 
 #[test]
-fn a_pin_of_four_to_six_digits_that_is_neither_a_run_nor_a_repeat_is_taken() {
+fn a_pin_of_four_digits_that_is_neither_a_run_nor_a_repeat_is_taken() {
     let (_dir, mut conn) = open_temp();
     let id = a_cashier(&mut conn, "Karim", "1357");
-    for good in ["1357", "90210", "428513", "1123", "0102"] {
+    for good in ["1357", "9021", "1123", "0102", "2580"] {
         assert!(
             users::set_pin(&mut conn, SHOP, OWNER, id, good, None).is_ok(),
             "{good} was refused as a PIN"

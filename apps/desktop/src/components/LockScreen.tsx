@@ -5,19 +5,19 @@
 // call like any other (`useSession().signInWithPin` /
 // `signInWithPassword`), just one that already knows who it is asking for.
 
+import { PIN_DIGITS } from "@dzpos/shared";
 import { KeyRound, User } from "lucide-react";
 import { useState } from "react";
 
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
 import { Keypad, keyedDigits, type KeypadKey } from "@/components/Keypad";
+import { PinDots } from "@/components/PinBoxes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTranslation } from "@/i18n";
 import { useLoginAttempt } from "@/lib/useLoginAttempt";
 import { useSession, type AuthMethod } from "@/lib/session";
-
-const MAX_PIN_DIGITS = 6;
 
 function PinUnlock({ userId }: { userId: number }) {
   const { signInWithPin } = useSession();
@@ -36,18 +36,12 @@ function PinUnlock({ userId }: { userId: number }) {
       void attempt.run();
       return;
     }
-    setDigits((current) => keyedDigits(current, key, MAX_PIN_DIGITS));
+    setDigits((current) => keyedDigits(current, key, PIN_DIGITS));
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <div
-        data-testid="lock-pin-display"
-        dir="ltr"
-        className="rounded-md border border-border bg-muted px-3 py-2 text-end font-numeric text-2xl tabular-nums"
-      >
-        {"•".repeat(digits.length) || " "}
-      </div>
+      <PinDots filled={digits.length} testId="lock-pin-display" />
       <Keypad onKey={onKey} disabled={attempt.locked} captureWindow />
       <Feedback attempt={attempt} />
     </div>

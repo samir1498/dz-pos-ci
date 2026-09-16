@@ -3,5 +3,6 @@
 export { Button, type ButtonProps, type ButtonVariant } from "./Button";
 export { Callout, type CalloutTone } from "./Callout";
 export { Field, type FieldProps } from "./Field";
+export { PinBoxes } from "./PinBoxes";
 export { Screen } from "./Screen";
 export { Text, type TextProps, type TextTone, type TextVariant } from "./Text";
