@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  clearDevice,
   clearSession,
+  forgetCachedDevice,
   forgetCachedSession,
+  loadDevice,
   loadSession,
+  saveDevice,
   saveSession,
 } from "./session";
 
@@ -65,5 +69,43 @@ describe("session store", () => {
     forgetCachedSession();
     expect(await loadSession()).toEqual(again);
     await clearSession();
+  });
+});
+
+// The two credentials die for different reasons, so forgetting one must not
+// forget the other. Before the M6+M7 review they shared a blob, and a
+// session that idled out after 15 minutes sent the cashier back to a QR
+// screen only a manager could get them past.
+describe("the phone and the person are forgotten separately", () => {
+  it("keeps the phone paired when the person's session ends", async () => {
+    await saveDevice("device-abc");
+    await saveSession({
+      deviceToken: "device-abc",
+      sessionToken: "session-1",
+      name: "Yacine",
+      role: "cashier",
+    });
+
+    await clearSession();
+
+    forgetCachedSession();
+    forgetCachedDevice();
+    expect(await loadSession()).toBeNull();
+    expect(await loadDevice()).toBe("device-abc");
+  });
+
+  it("forgets the phone when the device itself is revoked", async () => {
+    await saveDevice("device-abc");
+
+    await clearDevice();
+
+    forgetCachedDevice();
+    expect(await loadDevice()).toBeNull();
+  });
+
+  it("answers null for a phone that has never paired", async () => {
+    await clearDevice();
+    forgetCachedDevice();
+    expect(await loadDevice()).toBeNull();
   });
 });

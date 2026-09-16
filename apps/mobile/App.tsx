@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 
 import { clearMode, loadMode, type Mode } from "./src/lib/mode";
-import { clearSession, loadSession, type Session } from "./src/lib/session";
+import {
+  clearDevice,
+  clearSession,
+  loadDevice,
+  loadSession,
+  type Session,
+} from "./src/lib/session";
 import { Onboarding } from "./src/screens/Onboarding";
 import { SignIn } from "./src/screens/SignIn";
 import { Till } from "./src/screens/Till";
@@ -15,9 +21,14 @@ const LAUNCH = process.env.EXPO_PUBLIC_API_TOKEN ?? "";
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  // Why the cashier is looking at the sign-in screen again. Without it, a
+  // session that idled out mid-shift looks like the app forgot them.
+  const [lost, setLost] = useState<string | null>(null);
+  const [device, setDevice] = useState<string | null>(null);
 
   useEffect(() => {
     loadSession().then(setSession).catch(() => setSession(null));
+    loadDevice().then(setDevice).catch(() => setDevice(null));
   }, []);
 
   if (session === undefined) {
@@ -48,15 +59,54 @@ export default function App() {
       }
     }
     await clearSession();
+    setLost(null);
+    setSession(null);
+  }
+
+  /** The person's session died — idled out, or ended elsewhere. The phone
+   * is still paired, so only the person has to come back. */
+  async function sessionLost(message: string) {
+    await clearSession();
+    setLost(message);
+    setSession(null);
+  }
+
+  /** The phone itself is no longer trusted (revoked from settings). Clearing
+   * the session clears the device token with it, so the next screen is the
+   * pairing one and a manager has to hand over a fresh QR. */
+  async function deviceLost(message: string) {
+    await clearSession();
+    await clearDevice();
+    setDevice(null);
+    setLost(message);
     setSession(null);
   }
 
   return (
     <View style={{ flex: 1 }}>
       {session === null ? (
-        <SignIn apiBase={API_BASE} launch={LAUNCH} onSignedIn={setSession} />
+        <>
+          {lost !== null && <Text style={{ padding: 16 }}>{lost}</Text>}
+          <SignIn
+            apiBase={API_BASE}
+            launch={LAUNCH}
+            knownDevice={device}
+            onSignedIn={(s) => {
+              setDevice(s.deviceToken);
+              setLost(null);
+              setSession(s);
+            }}
+          />
+        </>
       ) : (
-        <Till apiBase={API_BASE} launch={LAUNCH} session={session} onSignOut={signOut} />
+        <Till
+          apiBase={API_BASE}
+          launch={LAUNCH}
+          session={session}
+          onSignOut={signOut}
+          onSessionLost={sessionLost}
+          onDeviceLost={deviceLost}
+        />
       )}
       <View style={{ padding: 8, alignItems: "center" }}>
         <Text style={{ fontSize: 12, color: "#666" }}>pair • ticket • products • customers • more</Text>

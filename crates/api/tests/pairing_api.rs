@@ -558,3 +558,86 @@ async fn a_cashier_cannot_list_or_revoke_devices() {
     .await;
     assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
 }
+
+/// The shop's record that a phone was trusted, and that it stopped being.
+/// Revoking was audited from the first day; pairing was not, so a device
+/// list could gain a row nobody could account for (M6+M7 review,
+/// 2026-09-16). Both rows are asserted here, by action, so deleting either
+/// `audit::record` call turns this red.
+#[tokio::test]
+async fn pairing_a_phone_and_revoking_it_both_reach_the_audit_log() {
+    let (_dir, app) = app();
+    let (status, body) = call(&app, "POST", "/pairing/qr", None, common::OWNER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let pairing_token = body["pairing_token"].as_str().unwrap().to_string();
+    let (status, body) = call_no_session(
+        &app,
+        "POST",
+        "/pairing/claim",
+        Some(json!({ "pairing_token": pairing_token, "device_name": "Phone" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+
+    let (status, body) = call(&app, "GET", "/audit-log", None, common::OWNER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let entries = body["rows"].as_array().unwrap();
+    let paired = entries
+        .iter()
+        .find(|e| e["action"] == "device.paired")
+        .unwrap_or_else(|| panic!("no device.paired row in {body}"));
+    assert_eq!(paired["entity"], "paired_device");
+    assert!(
+        paired["after"].as_str().unwrap_or("").contains("Phone"),
+        "the paired row names the phone: {paired}"
+    );
+
+    let (status, body) = call(&app, "GET", "/pairing/devices", None, common::OWNER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let device_id = body[0]["id"].as_i64().unwrap();
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/pairing/devices/{device_id}/revoke"),
+        None,
+        common::OWNER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = call(&app, "GET", "/audit-log", None, common::OWNER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let entries = body["rows"].as_array().unwrap();
+    assert!(
+        entries.iter().any(|e| e["action"] == "device.revoked"),
+        "no device.revoked row in {body}"
+    );
+}
+
+/// Claiming the first owner is not how a device token comes to exist, so it
+/// has no reason to sit outside the device gate. Before the M6+M7 review it
+/// did: a host on the shop Wi-Fi holding only the launch token could claim
+/// the owner of a shop that had none, without ever pairing.
+#[tokio::test]
+async fn first_setup_off_loopback_needs_a_paired_device() {
+    let (_dir, app) = app();
+    let (status, body) = call_lan(
+        &app,
+        "POST",
+        "/auth/first-setup",
+        Some(json!({ "name": "Intrus", "password": "correct horse battery" })),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+    // `session_required` is what the device gate answers a caller that
+    // showed no device header at all (`device::require`), the same as the
+    // bare LAN call above; a device that is known but revoked gets
+    // `auth_refused` instead. Nothing else on this route can produce it —
+    // `phone_auth` carries no session layer — and the body proves the
+    // refusal is the gate rather than a missing field or a shop that
+    // already has an owner, which would be `validation` and `conflict`.
+    // The loopback path still works: `first_setup_api.rs` drives it.
+    assert_eq!(body["error"]["code"], "session_required", "{body}");
+}

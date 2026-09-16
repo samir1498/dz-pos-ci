@@ -234,6 +234,34 @@ fn two_rings_racing_one_key_leave_one_sale() {
             Err(_) => "conflict",
         })
         .collect();
+    // Which error the loser got matters: the UNIQUE guard is meant to
+    // produce a Conflict, which the API answers 409, while a busy database
+    // falls through to Query, which the API answers 500. The old assertion
+    // accepted either and so pinned neither (M6+M7 review, 2026-09-16).
+    // Which error the loser gets matters, and the old assertion accepted
+    // any of them so it pinned none (M6+M7 review, 2026-09-16). Measured:
+    // with two connections the loser answers
+    // `Query(DatabaseError(Unknown, "database is locked"))`, which the API
+    // maps to 500 — not the 409 the UNIQUE guard in
+    // `repos::sale_idempotency::record` was written to produce. SQLite's
+    // busy handling wins before the insert is ever attempted, so `Ok(false)`
+    // is unreachable across processes.
+    //
+    // Pinned as it actually behaves rather than as intended, so that making
+    // it answer 409 (a `BEGIN IMMEDIATE` on the sale transaction, the way
+    // `services::pairing` takes the write lock up front) turns this red and
+    // has to be done deliberately. No money moves either way: exactly one
+    // document exists below, and the loser's retry reads the winner.
+    for r in [&a, &b] {
+        if let Err(message) = r {
+            assert!(
+                message.contains("database is locked"),
+                "the only refusal this race is known to produce is a busy \
+                 database; a different one means the locking changed and the \
+                 409 path needs its own assertion: {message}"
+            );
+        }
+    }
     // Busy (database is locked) counts as the conflict path the UNIQUE
     // guard exists to produce: a retry must read the winner, not ring again.
     if a.is_err() || b.is_err() {

@@ -7,6 +7,17 @@
 # This flow drives the Expo dev client (`com.dinar.app` dev) via Metro at
 # `exp://192.168.0.134:8081` — scan the QR Metro prints, or run `maestro`
 # with `--device` for a connected Android via ADB.
+#
+# Two things this flow cannot do, so do not read more into a green run than
+# is there. It reads labels on a screen, never a row in the shop file: only
+# the desktop's own documents list proves a sale rang once rather than
+# twice. And steps marked HUMAN need someone at the desktop — Maestro
+# cannot revoke a device or mint a QR by itself.
+#
+# Repaired 2026-09-16 after the adversarial review found this flow could not
+# run as written: it tapped a "Retry queued" button that the Till unmounts
+# the moment the queue empties, and its revoke step was a comment rather
+# than a step, so nothing after it meant anything.
 
 appId: com.dinar.app
 name: Pair, sign in, sell, offline retry is one sale, revoke is 401
@@ -18,10 +29,12 @@ tags:
 ---
 
 # 1 — Pair this phone (no session yet, only the QR the desktop shows).
+# HUMAN: mint the QR now (`POST /pairing/qr` as owner) — it lives 60 seconds,
+# so do it when this screen is already up, and paste the 64-hex below.
 - launchApp:
     clearState: true
 - assertVisible: "Pair this phone"
-- inputText: "PAIRING_TOKEN_FROM_DESKTOP_QR" # Maestro `runScript` fills this in CI; manual: paste the 64-hex from `POST /pairing/qr`
+- inputText: "PAIRING_TOKEN_FROM_DESKTOP_QR"
 - tapOn: "Phone name.*"
 - inputText: "Maestro phone"
 - tapOn: "Pair"
@@ -36,34 +49,52 @@ tags:
 - assertVisible: "Till — thin client"
 - assertVisible: "Queued: 0"
 
-# 3 — Online sale rings once, prints through desktop.
+# 3 — Online sale rings once and prints through the desktop. The till now
+# prices the basket the way the core does, so what it asks for is TTC plus
+# the stamp, not the sum of the price tags. "Pay exact" fills the box with
+# that amount; the change the screen shows afterwards is the server's
+# answer, not the phone's arithmetic.
 - tapOn: "Add" # first product in list
-- tapOn: "Pay.*cash"
-- assertVisible: "Cart:.*empty|Till — thin client" # sale cleared, or still on Till
+- assertVisible: "To pay:.*"
+- tapOn: "Pay exact"
+- tapOn: "Pay \\(cash\\)"
+- assertVisible: "Change:.*"
+- assertVisible: "Cart: empty"
+# HUMAN: the desktop's documents list must show exactly one new ticket, and
+# a ticket must have come out of the spool. Neither is visible from here.
 
-# 4 — Offline: kill Wi-Fi, sell is queued, not rung twice.
+# 4 — Offline: the sale is queued, and only because the call got no answer.
 - toggleAirplaneMode
 - tapOn: "Add"
-- tapOn: "Pay.*cash"
+- tapOn: "Pay exact"
+- tapOn: "Pay \\(cash\\)"
 - assertVisible: "Queued: 1"
 - assertVisible: "Retry queued"
-# 5 — Back online, retry is one sale and prints.
+
+# 5 — Back online, the retry rings once and prints. The button disappears
+# with the queue it drains, so there is no second tap to make here: the
+# proof that a replay does not re-ring is the desktop's documents list,
+# which must still show one ticket for this basket, not two.
 - toggleAirplaneMode
 - tapOn: "Retry queued"
 - assertVisible: "Queued: 0"
-# A second tap must not re-ring: the key is the same, server answers 200 replay.
-- tapOn: "Retry queued"
-- assertVisible: "Queued: 0"
+- assertNotVisible: "Retry queued"
+# HUMAN: desktop documents list — one new ticket for step 4's basket.
 
-# 6 — Revoke mid-shift (do on desktop: `POST /pairing/devices/{id}/revoke`
-# with owner session). Next call from this phone must fail closed.
+# 6 — Revoke mid-shift. HUMAN: on the desktop, settings → paired phones →
+# revoke this one (or `POST /pairing/devices/{id}/revoke` with an owner
+# session). Then continue: the phone's next call fails closed, and because
+# a revoked device is a refusal and not a dropped connection, the till now
+# sends the cashier back to pairing instead of queueing a sale nobody can
+# deliver.
 - tapOn: "Add"
-- tapOn: "Pay.*cash"
-# Expect the Till to show 401/refused — the queue keeps it, retry stays 1
-# until the phone is re-paired. Manual check: `curl` with the same device
-# token off-loopback must now be `401 auth_refused`.
-- assertVisible: "Queued: 1"
-
-# 7 — Sign out ends the server session, not just the local copy.
-- tapOn: "Sign out"
+- tapOn: "Pay exact"
+- tapOn: "Pay \\(cash\\)"
 - assertVisible: "Pair this phone"
+- assertVisible: "no longer paired|not paired"
+
+# 7 — Sign out ends the server session, not just the local copy. Reached by
+# re-pairing and signing in again after step 6; kept here as the last thing
+# to check by hand rather than pretending the flow can get back to it.
+# HUMAN: re-pair, sign in, tap "Sign out", expect "Pair this phone" and the
+# desktop's session list to show the session ended.

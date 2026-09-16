@@ -597,13 +597,11 @@ pub fn router_with_origin(
         get(routes::health).fallback(routes::method_not_allowed),
     );
     // Which person is calling: the session (M4 T2, crate::session). Inside
-    // the launch token and outside these three, because they are how a
-    // session comes to exist; a sign-in behind a session guard would be a
-    // lock with its key inside. They still show the launch token like
+    // the launch token and outside the session guard, because this is how a
+    // device token comes to exist; a claim behind a session guard would be a
+    // lock with its key inside. It still shows the launch token like
     // everything else.
-    let auth = Router::new()
-        .route("/auth/first-setup", post(routes::auth::claim_first_owner))
-        .route("/pairing/claim", post(routes::pairing::claim));
+    let auth = Router::new().route("/pairing/claim", post(routes::pairing::claim));
     // Signing in as a person, behind the device gate but outside the
     // session one (M7 T3): a sign-in behind a session guard would be a lock
     // with its key inside, but a LAN holder of only the launch token mints
@@ -613,6 +611,13 @@ pub fn router_with_origin(
     // answer without one; the device layer, not the session one, is what
     // guards them. The desktop on loopback passes bare, exactly as before.
     let phone_auth = Router::new()
+        // First setup is behind the device gate too (M6+M7 review,
+        // 2026-09-16): claiming the owner of a shop that has none is not
+        // how a device token comes to exist, so it has no reason to sit
+        // outside. The desktop on loopback passes the gate bare, exactly as
+        // before; a LAN holder of only the launch token no longer claims a
+        // fresh shop's owner without pairing first.
+        .route("/auth/first-setup", post(routes::auth::claim_first_owner))
         .route("/auth/login", post(routes::auth::login))
         .route("/auth/logout", post(routes::auth::logout))
         .route("/auth/me", get(routes::auth::me))

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button, Text, TextInput, View } from "react-native";
 
-import { saveSession, type Session } from "../lib/session";
+import { saveDevice, saveSession, type Session } from "../lib/session";
 
 type Me = { user_id: number; name: string; role: string };
 type LoginAnswer = { me: Me; token: string };
@@ -13,13 +13,18 @@ type LoginAnswer = { me: Me; token: string };
 export function SignIn({
   apiBase,
   launch,
+  knownDevice,
   onSignedIn,
 }: {
   apiBase: string;
   launch: string;
+  /** The device token from an earlier pairing, if this phone still has one.
+   * A session that idled out leaves it in place, so the cashier lands on the
+   * PIN box rather than on a QR they would have to ask a manager for. */
+  knownDevice: string | null;
   onSignedIn: (session: Session) => void;
 }) {
-  const [deviceToken, setDeviceToken] = useState<string | null>(null);
+  const [deviceToken, setDeviceToken] = useState<string | null>(knownDevice);
   const [pairingToken, setPairingToken] = useState("");
   const [phoneName, setPhoneName] = useState("");
   const [userId, setUserId] = useState("");
@@ -60,6 +65,7 @@ export function SignIn({
         null,
       );
       if (!answer.device_token) throw new Error("no-device-token");
+      await saveDevice(answer.device_token);
       setDeviceToken(answer.device_token);
     } catch (e) {
       setProblem(e instanceof Error ? e.message : "pair-failed");

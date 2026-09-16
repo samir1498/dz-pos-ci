@@ -7,7 +7,7 @@
 
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use chrono::{Duration, NaiveDateTime};
-use diesel::connection::SimpleConnection;
+use diesel::connection::{Connection, SimpleConnection};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
@@ -116,6 +116,23 @@ pub fn claim_pairing_token(
             created_by: row.created_by,
         };
         let device_row = repo::insert_device(conn, &write)?;
+        // Inside the same transaction as the pairing it records, like every
+        // other audited change (`services::audit`). The shop's only record
+        // that this phone was ever trusted: the revoke beside it was
+        // audited from the first day, the pairing was not, so a device list
+        // could gain a row nobody could account for.
+        crate::services::audit::record(
+            conn,
+            shop_id,
+            row.created_by,
+            crate::services::audit::Change {
+                action: crate::services::audit::ACTION_DEVICE_PAIRED,
+                entity: "paired_device",
+                entity_id: Some(device_row.id),
+                before: None,
+                after: Some(serde_json::json!({ "name": device_row.name }).to_string()),
+            },
+        )?;
         Ok((device_token, device_row))
     })();
     match claimed {
@@ -168,20 +185,25 @@ pub fn revoke_device(
     device_id: i32,
     now: NaiveDateTime,
 ) -> Result<PairedDeviceRow, CoreError> {
-    let row = repo::revoke_device(conn, shop_id, device_id, now)?;
-    crate::services::audit::record(
-        conn,
-        shop_id,
-        actor_id,
-        crate::services::audit::Change {
-            action: crate::services::audit::ACTION_DEVICE_REVOKED,
-            entity: "paired_device",
-            entity_id: Some(device_id),
-            before: None,
-            after: None,
-        },
-    )?;
-    Ok(row)
+    // One transaction for the change and the row that records it: a crash
+    // between the two would leave a phone revoked with nothing to say who
+    // did it, and `gates.rs` calls that row the only record the shop has.
+    conn.transaction(|conn| {
+        let row = repo::revoke_device(conn, shop_id, device_id, now)?;
+        crate::services::audit::record(
+            conn,
+            shop_id,
+            actor_id,
+            crate::services::audit::Change {
+                action: crate::services::audit::ACTION_DEVICE_REVOKED,
+                entity: "paired_device",
+                entity_id: Some(device_id),
+                before: None,
+                after: None,
+            },
+        )?;
+        Ok(row)
+    })
 }
 
 #[cfg(test)]
