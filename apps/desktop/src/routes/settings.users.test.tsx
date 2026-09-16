@@ -226,12 +226,33 @@ describe("adding a user", () => {
     await user.type(within(dialog).getByLabelText(fr.field_name), "Karim");
     await user.click(within(dialog).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: fr.role_manager }));
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2468");
     await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
 
     await waitFor(() => expect(userRows()).toHaveLength(3));
     const made = posts().find((p) => p.url.endsWith("/users"));
     expect(made?.body).toEqual({ name: "Karim", role: "manager" });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // The PIN rides in the same dialog and lands on the new fiche's own
+    // path, so a fiche is never listed without a way to sign in.
+    const pinned = posts().find((p) => p.url.endsWith("/pin"));
+    expect(pinned?.url).toMatch(/\/users\/3\/pin$/);
+    expect(pinned?.body).toEqual({ pin: "2468" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(within(userRows()[2] ?? document.body).queryByText(fr.users_no_pin)).not.toBeInTheDocument();
+  });
+
+  test("a PIN that is not four to six digits is refused before anything is posted", async () => {
+    const user = userEvent.setup();
+    app();
+    await screen.findByTestId("users-table");
+    await user.click(screen.getByRole("button", { name: fr.users_add }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText(fr.field_name), "Karim");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "12");
+    await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_pin_shape);
+    expect(posts()).toEqual([]);
   });
 
   test("a blank name is refused before anything is posted", async () => {
@@ -242,7 +263,9 @@ describe("adding a user", () => {
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_name_required);
+    // Two fields complain at once now (the PIN box is blank too), so the
+    // name's refusal is read by its text and not as the one alert.
+    expect(await within(dialog).findByText(fr.error_name_required)).toBeInTheDocument();
     expect(posts().filter((p) => p.url.endsWith("/users"))).toEqual([]);
   });
 
@@ -254,6 +277,7 @@ describe("adding a user", () => {
     await user.click(screen.getByRole("button", { name: fr.users_add }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByLabelText(fr.field_name), "Amel");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "1357");
     await user.click(within(dialog).getByRole("button", { name: fr.users_add }));
 
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_conflict);

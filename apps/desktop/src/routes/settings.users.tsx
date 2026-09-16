@@ -213,7 +213,13 @@ export function UsersScreen() {
 interface NewUserValues {
   name: string;
   role: string;
+  pin: string;
 }
+
+/** What the till accepts as a PIN, mirrored from `services::users`
+ *  (`MIN_PIN_DIGITS`..`MAX_PIN_DIGITS`) so the dialog can say "4 to 6
+ *  digits" before the round trip; the server still decides. */
+const PIN_SHAPE = /^\d{4,6}$/;
 
 function AddUserDialog({
   open,
@@ -227,8 +233,21 @@ function AddUserDialog({
   const queryClient = useQueryClient();
   const [serverError, setServerError] = useState<Key | null>(null);
 
+  // One dialog, two calls: the fiche and then its PIN, because a fiche
+  // without a PIN cannot sign in and the gap between "added" and "given a
+  // PIN" is exactly where an owner walks away and a cashier is left with a
+  // name on the picker that opens nothing. The API keeps them separate
+  // (`NewUserDto` carries no credential, `SetPinDto` is its own route with
+  // its own rules), so this sequences them rather than growing a third
+  // shape. A create that succeeds and a PIN the server refuses leaves the
+  // fiche listed with its "no PIN" badge and the dialog open on the
+  // refusal: nothing is hidden, and the key icon on the row finishes it.
   const create = useMutation({
-    mutationFn: (input: NewUserDto) => api.createUser(input),
+    mutationFn: async (input: { fiche: NewUserDto; pin: string }) => {
+      const made = await api.createUser(input.fiche);
+      await queryClient.invalidateQueries({ queryKey: usersQueryKey });
+      return api.setUserPin(made.id, { pin: input.pin });
+    },
     onSuccess: async () => {
       setServerError(null);
       onOpenChange(false);
@@ -239,19 +258,19 @@ function AddUserDialog({
     },
   });
 
-  const blank: NewUserValues = { name: "", role: DEFAULT_ROLE };
+  const blank: NewUserValues = { name: "", role: DEFAULT_ROLE, pin: "" };
   const form = useForm({
     defaultValues: blank,
     onSubmit: async ({ value }) => {
       const name = value.name.trim();
-      if (name === "") return;
+      if (name === "" || !PIN_SHAPE.test(value.pin)) return;
       const role = toRole(value.role);
       if (role === undefined) {
         setServerError("error_validation");
         return;
       }
       const written = await create
-        .mutateAsync({ name, role })
+        .mutateAsync({ fiche: { name, role }, pin: value.pin })
         .then(() => true)
         .catch(() => false);
       if (!written) return;
@@ -322,6 +341,30 @@ function AddUserDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                )}
+              </FormField>
+            )}
+          </form.Field>
+
+          <form.Field
+            name="pin"
+            validators={{
+              onSubmit: ({ value }) => (PIN_SHAPE.test(value) ? undefined : "error_pin_shape"),
+            }}
+          >
+            {(field) => (
+              <FormField label={t("field_pin")} error={said(field.state.meta.errors)}>
+                {(parts) => (
+                  <Input
+                    {...parts}
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    dir="ltr"
+                    className="font-numeric"
+                    value={field.state.value}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                  />
                 )}
               </FormField>
             )}

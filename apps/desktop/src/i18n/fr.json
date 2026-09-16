@@ -180,6 +180,7 @@
   "users_reset_pin_title": "Nouveau code",
   "users_reset_pin_hint": "Quatre à six chiffres. L'ancien code ne peut pas être affiché ; celui-ci le remplace.",
   "field_pin": "Code",
+  "error_pin_shape": "Un code PIN fait 4 à 6 chiffres.",
   "error_forbidden": "Vous n'êtes pas autorisé à faire cela.",
   "nav_till": "Caisse",
   "till_title": "Caisse",

@@ -180,6 +180,7 @@
   "users_reset_pin_title": "New PIN",
   "users_reset_pin_hint": "Four to six digits. The old PIN cannot be shown; this replaces it.",
   "field_pin": "PIN",
+  "error_pin_shape": "A PIN is 4 to 6 digits.",
   "error_forbidden": "You are not allowed to do this.",
   "nav_till": "Till",
   "till_title": "Till",
