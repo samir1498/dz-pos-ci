@@ -139,13 +139,21 @@ export default defineConfig({
     })),
     // The demo: the same real app on the same real API, recorded. One scene
     // per spec under e2e/demo, French (the shop's language), full HD, and a
-    // slower hand so a viewer can follow, which a test never needs. Not in
-    // `just e2e`: `just demo-clips` runs it, and the video it writes is the
-    // footage the Remotion cut is made of (context: plan
-    // the-demo-video-playwright-records-remotion-cuts). Anything a scene
-    // asserts is only there to keep the recording honest, not to prove the
-    // product; the three language projects do that.
-    {
+    // slower hand so a viewer can follow, which a test never needs. Anything
+    // a scene asserts is only there to keep the recording honest, not to
+    // prove the product; the three language projects do that (context: plan
+    // the-demo-video-playwright-records-remotion-cuts).
+    //
+    // The project only exists when DZPOS_DEMO is set, which `just demo-clips`
+    // does and nothing else does. A bare `playwright test` selects every
+    // project it can see, and the scenes rewrite the shop they perform in:
+    // they set the régime to réel, fill the seller's block, add customers
+    // and products and issue a facture. Ignoring the folder from the three
+    // language projects keeps a scene from counting as coverage; this keeps
+    // the scenes from running at all when nobody asked for footage.
+    ...(process.env.DZPOS_DEMO === undefined || process.env.DZPOS_DEMO === ""
+      ? []
+      : [{
       name: "demo",
       testDir: path.join(desktopDir, "e2e", "demo"),
       timeout: 180_000,
@@ -154,10 +162,10 @@ export default defineConfig({
         viewport: { width: 1920, height: 1080 },
         locale: LOCALE.fr,
         storageState: storageStateFor("fr"),
-        video: { mode: "on", size: { width: 1920, height: 1080 } },
+        video: { mode: "on" as const, size: { width: 1920, height: 1080 } },
         launchOptions: { slowMo: 350 },
       },
-    },
+    }]),
   ],
 
   webServer: [

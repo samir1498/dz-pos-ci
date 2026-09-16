@@ -268,7 +268,10 @@ e2e: claim
 demo-clips: claim
     #!/usr/bin/env bash
     set -euo pipefail
-    pnpm desktop e2e --project demo
+    # DZPOS_DEMO is what makes the demo project exist at all
+    # (apps/desktop/playwright.config.ts): without it a bare
+    # `playwright test` would record five scenes over the e2e shop file.
+    DZPOS_DEMO=1 pnpm desktop e2e --project demo
     out="${DZPOS_DEMO_OUT:-$HOME/dinar-remotion/public/recordings}"
     mkdir -p "$out"
     for webm in apps/desktop/demo-clips/*.webm; do
