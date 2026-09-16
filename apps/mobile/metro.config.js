@@ -16,17 +16,18 @@ config.watchFolders = [workspaceRoot];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules"),
-  // pnpm's hoisted store (the repo runs `node-linker=hoisted`, see the root
-  // .npmrc). A handful of Expo's own packages import things they never
-  // declared — `@expo/metro-runtime` imports `whatwg-fetch` — and under a
-  // strict tree those resolve from nowhere. This is the one directory that
-  // has every installed package flat, so it is the honest last resort
-  // rather than adding somebody else's forgotten dependency to ours.
-  path.resolve(workspaceRoot, "node_modules/.pnpm/node_modules"),
 ];
 // pnpm stores one physical copy per version and symlinks it in. Following
 // the symlink is what lets Metro see a workspace package's source at all.
 config.resolver.unstable_enableSymlinks = true;
-config.resolver.disableHierarchicalLookup = true;
+
+// `disableHierarchicalLookup` stays off, and that is the whole trick. It is
+// the flag React Native docs reach for in an npm-style flat tree, where
+// walking up parent directories only wastes stat calls. pnpm is the opposite
+// shape: every package gets its own `node_modules` holding exactly what it
+// declared, and the walk up from the requiring file is the only way to find
+// it. Turning the walk off is what made `react-native` fail to resolve
+// `scheduler` and `@expo/metro-runtime` fail to resolve `whatwg-fetch`,
+// which both sit in their requirer's own folder.
 
 module.exports = config;
