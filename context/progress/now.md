@@ -11,10 +11,14 @@ shop file. A three-lens review of the sign-in path shipped with it
 (device gate answers `device_refused`, phone reads the staff list fresh,
 add-user retries without a second fiche, mixed login bodies refused).
 Standup and the reworked home board are live on the status site. Open for
-Samir: shared lockout across PIN and password. Now running: the demo loop
-(`context/loops/20260916-demo-loop.md`), desktop scenes recorded by
-Playwright, the phone on an Android emulator with Maestro, Remotion to
-cut.
+Samir: shared lockout across PIN and password.
+
+**The demo footage exists, all six clips.** The loop
+(`context/loops/20260916-demo-loop.md`) recorded the five desktop scenes
+with Playwright and the phone scene with Maestro on an Android emulator
+(`just demo-clips`, `just demo-phone`); they sit in the Remotion project
+at `~/dinar-remotion/public/recordings`. Left in the loop: the Remotion
+cut with captions.
 
 
 **2026-09-15: M7 closed, the paired phone proven (PRs #89-#92).** Loop

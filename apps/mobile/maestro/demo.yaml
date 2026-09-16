@@ -1,0 +1,66 @@
+# The phone scene of the demo video. Expo Go on the `dinar` emulator, loading
+# Metro from this box over `adb reverse`: the app pairs by the typed code
+# (Maestro cannot point a camera at a monitor), the owner taps their name,
+# types four digits, and rings one sale for cash.
+#
+# Run by `just demo-phone`, which opens the app with `demo-open.yaml`, starts
+# `adb shell screenrecord`, runs this flow, and pulls the clip next to the
+# desktop ones. By hand:
+#   maestro test apps/mobile/maestro/demo-open.yaml
+#   maestro test -e API=http://127.0.0.1:4317 -e LAUNCH=<.dev/api-token> \
+#     -e SESSION=<owner session token> -e PIN=1379 -e NAME=Propriétaire \
+#     apps/mobile/maestro/demo.yaml
+#
+# Every string here is one the screens show today (`app/pair.tsx`,
+# `app/sign-in.tsx`, `features/till`). A renamed button breaks this flow
+# the way it would break a test, which is the point.
+
+appId: host.exp.exponent
+name: Demo, pair and sell on a phone
+tags:
+  - demo
+
+---
+
+# The camera is already rolling: `demo-open.yaml` brought Expo Go up on the
+# pairing screen first, so none of the loading is on film.
+- assertVisible: "Pair this phone"
+
+# The code, minted now (it lives sixty seconds) and typed.
+- tapOn: "Type the code instead"
+- runScript: mint-pairing.js
+- tapOn: "64 characters"
+- inputText: ${output.pairing}
+- hideKeyboard
+- tapOn: "Phone"
+- inputText: "Téléphone du comptoir"
+- hideKeyboard
+- tapOn: "Pair"
+- extendedWaitUntil:
+    visible: "Who is signing in?"
+    timeout: 20000
+- waitForAnimationToEnd
+
+# Tap your name, type four digits.
+- tapOn: ${NAME}
+- tapOn:
+    id: "PIN"
+    optional: true
+- inputText: ${PIN}
+- tapOn: "Sign in"
+- extendedWaitUntil:
+    visible: "Basket empty"
+    timeout: 20000
+- waitForAnimationToEnd
+
+# One sale for cash: two of the first thing on the list, exact money.
+- tapOn: "Add .*"
+- tapOn: "Add .*"
+- assertVisible: "2 items"
+- tapOn: "Exact"
+- tapOn: "Pay cash"
+- extendedWaitUntil:
+    visible: "Change:.*"
+    timeout: 20000
+- assertVisible: "Basket empty"
+- waitForAnimationToEnd

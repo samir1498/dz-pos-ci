@@ -261,6 +261,31 @@ e2e: claim
         pnpm desktop e2e --project "$project"
     done
 
+# the demo footage: run the recording project (apps/desktop/e2e/demo, one
+# scene per spec, French, 1920x1080), then convert each clip to an mp4 the
+# Remotion project reads (webm seeks badly there). Clips are gitignored on
+# both sides; a recording is one command away.
+demo-clips: claim
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # DZPOS_DEMO is what makes the demo project exist at all
+    # (apps/desktop/playwright.config.ts): without it a bare
+    # `playwright test` would record five scenes over the e2e shop file.
+    DZPOS_DEMO=1 pnpm desktop e2e --project demo
+    out="${DZPOS_DEMO_OUT:-$HOME/dinar-remotion/public/recordings}"
+    mkdir -p "$out"
+    for webm in apps/desktop/demo-clips/*.webm; do
+        name="$(basename "$webm" .webm)"
+        ffmpeg -y -loglevel error -i "$webm" -c:v libx264 -crf 18 -pix_fmt yuv420p -movflags +faststart "$out/$name.mp4"
+        echo "$out/$name.mp4"
+    done
+
+# the phone scene: Maestro drives Expo Go on the `dinar` emulator while
+# `adb shell screenrecord` films it (scripts/demo-phone.sh says which
+# variables point it at a Windows-side Maestro and adb).
+demo-phone:
+    ./scripts/demo-phone.sh
+
 # only the tests that write a committed screenshot; the e2e README says
 # which files, under which language.
 screenshot: claim

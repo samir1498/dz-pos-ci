@@ -41,6 +41,9 @@ function readDictionary(lang: LangCode): Record<string, string> {
  * than silently falling back to French. */
 export function currentLang(): LangCode {
   const name = test.info().project.name;
+  // The demo project (e2e/demo, see playwright.config.ts) performs in the
+  // shop's language; it is French with a camera on.
+  if (name === "demo") return "fr";
   if (!isLangCode(name)) {
     throw new Error(`unexpected Playwright project "${name}", expected one of ${LANG_CODES.join(", ")}`);
   }
@@ -49,7 +52,12 @@ export function currentLang(): LangCode {
 
 /** The current project's translated string for `key`. */
 export function t(key: string): string {
-  const lang = currentLang();
+  return tIn(currentLang(), key);
+}
+
+/** `key` in a named language, for the moment a test switches the screen
+ * away from the project's own and has to read what it now says. */
+export function tIn(lang: LangCode, key: string): string {
   const value = readDictionary(lang)[key];
   if (value === undefined) throw new Error(`${lang}.json has no key ${key}`);
   return value;
