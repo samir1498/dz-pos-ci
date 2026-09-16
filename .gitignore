@@ -10,6 +10,7 @@ coverage/
 lcov.info
 .scannerwork/
 apps/desktop/e2e/.artifacts/
+apps/desktop/demo-clips/
 .env
 .dev/
 .claude/worktrees/

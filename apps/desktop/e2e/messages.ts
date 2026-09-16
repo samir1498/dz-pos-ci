@@ -41,6 +41,9 @@ function readDictionary(lang: LangCode): Record<string, string> {
  * than silently falling back to French. */
 export function currentLang(): LangCode {
   const name = test.info().project.name;
+  // The demo project (e2e/demo, see playwright.config.ts) performs in the
+  // shop's language; it is French with a camera on.
+  if (name === "demo") return "fr";
   if (!isLangCode(name)) {
     throw new Error(`unexpected Playwright project "${name}", expected one of ${LANG_CODES.join(", ")}`);
   }

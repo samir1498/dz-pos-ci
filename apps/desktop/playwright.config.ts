@@ -124,15 +124,41 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
 
-  projects: LANGS.map((lang) => ({
-    name: lang,
-    use: {
-      ...devices["Desktop Chrome"],
-      viewport: { width: 1280, height: 800 },
-      locale: LOCALE[lang],
-      storageState: storageStateFor(lang),
+  projects: [
+    ...LANGS.map((lang) => ({
+      name: lang,
+      // The demo folder performs rather than asserts (below); a language
+      // run must never count one of its scenes as a passing test.
+      testIgnore: /\/demo\//,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 800 },
+        locale: LOCALE[lang],
+        storageState: storageStateFor(lang),
+      },
+    })),
+    // The demo: the same real app on the same real API, recorded. One scene
+    // per spec under e2e/demo, French (the shop's language), full HD, and a
+    // slower hand so a viewer can follow, which a test never needs. Not in
+    // `just e2e`: `just demo-clips` runs it, and the video it writes is the
+    // footage the Remotion cut is made of (context: plan
+    // the-demo-video-playwright-records-remotion-cuts). Anything a scene
+    // asserts is only there to keep the recording honest, not to prove the
+    // product; the three language projects do that.
+    {
+      name: "demo",
+      testDir: path.join(desktopDir, "e2e", "demo"),
+      timeout: 180_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1920, height: 1080 },
+        locale: LOCALE.fr,
+        storageState: storageStateFor("fr"),
+        video: { mode: "on", size: { width: 1920, height: 1080 } },
+        launchOptions: { slowMo: 350 },
+      },
     },
-  })),
+  ],
 
   webServer: [
     {

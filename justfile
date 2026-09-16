@@ -261,6 +261,22 @@ e2e: claim
         pnpm desktop e2e --project "$project"
     done
 
+# the demo footage: run the recording project (apps/desktop/e2e/demo, one
+# scene per spec, French, 1920x1080), then convert each clip to an mp4 the
+# Remotion project reads (webm seeks badly there). Clips are gitignored on
+# both sides; a recording is one command away.
+demo-clips: claim
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pnpm desktop e2e --project demo
+    out="${DZPOS_DEMO_OUT:-$HOME/dinar-remotion/public/recordings}"
+    mkdir -p "$out"
+    for webm in apps/desktop/demo-clips/*.webm; do
+        name="$(basename "$webm" .webm)"
+        ffmpeg -y -loglevel error -i "$webm" -c:v libx264 -crf 18 -pix_fmt yuv420p -movflags +faststart "$out/$name.mp4"
+        echo "$out/$name.mp4"
+    done
+
 # only the tests that write a committed screenshot; the e2e README says
 # which files, under which language.
 screenshot: claim
