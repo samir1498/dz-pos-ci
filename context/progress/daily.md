@@ -86,4 +86,7 @@ type: 'daily'
 ## 2026-09-13 19:26 UTC
 
 - Mirror-detour-temporary recorded (PR #70); release plan 5/5 archived. Store: research 6/9 active, M6 paused. Everything a session can do without humans is done except print route, M6 scope, emulator eyeball, R9 verdicts. (@release, @archive)
+## 2026-09-16 04:56 UTC
+
+- Merged the desktop and mobile polish batch to main (PR #93, squashed at 1a4e6d3) after gates caught five stale landing shots the filter-bar fix had invalidated — retook them, second gates run green (1159 Rust, 527 desktop, 344 shared, 131 landing, 103 design, 11 mobile). Then ran a three-lens adversarial review over everything merged since 2026-09-12 (0746966..main, 65 commits, 228 files). Six findings survived the challenge pass; full report in research/reviews/2026-09-16-m6-m7-adversarial-review.md. The blocker: the phone cannot ring a cash sale in a default (réel) shop — Till.tsx sends tendered as the HT sum while the server owes total_ttc + stamp, so it 422s and the catch-all enqueues it to retry for ever. Proven against a real router, not inferred. The 2026-09-15 walkthrough never reached step 4, so the phone half of M7 was never driven at all. (@review, @m7, @mobile, @money)
 

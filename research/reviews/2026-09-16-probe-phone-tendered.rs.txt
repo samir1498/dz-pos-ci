@@ -1,0 +1,176 @@
+// Tests may panic; the deny is for shipped code.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
+//! REVIEW PROBE — delete after the challenge pass.
+//!
+//! Sends exactly what apps/mobile/src/screens/Till.tsx:58-63 sends:
+//! `tendered_centimes = Σ selling_centimes × qty`, which is the HT sum
+//! under the réel régime. Asserts the wire answer and the field the
+//! refusal names, so we learn whether the 422 is the `tendered` check or
+//! something else entirely.
+
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
+use http_body_util::BodyExt;
+use serde_json::{json, Value};
+use tower::ServiceExt;
+
+mod common;
+
+const SHOP: i32 = 1;
+const TOKEN: &str = "test-launch-token";
+
+fn token() -> dzpos_api::LaunchToken {
+    dzpos_api::LaunchToken::from_secret(TOKEN).unwrap()
+}
+
+fn app() -> (tempfile::TempDir, axum::Router) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    (dir, dzpos_api::router(state, &token()))
+}
+
+async fn call(app: &axum::Router, method: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+    let req = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION);
+    let req = match body {
+        Some(v) => req
+            .header("content-type", "application/json")
+            .body(Body::from(v.to_string()))
+            .unwrap(),
+        None => req.body(Body::empty()).unwrap(),
+    };
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let value = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+    };
+    (status, value)
+}
+
+/// One unit at 110,00 DA HT, 19% TVA. The phone tenders 110,00; the shop
+/// is owed 130,90. Under 300,00 DA, so no stamp is in play yet.
+#[tokio::test]
+async fn the_phones_tendered_is_the_ht_sum_and_the_reel_shop_refuses_it() {
+    let (_dir, app) = app();
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/products",
+        Some(json!({
+            "name": "Sucre",
+            "unit": "piece",
+            "cost_centimes": 5_500,
+            "selling_centimes": 11_000,
+            "qty_on_hand_milli": 10_000,
+            "rate_bps": 1900,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let product = body["id"].as_i64().unwrap();
+
+    // Till.tsx: Σ selling_centimes × qty, one unit.
+    let phone_tendered = 11_000;
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": product, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": phone_tendered,
+            "idempotency_key": "probe-reel",
+        })),
+    )
+    .await;
+    println!("REEL  status={status} body={body}");
+    assert_ne!(status, StatusCode::CREATED, "expected a refusal, got {body}");
+}
+
+/// Same shop, but the basket is tendered at the full TTC the phone does
+/// not compute. Proves the refusal above is the tendered check and not a
+/// missing field or a régime problem.
+#[tokio::test]
+async fn the_same_basket_tendered_at_ttc_rings() {
+    let (_dir, app) = app();
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/products",
+        Some(json!({
+            "name": "Sucre",
+            "unit": "piece",
+            "cost_centimes": 5_500,
+            "selling_centimes": 11_000,
+            "qty_on_hand_milli": 10_000,
+            "rate_bps": 1900,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let product = body["id"].as_i64().unwrap();
+
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": product, "qty_milli": 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 13_090,
+            "idempotency_key": "probe-ttc",
+        })),
+    )
+    .await;
+    println!("TTC   status={status} body={body}");
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+}
+
+/// An IFU shop with an untaxed line still refuses the phone once the
+/// basket clears the 300,00 DA stamp floor: 40 units at 110,00 is
+/// 4 400,00 TTC, and the stamp is owed on top of what the phone tendered.
+#[tokio::test]
+async fn above_the_stamp_floor_the_phones_tendered_is_short_by_the_stamp() {
+    let (_dir, app) = app();
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/products",
+        Some(json!({
+            "name": "Sucre",
+            "unit": "piece",
+            "cost_centimes": 5_500,
+            "selling_centimes": 11_000,
+            "qty_on_hand_milli": 100_000,
+            "rate_bps": 0,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    let product = body["id"].as_i64().unwrap();
+
+    let qty = 40;
+    let (status, body) = call(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": product, "qty_milli": qty * 1_000 }],
+            "payment_mode": "cash",
+            "tendered_centimes": 11_000 * qty,
+            "idempotency_key": "probe-stamp",
+        })),
+    )
+    .await;
+    println!("STAMP status={status} body={body}");
+    assert_ne!(status, StatusCode::CREATED, "expected a refusal, got {body}");
+}
