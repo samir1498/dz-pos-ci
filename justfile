@@ -277,6 +277,12 @@ demo-clips: claim
         echo "$out/$name.mp4"
     done
 
+# the phone scene: Maestro drives Expo Go on the `dinar` emulator while
+# `adb shell screenrecord` films it (scripts/demo-phone.sh says which
+# variables point it at a Windows-side Maestro and adb).
+demo-phone:
+    ./scripts/demo-phone.sh
+
 # only the tests that write a committed screenshot; the e2e README says
 # which files, under which language.
 screenshot: claim

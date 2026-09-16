@@ -1,0 +1,34 @@
+# What happens before the camera rolls: Expo Go cold-starts, fetches the
+# bundle from Metro and puts its developer-menu card over the first screen.
+# Forty seconds of a tool the shopkeeper never sees, so `just demo-phone`
+# runs this flow first and only then starts recording.
+
+appId: host.exp.exponent
+name: Open Dinar in Expo Go and wait on the pairing screen
+tags:
+  - demo
+
+---
+
+- launchApp:
+    appId: host.exp.exponent
+    stopApp: true
+- openLink: exp://localhost:8081
+# The card hides the screen behind it from the accessibility tree too. Its
+# "Continue" opens the full developer menu, which the back key closes.
+- extendedWaitUntil:
+    visible: "Continue|Pair this phone"
+    timeout: 120000
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+      - extendedWaitUntil:
+          visible: "Reload"
+          timeout: 5000
+      - back
+- extendedWaitUntil:
+    visible: "Pair this phone"
+    timeout: 20000
+- waitForAnimationToEnd
