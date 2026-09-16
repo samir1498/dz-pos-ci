@@ -27,7 +27,7 @@ tasks:
     status: 'done'
   - id: 'T4'
     desc: 'Remotion scenes: OffthreadVideo per clip in a Series, captions in the product''s own tokens, cut points as constants not generated JSON'
-    status: 'pending'
+    status: 'done'
 acceptance: []
 ---
 # The demo video: Playwright records, Remotion cuts
@@ -167,6 +167,30 @@ that is one of the ObserveOne mistakes the agent already wrote down in
 
 No voiceover in v1. Captions read fine muted, which is how a video on a
 landing page is watched.
+
+## What T4 turned out to be
+
+Six clips, not one video. A feature is what somebody actually asks for:
+"what does it do about credit" wants twenty seconds of the book, not two
+minutes of everything. So `src/features.ts` holds one entry per feature
+and `src/Root.tsx` registers one composition each, plus `Reel`, which is
+all six behind the title card. `scripts/render.mjs` reads that same list,
+so adding a feature adds it to the render and no filename is written
+twice.
+
+The entry is the edit. `cuts` are seconds into the recording with a
+`rate`; `captions` are seconds into the finished clip, because that is the
+clock you are watching when you decide a line came too early. The pairing
+code the phone types runs at six times speed, which turns thirty seconds
+of typing into five, and the Playwright scenes run between 1.2 and 1.45
+because `slowMo: 350` is slower than anyone reads.
+
+One trap, written down because it cost an hour: `<OffthreadVideo>`'s
+`trimBefore` is in the recording's own frames and `playbackRate` does not
+divide it, while the sequence length around it is finished-video frames
+and does. Getting it backwards still renders something plausible, just
+seconds away from the beat you meant. Every cut in the file was checked
+against stills pulled out of the rendered mp4.
 
 ## Disk
 

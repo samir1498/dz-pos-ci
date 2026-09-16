@@ -13,12 +13,16 @@ add-user retries without a second fiche, mixed login bodies refused).
 Standup and the reworked home board are live on the status site. Open for
 Samir: shared lockout across PIN and password.
 
-**The demo footage exists, all six clips.** The loop
+**The demo video is cut, six clips and a reel.** The loop
 (`context/loops/20260916-demo-loop.md`) recorded the five desktop scenes
 with Playwright and the phone scene with Maestro on an Android emulator
-(`just demo-clips`, `just demo-phone`); they sit in the Remotion project
-at `~/dinar-remotion/public/recordings`. Left in the loop: the Remotion
-cut with captions.
+(`just demo-clips`, `just demo-phone`), then `~/dinar-remotion` cut and
+captioned them: one silent clip per feature (ring a sale, the facture,
+the book, the day, Arabic, the phone) and `dinar-demo.mp4`, all six behind
+a title card. Every cut point and every caption is in `src/features.ts`;
+`pnpm render` rebuilds the lot into `out/`. The plan's T4 is done, so the
+demo plan is finished. Open: `dinar-remotion` has no git remote, and
+nothing is published anywhere yet.
 
 
 **2026-09-15: M7 closed, the paired phone proven (PRs #89-#92).** Loop
