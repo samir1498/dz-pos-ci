@@ -318,7 +318,10 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 flex-col bg-background",
+        // `min-w-0` lets the inset shrink inside the flex wrapper instead of
+        // forcing the whole page wider than the viewport when a screen's
+        // content (a table, a date row) is intrinsically wide.
+        "relative flex min-w-0 w-full flex-1 flex-col bg-background",
         "md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
         className
       )}

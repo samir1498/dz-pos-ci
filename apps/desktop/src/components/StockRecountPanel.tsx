@@ -114,7 +114,7 @@ export function StockRecountPanel() {
           <CardDescription>{t("settings_stock_recount_hint")}</CardDescription>
         </CardHeader>
 
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex min-w-0 flex-col gap-4">
           {last.isPending ? (
             <p className="text-sm text-muted-foreground">{t("settings_loading")}</p>
           ) : null}
@@ -126,11 +126,11 @@ export function StockRecountPanel() {
 
           {last.isSuccess ? (
             <>
-              <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1">
+              <dl className="grid min-w-0 grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1">
                 <dt className="text-sm text-muted-foreground">
                   {t("stock_recount_last_run_label")}
                 </dt>
-                <dd data-testid="stock-recount-day" className="font-medium text-foreground">
+                <dd data-testid="stock-recount-day" className="min-w-0 font-medium break-words text-foreground">
                   {day === null ? (
                     t("stock_recount_never")
                   ) : (
@@ -147,7 +147,7 @@ export function StockRecountPanel() {
                     <dd
                       data-testid="stock-recount-checked"
                       dir="ltr"
-                      className="font-medium tabular-nums text-foreground"
+                      className="min-w-0 font-medium break-words tabular-nums text-foreground"
                     >
                       {checked}
                     </dd>

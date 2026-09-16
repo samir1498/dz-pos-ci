@@ -139,7 +139,7 @@ export function ExportImportPanel() {
         <CardDescription>{t("settings_export_import_hint")}</CardDescription>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-wrap items-end gap-2">
           {EXPORTS.map((one) => (
             <Button
@@ -203,14 +203,17 @@ export function ExportImportPanel() {
               control is not a second way to swap the file under a check
               that is already running. The name of the file is `ltr` like
               every other value the shop did not write: a name in Arabic
-              still ends in `.xlsx`. */}
+              still ends in `.xlsx`. Hidden with `hidden`, never `sr-only`:
+              the kit input carries `w-full`, which beats `sr-only`'s 1px
+              width in the cascade and leaves a full-width invisible box
+              that forces a page-level horizontal scrollbar. */}
           <Input
             ref={picker}
             type="file"
             accept=".xlsx"
             aria-label={t("import_pick_file")}
             data-testid="import-file"
-            className="sr-only"
+            className="hidden"
             tabIndex={-1}
             disabled={busy}
             onChange={(e) => {
@@ -233,7 +236,7 @@ export function ExportImportPanel() {
           <span
             dir="ltr"
             data-testid="import-file-name"
-            className="text-sm text-muted-foreground"
+            className="min-w-0 max-w-full truncate text-sm text-muted-foreground"
           >
             {file === null ? t("import_no_file") : file.name}
           </span>

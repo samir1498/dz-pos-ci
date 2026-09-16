@@ -72,7 +72,7 @@ export function SettingsScreen() {
   const exportAndImport = useHasPermission("export_and_import");
 
   return (
-    <section className="flex flex-col">
+    <section className="flex min-w-0 w-full max-w-full flex-col">
       <PageHeader title={t("settings_title")} description={t("settings_hint")} />
       {settings.isPending ? (
         <div className="flex flex-col gap-3" aria-busy="true">
@@ -87,7 +87,7 @@ export function SettingsScreen() {
         </p>
       ) : null}
       {settings.isSuccess ? (
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 w-full max-w-full flex-col gap-6">
           <StoreForm
             key={JSON.stringify(settings.data.store)}
             initial={settings.data.store}
@@ -218,7 +218,7 @@ function StoreForm({
   });
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader>
         <PanelHeading id="settings-store">{t("settings_store")}</PanelHeading>
         <CardDescription>{t("settings_store_hint")}</CardDescription>
@@ -226,14 +226,14 @@ function StoreForm({
       <form
         noValidate
         aria-labelledby="settings-store"
-        className="flex flex-col gap-6"
+        className="flex min-w-0 flex-col gap-6"
         onSubmit={(e) => {
           e.preventDefault();
           onSaved(false);
           void form.handleSubmit();
         }}
       >
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex min-w-0 flex-col gap-4">
           <form.Field
             name="name"
             validators={{
@@ -258,7 +258,7 @@ function StoreForm({
             )}
           </form.Field>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
             {STORE_FIELDS.map((spec) => (
               <form.Field key={spec.name} name={spec.name}>
                 {(field) => (
@@ -345,16 +345,16 @@ function RegimePanel({
       <form
         noValidate
         aria-labelledby="settings-regime"
-        className="flex flex-col gap-6"
+        className="flex min-w-0 flex-col gap-6"
         onSubmit={(e) => {
           e.preventDefault();
           void form.handleSubmit();
         }}
       >
-        <CardContent className="flex flex-col gap-4">
-          <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1 rounded-lg bg-muted p-4">
+        <CardContent className="flex min-w-0 flex-col gap-4">
+          <dl className="grid min-w-0 grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1 rounded-lg bg-muted p-4">
             <dt className="text-sm text-muted-foreground">{t("regime_current_label")}</dt>
-            <dd data-testid="regime-current" className="font-medium text-foreground">
+            <dd data-testid="regime-current" className="min-w-0 font-medium break-words text-foreground">
               {t(REGIME_KEY[current.regime])} · {t("regime_since")}{" "}
               <span dir="ltr" className="font-numeric tabular-nums">
                 {current.valid_from}
@@ -363,7 +363,7 @@ function RegimePanel({
             {planned !== null ? (
               <>
                 <dt className="text-sm text-muted-foreground">{t("regime_planned_label")}</dt>
-                <dd data-testid="regime-planned" className="font-medium text-foreground">
+                <dd data-testid="regime-planned" className="min-w-0 font-medium break-words text-foreground">
                   {t(REGIME_KEY[planned.regime])} · {t("regime_from")}{" "}
                   <span dir="ltr" className="font-numeric tabular-nums">
                     {planned.valid_from}
@@ -373,7 +373,7 @@ function RegimePanel({
             ) : null}
           </dl>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
             <form.Field name="regime">
               {(field) => (
                 <FormField label={t("field_regime")}>

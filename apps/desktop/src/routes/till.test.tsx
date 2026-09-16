@@ -698,6 +698,10 @@ describe("paying", () => {
 
     await waitFor(() => expect(posted()).toBe(true));
     expect(salePost()).toEqual({
+      // One retry key per press (M7 T4): present and non-empty, a new one on
+      // every press. Its exact value is a timestamp plus randomness, so only
+      // its presence is pinned here.
+      idempotency_key: expect.any(String),
       lines: [
         { product_id: 1, qty_milli: 2_000, unit_price_centimes: null, line_discount_centimes: 0 },
         { product_id: 2, qty_milli: 1_500, unit_price_centimes: null, line_discount_centimes: 0 },
@@ -709,6 +713,9 @@ describe("paying", () => {
       override: false,
       kind: "ticket",
     });
+    const key = salePost()?.idempotency_key;
+    expect(typeof key).toBe("string");
+    if (typeof key === "string") expect(key.length).toBeGreaterThan(0);
   });
 
   test("a card sale posts no tendered amount", async () => {

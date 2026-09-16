@@ -245,7 +245,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           scale in packages/design carries control heights and no layout
           widths yet; the day it gains one, this becomes that token. */}
       <SidebarProvider style={{ "--sidebar-width": "15rem" }}>
-        <Sidebar side={dir === "rtl" ? "right" : "left"} collapsible="offcanvas">
+        <Sidebar side={dir === "rtl" ? "right" : "left"} collapsible="icon">
           <SidebarHeader className="px-2 py-3">
             <Wordmark className="px-1 text-sidebar-foreground" />
           </SidebarHeader>

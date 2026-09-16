@@ -241,16 +241,18 @@ export function ProductsScreen() {
 
       <Card>
         <CardContent className="flex flex-wrap items-end gap-4">
-          <FormField
-            label={t("products_search")}
-            hint={t("products_search_hint")}
-            className="min-w-64 max-w-md flex-1"
-          >
+          {/* The "name or barcode" help is the input's placeholder, not a
+              hint under it: a hint makes this field taller than its
+              neighbours, and `items-end` then sets the category select
+              lower than the search box. Customers and suppliers already
+              do it this way. */}
+          <FormField label={t("products_search")} className="min-w-64 max-w-md flex-1">
             {(parts) => (
               <Input
                 {...parts}
                 type="search"
                 autoComplete="off"
+                placeholder={t("products_search_hint")}
                 data-testid="products-search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -279,10 +281,12 @@ export function ProductsScreen() {
 
           {/* A tick wants its label beside it, not over it, so the field is
               turned into a row; the label is still the kit's and still points
-              at the control by id. */}
+              at the control by id. `pb-2` centers the row on the inputs'
+              line: the row bottom-aligns with them (`items-end`) and at
+              20px it is 16px shorter than a 36px input, so 8px. */}
           <FormField
             label={t("products_filter_low")}
-            className="flex-row-reverse items-center justify-end gap-2"
+            className="flex-row-reverse items-center justify-end gap-2 pb-2"
           >
             {(parts) => (
               <Checkbox

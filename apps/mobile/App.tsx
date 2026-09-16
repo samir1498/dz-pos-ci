@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 
+import { clearMode, loadMode, type Mode } from "./src/lib/mode";
 import { clearSession, loadSession, type Session } from "./src/lib/session";
+import { Onboarding } from "./src/screens/Onboarding";
 import { SignIn } from "./src/screens/SignIn";
 import { Till } from "./src/screens/Till";
 

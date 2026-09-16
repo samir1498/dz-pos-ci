@@ -1,6 +1,10 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
+// Note: this carries `w-full`. Hiding an Input with `sr-only` does not
+// work: `w-full` beats `sr-only`'s 1px width in the cascade and leaves a
+// full-width invisible box that forces a page-level horizontal scrollbar
+// (settings import picker, 2026-09-15). Hide with `hidden` instead.
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (
     <input

@@ -89,7 +89,7 @@ export function DateField({
       role="group"
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      className={cn("flex items-center gap-1", className)}
+      className={cn("flex min-w-0 max-w-full items-center gap-1", className)}
       data-testid={testId}
       onBlur={(event) => {
         if (onBlur !== undefined && !event.currentTarget.contains(event.relatedTarget)) onBlur();

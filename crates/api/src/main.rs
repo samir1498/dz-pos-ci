@@ -36,6 +36,14 @@ struct Args {
     /// needs it: `--allow-origin http://100.111.55.62:5173`.
     #[arg(long)]
     allow_origin: Option<String>,
+    /// LAN mode for the real-phone walk (M6 T1, decided in
+    /// docs/architecture.md "Transport and auth"): bind 0.0.0.0 instead of
+    /// loopback and announce mDNS `Dinar-<shop>`. Opt-in per run, and the
+    /// launch token, device gate and session still guard every call; reach
+    /// of the network is not the permission. Off by default, so a plain
+    /// `just api` never leaves the machine.
+    #[arg(long, default_value_t = false)]
+    lan: bool,
 }
 
 /// The launch token every caller must show (`Authorization: Bearer`). Read
@@ -90,7 +98,28 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         // and the server answering never waits on either.
         tokio::spawn(dzpos_api::daily::run(state.clone()));
     }
-    let (listener, port) = dzpos_api::bind(args.port).await?;
+    let (listener, port) = if args.lan {
+        dzpos_api::bind_lan(args.port).await?
+    } else {
+        dzpos_api::bind(args.port).await?
+    };
+    // Held for the server's life: dropping the daemon unregisters the
+    // service (`crates/api/src/mdns.rs`). Announced after the bind so the
+    // port is the bound one, not the asked one.
+    let _mdns = if args.lan {
+        Some(
+            dzpos_api::mdns::register(args.shop, port)
+                .map_err(|why| format!("mDNS announce failed: {why}"))?,
+        )
+    } else {
+        None
+    };
+    if args.lan {
+        println!(
+            "dzpos-api listening on LAN http://0.0.0.0:{port} (mDNS Dinar-{})",
+            args.shop
+        );
+    }
     if made_here {
         // The operator's own terminal is the only place it goes; the UI
         // needs it as VITE_API_TOKEN (`just api` makes one per run in .dev
@@ -108,4 +137,20 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    // The walkthrough switch: loopback unless asked, so a plain `just api`
+    // never leaves the machine by accident.
+    #[test]
+    fn lan_mode_is_opt_in() {
+        let plain = Args::try_parse_from(["dzpos-api", "--db", "x.db"]).unwrap();
+        assert!(!plain.lan);
+        let lan = Args::try_parse_from(["dzpos-api", "--db", "x.db", "--lan"]).unwrap();
+        assert!(lan.lan);
+    }
 }

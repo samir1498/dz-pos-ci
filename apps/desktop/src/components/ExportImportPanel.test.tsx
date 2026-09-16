@@ -216,7 +216,7 @@ describe("the import", () => {
     const user = userEvent.setup();
     mount();
 
-    expect(screen.getByTestId("import-file")).toHaveClass("sr-only");
+    expect(screen.getByTestId("import-file")).toHaveClass("hidden");
     expect(screen.getByTestId("import-file")).toHaveAttribute("tabindex", "-1");
     expect(screen.getByTestId("import-file-name")).toHaveAttribute("dir", "ltr");
     expect(screen.getByTestId("import-pick")).toHaveTextContent(fr.import_pick_file);

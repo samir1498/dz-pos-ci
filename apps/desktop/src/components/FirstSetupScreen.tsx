@@ -22,14 +22,19 @@ export function FirstSetupScreen() {
   const [error, setError] = useState<Key | null>(null);
   const [pending, setPending] = useState(false);
 
-  const ready = name.trim() !== "" && password.length >= 8 && confirm.length >= 8;
+  const nameError: Key | null = name.trim() === "" ? "validation_required" : null;
+  const passwordError: Key | null =
+    password === "" ? null : password.length < 8 ? "validation_password_length" : null;
+  const confirmError: Key | null =
+    confirm === "" ? null : confirm !== password ? "setup_mismatch" : null;
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (pending || !ready) return;
-    if (confirm !== password) {
-      setConfirm("");
-      setError("setup_mismatch");
+    if (pending) return;
+    if (name.trim() === "" || password.length < 8 || confirm !== password) {
+      if (name.trim() === "") setError("validation_required");
+      else if (password.length < 8) setError("validation_password_length");
+      else setError("setup_mismatch");
       return;
     }
     setPending(true);
@@ -54,7 +59,10 @@ export function FirstSetupScreen() {
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-3" onSubmit={onSubmit}>
-            <FormField label={t("setup_name_label")}>
+            <FormField
+              label={t("setup_name_label")}
+              error={nameError ? t(nameError) : undefined}
+            >
               {(field) => (
                 <Input
                   {...field}
@@ -63,6 +71,7 @@ export function FirstSetupScreen() {
                   autoComplete="username"
                   autoFocus
                   disabled={pending}
+                  aria-invalid={nameError !== null}
                   onChange={(event) => {
                     setName(event.target.value);
                     setError(null);
@@ -70,7 +79,11 @@ export function FirstSetupScreen() {
                 />
               )}
             </FormField>
-            <FormField label={t("setup_password_label")}>
+            <FormField
+              label={t("setup_password_label")}
+              hint={t("validation_password_hint")}
+              error={passwordError ? t(passwordError) : undefined}
+            >
               {(field) => (
                 <Input
                   {...field}
@@ -79,6 +92,7 @@ export function FirstSetupScreen() {
                   value={password}
                   autoComplete="new-password"
                   disabled={pending}
+                  aria-invalid={passwordError !== null}
                   onChange={(event) => {
                     setPassword(event.target.value);
                     setError(null);
@@ -86,7 +100,10 @@ export function FirstSetupScreen() {
                 />
               )}
             </FormField>
-            <FormField label={t("setup_confirm_label")}>
+            <FormField
+              label={t("setup_confirm_label")}
+              error={confirmError ? t(confirmError) : undefined}
+            >
               {(field) => (
                 <Input
                   {...field}
@@ -95,6 +112,7 @@ export function FirstSetupScreen() {
                   value={confirm}
                   autoComplete="new-password"
                   disabled={pending}
+                  aria-invalid={confirmError !== null}
                   onChange={(event) => {
                     setConfirm(event.target.value);
                     setError(null);
@@ -102,7 +120,7 @@ export function FirstSetupScreen() {
                 />
               )}
             </FormField>
-            <Button type="submit" data-testid="setup-submit" disabled={pending || !ready}>
+            <Button type="submit" data-testid="setup-submit" disabled={pending}>
               {t("setup_submit")}
             </Button>
             {error !== null ? (

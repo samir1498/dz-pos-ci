@@ -346,8 +346,15 @@ export function TillScreen() {
     (quoting || !tenderedMissing) &&
     !pay.isPending;
 
+  // One retry key per press (M7 T4): the key is built with the body, so a
+  // transport retry of the same mutation replays the same sale while the
+  // next press promises a new one. Same shape as the phone's
+  // `newIdempotencyKey` (`apps/mobile/src/lib/queue.ts`).
+  const newIdempotencyKey = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
   const body = useCallback(
     (override: boolean): NewSaleDto => ({
+      idempotency_key: newIdempotencyKey(),
       lines: cart.map((line, i) => ({
         product_id: line.product.id,
         qty_milli: read[i].qtyMilli,

@@ -597,6 +597,7 @@ describe("sales", () => {
       });
     };
     const basket: NewSaleDto = {
+      idempotency_key: "test-key",
       lines: [
         {
           product_id: 1,
@@ -631,6 +632,7 @@ describe("sales", () => {
     const api = createClient("http://127.0.0.1:4317", stub);
     await expect(
       api.createSale({
+        idempotency_key: "test-key",
         lines: [],
         global_discount_centimes: 0,
         payment_mode: "credit",
@@ -658,6 +660,7 @@ describe("sales", () => {
     const api = createClient("http://127.0.0.1:4317", refusal);
     await expect(
       api.createSale({
+        idempotency_key: "test-key",
         lines: [],
         global_discount_centimes: 0,
         payment_mode: "credit",
@@ -816,6 +819,7 @@ describe("sales", () => {
     );
     await expect(
       api.createSale({
+        idempotency_key: "test-key",
         lines: [{ product_id: 1, qty_milli: 1_000, unit_price_centimes: null, line_discount_centimes: 0 }],
         global_discount_centimes: 0,
         payment_mode: "cash",
@@ -864,6 +868,7 @@ describe("sales", () => {
     const api = createClient("http://127.0.0.1:4317", fetchStub);
     await expect(
       api.createSale({
+        idempotency_key: "test-key",
         lines: [],
         global_discount_centimes: 0,
         payment_mode: "cash",

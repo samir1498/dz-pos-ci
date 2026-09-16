@@ -173,7 +173,7 @@ export function BackupsPanel() {
           <CardDescription>{t("settings_backups_hint")}</CardDescription>
         </CardHeader>
 
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex min-w-0 flex-col gap-4">
           {backups.isPending ? (
             <p className="text-sm text-muted-foreground">{t("settings_loading")}</p>
           ) : null}
@@ -185,9 +185,9 @@ export function BackupsPanel() {
 
           {backups.isSuccess ? (
             <>
-              <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1">
+              <dl className="grid min-w-0 grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-1">
                 <dt className="text-sm text-muted-foreground">{t("backups_newest_label")}</dt>
-                <dd data-testid="backups-newest" className="font-medium text-foreground">
+                <dd data-testid="backups-newest" className="min-w-0 font-medium break-words text-foreground">
                   {newest === undefined ? (
                     t("backups_none")
                   ) : (

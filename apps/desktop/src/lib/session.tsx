@@ -1,4 +1,6 @@
-// Who is signed in on this window, held in memory and nowhere else.
+// Who is signed in on this window, held in memory and nowhere else,
+// except in dev (`vite --host`), where the last session is mirrored to
+// `localStorage` (`DEV_STORAGE_KEY`) so a refresh keeps you signed in.
 //
 // A launch of the desktop app starts signed out every time: nothing here is
 // written to `localStorage` or any other store, so a machine left on
@@ -79,6 +81,39 @@ interface Ctx {
 
 const SessionContext = createContext<Ctx | null>(null);
 
+// In dev (`vite --host`) a refresh wiping the in-memory session is just
+// friction — prod (Tauri) has no refresh and must start signed out for the
+// overnight-PIN-pad rule, so this is dev-only.
+const DEV_PERSIST = import.meta.env.DEV;
+const DEV_STORAGE_KEY = "dzpos:dev-session";
+
+function loadDevSession(): { token: string; me: MeDto; idle: number; method: AuthMethod } | null {
+  if (!DEV_PERSIST || typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(DEV_STORAGE_KEY);
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw) as { token?: unknown; me?: unknown; idle?: unknown; method?: unknown };
+    if (typeof parsed.token !== "string" || parsed.me === null || typeof parsed.me !== "object") return null;
+    return parsed as never;
+  } catch {
+    return null;
+  }
+}
+
+function saveDevSession(token: string, me: MeDto, idle: number, method: AuthMethod) {
+  if (!DEV_PERSIST || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DEV_STORAGE_KEY, JSON.stringify({ token, me, idle, method }));
+  } catch {}
+}
+
+function clearDevSession() {
+  if (!DEV_PERSIST || typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(DEV_STORAGE_KEY);
+  } catch {}
+}
+
 /** What counts as the till being touched, for the idle timer. Not a click
  * that lands on a button (`keydown`/`pointerdown` already cover the pad and
  * the keyboard both), and never an API call succeeding: a screen quietly
@@ -98,6 +133,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const forgetSession = useCallback(() => {
     api.setSession(null);
+    clearDevSession();
     setMe(null);
     setMethod(null);
     setIdleMinutes(null);
@@ -116,6 +152,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // every launch, as the brief asks for.
   useEffect(() => {
     let cancelled = false;
+    // Dev-only: resume the last session so a refresh does not drop you at
+    // the sign-in screen. The `/auth/me` check below still revalidates it,
+    // and a refusal there forgets it (storage included).
+    const dev = loadDevSession();
+    if (dev !== null) {
+      api.setSession(dev.token);
+      setMe(dev.me);
+      setMethod(dev.method);
+      setIdleMinutes(dev.idle);
+      setStatus("signed-in");
+    }
     void (async () => {
       try {
         const health = await api.health();
@@ -135,17 +182,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setIdleMinutes(idle.idle_minutes);
         setStatus("signed-in");
       } catch {
-        if (!cancelled) setStatus("signed-out");
+        if (cancelled) return;
+        // A refused restore is not a session: drop the stored copy too, or
+        // every refresh would flash signed-in before falling back out.
+        if (dev !== null) forgetSession();
+        else setStatus("signed-out");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [forgetSession]);
 
   const establish = useCallback(
     (session: SessionAnswer, how: AuthMethod) => {
       api.setSession(session.token);
+      saveDevSession(session.token, session.me, session.idle_minutes, how);
       setMe(session.me);
       setMethod(how);
       setIdleMinutes(session.idle_minutes);

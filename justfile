@@ -129,14 +129,18 @@ gates: fmt lint clippy types-check test build
 # restarting the API. Vite inlines VITE_API_TOKEN into the served bundle,
 # and `--host` serves that bundle to every machine that can reach the
 # port: a per-run token is what keeps that from being a lasting credential.
-api port="4317" db=".dev/dev.db" origin="": claim
+# A real phone needs the API on the LAN, not loopback: append `lan`
+# (`just api 4317 .dev/dev.db "" lan`). That binds 0.0.0.0 and announces
+# mDNS `Dinar-<shop>`; the launch token, device gate and session still
+# guard every call, so only run it on a Wi-Fi you trust, with the dev file.
+api port="4317" db=".dev/dev.db" origin="" lan="": claim
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p .dev
     umask 077
     head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > .dev/api-token
     chmod 600 .dev/api-token
-    DZPOS_API_TOKEN="$(cat .dev/api-token)" cargo run -p dzpos-api -- --db {{db}} --port {{port}} {{ if origin != "" { "--allow-origin " + origin } else { "" } }}
+    DZPOS_API_TOKEN="$(cat .dev/api-token)" cargo run -p dzpos-api -- --db {{db}} --port {{port}} {{ if origin != "" { "--allow-origin " + origin } else { "" } }} {{ if lan != "" { "--lan" } else { "" } }}
 
 # ---- the development shop file (.dev/dev.db) ----
 #

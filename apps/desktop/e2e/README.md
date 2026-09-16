@@ -320,7 +320,7 @@ here. These are all of them.
 | `cash-net` | `expenses.tsx` | An amount, and the one figure that goes below zero. |
 | `card-in-total` | `expenses.tsx` | An amount, translated label. |
 | `page-header` | `PageHeader.tsx` | The screen's own header block, so a count can be read without matching the same figure inside the list. |
-| `products-search` | `products.tsx` | The search box; its label and its hint are translated and the hint repeats the barcode column's word. |
+| `products-search` | `products.tsx` | The search box; its label and its placeholder are translated and the placeholder repeats the barcode column's word. |
 | `products-clear-filters` | `products.tsx` | Absent until a filter is set, so a test counts it, and it says the same words as the empty screen's own button. |
 | `print-selected-labels` | `products.tsx` | Its label changes to the closing one once the sheet is open, so a name query matches only half the time. |
 | `print-label` | `products.tsx` | Absent on a product being typed, so a test counts it; the sheet's button beside it reads almost the same. |

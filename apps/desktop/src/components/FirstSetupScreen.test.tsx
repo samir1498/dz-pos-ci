@@ -107,13 +107,16 @@ describe("FirstSetupScreen", () => {
     );
   });
 
-  test("the submit waits for a name and two long-enough passwords", async () => {
+  test("the submit stays enabled and an empty form is refused with an error", async () => {
+    const user = userEvent.setup();
     mount();
     await screen.findByTestId("setup-screen");
-    expect(screen.getByTestId("setup-submit")).toBeDisabled();
+    expect(screen.getByTestId("setup-submit")).toBeEnabled();
+    await user.click(screen.getByTestId("setup-submit"));
+    expect(screen.getByTestId("setup-error")).toHaveTextContent("Obligatoire.");
   });
 
-  test("two different passwords are refused and the confirm box is emptied", async () => {
+  test("two different passwords are refused and the confirm box keeps its value", async () => {
     const user = userEvent.setup();
     mount();
     await screen.findByTestId("setup-screen");
@@ -125,6 +128,6 @@ describe("FirstSetupScreen", () => {
     expect(screen.getByTestId("setup-error")).toHaveTextContent(
       "Les deux mots de passe ne sont pas les mêmes.",
     );
-    expect(screen.getByTestId("setup-confirm")).toHaveValue("");
+    expect(screen.getByTestId("setup-confirm")).toHaveValue("autre mot de passe");
   });
 });
