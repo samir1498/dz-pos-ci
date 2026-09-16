@@ -296,13 +296,13 @@ describe("resetting a PIN", () => {
     // Blank, whether the fiche already had a PIN or not: there is no old
     // one to show, so the box never carries one in.
     expect(within(dialog).getByLabelText(fr.field_pin)).toHaveValue("");
-    await user.type(within(dialog).getByLabelText(fr.field_pin), "4321");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2580");
     await user.click(within(dialog).getByRole("button", { name: fr.action_reset_pin }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     const sent = posts().find((p) => p.url.endsWith("/pin"));
     expect(sent?.url).toMatch(/\/users\/1\/pin$/);
-    expect(sent?.body).toEqual({ pin: "4321" });
+    expect(sent?.body).toEqual({ pin: "2580" });
   });
 
   test("a fiche with no PIN is offered a first PIN, not a reset", async () => {
@@ -328,8 +328,9 @@ describe("resetting a PIN", () => {
     );
   });
 
-  test("a badly shaped PIN is refused by the server and shown translated", async () => {
-    pinAnswer = () => json(422, { error: { code: "validation", message: "shape" } });
+  test("a PIN the server finds weak is named as such, not as 'check the fields'", async () => {
+    pinAnswer = () =>
+      json(422, { error: { code: "validation", field: "pin", message: "the first one anybody tries" } });
     const user = userEvent.setup();
     app();
     await screen.findByTestId("users-table");
@@ -337,10 +338,27 @@ describe("resetting a PIN", () => {
     if (row === undefined) throw new Error("no first row");
     await user.click(within(row).getByRole("button", { name: fr.action_reset_pin }));
     const dialog = await screen.findByRole("dialog");
-    await user.type(within(dialog).getByLabelText(fr.field_pin), "12");
+    await user.type(within(dialog).getByLabelText(fr.field_pin), "2580");
     await user.click(within(dialog).getByRole("button", { name: fr.action_reset_pin }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_validation);
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_pin_weak);
+  });
+
+  test("1234 and 1111 are refused before anything is posted, with the reason", async () => {
+    const user = userEvent.setup();
+    app();
+    await screen.findByTestId("users-table");
+    const row = userRows()[0];
+    if (row === undefined) throw new Error("no first row");
+    await user.click(within(row).getByRole("button", { name: fr.action_reset_pin }));
+    const dialog = await screen.findByRole("dialog");
+    for (const weak of ["1234", "1111"]) {
+      await user.clear(within(dialog).getByLabelText(fr.field_pin));
+      await user.type(within(dialog).getByLabelText(fr.field_pin), weak);
+      await user.click(within(dialog).getByRole("button", { name: fr.action_reset_pin }));
+      expect(await within(dialog).findByRole("alert")).toHaveTextContent(fr.error_pin_weak);
+    }
+    expect(posts().filter((p) => p.url.endsWith("/pin"))).toEqual([]);
   });
 });
 

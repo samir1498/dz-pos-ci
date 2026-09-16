@@ -184,6 +184,7 @@
   "users_set_pin_hint": "Quatre chiffres. Cette personne n'a pas encore de code ; c'est avec celui-ci qu'elle se connectera.",
   "field_pin": "Code",
   "error_pin_shape": "Un code PIN fait 4 chiffres.",
+  "error_pin_weak": "Pas 1234, 4321 ni 1111 : un code qui se suit ou répète un chiffre est le premier que l'on essaie.",
   "error_forbidden": "Vous n'êtes pas autorisé à faire cela.",
   "nav_till": "Caisse",
   "till_title": "Caisse",

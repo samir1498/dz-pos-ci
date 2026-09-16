@@ -121,7 +121,7 @@ export type { ImportOutcomeDto } from "./generated/ImportOutcomeDto";
 export type { ImportRowDto } from "./generated/ImportRowDto";
 export type { LabelSheetDto } from "./generated/LabelSheetDto";
 export { formatCentimes, formatQty, parseAmountToCentimes, parseQtyToMilli } from "./money";
-export { PIN_DIGITS, PIN_SHAPE } from "./pin";
+export { PIN_DIGITS, PIN_SHAPE, pinProblem } from "./pin";
 export {
   BPS_PER_WHOLE,
   MILLI_PER_UNIT,

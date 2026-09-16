@@ -14,7 +14,7 @@
 // the rail that lists the rooms, which is why it heads itself at `h3` and
 // carries no link back — the rail is the way back and it never left.
 
-import { ApiError, PIN_SHAPE } from "@dzpos/shared";
+import { ApiError, pinProblem } from "@dzpos/shared";
 import type { NewUserDto, RoleDto, UserDto } from "@dzpos/shared";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -212,6 +212,25 @@ export function UsersScreen() {
 }
 
 
+/** The dialog's own word on a PIN before the round trip, as an i18n key. */
+function pinComplaint(pin: string): Key | undefined {
+  const problem = pinProblem(pin);
+  if (problem === "shape") return "error_pin_shape";
+  if (problem === "weak") return "error_pin_weak";
+  return undefined;
+}
+
+/** The server's refusal of a PIN, told apart from any other validation
+ *  error: a PIN the client let through is one the server found weak
+ *  (`services::users::validate_pin` names the field), and "check the
+ *  fields" sent an owner away thinking the save had gone through. */
+function pinRefusal(error: unknown): Key {
+  if (error instanceof ApiError && error.code === "validation" && error.field === "pin") {
+    return "error_pin_weak";
+  }
+  return errorKey(error);
+}
+
 interface NewUserValues {
   name: string;
   role: string;
@@ -252,7 +271,7 @@ function AddUserDialog({
       await queryClient.invalidateQueries({ queryKey: usersQueryKey });
     },
     onError: (error: unknown) => {
-      setServerError(errorKey(error));
+      setServerError(pinRefusal(error));
     },
   });
 
@@ -261,7 +280,7 @@ function AddUserDialog({
     defaultValues: blank,
     onSubmit: async ({ value }) => {
       const name = value.name.trim();
-      if (name === "" || !PIN_SHAPE.test(value.pin)) return;
+      if (name === "" || pinComplaint(value.pin) !== undefined) return;
       const role = toRole(value.role);
       if (role === undefined) {
         setServerError("error_validation");
@@ -347,7 +366,7 @@ function AddUserDialog({
           <form.Field
             name="pin"
             validators={{
-              onSubmit: ({ value }) => (PIN_SHAPE.test(value) ? undefined : "error_pin_shape"),
+              onSubmit: ({ value }) => pinComplaint(value),
             }}
           >
             {(field) => (
@@ -412,7 +431,7 @@ function ResetPinDialog({
       await queryClient.invalidateQueries({ queryKey: usersQueryKey });
     },
     onError: (error: unknown) => {
-      setServerError(errorKey(error));
+      setServerError(pinRefusal(error));
     },
   });
 
@@ -466,7 +485,7 @@ function ResetPinDialog({
           <form.Field
             name="pin"
             validators={{
-              onSubmit: ({ value }) => (value.trim() === "" ? "error_validation" : undefined),
+              onSubmit: ({ value }) => pinComplaint(value),
             }}
           >
             {(field) => (
