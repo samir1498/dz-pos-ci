@@ -52,7 +52,6 @@ export const RELEASE_ORG = "Dinar-dz/dz-pos";
 
 export const DOWNLOAD_FILES = {
   windows: "Dinar-Setup.exe",
-  macos: "Dinar.dmg",
   linux: "Dinar.AppImage",
 } as const;
 

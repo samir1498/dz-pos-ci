@@ -146,7 +146,7 @@ jobs:
             if [ "$MODE" = "dry-run" ]; then
               echo
               echo "This is a manual dry run. It builds all three installers"
-              echo "(Windows, macOS, Linux) and uploads them as run artifacts."
+              echo "(Windows, Linux) and uploads them as run artifacts."
               echo "**No release is created and no tag is touched.**"
             else
               echo
@@ -154,7 +154,9 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Builds all three installers (Windows nsis, macOS dmg, Linux appimage).
+  # Builds both installers (Windows nsis, Linux appimage). No macOS: an
+  # Algerian shop runs the till on Windows, and a macOS runner bills at ten
+  # times the Linux rate for a build nobody would download (2026-09-16).
   # Runs for both a release and a dry run: the whole point of the dry run is
   # to prove this job works before the first real tag needs it to. It never
   # has `contents: write`, so nothing in this job can publish anything by
@@ -172,12 +174,6 @@ jobs:
             bundle_glob: "*.exe"
             artifact_os: windows
             stable_name: Dinar-Setup.exe
-          - os: macos-latest
-            bundle: dmg
-            bundle_dir: dmg
-            bundle_glob: "*.dmg"
-            artifact_os: macos
-            stable_name: Dinar.dmg
           - os: ubuntu-latest
             bundle: appimage
             bundle_dir: appimage
@@ -203,7 +199,7 @@ jobs:
       # than inside the bundler.
       - run: pnpm -r build
 
-      # Tauri links webkit on Linux; the Windows and macOS runners already
+      # Tauri links webkit on Linux; the Windows runner already
       # carry what they need.
       - name: Install Linux web dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -296,10 +292,10 @@ jobs:
           fi
           pnpm exec tauri build --bundles nsis --config "{\"bundle\":{\"windows\":{\"certificateThumbprint\":\"$THUMBPRINT\",\"digestAlgorithm\":\"sha256\",\"timestampUrl\":\"http://timestamp.digicert.com\"}}}"
 
-      # macOS and Linux have no signing secrets yet (no Apple Developer
-      # account, nothing to sign an AppImage with), so they always take
-      # this path; Windows takes it only while there is no certificate.
-      # BUNDLE comes from the matrix (nsis/dmg/appimage).
+      # Linux has no signing secret yet — nothing to sign an AppImage
+      # with — so it always takes this path; Windows takes it only while
+      # there is no certificate.
+      # BUNDLE comes from the matrix (nsis/appimage).
       - name: Build the installer (unsigned)
         if: matrix.os != 'windows-latest' || steps.cert.outputs.present != 'true'
         working-directory: apps/desktop
@@ -421,8 +417,7 @@ jobs:
       # the three platforms. `size` is not part of the plugin's own manifest
       # shape at all -- the About screen's "what it weighs" only exists
       # because this step adds it, and reads it back off `raw_json`
-      # (`src-tauri/src/updater.rs`). macOS runners are Apple Silicon, hence
-      # darwin-aarch64. Unexercised against a real key: updater=publish only
+      # (`src-tauri/src/updater.rs`). Unexercised against a real key: updater=publish only
       # happens on a real release with the signing key, and there has been
       # no such release yet (docs/release-checklist.md, "what no gate can
       # cover").
@@ -440,7 +435,7 @@ jobs:
           tag = os.environ["TAG"]
           version = os.environ["VERSION"]
           base = f"https://github.com/Dinar-dz/dz-pos/releases/download/{tag}"
-          ext_platform = {".exe": "windows-x86_64", ".dmg": "darwin-aarch64", ".AppImage": "linux-x86_64"}
+          ext_platform = {".exe": "windows-x86_64", ".AppImage": "linux-x86_64"}
           platforms = {}
           installers = sorted(
               p for p in Path("dist").rglob("*") if p.is_file() and p.suffix in ext_platform
@@ -476,7 +471,7 @@ jobs:
           UPDATER: ${{ needs.gate.outputs.updater }}
         run: |
           set -euo pipefail
-          mapfile -t assets < <(find dist -maxdepth 2 -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' \) | sort)
+          mapfile -t assets < <(find dist -maxdepth 2 -type f \( -name '*.exe' -o -name '*.AppImage' \) | sort)
           [ "${#assets[@]}" -eq 3 ] || { echo "::error::expected 3 installers under dist/, found ${#assets[@]}"; exit 1; }
 
           if [ "$UPDATER" = "publish" ]; then
@@ -500,7 +495,6 @@ jobs:
                   notes+=$'\n- Windows (.exe): **unsigned**; SmartScreen will warn on install.'
                 fi
                 ;;
-              *.dmg) notes+=$'\n- macOS (.dmg): **unsigned**; right-click, Open on first launch (no Apple Developer signing yet).' ;;
               *.AppImage) notes+=$'\n- Linux (.AppImage): make executable, then run.' ;;
             esac
           done

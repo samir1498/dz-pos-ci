@@ -118,10 +118,12 @@ describe("the three routes render", () => {
 
   const ROUTES = ["index.html", join("en", "index.html"), join("ar", "index.html")];
 
-  describe("the download section links all three installers (Download.astro)", () => {
+  describe("the download section links both installers (Download.astro)", () => {
     // Stable filenames from lib/site.ts: the build job renames each
-    // installer before upload, so these URLs never carry a version.
-    const ASSETS = ["Dinar-Setup.exe", "Dinar.dmg", "Dinar.AppImage"];
+    // installer before upload, so these URLs never carry a version. No
+    // macOS build exists — a shop runs the till on Windows, and the runner
+    // bills at ten times Linux for a download nobody wants (2026-09-16).
+    const ASSETS = ["Dinar-Setup.exe", "Dinar.AppImage"];
     it.each(ROUTES)("%s carries one button per OS with a stable URL", (file) => {
       const html = read(file);
       for (const asset of ASSETS) {
@@ -129,7 +131,7 @@ describe("the three routes render", () => {
           `https://github.com/Dinar-dz/dz-pos/releases/latest/download/${asset}`,
         );
       }
-      for (const os of ["windows", "macos", "linux"]) {
+      for (const os of ["windows", "linux"]) {
         expect(html).toContain(`data-os="${os}"`);
       }
     });

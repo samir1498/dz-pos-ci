@@ -122,13 +122,11 @@ export const fr: Dict = {
     body: "Dinar s'installe sur le poste de la caisse, en français, en anglais et en arabe. Choisissez le fichier de votre système.",
     windowsLabel: "Windows",
     windowsNote: "Installeur .exe",
-    macosLabel: "macOS",
-    macosNote: "Image .dmg, Apple Silicon",
     linuxLabel: "Linux",
     linuxNote: "AppImage, à rendre exécutable",
     recommended: "Pour votre système",
     unsignedNote:
-      "Premières versions non signées : Windows affichera un avertissement SmartScreen, macOS demandera un clic droit puis Ouvrir. Cela disparaîtra avec le certificat.",
+      "Premières versions non signées : Windows affichera un avertissement SmartScreen. Cela disparaîtra avec le certificat.",
     allLink: "Toutes les versions",
   },
 };

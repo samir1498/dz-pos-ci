@@ -408,10 +408,9 @@ that day except retiring the mirror tag push: the same tag on the org
 already starts the same jobs there. A private repo's releases are
 private downloads -- a GitHub rule, not this file's -- so org releases
 stay draft/collaborators-only until the certificate lands. The build is a
-matrix of three installers (Windows nsis, macOS dmg on Apple Silicon,
-Linux appimage); the build job renames each to a stable filename
-(`Dinar-Setup.exe`, `Dinar.dmg`, `Dinar.AppImage`, the version living in
-the tag) so the landing page links never carry a version and the updater
+matrix of two installers (Windows nsis, Linux appimage); the build job
+renames each to a stable filename (`Dinar-Setup.exe`, `Dinar.AppImage`,
+the version living in the tag) so the landing page links never carry a version and the updater
 manifest points at files that do not move between releases.
 
 Decided (2026-09-11, M5 T0): the window runs under a policy that admits no

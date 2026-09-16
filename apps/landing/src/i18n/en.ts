@@ -99,13 +99,11 @@ export const en: Dict = {
     body: "Dinar installs on the till computer, in French, English and Arabic. Pick the file for your system.",
     windowsLabel: "Windows",
     windowsNote: ".exe installer",
-    macosLabel: "macOS",
-    macosNote: ".dmg image, Apple Silicon",
     linuxLabel: "Linux",
     linuxNote: "AppImage, make executable first",
     recommended: "For your system",
     unsignedNote:
-      "First builds are unsigned: Windows will show a SmartScreen warning, macOS will ask for right-click then Open. This goes away with the certificate.",
+      "First builds are unsigned: Windows will show a SmartScreen warning. This goes away with the certificate.",
     allLink: "All versions",
   },
 };

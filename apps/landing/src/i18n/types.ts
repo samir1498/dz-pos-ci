@@ -128,8 +128,6 @@ export interface Dict {
     readonly body: string;
     readonly windowsLabel: string;
     readonly windowsNote: string;
-    readonly macosLabel: string;
-    readonly macosNote: string;
     readonly linuxLabel: string;
     readonly linuxNote: string;
     /** Badge on the button matching the visitor's OS. */

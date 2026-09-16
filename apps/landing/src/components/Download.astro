@@ -19,7 +19,6 @@ const SYSTEMS: ReadonlyArray<{
   readonly note: string;
 }> = [
   { os: "windows", label: download.windowsLabel, note: download.windowsNote },
-  { os: "macos", label: download.macosLabel, note: download.macosNote },
   { os: "linux", label: download.linuxLabel, note: download.linuxNote },
 ];
 ---
@@ -48,17 +47,15 @@ const SYSTEMS: ReadonlyArray<{
 
 <script>
   // `userAgentData.platform` is Chromium-only; everything else falls back
-  // to `navigator.platform` ("Win32", "MacIntel", "Linux x86_64"). Unknown
-  // stays unmarked: all three buttons are always there.
+  // to `navigator.platform` ("Win32", "Linux x86_64"). Unknown stays
+  // unmarked, and so does a Mac: both buttons are always there.
   const agent = navigator as Navigator & { userAgentData?: { platform?: string } };
   const platform = (agent.userAgentData?.platform ?? navigator.platform ?? "").toLowerCase();
   const os = platform.includes("win")
     ? "windows"
-    : platform.includes("mac")
-      ? "macos"
-      : platform.includes("linux")
-        ? "linux"
-        : null;
+    : platform.includes("linux")
+      ? "linux"
+      : null;
   if (os !== null) {
     document.querySelector(`[data-os="${os}"]`)?.setAttribute("data-recommended", "true");
   }
