@@ -1,8 +1,25 @@
 ---
 type: 'now'
-updated: '2026-09-16'
+updated: '2026-09-17'
 ---
 ## Active
+
+**2026-09-17: Lumina is the benchmark, and the weekend builds against it.**
+Anouar asked for it as the priority. The comparison is
+`context/references/20260917-dinar-against-lumina-what-is-missing-and-what-is-already-ahe.md`:
+it found eight gaps, one of which was wrong (supplier opening debt has been
+built since M2) and was withdrawn, so seven stand. Roadmap
+`context/roadmaps/20260917-catching-lumina.md`, three plans, one loop over
+18 and 19 September: the `crates/api/src/dto.rs` split first so the parallel
+branches stop colliding in one 3071-line file, then the facture layout picker
+with a dense A4, an A5 and an 80 mm layout, then the phone in three languages,
+then the rest of the architecture fixes. Batches, variants, bundles,
+promotions, invoice scanning, cloud sync and delivery notes are parked on the
+roadmap with what unparks each. The work goes to six agents in
+`.claude/agents/`; the loop file
+`context/loops/20260917-catching-lumina-weekend-loop.md` says which agent
+takes what and carries the guardrails. Open for Samir: the scanner plan's last
+task, which is his phone and his laptop, and the shared-lockout ruling.
 
 **2026-09-16 evening: sign-in by name, four-digit PIN, phone proven on
 Samir's phone (PRs #97-#99).** The pairing plan is closed: scan the QR,
