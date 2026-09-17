@@ -57,10 +57,12 @@ packages/shared/src/i18n/
   index.ts        <- the barrel, merges the domains per language
 ```
 
-French is the key set the others are checked against, matching what the
-desktop already does at `apps/desktop/src/i18n/index.tsx:26`, where English
-plays that role. Pick one and say so on the page; two sources of truth for
-the key list is the failure this shape exists to avoid.
+English is the key set the other two are checked against. Not because the app
+is English, it is not, but because that is already the rule on the desktop at
+`apps/desktop/src/i18n/index.tsx:26`, where `isKey` is `v in en`, and the
+desktop migrates onto this package later. Two sources of truth for the key
+list is the failure this shape exists to avoid, so the choice is made here and
+not by whoever writes T2.
 
 ## The part a test cannot see
 

@@ -20,10 +20,13 @@ tasks:
     desc: 'facture_a5.html on the half sheet. Paper::A5 already exists and only sets the CSS page size; this is the layout that fits inside it. Reduced golden set: plain, cash, avoir, by three languages'
     status: 'pending'
   - id: 'T5'
-    desc: 'facture_80mm.html, a facture on the roll, and the ESC/POS path beside it the way escpos.rs already dumps a ticket. Reduced golden set by three languages'
+    desc: 'facture_80mm.html, a facture on the roll, browser printable. Reduced golden set by three languages. This alone closes T5'
     status: 'pending'
   - id: 'T6'
     desc: 'e2e: the picker persists per shop, and a facture printed after a change comes back in the chosen layout'
+    status: 'pending'
+  - id: 'T7'
+    desc: 'The 80mm facture down the ESC/POS path beside escpos.rs. Parkable on purpose: bidi on a roll and the ISO 8859-15 encoding are where a weekend goes, and T5 has already given the shop a printable layout without it'
     status: 'pending'
 acceptance:
   - 'A shop picks one of four facture layouts in settings and every facture printed afterwards uses it'
@@ -78,6 +81,11 @@ least interesting task and it is the one that decides whether the rest is
 cheap: with a registry in place each later layout is one template file plus
 its goldens, addable in any order and by parallel branches. Without it, each
 new layout is a fresh argument about where the selection lives.
+
+T3, T4 and T5 each add a variant to the registry T2 built, so all three touch
+that one enum and its match arms. They are still independent branches; the
+second and third to merge rebase onto the first rather than treating the
+conflict as a failed attempt. That is one rebase, not a strike.
 
 T2 is also the only task in this plan that can break an existing document.
 Its own proof is that the eighteen `facture_a4` goldens are byte for byte

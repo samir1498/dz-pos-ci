@@ -31,6 +31,22 @@ The fifth item on the original list, supplier opening debt, was struck before
 the loop started: it has been built since M2, core, route, form and tests, and
 the Lumina reference page was wrong. Checking beats copying a survey.
 
+## Before it starts
+
+The loop runs in a session that was started after
+`.claude/agents/` existed. A session already running when those files were
+written does not see them: asking for `dz-verifier` in the session that
+created it came back "agent type not found", checked 2026-09-17. So the
+weekend begins with a fresh `claude` in this repo, and only one, because a
+second `claude --continue` on the same transcript kills the first one's
+agents.
+
+The `ctx:` trailer shape a task commit uses is
+`ctx: plan:<slug>/T<id> <verb>`, verb last, one of `progress`, `close`,
+`done` or `pending`. A commit about a whole plan drops the task:
+`ctx: plan:<slug> start`. The hook rejects anything else, and a builder that
+gets it wrong burns an attempt on a commit rather than on the work.
+
 ## The order
 
 **Phase 0, alone, nothing else running.** T2 of

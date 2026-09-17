@@ -4,7 +4,7 @@ slug: 'dinar-against-lumina-what-is-missing-and-what-is-already-ahe'
 status: 'active'
 category: 'references'
 created: 20260917
-tldr: 'Feature-by-feature comparison with Lumina POS: eight real gaps ranked by what a shop notices, four places Dinar is already better, and three things not worth copying'
+tldr: 'Feature-by-feature comparison with Lumina POS: seven real gaps ranked by what a shop notices, an eighth withdrawn after checking our own code, four places Dinar is already better, and three things not worth copying'
 ---
 # Dinar against Lumina
 
