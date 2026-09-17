@@ -233,16 +233,21 @@ export interface SingleSpec {
 }
 
 // The till, cropped above the (empty, in this fixture) ticket-details box so
-// the cart, the totals and the payment keypad all stay in frame.
+// the cart, the totals and the payment keypad all stay in frame. The height
+// is measured, not chosen: the Encaisser button is the last thing that must
+// be whole, and it sits at rows 1439..1490 of the screenshot. When the till
+// fixture gains a row the button moves down and a stale height slices it in
+// half, which is what happened when the settings work reseeded the
+// catalogue and pushed both tills 36 px taller.
 export const HERO: SingleSpec = {
   key: "hero",
-  crop: { source: "till", top: 0, height: 1450 },
+  crop: { source: "till", top: 0, height: 1486 },
   widths: HERO_WIDTHS,
   sizes: HERO_SIZES,
   // HERO_WIDTHS is [342, 672]: index 1 is the 672 CSS px desktop tier.
   attrWidthIndex: 1,
 };
-export const HERO_AR_CROP: Crop = { source: "till-ar", top: 0, height: 1450 };
+export const HERO_AR_CROP: Crop = { source: "till-ar", top: 0, height: 1486 };
 
 // A different till moment from the hero: a credit sale past the customer's
 // limit, warned and then overridden. No crop: the whole screen is the point.

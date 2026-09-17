@@ -13,7 +13,7 @@
       ],
       "src": "hero-684w.webp",
       "width": 672,
-      "height": 757,
+      "height": 775,
       "sizes": "(min-width: 1120px) 672px, calc(100vw - 48px)"
     },
     "en": {
@@ -29,7 +29,7 @@
       ],
       "src": "hero-684w.webp",
       "width": 672,
-      "height": 757,
+      "height": 775,
       "sizes": "(min-width: 1120px) 672px, calc(100vw - 48px)"
     },
     "ar": {
@@ -45,7 +45,7 @@
       ],
       "src": "hero-ar-684w.webp",
       "width": 672,
-      "height": 757,
+      "height": 775,
       "sizes": "(min-width: 1120px) 672px, calc(100vw - 48px)"
     }
   },
