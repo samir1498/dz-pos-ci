@@ -141,6 +141,45 @@ pub struct ThemeChoiceDto {
     pub theme: Option<ThemeDto>,
 }
 
+/// Which of the shop's facture layouts its factures are drawn in.
+///
+/// Not the paper. The sheet is named on each print, because the till knows
+/// which tray the cashier reached for and the shop does not; the layout is
+/// chosen once and every facture follows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "FactureLayoutDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum FactureLayoutDto {
+    Standard,
+    Compact,
+}
+
+impl From<FactureLayout> for FactureLayoutDto {
+    fn from(layout: FactureLayout) -> Self {
+        match layout {
+            FactureLayout::Standard => FactureLayoutDto::Standard,
+            FactureLayout::Compact => FactureLayoutDto::Compact,
+        }
+    }
+}
+
+impl From<FactureLayoutDto> for FactureLayout {
+    fn from(dto: FactureLayoutDto) -> Self {
+        match dto {
+            FactureLayoutDto::Standard => FactureLayout::Standard,
+            FactureLayoutDto::Compact => FactureLayout::Compact,
+        }
+    }
+}
+
+/// The layout the settings screen is putting the shop on.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "FactureLayoutChoiceDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct FactureLayoutChoiceDto {
+    pub facture_layout: FactureLayoutDto,
+}
+
 /// What the settings screen reads: the store block, the régime in force
 /// and, when the owner has dated a change ahead, the one coming.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -151,6 +190,13 @@ pub struct SettingsDto {
     pub regime_planned: Option<DatedRegimeDto>,
     /// `null` when the shop has never chosen one.
     pub theme: Option<ThemeDto>,
+    /// Which layout its factures print in. Never null: a shop that has never
+    /// chosen prints on `standard`, so the screen has a value to show and the
+    /// printer has a page to draw.
+    pub facture_layout: FactureLayoutDto,
+    /// Every layout the shop may pick, so the screen does not carry its own
+    /// copy of the list and go stale when one is added.
+    pub facture_layouts: Vec<FactureLayoutDto>,
     /// How much a cashier may take off a basket before the sale needs
     /// someone holding `discount_above_threshold`, in basis points of the
     /// basket before any discount (250 is 2,5 %). Zero on a shop that has

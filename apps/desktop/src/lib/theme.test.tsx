@@ -12,26 +12,13 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { SettingsDto, ThemeDto } from "@dzpos/shared";
+import { SETTINGS } from "@/test/settings";
 
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { I18nProvider } from "@/i18n";
 import { STORAGE_KEY, ThemeProvider, useTheme } from "@/lib/theme";
 
-const settings: SettingsDto = {
-  store: {
-    name: "Mon magasin",
-    rc: null,
-    nif: null,
-    nis: null,
-    ai: null,
-    address: null,
-    phone: null,
-  },
-  regime: { regime: "reel", valid_from: "2026-01-01" },
-  regime_planned: null,
-  theme: null,
-  discount_threshold_bps: 0,
-};
+const settings = SETTINGS;
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let current: SettingsDto;

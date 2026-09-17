@@ -23,6 +23,7 @@ use dzpos_core::models::product::{NewProduct, Product, Unit};
 use dzpos_core::models::shop::{Shop, StoreBlock};
 use dzpos_core::models::stock::Drift;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
+use dzpos_core::print::FactureLayout;
 use dzpos_core::services::avoir::AvoirLine;
 use dzpos_core::services::backup::Backup;
 use dzpos_core::services::cash::{CashPosition, Outgoings, Takings};

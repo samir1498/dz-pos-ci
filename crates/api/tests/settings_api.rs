@@ -103,6 +103,8 @@ async fn the_seeded_shop_reads_as_its_name_reel_and_nothing_planned() {
             "regime": { "regime": "reel", "valid_from": "2026-01-01" },
             "regime_planned": null,
             "theme": null,
+            "facture_layout": "standard",
+            "facture_layouts": ["standard", "compact"],
             // A shop that has never set one refuses a cashier every
             // discount, which is the safe reading of "nobody has decided"
             // and the reason the settings screen has to offer the field.
@@ -155,6 +157,52 @@ async fn choosing_nothing_puts_the_shop_back_on_the_machine() {
 
     let (_, all) = call(&h.app, "GET", "/settings", None).await;
     assert_eq!(all["theme"], Value::Null);
+}
+
+#[tokio::test]
+async fn every_facture_layout_survives_the_round_trip() {
+    let h = harness();
+    for name in ["compact", "standard"] {
+        let (status, body) = call(
+            &h.app,
+            "PUT",
+            "/settings/facture-layout",
+            Some(json!({ "facture_layout": name })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(
+            body["facture_layout"],
+            json!(name),
+            "the answer lost the layout"
+        );
+
+        let (_, all) = call(&h.app, "GET", "/settings", None).await;
+        assert_eq!(
+            all["facture_layout"],
+            json!(name),
+            "the shop file lost the layout"
+        );
+    }
+}
+
+/// The name is closed here too, and for a sharper reason than the theme's:
+/// a layout this build cannot draw is a facture that cannot be printed, and
+/// a shop finds that out at the counter with a customer waiting.
+#[tokio::test]
+async fn a_layout_with_no_template_is_refused() {
+    let h = harness();
+    let (status, body) = call(
+        &h.app,
+        "PUT",
+        "/settings/facture-layout",
+        Some(json!({ "facture_layout": "hologram" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+
+    let (_, all) = call(&h.app, "GET", "/settings", None).await;
+    assert_eq!(all["facture_layout"], json!("standard"));
 }
 
 /// The name is closed. A body naming a theme with no block would leave the

@@ -28,6 +28,8 @@ use crate::models::document::{
 use crate::money::format::{format_centimes, format_qty};
 use crate::money::words::amount_in_words;
 use crate::money::{Money, Regime};
+use crate::print::layout::{FactureLayout, Page, Paper};
+use crate::print::refusals::refuse_what_cannot_be_printed;
 use crate::print::strings::{text, Key};
 use crate::print::{number, payment_mode_key, percent, some_amount};
 
@@ -35,29 +37,6 @@ use crate::print::{number, payment_mode_key, percent, some_amount};
 /// what décret 05-468 art. 3 asks for and what a comptable files it under.
 /// The ticket prints the time as well because a till is reconciled by shift.
 const DATE_FORMAT: &str = "%d/%m/%Y";
-
-/// The sheet the OS print dialog is given. It changes one line of the page,
-/// the `@page size`, and nothing else: an A5 facture is the same facture on
-/// a smaller sheet, not a second layout to keep in step (features.md §4,
-/// "A4/A5 through the OS dialog").
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Paper {
-    A4,
-    A5,
-}
-
-impl Paper {
-    /// The value of the CSS `size` descriptor. The two named page sizes are
-    /// CSS's own, so the browser and the print dialog agree on the sheet
-    /// without the template naming millimetres.
-    pub(crate) const fn css_size(self) -> &'static str {
-        match self {
-            Paper::A4 => "A4",
-            Paper::A5 => "A5",
-        }
-    }
-}
 
 /// The day the shop cancelled a facture and why, as the caller read them
 /// beside the document. They are not on `Document`: `cancelled_at` and
@@ -234,8 +213,8 @@ struct FactureView {
 /// page. An avoir that names the facture it is written against needs that
 /// facture's number, which is not on the avoir's own row, so it goes
 /// through `render_facture_with_reference`.
-pub fn render_facture(doc: &Document, lang: Lang, paper: Paper) -> Result<String, CoreError> {
-    render_facture_with(doc, &FactureInput::default(), lang, paper)
+pub fn render_facture(doc: &Document, lang: Lang, page: Page) -> Result<String, CoreError> {
+    render_facture_with(doc, &FactureInput::default(), lang, page)
 }
 
 /// The same page, given the document `doc.ref_document_id` points at.
@@ -249,7 +228,7 @@ pub fn render_facture_with_reference(
     doc: &Document,
     referenced: Option<&Document>,
     lang: Lang,
-    paper: Paper,
+    page: Page,
 ) -> Result<String, CoreError> {
     render_facture_with(
         doc,
@@ -258,7 +237,7 @@ pub fn render_facture_with_reference(
             cancellation: None,
         },
         lang,
-        paper,
+        page,
     )
 }
 
@@ -269,7 +248,7 @@ pub fn render_facture_with(
     doc: &Document,
     input: &FactureInput<'_>,
     lang: Lang,
-    paper: Paper,
+    page: Page,
 ) -> Result<String, CoreError> {
     // This template titles itself by kind, and the three kinds it has a
     // title for are the three it prints. A ticket has its own 80 mm paper;
@@ -284,74 +263,35 @@ pub fn render_facture_with(
             "this template prints a facture, an avoir or a proforma and nothing else",
         ));
     }
-    // The same refusal the ticket makes, for the same reason: a stored IFU
-    // document carrying a TVA recap contradicts the régime it was issued
-    // under, printing the recap names a tax the document must not name
-    // (CTCA 2026 art. 64), and dropping it quietly hands the buyer a total
-    // whose parts do not add up.
-    if doc.regime == Regime::Ifu && !doc.totals.tva_by_rate.is_empty() {
-        return Err(CoreError::render(
-            "an IFU document carries a TVA recap and has no printable form",
-        ));
-    }
-    // Décret 05-468 art. 3 puts the buyer on the paper: the identifiers of
-    // a company, the name and address of a consumer. A facture with no
-    // buyer block is not a facture, and the honest answer is to refuse it
-    // rather than print a document with an empty half.
-    let Some(buyer) = doc.buyer.as_ref() else {
-        return Err(CoreError::render(
-            "the document has no buyer block and no facture can be printed without one",
-        ));
-    };
-    // Only a facture has a cancelled wording ("facture annulée",
-    // features.md, Numbering row). Nothing cancels an avoir or a proforma,
-    // and inventing the French for it here would be a fiscal wording nobody
-    // reviewed.
-    if doc.status == DocumentStatus::Cancelled && doc.kind != DocumentKind::Facture {
-        return Err(CoreError::render(
-            "only a facture has a printed cancelled wording",
-        ));
-    }
-    // An avoir hands the lines back and asks for nothing, so it carries no
-    // droit de timbre (the stamp is a cash sale's tax anyway, Code du
-    // timbre 2026 art. 100-I). A stored avoir carrying one contradicts
-    // the rule that wrote it: the recap refusal above is the honest answer
-    // here too, because dropping the row hands the buyer a total whose parts
-    // do not add up.
-    if doc.kind == DocumentKind::Avoir && doc.totals.stamp != Money::ZERO {
-        return Err(CoreError::render(
-            "an avoir carries a droit de timbre and has no printable form",
-        ));
-    }
-    // A proforma moves no stock and creates no debt, and the triple it
-    // stores is three zeroes. One that carries a debt contradicts the rule
-    // that wrote it: printing the block would say a quote moved a ledger and
-    // dropping it would hide that the stored row says otherwise.
-    if doc.kind == DocumentKind::Proforma && doc.balance.is_some_and(carries_a_debt) {
-        return Err(CoreError::render(
-            "a proforma carries a debt and has no printable form",
-        ));
-    }
-    // The day and the reason belong to a document the shop cancelled.
-    // Printing them over a live facture would hand a customer a page saying
-    // it is void while the ledger still counts it.
-    if input.cancellation.is_some() && doc.status != DocumentStatus::Cancelled {
-        return Err(CoreError::render(
-            "a document that was not cancelled has no cancellation to print",
-        ));
-    }
-    // Only an avoir is written against another document. Printing "avoir sur
-    // facture" over a facture or a proforma would label the page as
-    // something it is not, and there is no other wording for a reference.
-    if doc.ref_document_id.is_some() && doc.kind != DocumentKind::Avoir {
-        return Err(CoreError::render(
-            "only an avoir names the facture it is written against",
-        ));
-    }
+    let buyer = refuse_what_cannot_be_printed(doc, input)?;
     let reference = reference(doc, input.referenced, lang)?;
-    view(doc, buyer, reference, input.cancellation, lang, paper)?
-        .render()
-        .map_err(CoreError::from)
+    let view = view(doc, buyer, reference, input.cancellation, lang, page.paper)?;
+    render_in(page.layout, view)
+}
+
+/// The page, in the layout that was asked for.
+///
+/// One arm per layout. Every layout is handed the same `FactureView`, which
+/// is the whole reason this is cheap: the decisions are made once above and a
+/// layout chooses how to draw them, never what they are. A new layout is one
+/// file under `templates/`, one wrapper struct beside `FactureView`, and one
+/// arm here.
+fn render_in(layout: FactureLayout, view: FactureView) -> Result<String, CoreError> {
+    match layout {
+        FactureLayout::Standard => view.render().map_err(CoreError::from),
+        FactureLayout::Compact => CompactFactureView { facture: view }
+            .render()
+            .map_err(CoreError::from),
+    }
+}
+
+/// The compact layout. It borrows the standard layout's view whole rather
+/// than copying its fields, so a field added for one page reaches the other
+/// without being listed twice and the two cannot drift apart.
+#[derive(Template)]
+#[template(path = "facture_compact_a4.html")]
+struct CompactFactureView {
+    facture: FactureView,
 }
 
 /// The printed number of the facture an avoir is written against, when the
@@ -549,7 +489,7 @@ const fn title(doc: &Document, lang: Lang) -> &'static str {
 /// Whether a stored triple says anything at all. Three zeroes is what a
 /// document that touched no ledger carries, and it is not a debt of nothing:
 /// it is the ledger saying it was never asked.
-const fn carries_a_debt(balance: BalanceTriple) -> bool {
+pub(crate) const fn carries_a_debt(balance: BalanceTriple) -> bool {
     !(balance.old_balance.as_centimes() == 0
         && balance.remaining_debt.as_centimes() == 0
         && balance.total_debt.as_centimes() == 0)

@@ -15,6 +15,8 @@ pub mod barcode_label;
 pub mod debt_slip;
 pub mod escpos;
 pub mod facture;
+pub mod layout;
+mod refusals;
 pub mod statement;
 pub mod strings;
 pub mod ticket;
@@ -26,8 +28,8 @@ pub use escpos::{
 };
 pub use facture::{
     render_facture, render_facture_with, render_facture_with_reference, Cancellation, FactureInput,
-    Paper,
 };
+pub use layout::{FactureLayout, Page, Paper};
 pub use statement::render_statement;
 pub use ticket::render_ticket;
 

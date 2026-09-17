@@ -358,6 +358,12 @@ pub const ROUTE_GATES: &[Gate] = &[
         why: "cosmetic, not money and not stock, so it stays open to everybody unless a shop asks otherwise (M3 carry-in, 2026-09-10)",
     },
     Gate {
+        method: "PUT",
+        path: "/settings/facture-layout",
+        permission: Some(Permission::EditSettings),
+        why: "which layout the shop's factures print in is not the theme beside it: the theme changes a screen and this changes the paper a customer is handed and a comptable files, so it sits with the other settings a manager holds (2026-09-17)",
+    },
+    Gate {
         method: "POST",
         path: "/stock/recount",
         permission: Some(Permission::CorrectLedger),
@@ -585,5 +591,10 @@ mod tests {
         );
         // The theme stays open.
         assert_eq!(wants("PUT", "/settings/theme"), None);
+        // The facture layout does not: it changes the paper, not a screen.
+        assert_eq!(
+            wants("PUT", "/settings/facture-layout"),
+            Some(Permission::EditSettings)
+        );
     }
 }

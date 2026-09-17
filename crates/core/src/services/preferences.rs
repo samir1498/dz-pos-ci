@@ -1,5 +1,6 @@
 //! What a shop has set that is written over in place rather than dated: the
-//! theme it opens on, and the idle time a session survives.
+//! theme it opens on, the facture layout it prints, and the idle time a
+//! session survives.
 //!
 //! Not in `services::settings`: that module is the dated series a document
 //! reads to know the régime it printed under, and nothing here is ever read
@@ -18,11 +19,15 @@ use chrono::{Duration, NaiveDateTime};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
+use crate::print::FactureLayout;
 use crate::repos::preferences as repo;
 use crate::services::audit;
 
 /// The key the theme is stored under.
 pub const THEME: &str = "theme";
+
+/// The key the chosen facture layout is stored under.
+pub const FACTURE_LAYOUT: &str = "facture_layout";
 
 /// The key the session idle time is stored under, in whole minutes.
 pub const SESSION_IDLE_MINUTES: &str = "session_idle_minutes";
@@ -104,6 +109,37 @@ pub fn set_theme(
         Some(theme) => repo::put(conn, shop_id, THEME, theme.as_str(), at),
         None => repo::clear(conn, shop_id, THEME),
     }
+}
+
+/// The layout the shop's factures print in.
+///
+/// Not an `Option` the way the theme is. A shop that has never chosen still
+/// prints factures, and the layout it prints in is `Standard`, so the answer
+/// to "which layout" is always a layout. A stored name this build cannot read
+/// falls back the same way: printing on the default beats refusing to print.
+pub fn facture_layout(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+) -> Result<FactureLayout, CoreError> {
+    Ok(repo::value(conn, shop_id, FACTURE_LAYOUT)?
+        .as_deref()
+        .and_then(FactureLayout::parse)
+        .unwrap_or_default())
+}
+
+/// Records the layout the shop prints factures in.
+///
+/// No audit row, for the reason the theme has none: `services::audit` records
+/// what somebody would have to answer for, and which of the shop's own
+/// layouts a facture is drawn in is not that. What the facture says is
+/// audited; the sheet it is drawn on is a preference.
+pub fn set_facture_layout(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    layout: FactureLayout,
+    at: NaiveDateTime,
+) -> Result<(), CoreError> {
+    repo::put(conn, shop_id, FACTURE_LAYOUT, layout.as_str(), at)
 }
 
 /// How long a session survives with nothing happening on it.
@@ -192,6 +228,44 @@ mod tests {
             set_theme(&mut conn, SHOP, Some(chosen), at()).unwrap();
             assert_eq!(theme(&mut conn, SHOP).unwrap(), Some(chosen));
         }
+    }
+
+    #[test]
+    fn a_shop_that_has_never_chosen_prints_on_the_standard_layout() {
+        let (_dir, mut conn) = open();
+        assert_eq!(
+            facture_layout(&mut conn, SHOP).unwrap(),
+            FactureLayout::Standard
+        );
+    }
+
+    #[test]
+    fn every_facture_layout_survives_a_round_trip() {
+        let (_dir, mut conn) = open();
+        for chosen in FactureLayout::ALL {
+            set_facture_layout(&mut conn, SHOP, chosen, at()).unwrap();
+            assert_eq!(facture_layout(&mut conn, SHOP).unwrap(), chosen);
+        }
+    }
+
+    /// A build that has seen a layout a later one wrote still prints. The
+    /// row is left alone rather than repaired: the newer build is the one
+    /// that knows what the name means, and clearing it here would lose the
+    /// shop's choice the moment an older build opened the file once.
+    #[test]
+    fn a_layout_this_build_never_heard_of_prints_on_the_standard_one() {
+        let (_dir, mut conn) = open();
+        repo::put(&mut conn, SHOP, FACTURE_LAYOUT, "hologram", at()).unwrap();
+        assert_eq!(
+            facture_layout(&mut conn, SHOP).unwrap(),
+            FactureLayout::Standard
+        );
+        assert_eq!(
+            repo::value(&mut conn, SHOP, FACTURE_LAYOUT)
+                .unwrap()
+                .as_deref(),
+            Some("hologram")
+        );
     }
 
     #[test]

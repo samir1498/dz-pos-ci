@@ -118,3 +118,35 @@ test("a régime change dated ahead is planned; dated back it is in force", async
   await regimeForm.getByRole("button", { name: t("action_apply") }).click();
   await expect(page.getByTestId("regime-current")).toContainText(t("regime_reel"));
 });
+
+/**
+ * The layout picker through a real browser.
+ *
+ * The picker's own wiring is covered by the jsdom test beside the component.
+ * What only a browser can say is this: the kit's select is a listbox the app
+ * draws, and jsdom cannot open it. That the printed page then comes back in
+ * the chosen layout is the API's business and is proved in
+ * `crates/api/tests/print_api.rs`, against a real facture.
+ */
+test("the chosen facture layout survives a reload", async ({ page }) => {
+  await page.goto("/settings/printing");
+  const picker = page.getByRole("combobox", { name: t("settings_facture_layout") });
+  await expect(picker).toContainText(t("facture_layout_standard"));
+
+  await picker.click();
+  await page.getByRole("option", { name: t("facture_layout_compact") }).click();
+  await expect(picker).toContainText(t("facture_layout_compact"));
+
+  // Read back off the server, not out of the screen's own memory.
+  await page.reload();
+  const reloaded = page.getByRole("combobox", { name: t("settings_facture_layout") });
+  await expect(reloaded).toContainText(t("facture_layout_compact"));
+
+  // Hand the shop back on the standard layout. Every spec in a run shares
+  // one database and the suites are ordered by filename, so the specs that
+  // print a facture after this one must meet the sheet they were written
+  // against.
+  await reloaded.click();
+  await page.getByRole("option", { name: t("facture_layout_standard") }).click();
+  await expect(reloaded).toContainText(t("facture_layout_standard"));
+});

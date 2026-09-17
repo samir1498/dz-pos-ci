@@ -9,7 +9,7 @@
 //! router's own route list in both directions, so neither can move without
 //! the other.
 //!
-//! The router's list is read out of `crates/api/src/lib.rs`, because axum's
+//! The router's list is read out of `crates/api/src/router.rs`, because axum's
 //! `Router` does not hand its routes back. The same shape as
 //! `apps/desktop/src/theme.test.ts`, which greps the screens for a theme
 //! branch: a source walk is what there is when the thing being checked is a
@@ -171,11 +171,11 @@ async fn a_cashier_is_refused_and_a_manager_is_not_on_every_gated_route() {
 
 /// The router, as source. Read at compile time so this test cannot be run
 /// against a file that is not the one that shipped.
-const ROUTER_SOURCE: &str = include_str!("../src/lib.rs");
+const ROUTER_SOURCE: &str = include_str!("../src/router.rs");
 
 /// Every route the router declares, as (method, path).
 ///
-/// `lib.rs` writes them as `.route("/path", get(..).post(..))` or
+/// `router.rs` writes them as `.route("/path", get(..).post(..))` or
 /// `.route("/path", post(..))`, sometimes over several lines, so the path is
 /// taken off the `.route(` line and the methods off everything up to the
 /// closing of that call.
@@ -243,7 +243,7 @@ fn the_router_source_is_readable_and_declares_the_routes_it_has() {
     let routes = declared_routes();
     assert!(
         routes.len() > 40,
-        "only {} routes were read out of lib.rs; the parser has stopped working",
+        "only {} routes were read out of router.rs; the parser has stopped working",
         routes.len()
     );
     for wanted in [
@@ -256,7 +256,7 @@ fn the_router_source_is_readable_and_declares_the_routes_it_has() {
     ] {
         assert!(
             routes.contains(&(wanted.0.to_owned(), wanted.1.to_owned())),
-            "{wanted:?} was not read out of lib.rs"
+            "{wanted:?} was not read out of router.rs"
         );
     }
 }
@@ -379,7 +379,7 @@ fn the_table_is_about_writes_and_the_reads_that_carry_lists_or_reports_out() {
 /// The gate's own default when the walk above is not looking.
 ///
 /// Every write the router answers today has a row, and the two walks are
-/// what keep that true. They read `lib.rs` as text, so a route that arrives
+/// what keep that true. They read `router.rs` as text, so a route that arrives
 /// through a helper, a nested router or a `route_layer` is invisible to
 /// them. What holds then is the gate itself: a write on a route no
 /// permission has been decided for is refused, because the honest answer to

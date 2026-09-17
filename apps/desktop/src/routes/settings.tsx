@@ -24,6 +24,7 @@ import {
   Info,
   Landmark,
   Palette,
+  Printer,
   Smartphone,
   Store,
   Users,
@@ -58,6 +59,12 @@ export const SETTINGS_SECTIONS: readonly SectionItem[] = [
   { to: "/settings/shop", label: "settings_nav_shop", icon: Store },
   { to: "/settings/regime", label: "settings_nav_regime", icon: Landmark },
   { to: "/settings/appearance", label: "settings_nav_appearance", icon: Palette },
+  {
+    to: "/settings/printing",
+    label: "settings_nav_printing",
+    icon: Printer,
+    permission: "edit_settings",
+  },
   {
     to: "/settings/users",
     label: "settings_nav_users",

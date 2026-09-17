@@ -755,5 +755,12 @@
   "phones_revoke": "Révoquer",
   "phones_revoke_title": "Révoquer ce téléphone ?",
   "phones_revoke_confirm": "Oui, révoquer",
-  "phones_revoke_confirm_hint": "Il cesse de vendre dès sa prochaine action et devra être appairé à nouveau avec un nouveau code."
+  "phones_revoke_confirm_hint": "Il cesse de vendre dès sa prochaine action et devra être appairé à nouveau avec un nouveau code.",
+  "settings_nav_printing": "Impression",
+  "settings_facture_layout": "Modèle de facture",
+  "settings_facture_layout_hint": "Comment la facture est dessinée. Le format du papier, A4 ou A5, se choisit à l'impression.",
+  "facture_layout_standard": "Standard",
+  "facture_layout_standard_hint": "Espacement large, une ligne par article, facile à lire.",
+  "facture_layout_compact": "Compact",
+  "facture_layout_compact_hint": "Les mêmes mentions, en plus serré : un long panier tient sur une feuille."
 }

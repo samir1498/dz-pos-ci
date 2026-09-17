@@ -9,11 +9,12 @@ use axum::Json;
 use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
 use dzpos_core::print::{
-    render_facture_with, render_ticket, render_ticket_escpos, Cancellation, FactureInput, Paper,
+    render_facture_with, render_ticket, render_ticket_escpos, Cancellation, FactureInput,
+    FactureLayout, Page, Paper,
 };
 use dzpos_core::services::documents::DocumentKind;
 use dzpos_core::services::sales::{NewSale, SaleKind};
-use dzpos_core::services::{avoir, documents, sales};
+use dzpos_core::services::{avoir, documents, preferences, sales};
 use serde::Deserialize;
 
 use crate::dto::{CancelDocumentDto, NewAvoirDto, NewSaleDto, SaleDto, SaleKindDto};
@@ -191,13 +192,20 @@ pub async fn print_ticket(
 }
 
 /// The language and the sheet, both named by the caller on every call. The
-/// sheet is not a setting either: the same facture goes on A4 in the office
-/// and on A5 at the counter, and the till is the only place that knows which
-/// the cashier reached for (features.md §4).
+/// sheet is not a setting: the same facture goes on A4 in the office and on
+/// A5 at the counter, and the till is the only place that knows which the
+/// cashier reached for (features.md §4).
+///
+/// The layout is the opposite and is left out of most calls. It is how the
+/// page is drawn rather than what it is drawn on, the shop chooses it once in
+/// settings, and every facture follows that choice. Naming it here overrides
+/// the choice for one page, which is what a settings screen showing a preview
+/// of each layout needs and nothing else does.
 #[derive(Deserialize)]
 pub struct FactureQuery {
     lang: Lang,
     paper: Paper,
+    layout: Option<FactureLayout>,
 }
 
 /// The A4 or A5 sheet for a stored facture, avoir or proforma, as an HTML
@@ -222,10 +230,17 @@ pub async fn facture(
 ) -> Result<Html<String>, ApiError> {
     let Path(id) =
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
-    let Query(FactureQuery { lang, paper }) = query
-        .map_err(|_| ApiError::BadRequest("lang must be fr, en or ar and paper a4 or a5".into()))?;
+    let Query(FactureQuery {
+        lang,
+        paper,
+        layout,
+    }) = query.map_err(|_| {
+        ApiError::BadRequest(
+            "lang must be fr, en or ar, paper a4 or a5, and layout one the shop has".into(),
+        )
+    })?;
     let shop = state.shop_id;
-    let (found, referenced) = state
+    let (found, referenced, chosen) = state
         .blocking(move |c| {
             let found = documents::get(c, shop, id)?;
             if !matches!(
@@ -243,7 +258,14 @@ pub async fn facture(
                 Some(ref_id) => Some(documents::get(c, shop, ref_id)?),
                 None => None,
             };
-            Ok((found, referenced))
+            // The shop's layout is read in the same call as the document, so
+            // the page and the layout it is drawn in come out of one look at
+            // the file. A layout named in the query wins, for the preview.
+            let chosen = match layout {
+                Some(layout) => layout,
+                None => preferences::facture_layout(c, shop)?,
+            };
+            Ok((found, referenced, chosen))
         })
         .await?;
     let cancellation = found.cancellation.as_ref().map(|c| Cancellation {
@@ -257,7 +279,10 @@ pub async fn facture(
             cancellation,
         },
         lang,
-        paper,
+        Page {
+            paper,
+            layout: chosen,
+        },
     )?))
 }
 

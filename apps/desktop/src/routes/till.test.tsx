@@ -16,9 +16,10 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
-import type { CategoryDto, CustomerDto, ProductDto, SaleDto, SettingsDto } from "@dzpos/shared";
+import type { CategoryDto, CustomerDto, ProductDto, SaleDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import { SessionProvider } from "@/lib/session";
+import { SETTINGS } from "@/test/settings";
 import { TillScreen } from "./till";
 
 // The two products of the till_cash_sale_two_rates fixture case: 400,00 DA
@@ -81,13 +82,7 @@ const categories: CategoryDto[] = [
   { id: 2, shop_id: 1, name: "Alimentaire", default_rate_bps: 900 },
 ];
 
-const settings: SettingsDto = {
-  store: { name: "Mon magasin", rc: null, nif: null, nis: null, ai: null, address: null, phone: null },
-  regime: { regime: "reel", valid_from: "2026-01-01" },
-  regime_planned: null,
-  theme: null,
-  discount_threshold_bps: 0,
-};
+const settings = SETTINGS;
 
 /** What the API answers for the fixture basket, so the confirmation shows
  * the server's amounts and not the screen's preview. */

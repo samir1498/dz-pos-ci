@@ -31,6 +31,7 @@ import { BackupsRoom } from "./settings.backups";
 import { DataRoom } from "./settings.data";
 import { RegimeRoom } from "./settings.regime";
 import { ShopRoom } from "./settings.shop";
+import { PrintingRoom } from "./settings.printing";
 import { ThemePanel } from "@/components/settings/ThemePanel";
 
 /** The régime's "valid from" field is three boxes now, not one native date
@@ -83,6 +84,8 @@ const seeded: SettingsDto = {
   regime: { regime: "reel", valid_from: "2026-01-01" },
   regime_planned: null,
   theme: null,
+  facture_layout: "standard",
+  facture_layouts: ["standard", "compact"],
   discount_threshold_bps: 0,
 };
 
@@ -160,6 +163,7 @@ function mount(lang: Lang = "fr", path = "/settings/shop") {
     room("/shop", ShopRoom),
     room("/regime", RegimeRoom),
     room("/appearance", ThemePanel),
+    room("/printing", PrintingRoom),
     room("/users", () => null),
     room("/phones", () => null),
     room("/backups", BackupsRoom),
@@ -213,6 +217,13 @@ beforeEach(() => {
       if (typeof body !== "object" || body === null) throw new Error("no body");
       current = { ...current, store: { ...store, ...body } };
       return Promise.resolve(json(200, current.store));
+    }
+    if (init?.method === "PUT" && url.endsWith("/settings/facture-layout")) {
+      const body: unknown = JSON.parse(String(init.body));
+      if (typeof body !== "object" || body === null) throw new Error("no body");
+      const chosen = "facture_layout" in body && body.facture_layout === "compact";
+      current = { ...current, facture_layout: chosen ? "compact" : "standard" };
+      return Promise.resolve(json(200, current));
     }
     if (init?.method === "POST" && url.endsWith("/settings/regime")) {
       if (regimeAnswer !== null) return Promise.resolve(regimeAnswer());
@@ -525,5 +536,40 @@ describe("in Arabic", () => {
     expect(within(current_).getByText("2026-01-01")).toHaveAttribute("dir", "ltr");
     const planned = screen.getByTestId("regime-planned");
     expect(within(planned).getByText("2027-01-01")).toHaveAttribute("dir", "ltr");
+  });
+});
+
+describe("the printing room", () => {
+  test("shows the layout the shop is on and what it means", async () => {
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_facture_layout });
+    expect(picker).toHaveTextContent(fr.facture_layout_standard);
+    expect(screen.getByText(fr.facture_layout_standard_hint)).toBeInTheDocument();
+  });
+
+  test("sends the layout that was picked and shows the answer", async () => {
+    const user = userEvent.setup();
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_facture_layout });
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: fr.facture_layout_compact }));
+    await waitFor(() => expect(sent("PUT").url).toContain("/settings/facture-layout"));
+    expect(sent("PUT").body).toEqual({ facture_layout: "compact" });
+    // The answer is the whole page, so the screen reads the new layout back
+    // rather than trusting the click that sent it.
+    await waitFor(() => expect(picker).toHaveTextContent(fr.facture_layout_compact));
+    expect(screen.getByText(fr.facture_layout_compact_hint)).toBeInTheDocument();
+  });
+
+  /** The list is the server's. A build that offered every layout it has
+   * heard of would show a shop an option its own server cannot print. */
+  test("offers only the layouts the server named", async () => {
+    const user = userEvent.setup();
+    current = { ...seeded, facture_layouts: ["standard"] };
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_facture_layout });
+    await user.click(picker);
+    expect(await screen.findByRole("option", { name: fr.facture_layout_standard })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: fr.facture_layout_compact })).not.toBeInTheDocument();
   });
 });

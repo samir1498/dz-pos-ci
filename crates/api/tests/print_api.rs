@@ -10,7 +10,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use diesel::connection::SimpleConnection;
 use dzpos_core::lang::Lang;
-use dzpos_core::print::{render_facture, render_ticket, Paper};
+use dzpos_core::print::{render_facture, render_ticket, FactureLayout, Page, Paper};
 use dzpos_core::services::documents;
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
@@ -325,11 +325,87 @@ async fn a_facture_is_the_html_the_core_renders_on_the_sheet_that_was_asked_for(
             let stored = documents::get(&mut conn, SHOP, i32::try_from(id).unwrap()).unwrap();
             assert_eq!(
                 body,
-                render_facture(&stored, lang, paper).unwrap(),
+                render_facture(
+                    &stored,
+                    lang,
+                    Page {
+                        paper,
+                        layout: FactureLayout::Standard,
+                    },
+                )
+                .unwrap(),
                 "{lang:?} {sheet}"
             );
         }
     }
+}
+
+/// The layout the shop chose reaches the paper, and a layout named in the
+/// query beats it.
+///
+/// Two claims and both matter. The first is the whole feature: a shop that
+/// picked a layout in settings and then printed a facture in the other one
+/// would have chosen nothing. The second is what a settings screen showing a
+/// preview of each layout needs, and it is the one that could silently stop
+/// working, because every other call leaves the query out.
+///
+/// The assertion is the page margin, 8mm on the compact stylesheet against
+/// 12mm on the standard one, rather than a word: which layout was drawn is
+/// the question, not what it says.
+#[tokio::test]
+async fn the_facture_comes_back_in_the_layout_the_shop_chose() {
+    let (_dir, _path, app) = app();
+    let id = a_facture(&app).await;
+
+    let (_, _, standard) =
+        call_text(&app, &format!("/sales/{id}/facture?lang=fr&paper=a4"), true).await;
+    assert!(standard.contains("margin: 12mm"), "the default layout");
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/settings/facture-layout")
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "facture_layout": "compact" }).to_string(),
+        ))
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(req).await.unwrap().status(),
+        StatusCode::OK
+    );
+
+    let (_, _, compact) =
+        call_text(&app, &format!("/sales/{id}/facture?lang=fr&paper=a4"), true).await;
+    assert!(compact.contains("margin: 8mm"), "the layout the shop chose");
+
+    let (_, _, forced) = call_text(
+        &app,
+        &format!("/sales/{id}/facture?lang=fr&paper=a4&layout=standard"),
+        true,
+    )
+    .await;
+    assert!(
+        forced.contains("margin: 12mm"),
+        "a layout named in the query has to beat the setting"
+    );
+}
+
+/// A layout nobody has a template for is refused rather than drawn on the
+/// default: a preview that quietly showed the standard page when asked for
+/// one that does not exist would say a layout works when it does not.
+#[tokio::test]
+async fn a_layout_the_app_cannot_draw_is_422_in_the_envelope() {
+    let (_dir, _path, app) = app();
+    let id = a_facture(&app).await;
+    let (status, _, _) = call_text(
+        &app,
+        &format!("/sales/{id}/facture?lang=fr&paper=a4&layout=hologram"),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]

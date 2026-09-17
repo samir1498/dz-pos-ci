@@ -30,6 +30,7 @@ import { Route as SettingsAppearanceRouteImport } from "./routes/settings.appear
 import { Route as SettingsBackupsRouteImport } from "./routes/settings.backups"
 import { Route as SettingsDataRouteImport } from "./routes/settings.data"
 import { Route as SettingsPhonesRouteImport } from "./routes/settings.phones"
+import { Route as SettingsPrintingRouteImport } from "./routes/settings.printing"
 import { Route as SettingsRegimeRouteImport } from "./routes/settings.regime"
 import { Route as SettingsShopRouteImport } from "./routes/settings.shop"
 import { Route as SettingsUsersRouteImport } from "./routes/settings.users"
@@ -140,6 +141,11 @@ const SettingsPhonesRoute = SettingsPhonesRouteImport.update({
   path: "/phones",
   getParentRoute: () => SettingsRoute,
 } as any)
+const SettingsPrintingRoute = SettingsPrintingRouteImport.update({
+  id: "/printing",
+  path: "/printing",
+  getParentRoute: () => SettingsRoute,
+} as any)
 const SettingsRegimeRoute = SettingsRegimeRouteImport.update({
   id: "/regime",
   path: "/regime",
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   "/settings/backups": typeof SettingsBackupsRoute
   "/settings/data": typeof SettingsDataRoute
   "/settings/phones": typeof SettingsPhonesRoute
+  "/settings/printing": typeof SettingsPrintingRoute
   "/settings/regime": typeof SettingsRegimeRoute
   "/settings/shop": typeof SettingsShopRoute
   "/settings/users": typeof SettingsUsersRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   "/settings/backups": typeof SettingsBackupsRoute
   "/settings/data": typeof SettingsDataRoute
   "/settings/phones": typeof SettingsPhonesRoute
+  "/settings/printing": typeof SettingsPrintingRoute
   "/settings/regime": typeof SettingsRegimeRoute
   "/settings/shop": typeof SettingsShopRoute
   "/settings/users": typeof SettingsUsersRoute
@@ -236,6 +244,7 @@ export interface FileRoutesById {
   "/settings/backups": typeof SettingsBackupsRoute
   "/settings/data": typeof SettingsDataRoute
   "/settings/phones": typeof SettingsPhonesRoute
+  "/settings/printing": typeof SettingsPrintingRoute
   "/settings/regime": typeof SettingsRegimeRoute
   "/settings/shop": typeof SettingsShopRoute
   "/settings/users": typeof SettingsUsersRoute
@@ -265,6 +274,7 @@ export interface FileRouteTypes {
     | "/settings/backups"
     | "/settings/data"
     | "/settings/phones"
+    | "/settings/printing"
     | "/settings/regime"
     | "/settings/shop"
     | "/settings/users"
@@ -291,6 +301,7 @@ export interface FileRouteTypes {
     | "/settings/backups"
     | "/settings/data"
     | "/settings/phones"
+    | "/settings/printing"
     | "/settings/regime"
     | "/settings/shop"
     | "/settings/users"
@@ -318,6 +329,7 @@ export interface FileRouteTypes {
     | "/settings/backups"
     | "/settings/data"
     | "/settings/phones"
+    | "/settings/printing"
     | "/settings/regime"
     | "/settings/shop"
     | "/settings/users"
@@ -493,6 +505,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof SettingsPhonesRouteImport
       parentRoute: typeof SettingsRoute
     }
+    "/settings/printing": {
+      id: "/settings/printing"
+      path: "/printing"
+      fullPath: "/settings/printing"
+      preLoaderRoute: typeof SettingsPrintingRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     "/settings/regime": {
       id: "/settings/regime"
       path: "/regime"
@@ -530,6 +549,7 @@ interface SettingsRouteChildren {
   SettingsBackupsRoute: typeof SettingsBackupsRoute
   SettingsDataRoute: typeof SettingsDataRoute
   SettingsPhonesRoute: typeof SettingsPhonesRoute
+  SettingsPrintingRoute: typeof SettingsPrintingRoute
   SettingsRegimeRoute: typeof SettingsRegimeRoute
   SettingsShopRoute: typeof SettingsShopRoute
   SettingsUsersRoute: typeof SettingsUsersRoute
@@ -542,6 +562,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsBackupsRoute: SettingsBackupsRoute,
   SettingsDataRoute: SettingsDataRoute,
   SettingsPhonesRoute: SettingsPhonesRoute,
+  SettingsPrintingRoute: SettingsPrintingRoute,
   SettingsRegimeRoute: SettingsRegimeRoute,
   SettingsShopRoute: SettingsShopRoute,
   SettingsUsersRoute: SettingsUsersRoute,

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fr" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>FACTURE FA-2026-000042</title>
+<style>
+@page { size: A4; margin: 8mm }
+body { margin: 0; background: #fff; color: #000; font: 9px/1.3 "DejaVu Sans", Arial, sans-serif }
+.doc { max-inline-size: 194mm; margin: 0 auto; position: relative }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 6mm; border-block-end: 1.5px solid #000; padding-block-end: 2mm }
+.head h1 { font-size: 15px; margin: 0 0 .5mm }
+.ident { text-align: end }
+.num { white-space: nowrap }
+/* Bidi. A value the shop did not write in Arabic keeps its own order on an
+Arabic page: a phone, an identifier with a space in it, a date beside a time,
+a period running from one day to another, a signed amount, a quantity against
+a unit price. Each of those is one left-to-right run, and the neutral
+characters inside it (a space, a slash, a minus sign) belong to that run and
+not to the Arabic line around it. Without this a phone prints back to front, a
+negative amount carries its sign on the far side, and a period reads from its
+last day to its first. The isolation sits on the inline span and never on the
+box around it, so a cell and a line keep the alignment the page gives them.
+Text the shop typed is wrapped in bdi instead, because an address or a product
+name can be in either script and bdi takes its direction from what is in it.
+Checked with fribidi against these goldens, 2026-09-12. */
+.amount, .num, .qty, .rate { direction: ltr; unicode-bidi: isolate }
+.annulee { position: absolute; inset-block-start: 96mm; inset-inline: 0; text-align: center }
+.annulee span { display: inline-block; border: 3px solid #949494; color: #949494; font-size: 38px; font-weight: 700; letter-spacing: .15em; padding: 2mm 8mm; transform: rotate(-24deg) }
+.cancelled { margin-block-start: 1mm; font-weight: 700 }
+.notice { margin: 3mm 0 0; border: 1px solid #000; padding: 1.5mm 2mm; font-weight: 700 }
+.parties { display: flex; gap: 4mm; margin-block-start: 4mm }
+.party { flex: 1 1 0; border: 1px solid #000; padding: 2mm }
+.party h2 { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 1.2mm }
+.party .who { font-weight: 700 }
+.label { color: #333 }
+.lines { display: flex; margin-block-start: 4mm }
+.lines table { flex: 1 1 auto }
+table { border-collapse: collapse }
+th, td { border: 1px solid #000; padding: .9mm 1.4mm; text-align: start; vertical-align: top }
+th { background: #eee; font-weight: 700 }
+td.n, th.n { text-align: end; white-space: nowrap }
+.totals { display: flex; justify-content: flex-end; margin-block-start: 3mm }
+.totals table { inline-size: 88mm }
+.totals td { border: none; padding: .6mm 1.4mm }
+.totals tr.net td { border-block-start: 1px solid #000; font-weight: 700; font-size: 11px }
+.cur { margin-inline-start: .4em }
+.words { margin-block-start: 3.5mm; border: 1px solid #000; padding: 2mm }
+.blocks { display: flex; gap: 4mm; margin-block-start: 3.5mm }
+.block { flex: 1 1 0; border: 1px solid #000; padding: 2mm }
+.block h2 { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 1.2mm }
+.block .row { display: flex; justify-content: space-between; gap: 4mm }
+.block .row.total { font-weight: 700 }
+.sign { display: flex; justify-content: space-between; gap: 16mm; margin-block-start: 6mm }
+.sign div { flex: 1 1 0; border-block-start: 1px solid #000; padding-block-start: 1.5mm; min-block-size: 15mm }
+</style>
+</head>
+<body>
+<article class="doc">
+<header class="head">
+<div>
+<h1>FACTURE</h1>
+<div><span class="num">FA-2026-000042</span></div>
+<div><span class="num">09/09/2026</span></div>
+</div>
+<div class="ident">
+<div class="who"><bdi>Mon magasin</bdi></div>
+</div>
+</header>
+<section class="parties">
+<div class="party">
+<h2>Vendeur</h2>
+<div class="who"><bdi>Mon magasin</bdi></div>
+<div><bdi>12 rue Didouche Mourad, Alger</bdi></div>
+<div><span class="num">0555 12 34 56</span></div>
+<div><span class="label">RC</span> <span class="num">16/00-1234567 B 25</span></div>
+<div><span class="label">NIF</span> <span class="num">000216001234567</span></div>
+<div><span class="label">NIS</span> <span class="num">000216001234567 00</span></div>
+<div><span class="label">AI</span> <span class="num">16001234567</span></div>
+</div>
+<div class="party">
+<h2>Client</h2>
+<div class="who"><bdi>Yacine Meziane</bdi></div>
+<div><bdi>14 rue des Frères Bouadou, Bir Mourad Raïs</bdi></div>
+</div>
+</section>
+<div class="lines">
+<table>
+<thead>
+<tr><th>Désignation</th><th class="n">Qté</th><th class="n">Prix unitaire HT</th><th class="n">Remise</th><th class="n">TVA</th><th class="n">Montant HT</th></tr>
+</thead>
+<tbody>
+<tr><td><bdi>Huile &#60;Elio&#62; &#38; Co 5 L</bdi></td><td class="n"><span class="qty qty-line">2</span></td><td class="n"><span class="amount amount-unit-price">150,00</span></td><td class="n"></td><td class="n"><span class="rate rate-line">19 %</span></td><td class="n"><span class="amount amount-line">300,00</span></td></tr>
+<tr><td><bdi>Farine</bdi></td><td class="n"><span class="qty qty-line">1,5</span></td><td class="n"><span class="amount amount-unit-price">320,00</span></td><td class="n"></td><td class="n"><span class="rate rate-line">9 %</span></td><td class="n"><span class="amount amount-line">480,00</span></td></tr>
+<tr><td><bdi>Pain</bdi></td><td class="n"><span class="qty qty-line">1</span></td><td class="n"><span class="amount amount-unit-price">80,00</span></td><td class="n"><span class="amount amount-line-discount">-10,00</span></td><td class="n"><span class="rate rate-line">0 %</span></td><td class="n"><span class="amount amount-line">70,00</span></td></tr>
+</tbody>
+</table>
+</div>
+<div class="totals">
+<table>
+<tbody>
+<tr><td>Total HT</td><td class="n"><span class="amount amount-total">850,00</span><span class="cur">DA</span></td></tr>
+<tr><td>Remise</td><td class="n"><span class="amount amount-discount">-20,00</span><span class="cur">DA</span></td></tr>
+<tr><td>Sous-total HT</td><td class="n"><span class="amount amount-subtotal">830,00</span><span class="cur">DA</span></td></tr>
+<tr><td>TVA <span class="rate rate-tva">0 %</span> <span class="label">Base <span class="amount amount-tva-base">68,36</span></span></td><td class="n"><span class="amount amount-tva">0,00</span><span class="cur">DA</span></td></tr>
+<tr><td>TVA <span class="rate rate-tva">9 %</span> <span class="label">Base <span class="amount amount-tva-base">468,69</span></span></td><td class="n"><span class="amount amount-tva">42,18</span><span class="cur">DA</span></td></tr>
+<tr><td>TVA <span class="rate rate-tva">19 %</span> <span class="label">Base <span class="amount amount-tva-base">292,95</span></span></td><td class="n"><span class="amount amount-tva">55,66</span><span class="cur">DA</span></td></tr>
+<tr><td>Total TTC</td><td class="n"><span class="amount amount-total-ttc">927,84</span><span class="cur">DA</span></td></tr>
+<tr><td>Droit de timbre</td><td class="n"><span class="amount amount-stamp">10,00</span><span class="cur">DA</span></td></tr>
+<tr class="net"><td>Net à payer</td><td class="n"><span class="amount amount-net-to-pay">937,84</span><span class="cur">DA</span></td></tr>
+</tbody>
+</table>
+</div>
+<p class="words">Arrêtée la présente facture à la somme de <strong class="in-words">neuf-cent-trente-sept dinars et quatre-vingt-quatre centimes</strong></p>
+<section class="blocks">
+<div class="block">
+<h2>Mode de paiement</h2>
+<div>Espèces</div>
+</div>
+</section>
+<section class="sign">
+<div>Vendeur · Cachet et signature</div>
+<div>Client · Cachet et signature</div>
+</section>
+</article>
+</body>
+</html>

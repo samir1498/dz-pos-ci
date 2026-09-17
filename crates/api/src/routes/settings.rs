@@ -9,11 +9,13 @@ use chrono::{NaiveDateTime, NaiveTime};
 use dzpos_core::error::CoreError;
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::money::Bps;
+use dzpos_core::print::FactureLayout;
 use dzpos_core::services::clock;
 use dzpos_core::services::{preferences, settings, shops};
 
 use crate::dto::{
-    parse_day, DiscountThresholdChangeDto, RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto,
+    parse_day, DiscountThresholdChangeDto, FactureLayoutChoiceDto, FactureLayoutDto,
+    RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto,
 };
 use crate::error::ApiError;
 use crate::session::CurrentUser;
@@ -36,6 +38,8 @@ fn read_all(
         regime: settings::regime_current(conn, shop, at)?.into(),
         regime_planned: settings::regime_planned(conn, shop, at)?.map(Into::into),
         theme: preferences::theme(conn, shop)?.map(Into::into),
+        facture_layout: preferences::facture_layout(conn, shop)?.into(),
+        facture_layouts: FactureLayout::ALL.map(FactureLayoutDto::from).to_vec(),
         discount_threshold_bps: settings::discount_threshold_as_of(conn, shop, at)?.as_u32(),
     })
 }
@@ -76,6 +80,29 @@ pub async fn set_theme(
     let all = state
         .blocking(move |c| {
             preferences::set_theme(c, shop, chosen, now())?;
+            read_all(c, shop)
+        })
+        .await?;
+    Ok(Json(all))
+}
+
+/// Records the layout the shop's factures print in.
+///
+/// Answers the whole settings page for the reason `set_theme` does: the
+/// screen should read one shape back rather than patch its own copy.
+///
+/// No `null` arm, unlike the theme. A shop always prints in some layout, and
+/// "none" would be `standard` under another name.
+pub async fn set_facture_layout(
+    State(state): State<AppState>,
+    body: Result<Json<FactureLayoutChoiceDto>, JsonRejection>,
+) -> Result<Json<SettingsDto>, ApiError> {
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let chosen = FactureLayout::from(dto.facture_layout);
+    let shop = state.shop_id;
+    let all = state
+        .blocking(move |c| {
+            preferences::set_facture_layout(c, shop, chosen, now())?;
             read_all(c, shop)
         })
         .await?;

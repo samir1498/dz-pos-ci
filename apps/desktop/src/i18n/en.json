@@ -755,5 +755,12 @@
   "phones_revoke": "Revoke",
   "phones_revoke_title": "Revoke this phone?",
   "phones_revoke_confirm": "Yes, revoke",
-  "phones_revoke_confirm_hint": "It stops selling on its next action and has to be paired again with a fresh code."
+  "phones_revoke_confirm_hint": "It stops selling on its next action and has to be paired again with a fresh code.",
+  "settings_nav_printing": "Printing",
+  "settings_facture_layout": "Invoice layout",
+  "settings_facture_layout_hint": "How the invoice is drawn. The paper size, A4 or A5, is chosen when printing.",
+  "facture_layout_standard": "Standard",
+  "facture_layout_standard_hint": "Roomy spacing, one line per article, easy to read.",
+  "facture_layout_compact": "Compact",
+  "facture_layout_compact_hint": "The same mentions, drawn tight: a long basket fits on one sheet."
 }

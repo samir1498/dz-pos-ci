@@ -37,6 +37,9 @@ const settings: SettingsDto = {
   regime: { regime: "reel", valid_from: "2026-01-01" },
   regime_planned: null,
   theme: null,
+  facture_layout: "standard",
+
+  facture_layouts: ["standard", "compact"],
   discount_threshold_bps: 0,
 };
 

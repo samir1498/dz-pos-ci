@@ -13,6 +13,7 @@ import type { RegimeDto } from "../generated/RegimeDto";
 import type { RestoreDto } from "../generated/RestoreDto";
 import type { SettingsDto } from "../generated/SettingsDto";
 import type { StoreDto } from "../generated/StoreDto";
+import type { FactureLayoutDto } from "../generated/FactureLayoutDto";
 import type { ThemeDto } from "../generated/ThemeDto";
 import { day, exactInteger } from "./common";
 import type { Assert, Matches } from "./drift";
@@ -68,12 +69,22 @@ export const themeSchema = z.enum([
 ]) satisfies z.ZodType<ThemeDto>;
 type _Theme = Assert<Matches<ThemeDto, typeof themeSchema>>;
 
+/** Which layout a facture is drawn in. Not the paper: the sheet is named on
+ *  each print, because the till knows which tray the cashier reached for. */
+export const factureLayoutSchema = z.enum(["standard", "compact"]) satisfies z.ZodType<FactureLayoutDto>;
+type _FactureLayout = Assert<Matches<FactureLayoutDto, typeof factureLayoutSchema>>;
+
 export const settingsSchema = z.object({
   store: storeSchema,
   regime: datedRegimeSchema,
   regime_planned: datedRegimeSchema.nullable(),
   /** `null` is the shop following the machine, not a missing answer. */
   theme: themeSchema.nullable(),
+  /** Never null: a shop that has never chosen prints on `standard`. */
+  facture_layout: factureLayoutSchema,
+  /** Every layout the shop may pick, from the server, so the screen carries
+   *  no copy of the list to go stale when one is added. */
+  facture_layouts: z.array(factureLayoutSchema),
   /** Basis points of the basket, so a whole number: 250 is 2,5 %. Zero on
    *  a shop that has never set one, which refuses a cashier every
    *  discount. */

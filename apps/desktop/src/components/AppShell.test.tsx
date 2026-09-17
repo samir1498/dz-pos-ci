@@ -25,18 +25,13 @@ import { ThemeProvider } from "@/lib/theme";
 import ar from "@/i18n/ar.json";
 import fr from "@/i18n/fr.json";
 
+import { SETTINGS } from "@/test/settings";
 import { AppShell, NAV, activeItem } from "./AppShell";
 
 const SHOP_TODAY = "2026-09-10";
 const SHOP_NAME = "Superette El Baraka";
 
-const settings = {
-  store: { name: SHOP_NAME, rc: null, nif: null, nis: null, ai: null, address: null, phone: null },
-  regime: { regime: "reel", valid_from: "2026-01-01" },
-  regime_planned: null,
-  theme: null,
-  discount_threshold_bps: 0,
-};
+const settings = { ...SETTINGS, store: { ...SETTINGS.store, name: SHOP_NAME } };
 
 const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), {
