@@ -211,10 +211,63 @@ test.describe("the same article under two numbers", () => {
   test("a twelve-digit UPC finds the thirteen-digit EAN on file", async ({ page }) => {
     await scan(page, UPC_ON_THE_BOX);
     await expect(cartRow(page, UPC_ARTICLE)).toBeVisible();
+    // The row alone is not the whole claim: only `onScan` empties the box,
+    // so an empty box is what says the scan went through the canonicalising
+    // path rather than the till's own "one thing is visible, add it".
+    await expect(searchBox(page)).toHaveValue("");
+  });
+});
+
+test.describe("a scanner slower than the burst rule, which is still a scanner", () => {
+  test.beforeAll(async ({ request }) => {
+    await seed(request, `${ARTICLE} slow`, "6130009000165");
+  });
+
+  test("its code arrives as typing, and the box is empty after each one", async ({ page }) => {
+    // Some models put 100 ms between characters, which is past
+    // SCAN_MAX_GAP_MS on purpose: nothing about such a unit can be told from
+    // a person, so the burst rule never fires and the code lands in the box
+    // as ordinary typing. The till's own Enter has to finish the job, and it
+    // has to leave the box empty or the next code appends to this one.
+    //
+    // This is also the only case in the file where the clock actually moves
+    // between characters. Every other `scan()` here runs under a frozen
+    // clock, so its gaps are zero and none of them would notice
+    // `performance.now()` being replaced by a constant.
+    const cdp = await page.context().newCDPSession(page);
+    for (const digit of "6130009000165") {
+      await cdp.send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: digit,
+        code: `Digit${digit}`,
+        text: digit,
+      });
+      await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key: digit, code: `Digit${digit}` });
+      await page.clock.runFor(100);
+    }
+    await expect(searchBox(page)).toHaveValue("6130009000165");
+    await expect(cartRow(page, `${ARTICLE} slow`)).toBeHidden();
+
+    await page.keyboard.press("Enter");
+    await expect(cartRow(page, `${ARTICLE} slow`)).toBeVisible();
+    await expect(searchBox(page)).toHaveValue("");
+    await cdp.detach();
   });
 });
 
 test.describe("a person, who must never be read as a scanner", () => {
+  test("Space still works the button it was pressed on", async ({ page }) => {
+    // The hook moves focus to the search box on a character that could be
+    // part of a code. Space used to count, and a button fires its click on
+    // Space's keyup, which by then landed on the box: the button did
+    // nothing and the box got a space.
+    const all = page.getByRole("button", { name: t("till_all_categories"), exact: true });
+    await all.focus();
+    await page.keyboard.press("Space");
+    await expect(searchBox(page)).toHaveValue("");
+    await expect(all).toBeFocused();
+  });
+
   test("a name typed with human pauses adds nothing", async ({ page }) => {
     const box = searchBox(page);
     await box.focus();

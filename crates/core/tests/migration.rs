@@ -2351,14 +2351,12 @@ fn the_migration_reverts_and_reapplies() {
         .unwrap(),
         1
     );
-    // Idempotency keys are on top, pairing below: revert both to get back
-    // to the audit clock.
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
+    // Canonical barcodes, idempotency keys, sale idempotency and pairing sit
+    // on top of the audit clock: revert down to it.
+    for _ in 0..4 {
+        conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+            .unwrap();
+    }
     assert_eq!(
         count(
             &mut conn,
@@ -2379,14 +2377,13 @@ fn the_migration_reverts_and_reapplies() {
         1,
         "the audit clock up.sql did not take the hour back"
     );
-    // Idempotency keys (15) and pairing (14) are now on top, so drop both
-    // before the sessions check.
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
-    conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
-        .unwrap();
+    // Canonical barcodes (16), sale idempotency (15), pairing (14) and the
+    // audit clock (13) are now on top, so drop all four before the sessions
+    // check.
+    for _ in 0..4 {
+        conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
+            .unwrap();
+    }
 
     // The twelfth: the sessions table. It adds a table and two indexes and
     // nothing else, so its down drops all three and touches no user and no
@@ -4303,4 +4300,66 @@ fn a_database_without_sessions_takes_the_migration_that_adds_them() {
         "a deleted shop left its sessions behind"
     );
     assert_eq!(orphan_rows(&mut conn), 0);
+}
+
+#[test]
+fn the_canonical_barcode_migration_folds_a_upc_and_leaves_a_collision_alone() {
+    // architecture.md, Data: a migration ships with a test that opens a
+    // database built by the previous ones and applies it.
+    //
+    // Three articles sit in the file before it runs: one filed under the
+    // twelve digits printed on the box, one already thirteen, and a pair
+    // that is the same article under both of its numbers. The first is
+    // folded, the second is untouched, and the pair is left exactly as it
+    // is: folding it would collide, and which of the two rows is the real
+    // article is not something SQL can know.
+    use diesel::connection::SimpleConnection;
+    use diesel_migrations::MigrationHarness;
+    let (_dir, mut conn) = open_at_migration(15);
+    conn.batch_execute(
+        "INSERT INTO products (shop_id, name, barcode, unit, cost_centimes, selling_centimes, \
+           qty_on_hand_milli, low_stock_at_milli, rate_bps, active) VALUES \
+           (1, 'Thé sur la boîte', '613000900127', 'piece', 0, 12000, 0, 0, 1900, 1), \
+           (1, 'Café déjà long', '6130009000110', 'piece', 0, 12000, 0, 0, 1900, 1), \
+           (1, 'Sucre court', '613000900134', 'piece', 0, 12000, 0, 0, 1900, 1), \
+           (1, 'Sucre long', '0613000900134', 'piece', 0, 12000, 0, 0, 1900, 1), \
+           (1, 'Sel EAN-8', '61300001', 'piece', 0, 12000, 0, 0, 1900, 1)",
+    )
+    .unwrap();
+
+    conn.run_pending_migrations(dzpos_core::db::MIGRATIONS)
+        .unwrap();
+
+    let mut barcode = |name: &str| -> String {
+        #[derive(QueryableByName)]
+        struct Row {
+            #[diesel(sql_type = Text)]
+            barcode: String,
+        }
+        diesel::sql_query(format!(
+            "SELECT barcode FROM products WHERE name = '{name}'"
+        ))
+        .load::<Row>(&mut conn)
+        .unwrap()
+        .remove(0)
+        .barcode
+    };
+
+    assert_eq!(
+        barcode("Thé sur la boîte"),
+        "0613000900127",
+        "the twelve digits on the box are the EAN-13 they are short for"
+    );
+    assert_eq!(barcode("Café déjà long"), "6130009000110");
+    assert_eq!(
+        barcode("Sel EAN-8"),
+        "61300001",
+        "an EAN-8 is its own number"
+    );
+    assert_eq!(
+        barcode("Sucre court"),
+        "613000900134",
+        "folding this one would collide with the row that already holds it"
+    );
+    assert_eq!(barcode("Sucre long"), "0613000900134");
 }

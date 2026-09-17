@@ -38,6 +38,7 @@ export function MoneyInput({
   "aria-describedby": describedBy,
   "aria-label": label,
   placeholder,
+  onKeyDown,
 }: {
   /** Centimes, or `null` for an empty field. */
   value: number | null;
@@ -50,6 +51,9 @@ export function MoneyInput({
   "aria-describedby"?: string;
   "aria-label"?: string;
   placeholder?: string;
+  /** For a screen that wants to know about Enter. The box itself does
+   * nothing with it: the value is already committed on every keystroke. */
+  onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
 }) {
   const shown = (centimes: number | null): string =>
     centimes === null ? "" : formatCentimes(centimes);
@@ -81,6 +85,7 @@ export function MoneyInput({
       data-testid={testId}
       className={cn("font-numeric tabular-nums text-end", className)}
       value={text}
+      onKeyDown={onKeyDown}
       onFocus={() => {
         editing.current = true;
       }}

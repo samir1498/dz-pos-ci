@@ -62,11 +62,27 @@ function codeChar(code: string): string {
 }
 
 /** A scanner's own prefix or suffix is punctuation around the code: an
- * asterisk, an AIM identifier, a stray carriage return. The code is what is
- * left after both ends are cleaned. */
+ * asterisk, a stray carriage return. The code is what is left after both
+ * ends are cleaned. An AIM identifier is not punctuation and is not handled
+ * here; see `aimLength`. */
 function trimEdges(text: string): string {
   return text.replace(/^[^0-9A-Za-z]+/, "").replace(/[^0-9A-Za-z]+$/, "");
 }
+
+/**
+ * How many characters of a leading AIM symbology identifier to drop.
+ *
+ * A scanner with "transmit AIM identifier" switched on prefixes every code
+ * with `]` and two characters naming the symbology it read: `]E0` for an
+ * EAN-13, `]C0` for Code 128, `]d2` for a Data Matrix (ISO/IEC 15424). Only
+ * the `]` is punctuation, so trimming the edges leaves `E0` welded to the
+ * front of the digits and the whole scan reads as a code no article
+ * carries. Three characters or none, because a `]` that is not followed by
+ * the two an identifier has is somebody's stray keystroke and the edge trim
+ * already owns that case.
+ */
+const AIM = /^\][A-Za-z][A-Za-z0-9]/;
+const aimLength = (text: string): number => (AIM.test(text) ? 3 : 0);
 
 const ALPHANUMERIC = /^[0-9A-Za-z]+$/;
 const DIGITS = /^[0-9]+$/;
@@ -86,11 +102,16 @@ const DIGITS = /^[0-9]+$/;
  * accepts letters too, which is what Code 128 needs.
  */
 export function burstCode(state: ScanState, strict: boolean): string | null {
-  const keys = trimEdges(state.keys);
+  // `keys` and `codes` are kept in step, one character per press, so an
+  // identifier dropped from the front of one is dropped from the front of
+  // the other at the same offset. Its own last character is a digit often
+  // enough (`]E0`) that leaving it on `codes` would invent a leading zero.
+  const aim = aimLength(state.keys);
+  const keys = trimEdges(state.keys.slice(aim));
   if (keys.length >= SCAN_MIN_LENGTH && ALPHANUMERIC.test(keys)) {
     if (!strict || DIGITS.test(keys)) return keys;
   }
-  const codes = trimEdges(state.codes);
+  const codes = trimEdges(state.codes.slice(aim));
   if (codes.length >= SCAN_MIN_LENGTH && DIGITS.test(codes)) return codes;
   return null;
 }

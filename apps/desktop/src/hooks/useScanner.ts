@@ -24,6 +24,10 @@ import { useCallback, useEffect, useRef } from "react";
 
 import { EMPTY, SCAN_IDLE_MS, type ScanState, feed } from "@/lib/scan";
 
+/** A character a barcode can be made of. Anything else is not worth moving
+ * focus for, and Space actively must not be: see the call site. */
+const CODE_CHARACTER = /^[0-9A-Za-z]$/;
+
 /** Fields where the cashier is typing on purpose. A scan is never taken out
  * of one of these, and never redirected away from one. */
 function isTextField(element: Element | null): boolean {
@@ -85,7 +89,15 @@ export function useScanner({
   useEffect(() => clearTimer, [clearTimer]);
 
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled) {
+      // A burst can be half-fed when the till locks or a dialog opens. The
+      // listener goes, but an armed timer would still fire up to
+      // SCAN_IDLE_MS later and add a product behind the lock screen, so it
+      // goes too, and the half-burst with it.
+      clearTimer();
+      state.current = EMPTY;
+      return undefined;
+    }
     function onKeyDown(event: KeyboardEvent) {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       const active = document.activeElement;
@@ -115,7 +127,12 @@ export function useScanner({
       // A character that began somewhere harmless belongs in the box, and
       // it has to be moved there while the key is still on its way: focus
       // set now is where the browser inserts it.
-      if (event.key.length === 1 && !event.repeat && active !== target.current) {
+      //
+      // Only a character a code could be made of. Space used to qualify,
+      // and moving focus on it broke every button on the screen: a button
+      // fires its click on Space's *keyup*, which by then was landing on
+      // the search box, so the button did nothing and the box got a space.
+      if (CODE_CHARACTER.test(event.key) && !event.repeat && active !== target.current) {
         target.current?.focus();
       }
       armIdle();

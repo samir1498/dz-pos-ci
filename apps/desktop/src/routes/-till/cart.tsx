@@ -114,6 +114,7 @@ export function Cart({
   onLineDiscount,
   onStep,
   onRemove,
+  onDone,
 }: {
   lines: readonly CartLine[];
   read: readonly ReadLine[];
@@ -126,6 +127,11 @@ export function Cart({
   onLineDiscount: (id: number, centimes: number | null) => void;
   onStep: (id: number, by: number) => void;
   onRemove: (id: number) => void;
+  /** Enter, in a quantity or a line discount. The till sends focus back to
+   * the search box, which is where the next article arrives from: a scanner
+   * types into whatever has focus, and a cashier who edited a quantity and
+   * then scanned used to get the code appended to the quantity. */
+  onDone: () => void;
 }) {
   const { t } = useTranslation();
   const rows: Row[] = lines.map((line, i) => ({ line, read: read[i] }));
@@ -177,6 +183,11 @@ export function Cart({
             aria-label={`${t("field_qty")} ${row.line.product.name}`}
             value={row.line.qtyText}
             onChange={(event) => onQty(row.line.product.id, event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              onDone();
+            }}
           />
           <Button
             type="button"
@@ -201,6 +212,11 @@ export function Cart({
           aria-label={`${t("field_line_discount")} ${row.line.product.name}`}
           value={row.line.discount}
           onChange={(centimes) => onLineDiscount(row.line.product.id, centimes)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            onDone();
+          }}
         />
       ),
     },

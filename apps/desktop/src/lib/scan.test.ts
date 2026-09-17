@@ -174,6 +174,53 @@ describe("what the shop prints around the code", () => {
     expect(burst(presses, 20, "Enter").scan).toBe("6130000000001");
   });
 
+  test("an AIM identifier is the symbology's name, not part of the code", () => {
+    // `]E0` is what a scanner with "transmit AIM identifier" on sends before
+    // an EAN-13. Trimming only the `]` left `E0` welded to the digits and
+    // every scan from such a unit read as a code no article carries.
+    const presses = [
+      { key: "]", code: "BracketRight" },
+      { key: "E", code: "KeyE" },
+      { key: "0", code: "Digit0" },
+      ...digits("6130000000001", "fr"),
+    ];
+    expect(burst(presses, 20, "Enter").scan).toBe("6130000000001");
+  });
+
+  test("and the identifier's own digit does not reach the physical-key form", () => {
+    // The US-layout path reads `codes`, where `]E0` is `?`, `?`, `0`. The
+    // two `?` trim away as punctuation and the `0` would not, so a code
+    // stripped on one side only comes out with a leading zero it never had.
+    const presses = [
+      { key: "]", code: "BracketRight" },
+      { key: "E", code: "KeyE" },
+      { key: "0", code: "Digit0" },
+      ...digits("6130000000001", "us"),
+    ];
+    expect(burst(presses, 20, "Enter").scan).toBe("6130000000001");
+  });
+
+  test("an identifier only counts at the very front of the burst", () => {
+    // `A]E` then eight letters. Unanchored, the identifier pattern would
+    // find `]EA` one character in and drop three from the front, and what
+    // was left would read as a clean Code 128 word. The bracket is inside
+    // the run, so this is somebody typing and the answer is nothing.
+    const presses = [
+      { key: "A", code: "KeyA" },
+      { key: "]", code: "BracketRight" },
+      { key: "E", code: "KeyE" },
+      ...typed("ABCDEFGH"),
+    ];
+    expect(burst(presses, 20, "Enter").scan).toBeNull();
+  });
+
+  test("a stray closing bracket is still just punctuation", () => {
+    // Three characters or none: `]` followed by something that is not a
+    // symbology name is the edge trim's business, not the identifier's.
+    const presses = [{ key: "]", code: "BracketRight" }, ...digits("6130000000001", "fr")];
+    expect(burst(presses, 20, "Enter").scan).toBe("6130000000001");
+  });
+
   test("punctuation in the middle is not a code, it is somebody typing", () => {
     // Only the ends are the scanner's. A character inside the run means the
     // burst was never a barcode, and Code 39's own hyphens are not something

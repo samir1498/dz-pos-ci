@@ -178,7 +178,7 @@ fn validate(
         .as_deref()
         .map(str::trim)
         .filter(|b| !b.is_empty())
-        .map(str::to_string);
+        .map(canonical_barcode);
 
     // The category is looked up whatever the rate says. It used to be read
     // only when it had to supply a rate, so a caller who named its own rate
@@ -234,6 +234,23 @@ fn resolve_rate(new: &NewProduct, category_rate_bps: Option<i32>) -> Result<Bps,
 /// row would have taken, and deriving it from the id made that insert roll
 /// back without consuming the id, so every later blank create hit the same
 /// number and failed for ever.
+/// The one form a barcode is stored and compared in.
+///
+/// A UPC-A is twelve digits and the same article's EAN-13 is those twelve
+/// with a zero in front. A scanner reads whichever is printed on the box, so
+/// the till has to compare both sides in one form; folding it in here as
+/// well is what stops the same article being filed twice under its two
+/// numbers, which the UNIQUE index cannot see because the two are different
+/// strings. `canonicalBarcode` in apps/desktop/src/lib/scan.ts is the same
+/// rule on the other side of the wire.
+fn canonical_barcode(code: &str) -> String {
+    if code.len() == 12 && code.bytes().all(|b| b.is_ascii_digit()) {
+        format!("0{code}")
+    } else {
+        code.to_string()
+    }
+}
+
 fn next_free_in_store_barcode(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -297,6 +314,28 @@ mod tests {
     fn check_digit_matches_a_known_ean13() {
         // 978020137962-x, the ISBN example GS1 publishes; the digit is 4.
         assert_eq!(ean13_check_digit("978020137962").unwrap(), 4);
+    }
+
+    #[test]
+    fn a_twelve_digit_upc_is_filed_as_the_ean_it_is_short_for() {
+        // The two numbers on one box. Filed apart, the UNIQUE index sees two
+        // different strings and lets the same article in twice, and a scan
+        // then resolves to whichever row sorts first by name.
+        assert_eq!(canonical_barcode("613000900127"), "0613000900127");
+        assert_eq!(
+            canonical_barcode("613000900127"),
+            canonical_barcode("0613000900127")
+        );
+    }
+
+    #[test]
+    fn nothing_else_is_touched() {
+        // An EAN-8 is eight digits and its own article, an in-store code is
+        // already thirteen, and a twelve-character code with a letter in it
+        // is not a UPC at all.
+        assert_eq!(canonical_barcode("61300001"), "61300001");
+        assert_eq!(canonical_barcode("2000010000073"), "2000010000073");
+        assert_eq!(canonical_barcode("ABC123456789"), "ABC123456789");
     }
 
     #[test]

@@ -144,6 +144,9 @@ export function TillScreen() {
   // line under the box can show them: a cashier reads them off the screen
   // and compares them with what is printed on the article.
   const [unknownScan, setUnknownScan] = useState<string | null>(null);
+  // Whether the credit-limit override dialog is asking. Up here rather than
+  // beside `forceThrough` below, because `useScanner` reads it.
+  const [forcing, setForcing] = useState(false);
   // The picked fiche itself, not its id: the search box narrows the list
   // under it, and a customer who drops out of the results is still the one
   // this basket is for.
@@ -189,8 +192,10 @@ export function TillScreen() {
       await queryClient.invalidateQueries({ queryKey: customersQueryKey });
       // The next customer's first scan goes into this box; a filter left
       // over from the last basket would take its digits on the end and
-      // match nothing.
+      // match nothing. The unknown-code line goes with it: it is about a
+      // code nobody scanned into this basket.
       setSearch("");
+      setUnknownScan(null);
       // The sale moved stock, so the tiles owe the shop a new count.
       await queryClient.invalidateQueries({ queryKey: productsQueryKey });
       searchRef.current?.focus();
@@ -255,7 +260,17 @@ export function TillScreen() {
   const onScan = useCallback(
     (code: string) => {
       const wanted = canonicalBarcode(code);
-      const found = (products.data ?? []).find(
+      const loaded = products.data;
+      if (loaded === undefined) {
+        // The tiles have not arrived yet, on a cold start or after the list
+        // failed. "No article carries this code" would be a lie: nothing
+        // has been looked in. The digits stay in the box so the cashier can
+        // press Enter once the tiles are there.
+        setSearch(code);
+        setUnknownScan(null);
+        return;
+      }
+      const found = loaded.find(
         (p) => p.barcode !== null && canonicalBarcode(p.barcode) === wanted,
       );
       if (found === undefined) {
@@ -272,7 +287,12 @@ export function TillScreen() {
     [add, products.data],
   );
 
-  useScanner({ target: searchRef, onScan, enabled: !locked });
+  // Off while the screen is locked, while a sale is on the wire, and while
+  // the override dialog is asking. A scan in any of those windows lands in
+  // a basket that `pay.onSuccess` is about to empty, or in one the override
+  // will not send: `forceThrough` posts the body the server already refused,
+  // so the article would be rung up on screen and sold to nobody.
+  useScanner({ target: searchRef, onScan, enabled: !locked && !pay.isPending && !forcing });
 
   function setQty(id: number, qtyText: string) {
     setCart((current) => current.map((l) => (l.product.id === id ? { ...l, qtyText } : l)));
@@ -423,8 +443,9 @@ export function TillScreen() {
    *
    * The question is asked in a dialog of ours rather than a browser
    * `confirm()`, which is a box Windows draws in the language Windows is in
-   * and which does not mirror on an Arabic till. */
-  const [forcing, setForcing] = useState(false);
+   * and which does not mirror on an Arabic till. `forcing` itself is
+   * declared with the other state above, because the scanner is switched off
+   * while this dialog is up and that wiring runs before this point. */
   const override = useCallback(() => {
     if (refusal === null) return;
     setForcing(true);
@@ -479,7 +500,16 @@ export function TillScreen() {
     const typed = search.trim();
     if (typed === "") return;
     const only = visible.length === 1 ? visible[0] : undefined;
-    if (only !== undefined) add(only);
+    if (only === undefined) return;
+    add(only);
+    // The box is emptied here, not only in `onScan`. A scanner whose
+    // characters arrive more than SCAN_MAX_GAP_MS apart never forms a burst,
+    // so its code lands here as ordinary typing and its Enter comes through
+    // this branch. Leaving the digits behind meant the next scan appended to
+    // them, matched nothing, and added nothing, silently, from the second
+    // article on. 100 ms between characters is an ordinary wedge setting.
+    setSearch("");
+    setUnknownScan(null);
   }
 
   return (
@@ -576,6 +606,7 @@ export function TillScreen() {
             onNew={() => {
               setDone(null);
               setReceiptId(null);
+              setUnknownScan(null);
               searchRef.current?.focus();
             }}
           />
@@ -615,6 +646,7 @@ export function TillScreen() {
           onLineDiscount={setLineDiscount}
           onStep={step}
           onRemove={remove}
+          onDone={() => searchRef.current?.focus()}
         />
 
         <PaymentPanel

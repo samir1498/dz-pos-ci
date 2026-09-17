@@ -6,7 +6,7 @@
 // above its own line) never reaching the server at all.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -227,6 +227,9 @@ function html(status: number, body: string): Response {
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let rows: ProductDto[];
+/** Holds the product list unanswered, which is the state the screen is in
+ * for the first moments after it opens and after the list has failed. */
+let productsHang: boolean;
 let customerRows: CustomerDto[];
 let saleAnswer: (() => Response) | null;
 let ticketAnswer: (() => Response) | null;
@@ -272,6 +275,7 @@ function facturePrinted(): string | undefined {
 
 beforeEach(() => {
   rows = [coffee, tomato, crate, salt];
+  productsHang = false;
   customerRows = [amrani, noCredit, overLimit, anonymous];
   saleAnswer = null;
   ticketAnswer = null;
@@ -290,6 +294,7 @@ beforeEach(() => {
       return Promise.resolve(html(200, FACTURE_HTML));
     }
     if (url.endsWith(`/sales/${sale.id}`)) return Promise.resolve(json(200, sale));
+    if (productsHang) return new Promise<Response>(() => undefined);
     return Promise.resolve(json(200, rows));
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -1306,5 +1311,100 @@ describe("the facture at the till", () => {
     await user.click(screen.getByRole("radio", { name: "A5" }));
     await waitFor(() => expect(facturePrinted()).toContain("paper=a5"));
     expect(screen.queryByTestId("till-ticket")).toBeNull();
+  });
+});
+
+describe("the scanner, where the screen has to switch it off or clean up after it", () => {
+  /** A wedge scanner's burst, straight at the window the way the hook reads
+   * it. Synchronous, so every gap is far under SCAN_MAX_GAP_MS and the rule
+   * sees one burst. The characters are not inserted anywhere: `fireEvent`
+   * runs no default action, and every assertion below is about what the
+   * screen did with the scan, not where the digits went. */
+  function burstAtWindow(code: string): void {
+    for (const digit of code) {
+      fireEvent.keyDown(window, { key: digit, code: `Digit${digit}` });
+    }
+    fireEvent.keyDown(window, { key: "Enter", code: "Enter" });
+  }
+
+  const SEARCH = "Chercher un produit ou scanner un code-barres";
+
+  test("a code that arrived too slowly to be a burst still leaves the box empty", async () => {
+    const user = userEvent.setup();
+    mount();
+    const box = await screen.findByLabelText(SEARCH);
+    await user.click(box);
+    // Pasted, not typed: a paste fires no keydown, so the burst rule never
+    // sees it. That is exactly the shape a scanner whose characters arrive
+    // more than SCAN_MAX_GAP_MS apart presents to the screen, and its Enter
+    // then comes through the till's own handler rather than the hook's.
+    await user.paste(coffee.barcode ?? "");
+    await user.keyboard("{Enter}");
+
+    expect(await screen.findByLabelText(`Quantité ${coffee.name}`)).toHaveValue("1");
+    // The box has to be empty or the next scan appends to these digits,
+    // matches nothing and silently adds nothing from the second article on.
+    expect(box).toHaveValue("");
+  });
+
+  test("a scan while the override dialog is asking does not join the basket", async () => {
+    const user = userEvent.setup();
+    saleAnswer = () =>
+      json(422, {
+        error: {
+          code: "credit_limit",
+          message: "past the limit",
+          balance_after_centimes: 550_000,
+          credit_limit_centimes: 500_000,
+        },
+      });
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    await pickCustomer(user, amrani);
+    await user.click(screen.getByRole("radio", { name: "Crédit" }));
+    await user.click(screen.getByRole("button", { name: "Encaisser" }));
+    await user.click(await screen.findByRole("button", { name: "Forcer la vente" }));
+    await screen.findByTestId("till-override-dialog");
+
+    burstAtWindow(tomato.barcode ?? "");
+
+    // `forceThrough` posts the body the server already refused, so an
+    // article added now is rung up on screen and sold to nobody.
+    await waitFor(() => {
+      expect(screen.queryByLabelText(`Quantité ${tomato.name}`)).toBeNull();
+    });
+  });
+
+  test("Enter in a quantity puts the cashier back where the next article arrives", async () => {
+    const user = userEvent.setup();
+    mount();
+    await findTile(coffee);
+    await user.click(tile(coffee));
+    const qty = await screen.findByLabelText(`Quantité ${coffee.name}`);
+    await user.clear(qty);
+    await user.type(qty, "3");
+    expect(qty).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+
+    // A scanner types into whatever has focus. Left in the quantity box, the
+    // next article's code is appended to the quantity instead of being
+    // looked up, and the till then refuses to pay on a number that long.
+    expect(screen.getByLabelText(SEARCH)).toHaveFocus();
+    expect(qty).toHaveValue("3");
+  });
+
+  test("a scan before the tiles have arrived does not claim the code is unknown", async () => {
+    productsHang = true;
+    mount();
+    const box = await screen.findByLabelText(SEARCH);
+
+    burstAtWindow("6130009999999");
+
+    // Nothing has been looked in, so "no article carries this code" would be
+    // a lie. The digits stay where the cashier can see them.
+    await waitFor(() => expect(box).toHaveValue("6130009999999"));
+    expect(screen.queryByText(/Aucun article ne porte ce code/)).toBeNull();
   });
 });
