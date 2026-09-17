@@ -38,9 +38,15 @@ migration: stop and hand it back. That work belongs to `dz-money-builder`.
 ## Commit shape
 
 Branch and PR, never straight to `main`. The `ctx:` trailer sits in the same
-paragraph block as `Co-Authored-By`, no blank line between them, and carries
-an action word: `ctx: progress plan:<slug> T<id>`. The words "pre-existing"
-and "already present" are banned from commit and PR text.
+paragraph block as `Co-Authored-By`, with no blank line between them, and the
+shape is `ctx: plan:<slug>/T<id> <verb>` with the verb last: `progress` while
+the task runs, `close` on the commit that finishes it. A commit about a whole
+plan rather than one task drops the task part. Get this wrong and the hook
+rejects the commit.
+
+Two words are banned from commit and pull request text; `CLAUDE.md` names
+them. Both mean the same thing, that a failure was there before your change,
+and neither is ever the explanation. Find the root cause or say you did not.
 
 ## Tests
 

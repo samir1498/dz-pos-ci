@@ -31,8 +31,9 @@ needs a named fixture or a cited article, not a recollection.
 Same as `dz-builder`: every cargo through `just`; `just disk` first; never
 `pkill -f`, `git stash`, `git add -A` or prettier; no `unwrap` or `expect`;
 no TypeScript `as`. The `ctx:` trailer sits in the same paragraph block as
-`Co-Authored-By` with an action word. Never excuse a failure as already
-present; state the actual root cause.
+`Co-Authored-By`, shaped `ctx: plan:<slug>/T<id> <verb>` with the verb last,
+`progress` or `close`. The two words `CLAUDE.md` bans do not appear in a
+commit or a pull request; state the actual root cause instead.
 
 ## Hand back what is true
 
