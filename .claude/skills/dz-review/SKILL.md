@@ -22,23 +22,30 @@ reading alone.
 
 ## Pass 1: three lenses, in parallel, no overlap
 
-Spawn the agents in one message. Vary the model. Brief each with the
-business rules from `docs/features.md`, the branch, and "do not edit, do
-not spawn, say clean rather than pad". A lens that needs a scratch file
-to prove something names it `review-probe-<what>` and deletes it before
-reporting; a lens that runs cargo says so, and runs none while the
-session's gates run (the box has 11 GB).
+Spawn all three in one message, as the agents defined in `.claude/agents/`:
+`dz-review-centimes`, `dz-review-reach`, `dz-review-tests`. Each owns its lens
+and nothing else. The standing brief lives in the agent file, so the prompt
+carries only what changes: the branch or the diff, the rows of
+`docs/features.md` the change touches, and what Pass 0 already ran.
 
-- **Centime correctness.** Every way a total, TVA, stamp, change or debt
+The lenses run Sonnet for a single pull request. At the end of a loop they run
+once more over everything that loop merged, with `model: "fable"` passed to
+the Agent tool, which overrides the agent file's own model. Samir, 2026-09-17:
+one sharp review of the whole weekend rather than a dozen of them.
+
+Long build output goes to `dz-verifier` rather than into this session. It runs
+named commands and reports what they printed, nothing else.
+
+- **`dz-review-centimes`.** Every way a total, TVA, stamp, change or debt
   comes out wrong: rounding twice, float leaking in, a discount spread that
   loses or invents a centime, overflow, a zero or negative line, a credit
   sale that bypasses the limit, a gapless number that gaps on a failed
   write.
-- **Roles and data reach.** What a cashier can do that only a manager
+- **`dz-review-reach`.** What a cashier can do that only a manager
   should, what any client on the LAN can ask the API without a role, which
   `shop_id` filter is missing, what a deleted row takes with it, what an
   audit log does not record.
-- **Fixture and test quality.** Which assertion still passes with the
+- **`dz-review-tests`.** Which assertion still passes with the
   constant flipped; which fixture computes its own expectation; which
   proptest invariant is a tautology; which golden file was regenerated
   from the code it tests.
@@ -49,6 +56,10 @@ what is missing that a reviewer expects (rollback, migration, i18n), and
 which of the plan's claims were verified against code rather than assumed.
 
 ## Pass 2: challenge every finding
+
+This pass stays with the session. The lenses find; the session proves. An
+agent that both reports a finding and rules on it has marked its own paper,
+and the two review fixes that opened new holes came from exactly that.
 
 Each finding is a claim. Sort it:
 1. **Provable by reading code.** Read it yourself. Quote the line.

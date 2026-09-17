@@ -33,6 +33,14 @@ as a loop instead, see `context/progress/now.md`) · `dz-context` · `dz-money` 
 User-level `stale-check` (any repo) reads `.claude/stale-homes.md` here for
 where each duplicated fact lives and how a fix is routed.
 
+## Agents (`.claude/agents/`)
+`dz-builder` (ordinary work), `dz-money-builder` (anything touching centimes,
+the schema or a printed total), `dz-review-centimes` / `dz-review-reach` /
+`dz-review-tests` (the three `dz-review` lenses, which find but never rule),
+`dz-verifier` (runs named commands and reports the output, no judgement).
+Each file's frontmatter decides its model; a caller may override it, which is
+how the whole-loop review runs the lenses on a sharper model.
+
 ## Non-negotiables (repeated here because they are cheap to forget)
 - Money is integer centimes, checked arithmetic, no `f64` near a total.
 - No `unwrap` / `expect` in shipped code (clippy denies it). No TS `as`
