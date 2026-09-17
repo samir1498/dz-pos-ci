@@ -13,6 +13,7 @@
 | Fiscal rules | `docs/features.md` table | fixtures by name |
 | Branch shape | `context/processes/20260908-git-and-planning.md` | `dz-pr` skill |
 | The boss site URL | `context/progress/now.md`, `CLAUDE.md` | memory file |
+| How long a file may be, and which files are already over it | `scripts/file-sizes.mjs` (the limits) and `scripts/file-sizes.json` (the pinned list) | prose says `just sizes`, never the numbers or the list |
 | Skills list | `.claude/skills/` directory | `CLAUDE.md` index line |
 | Agent list and which model each runs | `.claude/agents/*.md` frontmatter | `CLAUDE.md` index line, the `dz-review` skill names the lenses but not their models |
 | Core module layers | `crates/core/src/lib.rs` mod list | `docs/architecture.md` § Layers inside core |

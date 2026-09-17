@@ -67,7 +67,7 @@ native speaker (`context/plans/archived/20260911-landing-page.md`).
 The `justfile` at the root is the list; `just` alone prints it.
 
 ```
-just gates        # fmt, lint, clippy, generated types check, tests, builds; what a PR needs
+just gates        # fmt, lint, file sizes, clippy, generated types check, tests, builds; what a PR needs
 just claim        # claim the shared build folder for this checkout before a bare `cargo`
 just lint         # the desktop's one eslint rule: no bare input, button, select, textarea or table
 just e2e          # Playwright against a fresh API and database, fr then en then ar

@@ -1,0 +1,41 @@
+{
+  "_comment": "Files already over the line limit when the gate went in (2026-09-17), with the length they had that day. An entry may not grow, and an entry back under the limit has to be deleted. Nothing new joins this list: a new file over the limit fails the gate and gets split instead. Same shape as apps/desktop/src/lint/allowlist.json. Run by `just sizes`.",
+  "_limits": {
+    "source": 600,
+    "tests": 1200
+  },
+  "over_the_limit": {
+    "apps/desktop/src/components/ui/sidebar.tsx": 736,
+    "apps/desktop/src/routes/customers_.$id.tsx": 898,
+    "apps/desktop/src/routes/dashboard.tsx": 659,
+    "apps/desktop/src/routes/documents.tsx": 724,
+    "apps/desktop/src/routes/expenses.tsx": 668,
+    "apps/desktop/src/routes/products.tsx": 929,
+    "apps/desktop/src/routes/purchases_.$id.tsx": 610,
+    "apps/desktop/src/routes/suppliers.tsx": 1086,
+    "apps/desktop/src/routes/till.test.tsx": 1410,
+    "apps/desktop/src/routes/till.tsx": 905,
+    "crates/api/src/lib.rs": 987,
+    "crates/api/tests/sales_api.rs": 1591,
+    "crates/core/src/print/facture.rs": 676,
+    "crates/core/src/print/strings.rs": 638,
+    "crates/core/src/services/avoir.rs": 988,
+    "crates/core/src/services/backup.rs": 629,
+    "crates/core/src/services/debt.rs": 952,
+    "crates/core/src/services/export.rs": 601,
+    "crates/core/src/services/import.rs": 870,
+    "crates/core/src/services/purchases.rs": 1027,
+    "crates/core/src/services/sales.rs": 1300,
+    "crates/core/src/services/seed.rs": 1155,
+    "crates/core/src/services/supplier_debt.rs": 821,
+    "crates/core/src/services/users.rs": 828,
+    "crates/core/tests/avoir_service.rs": 1702,
+    "crates/core/tests/debt_service.rs": 2044,
+    "crates/core/tests/migration.rs": 4365,
+    "crates/core/tests/print_facture.rs": 1908,
+    "crates/core/tests/purchases_service.rs": 1420,
+    "crates/core/tests/sales_service.rs": 2893,
+    "packages/shared/src/client.test.ts": 1407,
+    "packages/shared/src/client.ts": 1134
+  }
+}

@@ -11,7 +11,8 @@ tldr: 'just gates and just e2e, what counts as tested, the extra layers for mone
 Before "done" and before a PR, run from the repo root and show the output:
 
 ```
-just gates   # cargo fmt --check, clippy --all-targets -D warnings,
+just gates   # cargo fmt --check, the desktop eslint rule, the file-size
+             # ratchet (sizes), clippy --all-targets -D warnings,
              # generated TS types diffed against the DTOs (types-check),
              # cargo test, pnpm -r test, pnpm -r build
 just e2e     # Playwright against a fresh API and database

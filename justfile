@@ -76,6 +76,16 @@ clippy: claim desktop-dist
 lint:
     pnpm --filter dzpos-desktop lint
 
+# No huge files. A ratchet, not a big-bang rule: the files already over the
+# line limit are pinned at today's length in scripts/file-sizes.json, they
+# may not grow, and an entry back under the limit has to be deleted, so the
+# list only shrinks. Nothing new joins it. Same shape as the eslint allowlist
+# above, and the same reason: crates/api/src/dto.rs reached 3071 lines holding
+# every domain at once, which made it the first place two branches collided.
+# No cargo, so it runs early and cheap.
+sizes:
+    node scripts/file-sizes.mjs
+
 test: claim desktop-dist
     flock "$CARGO_TARGET_DIR/.lock" cargo test --workspace
     pnpm -r test
@@ -115,7 +125,7 @@ theme:
     pnpm --filter @dzpos/design gen:theme
 
 # everything a PR needs, in order; stops at the first failure
-gates: fmt lint clippy types-check test build
+gates: fmt lint sizes clippy types-check test build
 
 # ---- dev ----
 
