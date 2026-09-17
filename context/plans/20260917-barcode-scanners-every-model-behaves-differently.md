@@ -164,3 +164,49 @@ The phone's own scanning is the camera and ML Kit, a different path that
 this does not touch. Printing a barcode label already ships (`docs/features.md`
 §4). Configuring a scanner by scanning its manual's setup codes is a thing
 the shop can do and a thing we should not depend on.
+
+## The shape this is not, written down on purpose (2026-09-17)
+
+Every defect a review found in this feature came from one place: it infers
+"is this a scanner" from how fast the keys arrive. The inference is what needs
+a window listener, a gap threshold, an idle timer, a rule about which
+elements it may steal focus from, and a switch to turn it off during payment.
+Ten findings, and all of them live in that layer rather than in what a
+scanner does.
+
+There is a design without the inference, and it is roughly what the till had
+before this feature plus two additions:
+
+- Enter or Tab in the search box looks the text up as a barcode first, both
+  sides through `canonicalBarcode`, and falls back to the name filter. That
+  is the branch this feature deleted, plus one line for Tab.
+- The layout mismatch is handled on the search box's own `onKeyDown`: keep
+  the `code` of each keystroke, and when a terminator arrives and the text
+  matches nothing, try the digits the physical keys spell. Same fallback,
+  scoped to one element.
+- Focus is a discipline rather than something to steal: a button that ends an
+  action returns focus to the search box, and Enter in a quantity or a
+  discount already does.
+
+That deletes `SCAN_MAX_GAP_MS`, `SCAN_IDLE_MS`, the idle timer, the window
+listener, `isTextField` and the `enabled` gating, and makes five of the ten
+findings impossible rather than fixed.
+
+What it gives up is the model that sends no terminator at all. Such a unit
+would leave its digits in the box and the cashier would press Enter, and the
+real fix would be scanning one configuration barcode from the unit's manual
+to turn a suffix on. Carriage return is the factory default on essentially
+every wedge scanner, so no suffix is a choice somebody made rather than a
+state a shop finds itself in.
+
+This is not a plan to rewrite anything. The current code is tested, merged,
+and has two rulings of Samir's in it, and no real scanner has misbehaved
+because none has been plugged in. It is here so the next scanner defect is
+not patched onto the inference layer by someone who does not know there is a
+door out of it.
+
+Known and not fixed: a word of eight or more letters typed at under 80 ms a
+character and then ended with Enter is taken as a Code 128 scan, and the
+`preventDefault` that goes with it suppresses the till's "one article is
+visible, add it". That is about 150 words a minute sustained, so it is rare
+rather than impossible.
