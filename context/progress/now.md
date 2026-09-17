@@ -13,6 +13,18 @@ add-user retries without a second fiche, mixed login bodies refused).
 Standup and the reworked home board are live on the status site. Open for
 Samir: shared lockout across PIN and password.
 
+**Barcode scanners, from Anouar on 2026-09-17: there are several models.**
+He does not know which, and it barely matters: a scanner is a keyboard that
+types fast, and what differs between models is the key it sends at the end,
+whether anything is focused, and whether its layout matches the machine.
+Today the till waits for Enter in one box and matches the characters the OS
+hands it, so a Tab-suffix unit, a scan with the focus elsewhere, or a
+US-configured scanner on the French keyboard all fail. Plan:
+`context/plans/20260917-barcode-scanners-every-model-behaves-differently.md`,
+with the matrix of behaviours and how each is simulated. Everything but the
+real keymap runs headless on this box; the laptop and a phone as a
+Bluetooth wedge are Samir's pass at the end.
+
 **The demo video is cut, six clips and a reel.** The loop
 (`context/loops/20260916-demo-loop.md`) recorded the five desktop scenes
 with Playwright and the phone scene with Maestro on an Android emulator
