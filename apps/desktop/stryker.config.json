@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation testing, pointed at one file on purpose. src/lib/scan.ts is arithmetic on thresholds and a chain of conditions, the kind of code a test can cover line by line while asserting nothing that would notice an 80 turning into a 79. Stryker changes each number and each comparison in turn and the tests have to fail. A React hook or a route would drown this in mutants nothing can kill, so they are not here. Run it with `just mutate`.",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": [
+    "@stryker-mutator/vitest-runner"
+  ],
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "mutate": [
+    "src/lib/scan.ts"
+  ],
+  "coverageAnalysis": "perTest",
+  "reporters": [
+    "html",
+    "json",
+    "clear-text",
+    "progress"
+  ],
+  "htmlReporter": {
+    "fileName": "e2e/.artifacts/mutation/index.html"
+  },
+  "thresholds": {
+    "high": 100,
+    "low": 95,
+    "break": 95
+  },
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true,
+  "jsonReporter": {
+    "fileName": "e2e/.artifacts/mutation/report.json"
+  }
+}

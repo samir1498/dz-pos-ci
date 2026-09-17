@@ -189,6 +189,7 @@
   "nav_till": "Caisse",
   "till_title": "Caisse",
   "till_search": "Chercher un produit ou scanner un code-barres",
+  "till_scan_unknown": "Aucun article ne porte ce code :",
   "till_all_categories": "Tout",
   "till_no_product": "Aucun produit ne correspond.",
   "till_cart": "Panier",

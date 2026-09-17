@@ -25,6 +25,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import { useScanner } from "@/hooks/useScanner";
+import { canonicalBarcode } from "@/lib/scan";
 import {
   ApiError,
   MoneyError,
@@ -137,6 +140,10 @@ export function TillScreen() {
   const [done, setDone] = useState<SaleDto | null>(null);
   const [receiptId, setReceiptId] = useState<number | null>(null);
   const [serverError, setServerError] = useState<Key | null>(null);
+  // A scanned code no product carries. Kept as the digits themselves so the
+  // line under the box can show them: a cashier reads them off the screen
+  // and compares them with what is printed on the article.
+  const [unknownScan, setUnknownScan] = useState<string | null>(null);
   // The picked fiche itself, not its id: the search box narrows the list
   // under it, and a customer who drops out of the results is still the one
   // this basket is for.
@@ -241,6 +248,31 @@ export function TillScreen() {
     });
     searchRef.current?.focus();
   }, []);
+
+  // A scanner's burst, once `useScanner` has decided it was one. Both sides
+  // of the comparison are canonicalised because the code on the box is a
+  // twelve-digit UPC as often as the thirteen-digit EAN the shop typed in.
+  const onScan = useCallback(
+    (code: string) => {
+      const wanted = canonicalBarcode(code);
+      const found = (products.data ?? []).find(
+        (p) => p.barcode !== null && canonicalBarcode(p.barcode) === wanted,
+      );
+      if (found === undefined) {
+        // Nothing is cleared and nothing is created: the digits stay in the
+        // box, under a line that says no article carries them.
+        setSearch(code);
+        setUnknownScan(code);
+        return;
+      }
+      setUnknownScan(null);
+      setSearch("");
+      add(found);
+    },
+    [add, products.data],
+  );
+
+  useScanner({ target: searchRef, onScan, enabled: !locked });
 
   function setQty(id: number, qtyText: string) {
     setCart((current) => current.map((l) => (l.product.id === id ? { ...l, qtyText } : l)));
@@ -431,20 +463,21 @@ export function TillScreen() {
     if (event.key === "Escape") {
       event.preventDefault();
       setSearch("");
+      setUnknownScan(null);
       return;
     }
     if (event.key !== "Enter") return;
+    // The scanner marks a terminator that ended a burst. Today this guard
+    // changes nothing on its own: `onScan` empties the box, React flushes
+    // that before this handler reads `search`, and an empty box returns two
+    // lines down anyway. It is here because that is a coincidence of when
+    // React flushes, and the day it flushes later, one scan becomes two
+    // lines in the basket. Checked by removing it, 2026-09-17: the quantity
+    // stayed 1, which is why this comment does not claim otherwise.
+    if (event.defaultPrevented) return;
     event.preventDefault();
     const typed = search.trim();
     if (typed === "") return;
-    // A scanner types the barcode and sends Enter. An exact barcode is a
-    // decision, not a filter: it adds and clears, whatever else matched.
-    const scanned = rows.find((p) => p.barcode === typed);
-    if (scanned !== undefined) {
-      add(scanned);
-      setSearch("");
-      return;
-    }
     const only = visible.length === 1 ? visible[0] : undefined;
     if (only !== undefined) add(only);
   }
@@ -473,9 +506,17 @@ export function TillScreen() {
                 aria-label={t("till_search")}
                 placeholder={t("till_search")}
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setUnknownScan(null);
+                }}
                 onKeyDown={onSearchKey}
               />
+              {unknownScan !== null ? (
+                <p role="status" className="absolute top-full mt-1 text-sm text-fg-muted">
+                  {t("till_scan_unknown")} <span className="font-mono">{unknownScan}</span>
+                </p>
+              ) : null}
             </div>
           }
         />

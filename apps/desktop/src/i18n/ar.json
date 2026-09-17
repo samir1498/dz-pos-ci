@@ -189,6 +189,7 @@
   "nav_till": "الصندوق",
   "till_title": "الصندوق",
   "till_search": "ابحث عن منتج أو امسح الرمز الشريطي",
+  "till_scan_unknown": "لا يوجد منتج يحمل هذا الرمز:",
   "till_all_categories": "الكل",
   "till_no_product": "لا يوجد منتج مطابق.",
   "till_cart": "السلة",

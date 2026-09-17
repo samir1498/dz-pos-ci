@@ -20,3 +20,6 @@ apps/landing/src/styles/tokens.css
 # This machine's editor setup, not the project's.
 .opencode/
 opencode.json
+
+# Stryker's scratch copy of the workspace, written per mutation run.
+apps/desktop/.stryker-tmp/

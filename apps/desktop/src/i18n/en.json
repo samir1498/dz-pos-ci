@@ -189,6 +189,7 @@
   "nav_till": "Till",
   "till_title": "Till",
   "till_search": "Search a product or scan a barcode",
+  "till_scan_unknown": "No article carries this code:",
   "till_all_categories": "All",
   "till_no_product": "No product matches.",
   "till_cart": "Cart",

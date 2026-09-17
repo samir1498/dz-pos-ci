@@ -253,6 +253,15 @@ landing-deploy:
 # one database the first invocation starts, and the products suite's
 # first test needs an empty table. Run one language with
 # `pnpm desktop e2e --project ar`.
+# Mutation testing over the one module where a passing test proves least:
+# the burst rule that tells a barcode scanner from a cashier typing. Stryker
+# changes each threshold and each comparison in turn and the unit tests have
+# to notice. It runs vitest many times over, so it is its own recipe and not
+# part of `gates`; the report lands in
+# apps/desktop/e2e/.artifacts/mutation/index.html.
+mutate:
+    pnpm desktop exec stryker run
+
 e2e: claim
     #!/usr/bin/env bash
     set -euo pipefail
