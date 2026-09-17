@@ -1,7 +1,7 @@
 ---
 title: 'The demo video: Playwright records, Remotion cuts'
 slug: 'the-demo-video-playwright-records-remotion-cuts'
-status: 'active'
+status: 'done'
 category: 'marketing'
 created: 20260916
 tldr: 'Record the real app with the Playwright suite that already drives it, then use Remotion only to caption the clips and cut them together. No reconstruction of the UI inside Remotion — a demo that is drawn rather than recorded is a demo of a drawing.'
@@ -132,10 +132,12 @@ What it took on this box, evening of 2026-09-16, so nobody rediscovers it:
   password and `POST /users/1/pin` gave them the seed PIN, so the flow's
   defaults hold here as on the laptop.
 
-One blemish to deal with in the cut: Expo Go draws its own floating
-"Tools" button over the top right of every frame. A development client
-built without the dev menu would remove it, which is a bigger job than
-masking that corner in Remotion.
+Expo Go used to draw its own floating "Tools" button over the top right
+of every frame. Its developer menu has the switch that hides it, and
+`scripts/demo-phone.sh` flips that switch before recording because the
+`pm clear` earlier in the script resets it (`DZPOS_KEEP_DEV_BUTTON=1`
+skips that block). A development client built without the dev menu would
+remove the button for good, which is a bigger job than four adb taps.
 
 ## T3 — Clips into the Remotion project
 

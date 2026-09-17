@@ -1,7 +1,7 @@
 ---
 title: 'Demo video: paired phone proven'
 slug: 'demo-video-paired-phone-proven'
-status: 'active'
+status: 'cancelled'
 category: 'demo'
 created: 20260915
 tldr: 'Short video proving the M7 loop on real hardware: pair, sign in, sell, offline retry rings once, revoke closes the door'
@@ -25,7 +25,11 @@ acceptance: []
 
 ## Goal
 
-TODO: define goal
+Superseded on 2026-09-16 by
+`the-demo-video-playwright-records-remotion-cuts`, which films the real
+app with the test suite that already drives it instead of screen-capturing
+the laptop by hand. The clips and the reel exist; this page never got past
+its task list and is kept only so the slug resolves.
 
 ## Scope
 

@@ -84,3 +84,26 @@ server has no idempotency key anywhere (`grep idempotency crates/ apps/`
 is empty). Commit-then-timeout rings the sale twice. Side gap in the same
 flow: `Till.tsx:39-60` only attempts the print on the first try, never
 after a queued retry, so a retried sale prints nothing.
+
+## Where T6 actually stands (2026-09-17)
+
+The milestone is closed and the roadmap entry says so; this task is the
+one piece of it left open, and it is left open on purpose.
+
+Proven: pairing, sign-in and an online cash sale from a phone. Samir
+drove it by hand on 2026-09-16 (QR scanned, name tapped, four digits,
+twelve coffees rung as ticket 2 for 1 443,00 DA in the shop file), and
+`just demo-phone` repeats pair, sign in and sell on the emulator every
+time it films.
+
+Not proven on hardware: the rest of T6's sentence. Nobody has killed the
+Wi-Fi mid-sale, watched the retry ring exactly once with the print
+following it, then revoked the phone from the desktop and confirmed the
+next call gets a 401. The server side of all three has tests; the phone
+side has never been driven through them by a person or by Maestro.
+
+`apps/mobile/maestro/pair-and-sell.yaml` is the flow that would do it and
+its steps 4 to 7 are written. Its step 2 still types a user id into a
+field the sign-in screen removed in PR #99, so the flow stops before it
+reaches them. Fixing that step is the cheap half of closing T6; borrowing
+a second phone for twenty minutes is the other half.

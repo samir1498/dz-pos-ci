@@ -5,7 +5,7 @@ status: 'active'
 category: 'roadmap'
 created: 20260908
 period: '2026-H2'
-tldr: 'Seven milestones from the money core to a phone in the shop; full text in docs/roadmap.md'
+tldr: 'Eight milestones from the money core to a paired phone proven in the shop; full text in docs/roadmap.md'
 priority: 90
 entries:
   - ref: 'money-module-centimes-tva-stamp-amount-in-words'
