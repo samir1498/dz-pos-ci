@@ -82,12 +82,24 @@ nothing at a counter produces by hand.
   physical keys are the truth. Preferring `key` first is what keeps a
   correctly configured French scanner working, where blind `code` reading
   would break it.
-- **Listen at the window, not at one box.** The scan lands wherever focus
-  is. The till already has a window key listener for F9, so this is the same
-  shape.
+- **Send the scan to the box, do not read it from everywhere.** A window
+  listener that merely watches would recognise the burst while the
+  characters still land in whatever field had focus: a scan started in the
+  amount box would add the product and leave `6130000000001` in the amount.
+  So the window listener redirects instead. A printable key, not a repeat,
+  with focus on something that is not a text field and the till not locked,
+  focuses the search box before the character is inserted; everything after
+  that happens in that box's own handler. A scan with focus on a tile, a
+  chip or a button works and its Enter goes to the search box rather than
+  clicking the button. A scan started inside another text field is left
+  alone, exactly as today, because guessing there is worse than not.
 - **Do not eat what a person typed.** The idle path only fires for a string
   that looks like a barcode; a fast typist's `camembert` with a pause after
   it is not one. A code that matches nothing never clears the box.
+- **Say when a code is unknown.** Samir, 2026-09-17: a scan that matches no
+  product shows a line under the search box saying so, and the digits stay
+  where they are. Nothing is created, nothing is cleared, and the cashier
+  can read the code off the screen. Needs its key in `ar`, `fr` and `en`.
 
 Two integration traps, both from the review of this plan:
 
@@ -114,7 +126,8 @@ the room.
 | Inter-character speed, Bluetooth 10–30 ms against a slower USB unit | timestamps passed to the pure function | unit |
 | A person typing, which must never be read as a scan | the same, with human gaps | unit + e2e |
 | UPC-A scanned against an EAN-13 on file | `barcodeKeys` on both sides | unit |
-| A scan while the focus is in another field or a dialog | Playwright focuses that field first | e2e, here |
+| A scan with focus on a tile, a chip or a button | Playwright focuses that element first | e2e, here |
+| A scan started inside another text field leaves it alone | Playwright focuses the amount box first | e2e, here |
 | The real OS keymap through Tauri's webview | cannot be simulated here: Chromium is not WebKitGTK or WebView2 | laptop, by hand (T6) |
 | A real wedge over Bluetooth HID | an Android phone running `hid-barcode-scanner`, which sends raw HID codes like a USB keyboard | laptop and phone, by hand (T6) |
 
@@ -140,6 +153,12 @@ desktop suite is too slow to run per mutant without `coverageAnalysis:
 here as an equivalent mutant with the reason it cannot be killed.
 
 ## Not in this plan
+
+The product form and the purchase screen. Scanning a code into a new
+product's barcode field, or onto a purchase invoice as the goods arrive, is
+how a shop works and is a second wiring with its own tests; Samir's call on
+2026-09-17 was the till alone, because that is where a scanner is used all
+day.
 
 The phone's own scanning is the camera and ML Kit, a different path that
 this does not touch. Printing a barcode label already ships (`docs/features.md`

@@ -23,7 +23,10 @@ US-configured scanner on the French keyboard all fail. Plan:
 `context/plans/20260917-barcode-scanners-every-model-behaves-differently.md`,
 with the matrix of behaviours and how each is simulated. Everything but the
 real keymap runs headless on this box; the laptop and a phone as a
-Bluetooth wedge are Samir's pass at the end.
+Bluetooth wedge are Samir's pass at the end. His two rulings: the till
+alone, not the product form or purchases, and a code that matches nothing
+says so while the digits stay in the box. Loop:
+`context/loops/20260917-scanner-loop.md`.
 
 **The demo video is cut, six clips and a reel.** The loop
 (`context/loops/20260916-demo-loop.md`) recorded the five desktop scenes
