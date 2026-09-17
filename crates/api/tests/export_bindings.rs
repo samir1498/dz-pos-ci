@@ -165,7 +165,32 @@ fn out_dir() -> std::path::PathBuf {
 /// `FILES` (or the other way round) fails here, and a bare `#[ts(export)]`
 /// is refused because ts-rs would then write it to `crates/api/bindings`
 /// from a generated lib test, outside the directory the gate diffs.
-const DTO_SOURCE: &str = include_str!("../src/dto.rs");
+///
+/// Every file in `src/dto/` is named here rather than globbed, because a
+/// glob is not something `include_str!` can do and a domain file nobody
+/// listed would take its DTOs out of this check without failing anything.
+/// A new domain file is added here in the same commit that creates it.
+const DTO_SOURCE: &str = concat!(
+    include_str!("../src/dto/mod.rs"),
+    include_str!("../src/dto/common.rs"),
+    include_str!("../src/dto/meta.rs"),
+    include_str!("../src/dto/products.rs"),
+    include_str!("../src/dto/categories.rs"),
+    include_str!("../src/dto/settings.rs"),
+    include_str!("../src/dto/backups.rs"),
+    include_str!("../src/dto/sales.rs"),
+    include_str!("../src/dto/customers.rs"),
+    include_str!("../src/dto/suppliers.rs"),
+    include_str!("../src/dto/expenses.rs"),
+    include_str!("../src/dto/stock.rs"),
+    include_str!("../src/dto/purchases.rs"),
+    include_str!("../src/dto/dashboard.rs"),
+    include_str!("../src/dto/import.rs"),
+    include_str!("../src/dto/auth.rs"),
+    include_str!("../src/dto/audit.rs"),
+    include_str!("../src/dto/users.rs"),
+    include_str!("../src/dto/pairing.rs")
+);
 
 #[test]
 fn every_exported_dto_is_in_the_list_and_none_uses_the_bare_export() {
