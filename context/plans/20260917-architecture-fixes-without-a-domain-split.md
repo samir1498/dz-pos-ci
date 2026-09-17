@@ -34,11 +34,15 @@ tasks:
   - id: 'T9'
     desc: 'The two JSX money sums, purchases.tsx:260 and purchases_.$id.tsx:232, stop adding transport and extra costs in the component; the API answers the total. Money work, so the money builder and a mirror CI run'
     status: 'pending'
+  - id: 'T10'
+    desc: 'Burn the file-size list down. Samir, 2026-09-17: no huge files. The gate is in and pins 32 of them; the ones worth splitting first are suppliers.tsx at 1086, products.tsx at 929, customers_.$id.tsx at 898 and documents.tsx at 724, because a screen that long is the one nobody reads before changing it. The Rust services on the list are a separate argument and stay pinned for now'
+    status: 'pending'
 acceptance:
   - 'No file in crates/api is over a thousand lines and no import outside dto/ changed'
   - 'No service imports a sibling that imports it back'
   - 'No service calls a repo that belongs to another domain'
   - 'No component computes a total the API could answer, and no f64 sits anywhere near an amount in any app'
+  - 'scripts/file-sizes.json is shorter than the 32 entries it started with, and no entry grew'
 ---
 # Architecture fixes without a domain split
 
@@ -57,6 +61,19 @@ Restructuring is not on the table and not because it is hard. It would touch
 every file in `crates/core`, contradict a written rule, and buy a property
 nobody has needed yet. The findings are individually cheap; the restructure is
 the only expensive option in the room.
+
+## The file-size gate, added 2026-09-17
+
+Samir asked for a no-huge-files rule while T2 was merging. It is `just sizes`,
+a ratchet over `scripts/file-sizes.json`: 600 lines for a source file, 1200 for
+a test file, the 32 already over it pinned at today's length, none of them
+allowed to grow, and an entry that comes back under the limit has to be
+deleted. Nothing new joins the list.
+
+That turns T8's `suppliers.tsx` split from a good idea into something the gate
+will keep. It also means every task on this page now has a second obligation:
+if it shortens a pinned file, it lowers or deletes that file's entry in the
+same commit, or the gate fails.
 
 ## Why T2 goes first and alone
 
