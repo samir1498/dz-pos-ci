@@ -16,3 +16,7 @@ apps/desktop/demo-clips/
 .claude/worktrees/
 apps/landing/.astro/
 apps/landing/src/styles/tokens.css
+
+# This machine's editor setup, not the project's.
+.opencode/
+opencode.json
