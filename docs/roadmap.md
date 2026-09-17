@@ -1,6 +1,6 @@
 # Roadmap: from the money core to a first shop
 
-Seven milestones, in order. Each one names what the owner can demo when it
+Eight milestones, in order. Each one names what the owner can demo when it
 closes, what goes in, the fiscal fixtures it leans on (rows in
 `features.md`), and what blocks it. No dates: a milestone closes when its
 demo runs on a real machine and every PR in it went through the review

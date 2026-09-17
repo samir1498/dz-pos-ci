@@ -21,6 +21,12 @@
 #
 # Relabelled 2026-09-16 for the expo-router rewrite: the screens are the same
 # three, but every string this flow taps moved into the design system.
+#
+# Sign-in step fixed 2026-09-17: PR #99 replaced the user-id field with a
+# list of the shop's names, so the flow taps a name and types that person's
+# PIN. Pass both in:
+#   maestro test -e NAME=<cashier> -e PIN=<four digits> \
+#     apps/mobile/maestro/pair-and-sell.yaml
 
 appId: com.dinar.app
 name: Pair, sign in, sell, offline retry is one sale, revoke is 401
@@ -48,12 +54,15 @@ tags:
 - tapOn: "Pair"
 - assertVisible: "Sign in on this phone"
 
-# 2 — Sign in as a person (device-gated login, M7 T3). Use a cashier PIN
-# the owner just set in settings (e.g. `2580` for user id `2`).
-- tapOn: "Your number"
-- inputText: "2"
-- tapOn: "PIN"
-- inputText: "2580"
+# 2 — Sign in as a person (device-gated login, M7 T3). The screen lists the
+# shop's names: tap one and type only that person's four-digit PIN, the one
+# the owner set in settings. Pass them in with
+# `-e NAME=<cashier> -e PIN=<four digits>`.
+- tapOn: ${NAME}
+- tapOn:
+    id: "PIN"
+    optional: true
+- inputText: ${PIN}
 - tapOn: "Sign in"
 # The till's own resting state: nothing queued, nothing in the basket. The
 # cashier's name is on this screen too, but it comes from the shop file and

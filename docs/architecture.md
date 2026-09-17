@@ -600,7 +600,7 @@ tracks them, alongside the release gates and who holds each:
 | Restricted CI | rustfmt, desktop eslint, release-gate script | every `just ci` push to `samir1498/dz-pos-ci` |
 | Full CI | clippy, cargo test, pnpm test and build; Windows and coverage on main | `just ci` of main, or `just ci <branch> full` |
 | Browser end-to-end | Playwright + chromium against a fresh API and database (`just e2e`); ObserveOne is the recorded tool, Playwright the interim | before a merge, not in CI |
-| Mobile | Jest (RN preset), Maestro flows on a real device | later |
+| Mobile | Jest (RN preset), Maestro flows on a real device or the demo emulator | by hand, not in CI: `apps/mobile/maestro/` |
 
 Gates (`just gates`): `cargo fmt --check`, the desktop's eslint
 (`just lint`), `cargo clippy --all-targets -D warnings`, the generated TS

@@ -7,7 +7,7 @@ Run on a real phone over Tailscale (`100.111.55.62` for the desktop, `EXPO_PUBLI
 maestro test apps/mobile/maestro/pair-and-sell.yaml
 ```
 
-The flow assumes the desktop is in LAN mode (`bind_lan` + `mDNS` `_dzpos._tcp`, firewall banner), and the QR has been shown (`POST /pairing/qr` as owner|manager). The phone's `pair` screen would normally scan the QR; Maestro asserts the screen exists and then drives `till` → `Add` → `Pay` → `Queued: 0`. Ticket spool is checked on the desktop: `spool/ticket-*.bin` beside the shop file.
+The flow assumes the desktop is in LAN mode (`bind_lan` + `mDNS` `_dzpos._tcp`, firewall banner), and the QR has been shown (`POST /pairing/qr` as owner|manager). The phone's `pair` screen would normally scan the QR; Maestro asserts the screen exists, pairs with the typed code, signs in by tapping a name and typing a PIN, rings an online sale, kills the network to queue one, retries it, revokes the phone from the desktop and signs out. The file's seven numbered steps are the list. Ticket spool is checked on the desktop: `spool/ticket-*.bin` beside the shop file.
 
 No CI run for Maestro yet: it needs a real phone and Tailscale, not a runner.
 

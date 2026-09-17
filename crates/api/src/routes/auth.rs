@@ -1,8 +1,10 @@
 //! Signing in, signing out, and who is signed in (M4 T2).
 //!
-//! The three routes that sit inside the launch-token guard and outside the
-//! session one, because they are how a session comes to exist. Everything
-//! else on this API is behind both.
+//! Five of these sit inside the launch-token guard and outside the session
+//! one, because they are how a session comes to exist: `first-setup`,
+//! `login`, `staff`, `logout` and `me` (`lib.rs`, the `phone_auth` router).
+//! `idle` is defined here too and is behind both, like everything else on
+//! this API.
 //!
 //! Nothing here decides anything about a credential: `services::users` owns
 //! the single refusal, the wrong-try counter and the lockout, and
