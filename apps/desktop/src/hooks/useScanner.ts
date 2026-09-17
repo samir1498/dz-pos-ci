@@ -28,10 +28,15 @@ import { EMPTY, SCAN_IDLE_MS, type ScanState, feed } from "@/lib/scan";
  * focus for, and Space actively must not be: see the call site. */
 const CODE_CHARACTER = /^[0-9A-Za-z]$/;
 
-/** Fields where the cashier is typing on purpose. A scan is never taken out
- * of one of these, and never redirected away from one. */
+/** Places where the cashier is typing on purpose. A scan is never taken out
+ * of one of these, and never redirected away from one.
+ *
+ * The keypad is one of them even though its keys are buttons: a digit
+ * pressed with focus inside it is an amount being entered, and the pad
+ * mirrors the physical keyboard for exactly that. */
 function isTextField(element: Element | null): boolean {
   if (element === null) return false;
+  if (element.closest("[data-keypad]") !== null) return true;
   const tag = element.tagName;
   if (tag === "TEXTAREA") return true;
   if (element instanceof HTMLElement && element.isContentEditable) return true;
@@ -124,9 +129,13 @@ export function useScanner({
         return;
       }
 
-      // A character that began somewhere harmless belongs in the box, and
-      // it has to be moved there while the key is still on its way: focus
-      // set now is where the browser inserts it.
+      // A character that began somewhere harmless belongs in the box, so
+      // the rest of the burst is sent there. This one is already gone:
+      // moving focus during keydown does not redirect the key being
+      // pressed, it is simply lost wherever it started. Checked in a real
+      // browser, 2026-09-17, with focus on a keypad key: the digit reached
+      // the keypad and the box stayed empty. The burst survives it anyway,
+      // because this listener has already fed it to the rule.
       //
       // Only a character a code could be made of. Space used to qualify,
       // and moving focus on it broke every button on the screen: a button

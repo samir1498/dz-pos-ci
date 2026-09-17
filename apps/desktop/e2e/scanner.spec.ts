@@ -182,6 +182,19 @@ test.describe("where the cashier left the focus", () => {
     await expect(cartRow(page, `${ARTICLE} focus`)).toBeVisible();
   });
 
+  test("on the keypad, where the digits are an amount and not a code", async ({ page }) => {
+    // The pad mirrors the physical keyboard while focus is inside it, so a
+    // cashier can click a key and then type the rest. The scanner used to
+    // move focus to the search box on the first digit: the amount got that
+    // one and every digit after it went into the search box instead.
+    const tendered = page.getByLabel(t("field_tendered"), { exact: true });
+    await page.getByTestId("keypad").getByRole("button", { name: "7", exact: true }).focus();
+    await page.keyboard.press("Digit5");
+    await page.keyboard.press("Digit3");
+    await expect(searchBox(page)).toHaveValue("");
+    await expect(tendered).toHaveValue("53,00");
+  });
+
   test("in the amount box, which is left alone", async ({ page }) => {
     const tendered = page.getByLabel(t("field_tendered"), { exact: true });
     await tendered.focus();

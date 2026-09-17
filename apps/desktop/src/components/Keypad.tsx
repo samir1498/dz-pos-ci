@@ -120,6 +120,13 @@ export function Keypad({
       role="group"
       aria-label={t("keypad_label")}
       data-testid={testId}
+      // A cashier with focus in here is typing an amount, digit by digit, and
+      // the digits mean this pad rather than a barcode. `useScanner` reads
+      // this to leave the pad alone, the same way it leaves a text field
+      // alone: without it the first digit reached the amount and every digit
+      // after it landed in the search box, because the scanner had moved
+      // focus there on the first one.
+      data-keypad=""
       className={cn("grid gap-2", className)}
       onKeyDown={onKeyDown}
     >
