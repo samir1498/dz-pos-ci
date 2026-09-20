@@ -17,7 +17,8 @@ the same pages; this file is the index.
 ## Processes (`context/processes/`)
 - `coding-rules`: Rust, TypeScript, CSS; layering; comments; money in centimes.
 - `quality-gates`: `just gates` and `just e2e`, what counts as tested, the extra layers
-  for money, roles and deletion.
+  for money, roles and deletion, and when a test gets deleted or merged
+  rather than kept.
 - `machines-and-heavy-jobs`: WSL box vs laptop, the shared-box claim rule,
   the disk gate, worktree teardown.
 - `security-and-provenance`: ISO 27001 controls per feature; where a

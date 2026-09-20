@@ -26,6 +26,15 @@ runs Pass 2 and proves or drops every claim you make.
   satisfy the assertion by another route, so the test is not isolating the
   claim in its title
 - A test name that promises more than the body checks
+- A change-detector: the whole assertion is that a call reached a mock with
+  the arguments it was handed. Red on a rename, green on a wrong answer
+- A run of trivial cases that are one case. Twelve asserting one key each are
+  a sorted comparison that names both directions of the failure
+
+The rules behind the last two, and what has to be true before a test is
+deleted or merged, are in `context/processes/20260908-quality-gates.md`
+under "What a test has to be able to do". Report the candidates; the session
+runs the mutation before anything is removed.
 
 ## What counts as covered here
 

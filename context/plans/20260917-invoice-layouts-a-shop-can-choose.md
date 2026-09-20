@@ -27,7 +27,7 @@ tasks:
     status: 'done'
   - id: 'T7'
     desc: 'The 80mm facture down the ESC/POS path beside escpos.rs. Parkable on purpose: bidi on a roll and the ISO 8859-15 encoding are where a weekend goes, and T5 has already given the shop a printable layout without it'
-    status: 'pending'
+    status: 'parked'
 acceptance:
   - 'A shop picks one of four facture layouts in settings and every facture printed afterwards uses it'
   - 'Every layout carries the fields docs/features.md section 4 requires of a facture, in all three languages'

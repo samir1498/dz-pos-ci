@@ -11,7 +11,7 @@ tasks:
     desc: 'This page: why the phone gets the new shape first and the desktop keeps its JSON for now'
     status: 'done'
   - id: 'T2'
-    desc: 'packages/shared/src/i18n: one TS object per domain, a barrel that merges them, the key type derived from the French object, and a check that every language has every key'
+    desc: 'packages/shared/src/i18n: one TS object per domain, a barrel that merges them, the key type derived from the English object, and a check that every language has every key'
     status: 'pending'
   - id: 'T3'
     desc: 'The phone provider and hook reading those dictionaries, language persisted on the device, RTL for Arabic on every screen the phone has'

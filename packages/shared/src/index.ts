@@ -148,3 +148,23 @@ export type {
   TotalsOptions,
   TvaGroup,
 } from "./totals";
+
+/** The phone's dictionaries. One export point, because the package has one
+ *  (`package.json`, `exports`), and adding a second would ask Metro to
+ *  resolve subpath exports, which is a bundler setting and not a reason to
+ *  split a module.
+ *
+ *  `Lang` here is the language a screen is drawn in. `PrintLang` above is
+ *  the one a document is printed in. The same three codes today, and two
+ *  names on purpose: a shop printing a facture in French for a customer
+ *  while the cashier works in Arabic is the case that separates them. */
+export {
+  DOMAINS as I18N_DOMAINS,
+  LANGS as I18N_LANGS,
+  RTL as I18N_RTL,
+  format,
+  isKey,
+  isLang,
+  translate,
+} from "./i18n";
+export type { Key, Lang, Message, Messages, Plural, PluralCategory, Vars } from "./i18n";
