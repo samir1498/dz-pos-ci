@@ -1070,6 +1070,42 @@ now resettable (`POST /users/{id}/password`, `ManageUsers`, same 8+ validation
 and session rule as PIN, `SetPasswordDto`, `users_api` test) — the review-found
 hole where a forgotten owner password was file surgery.
 
+## 6b. What the phone is, and what it is not (v1)
+
+Written 2026-09-20, after Samir used the app by hand and found it narrower
+than every page describing it. Section 6 says how a phone is paired and
+trusted; this one says what a cashier can actually do once it is.
+
+The phone is four screens and no more: pair, sign in, till, settings
+(`apps/mobile/app/`). It is a thin client of the desktop, never a second copy
+of the shop, and the desktop is the one source of truth.
+
+What it does. Scan the QR to pair, sign in by name and four-digit PIN, ring a
+cash sale from the catalogue, and queue that sale when the shop Wi-Fi is not
+there, retrying it under the same signer. It speaks Arabic, French and English
+and remembers which. Every word on it comes from one dictionary, which
+`apps/mobile/lib/no-literal-strings.test.ts` keeps true.
+
+What it does not do, listed because "the phone milestone is closed" has been
+read as "the phone is finished":
+
+- No barcode scanning. The scanner work is the desktop till's.
+- No product lookup, no stock, no price check away from the basket.
+- No customers, no debt, no credit sale. The till screen rings cash.
+- No reports, no dashboard, no day's figures. An owner holding the phone can
+  see nothing about the shop.
+- No card and no credit: `apps/mobile/lib/basket.ts` rings `paymentMode: "cash"`
+  and that is the whole list.
+- No documents: no facture, no avoir, no reprint, no cancellation.
+- No design pass. `packages/design` and the three brand directions are the
+  desktop's; the phone was built screen by screen to prove the plumbing and
+  looks like it. Samir, 2026-09-20, having used it: "the design was ugly."
+
+None of that is a defect against a promise. The milestone the phone closed was
+"a cashier on the floor can ring a sale and it lands in the shop's file", and
+that is proven on real hardware. This section exists so nobody reads further
+into it than that.
+
 ## 7. Cloud mode (open)
 
 Same core binary hosted, one SQLite file per shop, account login. Not

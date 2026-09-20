@@ -504,9 +504,11 @@ fix below.
   `expected_at_close_centimes`. Ruling 4 requires a reason for a gap and
   nothing else in the file can enforce it.
 
-There is no `cash_movements` table and no `drawers` table. Money out of the
-drawer mid-shift is an expense, which `expenses` already holds; cash handed to
-the owner is the note at close. Both were ruled today. If a shop later asks
+There is no `cash_movements` table and no `drawers` table. Cash handed to the
+owner is the note at close, and an expense paid out of the shop's money is an
+`expenses` row as it is today, recorded by a `commit_money` holder. Neither
+one touches a cashier's expected figure, for the reason the next section
+gives. Both were ruled today. If a shop later asks
 for the individual movements, that is a table added then, not now.
 
 `expected_at_close_centimes` is the one stored figure and it is stored on
@@ -517,49 +519,82 @@ expected figure would move the Monday count after it was signed. The snapshot
 is what the closer saw; the difference is `counted - expected_at_close`, both
 stored, so it is checkable and does not drift.
 
-### The window, and the hour it is off by
+### What the expected figure is made of
 
-The shift window is read on the shop clock against `created_at` of documents,
-`debt_ledger` and `supplier_ledger`, all of which the services stamp.
+Rewritten a second time on 2026-09-20, after the money lens read the first
+version against `crates/core/src/repos/cash.rs` and found it counting other
+people's sales. What follows is the corrected shape.
 
-`created_at` and not `issued_at`, deliberately, and it is ruling 3 that
-decides it. `documents` carries both: `created_at` is when the row was
-written, `issued_at` is the business moment. They differ only for a sale the
-phone queued offline, and `issued_at` is not client-settable
-(`crates/api/src/dto/sales.rs:388`, and `:461` hardcodes it to `None` on the
-way in), so it carries no information about the ring that `created_at` lacks.
-Arrival is also the one of the two a counter cannot steer. Every comparison
-in `services::shifts` reads `created_at`, and a test pins a replay that lands
-after its own shift closed and is tagged rather than counted.
-`expenses.created_at` is not stamped: there is no clock call in
-`services/expenses.rs` or `repos/expenses.rs`, so it takes the
-`DEFAULT (CURRENT_TIMESTAMP)` written in
+A shift's expected figure is:
+
+    opening_cash + that user's cash sales + that user's cash debt payments
+
+and nothing else. Every term is `checked_*`.
+
+**Why the user filter is not optional.** `repos::cash` has no `user_id` in it
+anywhere: `sales`, `customer_payments` and `supplier_payments` each filter on
+`shop_id` and a time range and nothing more. Ruling 1 lets two cashiers hold
+overlapping shifts, so a shop-wide sum handed to each of them counts the other
+one's takings. Two cashiers each ringing 1 000 000 centimes between 09:00 and
+14:00 would each be told to expect 2 000 000, each be recorded 1 000 000
+short, each be made to write a note, and each get an audit row saying so, for
+doing nothing wrong. `documents` carries `user_id` and so does `debt_ledger`,
+so the filter is a where clause rather than a redesign.
+
+**Why expenses and supplier payments are not in it.** Both are `commit_money`
+work, which a cashier does not hold: they are the manager's payments out of
+the shop's money, not out of this cashier's drawer. Taking them out is not
+only correct, it removes a problem that had no cheap fix.
+`repos::expenses::total_between` filters `expense_date`, which is a date and
+not a moment, so a shift running 09:00 to 14:00 would have pulled the whole
+day's expenses including one filed at 20:00 by somebody else. There is no
+shift-sized slice of that column to ask for.
+
+**Which timestamp.** `issued_at` on documents, `created_at` on `debt_ledger`.
+Both are stamped by the services from the shop clock:
+`services::sales::issue` sets `issued_at` to `clock::now()` when the caller
+gives none (`crates/core/src/services/sales.rs:233`), and `NewSaleDto` cannot
+give one (`crates/api/src/dto/sales.rs:388`, `:461`); `repos::debt` stamps
+`created_at` the same way. `repos::cash::sales` already reads `issued_at`, so
+a shift and the dashboard read the same column.
+
+This is also what satisfies ruling 3 with nothing added. A sale the phone
+queued offline is stamped when the server processes it, so `issued_at` is its
+arrival, which is the moment the ruling attaches it to. `documents.created_at`
+is left alone: it takes SQLite's UTC default and no repo stamps it, so it
+would have carried the same hour error the expenses column does, and nothing
+here reads it.
+
+### The expense clock, still worth fixing
+
+`expenses.created_at` takes `DEFAULT (CURRENT_TIMESTAMP)` from
 `crates/core/migrations/2026-09-10-000008_suppliers_purchases_expenses/up.sql`,
-which SQLite answers in UTC. Algiers is an hour ahead, so an expense written
-after 23:00 falls out of the shift that paid it.
-
-The fix ships in this same migration, in the 000013 shape: stamp on write, and
-shift the rows written so far by the hour they are short. This carries over
-from the earlier draft of this phase and must not be dropped with the
-`cash_movements` table it was attached to.
+which SQLite answers in UTC while Algiers is an hour ahead. No shift figure
+depends on it any more, so it stops being load-bearing here, but it is still
+wrong for anything that reads an expense by the hour. It ships in this
+migration in the 000013 shape: stamp on write, and move the rows written so
+far by the hour they are short.
 
 ### What it does to the services
 
-A new `services::shifts` reads the position through `services::cash::position`
-and never through `repos::cash` or `repos::expenses`, or
-`REACHES_PAST_A_SIBLING` grows on its first commit (and T4 branch b will have
-just shortened it). `cash::position` gains a `Period::Between(from, to)` for a
-shift window.
+A new `services::shifts` asks `services::cash` for its figures and never
+touches `repos::cash` or `repos::expenses`, or `REACHES_PAST_A_SIBLING` grows
+on its first commit, just after T4 branch b shortened it.
 
-Expected at close is `opening_cash + cash_in.total() - cash_out.total()` over
-the window, every step `checked_*`. `Takings` and `Outgoings` keep exactly the
-fields they have; nothing is added to either, because no movement kind exists
-to add.
+`services::cash` gains one function for this, `takings_for(conn, shop_id,
+user_id, from, until)`, answering that person's cash sales and cash debt
+payments over a window. `cash::position` is untouched: it keeps summing the
+shop over a day or a month, from sales, both ledgers and expenses, exactly as
+it does today. A shift is a second, narrower question put to the same module,
+not a new input to the old one. That is what keeps a shift, a handover or a
+refund from moving the shop's cash figure.
 
-The dashboard does not read shifts at all. `cash::position` over a day or a
-month answers what it answers today, from sales, the two ledgers and expenses.
-A shift is a second, narrower read of the same function, not a new input to it.
-This is what keeps a handover from moving the shop's cash figure.
+`shifts::sales_outside_a_shift` is a `documents` question, not a `cash` one:
+which of this user's sales fall in none of their own windows. It goes through
+a helper on `services::documents` rather than a query of its own, because a
+`("shifts", &["documents"])` row is exactly what the burn-down list refuses,
+and the plan's own guardrail says that list only shortens. `services/documents.rs`
+is on T3's file list for that reason.
 
 A sale rung while the ringer has no open shift is accepted and tagged, never
 refused (ruling 2). The tag is derived, not stored: a sale belongs to no shift
@@ -673,17 +708,22 @@ Size M.
 open_for, sales_outside_a_shift, report}`, the `cash::position` window, and
 the three audit actions. Files: `crates/core/src/services/shifts.rs`,
 `crates/core/src/services/cash.rs`, `crates/core/src/services/audit.rs`,
-`crates/core/src/services/mod.rs`, `crates/core/tests/shifts_service.rs`.
+`crates/core/src/services/documents.rs`, `crates/core/src/services/mod.rs`,
+`crates/core/tests/shifts_service.rs`.
 Spec: the cash position paragraph of §1, rewritten in this PR to say what a
 session adds; the fiscal rules table gains no row because no document
-changes what it charges. Done: a fixture with an opening cash figure, two cash sales, one card sale,
-one customer payment, one cash expense and one supplier payment in cash,
-whose expected figure is written by hand in the test and not computed by the
-code under test; the difference is negative when counted is short;
-`REACHES_PAST_A_SIBLING` unchanged.
+changes what it charges. Done: a fixture with an opening cash figure, two cash sales and one cash debt
+payment by the shift's own user, plus a card sale, a cash expense, a supplier
+payment in cash and a second cashier's cash sale in the same window, none of
+which may appear in the expected figure. The expected figure is written by
+hand in the test and never computed by the code under test; the difference is
+negative when counted is short; `REACHES_PAST_A_SIBLING` unchanged.
 
-No paid-out in the fixture: ruling 1 removed the movement, so cash leaving
-the drawer is the expense that is already in the list.
+The second cashier's sale is the point of the fixture. Without it the test
+passes against a shop-wide sum, which is the defect the money lens found:
+`repos::cash` filters on `shop_id` and a time range and carries no `user_id`
+at all, so two overlapping shifts would each be told to expect the other's
+takings and each be recorded short by it.
 
 The window comparison gets its own cases, because a fixture whose rows all
 sit inside one shift passes with the comparison inverted: a sale at exactly
@@ -735,8 +775,24 @@ Files: `crates/core/src/services/cash.rs`, `avoir.rs`, `cancellation.rs`,
 `apps/desktop/src/components/CashPanel.tsx` (lifted out of `expenses.tsx`,
 which shortens it and lowers its entry), `dashboard.tsx` (imports only).
 
+Before any of it, one thing the money lens found and the ruling does not
+cover. `avoir::issue` credits the ledger for the whole amount, then settles
+the facture it is written against, then the customer's other unpaid papers
+oldest first, and only what none of them can take becomes credit the shop
+holds. Settling in cash on top of that unchanged path pays twice: a customer
+with a 20 000 DA avoir and a separate 15 000 DA unpaid facture would have
+that facture cleared on the ledger and be handed the whole 20 000 in notes.
+So cash settlement replaces the ledger legs for the amount handed over rather
+than sitting beside them, and the migration's own CHECK says a row of
+`kind = 'avoir'` may carry no `payment_mode`
+(`crates/core/migrations/2026-09-09-000006_debt_payment_mode_check/up.sql`),
+so the schema moves too. The anonymous cancelled ticket has no ledger row at
+all and is the simpler arm.
+
 Done: a cash refund lowers the day's cash figure and the open shift's
-expected figure by the same centimes; the three assertions that pin
+expected figure by the same centimes; a customer with another unpaid document
+is not credited twice, proven by a test that fails against the ledger path
+left unchanged; the three assertions that pin
 `refunds` at zero (`cash_service.rs:161`, `:343`, `cash_prop.rs:153`) are
 replaced by ones that pin the new behaviour rather than loosened; a partial
 avoir refunds its share and no more; the stamp is still never given back; and
