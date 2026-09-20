@@ -127,7 +127,39 @@ Dependency direction is one way: `api → core`, `desktop → api`,
 
 - **models**: plain structs, diesel derives, no logic.
 - **repos**: one per aggregate, the only place diesel queries live, every
-  query scoped by `shop_id`.
+  query scoped by `shop_id`. Two services ask SQL a question anyway.
+  `backup.rs` runs `VACUUM INTO`, `PRAGMA integrity_check` and reads the
+  migrations table; `support_bundle.rs` reads `sqlite_master` and `PRAGMA
+  table_info`. None of those is about a shop, so there is no aggregate to
+  own them and no `shop_id` to put on them.
+
+  Both also count rows: `SELECT COUNT(*)` over `products`, `documents` and
+  `customers` for the bundle, and over `products` and `documents` for the
+  check that a file offered for restore is a dz-pos file at all. Those are
+  real data tables and the counts carry no `shop_id`, which is only
+  harmless because of the line under **Data** below: one file per shop. The
+  count of a table is the count for the shop, and the day that stops being
+  true these five queries are wrong, not merely impolite. The support
+  bundle carries the numbers and never the rows
+  (`crates/api/tests/support_bundle.rs`).
+
+  Handing SQLite a statement is the other door, and it matters more,
+  because `batch_execute` returns no rows but will run anything: an
+  `UPDATE` across every shop as readily as a `BEGIN`. Two services use it.
+  `backup.rs` runs `VACUUM INTO` and `PRAGMA query_only`, which the query
+  builder cannot express, and `pairing.rs` runs `BEGIN IMMEDIATE`, because
+  diesel's `transaction()` begins deferred and this one needs the write
+  lock up front.
+
+  That last guard is ahead of the architecture rather than answering it:
+  the API holds one connection behind one mutex (`AppState`), so two
+  phones claiming one QR are already serialized in Rust before either
+  statement reaches SQLite. It costs nothing and it is the difference
+  between the claim being safe and being safe by accident, the day a pool
+  or a second writer arrives.
+
+  `crates/core/tests/repos_own_the_queries.rs` walks both doors against
+  both lists and fails on a third service at either.
 - **services**: business rules (stock ledger, totals, TVA, stamp, numbering,
   debt). Take a connection, return domain results. This is where the tests
   concentrate.

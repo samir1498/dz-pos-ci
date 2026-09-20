@@ -89,9 +89,14 @@ pub fn claim_pairing_token(
     // ever clears, so SQLite answers BUSY instead of serializing them.
     // Immediate takes the write lock up front; the loser waits out the
     // winner (busy_timeout, `db::open`) and then reads `used_at` set.
-    // The flip stays conditional on top of that, so a zero-row flip is
-    // already-claimed even if the read ever races again — answered the same
-    // indistinguishable way as every other refusal here.
+    //
+    // That race cannot happen in the API as it stands, which holds one
+    // connection behind one mutex, so two claims are already serialized in
+    // Rust before either statement is sent. The guard is for the day a pool
+    // or a second writer arrives, and it costs one word. The flip stays
+    // conditional on top of it either way, so a zero-row flip reads as
+    // already-claimed, answered the same indistinguishable way as every
+    // other refusal here.
     conn.batch_execute("BEGIN IMMEDIATE")?;
     let claimed = (|| -> Result<(DeviceToken, PairedDeviceRow), CoreError> {
         let row = repo::pairing_by_hash(conn, shop_id, &hash)?.ok_or(CoreError::AuthRefused)?;
@@ -136,10 +141,20 @@ pub fn claim_pairing_token(
         Ok((device_token, device_row))
     })();
     match claimed {
-        Ok(out) => {
-            conn.batch_execute("COMMIT")?;
-            Ok(out)
-        }
+        Ok(out) => match conn.batch_execute("COMMIT") {
+            Ok(()) => Ok(out),
+            // A COMMIT that fails leaves the transaction open, and the API
+            // holds this one connection for the life of the process
+            // (`AppState`): every write after it would be refused for
+            // starting a transaction inside a transaction, until somebody
+            // restarted the till. The rollback is what hands the connection
+            // back. Returning the commit's own error rather than the
+            // rollback's: what failed is the claim.
+            Err(failed) => {
+                let _ = conn.batch_execute("ROLLBACK");
+                Err(CoreError::from(failed))
+            }
+        },
         Err(refused) => {
             let _ = conn.batch_execute("ROLLBACK");
             Err(refused)
@@ -238,6 +253,37 @@ mod tests {
             claim_pairing_token(&mut conn, shop, t.expose(), noon(), "Phone2"),
             Err(CoreError::AuthRefused)
         ));
+    }
+
+    /// The claim drives its own transaction, so it owns ending it. A path
+    /// that returns without a COMMIT or a ROLLBACK leaves the connection
+    /// inside a transaction, and the API holds one connection for the life
+    /// of the process: every write after it would be refused for starting a
+    /// transaction inside a transaction, until somebody restarted the till.
+    ///
+    /// A refusal is the reachable case and is what this holds. The other
+    /// one, a COMMIT that itself fails, is argued in the code rather than
+    /// proven here: forcing it wants a deferred constraint or a full disk,
+    /// neither of which this file can arrange around a function that takes a
+    /// connection it did not open.
+    #[test]
+    fn a_refused_claim_gives_the_connection_back() {
+        let (_dir, mut conn) = crate::repos::testdb::open();
+        let shop = crate::repos::testdb::SHOP;
+        let owner = crate::repos::testdb::OWNER;
+        let t = create_pairing_token(&mut conn, shop, owner, noon()).unwrap();
+
+        assert!(matches!(
+            claim_pairing_token(&mut conn, shop, t.expose(), later(61), "Phone"),
+            Err(CoreError::AuthRefused)
+        ));
+
+        // The next transaction on the same connection is the check: BEGIN
+        // inside a live transaction is an error, so this fails if the
+        // refusal walked away from one.
+        conn.batch_execute("BEGIN IMMEDIATE")
+            .expect("the refused claim left no transaction open");
+        conn.batch_execute("ROLLBACK").unwrap();
     }
 
     #[test]
