@@ -12,6 +12,8 @@
 
 import type { Key, Vars } from "@dzpos/shared";
 
+import { ERROR_KEY, errorKey } from "./errors";
+
 /** What the cashier is told, in a form the screen can put in their own
  *  language.
  *
@@ -64,14 +66,16 @@ export function outcomeOf(status: number | null, error: ApiError): Outcome {
   if (status >= 500) return { kind: "queue" };
 
   if (status === 401) {
-    if (error?.code === "device_refused") return { kind: "pair-again", say: { key: "error_pair_again" } };
-    if (error?.code === "auth_refused") return { kind: "refused", say: { key: "error_wrong_secret" } };
-    return { kind: "sign-in-again", say: { key: "error_sign_in_again" } };
+    if (error?.code === "device_refused")
+      return { kind: "pair-again", say: { key: ERROR_KEY.device_refused } };
+    if (error?.code === "auth_refused")
+      return { kind: "refused", say: { key: ERROR_KEY.auth_refused } };
+    return { kind: "sign-in-again", say: { key: ERROR_KEY.session_required } };
   }
   if (status === 403) {
     // The person is signed in; their role does not reach this. Neither
     // re-pairing nor signing in again changes that.
-    return { kind: "refused", say: { key: "error_not_allowed" } };
+    return { kind: "refused", say: { key: ERROR_KEY.forbidden } };
   }
   // 409 is a refusal, not a queue. The core answers it two ways on the same
   // code and field (`CoreError::conflict("idempotency_key", …)`): a key
@@ -81,12 +85,16 @@ export function outcomeOf(status: number | null, error: ApiError): Outcome {
   // module exists to kill got written. Both are shown to the cashier, who
   // rings again with a fresh key.
   //
-  // The status is all that sentence has to offer, and on a 422 that is less
-  // than the server said. What would close the gap is the desktop's shape: a
-  // record from the core's error codes to keys, so a credit limit or a
-  // validation failure gets its own sentence. It is not written here because
-  // the phone rings cash sales and nothing else yet, and a map built from
-  // guesses is a dictionary of keys no screen reaches. It is on the plan page
-  // rather than in this comment, so it is visible without opening this file.
+  // What the cashier is told comes from the code, not the status. Until
+  // 2026-09-20 every refusal that was not a credential landed on one
+  // sentence naming a number, so a credit limit and a barcode already taken
+  // read the same on the counter as a template that would not render.
+  // `errors.ts` is the table, walked against the server's own two lists.
+  //
+  // A code with no line there still falls back to the status, rather than
+  // to a general sentence: a number a manager can be read out over the
+  // phone is worth more than prose that hides which refusal happened.
+  const key = errorKey(error?.code);
+  if (key !== null) return { kind: "refused", say: { key } };
   return { kind: "refused", say: { key: "error_refused", vars: { status } } };
 }

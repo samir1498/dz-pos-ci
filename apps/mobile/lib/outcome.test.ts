@@ -62,7 +62,16 @@ const REFUSED: [string, number, ApiError, Outcome][] = [
     "the request did not validate",
     422,
     { code: "validation", message: SERVERS_OWN_WORDS },
-    { kind: "refused", say: { key: "error_refused", vars: { status: 422 } } },
+    { kind: "refused", say: { key: "error_validation" } },
+  ],
+  // The refusal this milestone is about. Until 2026-09-20 a customer past
+  // their credit limit and a template that would not render read the same
+  // on the counter, because the sentence came from the status.
+  [
+    "the customer is past their credit limit",
+    422,
+    { code: "credit_limit", message: SERVERS_OWN_WORDS },
+    { kind: "refused", say: { key: "error_credit_limit" } },
   ],
   // A key the server already knows. The core answers 409 two ways on the
   // same code and field: a key whose winner is readable, worth sending
@@ -74,7 +83,7 @@ const REFUSED: [string, number, ApiError, Outcome][] = [
     "the idempotency key was already spent",
     409,
     { code: "conflict", message: SERVERS_OWN_WORDS },
-    { kind: "refused", say: { key: "error_refused", vars: { status: 409 } } },
+    { kind: "refused", say: { key: "error_sale_already_rung" } },
   ],
   // And a body with nothing in it says the same as one with everything in
   // it, because nothing in the answer was ever where the sentence came
@@ -84,6 +93,16 @@ const REFUSED: [string, number, ApiError, Outcome][] = [
     "the body carried nothing",
     422,
     null,
+    { kind: "refused", say: { key: "error_refused", vars: { status: 422 } } },
+  ],
+  // A code from a build of the server newer than this build of the phone.
+  // It falls back to the status rather than to a general sentence: a number
+  // a cashier can read out is worth more than prose that hides which
+  // refusal happened.
+  [
+    "the code is one this build has never heard of",
+    422,
+    { code: "a_code_from_a_later_server", message: SERVERS_OWN_WORDS },
     { kind: "refused", say: { key: "error_refused", vars: { status: 422 } } },
   ],
 ];
