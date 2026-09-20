@@ -41,6 +41,20 @@ impl Lang {
             Lang::Fr | Lang::En => "ltr",
         }
     }
+
+    /// The reverse of `tag`. A spelling this build does not recognise reads
+    /// as `None` rather than as an error, the way `services::preferences`'s
+    /// own `Theme::parse` reads an unknown theme: a stored or requested
+    /// language this build has never heard of should fall back to the
+    /// caller's own language, not refuse to print.
+    pub fn parse(value: &str) -> Option<Lang> {
+        match value {
+            "fr" => Some(Lang::Fr),
+            "en" => Some(Lang::En),
+            "ar" => Some(Lang::Ar),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -61,5 +75,19 @@ mod tests {
             let json = serde_json::to_string(&lang).unwrap_or_default();
             assert_eq!(json, format!("\"{}\"", lang.tag()));
         }
+    }
+
+    #[test]
+    fn parse_is_the_reverse_of_tag_for_every_language() {
+        for lang in Lang::ALL {
+            assert_eq!(Lang::parse(lang.tag()), Some(lang));
+        }
+    }
+
+    #[test]
+    fn a_spelling_this_build_does_not_know_reads_as_no_language() {
+        assert_eq!(Lang::parse("de"), None);
+        assert_eq!(Lang::parse("FR"), None);
+        assert_eq!(Lang::parse(""), None);
     }
 }

@@ -39,6 +39,7 @@ const settings: SettingsDto = {
   theme: null,
   facture_layout: "standard",
   facture_layouts: ["standard", "compact", "half_sheet", "roll_80mm"],
+  print_lang: null,
   discount_threshold_bps: 0,
 };
 
@@ -137,6 +138,16 @@ describe("settingsSchema", () => {
     expect(settingsSchema.safeParse({ ...settings, facture_layout: "halfsheet" }).success).toBe(
       false,
     );
+  });
+
+  /** `null` is the shop following the till's own language, not a missing
+   *  answer, so it has to stay a valid page and not just the three names. */
+  test("takes every print language the server can name, and null", () => {
+    for (const lang of ["fr", "en", "ar"] as const) {
+      expect(settingsSchema.parse({ ...settings, print_lang: lang }).print_lang).toBe(lang);
+    }
+    expect(settingsSchema.parse({ ...settings, print_lang: null }).print_lang).toBeNull();
+    expect(settingsSchema.safeParse({ ...settings, print_lang: "de" }).success).toBe(false);
   });
 });
 

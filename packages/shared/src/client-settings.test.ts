@@ -44,6 +44,7 @@ describe("settings", () => {
     facture_layout: "standard",
 
     facture_layouts: ["standard", "compact"],
+    print_lang: null,
     discount_threshold_bps: 0,
   };
 
@@ -121,6 +122,39 @@ describe("settings", () => {
   test("a settings answer naming a theme the app has no block for is refused", async () => {
     const api = createClient("http://127.0.0.1:4317", stub(200, { ...settings, theme: "midnight" }));
     await expect(api.getSettings()).rejects.toMatchObject({ code: "bad_response" });
+  });
+
+  test("choosing a print language puts it and returns the whole page", async () => {
+    const chosen: SettingsDto = { ...settings, print_lang: "ar" };
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(chosen), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.setPrintLang("ar")).resolves.toEqual(chosen);
+    expect(calls[0]?.url).toBe("http://127.0.0.1:4317/settings/print-lang");
+    expect(calls[0]?.init?.method).toBe("PUT");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ print_lang: "ar" });
+  });
+
+  /** null is a choice: it puts every fiscal paper back on the till's own
+   *  language. */
+  test("clearing the print language sends null rather than leaving the field out", async () => {
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchStub: typeof fetch = async (input, init) => {
+      calls.push({ url: String(input), init });
+      return new Response(JSON.stringify(settings), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const api = createClient("http://127.0.0.1:4317", fetchStub);
+    await expect(api.setPrintLang(null)).resolves.toEqual(settings);
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ print_lang: null });
   });
 
   test("a régime change posts the day and returns the whole page", async () => {

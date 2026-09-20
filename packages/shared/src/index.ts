@@ -45,6 +45,8 @@ export type { DatedRegimeDto } from "./generated/DatedRegimeDto";
 export type { SettingsDto } from "./generated/SettingsDto";
 export type { FactureLayoutDto } from "./generated/FactureLayoutDto";
 export type { FactureLayoutChoiceDto } from "./generated/FactureLayoutChoiceDto";
+export type { PrintLangDto } from "./generated/PrintLangDto";
+export type { PrintLangChoiceDto } from "./generated/PrintLangChoiceDto";
 export type { ThemeDto } from "./generated/ThemeDto";
 export type { ThemeChoiceDto } from "./generated/ThemeChoiceDto";
 export type { RegimeChangeDto } from "./generated/RegimeChangeDto";

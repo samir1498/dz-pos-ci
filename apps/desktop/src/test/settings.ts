@@ -26,5 +26,6 @@ export const SETTINGS: SettingsDto = {
   theme: null,
   facture_layout: "standard",
   facture_layouts: ["standard", "compact"],
+  print_lang: null,
   discount_threshold_bps: 0,
 };

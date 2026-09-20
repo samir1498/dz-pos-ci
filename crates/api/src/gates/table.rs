@@ -284,6 +284,12 @@ pub const ROUTE_GATES: &[Gate] = &[
         why: "which layout the shop's factures print in is not the theme beside it: the theme changes a screen and this changes the paper a customer is handed and a comptable files, so it sits with the other settings a manager holds (2026-09-17)",
     },
     Gate {
+        method: "PUT",
+        path: "/settings/print-lang",
+        permission: Some(Permission::EditSettings),
+        why: "the language every fiscal paper prints in is the same kind of decision as the facture layout beside it, not the theme: it changes what a customer is handed and what a comptable files, so a cashier does not choose it (plan a-print-language-the-shop-keeps, 2026-09-20)",
+    },
+    Gate {
         method: "POST",
         path: "/stock/recount",
         permission: Some(Permission::CorrectLedger),

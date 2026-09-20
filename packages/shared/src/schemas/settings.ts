@@ -14,6 +14,7 @@ import type { RestoreDto } from "../generated/RestoreDto";
 import type { SettingsDto } from "../generated/SettingsDto";
 import type { StoreDto } from "../generated/StoreDto";
 import type { FactureLayoutDto } from "../generated/FactureLayoutDto";
+import type { PrintLangDto } from "../generated/PrintLangDto";
 import type { ThemeDto } from "../generated/ThemeDto";
 import { day, exactInteger } from "./common";
 import type { Assert, Matches } from "./drift";
@@ -79,6 +80,11 @@ export const factureLayoutSchema = z.enum([
 ]) satisfies z.ZodType<FactureLayoutDto>;
 type _FactureLayout = Assert<Matches<FactureLayoutDto, typeof factureLayoutSchema>>;
 
+/** The three `print::strings` already holds. `null` is the shop following
+ *  the till's own language rather than a stored choice. */
+export const printLangSchema = z.enum(["fr", "en", "ar"]) satisfies z.ZodType<PrintLangDto>;
+type _PrintLang = Assert<Matches<PrintLangDto, typeof printLangSchema>>;
+
 export const settingsSchema = z.object({
   store: storeSchema,
   regime: datedRegimeSchema,
@@ -90,6 +96,9 @@ export const settingsSchema = z.object({
   /** Every layout the shop may pick, from the server, so the screen carries
    *  no copy of the list to go stale when one is added. */
   facture_layouts: z.array(factureLayoutSchema),
+  /** `null` when the shop has never chosen one, which is not French by
+   *  default: the till prints in whatever language it is being used in. */
+  print_lang: printLangSchema.nullable(),
   /** Basis points of the basket, so a whole number: 250 is 2,5 %. Zero on
    *  a shop that has never set one, which refuses a cashier every
    *  discount. */

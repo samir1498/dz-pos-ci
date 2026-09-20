@@ -766,5 +766,8 @@
   "facture_layout_half_sheet": "Half sheet (A5)",
   "facture_layout_half_sheet_hint": "A facture handed over at the counter with the goods. Drawn for A5, and printed on A5 even when the print asks for A4.",
   "facture_layout_roll_80mm": "80 mm roll",
-  "facture_layout_roll_80mm_hint": "The facture on the till's own roll. Every legal mention is on it, in one column: the customer leaves with their facture without changing printer."
+  "facture_layout_roll_80mm_hint": "The facture on the till's own roll. Every legal mention is on it, in one column: the customer leaves with their facture without changing printer.",
+  "settings_print_lang": "Print language",
+  "settings_print_lang_hint": "The language every fiscal paper prints in: the ticket, the invoice, the customer statement and the debt slip. Independent of the screen's own language.",
+  "print_lang_follow_till": "Follow the till"
 }

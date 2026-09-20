@@ -17,6 +17,7 @@
 use crate::error::ApiError;
 use chrono::NaiveDate;
 use dzpos_core::error::CoreError;
+use dzpos_core::lang::Lang;
 use dzpos_core::models::category::Category;
 use dzpos_core::models::document::{Document, DocumentKind, DocumentLine, DocumentStatus};
 use dzpos_core::models::product::{NewProduct, Product, Unit};

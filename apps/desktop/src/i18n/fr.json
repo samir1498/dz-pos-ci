@@ -766,5 +766,8 @@
   "facture_layout_half_sheet": "Demi-feuille (A5)",
   "facture_layout_half_sheet_hint": "Une facture remise au comptoir avec la marchandise. Dessinée pour le A5, et imprimée sur A5 même si l'impression demande du A4.",
   "facture_layout_roll_80mm": "Rouleau 80 mm",
-  "facture_layout_roll_80mm_hint": "La facture sur le rouleau de la caisse. Toutes les mentions légales y sont, en une colonne : le client repart avec sa facture sans changer d'imprimante."
+  "facture_layout_roll_80mm_hint": "La facture sur le rouleau de la caisse. Toutes les mentions légales y sont, en une colonne : le client repart avec sa facture sans changer d'imprimante.",
+  "settings_print_lang": "Langue d'impression",
+  "settings_print_lang_hint": "La langue dans laquelle chaque papier fiscal s'imprime : le ticket, la facture, le relevé client et le bon de dette. Indépendante de la langue de l'écran.",
+  "print_lang_follow_till": "Suivre la caisse"
 }

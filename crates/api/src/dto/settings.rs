@@ -191,6 +191,71 @@ pub struct FactureLayoutChoiceDto {
     pub facture_layout: FactureLayoutDto,
 }
 
+/// The language every fiscal paper prints in: the ticket, the facture, the
+/// customer statement and the debt slip alike
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`). The same
+/// three `print::strings` already holds and the screen's own three
+/// (`apps/desktop/src/i18n`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "PrintLangDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum PrintLangDto {
+    Fr,
+    En,
+    Ar,
+}
+
+impl From<Lang> for PrintLangDto {
+    fn from(l: Lang) -> Self {
+        match l {
+            Lang::Fr => PrintLangDto::Fr,
+            Lang::En => PrintLangDto::En,
+            Lang::Ar => PrintLangDto::Ar,
+        }
+    }
+}
+
+impl From<PrintLangDto> for Lang {
+    fn from(d: PrintLangDto) -> Self {
+        match d {
+            PrintLangDto::Fr => Lang::Fr,
+            PrintLangDto::En => Lang::En,
+            PrintLangDto::Ar => Lang::Ar,
+        }
+    }
+}
+
+/// The print language the settings screen is putting the shop on. `null` is
+/// not a missing answer: it is the shop asking to forget its choice, which
+/// puts every fiscal paper back on the till's own language, the way
+/// `ThemeChoiceDto`'s `null` puts the screen back on Comptoir.
+///
+/// The two are told apart rather than trusted to differ, which is why the
+/// field is an option of an option and arrives through `answered` below.
+/// Serde fills a plain missing `Option` field with `None`, so a caller that
+/// dropped the key would have read as the shop asking to forget, and a
+/// screen with a bug in it would have quietly put a shop that prints Arabic
+/// back on the till's language with nothing refused and nothing logged. The
+/// outer `None` is "you did not answer", and the route turns it into a 422.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "PrintLangChoiceDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct PrintLangChoiceDto {
+    #[serde(default, deserialize_with = "answered")]
+    #[ts(as = "Option<PrintLangDto>")]
+    pub print_lang: Option<Option<PrintLangDto>>,
+}
+
+/// `Some(None)` for a field that is there and `null`, `Some(Some(_))` for one
+/// carrying a language. A field that is not there never reaches this, and
+/// `serde(default)` leaves it `None`.
+fn answered<'de, D>(d: D) -> Result<Option<Option<PrintLangDto>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::deserialize(d).map(Some)
+}
+
 /// What the settings screen reads: the store block, the régime in force
 /// and, when the owner has dated a change ahead, the one coming.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -208,6 +273,11 @@ pub struct SettingsDto {
     /// Every layout the shop may pick, so the screen does not carry its own
     /// copy of the list and go stale when one is added.
     pub facture_layouts: Vec<FactureLayoutDto>,
+    /// The language every fiscal paper prints in. `null` when the shop has
+    /// never chosen one, which is not French by default: the till prints in
+    /// whatever language it is being used in (T3 reads this; nothing does
+    /// yet).
+    pub print_lang: Option<PrintLangDto>,
     /// How much a cashier may take off a basket before the sale needs
     /// someone holding `discount_above_threshold`, in basis points of the
     /// basket before any discount (250 is 2,5 %). Zero on a shop that has

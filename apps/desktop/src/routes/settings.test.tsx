@@ -87,6 +87,7 @@ const seeded: SettingsDto = {
   theme: null,
   facture_layout: "standard",
   facture_layouts: ["standard", "compact", "half_sheet", "roll_80mm"],
+  print_lang: null,
   discount_threshold_bps: 0,
 };
 
@@ -231,6 +232,14 @@ beforeEach(() => {
       // server stored, so a value neither of them knows must not pass.
       const chosen = seeded.facture_layouts.find((layout) => layout === asked);
       current = { ...current, facture_layout: chosen ?? "standard" };
+      return Promise.resolve(json(200, current));
+    }
+    if (init?.method === "PUT" && url.endsWith("/settings/print-lang")) {
+      const body: unknown = JSON.parse(String(init.body));
+      if (typeof body !== "object" || body === null) throw new Error("no body");
+      const asked = "print_lang" in body ? body.print_lang : undefined;
+      const chosen = (["fr", "en", "ar"] as const).find((lang) => lang === asked);
+      current = { ...current, print_lang: chosen ?? null };
       return Promise.resolve(json(200, current));
     }
     if (init?.method === "POST" && url.endsWith("/settings/regime")) {
@@ -652,5 +661,37 @@ describe("the printing room", () => {
     await user.click(picker);
     expect(await screen.findByRole("option", { name: fr.facture_layout_standard })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: fr.facture_layout_compact })).not.toBeInTheDocument();
+  });
+
+  test("shows the print language following the till when the shop has never chosen", async () => {
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_print_lang });
+    expect(picker).toHaveTextContent(fr.print_lang_follow_till);
+  });
+
+  test("sends the print language that was picked and shows the answer", async () => {
+    const user = userEvent.setup();
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_print_lang });
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: fr.lang_name_ar }));
+    await waitFor(() => expect(sent("PUT").url).toContain("/settings/print-lang"));
+    expect(sent("PUT").body).toEqual({ print_lang: "ar" });
+    // The answer is the whole page, so the screen reads the stored choice
+    // back rather than trusting the click that sent it.
+    await waitFor(() => expect(picker).toHaveTextContent(fr.lang_name_ar));
+  });
+
+  test("choosing to follow the till again sends null", async () => {
+    const user = userEvent.setup();
+    current = { ...seeded, print_lang: "ar" };
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_print_lang });
+    expect(picker).toHaveTextContent(fr.lang_name_ar);
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: fr.print_lang_follow_till }));
+    await waitFor(() => expect(sent("PUT").url).toContain("/settings/print-lang"));
+    expect(sent("PUT").body).toEqual({ print_lang: null });
+    await waitFor(() => expect(picker).toHaveTextContent(fr.print_lang_follow_till));
   });
 });

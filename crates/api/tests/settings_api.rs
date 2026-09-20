@@ -113,6 +113,9 @@ async fn the_seeded_shop_reads_as_its_name_reel_and_nothing_planned() {
                 .iter()
                 .map(|layout| layout.as_str())
                 .collect::<Vec<_>>(),
+            // `null` is not French by default: a shop that has never chosen
+            // prints in whatever language the till is being used in.
+            "print_lang": null,
             // A shop that has never set one refuses a cashier every
             // discount, which is the safe reading of "nobody has decided"
             // and the reason the settings screen has to offer the field.
@@ -165,6 +168,169 @@ async fn choosing_nothing_puts_the_shop_back_on_the_machine() {
 
     let (_, all) = call(&h.app, "GET", "/settings", None).await;
     assert_eq!(all["theme"], Value::Null);
+}
+
+/// `null` is the shop following the till, and it is what a shop that has
+/// never chosen reads as (not French by default).
+#[tokio::test]
+async fn a_print_lang_is_kept_and_read_back_under_the_name_the_wire_uses() {
+    let h = harness();
+    for name in ["fr", "en", "ar"] {
+        let (status, body) = call(
+            &h.app,
+            "PUT",
+            "/settings/print-lang",
+            Some(json!({ "print_lang": name })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(
+            body["print_lang"],
+            json!(name),
+            "the answer lost the print language"
+        );
+
+        let (_, all) = call(&h.app, "GET", "/settings", None).await;
+        assert_eq!(
+            all["print_lang"],
+            json!(name),
+            "the shop file lost the print language"
+        );
+    }
+}
+
+#[tokio::test]
+async fn choosing_no_print_lang_puts_the_shop_back_on_the_till() {
+    let h = harness();
+    let (_, _) = call(
+        &h.app,
+        "PUT",
+        "/settings/print-lang",
+        Some(json!({ "print_lang": "ar" })),
+    )
+    .await;
+    let (status, body) = call(
+        &h.app,
+        "PUT",
+        "/settings/print-lang",
+        Some(json!({ "print_lang": null })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["print_lang"], Value::Null);
+
+    let (_, all) = call(&h.app, "GET", "/settings", None).await;
+    assert_eq!(all["print_lang"], Value::Null);
+}
+
+/// The name is closed: a spelling this build does not carry is a bad
+/// request, the same 422 every other unknown DTO variant gets, so a shop
+/// finds out at the moment of choosing rather than storing a value that
+/// silently degrades later.
+#[tokio::test]
+async fn a_print_lang_with_no_wording_is_refused() {
+    let h = harness();
+    for bad in [
+        json!({ "print_lang": "de" }),
+        json!({ "print_lang": "Fr" }),
+        json!({ "print_langs": "fr" }),
+        json!({ "print_lang": "" }),
+        // No field at all. Serde reads a missing `Option` as `None`, so
+        // without the route's own check this one would have been a shop
+        // quietly put back on the till's language.
+        json!({}),
+    ] {
+        let (status, _) = call(&h.app, "PUT", "/settings/print-lang", Some(bad.clone())).await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{bad} was accepted as a print language"
+        );
+    }
+
+    let (_, all) = call(&h.app, "GET", "/settings", None).await;
+    assert_eq!(
+        all["print_lang"],
+        Value::Null,
+        "a refused body still wrote a row"
+    );
+}
+
+/// A cashier is refused on the permission, not on a missing field: the same
+/// walk `route_gates.rs` runs over every row of `ROUTE_GATES`, including
+/// this one now that it carries `EditSettings`
+/// (`a_cashier_is_refused_and_a_manager_is_not_on_every_gated_route`). This
+/// asserts it here too, reading the refusal body rather than only the
+/// status, so a regression that kept the 403 but dropped the reason still
+/// fails.
+#[tokio::test]
+async fn a_cashier_is_refused_on_the_permission_and_a_manager_is_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
+    common::sign_in_as(&path, SHOP, "cashier", common::CASHIER_SESSION);
+    common::sign_in_as(&path, SHOP, "manager", common::MANAGER_SESSION);
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    let app = dzpos_api::router(state, &token());
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/settings/print-lang")
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::CASHIER_SESSION)
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "print_lang": "ar" }).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["error"]["code"], "forbidden", "{body}");
+    assert_eq!(body["error"]["permission"], "edit_settings", "{body}");
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/settings/print-lang")
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::MANAGER_SESSION)
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "print_lang": "ar" }).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
+/// The setting outlives the connection that wrote it: the app is rebuilt
+/// from the same file, standing in for the process restarting, and the PUT
+/// is still there.
+#[tokio::test]
+async fn a_print_lang_survives_reopening_the_shop_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
+    {
+        let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+        let app = dzpos_api::router(state, &token());
+        let (status, body) = call(
+            &app,
+            "PUT",
+            "/settings/print-lang",
+            Some(json!({ "print_lang": "ar" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    // A fresh state and a fresh router over the same file: the first one is
+    // dropped above, so nothing but the file itself carries the write.
+    let reopened = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    let app = dzpos_api::router(reopened, &token());
+    let (_, all) = call(&app, "GET", "/settings", None).await;
+    assert_eq!(
+        all["print_lang"],
+        json!("ar"),
+        "the print language did not survive a restart"
+    );
 }
 
 #[tokio::test]
@@ -472,6 +638,7 @@ async fn the_settings_routes_need_the_token_and_refuse_other_methods() {
         ("GET", "/settings"),
         ("PUT", "/settings/store"),
         ("POST", "/settings/regime"),
+        ("PUT", "/settings/print-lang"),
     ] {
         let req = Request::builder()
             .method(method)
@@ -489,6 +656,8 @@ async fn the_settings_routes_need_the_token_and_refuse_other_methods() {
         ("POST", "/settings/store"),
         ("PUT", "/settings/regime"),
         ("GET", "/settings/regime"),
+        ("GET", "/settings/print-lang"),
+        ("POST", "/settings/print-lang"),
     ] {
         let (status, body) = call(&h.app, method, uri, Some(json!({}))).await;
         assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED, "{method} {uri}");

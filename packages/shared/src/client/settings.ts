@@ -3,6 +3,7 @@
 
 import type { DiscountThresholdChangeDto } from "../generated/DiscountThresholdChangeDto";
 import type { FactureLayoutDto } from "../generated/FactureLayoutDto";
+import type { PrintLangDto } from "../generated/PrintLangDto";
 import type { RegimeChangeDto } from "../generated/RegimeChangeDto";
 import type { SettingsDto } from "../generated/SettingsDto";
 import type { StoreDto } from "../generated/StoreDto";
@@ -70,6 +71,20 @@ export function settingsClient({ send }: Transport) {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ facture_layout: layout }),
+      });
+      return narrow(body, settingsSchema, "settings");
+    },
+
+    /** Records the language every fiscal paper prints in, or `null` to put
+     * every fiscal paper back on the till's own language. Answers the whole
+     * settings page, the way `setTheme` does. Nothing reads this yet: the
+     * document routes take `?lang=` and the stored preference in a later
+     * task. */
+    async setPrintLang(lang: PrintLangDto | null): Promise<SettingsDto> {
+      const body = await send("/settings/print-lang", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ print_lang: lang }),
       });
       return narrow(body, settingsSchema, "settings");
     },

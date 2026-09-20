@@ -22,18 +22,18 @@ use dzpos_api::dto::{
     NewPaymentDto, NewProductDto, NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto,
     NewSaleLineDto, NewSupplierDto, NewUserDto, OutgoingsDto, OwedDto, PaidNowDto, PairedDeviceDto,
     PairingQrDto, PartyKindDto, PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto,
-    PermissionDto, ProductDto, PurchaseDetailDto, PurchaseDto, PurchaseLineDto, PurchaseReceiptDto,
-    PurchaseReceiptLineDto, PurchaseStatusDto, ReceiveLineDto, RegimeChangeDto, RegimeDto,
-    RestoreDto, RoleDto, SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto,
-    SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto, SaleWarningDto, SessionDto,
-    SessionIdleDto, SetPasswordDto, SetPinDto, SettingsDto, StaffDto, StockDriftDto,
-    StockRecountDto, StoreDto, SupplierAllocationDto, SupplierDebtKindDto, SupplierDto,
-    SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto, TakingsDto,
-    ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto, UserDto,
+    PermissionDto, PrintLangChoiceDto, PrintLangDto, ProductDto, PurchaseDetailDto, PurchaseDto,
+    PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto, PurchaseStatusDto, ReceiveLineDto,
+    RegimeChangeDto, RegimeDto, RestoreDto, RoleDto, SaleBalanceDto, SaleCancelEffectDto,
+    SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
+    SaleWarningDto, SessionDto, SessionIdleDto, SetPasswordDto, SetPinDto, SettingsDto, StaffDto,
+    StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto, SupplierDebtKindDto,
+    SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto,
+    TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto, UserDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 113] = [
+const FILES: [&str; 115] = [
     "LoginDto.ts",
     "MeDto.ts",
     "SessionDto.ts",
@@ -116,6 +116,8 @@ const FILES: [&str; 113] = [
     "ExpensesDto.ts",
     "FactureLayoutChoiceDto.ts",
     "FactureLayoutDto.ts",
+    "PrintLangDto.ts",
+    "PrintLangChoiceDto.ts",
     "NewExpenseDto.ts",
     "TakingsDto.ts",
     "OutgoingsDto.ts",
@@ -251,6 +253,8 @@ fn export_bindings() {
     SettingsDto::export_all(&cfg).unwrap();
     FactureLayoutDto::export_all(&cfg).unwrap();
     FactureLayoutChoiceDto::export_all(&cfg).unwrap();
+    PrintLangDto::export_all(&cfg).unwrap();
+    PrintLangChoiceDto::export_all(&cfg).unwrap();
     RegimeChangeDto::export_all(&cfg).unwrap();
     DiscountThresholdChangeDto::export_all(&cfg).unwrap();
     BackupDto::export_all(&cfg).unwrap();

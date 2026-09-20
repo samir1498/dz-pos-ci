@@ -91,6 +91,7 @@ const SURFACE: Readonly<Record<string, readonly string[]>> = {
     "setDiscountThreshold",
     "setTheme",
     "setFactureLayout",
+    "setPrintLang",
   ],
   stock: ["lastStockRecount", "recountStock"],
   suppliers: [

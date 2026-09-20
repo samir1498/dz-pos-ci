@@ -208,6 +208,10 @@ pub fn router_with_origin(
             put(routes::settings::set_facture_layout),
         )
         .route(
+            "/settings/print-lang",
+            put(routes::settings::set_print_lang),
+        )
+        .route(
             "/stock/recount",
             get(routes::stock::last).post(routes::stock::recount),
         )

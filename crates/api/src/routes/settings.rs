@@ -15,7 +15,7 @@ use dzpos_core::services::{preferences, settings, shops};
 
 use crate::dto::{
     parse_day, DiscountThresholdChangeDto, FactureLayoutChoiceDto, FactureLayoutDto,
-    RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto,
+    PrintLangChoiceDto, RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto,
 };
 use crate::error::ApiError;
 use crate::session::CurrentUser;
@@ -40,6 +40,7 @@ fn read_all(
         theme: preferences::theme(conn, shop)?.map(Into::into),
         facture_layout: preferences::facture_layout(conn, shop)?.into(),
         facture_layouts: FactureLayout::ALL.map(FactureLayoutDto::from).to_vec(),
+        print_lang: preferences::print_lang(conn, shop)?.map(Into::into),
         discount_threshold_bps: settings::discount_threshold_as_of(conn, shop, at)?.as_u32(),
     })
 }
@@ -80,6 +81,38 @@ pub async fn set_theme(
     let all = state
         .blocking(move |c| {
             preferences::set_theme(c, shop, chosen, now())?;
+            read_all(c, shop)
+        })
+        .await?;
+    Ok(Json(all))
+}
+
+/// Records the language every fiscal paper prints in, or forgets it when the
+/// body carries `null`, which puts every fiscal paper back on the till's own
+/// language: the `null` arm exists for the same reason the theme's does, a
+/// shop that chose one needs a way back. Nothing reads this yet (T3 wires
+/// the print routes); T2 stops at the setting existing and being settable.
+///
+/// Answers the whole settings page for the reason `set_theme` does.
+pub async fn set_print_lang(
+    State(state): State<AppState>,
+    body: Result<Json<PrintLangChoiceDto>, JsonRejection>,
+) -> Result<Json<SettingsDto>, ApiError> {
+    let Json(dto) = body.map_err(ApiError::from)?;
+    // A body with no `print_lang` at all is refused rather than read as the
+    // shop forgetting its choice. See `PrintLangChoiceDto`'s own doc: serde
+    // would otherwise hand both the same answer.
+    let Some(answer) = dto.print_lang else {
+        return Err(ApiError::Request(CoreError::validation(
+            "print_lang",
+            "name the language to print in, or null to follow the till",
+        )));
+    };
+    let chosen = answer.map(Into::into);
+    let shop = state.shop_id;
+    let all = state
+        .blocking(move |c| {
+            preferences::set_print_lang(c, shop, chosen, now())?;
             read_all(c, shop)
         })
         .await?;

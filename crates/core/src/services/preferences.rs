@@ -1,6 +1,6 @@
 //! What a shop has set that is written over in place rather than dated: the
-//! theme it opens on, the facture layout it prints, and the idle time a
-//! session survives.
+//! theme it opens on, the facture layout it prints, the language every
+//! fiscal paper prints in, and the idle time a session survives.
 //!
 //! Not in `services::settings`: that module is the dated series a document
 //! reads to know the régime it printed under, and nothing here is ever read
@@ -19,6 +19,7 @@ use chrono::{Duration, NaiveDateTime};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
+use crate::lang::Lang;
 use crate::print::FactureLayout;
 use crate::repos::preferences as repo;
 use crate::services::audit;
@@ -28,6 +29,9 @@ pub const THEME: &str = "theme";
 
 /// The key the chosen facture layout is stored under.
 pub const FACTURE_LAYOUT: &str = "facture_layout";
+
+/// The key the shop's chosen print language is stored under.
+pub const PRINT_LANG: &str = "print_lang";
 
 /// The key the session idle time is stored under, in whole minutes.
 pub const SESSION_IDLE_MINUTES: &str = "session_idle_minutes";
@@ -140,6 +144,51 @@ pub fn set_facture_layout(
     at: NaiveDateTime,
 ) -> Result<(), CoreError> {
     repo::put(conn, shop_id, FACTURE_LAYOUT, layout.as_str(), at)
+}
+
+/// The language every fiscal paper prints in, or `None` when the shop has
+/// never chosen one. `None` does not mean French: it means what it always
+/// has, that the till prints in whatever language it is being used in at the
+/// moment somebody presses print (`docs/features.md` §4, the ruling in
+/// `context/plans/20260920-a-print-language-the-shop-keeps.md`).
+///
+/// A stored value that is not `fr`, `en` or `ar` reads as no preference
+/// rather than as an error, the way an unknown theme does: a row written by
+/// a future version, or by hand, degrades to today's behaviour instead of
+/// refusing to print.
+pub fn print_lang(conn: &mut SqliteConnection, shop_id: i32) -> Result<Option<Lang>, CoreError> {
+    Ok(repo::value(conn, shop_id, PRINT_LANG)?
+        .as_deref()
+        .and_then(Lang::parse))
+}
+
+/// Records the shop's print language, or forgets it when `lang` is `None`,
+/// which puts every fiscal paper back on the till's own language. The `None`
+/// arm exists for the same reason the theme's does: a shop that chose
+/// Arabic needs a way back to "follow the till" without a second field.
+///
+/// No audit row, the same call `set_facture_layout` above makes and for a
+/// reason that reaches a little further: the three languages are three
+/// spellings of the same fixed strings in `print::strings`, and the number,
+/// the date and every total on the paper are identical in all three, which
+/// the per-language goldens are what prove. What the facture says does not
+/// change, so there is nothing here somebody would have to answer for.
+///
+/// The argument on the other side has not been put to Samir and is written
+/// down rather than decided: a shop that switches part way through a year
+/// leaves an archive in two languages, and an inspector asking why would
+/// find nothing in the log saying when or who. If that is worth a row, it is
+/// worth one on the layout beside it too, and both change together.
+pub fn set_print_lang(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    lang: Option<Lang>,
+    at: NaiveDateTime,
+) -> Result<(), CoreError> {
+    match lang {
+        Some(lang) => repo::put(conn, shop_id, PRINT_LANG, lang.tag(), at),
+        None => repo::clear(conn, shop_id, PRINT_LANG),
+    }
 }
 
 /// How long a session survives with nothing happening on it.
@@ -346,5 +395,59 @@ mod tests {
         assert_eq!(Theme::ObserveDark.as_str(), "observe-dark");
         assert_eq!(Theme::parse("observe-dark"), Some(Theme::ObserveDark));
         assert_eq!(Theme::parse("Observe-Dark"), None);
+    }
+
+    #[test]
+    fn a_shop_that_has_never_chosen_has_no_stored_print_lang() {
+        let (_dir, mut conn) = open();
+        assert_eq!(print_lang(&mut conn, SHOP).unwrap(), None);
+    }
+
+    #[test]
+    fn every_print_lang_survives_a_round_trip() {
+        let (_dir, mut conn) = open();
+        for chosen in Lang::ALL {
+            set_print_lang(&mut conn, SHOP, Some(chosen), at()).unwrap();
+            assert_eq!(print_lang(&mut conn, SHOP).unwrap(), Some(chosen));
+        }
+    }
+
+    #[test]
+    fn choosing_no_print_lang_puts_the_shop_back_on_the_till() {
+        let (_dir, mut conn) = open();
+        set_print_lang(&mut conn, SHOP, Some(Lang::Ar), at()).unwrap();
+        set_print_lang(&mut conn, SHOP, None, at()).unwrap();
+        assert_eq!(print_lang(&mut conn, SHOP).unwrap(), None);
+    }
+
+    /// A row a newer build, or a hand, wrote: the shop prints in the caller's
+    /// language rather than the route refusing, the way an unknown theme
+    /// reads as no choice.
+    #[test]
+    fn a_print_lang_this_build_does_not_know_reads_as_no_preference() {
+        let (_dir, mut conn) = open();
+        repo::put(&mut conn, SHOP, PRINT_LANG, "de", at()).unwrap();
+        assert_eq!(print_lang(&mut conn, SHOP).unwrap(), None);
+        // The row is left alone rather than repaired, the same as an unknown
+        // facture layout: a newer build wrote it and knows what it means.
+        assert_eq!(
+            repo::value(&mut conn, SHOP, PRINT_LANG).unwrap().as_deref(),
+            Some("de")
+        );
+    }
+
+    /// The setting outlives the connection that wrote it: a fresh handle on
+    /// the same file, standing in for the process restarting, still reads it
+    /// back.
+    #[test]
+    fn a_print_lang_survives_reopening_the_shop_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.db");
+        {
+            let mut conn = crate::db::open(&path).unwrap();
+            set_print_lang(&mut conn, SHOP, Some(Lang::Ar), at()).unwrap();
+        }
+        let mut reopened = crate::db::open(&path).unwrap();
+        assert_eq!(print_lang(&mut reopened, SHOP).unwrap(), Some(Lang::Ar));
     }
 }
