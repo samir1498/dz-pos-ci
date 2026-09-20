@@ -48,7 +48,6 @@ use crate::models::product::{NewProduct, Unit};
 use crate::money::{Bps, Money};
 use crate::print::barcode_label::is_ean13;
 use crate::print::strings::{text as word, Key};
-use crate::repos::products as products_repo;
 use crate::services::{audit, categories, products};
 
 pub use crate::services::export::PRODUCT_COLUMNS;
@@ -367,7 +366,7 @@ fn existing(
     let Some(barcode) = barcode else {
         return Ok(None);
     };
-    Ok(products_repo::by_barcode(conn, shop_id, barcode)?.map(|p| p.id))
+    Ok(products::by_barcode(conn, shop_id, barcode)?.map(|p| p.id))
 }
 
 /// The cells of one row, once they have been read and found well formed.
