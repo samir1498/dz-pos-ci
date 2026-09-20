@@ -15,7 +15,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'The phone provider and hook reading those dictionaries, language persisted on the device, RTL for Arabic on every screen the phone has'
-    status: 'pending'
+    status: 'done'
   - id: 'T4'
     desc: 'Every literal string in apps/mobile replaced by a key. pair.tsx, sign-in.tsx and the till are the ones with visible copy'
     status: 'pending'
