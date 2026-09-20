@@ -12,7 +12,7 @@ tasks:
     status: 'done'
   - id: 'T2'
     desc: 'crates/api/src/dto.rs, 3071 lines, becomes dto/{domain}.rs matching routes/, with dto/mod.rs re-exporting everything so no import anywhere else changes. Lands first and alone'
-    status: 'pending'
+    status: 'done'
   - id: 'T3'
     desc: 'Break the two service cycles: documents imports avoir while avoir imports documents, sales imports proforma while proforma imports sales. The shared types move to a module both import'
     status: 'pending'
