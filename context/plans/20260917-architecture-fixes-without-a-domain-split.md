@@ -24,13 +24,13 @@ tasks:
     status: 'pending'
   - id: 'T6'
     desc: 'routes/products.rs:34 redact_cost: the permission decision moves out of the handler, or the page says why this one stays and gates.rs stops citing it as the thing route gating avoids'
-    status: 'pending'
+    status: 'done'
   - id: 'T7'
     desc: 'docs/architecture.md:129 gains the exception it is missing: backup and support_bundle run SQL outside repos, deliberately, because database administration has no aggregate'
-    status: 'pending'
+    status: 'done'
   - id: 'T8'
     desc: 'Frontend: apps/mobile/lib/basket.ts:72 uses parseAmountToCentimes; the three as assertions in the phone become zod or type guards; suppliers.tsx at 1086 lines becomes routes/-suppliers/ like -till/ and -customers/; PAYMENT_METHODS and the balance label move to components/ instead of being copied'
-    status: 'pending'
+    status: 'done'
   - id: 'T9'
     desc: 'The two JSX money sums, purchases.tsx:260 and purchases_.$id.tsx:232, stop adding transport and extra costs in the component; the API answers the total. Money work, so the money builder and a mirror CI run'
     status: 'pending'
@@ -158,3 +158,48 @@ Still open in T8: `suppliers.tsx` at 1086 lines becomes `routes/-suppliers/`,
 and `PAYMENT_METHODS` plus `supplierBalanceLabel` move to `components/`
 instead of sitting in both `suppliers.tsx:73-80` and
 `-customers/parts.tsx:24,49`. That half is also T10's largest file.
+
+
+## T6 and T7, and what checking them changed, 2026-09-20
+
+Both were "the written rule gains the exception the code already has", so
+they went on one branch (#120). Neither survived contact with the code as
+the plan described it.
+
+T7 said `backup.rs` and `support_bundle.rs` run SQL outside repos. True,
+and two things the plan did not have. `pairing.rs` is a third, and it is
+a different exception: it runs `BEGIN IMMEDIATE` because diesel's
+`transaction()` begins deferred. And diesel has two doors, not one.
+`sql_query` asks a question; `batch_execute` returns nothing and runs any
+statement at all, so a rule watching only the first leaves a service free
+to `UPDATE` across every shop unscoped. The test walks both.
+
+The first correction was also wrong. Both services count rows over
+`products`, `documents` and `customers` with no `shop_id` on the query.
+The page names those five counts now and the invariant that makes them
+harmless, which is one file per shop.
+
+T6 said `redact_cost` is a permission decision inside a handler, and that
+`gates.rs` cites it as what route gating avoids. It cites it as the
+contrast: a gate row can only say yes or no to a whole answer, and `GET
+/products` cannot be gated at all because the till needs the catalogue.
+The decision is deliberate and documented. What was missing is that
+`routes/mod.rs` stated its rule with no exception. `auth.rs` reads a
+permission too and is not a second decision; the header separates them.
+
+The bug the lenses found on the way: the pairing claim's commit path
+propagated its own failure without rolling back, on the one connection
+the API holds for the life of the process.
+
+The lesson worth carrying to T3, T4 and T5: a plan task that names a
+finding from a review is a claim, not an instruction. Three of the four
+statements here were wrong in a way that only reading the named file
+showed.
+
+## T5, checked before starting, 2026-09-20
+
+Its stated reason does not hold. `services/stock.rs:199` already writes
+its audit row through `services::audit::record`, so the shop clock is
+already stamped. The breach is a read: line 166 calls
+`repos::audit::by_action` because `services::audit` has no such function.
+The fix is to add `by_action` to the service.
