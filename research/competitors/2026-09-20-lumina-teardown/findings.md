@@ -113,13 +113,27 @@ relaunching it fresh with the remote-debugging flag; no CDP-level command
 (`Emulation.setFocusEmulationEnabled`, `Page.setWebLifecycleState`, forcing a
 resize) unstuck the existing process once it had latched onto the stale frame.
 
-All 40 regenerable desktop screenshots (14 sidebar sections times two
-languages, plus 6 settings sub-tabs times two languages) were retaken this
-pass under the same filenames in `screens/`, confirmed modal-free by
-inspection before the rest were taken, and now show the actual screen named
-in each filename. Treat the retake as the first real evidence those filenames
-carry, not as duplicate work — the first pass produced no usable images at
-all.
+The retake covered 40 desktop screenshots (14 sidebar sections times two
+languages, plus 6 settings sub-tabs times two languages), under the same
+filenames in `screens/`.
+
+**Four of them are still the modal**, found on 2026-09-20 while building the
+report pages: `d-settings-overview-fr.png`, `d-settings-overview-ar.png`,
+`d-product-form-filled.png` and `d-customer-form-filled.png`. The
+"confirmed modal-free by inspection" claim above the fix was written from a
+sample, not from all 40. The check that found them is mechanical and takes
+seconds, and is the one to use next time: `compare -metric RMSE <shot>
+flow.png null:` over every file, then sort. The four modal shots score under
+13 000 against `flow.png`; every real screen scores above 29 000, so the two
+groups do not overlap and no judgement call is involved. All 58 files are
+byte-distinct, so a hash check would not have caught it.
+
+The other 54 are real, distinct screens and are the evidence behind the
+claims here. The report site carries 55 images: those 54 plus `flow.png`
+itself, which is the modal and is captioned as the modal. The three
+mislabelled files were not published; `d-settings-overview-ar.png` was
+published under the honest name `modal-upsell-ar.png`, because the Arabic
+layout of their purchase banner is worth having.
 
 ## Roles: enforced only in the renderer, never at the data layer
 
