@@ -15,7 +15,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'Break the two service cycles: documents imports avoir while avoir imports documents, sales imports proforma while proforma imports sales. The shared types move to a module both import'
-    status: 'pending'
+    status: 'done'
   - id: 'T4'
     desc: 'The nine services that reach past a sibling service into its repo go through the service instead; the missing functions get added to the sibling. Sharpest case is services/debt.rs:25,27 writing through repos::customers and repos::documents'
     status: 'pending'
@@ -33,6 +33,9 @@ tasks:
     status: 'done'
   - id: 'T9'
     desc: 'The two JSX money sums, purchases.tsx:260 and purchases_.$id.tsx:232, stop adding transport and extra costs in the component; the API answers the total. Money work, so the money builder and a mirror CI run'
+    status: 'pending'
+  - id: 'T11'
+    desc: 'The three rings the ring walk still pins: users, sessions, audit and preferences import each other. Needs its own page saying what the shared piece is before anything moves; RINGS_STILL_OPEN in crates/core/tests/services_go_through_services.rs is the list'
     status: 'pending'
   - id: 'T10'
     desc: 'Burn the file-size list down. Samir, 2026-09-17: no huge files. The gate is in and pins 32 of them; the ones worth splitting first are suppliers.tsx at 1086, products.tsx at 929, customers_.$id.tsx at 898 and documents.tsx at 724, because a screen that long is the one nobody reads before changing it. The Rust services on the list are a separate argument and stay pinned for now'
@@ -203,3 +206,24 @@ its audit row through `services::audit::record`, so the shop clock is
 already stamped. The breach is a read: line 166 calls
 `repos::audit::by_action` because `services::audit` has no such function.
 The fix is to add `by_action` to the service.
+
+## The two rings are gone, and there are three more (2026-09-20)
+
+T3 merged as #124. `services::pricing` sits under `sales` and `proforma`;
+`services::cancellation` sits above `documents` and `avoir`, because
+cancelling a facture writes an avoir and that is the one operation needing
+both. Both are moves with no rule and no arithmetic edited.
+
+What the task actually taught, worth keeping: the architecture review named
+two rings by reading the imports of four files. A walk over every service
+file found five. The three left are `users`, `sessions`, `audit` and
+`preferences` in a knot, and they are now T11 rather than a sentence in a
+review nobody re-reads.
+
+The gate is `no_service_imports_a_sibling_that_imports_it_back` in
+`crates/core/tests/services_go_through_services.rs`. Its first version
+dropped a real ring, because it remembered which services it had finished
+with and skipped them, so a second ring through a shared service was never
+looked for. It now enumerates every ring from that ring's alphabetically
+first service. If the pinned list ever looks shorter than it should, that is
+the failure mode to check first.
