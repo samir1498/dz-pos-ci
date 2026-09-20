@@ -915,7 +915,7 @@ fourteenth permission fails to compile until somebody places it for all
 three roles. Nothing falls through a wildcard.
 
 A permission is applied in one seam and not in each handler.
-`crates/api/src/gates.rs` holds a row per route saying which permission it
+`crates/api/src/gates/` holds a row per route saying which permission it
 wants and why, the session middleware looks that row up by the route's own
 path template and refuses before the handler runs, and a write on a route
 the table does not name is refused rather than waved through. A test parses

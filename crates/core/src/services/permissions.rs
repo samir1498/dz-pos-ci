@@ -199,7 +199,7 @@ pub fn require(role: Role, permission: Permission) -> Result<(), CoreError> {
 /// `ungated_write`, a route the permission table forgot rather than a role
 /// asking for something it may not, which names no permission to record.
 /// Everything this function is actually called on is a route
-/// `crates/api/src/gates.rs` deliberately names a permission for, a read as
+/// `crates/api/src/gates/` deliberately names a permission for, a read as
 /// much as a write — `ExportAndImport` on `GET /export/*` is exactly the case
 /// the finding was written about, a cashier trying the export route and
 /// leaving nothing behind — so the method is carried on the row rather than

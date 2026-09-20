@@ -87,7 +87,7 @@ interface NavItem {
   /** Absent for a route open to every signed-in role. Where present, the
    *  sidebar shows the item only once `hasPermission` says the session
    *  holds it — the same permission the route itself is gated by
-   *  server-side, not a client-only opinion (`crates/api/src/gates.rs`).
+   *  server-side, not a client-only opinion (`crates/api/src/gates/`).
    *  The settings entry stays visible for everyone: its rail lists only
    *  the rooms the session may open and `/settings` itself redirects to the
    *  shop block, which every role may read. Dashboard and purchases carry a permission here because
@@ -150,7 +150,7 @@ export const NAV: readonly NavItem[] = [
   // `/settings`, but it was unreachable in practice: a shop looking for it
   // scrolled past five other blocks first, and half the time gave up. A
   // second door into one room is cheaper than the hunt. `EditSettings` is
-  // the permission `gates.rs` names on all three pairing routes.
+  // the permission `gates/` names on all three pairing routes.
   {
     to: "/settings/phones",
     label: "nav_phones",

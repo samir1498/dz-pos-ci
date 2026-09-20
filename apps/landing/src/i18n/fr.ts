@@ -45,7 +45,7 @@ export const fr: Dict = {
     // crates/core/src/services/permissions.rs `can`: Sell is the only
     // permission a Cashier holds; SeeCostAndMargin (closes the purchase and
     // supplier routes outright) and CommitMoney (expenses) and SeeReports
-    // (the cash figures, checked against crates/api/src/gates.rs's rows for
+    // (the cash figures, checked against crates/api/src/gates/'s rows for
     // /dashboard, /expenses and /cash) are Owner | Manager only.
     cashierScope: "Le caissier vend, encaisse et imprime le ticket. Rien de plus : ni le coût d'un article, ni la marge faite dessus, ni les fournisseurs, ni les dépenses, ni la caisse du jour.",
     // crates/core/src/services/permissions.rs: `discount_needs_permission`

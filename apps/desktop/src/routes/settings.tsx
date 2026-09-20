@@ -13,7 +13,7 @@
 // the shape ObserveOne's settings settled on for the same reason.
 //
 // The rail hides what the session cannot hold, and hides it for the same
-// reason the sidebar does: `crates/api/src/gates.rs` already refuses the
+// reason the sidebar does: `crates/api/src/gates/` already refuses the
 // routes behind those rooms, so this is the hidden button and never the
 // defence. Typing `/settings/users` by hand still meets the server's 403.
 
@@ -46,7 +46,7 @@ interface SectionItem {
   readonly label: Key;
   readonly icon: ComponentType<LucideProps>;
   /** Absent for a room every signed-in role may open. Where present, it is
-   *  the same permission `gates.rs` names on the routes that room calls. */
+   *  the same permission `gates/` names on the routes that room calls. */
   readonly permission?: PermissionDto;
 }
 

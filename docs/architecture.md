@@ -82,7 +82,7 @@ third thing again: 403 `forbidden` naming the permission.
 
 The permission is checked in one place and not in each handler. The same
 middleware that resolved the session looks the route up in
-`crates/api/src/gates.rs`, a table with one row per route saying which
+`crates/api/src/gates/`, a table with one row per route saying which
 permission that route wants and why, and refuses before the handler runs.
 So no handler names a permission, no handler can forget to, and a route
 added without a row does not quietly inherit one. It fails closed instead: a

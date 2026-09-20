@@ -25,7 +25,7 @@
 | Where CI runs and what it runs | `.github/workflows/ci.yml` and the `justfile` `ci` recipe | `README.md` Quality gates, `docs/architecture.md` Testing matrix name the split, never restate the per-job conditions |
 | Theme default and what happens when a shop has never chosen one | `docs/architecture.md` § Design | `docs/features.md` §8 names the default (Comptoir) and points here for the mechanism |
 | Desktop screens list | `apps/desktop/src/routes/*.tsx` | `README.md` § Screens |
-| Gated-read count and which routes are closed outright vs. field-redacted | `crates/api/src/gates.rs` module doc, counted off `ROUTE_GATES` | `docs/features.md` §5, `context/progress/now.md` name examples, never restate the count |
+| Gated-read count and which routes are closed outright vs. field-redacted | `crates/api/src/gates/mod.rs` module doc, counted off `ROUTE_GATES` | `docs/features.md` §5, `context/progress/now.md` name examples, never restate the count |
 | API error codes and what each carries | `crates/api/src/error.rs` (`ApiError::parts`, `Figures`) and `crates/core/src/error.rs` (`CoreError::code`) | `docs/architecture.md` error-code table |
 | Committed landing shots (which files exist) | `apps/landing/src/lib/shots.ts` (manifest, `buildShots()`) | `public/shots/*.webp`, the e2e PNGs they compose |
 | E2E test-id inventory | `data-testid` attributes in `apps/desktop/src` and the specs that click them | e2e README § test ids |

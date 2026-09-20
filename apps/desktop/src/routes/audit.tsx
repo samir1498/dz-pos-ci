@@ -44,7 +44,7 @@ import type { AuditEntryDto } from "@dzpos/shared";
 // `GET /audit-log` answers 403 and the error alert below shows in its
 // place. Deliberate — the nav entry hiding the link is the sole point where
 // this screen keeps a manager out, and the API refusing the request is the
-// actual control (`crates/api/src/gates.rs`, `Permission::SeeAuditLog`).
+// actual control (`crates/api/src/gates/`, `Permission::SeeAuditLog`).
 export const Route = createFileRoute("/audit")({ component: AuditScreen });
 
 export { AuditScreen };

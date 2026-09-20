@@ -1,5 +1,5 @@
 //! HTTP handlers. They translate, they do not decide: every rule lives in
-//! `dzpos_core::services`, and a permission is a row in `gates.rs` that
+//! `dzpos_core::services`, and a permission is a row in `gates/` that
 //! answers for a whole route.
 //!
 //! One handler decides, and only one: `products.rs::redact_cost` blanks
@@ -7,7 +7,7 @@
 //! `SeeCostAndMargin`. `GET /products` cannot be gated as a route because
 //! the till needs the catalogue to ring a sale up, and a gate row can only
 //! say yes or no to the whole answer, so the field is stripped where the
-//! `ProductDto` is built instead. `gates.rs`'s own header names it as the
+//! `ProductDto` is built instead. `gates/mod.rs`'s own header names it as the
 //! thing a route-level gate cannot do (M4 T5 review, 2026-09-11). A second
 //! one would mean a second place to read before trusting what a role sees,
 //! which is the cost this rule exists to avoid, so

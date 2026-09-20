@@ -3,7 +3,7 @@
 //!
 //! Apart from `lib.rs` because that file is about the shop file: opening it,
 //! upgrading it, backing it up and putting it back. This one is about the
-//! surface, and it is the file a new endpoint is added to. `gates.rs` holds
+//! surface, and it is the file a new endpoint is added to. `gates/` holds
 //! the permission each route needs and `tests/route_gates.rs` walks the two
 //! against each other in both directions, so a route added here without a
 //! gate fails closed rather than quietly open.

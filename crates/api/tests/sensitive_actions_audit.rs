@@ -100,7 +100,7 @@ fn product(name: &str) -> Value {
 
 /// The finding's own example: a cashier tries the export route, is refused,
 /// and used to leave nothing an owner reading the log could see. `GET
-/// /export/products` is deliberately a read and not a write: `gates.rs`
+/// /export/products` is deliberately a read and not a write: `gates/`
 /// still names `ExportAndImport` for it, so the refusal is exactly as
 /// deliberate as one on a write, which is the whole reason a read is not
 /// excluded here.

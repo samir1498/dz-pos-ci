@@ -148,7 +148,7 @@ function PurchaseDetail({
   const open = purchase.status === "ordered" || purchase.status === "partially_received";
   const anythingArrived = lines.some((l) => l.qty_received_milli > 0);
   // GET /purchases/{id} itself now refuses a caller without
-  // see_cost_and_margin, the same as the list (crates/api/src/gates.rs, M4
+  // see_cost_and_margin, the same as the list (crates/api/src/gates/, M4
   // T5 review, 2026-09-11), and AppShell hides the nav entry that leads
   // here on the same permission, so this reads true for everyone who
   // reaches the screen with data to show. Kept for the day the route gate

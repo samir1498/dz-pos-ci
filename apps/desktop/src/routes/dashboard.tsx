@@ -89,7 +89,7 @@ export function DashboardScreen() {
 function Day({ day }: { day: string }) {
   const { t } = useTranslation();
   // GET /dashboard and GET /dashboard/series now refuse a caller without
-  // SeeReports outright (crates/api/src/gates.rs, M4 T5 review,
+  // SeeReports outright (crates/api/src/gates/, M4 T5 review,
   // 2026-09-11), and AppShell hides the nav entry the same way, so a
   // cashier never reaches this screen with data to draw. The finer-grained
   // check below is a second permission, not a second layer of the same one:

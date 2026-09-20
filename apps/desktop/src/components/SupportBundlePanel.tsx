@@ -3,7 +3,7 @@
 // names everything the zip carries and everything it refuses to, and this
 // file adds none of its own logic to that list. Not gated client-side, the
 // same as the backups block beside it: `/support-bundle` is refused server
-// side to anyone without `edit_settings` (`crates/api/src/gates.rs`), and a
+// side to anyone without `edit_settings` (`crates/api/src/gates/`), and a
 // cashier or manager who cannot reach it sees the refusal `errorKey` reads
 // rather than a hidden button.
 

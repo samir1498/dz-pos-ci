@@ -15,7 +15,7 @@ runs Pass 2 and proves or drops every claim you make.
 
 - A write a cashier can reach that belongs to a manager, and the reverse: a
   gate so tight the counter cannot work
-- A route any client on the shop LAN can call without a role. `gates.rs` and
+- A route any client on the shop LAN can call without a role. `gates/` and
   `crates/api/tests/route_gates.rs` hold the table; an ungated write is meant
   to fail closed, so check the table was actually extended
 - A query missing its `shop_id` filter. 28 of 29 tables carry `shop_id`; the

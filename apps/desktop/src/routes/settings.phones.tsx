@@ -1,7 +1,7 @@
 // The phones paired to this till.
 //
 // Minting a code, listing the phones and revoking one are all `EditSettings`
-// in `crates/api/src/gates.rs`, enforced by the session middleware on the
+// in `crates/api/src/gates/`, enforced by the session middleware on the
 // route itself. The rail hides this room from a role that does not hold it;
 // the server refuses it regardless.
 

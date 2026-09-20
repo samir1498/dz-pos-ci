@@ -43,7 +43,7 @@ pub fn token_digest(token: &str) -> String {
 
 /// The desktop (owner|manager) asks for a QR to show. Returns the secret the
 /// QR carries; the row stores its hash and the expiry. Permission is gated in
-/// `crates/api/src/gates.rs` (`ManageUsers`), not here.
+/// `crates/api/src/gates/` (`ManageUsers`), not here.
 pub fn create_pairing_token(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -202,7 +202,7 @@ pub fn revoke_device(
 ) -> Result<PairedDeviceRow, CoreError> {
     // One transaction for the change and the row that records it: a crash
     // between the two would leave a phone revoked with nothing to say who
-    // did it, and `gates.rs` calls that row the only record the shop has.
+    // did it, and `gates/` calls that row the only record the shop has.
     conn.transaction(|conn| {
         let row = repo::revoke_device(conn, shop_id, device_id, now)?;
         crate::services::audit::record(

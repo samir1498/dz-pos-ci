@@ -3,7 +3,7 @@
 //
 // The room itself is open to every role because the recount is. The four
 // exports and the two import routes are `ExportAndImport` in
-// `crates/api/src/gates.rs`, so that block alone is hidden from a role that
+// `crates/api/src/gates/`, so that block alone is hidden from a role that
 // does not hold it — the server refuses those routes either way.
 
 import { createFileRoute } from "@tanstack/react-router";

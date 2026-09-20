@@ -26,7 +26,7 @@ use crate::AppState;
 ///
 /// `GET /products` and `GET /products/{id}` carry the whole catalogue to
 /// every signed-in role, cashier included, because the till needs it to
-/// ring a sale up (`gates.rs` names no row for either read). What the till
+/// ring a sale up (`gates/` names no row for either read). What the till
 /// does not need is what a product cost the shop, so this is the one field
 /// a route in this file redacts itself rather than leaving to a row in the
 /// gate table, which can only say yes or no to a whole route (M4 T5 review,

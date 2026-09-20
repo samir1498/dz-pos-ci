@@ -125,7 +125,7 @@ function PurchasesScreen() {
     queryFn: () => api.listSuppliers(),
   });
   // GET /purchases itself now refuses a caller without see_cost_and_margin
-  // (crates/api/src/gates.rs, M4 T5 review, 2026-09-11) and AppShell hides
+  // (crates/api/src/gates/, M4 T5 review, 2026-09-11) and AppShell hides
   // the nav entry on the same permission, so a cashier never reaches this
   // screen with data to draw and this reads true for everyone who does. Kept
   // rather than deleted: the column filter is the one place that would still

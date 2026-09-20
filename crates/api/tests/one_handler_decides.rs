@@ -2,7 +2,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 //! Handlers translate, they do not decide (`routes/mod.rs`). A permission is
-//! a row in `gates.rs` that answers for a whole route, and one handler is
+//! a row in `gates/` that answers for a whole route, and one handler is
 //! outside that because a row cannot say "this answer, without one field".
 //!
 //! `products.rs::redact_cost` blanks what a product cost the shop for a role
@@ -58,7 +58,7 @@ fn no_handler_outside_the_two_routes_mod_names_reads_a_permission() {
     assert_eq!(
         found, allowed,
         "a handler outside {allowed:?} reads a permission. A route a role may \
-         not call at all is a row in gates.rs; a field a role may not see \
+         not call at all is a row in gates/table.rs; a field a role may not see \
          inside an answer everyone may call is the exception routes/mod.rs \
          describes, and taking it a second time means saying so there first."
     );

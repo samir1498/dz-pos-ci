@@ -299,7 +299,7 @@ describe("the rail", () => {
     mount();
     await screen.findByLabelText(fr.field_name);
     // GET /users and the four exports already refuse a cashier
-    // (`crates/api/src/gates.rs`, `ManageUsers` and `ExportAndImport`); this
+    // (`crates/api/src/gates/`, `ManageUsers` and `ExportAndImport`); this
     // is the hidden button, not the defence (M4 T5).
     expect(screen.queryByTestId("settings-room-users")).not.toBeInTheDocument();
     expect(screen.queryByTestId("settings-room-phones")).not.toBeInTheDocument();
