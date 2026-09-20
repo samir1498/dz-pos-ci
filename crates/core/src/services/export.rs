@@ -32,8 +32,7 @@ use crate::models::product::Product;
 use crate::money::Money;
 use crate::print::number;
 use crate::print::strings::{text, Key};
-use crate::repos::documents as documents_repo;
-use crate::services::{audit, categories, customers, products, suppliers};
+use crate::services::{audit, categories, customers, documents, products, suppliers};
 
 /// Two decimals and a thousands separator: what a shop reads an amount as,
 /// and what keeps a column summable.
@@ -363,7 +362,7 @@ pub fn sales(
     lang: Lang,
     range: DayRange,
 ) -> Result<Vec<u8>, CoreError> {
-    let documents = documents_repo::list_in_range(conn, shop_id, range.from, range.to)?;
+    let documents = documents::list_in_range(conn, shop_id, range.from, range.to)?;
 
     let formats = Formats::new();
     let mut workbook = Workbook::new();

@@ -39,19 +39,23 @@ use std::path::Path;
 /// joins the one below.
 const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency", "testdb"];
 
-/// What reaches past a sibling today, service by service. Thirteen of
-/// them across nine services; it was seventeen across eleven until the
+/// What reaches past a sibling today, service by service. Eleven of
+/// them across seven services; it was seventeen across eleven until the
 /// category list got a door of its own. Shrinking, never growing: the fix for a
 /// row is to add the missing function to the sibling's service and call
 /// that, the way `stock.rs` now reads the audit log through
 /// `services::audit::by_action`.
-const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 9] = [
-    ("avoir", &["documents"]),
+///
+/// `customers` stays on the list: `documents` already imports `services::customers`
+/// (`issue` checks `customer_belongs_to_shop`), so routing `unpaid_of_customer`
+/// through `services::documents` would close a ring the walk below refuses,
+/// `customers -> documents -> customers`. Breaking that back edge is its own
+/// task.
+const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 7] = [
     ("cash", &["expenses"]),
     ("customers", &["documents"]),
     ("dashboard", &["debt", "supplier_debt"]),
     ("debt", &["customers", "documents"]),
-    ("export", &["documents"]),
     ("import", &["products"]),
     ("purchases", &["products", "supplier_debt"]),
     ("supplier_debt", &["purchases", "suppliers"]),

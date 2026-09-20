@@ -63,6 +63,38 @@ pub fn list(
     repo::list(conn, shop_id, kind)
 }
 
+/// Every avoir written against one document, oldest first: the order they
+/// were issued in, which is the order a facture's credit notes are read in.
+///
+/// `pub(crate)` and not `pub`, like `mark_cancelled` below: the repo it
+/// stands in front of is `pub(crate)` too (`lib.rs`), so a door widened to
+/// `pub` would hand the rest of the workspace a read the crate had kept to
+/// itself. It is also the raw read: `avoir::list_for` asks
+/// `get_of_kind` first so a foreign shop's id or a document that is not a
+/// facture answers `NotFound` rather than an empty list, and this answers
+/// the empty list. Callers outside this crate want that function.
+pub(crate) fn avoirs_of(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+) -> Result<Vec<Document>, CoreError> {
+    repo::avoirs_of(conn, shop_id, document_id)
+}
+
+/// Every kind, oldest first, over a stretch of days on the shop's calendar.
+/// Both ends are inclusive and either may be absent, which is how a shop
+/// asking for its whole history reaches this.
+///
+/// `pub(crate)` for the reason `avoirs_of` above gives.
+pub(crate) fn list_in_range(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    from: Option<chrono::NaiveDate>,
+    to: Option<chrono::NaiveDate>,
+) -> Result<Vec<Document>, CoreError> {
+    repo::list_in_range(conn, shop_id, from, to)
+}
+
 /// Stamps the cancellation onto the document itself.
 ///
 /// The decision and the rest of the undo belong to `services::cancellation`,

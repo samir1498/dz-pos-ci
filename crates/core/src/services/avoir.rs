@@ -39,7 +39,6 @@ use crate::error::CoreError;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Bps, Money, MoneyError, Regime, Totals, TvaLine};
-use crate::repos::documents as repo;
 use crate::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
     NewDocumentLine,
@@ -356,7 +355,7 @@ pub fn list_for(
     // Through the service, so a ticket or another shop's document is answered
     // as no such facture rather than as an empty list (rule 3).
     documents::get_of_kind(conn, shop_id, facture_id, DocumentKind::Facture)?;
-    repo::avoirs_of(conn, shop_id, facture_id)
+    documents::avoirs_of(conn, shop_id, facture_id)
 }
 
 /// Whether any line of the facture still has something on it to credit.
@@ -458,7 +457,7 @@ impl Remaining {
         shop_id: i32,
         facture: &Document,
     ) -> Result<Self, CoreError> {
-        let earlier = repo::avoirs_of(conn, shop_id, facture.id)?;
+        let earlier = documents::avoirs_of(conn, shop_id, facture.id)?;
 
         let mut lines: Vec<RemainingLine> = facture
             .lines
