@@ -8,10 +8,16 @@
 //
 // So the native splash stays up until `SessionProvider` has finished, and
 // the first thing anyone sees is the screen they were going to end up on.
+//
+// The language is waited on for the same reason and it is the louder of the
+// two. Lifting the splash first would show the pairing screen in French,
+// then swap every sentence to Arabic a frame later, on the one screen a
+// cashier meets before they have been told anything about the phone.
 
 import { useEffect, type ReactNode } from "react";
 import * as SplashScreen from "expo-splash-screen";
 
+import { useTranslation } from "./LanguageProvider";
 import { useSession } from "./SessionProvider";
 
 // Asked for at module scope, before React mounts anything: after the first
@@ -19,7 +25,9 @@ import { useSession } from "./SessionProvider";
 void SplashScreen.preventAutoHideAsync();
 
 export function SplashGate({ children }: { children: ReactNode }) {
-  const { ready } = useSession();
+  const { ready: sessionReady } = useSession();
+  const { ready: languageReady } = useTranslation();
+  const ready = sessionReady && languageReady;
 
   useEffect(() => {
     // Best-effort. A splash that fails to hide would leave the till

@@ -89,9 +89,21 @@ rate. CTCA art. 23 lists the 9 % goods by customs tariff line, so the rate is
 a property of the product and a global rate is wrong for any shop selling
 both. Decided here 2026-09-08 and built that way.
 
-**Three languages everywhere.** Their desktop UI is Arabic only and their
-mobile app is French only. Ours is French, English and Arabic on both, and
-the printed documents too (`crates/core/src/print/strings.rs`).
+**Three languages everywhere: struck 2026-09-20, it was never true.** This
+page said their desktop was Arabic only and their phone French only. Driving
+both builds says otherwise. Their settings screen offers Arabic, English and
+French and switching retitles every screen and turns the layout round; their
+Android app opens in Arabic and carries an Arabic-French toggle. Nothing here
+is an advantage, and our own phone had no dictionaries at all until
+2026-09-20. What is left of the claim is the printed documents, which carry
+their own three-language strings in `crates/core/src/print/strings.rs` and are
+a separate thing from the screens. The walks and the screenshots that settle
+it are in `research/competitors/2026-09-20-lumina-teardown/`.
+
+**Where the language work actually stands.** The desktop has carried all
+three since M0. The phone got its dictionaries and its provider on
+2026-09-20 and its screens still read literal English
+(`context/plans/20260917-the-phone-in-three-languages.md`).
 
 **Money that cannot drift.** Integer centimes, checked arithmetic, no float
 anywhere near a total, and fixtures the core is tested against. Their pricing

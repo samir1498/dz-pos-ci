@@ -79,6 +79,47 @@ sharper model. The session proves or drops every finding itself. Then
 `dz-standup`, so Anouar opens the site on Monday and sees what the weekend did
 rather than hearing it from Samir.
 
+## Running alongside: taking Lumina apart
+
+Samir added this on 2026-09-20, because Anouar named Lumina the example to
+follow twice in one conversation and called it the priority. It does not sit
+in the phase order. It runs in background agents at the same time as the
+phases, so a competitor's whole feature list never lands in the session that
+has to think about a golden file.
+
+Both artifacts were already on this disk, so nothing is downloaded:
+`~/lumina/Lumina POS Setup 1.0.0.exe`, `~/lumina/app/Lumina POS.exe` and
+`~/lumina/lumina.apk`.
+
+- The Electron app is read and driven. `asar extract` on `app.asar` gives the
+  renderer source and the bundled database; Playwright over the Chrome
+  DevTools Protocol drives the running window.
+- The APK runs on an Android emulator through Android Studio on the Windows
+  side, never on Samir's phone, and Maestro drives it.
+- Every feature in every mode, not a walk past the screens. A sale, a return,
+  a purchase, stock, a customer's debt, each report, each setting, each
+  printed document.
+
+Everything lands in `research/competitors/`, screenshots included, and the
+session commits it. `research/README.md` carries the rule that governs all of
+it: nothing found this way becomes source code. It is a competitor's
+proprietary code taken out of their installer, copying it infringes, and its
+reading of the droit de timbre is out of date. It is a list of what a shop
+has seen before, which is what Anouar is asking for.
+
+## What a test has to be able to do
+
+`context/processes/20260908-quality-gates.md` carries the rules, added
+2026-09-20 after Samir asked where they lived. In this loop they mean: a test
+that cannot fail is deleted, a change-detector asserting a call reached a mock
+is deleted, a run of trivial cases becomes one case that names both directions
+of the failure, and none of the three is decided by reading. Break the claim,
+watch the named test go red, put it back.
+
+The count going down is the suite getting sharper, not thinner. The
+dictionaries went from thirty-two checks to twenty-three with every mutation
+still failing.
+
 ## Who does what
 
 `dz-builder` for routes, templates, hooks, i18n, file moves and the dto split.
