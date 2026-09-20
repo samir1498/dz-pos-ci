@@ -30,7 +30,6 @@
     "crates/core/tests/debt_service.rs": 2044,
     "crates/core/tests/migration.rs": 4365,
     "crates/core/tests/purchases_service.rs": 1420,
-    "crates/core/tests/sales_service.rs": 2893,
-    "packages/shared/src/client.ts": 994
+    "crates/core/tests/sales_service.rs": 2893
   }
 }

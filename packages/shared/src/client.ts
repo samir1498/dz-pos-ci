@@ -6,81 +6,17 @@
 // translatable error instead of leaking a half-typed object into the UI. The
 // schemas are pinned to `./generated` in both directions, so the check the
 // client runs cannot drift from the Rust struct it is checking.
+//
+// The calls themselves live one file per domain under `./client/`, the same
+// split `crates/api/src/routes/` uses, each taking a `Transport` rather than
+// reaching into this file's closure. `health`, `getBuildInfo` and `clock`
+// stay here because they stay in `routes/mod.rs` too, ungrouped there; and
+// `setSession`/`logout` stay here because both touch the `session` variable
+// this closure holds, which no domain file can reach.
 
-import { z } from "zod";
-
-import type { AdjustmentDto } from "./generated/AdjustmentDto";
-import type { AuditLogDto } from "./generated/AuditLogDto";
-import type { BackupDto } from "./generated/BackupDto";
-import type { BackupsDto } from "./generated/BackupsDto";
 import type { BuildInfoDto } from "./generated/BuildInfoDto";
-import type { CategoryDto } from "./generated/CategoryDto";
 import type { ClockDto } from "./generated/ClockDto";
-import type { CustomerDto } from "./generated/CustomerDto";
-import type { CustomerLedgerDto } from "./generated/CustomerLedgerDto";
-import type { CustomerPaymentsDto } from "./generated/CustomerPaymentsDto";
-import type { CustomerWriteDto } from "./generated/CustomerWriteDto";
-import type { DashboardDto } from "./generated/DashboardDto";
-import type { DashboardSeriesDto } from "./generated/DashboardSeriesDto";
-import type { CashPositionDto } from "./generated/CashPositionDto";
-import type { ExpenseCategoryDto } from "./generated/ExpenseCategoryDto";
-import type { ExpenseDto } from "./generated/ExpenseDto";
-import type { ExpensesDto } from "./generated/ExpensesDto";
-import type { NewExpenseDto } from "./generated/NewExpenseDto";
 import type { HealthDto } from "./generated/HealthDto";
-import type { DeviceTokenDto } from "./generated/DeviceTokenDto";
-import type { LoginDto } from "./generated/LoginDto";
-import type { MeDto } from "./generated/MeDto";
-import type { PairedDeviceDto } from "./generated/PairedDeviceDto";
-import type { PairingQrDto } from "./generated/PairingQrDto";
-import type { PermissionDto } from "./generated/PermissionDto";
-import type { SessionDto } from "./generated/SessionDto";
-import type { SessionIdleDto } from "./generated/SessionIdleDto";
-import type { ImportAppliedDto } from "./generated/ImportAppliedDto";
-import type { ImportDryRunDto } from "./generated/ImportDryRunDto";
-import type { NewAvoirDto } from "./generated/NewAvoirDto";
-import type { CancelDocumentDto } from "./generated/CancelDocumentDto";
-import type { NewCustomerDto } from "./generated/NewCustomerDto";
-import type { NewPaymentDto } from "./generated/NewPaymentDto";
-import type { NewProductDto } from "./generated/NewProductDto";
-import type { NewSaleDto } from "./generated/NewSaleDto";
-import type { CloseOrderDto } from "./generated/CloseOrderDto";
-import type { NewPurchaseDto } from "./generated/NewPurchaseDto";
-import type { NewReceiptDto } from "./generated/NewReceiptDto";
-import type { ProductDto } from "./generated/ProductDto";
-import type { PurchaseDetailDto } from "./generated/PurchaseDetailDto";
-import type { PurchaseDto } from "./generated/PurchaseDto";
-import type { PurchaseStatusDto } from "./generated/PurchaseStatusDto";
-import type { DiscountThresholdChangeDto } from "./generated/DiscountThresholdChangeDto";
-import type { RegimeChangeDto } from "./generated/RegimeChangeDto";
-import type { RestoreDto } from "./generated/RestoreDto";
-import type { SaleDto } from "./generated/SaleDto";
-import type { SaleKindDto } from "./generated/SaleKindDto";
-import type { SettingsDto } from "./generated/SettingsDto";
-import type { FactureLayoutDto } from "./generated/FactureLayoutDto";
-import type { ThemeDto } from "./generated/ThemeDto";
-import type { StoreDto } from "./generated/StoreDto";
-import type { CloseSupplierDto } from "./generated/CloseSupplierDto";
-import type { LastStockRecountDto } from "./generated/LastStockRecountDto";
-import type { StockRecountDto } from "./generated/StockRecountDto";
-import type { NewSupplierDto } from "./generated/NewSupplierDto";
-import type { SupplierDto } from "./generated/SupplierDto";
-import type { SupplierLedgerDto } from "./generated/SupplierLedgerDto";
-import type { SupplierStatementDto } from "./generated/SupplierStatementDto";
-import type { SupplierWriteDto } from "./generated/SupplierWriteDto";
-import type { ClaimFirstOwnerDto } from "./generated/ClaimFirstOwnerDto";
-import type { NewUserDto } from "./generated/NewUserDto";
-import type { SetPinDto } from "./generated/SetPinDto";
-import type { StaffDto } from "./generated/StaffDto";
-import type { UserDto } from "./generated/UserDto";
-import { categorySchema, productSchema } from "./schemas/catalogue";
-import { dashboardSchema, dashboardSeriesSchema } from "./schemas/dashboard";
-import { importAppliedSchema, importDryRunSchema, labelSheetSchema } from "./schemas/import";
-import {
-  customerLedgerSchema,
-  customerPaymentsSchema,
-  customerSchema,
-} from "./schemas/customer";
 export {
   ApiError,
   type Download,
@@ -89,46 +25,27 @@ export {
   type PrintPaper,
 } from "./client-response";
 
-import {
-  ApiError,
-  narrow,
-  unwrap,
-  unwrapFile,
-  unwrapText,
-  type Download,
-  type ExportKind,
-  type PrintLang,
-  type PrintPaper,
-} from "./client-response";
-import { purchaseDetailSchema, purchaseSchema } from "./schemas/purchase";
-import { auditLogSchema } from "./schemas/audit";
-import {
-  cashPositionSchema,
-  expenseCategorySchema,
-  expenseSchema,
-  expensesSchema,
-} from "./schemas/expense";
-import {
-  supplierLedgerSchema,
-  supplierSchema,
-  supplierStatementSchema,
-} from "./schemas/supplier";
-import { saleSchema } from "./schemas/sale";
-import { deviceTokenSchema, pairedDeviceSchema, pairingQrSchema } from "./schemas/pairing";
-import { meSchema, sessionIdleSchema, sessionSchema } from "./schemas/session";
-import { staffSchema } from "./schemas/staff";
-import { userSchema } from "./schemas/user";
-import { lastStockRecountSchema, stockRecountSchema } from "./schemas/stock";
-import {
-  backupSchema,
-  backupsSchema,
-  buildInfoSchema,
-  clockSchema,
-  healthSchema,
-  restoreSchema,
-  settingsSchema,
-  storeSchema,
-} from "./schemas/settings";
+import { ApiError, narrow, unwrap, unwrapFile, unwrapText, type Download } from "./client-response";
+import { buildInfoSchema, clockSchema, healthSchema } from "./schemas/settings";
+
+import { auditClient } from "./client/audit";
+import { authClient } from "./client/auth";
+import { backupsClient } from "./client/backups";
+import { categoriesClient } from "./client/categories";
+import { customersClient } from "./client/customers";
+import { dashboardClient } from "./client/dashboard";
+import { expensesClient } from "./client/expenses";
+import { exportClient } from "./client/export";
+import { importClient } from "./client/import";
+import { pairingClient } from "./client/pairing";
+import { productsClient } from "./client/products";
+import { purchasesClient } from "./client/purchases";
+import { salesClient } from "./client/sales";
+import { settingsClient } from "./client/settings";
+import { stockClient } from "./client/stock";
+import { suppliersClient } from "./client/suppliers";
+import { supportClient } from "./client/support";
+import { usersClient } from "./client/users";
 
 export type ApiClient = ReturnType<typeof createClient>;
 
@@ -158,6 +75,15 @@ export interface ClientOptions {
  * and the two gates are separate on purpose
  * (`docs/architecture.md` § Transport and auth). */
 export const SESSION_HEADER = "x-dzpos-session";
+
+/** The three ways a call gets sent, handed to each domain factory under
+ * `./client/` so none of them has to hold the token, the session or the
+ * fetch to use. */
+export interface Transport {
+  send(path: string, init?: RequestInit): Promise<unknown>;
+  sendText(path: string, init?: RequestInit): Promise<string>;
+  sendFile(path: string, init?: RequestInit): Promise<Download>;
+}
 
 export function createClient(baseUrl: string, options: ClientOptions | typeof fetch = {}) {
   const base = baseUrl.replace(/\/+$/, "");
@@ -221,6 +147,8 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     return unwrapFile(res);
   }
 
+  const transport: Transport = { send, sendText, sendFile };
+
   return {
     baseUrl: base,
 
@@ -231,77 +159,6 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       session = next ?? undefined;
     },
 
-    /** Signs in with a user id and a PIN, or a name and a password.
-     *
-     * The token is returned and deliberately not remembered: a browser got
-     * the same session as an httpOnly cookie, and holding the token in a
-     * variable JavaScript can read would hand back exactly what httpOnly was
-     * for. The desktop, whose webview cannot set a cookie, calls
-     * `setSession(answer.token)` after this (T4). */
-    async login(body: LoginDto): Promise<SessionDto> {
-      return narrow(
-        await send("/auth/login", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        }),
-        sessionSchema,
-        "sign-in answer",
-      );
-    },
-
-    /** The one door into a shop nobody has ever signed into: a name and a
-     * password. The server finds the shop's own owner, writes those, then
-     * signs them in the same way `login` does. The till PIN is set later
-     * from the users screen. Refuses once any credential anywhere in the
-     * shop already exists. */
-    async claimFirstOwner(body: ClaimFirstOwnerDto): Promise<SessionDto> {
-      return narrow(
-        await send("/auth/first-setup", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        }),
-        sessionSchema,
-        "sign-in answer",
-      );
-    },
-
-    /** The QR the desktop shows (M6 T2): 60s single-use, owner|manager only. */
-    async createPairingQr(): Promise<PairingQrDto> {
-      return narrow(await send("/pairing/qr", { method: "POST" }), pairingQrSchema, "pairing QR");
-    },
-
-    /** The phones this shop has paired, newest first as the server orders
-     * them. Same gate as the QR that created them (`EditSettings`), so a
-     * cashier's session is refused by the route, not by a hidden button. */
-    async listPairedDevices(): Promise<PairedDeviceDto[]> {
-      return narrow(await send("/pairing/devices"), z.array(pairedDeviceSchema), "paired phones");
-    },
-
-    /** Revoke one paired phone. The phone finds out on its next call, which
-     * is a 401 it reads as "pair again" rather than as a dropped Wi-Fi. */
-    async revokePairedDevice(id: number): Promise<PairedDeviceDto> {
-      return narrow(
-        await send(`/pairing/devices/${id}/revoke`, { method: "POST" }),
-        pairedDeviceSchema,
-        "revoked phone",
-      );
-    },
-
-    /** The phone trades the QR's pairing token for a device token (M6 T2). */
-    async claimPairing(body: { pairing_token: string; device_name: string }): Promise<DeviceTokenDto> {
-      return narrow(
-        await send("/pairing/claim", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        }),
-        deviceTokenSchema,
-        "pairing claim",
-      );
-    },
-
     /** Ends the session and forgets the token, whether or not the server had
      * one to end. */
     async logout(): Promise<void> {
@@ -310,36 +167,6 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       } finally {
         session = undefined;
       }
-    },
-
-    /** Who is signed in. Raises `session_required` when nobody is, which is
-     * what the desktop revalidates on focus against. */
-    async me(): Promise<MeDto> {
-      return narrow(await send("/auth/me"), meSchema, "session answer");
-    },
-
-    /** The owner's audit log (M4 T7): one page, newest first, narrowed to a
-     * user, an action or a day when the screen asks for one, and the two
-     * dropdowns' own options riding along on every page. Answers 403 for
-     * anyone who is not the owner; the caller decides what that looks like. */
-    async listAuditLog(filters?: {
-      userId?: number;
-      action?: string;
-      day?: string;
-      page?: number;
-    }): Promise<AuditLogDto> {
-      const query = new URLSearchParams();
-      if (filters?.userId !== undefined) query.set("user_id", String(filters.userId));
-      if (filters?.action !== undefined) query.set("action", filters.action);
-      if (filters?.day !== undefined) query.set("day", filters.day);
-      if (filters?.page !== undefined) query.set("page", String(filters.page));
-      const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
-      return narrow(await send(`/audit-log${suffix}`), auditLogSchema, "audit log");
-    },
-
-    /** How long a session survives with nothing happening on it. */
-    async sessionIdle(): Promise<SessionIdleDto> {
-      return narrow(await send("/auth/idle"), sessionIdleSchema, "idle answer");
     },
 
     async health(): Promise<HealthDto> {
@@ -360,635 +187,23 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
       return narrow(await send("/clock"), clockSchema, "clock answer");
     },
 
-    async listCategories(): Promise<CategoryDto[]> {
-      return narrow(await send("/categories"), z.array(categorySchema), "category list");
-    },
-
-    async listProducts(): Promise<ProductDto[]> {
-      return narrow(await send("/products"), z.array(productSchema), "product list");
-    },
-
-    async updateProduct(id: number, input: NewProductDto): Promise<ProductDto> {
-      const body = await send(`/products/${id}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, productSchema, "product");
-    },
-
-    /** The four workbooks a shop takes away. The range is the sales
-     * workbook's alone; the other three are the rows as they stand today,
-     * because a product is a current row and not an event. */
-    async exportWorkbook(
-      kind: ExportKind,
-      lang: PrintLang,
-      range?: { from?: string; to?: string },
-    ): Promise<Download> {
-      const query = new URLSearchParams({ lang });
-      if (range?.from !== undefined && range.from !== "") query.set("from", range.from);
-      if (range?.to !== undefined && range.to !== "") query.set("to", range.to);
-      return sendFile(`/export/${kind}?${query.toString()}`);
-    },
-
-    /** The empty workbook a shop fills in and posts back. */
-    async importTemplate(lang: PrintLang): Promise<Download> {
-      return sendFile(`/import/products/template?lang=${lang}`);
-    },
-
-    /** The support bundle (M5 T3): a zip carrying the session log, the
-     * build's own version and migration history, the shape of the schema, a
-     * few counts and the machine's OS, language and time zone. No customer,
-     * no product, no price and no document is in it; `dzpos_core::services::
-     * support_bundle`'s own doc names the whole list and the test that holds
-     * it. */
-    async supportBundle(): Promise<Download> {
-      return sendFile("/support-bundle");
-    },
-
-    /** What the file would do, with nothing written. A file with refusals in
-     * it still answers 200: the refusals are the answer. */
-    async dryRunProductImport(file: Blob): Promise<ImportDryRunDto> {
-      const body = await send("/import/products/dry-run", { method: "POST", body: file });
-      return narrow(body, importDryRunSchema, "import dry run");
-    },
-
-    /** The file, written, or nothing at all. */
-    async applyProductImport(file: Blob): Promise<ImportAppliedDto> {
-      const body = await send("/import/products", { method: "POST", body: file });
-      return narrow(body, importAppliedSchema, "import result");
-    },
-
-    /** The 58 x 40 mm shelf label for one product, as a page to print. */
-    async getProductLabel(id: number, lang: PrintLang): Promise<string> {
-      return sendText(`/products/${id}/label?lang=${lang}`);
-    },
-
-    /** A sheet of those labels on A4, in the order the ids are given.
-     *
-     * The selection is checked against the same cap the API holds before
-     * the call is made: a body the server will refuse is a call not worth
-     * making, and the screen gets a `bad_request` it already translates
-     * rather than a round trip. */
-    async getLabelSheet(ids: readonly number[], lang: PrintLang): Promise<string> {
-      const body = labelSheetSchema.safeParse({ ids: [...ids] });
-      if (!body.success) {
-        throw new ApiError("bad_request", "that is not a printable selection", 0);
-      }
-      return sendText(`/labels/sheet?lang=${lang}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body.data),
-      });
-    },
-
-    async getSettings(): Promise<SettingsDto> {
-      return narrow(await send("/settings"), settingsSchema, "settings");
-    },
-
-    /** The whole store block; a null clears that field. */
-    async updateStore(input: StoreDto): Promise<StoreDto> {
-      const body = await send("/settings/store", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, storeSchema, "store block");
-    },
-
-    /** Appends a dated régime change; the answer is the whole settings page
-     * again, since the change is current or planned depending on its day. */
-    async changeRegime(input: RegimeChangeDto): Promise<SettingsDto> {
-      const body = await send("/settings/regime", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, settingsSchema, "settings");
-    },
-
-    /** Appends a dated change to the discount a cashier may give without
-     * asking anyone, in basis points of the basket. Answers the whole
-     * settings page, like the régime change it rides beside. */
-    async setDiscountThreshold(input: DiscountThresholdChangeDto): Promise<SettingsDto> {
-      const body = await send("/settings/discount-threshold", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, settingsSchema, "settings");
-    },
-
-    /** Records the shop's theme, or `null` to follow the machine. The answer
-     * is the whole settings page, the way a régime change answers, so the
-     * screen reads one shape back instead of patching its own copy. */
-    async setTheme(theme: ThemeDto | null): Promise<SettingsDto> {
-      const body = await send("/settings/theme", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ theme }),
-      });
-      return narrow(body, settingsSchema, "settings");
-    },
-
-    /** Records which layout the shop's factures are drawn in. Answers the
-     * whole settings page, the way `setTheme` does, so the screen reads one
-     * shape back instead of patching its own copy. */
-    async setFactureLayout(layout: FactureLayoutDto): Promise<SettingsDto> {
-      const body = await send("/settings/facture-layout", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ facture_layout: layout }),
-      });
-      return narrow(body, settingsSchema, "settings");
-    },
-
-    /** The copies of the shop file the server keeps, newest first: the daily
-     * ones, the copies taken on the way into a restore, and the copies taken
-     * on the way into an update. The three are kept under different rules
-     * and so travel in their own lists. */
-    async listBackups(): Promise<BackupsDto> {
-      return narrow(await send("/backups"), backupsSchema, "backup list");
-    },
-
-    /** One more copy, taken now. The server names it and prunes the folder. */
-    async createBackup(): Promise<BackupDto> {
-      return narrow(await send("/backups", { method: "POST" }), backupSchema, "backup");
-    },
-
-    /** Puts the shop file back from a copy. The name is the server's own, and
-     * it is encoded rather than spliced, so a name that somehow carried a
-     * separator reaches the server as one segment and is refused there. */
-    async restoreBackup(name: string): Promise<RestoreDto> {
-      const body = await send(`/backups/${encodeURIComponent(name)}/restore`, {
-        method: "POST",
-      });
-      return narrow(body, restoreSchema, "restore answer");
-    },
-
-    /** Rings up the basket. The server dates the document and assigns the
-     * number; neither is on the request. */
-    async createSale(input: NewSaleDto): Promise<SaleDto> {
-      const body = await send("/sales", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, saleSchema, "sale");
-    },
-
-    async getSale(id: number): Promise<SaleDto> {
-      return narrow(await send(`/sales/${id}`), saleSchema, "sale");
-    },
-
-    /** The 80 mm ticket for a sale, as the HTML page the core rendered.
-     * The UI prints these bytes and never builds a document of its own:
-     * the desktop and a server print the same paper (features.md §4). The
-     * language is the one the till is being used in. */
-    async getSaleTicket(id: number, lang: PrintLang): Promise<string> {
-      return sendText(`/sales/${id}/ticket?lang=${lang}`);
-    },
-
-    /** The A4 or A5 facture for a sale, as the HTML page the core rendered.
-     * The same contract as the ticket, plus the sheet: the UI prints these
-     * bytes and never lays a document out itself. The id has to name a
-     * facture; a ticket's id is a 404, because a ticket is its own paper. */
-    async getSaleFacture(id: number, lang: PrintLang, paper: PrintPaper): Promise<string> {
-      return sendText(`/sales/${id}/facture?lang=${lang}&paper=${paper}`);
-    },
-
-    /** Newest first, every kind the till issues. `kind` narrows it to one
-     * series: the day's till roll asks for `ticket`, a documents screen for
-     * `facture`, and a screen that wants both asks for neither. */
-    async listSales(kind?: SaleKindDto): Promise<SaleDto[]> {
-      const query = kind === undefined ? "" : `?kind=${kind}`;
-      return narrow(await send(`/sales${query}`), z.array(saleSchema), "sale list");
-    },
-
-    /** Writes a credit note against the facture named. `lines` left out is
-     * the whole of what is left on it, which is what the "avoir the lot"
-     * button sends; a list credits the lines it names and no more of each
-     * than the facture has left. Every rule is the core's. */
-    async createAvoir(id: number, input: NewAvoirDto): Promise<SaleDto> {
-      const body = await send(`/sales/${id}/avoir`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, saleSchema, "avoir");
-    },
-
-    /** Every avoir written against one facture, oldest first. A ticket's id
-     * is a 404 rather than an empty list: an empty list would read as "this
-     * facture has no credit notes". */
-    async listAvoirs(id: number): Promise<SaleDto[]> {
-      return narrow(await send(`/sales/${id}/avoirs`), z.array(saleSchema), "avoir list");
-    },
-
-    /** Annuls a document and hands it back carrying the block that says
-     * when, by whom, why and with which avoir. It keeps its number. */
-    async cancelSale(id: number, input: CancelDocumentDto): Promise<SaleDto> {
-      const body = await send(`/sales/${id}/cancel`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, saleSchema, "sale");
-    },
-
-    /** The shop's customers, the active ones first. `search` is a piece of a
-     * name or a phone number; blank asks for the whole list, which is what an
-     * emptied search box means. */
-    async listCustomers(search?: string): Promise<CustomerDto[]> {
-      const trimmed = search === undefined ? "" : search.trim();
-      const query = trimmed === "" ? "" : `?q=${encodeURIComponent(trimmed).replace(/%20/g, "+")}`;
-      return narrow(await send(`/customers${query}`), z.array(customerSchema), "customer list");
-    },
-
-    async getCustomer(id: number): Promise<CustomerDto> {
-      return narrow(await send(`/customers/${id}`), customerSchema, "customer");
-    },
-
-    /** Opens a fiche, and with it the opening debt when the shop is carrying
-     * one over. The opening debt is only on the create: a wrong one is
-     * corrected by an adjustment, never by editing the fiche. */
-    async createCustomer(input: NewCustomerDto): Promise<CustomerDto> {
-      const body = await send("/customers", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, customerSchema, "customer");
-    },
-
-    /** The whole fiche; a null clears that field. */
-    async updateCustomer(id: number, input: CustomerWriteDto): Promise<CustomerDto> {
-      const body = await send(`/customers/${id}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, customerSchema, "customer");
-    },
-
-    /** The movements newest first, each with the balance as of itself, and
-     * the balance they sum to. Both are the core's; nothing here adds a
-     * column up. */
-    async customerLedger(id: number): Promise<CustomerLedgerDto> {
-      return narrow(await send(`/customers/${id}/ledger`), customerLedgerSchema, "customer ledger");
-    },
-
-    /** Corrects a balance by writing a movement: positive raises the debt,
-     * negative lowers it. The answer is the whole ledger again. */
-    async adjustCustomerDebt(id: number, input: AdjustmentDto): Promise<CustomerLedgerDto> {
-      const body = await send(`/customers/${id}/adjustments`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, customerLedgerSchema, "customer ledger");
-    },
-
-    /** The customer's payments, newest first, each with the documents it
-     * settled. The balance in the envelope is the whole ledger's, not the
-     * newest payment's: a sale written after the last payment moved it. */
-    async customerPayments(id: number): Promise<CustomerPaymentsDto> {
-      return narrow(
-        await send(`/customers/${id}/payments`),
-        customerPaymentsSchema,
-        "customer payments",
-      );
-    },
-
-    /** Money against a debt. The server settles the oldest documents first
-     * and refuses a payment above what the customer owes; the answer is the
-     * whole list of payments again. */
-    async payCustomer(id: number, input: NewPaymentDto): Promise<CustomerPaymentsDto> {
-      const body = await send(`/customers/${id}/payments`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, customerPaymentsSchema, "customer payments");
-    },
-
-    /** The statement of account over a range of days, as the HTML page the
-     * core rendered. The UI prints these bytes and never builds a document of
-     * its own (features.md §4). The days are `YYYY-MM-DD`. */
-    async customerStatement(
-      id: number,
-      from: string,
-      to: string,
-      lang: PrintLang,
-    ): Promise<string> {
-      const query = new URLSearchParams({ from, to, lang });
-      return sendText(`/customers/${id}/statement?${query.toString()}`);
-    },
-
-    /** The 80 mm debt slip, as the HTML page the core rendered: what the
-     * customer owes now and the newest movements behind it. No range, because
-     * the slip is about today rather than about a period, and the server's
-     * clock dates it. */
-    async customerDebtSlip(id: number, lang: PrintLang): Promise<string> {
-      const query = new URLSearchParams({ lang });
-      return sendText(`/customers/${id}/debt-slip?${query.toString()}`);
-    },
-
-    /** The shop's suppliers, the ones it still buys from first. `search` is a
-     * piece of a name or a phone number; blank asks for the whole list, which
-     * is what an emptied search box means. */
-    async listSuppliers(search?: string): Promise<SupplierDto[]> {
-      const trimmed = search === undefined ? "" : search.trim();
-      const query = trimmed === "" ? "" : `?q=${encodeURIComponent(trimmed).replace(/%20/g, "+")}`;
-      return narrow(await send(`/suppliers${query}`), z.array(supplierSchema), "supplier list");
-    },
-
-    async getSupplier(id: number): Promise<SupplierDto> {
-      return narrow(await send(`/suppliers/${id}`), supplierSchema, "supplier");
-    },
-
-    /** Opens a fiche, and with it the debt the shop was already carrying to
-     * this supplier. The opening debt is only on the create: a wrong one is
-     * corrected by an adjustment, never by editing the fiche. */
-    async createSupplier(input: NewSupplierDto): Promise<SupplierDto> {
-      const body = await send("/suppliers", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, supplierSchema, "supplier");
-    },
-
-    /** The whole fiche; a null clears that field. */
-    async updateSupplier(id: number, input: SupplierWriteDto): Promise<SupplierDto> {
-      const body = await send(`/suppliers/${id}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, supplierSchema, "supplier");
-    },
-
-    /** Stops the shop buying from this supplier. A fiche whose account is
-     * still open is refused without a reason, and the reason goes into the
-     * audit log beside the balance. */
-    async closeSupplier(id: number, input: CloseSupplierDto): Promise<SupplierDto> {
-      const body = await send(`/suppliers/${id}/close`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, supplierSchema, "supplier");
-    },
-
-    /** The movements newest first, each with the balance as of itself and,
-     * on a payment, the orders it settled. Both figures are the core's. */
-    async supplierLedger(id: number): Promise<SupplierLedgerDto> {
-      return narrow(await send(`/suppliers/${id}/ledger`), supplierLedgerSchema, "supplier ledger");
-    },
-
-    /** Money to a supplier. The server settles the oldest orders first and
-     * refuses a payment above what the shop owes; the answer is the whole
-     * ledger again. */
-    async paySupplier(id: number, input: NewPaymentDto): Promise<SupplierLedgerDto> {
-      const body = await send(`/suppliers/${id}/payments`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, supplierLedgerSchema, "supplier ledger");
-    },
-
-    /** Corrects a balance by writing a movement: positive raises what the
-     * shop owes, negative lowers it. The answer is the whole ledger again. */
-    async adjustSupplierDebt(id: number, input: AdjustmentDto): Promise<SupplierLedgerDto> {
-      const body = await send(`/suppliers/${id}/adjustments`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, supplierLedgerSchema, "supplier ledger");
-    },
-
-    /** The supplier's account between two days, both included. JSON and not
-     * a rendered page: the printed statement is a paper a customer is
-     * handed, and the shop's own copy of what it owes is a screen. */
-    async supplierStatement(id: number, from: string, to: string): Promise<SupplierStatementDto> {
-      const query = new URLSearchParams({ from, to });
-      return narrow(
-        await send(`/suppliers/${id}/statement?${query.toString()}`),
-        supplierStatementSchema,
-        "supplier statement",
-      );
-    },
-
-    /** The shop's staff, active first then alphabetical: the owner's own
-     * read (M4 T8). */
-    /** The names a sign-in screen offers before anyone is signed in
-     * (`GET /auth/staff`): a cashier taps one and types only a PIN. Inside
-     * the device gate and outside the session one, like `login`, so it
-     * answers a signed-out desktop on loopback and a paired phone on the
-     * LAN, and nobody else. */
-    async listStaff(): Promise<StaffDto[]> {
-      return narrow(await send("/auth/staff"), z.array(staffSchema), "staff list");
-    },
-    async listUsers(): Promise<UserDto[]> {
-      return narrow(await send("/users"), z.array(userSchema), "user list");
-    },
-
-    /** A fiche, name and role. No credential yet: `setUserPin` is what
-     * gives it a PIN, the first one or a reset alike. */
-    async createUser(input: NewUserDto): Promise<UserDto> {
-      const body = await send("/users", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, userSchema, "user");
-    },
-
-    /** Gives a fiche its first PIN or resets a forgotten one; the server
-     * does not tell the two apart and neither does this. Never answers with
-     * the PIN it replaces, because there is not one to show. */
-    async setUserPin(id: number, input: SetPinDto): Promise<UserDto> {
-      const body = await send(`/users/${id}/pin`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, userSchema, "user");
-    },
-
-    /** Switches a fiche off. The last-owner and self refusals are the
-     * server's, enforced on the row. */
-    async deactivateUser(id: number): Promise<UserDto> {
-      const body = await send(`/users/${id}/deactivate`, { method: "POST" });
-      return narrow(body, userSchema, "user");
-    },
-
-    /** Switches a fiche back on. */
-    async reactivateUser(id: number): Promise<UserDto> {
-      const body = await send(`/users/${id}/reactivate`, { method: "POST" });
-      return narrow(body, userSchema, "user");
-    },
-
-    /** One month of expenses and what it came to, `YYYY-MM` on the shop's
-     * calendar. The total is the server's: a screen that added the rows up
-     * would be a second answer to the same question. */
-    async listExpenses(month: string): Promise<ExpensesDto> {
-      const query = new URLSearchParams({ month });
-      return narrow(await send(`/expenses?${query.toString()}`), expensesSchema, "expenses");
-    },
-
-    /** The seven seeded categories, in the order the screen lists them. Each
-     * carries an i18n key, and the label comes from the app's own language
-     * files. */
-    async listExpenseCategories(): Promise<ExpenseCategoryDto[]> {
-      return narrow(
-        await send("/expense-categories"),
-        z.array(expenseCategorySchema),
-        "expense categories",
-      );
-    },
-
-    async createExpense(input: NewExpenseDto): Promise<ExpenseDto> {
-      const body = await send("/expenses", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, expenseSchema, "expense");
-    },
-
-    /** The cash position over one day or one month, never both: the server
-     * refuses a call that names the two, so the range a figure covers is
-     * always the one that was asked for. */
-    async cashPosition(period: { day: string } | { month: string }): Promise<CashPositionDto> {
-      const query = new URLSearchParams(period);
-      return narrow(await send(`/cash?${query.toString()}`), cashPositionSchema, "cash position");
-    },
-
-    /** The whole dashboard for one day and the month it falls in. The day is
-     * the shop's today when the caller names none: the server reads the same
-     * clock the services date documents with, so a screen that sent nothing
-     * and one that sent what `/clock` gave it get the same answer. */
-    async dashboard(day?: string): Promise<DashboardDto> {
-      const suffix = day === undefined ? "" : `?${new URLSearchParams({ day }).toString()}`;
-      return narrow(await send(`/dashboard${suffix}`), dashboardSchema, "dashboard");
-    },
-
-    /** The chart behind the dashboard: the last `days` days ending on `day`,
-     * each on its own and folded into weeks. Both default the way the screen
-     * reads them, the shop's today and thirty days, and the server refuses a
-     * window of nothing or of more than a year. */
-    async dashboardSeries(window?: { day?: string; days?: number }): Promise<DashboardSeriesDto> {
-      const query = new URLSearchParams();
-      if (window?.day !== undefined) query.set("day", window.day);
-      if (window?.days !== undefined) query.set("days", String(window.days));
-      const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
-      return narrow(
-        await send(`/dashboard/series${suffix}`),
-        dashboardSeriesSchema,
-        "dashboard series",
-      );
-    },
-
-    /** The shop's orders, newest first, narrowed to one state or one
-     * supplier when the screen asks for it. A row per order and no lines:
-     * the lines are what `getPurchase` answers. */
-    async listPurchases(filters?: {
-      status?: PurchaseStatusDto;
-      supplierId?: number;
-    }): Promise<PurchaseDto[]> {
-      const query = new URLSearchParams();
-      if (filters?.status !== undefined) query.set("status", filters.status);
-      if (filters?.supplierId !== undefined) query.set("supplier_id", String(filters.supplierId));
-      const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
-      return narrow(await send(`/purchases${suffix}`), z.array(purchaseSchema), "purchase list");
-    },
-
-    /** One order with its lines and every delivery against it. */
-    async getPurchase(id: number): Promise<PurchaseDetailDto> {
-      return narrow(await send(`/purchases/${id}`), purchaseDetailSchema, "purchase");
-    },
-
-    /** Writes the order. With `receive_now` the whole delivery is written in
-     * the same transaction, which is the common case: the goods came with
-     * the paper. Stock and the supplier's debt move on the delivery and
-     * never on the order alone. */
-    async createPurchase(input: NewPurchaseDto): Promise<PurchaseDetailDto> {
-      const body = await send("/purchases", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, purchaseDetailSchema, "purchase");
-    },
-
-    /** A delivery against an order: the stock rises and the supplier's
-     * account with it, at the cost the goods landed at. */
-    async receivePurchase(id: number, input: NewReceiptDto): Promise<PurchaseDetailDto> {
-      const body = await send(`/purchases/${id}/receipts`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, purchaseDetailSchema, "purchase");
-    },
-
-    /** Goods handed back. No document is written: the stock movement out and
-     * the credit on the ledger are the record. */
-    async returnPurchase(id: number, input: NewReceiptDto): Promise<PurchaseDetailDto> {
-      const body = await send(`/purchases/${id}/returns`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, purchaseDetailSchema, "purchase");
-    },
-
-    /** An order that never happened, only while nothing has arrived. */
-    async cancelPurchase(id: number, input: CloseOrderDto): Promise<PurchaseDetailDto> {
-      const body = await send(`/purchases/${id}/cancel`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, purchaseDetailSchema, "purchase");
-    },
-
-    /** An order the rest of which will never come. What arrived stays. */
-    async closeShortPurchase(id: number, input: CloseOrderDto): Promise<PurchaseDetailDto> {
-      const body = await send(`/purchases/${id}/close-short`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, purchaseDetailSchema, "purchase");
-    },
-
-    /** The day the shop last recounted its stock and what that day put
-     * right. Null day means it has never run: the daily loop marks the first
-     * one on the first wake after the app is launched. */
-    async lastStockRecount(): Promise<LastStockRecountDto> {
-      return narrow(await send("/stock/recount"), lastStockRecountSchema, "last stock recount");
-    },
-
-    /** Recounts now, whatever the marker says. The server compares every
-     * product's cached quantity with its ledger and writes the ledger back
-     * over the ones that disagree, so the answer is what it corrected. */
-    async recountStock(): Promise<StockRecountDto> {
-      const body = await send("/stock/recount", { method: "POST" });
-      return narrow(body, stockRecountSchema, "stock recount");
-    },
-
-    async createProduct(input: NewProductDto): Promise<ProductDto> {
-      const body = await send("/products", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      return narrow(body, productSchema, "product");
-    },
+    ...authClient(transport),
+    ...pairingClient(transport),
+    ...auditClient(transport),
+    ...categoriesClient(transport),
+    ...productsClient(transport),
+    ...exportClient(transport),
+    ...importClient(transport),
+    ...settingsClient(transport),
+    ...backupsClient(transport),
+    ...salesClient(transport),
+    ...customersClient(transport),
+    ...suppliersClient(transport),
+    ...usersClient(transport),
+    ...expensesClient(transport),
+    ...dashboardClient(transport),
+    ...purchasesClient(transport),
+    ...stockClient(transport),
+    ...supportClient(transport),
   };
 }
