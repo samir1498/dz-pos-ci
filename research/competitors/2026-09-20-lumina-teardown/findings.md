@@ -307,3 +307,234 @@ template, and set the invoice print language and the receipt print language
   onto the Windows filesystem is not executable), then start it with a
   remote-debugging port and drive it from the Windows-side Node, because WSL
   cannot reach a Windows loopback port.
+
+## The Android pass, 2026-09-20
+
+Picked up exactly where the last pass stopped: owner account created, French
+selected, a product form filled but never saved. The adb bridge was tested
+first, per the environment brief — `cmd.exe /c "adb devices"` from
+`/mnt/c/Users/Anwender` returned `emulator-5554 device` on the first try, so
+that hazard did not recur this pass. Host load was low throughout (load
+average under 1 most of the session), so the CPU-contention freeze from the
+previous pass never showed up either. All screenshots below are in
+`shots/`; every one was opened and read before being named or described here.
+
+### 1. The unsaved product actually saves
+
+The stuck field was the on-screen quantity keypad, not the system IME — key
+111 (ESC) does not dismiss it, only tapping the keypad's own checkmark does.
+Once dismissed, "Enregistrer le Produit" saved the product and navigated to
+the stock list on its own; the screenshot taken immediately after the tap
+still showed the form (a rendering-lag race, same family as the desktop's
+frozen-frame bug, just recovered by waiting a beat and re-shooting).
+`android-fr-product-list.png` shows "Cafe 250g" in the stock list, barcode
+2033948137956, 250,00 DA, 50 pièce, "En stock" — proof the save wrote a real
+row, not just a form reset.
+
+### 2. A cash sale end to end
+
+Tapping the product in the POS tab added it straight to a slide-up cart
+without needing a till session open (`android-fr-sale-cart.png`). The
+walk-in flow is deliberately short: "Confirmer le paiement" opens a
+"Confirmation de la vente" modal for "Client Passager" with no payment-method
+choice, just subtotal/total and one "Confirmer & Payer" button
+(`android-fr-sale-confirm-modal.png`). The sale posted immediately, appears
+in the Ventes tab as "Sale #1 · 250,00 DA · Payé" (`android-fr-sales-log.png`),
+and opening it shows a real receipt view — "Reçu N° #1", edit/delete
+actions, and four print targets (Ticket, Facture, Facture ticket, Livraison)
+— with no tax line, consistent with the earlier finding that TVA is a single
+shop-wide rate (`android-fr-sale-receipt.png`).
+
+### 3. A customer, created and attached to a sale
+
+Clients → "Ajouter le premier client" opens a form with Nom, Téléphone,
+Adresse, NIF, RC, AI, NIS, **Dette initiale** and **Plafond de crédit**
+(`android-fr-customer-form-filled.png`) — confirms the earlier note that the
+form collects an opening debt and credit limit the `customers` table has no
+column for. Saved as "Samir Client" / 0555123456
+(`android-fr-customer-list.png`). Back in the POS tab, "+ Client" opens a
+"Choisir un client" picker that lists it (`android-fr-sale-choose-customer.png`);
+picking it replaces the "+ Client" pill with a customer chip that survives
+adding the product to the cart (`android-fr-sale-cart-with-customer.png`).
+With a real customer attached, the payment step is a different, richer modal
+than the walk-in one: a method row (Espèces, Chèque, Virement, Carte, Autre),
+a "Montant payé" field, and quick buttons for Complet / ½ / **Tout en
+dette** — a full credit sale — where the walk-in flow only offered
+Confirmer & Payer (`android-fr-sale-payment-modal.png`). The resulting
+"Sale #2" shows "Samir Client" as the buyer in the sales log
+(`android-fr-sales-log-with-customer.png`), and stock ticked down one unit
+per sale (50 → 49 → 48), confirmed against the batch shown in the POS list
+each time.
+
+Also captured by an accidental tap while the "Nom" keyboard was still up on
+the customer form: the "Mise à niveau" pill opens a full activation-request
+page ("Commander maintenant") asking name, phone, wilaya and commune, with
+copy promising a human will call back with an activation code
+(`android-fr-upgrade-activation-request.png`). Nothing was entered or
+submitted on it, per the standing rule against asking Lumina for a code;
+Android's hardware back popped it cleanly back to the customer form with the
+typed name still in place, confirming it is a pushed route and not a
+form-owning modal.
+
+### 4. Reports
+
+The "Plus" tab is the home screen's four-tile grid moved into a scrollable
+menu, grouped under Documents / Rapports / Opérations / Gestion Financière /
+Paramètres / Données / Compte; scrolling it end to end took three
+screenshots (`android-fr-plus-menu.png`, `android-fr-plus-menu-2.png`,
+`android-fr-plus-menu-3.png`). The home dashboard itself — "Travail
+quotidien" (Vente rapide, Vente, Facture proforma, Ventes) and "Stock &
+achats" tiles — is in `android-fr-home-dashboard.png`; an earlier, identical
+capture of the same screen reached by a mistaken tap during the customer
+form is `android-fr-dashboard.png`, kept because it is genuine, not a
+duplicate frame.
+
+The Android reports surface is much thinner than the desktop's eight tabs:
+Plus → Rapports has exactly two entries, Statistiques and Calculateur Zakat.
+Statistiques is one long scrolling page, captured in four screenshots as it
+scrolled (`android-fr-reports-statistiques.png`,
+`android-fr-reports-statistiques-2.png`,
+`android-fr-reports-statistiques-3.png`,
+`android-fr-reports-statistiques-4.png`): Revenus et bénéfices (revenu net,
+coût des ventes, bénéfice brut, panier moyen, bénéfice net final), Trésorerie
+(cash in/out, capital investi, dépenses, solde de trésorerie disponible),
+Analyse des dettes (créances clients, dettes fournisseurs, each with a
+"Détails" list that read "Aucune dette" since none exist yet), Stock (stock
+au prix d'achat, stock au prix de vente estimé) and a closing "Bénéfice
+latent" card projecting the profit if all stock sold. Every figure matched
+what the two sales and the one unsold-stock line should produce (500,00 DA
+revenue, 12 000,00 DA stock at sale price). Calculateur Zakat
+(`android-fr-reports-zakat.png`) auto-fills stock value, créances clients
+and dettes fournisseurs from the same data and asks for liquidités
+disponibles, autres dettes and the day's nisab value by hand — matches the
+desktop finding exactly, now with the actual screen instead of just the
+menu label.
+
+### 5. Settings
+
+Plus → Paramètres Principaux is one very long page; scrolled and captured in
+ten shots (`android-fr-settings-general.png` through
+`android-fr-settings-general-10.png`). Worth recording specifically:
+appearance (Jour/Nuit/Auto); interface language and **invoice/receipt print
+language set independently of it** (interface was French, print language was
+still Arabic — matches the desktop); a "RTL: Activé" label sitting next to
+the network header even while the interface was French and the layout was
+plainly LTR (a leftover status string, not a real state — see the Arabic
+pass below for what RTL actually does here); network fields (IP, port 8080,
+Appairage anti-mélange **Désactivé**); user info showing the account role as
+"مدير عام" in Arabic script even with the whole rest of the screen in
+French; a "Mode Comptabilité Financière uniquement" switch (disables stock
+tracking) matching the desktop's financial-only mode; ticket printing with
+58 mm / 80 mm / Auto / custom-mm width and a **Bluetooth direct-print**
+toggle whose own description says "L'arabe est imprimé en image, donc
+parfait sur toutes les imprimantes" — a concrete, previously-unrecorded
+detail about how they solve Arabic-on-ESC/POS printers; a pricing-method
+toggle for average-cost pricing, noted in-app as **not synced in cloud
+mode**; "Activer la Licence" and backup/restore (export ZIP explicitly
+offered "à envoyer (WhatsApp / Drive)"); and a red "Zone dangereuse" with
+"Réinitialisation usine" at the very bottom, which was not tapped.
+
+Two settings screens live one level down and were opened separately:
+Gestion des Utilisateurs shows the single admin account, "Dinar" / `@qa` /
+مدير عام, with pause and delete actions and an "Ajouter un Utilisateur"
+button (`android-fr-settings-users.png`) — a second Seller/Cashier/etc.
+account was not created this pass, so whether the Android sidebar hides
+things per-role the way the desktop does is still unconfirmed on phone.
+Paramètres de Sécurité offers session-lock-on-close (off), biometric unlock
+(refused with "Aucune empreinte enregistrée sur cet appareil" since the AVD
+has none enrolled) and a PIN quick-unlock, with a note that the PIN is
+per-device and clears on logout (`android-fr-settings-security.png`).
+
+### 6. Scanner and caisse (till)
+
+The barcode scanner needed an OS camera-permission grant the first time it
+was opened; the dialog was "Allow Lumina to take pictures and record video?"
+(`android-fr-camera-permission-dialog.png`), granted "While using the app".
+The scanner screen itself opened correctly afterwards — title "Scanner le
+code-barres", a Une fois/Multiple toggle, and copy explaining the product is
+added automatically on a hit — but the preview area stayed black
+(`android-fr-scanner-barcode.png`): the `dinar` AVD has no virtual camera
+configured, so this is an emulator limitation, not something to hold against
+the app; the UI itself is real and was reached.
+
+The till is a separate flow from the sale itself: two sales were rung up
+earlier in this pass with **no caisse session open at all**, which the
+Gestion de la Caisse screen confirms in its resting state
+(`android-fr-caisse-no-session.png`, "Aucune session ouverte" — Lumina does
+not gate selling behind an open till). Opening one asks only for a Solde
+d'ouverture (`android-fr-caisse-open-session-modal.png`) and produces a live
+dashboard — session #1, caissier "Dinar", opening balance, ventes espèces,
+dépenses + sorties, solde actuel, three quick actions (Entrée de fonds /
+Sortie de fonds / Dépense de caisse), a movements log, and history
+(`android-fr-caisse-session-active.png`). Once a session is open, the POS
+screen's "Ouvrir une session caisse" button is replaced by a live
+"#1 · 0,00" badge. Closing asks for a Solde réel à la fermeture, computes the
+variance against the theoretical balance, and flagged "✓ Caisse équilibrée"
+before confirming — this pass dismissed that modal with its X rather than
+confirming, to leave the session open (`android-fr-caisse-close-session-modal.png`).
+
+### 7. Arabic pass: layout is not one thing
+
+Switched the interface language to Arabic from Paramètres Principaux
+(`android-ar-settings-general.png`) and repeated a short walk: home, product
+list, one sale screen, and this same settings screen. The header immediately
+labelled itself "الاتصال والشبكة (RTL: مفعل)" and every string on every
+screen visited was in Arabic — no leftover French or English label was found
+anywhere in this short pass, which is a stronger result than the "RTL:
+Activé" ghost label under French suggested.
+
+What is genuinely inconsistent is *how much* actually mirrors:
+
+- The **home dashboard** mirrors text alignment throughout, but the bottom
+  tab bar keeps the exact same left-to-right icon order as French (home is
+  still the leftmost icon, "المزيد"/More still the rightmost) — only the
+  active-tab label under "الرئيسية" changed, not its position
+  (`android-ar-home-dashboard.png`).
+- The **Stock/product list** card layout does mirror: the bag icon stays on
+  the left but the quantity badge ("48 قطعة") and price move to read
+  right-to-left as a group (`android-ar-product-list.png`).
+- The **POS product list**, which looks like the same card, does **not**
+  mirror — bag icon left, quantity badge left, price right, pixel-identical
+  positions to the French version, only the text inside is Arabic
+  (`android-ar-pos-list.png`). Two near-identical list screens in the same
+  app handle RTL differently.
+- The **cart and confirm-sale modal** mirror fully and correctly: the close
+  "×" moves from left to right, the cart icon/count moves to the leading
+  (right) edge, and "الإجمالي" (total) is right-aligned where "Total" was
+  left-aligned in French (`android-ar-sale-cart.png`,
+  `android-ar-sale-confirm-modal.png`).
+- One numeral inconsistency: the confirm-sale modal's subtitle read "زبون
+  عابر · ١ منتج" — an Arabic-Indic "١" for the item count — while every
+  price and quantity on the same screen and everywhere else in the Arabic
+  UI used Western digits (0,00, 48, 250,00). This is the one string in the
+  whole Arabic pass that did not follow the numeral convention the rest of
+  the app settled on; visible in `android-ar-sale-confirm-modal.png`.
+
+A third sale was rung up in Arabic the same way as the French ones (walk-in,
+no till session gate, immediate posting) purely to reach the confirm modal
+for the numeral check above; no new customer or product was created in this
+part of the pass.
+
+### What this pass did not reach, and why
+
+- The scanner's camera **preview** (not the screen) could not be shown to
+  produce a picture, because the `dinar` AVD has no virtual camera backing
+  it — an emulator configuration gap, not a Lumina gap.
+- A second Android user account (Cashier/Accountant/Assistant) was not
+  created, so whether the phone's sidebar hides things per-role like the
+  desktop does remains unconfirmed on Android specifically.
+- Cloud sync, multi-branch, the AI invoice scan and anything behind
+  activation were not attempted, per the standing rule against touching
+  Lumina's paid tier or their cloud.
+- LAN pairing ("بحث تلقائي") was not attempted this pass either; it stays
+  the next concrete step noted in blockers.md.
+
+### State left on the emulator
+
+The `dinar` AVD was left with: the interface language set to **Arabic**
+(not reverted to French); a caisse session (**#1**) still open with a
+0,00 DA opening balance; three completed cash sales (#1 walk-in, #2 to
+"Samir Client", #3 walk-in in Arabic) all against the one product, "Cafe
+250g", whose stock is now 47 pièce; one customer, "Samir Client"; camera
+permission granted to Lumina. Nothing was submitted to Lumina's activation
+or cloud endpoints, and the factory-reset control was not touched.
