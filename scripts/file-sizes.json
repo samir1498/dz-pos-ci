@@ -20,7 +20,7 @@
     "crates/core/src/services/avoir.rs": 987,
     "crates/core/src/services/backup.rs": 629,
     "crates/core/src/services/debt.rs": 952,
-    "crates/core/src/services/import.rs": 838,
+    "crates/core/src/services/import.rs": 837,
     "crates/core/src/services/purchases.rs": 1027,
     "crates/core/src/services/sales.rs": 1071,
     "crates/core/src/services/seed.rs": 1126,

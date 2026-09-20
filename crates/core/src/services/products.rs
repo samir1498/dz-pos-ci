@@ -31,6 +31,58 @@ pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Product
     repo::get(conn, shop_id, id)
 }
 
+/// The product this shop already sells under that barcode, if any. The Excel
+/// import asks before it decides whether a row updates a fiche or opens one
+/// (features.md §1); it used to ask `repos::products` itself, which is this
+/// service's table to answer for.
+///
+/// `canonical_barcode` is deliberately not applied here. `create` puts a
+/// twelve-digit UPC into its thirteen-digit form on the way in, so a lookup
+/// that canonicalised as well would start matching rows this door used to
+/// miss. That may well be the right answer for the import, but it is a
+/// change to what the import does, not to where it knocks, and this move is
+/// only the door.
+pub fn by_barcode(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    barcode: &str,
+) -> Result<Option<Product>, CoreError> {
+    repo::by_barcode(conn, shop_id, barcode)
+}
+
+/// Writes the fiche's cost price: what the goods last landed at, in
+/// centimes, as `services::purchases` computed it inside the transaction
+/// that received them.
+///
+/// A pass-through on purpose, adding no check and changing no value. Two
+/// reasons, and the second is the fiscal one. The amount arrives already
+/// decided: the landing cost is the receipt's own arithmetic, checked there,
+/// and a second opinion taken here would either agree (noise) or disagree
+/// (two costs for one delivery). And nothing fiscal is measured against this
+/// column: the "Cost of goods sold" row of the features.md §3 totals table
+/// says a unit's cost is "what it cost when it left, written on the sale's
+/// stock movement, never the fiche's cost price, which is the last
+/// delivery's and moves with every purchase". The movement that does carry
+/// the margin is written a few lines earlier in the same transaction, by
+/// `services::stock::record`. So this door exists to stop `purchases` from
+/// reaching past `products` into its repo, not to add a rule; a rule added
+/// here would be a rule the receipt already applied.
+///
+/// A negative cost is not refused here for the same reason.
+/// `services::purchases::save` refuses a negative `transport` and a
+/// negative `extra_costs`, and `spread` beside it refuses a negative line
+/// `unit_cost`, so the share it hands a line is never below zero and the
+/// landed cost is a `checked_add` of two non-negative amounts. A guard here
+/// would be a second reading of a rule the order already applied.
+pub fn set_cost(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    id: i32,
+    cost: Money,
+) -> Result<(), CoreError> {
+    repo::set_cost(conn, shop_id, id, cost)
+}
+
 pub fn create(
     conn: &mut SqliteConnection,
     shop_id: i32,

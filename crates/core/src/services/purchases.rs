@@ -33,10 +33,10 @@ use crate::models::purchase::{
 use crate::models::stock::Movement;
 use crate::models::supplier_debt::SupplierDebtRowWrite;
 use crate::money::Money;
-use crate::repos::{
-    counters, products as products_repo, purchases as repo, supplier_debt as debt_repo,
+use crate::repos::{counters, purchases as repo, supplier_debt as debt_repo};
+use crate::services::{
+    audit, bounded_field, clock, optional_field, products, stock, supplier_debt,
 };
-use crate::services::{audit, bounded_field, clock, optional_field, stock, supplier_debt};
 
 pub use crate::models::purchase::{
     Purchase, PurchaseLine, PurchaseReceipt, PurchaseReceiptLine, PurchaseStatus,
@@ -660,7 +660,7 @@ fn receive_inside(
         )?;
         // What the product costs the shop is what the goods last landed at,
         // so a margin read tomorrow is read against today's delivery.
-        products_repo::set_cost(conn, shop_id, line.product_id, line.landed_unit_cost)?;
+        products::set_cost(conn, shop_id, line.product_id, line.landed_unit_cost)?;
         value = value.checked_add(step_value(
             line,
             line.qty_received_milli,
@@ -853,7 +853,7 @@ fn spread(
         }
         // The product has to be this shop's: a `NotFound` here rather than the
         // foreign key's failure further down (rule 3).
-        products_repo::get(conn, shop_id, line.product_id)?;
+        products::get(conn, shop_id, line.product_id)?;
         if seen.contains(&line.product_id) {
             // "The cost of the last receipt" has to name one line, and two
             // lines of one product on one order leave it asking which.
