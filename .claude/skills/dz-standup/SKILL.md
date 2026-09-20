@@ -5,13 +5,14 @@ description: Write or rebuild a daily standup page on the Dinar status site. Use
 
 ## Source of truth
 
-The site generator lives at `/home/samir/.dz-night/report/`
-(`reports/`, `reference/`, `screens/`, `make-index.py`, `make-screens.py`,
-`deploy.sh`). It is its own git repo, `Dinar-dz/dinar-reports` (private):
-every change there ends committed and pushed, like any other repo. The
-home page is a status board rendered from the `STATUS` block at the top
-of `make-index.py` plus the newest dated report, which features itself
-automatically.
+The site lives at `/home/samir/.dz-night/report/`. It is an Astro site
+(`src/pages/`, `src/legacy/`, `src/data/`, `public/`, `deploy.sh`) and its
+own git repo, `Dinar-dz/dinar-reports` (private): every change there ends
+committed and pushed, like any other repo. The home page is a status board
+rendered from `src/data/status.ts` plus the newest dated report, which
+features itself automatically. Every page sits in one docs shell with a
+grouped sidebar; the sidebar is built from the data, so a new report turns
+up in it on its own.
 
 ## What to gather first
 
@@ -27,20 +28,29 @@ codes in the body (`M6`, `T9`), no route or constant names, no em dashes.
 Short — what moved, what it means, what is next. Holds name Samir, never
 Anouar. At most three inline screenshots (`screens/*.png`), each wrapped
 in a new-tab link plus the native `<dialog>` preview snippet copied from
-the previous standup. Copy the `<head>` (favicon, OG/Twitter card) from
-the previous standup too. File name: `reports/YYYY-MM-DD-daily-standup.html`.
+the previous standup. The layout supplies the `<head>`, so the
+page is a body fragment, not a whole document.
+
+A new standup is one file, `src/legacy/reports__YYYY-MM-DD-daily-standup.html`,
+holding an optional `<style>` block and the body, plus one row in
+`src/data/legacy.json` giving its title, summary, date and its URL
+`/reports/YYYY-MM-DD-daily-standup.html`. Copy the previous standup's
+fragment and edit it; that keeps the house style without copying a head
+that no longer belongs to the page.
 
 ## Ship
 
-From `/home/samir/.dz-night/report/`: `python3 make-index.py` (the new
-page becomes the featured latest on the home board), `./deploy.sh`, then
-verify on the preview URL the deploy prints. Production
+From `/home/samir/.dz-night/report/`: `./deploy.sh`, which pulls the
+screenshots, runs `astro build` and publishes `dist/` (the new page becomes
+the featured latest on the home board on its own). Then verify on the
+preview URL the deploy prints. `pnpm exec astro dev` serves it locally
+while writing. Production
 (`https://dinar-reports.pages.dev/`) sits behind Cloudflare Access, so
 the preview URL is the verification path and the link to share with
 anyone outside the Access policy. Then commit and push
 `Dinar-dz/dinar-reports`.
 
 Dated reports are history: never rewrite a past standup's body to match
-today. If the milestone count moved, the place to update is the `STATUS`
-block and the reference pages, which is a stale-check sweep, not an edit
+today. If the milestone count moved, the place to update is
+`src/data/status.ts` and the reference pages, which is a stale-check sweep, not an edit
 to old news.
