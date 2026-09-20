@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import {
   clearDevice,
   clearSession,
@@ -35,6 +37,31 @@ const SIGNED_IN = {
   name: "Samir",
   role: "owner",
 };
+
+describe("what comes back off the store", () => {
+  /** Whatever sits under the key is read, not assumed. A blob from an
+   *  older build, or a half-written one, would otherwise become a
+   *  `Session` with a field undefined: a missing `sessionToken` sends
+   *  every guarded call out with the header absent, earns a 401, and
+   *  tells the cashier their session expired rather than sending them to
+   *  sign in once and be done. Signed out is the honest answer.
+   *
+   *  A row per field rather than one blob missing several: a blob short
+   *  of two of them still reads as not a sign-in with either check
+   *  deleted, and says nothing about either one. */
+  it.each(["deviceToken", "sessionToken", "name", "role"])(
+    "answers signed out when the stored blob has no %s",
+    async (missing) => {
+      const short: Record<string, unknown> = { ...SIGNED_IN };
+      delete short[missing];
+      await saveSession(SIGNED_IN);
+      await AsyncStorage.setItem("dzpos:session", JSON.stringify(short));
+      forgetCachedSession();
+
+      expect(await loadSession()).toBeNull();
+    },
+  );
+});
 
 describe("session store", () => {
   it("round-trips a sign-in through the store", async () => {

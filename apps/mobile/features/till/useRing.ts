@@ -17,7 +17,7 @@ import type { NewSaleDto, SaleDto } from "@dzpos/shared";
 import { useCallback, useEffect, useState } from "react";
 
 import { call } from "../../lib/api";
-import type { CartLine } from "../../lib/basket";
+import { readChange, type CartLine } from "../../lib/basket";
 import type { Say } from "../../lib/outcome";
 import { enqueue, list, newIdempotencyKey, retry } from "../../lib/queue";
 import type { Session } from "../../lib/session";
@@ -132,7 +132,7 @@ export function useRing({
       const { done, sale } = await settle("/sales", body);
       if (sale !== null) {
         print(sale.id);
-        setChange(sale.change_centimes ?? null);
+        setChange(readChange(sale.change_centimes));
         onRung();
         setBusy(false);
         return;

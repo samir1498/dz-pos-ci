@@ -10,9 +10,16 @@ import Constants from "expo-constants";
 
 import { outcomeOf, type ApiError, type Outcome, type Refusal, type Say } from "./outcome";
 
-/** Where the shop's core is, and the operator's secret for reaching it. */
+/** Where the shop's core is, and the operator's secret for reaching it.
+ *
+ *  `extra` is whatever `app.json` happens to hold, so it arrives as
+ *  `unknown` and is checked rather than asserted. A build whose config
+ *  carried a number there would otherwise have put a number where every
+ *  URL in this file is built from a string. */
+const configuredBase: unknown = Constants.expoConfig?.extra?.apiUrl;
+
 export const API_BASE: string =
-  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
+  (typeof configuredBase === "string" ? configuredBase : undefined) ??
   process.env.EXPO_PUBLIC_API_URL ??
   "http://127.0.0.1:4317";
 
@@ -65,14 +72,21 @@ export async function call<T>(
   // `RequestInit` has a `credentials` of its own (a same-origin cookie
   // policy, meaningless here), so ours takes the name and that one is
   // dropped rather than shadowed.
-  init: Omit<RequestInit, "credentials"> & { credentials?: Credentials } = {},
+  // `headers` is narrowed to a plain record here rather than taking
+  // `RequestInit`'s three shapes. Every caller in this app passes a plain
+  // object or nothing, and the alternative was asserting the union into
+  // one at the spread, which is the same guess written later.
+  init: Omit<RequestInit, "credentials" | "headers"> & {
+    credentials?: Credentials;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<{ outcome: Outcome; body: T | null; status: number | null }> {
   const { credentials = {}, headers, ...rest } = init;
   let res: Response | null = null;
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...rest,
-      headers: { ...headersFor(credentials), ...(headers as Record<string, string> | undefined) },
+      headers: { ...headersFor(credentials), ...headers },
     });
   } catch {
     return { outcome: outcomeOf(null, null), body: null, status: null };
@@ -84,8 +98,37 @@ export async function call<T>(
   } catch {
     parsed = null;
   }
-  const error = (parsed as { error?: ApiError } | null)?.error ?? null;
-  return { outcome: outcomeOf(res.status, error), body: parsed as T | null, status: res.status };
+  return { outcome: outcomeOf(res.status, errorIn(parsed)), body: bodyOf<T>(parsed), status: res.status };
+}
+
+/** The error the core puts in a refusal body, if this answer has one.
+ *
+ *  Read rather than asserted. A 500 from something in front of the server,
+ *  a proxy or a captive portal, answers HTML or a bare string, and
+ *  reaching into that for `.error.code` is how a screen decides the phone
+ *  was unpaired because a hotel Wi-Fi said hello. */
+function errorIn(parsed: unknown): ApiError {
+  if (typeof parsed !== "object" || parsed === null || !("error" in parsed)) return null;
+  const error: unknown = parsed.error;
+  if (typeof error !== "object" || error === null) return null;
+  const code = "code" in error && typeof error.code === "string" ? error.code : undefined;
+  const message =
+    "message" in error && typeof error.message === "string" ? error.message : undefined;
+  return { code, message };
+}
+
+/** The one assertion left in the phone, and it is the wire.
+ *
+ *  `T` is what the caller says the route answers; nothing exists at
+ *  runtime to check it against. Removing it means a schema per DTO, which
+ *  is a real piece of work and is written down on the architecture plan
+ *  rather than hidden behind a guess here. What it is not is a licence:
+ *  everything read *out* of this answer on a refusal path goes through
+ *  `errorIn` above, so a body that is not the shape the caller expected
+ *  cannot decide what the phone does next. It can only be rendered empty. */
+function bodyOf<T>(parsed: unknown): T | null {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+  return (parsed ?? null) as T | null;
 }
 
 /** The same call, for the read paths where a refusal is exceptional and
@@ -100,6 +143,6 @@ export async function get<T>(path: string, credentials: Credentials): Promise<T>
     "say" in outcome
       ? outcome
       : { kind: "refused", say: { key: "error_refused", vars: { status: status ?? 0 } } };
-  const code = (body as { error?: ApiError } | null)?.error?.code ?? null;
+  const code = errorIn(body)?.code ?? null;
   throw new ApiRefusal(status ?? 0, code, refusal);
 }

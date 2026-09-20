@@ -2,14 +2,18 @@
 // price tags. Under the réel régime a price tag is HT, so the two differ by
 // the TVA and, past 300,00 DA, by the droit de timbre as well.
 //
-// Every expectation below is written out by hand from docs/features.md §3,
-// never by calling the thing under test. The first case is the one the
+// Every expectation about a total is written out by hand from
+// docs/features.md §3, never by calling the thing under test. The one
+// exception is the round trip at the bottom, whose operands come from
+// `priceBasket` on purpose: what it holds is that two functions agree on
+// a string, so a hand-written amount would only test the pair on a number
+// the Exact button never produces. The first case is the one the
 // adversarial review of 2026-09-16 proved against a running API: the old
 // screen sent 11 000 where the server owed 13 090 and was refused.
 
 import { describe, expect, it } from "vitest";
 
-import { formatCentimes, priceBasket, readTendered, type Product } from "./basket";
+import { formatCentimes, priceBasket, readChange, readTendered, type Product } from "./basket";
 
 const sucre = (rateBps: number): Product => ({
   id: 1,
@@ -68,9 +72,23 @@ describe("what the customer handed over", () => {
     expect(readTendered("1,234")).toBeNull();
   });
 
-  it("round-trips what the Pay exact button puts in the box", () => {
-    const owed = priceBasket([{ product: sucre(1900), qty: 1 }], "reel").netToPay;
-    expect(readTendered(formatCentimes(owed))).toBe(owed);
+  /** Both ends of the Exact button, and the second is the one that broke.
+   *
+   *  Showing an amount groups its thousands with a narrow no-break space
+   *  (`packages/shared/src/money.ts`), so a basket over a thousand dinars
+   *  goes into the box as "1 234,00". The parser this file used to have
+   *  wanted `^\d+(\.\d{0,2})?$` and read that as nothing at all, which
+   *  means moving the phone onto the shared formatter without also moving
+   *  it onto the shared parser leaves Exact dead on exactly the baskets
+   *  worth the most. The small case alone could not have said so. */
+  it("round-trips what the Pay exact button puts in the box, grouped or not", () => {
+    const small = priceBasket([{ product: sucre(1900), qty: 1 }], "reel").netToPay;
+    expect(readTendered(formatCentimes(small))).toBe(small);
+
+    const large = priceBasket([{ product: sucre(1900), qty: 90 }], "reel").netToPay;
+    expect(large).toBeGreaterThan(100_000);
+    expect(formatCentimes(large)).toContain("\u202f");
+    expect(readTendered(formatCentimes(large))).toBe(large);
   });
 });
 
@@ -80,5 +98,21 @@ describe("showing an amount", () => {
     expect(formatCentimes(4_400)).toBe("44,00");
     expect(formatCentimes(5)).toBe("0,05");
     expect(formatCentimes(0)).toBe("0,00");
+  });
+});
+
+describe("the change the server answered", () => {
+  /** The phone's own `call<T>` hands a body back without a schema, and
+   *  `formatCentimes` throws on anything that is not a safe integer, so
+   *  a garbled `change_centimes` would take the till screen down in the
+   *  middle of a sale with no error boundary under it. */
+  it("is null for anything that is not a whole number of centimes", () => {
+    expect(readChange(2500)).toBe(2500);
+    expect(readChange(0)).toBe(0);
+    expect(readChange(25.5)).toBeNull();
+    expect(readChange("2500")).toBeNull();
+    expect(readChange(null)).toBeNull();
+    expect(readChange(undefined)).toBeNull();
+    expect(readChange(Number.MAX_SAFE_INTEGER + 2)).toBeNull();
   });
 });

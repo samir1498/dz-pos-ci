@@ -43,23 +43,35 @@ async function refusalFrom(status: number, body: unknown): Promise<ApiRefusal> {
 }
 
 describe("a read the server refused", () => {
-  /** The claim the sign-in screen acts on. `pair-again` and not the status
-   *  or the code, so the screen does not sort the answer a second time and
-   *  cannot disagree with `outcomeOf` about what it means. */
-  it("says the pairing is gone when the device gate refused it", async () => {
+  /** What is held here and nowhere else: the answer `outcomeOf` reached
+   *  arrives on the thrown refusal whole, so the sign-in screen reads a
+   *  kind rather than sorting a status and a code a second time and
+   *  disagreeing. Which status maps to which outcome is `outcome.test.ts`'s
+   *  table; this is only the wire carrying it. */
+  it("carries the outcome whole to whoever catches it", async () => {
     const refusal = await refusalFrom(401, { error: { code: "device_refused", message: "revoked" } });
-    expect(refusal.outcome.kind).toBe("pair-again");
-    expect(refusal.outcome.say.key).toBe("error_pair_again");
+    expect(refusal.outcome).toEqual({ kind: "pair-again", say: { key: "error_pair_again" } });
+    expect(refusal.code).toBe("device_refused");
   });
 
-  /** And the other way, which is the expensive half: a phone unpaired over
-   *  a permission would send a cashier to a manager for a QR they did not
-   *  need, in the middle of a queue. */
-  it("does not say the pairing is gone for a role or a mistyped PIN", async () => {
-    const role = await refusalFrom(403, { error: { code: "forbidden", message: "no" } });
-    expect(role.outcome.kind).toBe("refused");
-
-    const pin = await refusalFrom(401, { error: { code: "auth_refused", message: "no" } });
-    expect(pin.outcome.kind).toBe("refused");
+  /** A refusal body the core did not write. A proxy, a captive portal or
+   *  a gateway answers its own page on the way out, and the phone reads
+   *  whatever that is for `.error.code`. Read as an object it throws on
+   *  the way into the screen; read loosely it finds a "code" that belongs
+   *  to somebody else's vocabulary, or is not a string at all. None of
+   *  those may end in "ask a manager for a new QR", so the answer has to
+   *  stay the plain one a 401 gets when nothing names a reason.
+   *
+   *  The row that discriminates is the numeric code: a body whose `error`
+   *  is a string or a page reaches the same answer through a blind read
+   *  too, because a string has no `.code` either. */
+  it.each([
+    ["a page from something in front of the server", "<html>Sign in to the Wi-Fi</html>"],
+    ["an error that is a word, not a fiche", { error: "device_refused" }],
+    ["a code that is not a string", { error: { code: 42 } }],
+  ])("does not read a code out of %s", async (_what, body) => {
+    const refusal = await refusalFrom(401, body);
+    expect(refusal.outcome).toEqual({ kind: "sign-in-again", say: { key: "error_sign_in_again" } });
+    expect(refusal.code).toBeNull();
   });
 });

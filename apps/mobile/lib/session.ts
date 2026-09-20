@@ -37,12 +37,36 @@ export async function saveSession(session: Session): Promise<void> {
   }
 }
 
+/** Whether what came back off the store is a session this build can use.
+ *
+ *  `JSON.parse` answers `any`, and asserting it into shape is what
+ *  CLAUDE.md bans `as` for. A blob half written, or written by a build
+ *  whose `Session` had different fields, would otherwise put `undefined`
+ *  into the Authorization headers of every guarded call, and the phone
+ *  would earn a 401 it could not explain to anyone. Read as "nobody is
+ *  signed in" instead, which sends the cashier to a PIN box. */
+function isSession(value: unknown): value is Session {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "deviceToken" in value &&
+    typeof value.deviceToken === "string" &&
+    "sessionToken" in value &&
+    typeof value.sessionToken === "string" &&
+    "name" in value &&
+    typeof value.name === "string" &&
+    "role" in value &&
+    typeof value.role === "string"
+  );
+}
+
 export async function loadSession(): Promise<Session | null> {
   if (memory !== undefined) return memory;
   try {
     const raw = await (await store()).getItem(STORAGE_KEY);
-    memory = raw ? (JSON.parse(raw) as Session) : null;
-    return memory ?? null;
+    const parsed: unknown = raw === null ? null : JSON.parse(raw);
+    memory = isSession(parsed) ? parsed : null;
+    return memory;
   } catch {
     memory = null;
     return null;

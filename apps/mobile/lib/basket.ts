@@ -15,7 +15,23 @@
 // only a preview: the amounts a document carries are the API's answer
 // (rule 2), and the ticket prints what the core rang.
 
-import { computeTotals, type RegimeDto, type Totals, type TotalsLine } from "@dzpos/shared";
+import {
+  computeTotals,
+  formatCentimes,
+  parseAmountToCentimes,
+  type RegimeDto,
+  type Totals,
+  type TotalsLine,
+} from "@dzpos/shared";
+
+/** Showing an amount is the shared package's job, and now the phone's too.
+ *
+ *  This file carried its own copy: the same split into dinars and centimes,
+ *  without the thousands grouping and without the safe-integer check. Two
+ *  spellings of how the product shows money, one of which nobody was
+ *  watching. Re-exported rather than removed, because the screens import it
+ *  from here and where it lives is not their business. */
+export { formatCentimes };
 
 /** The phone shows one price per product and sells whole units. */
 export type Product = {
@@ -64,19 +80,33 @@ export function priceBasket(cart: readonly CartLine[], regime: RegimeDto): Total
  * and the screen waits rather than posting an amount nobody handed over.
  * Accepts a comma as the decimal mark, which is what an Algerian keyboard
  * and an Algerian price tag both use.
+ *
+ * The digits are read by `parseAmountToCentimes`, digit by digit. This
+ * function used to do `Math.round(Number(trimmed) * 100)`, which is a float
+ * on the path to an amount and the first non-negotiable in CLAUDE.md. At
+ * Algerian prices it landed on the right integer every time, so it was a
+ * banned pattern and a second parser rather than a wrong total, and the
+ * architecture review of 2026-09-17 named it as both.
+ *
+ * The negative is this function's own rule and not the parser's. A price
+ * can be negative, an avoir is made of them; an amount handed across a
+ * counter cannot be.
  */
-export function readTendered(typed: string): number | null {
-  const trimmed = typed.trim().replace(",", ".");
-  if (trimmed === "") return null;
-  if (!/^\d+(\.\d{0,2})?$/.test(trimmed)) return null;
-  const centimes = Math.round(Number(trimmed) * 100);
-  return Number.isSafeInteger(centimes) ? centimes : null;
+/** The change the server worked out, or null if it did not answer one.
+ *
+ *  Checked because the phone's own `call<T>` hands a body straight back
+ *  without a schema, unlike `@dzpos/shared`'s client, and
+ *  `formatCentimes` throws on anything that is not a safe integer. A
+ *  `change_centimes` that arrived as a string or a float would take the
+ *  till screen down mid-sale, and the phone carries no error boundary, so
+ *  the whole app would go with it. Null instead: the change line is not
+ *  drawn, the sale is still rung, and the cashier reads the paper. */
+export function readChange(value: unknown): number | null {
+  return Number.isSafeInteger(value) && typeof value === "number" ? value : null;
 }
 
-/** The amount as the box should show it: whole dinars and centimes, with
- * the comma the rest of the app prints. */
-export function formatCentimes(centimes: number): string {
-  const sign = centimes < 0 ? "-" : "";
-  const abs = Math.abs(centimes);
-  return `${sign}${Math.floor(abs / 100)},${String(abs % 100).padStart(2, "0")}`;
+export function readTendered(typed: string): number | null {
+  const centimes = parseAmountToCentimes(typed);
+  if (centimes === null || centimes < 0) return null;
+  return centimes;
 }
