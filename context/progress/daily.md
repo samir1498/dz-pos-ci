@@ -97,3 +97,11 @@ type: 'daily'
 ## 2026-09-16 17:02 UTC
 
 - Pairing plan closed (PRs #97 QR scan, #98 settings rooms, #99 sign-in by name + four-digit PIN boxes + review fixes). Samir paired his phone and rang twelve coffees; ticket 2 in the shop file. Root cause of the day: the phone treated a wrong PIN as a lost pairing (both were 401 auth_refused); the device gate now answers device_refused. Standup 16 Sep and the reworked home board deployed. Demo loop opened: disk is at 60 GB, so the Remotion plan is unblocked; the phone will be recorded on an Android emulator via Maestro. (@pairing, @signin, @review, @report, @loop)
+## 2026-09-20 19:57 UTC
+
+- Merged the stored print language (#130). One `print_lang` key per shop in `preferences`, the service pair, `PUT`/`GET /settings/print-lang` behind `edit_settings`, and the desktop panel. Two holes the review found by mutation and both are closed: a preference read could drop its `shop_id` with all forty-seven preference and settings tests still green (the two-shop isolation test now lives in `crates/core/tests/preferences_service.rs`, outside the source walk that refuses a raw query under `crates/core/src/services/`), and a body with no `print_lang` at all cleared the shop's choice because serde fills a missing `Option` with `None`; the field is an option of an option now and a missing key is a 422.
+
+T3 is building on `feat/the-six-papers-read-the-shops-language`: the six fiscal routes read the setting. The plan's T1 page said the override would be `?lang=`, which cannot work, because every desktop caller already sends `?lang=<the UI language>` on all six routes, so the stored setting would never be reached. The override is a new optional `?print_lang=` instead and `lang` keeps meaning the language the caller asked in. Precedence: `?print_lang=`, then the stored setting, then `lang`. The plan file is being corrected in the same PR.
+
+Still open for Samir: whether changing the print language should write an audit row. It writes none today, matching the theme and the facture layout, and the case either way is in `set_print_lang`'s own doc. The thirty-two Arabic amount-in-words golden values are still unreviewed by a native speaker, and T3 is what makes a shop able to choose Arabic once and have every facture spell its total from them.
+

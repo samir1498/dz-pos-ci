@@ -12,12 +12,11 @@ tasks:
     status: 'done'
   - id: 'T2'
     desc: 'A print_lang key in preferences, the service pair that reads and writes it, the gated PUT route, the DTO and the settings panel beside the facture layout'
-    status: 'pending'
+    status: 'done'
   - id: 'T3'
     desc: 'The six document routes take ?lang= as an override and read the preference when it is absent; docs features.md 4 and 8 rewritten in the same PR'
     status: 'pending'
 ---
-
 # A print language the shop keeps
 
 `docs/features.md:18` has said since v1 that the UI language and the print
