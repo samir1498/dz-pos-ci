@@ -120,3 +120,41 @@ come in nine milestones.
 
 This is written down because it is the finding most likely to be
 rediscovered, and the second most likely to be fixed by reflex.
+
+## T8, the half that landed on 2026-09-20
+
+The phone's two non-negotiable breaches are closed (#118). `readTendered`
+calls `parseAmountToCentimes`, `formatCentimes` is re-exported from
+`@dzpos/shared` rather than copied, and the three `as` assertions are
+runtime guards. Type guards, not zod: the phone has no zod dependency and
+three small readers do not earn one. The one assertion left is the wire in
+`bodyOf<T>`, exempted in place with a comment.
+
+Four things that pass taught more than the fix did and are worth keeping:
+
+The formatter and the parser were coupled and neither knew it. The shared
+formatter groups thousands with U+202F, and the phone's old regex rejected
+that, so moving one without the other would have killed the Exact button on
+every basket over 1000 dinars. A round trip through both is pinned in
+`apps/mobile/lib/basket.test.ts`.
+
+A guard can erase what it was written to protect. The first queue check
+demanded a `sessionToken` key, and that field arrived with the Expo SDK 57
+rebuild (838e4ee), so a sale rung offline before that update would have
+been dropped on the first read after it, with nothing in the queue count to
+say it had gone. A missing signer is filled in as null.
+
+`formatCentimes` throws on anything that is not a safe integer, and the
+phone's own `call<T>` hands a body back with no schema behind it. Any
+screen that formats a number straight off the wire is one server bug away
+from taking the till down, and the phone carries no error boundary. The
+till's change now goes through `readChange` first.
+
+The test lens caught both blob fixtures short of several fields at once, so
+deleting the check the test named left it green. Mutation confirmed it. A
+row per field is the shape that holds.
+
+Still open in T8: `suppliers.tsx` at 1086 lines becomes `routes/-suppliers/`,
+and `PAYMENT_METHODS` plus `supplierBalanceLabel` move to `components/`
+instead of sitting in both `suppliers.tsx:73-80` and
+`-customers/parts.tsx:24,49`. That half is also T10's largest file.
