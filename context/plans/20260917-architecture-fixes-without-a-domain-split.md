@@ -21,7 +21,7 @@ tasks:
     status: 'pending'
   - id: 'T5'
     desc: 'services/stock.rs:12 calls services::audit::record instead of repos::audit, so the audit row gets the shop clock'
-    status: 'pending'
+    status: 'done'
   - id: 'T6'
     desc: 'routes/products.rs:34 redact_cost: the permission decision moves out of the handler, or the page says why this one stays and gates.rs stops citing it as the thing route gating avoids'
     status: 'done'
