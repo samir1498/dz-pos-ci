@@ -1,7 +1,7 @@
 ---
 title: 'Invoice layouts a shop can choose'
 slug: 'invoice-layouts-a-shop-can-choose'
-status: 'active'
+status: 'done'
 category: 'feature'
 created: 20260917
 tldr: 'Lumina ships eleven facture layouts plus an A5 and a thermal one; we ship a single A4 with no way to pick another. Build the picker first, then three more layouts, and let the golden harness that already parses the amounts back out of each file keep the totals honest.'
@@ -12,13 +12,13 @@ tasks:
     status: 'done'
   - id: 'T2'
     desc: 'The layout registry and the shop setting: a print_layout value, render_facture_with taking a layout, the DTO, the route and the settings picker. No new template; the default stays today A4 so every existing golden holds byte for byte'
-    status: 'pending'
+    status: 'done'
   - id: 'T3'
     desc: 'facture_compact_a4.html: a denser A4 that fits more lines on a sheet with the fiscal block intact. Full golden set, six cases by three languages'
-    status: 'pending'
+    status: 'done'
   - id: 'T4'
     desc: 'facture_a5.html on the half sheet. Paper::A5 already exists and only sets the CSS page size; this is the layout that fits inside it. Reduced golden set: plain, cash, avoir, by three languages'
-    status: 'pending'
+    status: 'done'
   - id: 'T5'
     desc: 'facture_80mm.html, a facture on the roll, browser printable. Reduced golden set by three languages. This alone closes T5'
     status: 'done'
@@ -110,3 +110,30 @@ Delivery notes stay out for the reason the reference page gives. Décret
 05-468 art. 14-17 allows a bon de livraison only alongside a facture
 récapitulative and a wilaya authorisation, so closing that gap means building
 both, not adding a template.
+
+## Closed, 2026-09-20
+
+Every task but the parked one is in. The statuses above said `pending` long
+after the work merged, which is what this section is here to stop happening
+again: the check was against the files, not against the plan.
+
+What is on disk, and what proves each one:
+
+- The registry and the setting: `FactureLayout` in
+  `crates/core/src/print/layout.rs`, `FactureLayoutDto` in
+  `crates/api/src/dto/settings.rs`, the route reading the shop's choice at
+  `crates/api/src/routes/sales.rs:295`, and the picker in
+  `apps/desktop/src/components/settings/FactureLayoutPanel.tsx`.
+- Four templates: `facture_a4.html`, `facture_compact_a4.html`,
+  `facture_half_sheet.html`, `facture_roll_80mm.html`.
+- Goldens: 18 for A4 and 18 for the compact A4, six cases by three
+  languages each; 9 each for the half sheet and the roll, three cases by
+  three languages, which is the reduced set the plan asked for.
+
+One name drifted from the plan: T4 is written here as `facture_a5.html` and
+shipped as `facture_half_sheet.html`, because the layout is about the half
+sheet rather than about the paper name, and `Paper::A5` already meant
+something narrower.
+
+T7, the 80mm facture down the ESC/POS path, stays parked on purpose. The
+shop has a printable roll layout without it.
