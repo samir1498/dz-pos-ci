@@ -1,7 +1,7 @@
 ---
 title: 'The phone in three languages'
 slug: 'the-phone-in-three-languages'
-status: 'active'
+status: 'done'
 category: 'feature'
 created: 20260917
 tldr: 'The mobile app has literal English in its JSX in a product whose premise is French, English and Arabic. Give it dictionaries in packages/shared, in the shape Samir asked for, domain objects behind a barrel, and let the desktop migrate to the same shape later instead of moving five hundred keys this weekend.'
@@ -24,7 +24,7 @@ tasks:
     status: 'done'
   - id: 'T6'
     desc: 'A record from the core error codes to keys on the phone, the shape apps/desktop/src/lib/fields.tsx has. Until it exists a 422 tells the cashier only its status number'
-    status: 'pending'
+    status: 'done'
 acceptance:
   - 'Every string a cashier can read on the phone comes from a dictionary'
   - 'The phone in Arabic lays out right to left, proven on a real device, not only in a test'
@@ -149,3 +149,29 @@ The desktop's migration off JSON, which is the follow-up this makes cheap.
 Translating the printed documents, which already have their own strings and
 their own reason for being separate: a headless server prints the same paper
 with no browser and no React in it.
+
+## Closed 2026-09-20
+
+All six tasks merged. T6 shipped as #122: `apps/mobile/lib/errors.ts` maps
+every code the core and the API can emit to a sentence, and
+`apps/mobile/lib/errors.test.ts` walks `CoreError::code` and `ApiError::parts`
+so the map cannot go green on a code the server grew after it was written.
+
+Two things the task found and did not fix, both written at the lines they
+affect:
+
+- `credit_limit` and `party_ids` drop the figures the server sends with them,
+  because `errorIn` in `lib/api.ts` reads only `code` and `message`. Nothing
+  is affected today: the till rings cash and `useRing` sends no `customer_id`,
+  so neither code can be reached from the phone. The figures are the first
+  thing to add the day the phone sells on credit.
+- On a 409 the phone drops the queued sale and shows a sentence, so the
+  cashier sees no receipt and no change. The core's own message says to
+  resend the same key and read the winner's sale, which is a shape change to
+  `settle` in `features/till/useRing.ts`. The sentence now tells the cashier
+  the sale is already rung rather than to try again, which is what the old
+  one said and what would have rung a second sale.
+
+The phone's own dictionary keys are named for what they say: the 409 key is
+`error_sale_already_rung`, not `error_conflict`, because the desktop keeps a
+generic `error_conflict` of its own in `apps/desktop/src/i18n`.
