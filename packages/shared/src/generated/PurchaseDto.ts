@@ -15,7 +15,14 @@ supplier_document_number: string | null,
 /**
  * `YYYY-MM-DD` on the shop's calendar.
  */
-purchase_date: string, due_date: string | null, transport_centimes: number, extra_costs_centimes: number, status: PurchaseStatusDto, user_id: number, note: string | null, 
+purchase_date: string, due_date: string | null, transport_centimes: number, extra_costs_centimes: number, 
+/**
+ * The two columns above as one amount, added in the core. The screens
+ * show what the goods cost to get here under one heading, and a screen
+ * that added the two itself would be a second answer to a question the
+ * core already answers — and an unchecked one.
+ */
+extras_centimes: number, status: PurchaseStatusDto, user_id: number, note: string | null, 
 /**
  * `YYYY-MM-DD HH:MM:SS`, the moment the row was written.
  */

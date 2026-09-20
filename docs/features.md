@@ -94,7 +94,14 @@ quantity, unit cost), transport and extra costs, amount paid now, due date
 for the rest. The supplier has to be one the shop still buys from: a closed
 fiche refuses an order and goes on taking payments. A product is named once
 on an order, because the cost a delivery leaves on the product has to name
-one line.
+one line. Transport and the other extra costs are two columns and one figure
+on a screen, so the API answers their sum beside them
+(`PurchaseDto.extras_centimes`, added with checked arithmetic in the core;
+`the_extras_are_answered_as_one_amount_by_every_route_that_names_an_order`
+drives all seven routes that answer an order).
+Nothing is charged on it and no line moves: it is there so that a screen
+showing what the goods cost to get here prints an amount the core added
+rather than adding two of its own.
 
 Money handed over as the order is written is a payment like any other, so it
 settles the supplier's oldest open order first (§2) and not necessarily the

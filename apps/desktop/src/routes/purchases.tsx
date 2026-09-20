@@ -257,7 +257,7 @@ function PurchaseTable({
       id: "extra",
       header: t("col_extra_costs"),
       money: true,
-      cell: (p) => <Money centimes={p.transport_centimes + p.extra_costs_centimes} />,
+      cell: (p) => <Money centimes={p.extras_centimes} />,
     },
     {
       id: "status",

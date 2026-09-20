@@ -48,6 +48,10 @@ export const purchaseSchema = z.object({
   due_date: day.nullable(),
   transport_centimes: exactInteger,
   extra_costs_centimes: exactInteger,
+  /** The two above as one amount, added in the core. Nothing here checks it
+   *  against them: a screen that re-added the columns to see whether the API
+   *  agreed would be the second answer this field exists to remove. */
+  extras_centimes: exactInteger,
   status: purchaseStatusSchema,
   user_id: z.number(),
   note: z.string().max(200).nullable(),

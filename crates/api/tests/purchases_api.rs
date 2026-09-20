@@ -190,6 +190,11 @@ async fn the_extra_costs_land_on_the_lines_and_the_delivery_moves_stock_and_debt
     assert_eq!(status, StatusCode::CREATED, "{made}");
     // 10 000 centimes over ten units is 1 000 a unit on top of 20 000.
     assert_eq!(made["lines"][0]["landed_unit_cost_centimes"], 21_000);
+    // The two cost columns as they were sent, and the one amount the core
+    // added out of them: 100,00 of transport and nothing else is 100,00.
+    assert_eq!(made["purchase"]["transport_centimes"], 10_000);
+    assert_eq!(made["purchase"]["extra_costs_centimes"], 0);
+    assert_eq!(made["purchase"]["extras_centimes"], 10_000);
     assert_eq!(made["purchase"]["status"], "received");
     assert_eq!(made["receipts"][0]["series"], "reception:2026");
     assert_eq!(made["receipts"][0]["number"], 1);
@@ -275,6 +280,128 @@ async fn a_return_takes_the_goods_and_the_debt_back_off() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
     assert_eq!(refused["error"]["code"], "validation");
     assert_eq!(on_hand(&h.app, product).await, 7_000);
+}
+
+/// The two cost columns cross as they are stored, and their sum crosses with
+/// them: the screens print what the goods cost to get here under one heading,
+/// and before T9 two components added the two columns inside their JSX. The
+/// expected figures here are written from the rule — migration 000008 keeps
+/// transport and the other extra costs in two columns because they are two
+/// things agreed once for the whole order — and not read back off the answer.
+#[tokio::test]
+async fn the_extras_are_answered_as_one_amount_by_every_route_that_names_an_order() {
+    let h = harness();
+    let supplier = a_supplier(&h.app, "Sarl Amrani").await;
+    let product = a_product(&h.app, "Farine 5kg").await;
+
+    // 100,00 of transport and 25,00 of other costs is 125,00.
+    let mut order = an_order(supplier, product);
+    order["transport_centimes"] = json!(10_000);
+    order["extra_costs_centimes"] = json!(2_500);
+    let (status, made) = call(&h.app, "POST", "/purchases", Some(order)).await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+    assert_eq!(made["purchase"]["extras_centimes"], 12_500);
+
+    // The same order read back, and read again in the list: one answer, not
+    // three chances to disagree.
+    let id = made["purchase"]["id"].as_i64().unwrap();
+    let (_, one) = call(&h.app, "GET", &format!("/purchases/{id}"), None).await;
+    assert_eq!(one["purchase"]["extras_centimes"], 12_500);
+    let (_, all) = call(&h.app, "GET", "/purchases", None).await;
+    assert_eq!(all[0]["extras_centimes"], 12_500);
+
+    // An order that cost nothing to bring in answers zero, not nothing: the
+    // list prints a figure on every row.
+    let (_, free) = call(
+        &h.app,
+        "POST",
+        "/purchases",
+        Some(an_order(supplier, product)),
+    )
+    .await;
+    assert_eq!(free["purchase"]["transport_centimes"], 0);
+    assert_eq!(free["purchase"]["extra_costs_centimes"], 0);
+    assert_eq!(free["purchase"]["extras_centimes"], 0);
+
+    // Only one of the two set is the common shape, and the empty column must
+    // not take the other one with it.
+    let mut carried = an_order(supplier, product);
+    carried["extra_costs_centimes"] = json!(2_500);
+    let (_, carried) = call(&h.app, "POST", "/purchases", Some(carried)).await;
+    assert_eq!(carried["purchase"]["extras_centimes"], 2_500);
+
+    // The four routes that change an order answer it too, each through its
+    // own conversion, and a conversion nothing calls is where a wrong figure
+    // would sit unnoticed. Driving them is the only way to tell.
+    let mut moving = an_order(supplier, product);
+    moving["transport_centimes"] = json!(10_000);
+    moving["extra_costs_centimes"] = json!(2_500);
+    let (_, moving) = call(&h.app, "POST", "/purchases", Some(moving)).await;
+    let moving_id = moving["purchase"]["id"].as_i64().unwrap();
+    let moving_line = moving["lines"][0]["id"].as_i64().unwrap();
+
+    let (status, received) = call(
+        &h.app,
+        "POST",
+        &format!("/purchases/{moving_id}/receipts"),
+        Some(json!({ "lines": [{ "purchase_line_id": moving_line, "qty_milli": 6_000 }] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{received}");
+    assert_eq!(received["purchase"]["extras_centimes"], 12_500);
+
+    let (status, returned) = call(
+        &h.app,
+        "POST",
+        &format!("/purchases/{moving_id}/returns"),
+        Some(json!({ "lines": [{ "purchase_line_id": moving_line, "qty_milli": 1_000 }] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{returned}");
+    assert_eq!(returned["purchase"]["extras_centimes"], 12_500);
+
+    let (status, short) = call(
+        &h.app,
+        "POST",
+        &format!("/purchases/{moving_id}/close-short"),
+        Some(json!({ "reason": "le fournisseur ne livre plus" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{short}");
+    assert_eq!(short["purchase"]["extras_centimes"], 12_500);
+
+    // A cancellation only succeeds before a delivery, so it needs an order of
+    // its own. Until this block nothing in the suite reached that success
+    // path: the one other `/cancel` call is the refusal after a delivery.
+    let mut doomed = an_order(supplier, product);
+    doomed["transport_centimes"] = json!(10_000);
+    doomed["extra_costs_centimes"] = json!(2_500);
+    let (_, doomed) = call(&h.app, "POST", "/purchases", Some(doomed)).await;
+    let doomed_id = doomed["purchase"]["id"].as_i64().unwrap();
+    let (status, cancelled) = call(
+        &h.app,
+        "POST",
+        &format!("/purchases/{doomed_id}/cancel"),
+        Some(json!({ "reason": "commande en double" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{cancelled}");
+    assert_eq!(cancelled["purchase"]["extras_centimes"], 12_500);
+}
+
+/// A cost cannot be negative: the column is `INTEGER >= 0` in migration 000008
+/// and the service refuses the field before the row is written, so the sum
+/// above is never asked to answer for one.
+#[tokio::test]
+async fn a_negative_cost_is_refused_on_its_own_field_and_never_reaches_the_sum() {
+    let h = harness();
+    let supplier = a_supplier(&h.app, "Sarl Amrani").await;
+    let product = a_product(&h.app, "Farine 5kg").await;
+    let mut order = an_order(supplier, product);
+    order["extra_costs_centimes"] = json!(-1);
+    let (status, refused) = call(&h.app, "POST", "/purchases", Some(order)).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+    assert_eq!(refused["error"]["field"], "extra_costs_centimes");
 }
 
 #[tokio::test]

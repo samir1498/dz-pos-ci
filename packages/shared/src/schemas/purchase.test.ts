@@ -26,6 +26,9 @@ const purchase: PurchaseDto = {
   due_date: "2026-10-10",
   transport_centimes: 50_000,
   extra_costs_centimes: 12_500,
+  // 500,00 and 125,00 of other costs; the API answers the 625,00 and the
+  // screens print it.
+  extras_centimes: 62_500,
   status: "partially_received",
   user_id: 1,
   note: null,
@@ -104,6 +107,15 @@ describe("purchase", () => {
     expect(
       purchaseSchema.safeParse({ ...purchase, transport_centimes: 50_000.5 }).success,
     ).toBe(false);
+    expect(purchaseSchema.safeParse({ ...purchase, extras_centimes: 62_500.5 }).success).toBe(
+      false,
+    );
+  });
+
+  test("an answer without the extras the core added is refused", () => {
+    const without: Record<string, unknown> = { ...purchase };
+    delete without.extras_centimes;
+    expect(purchaseSchema.safeParse(without).success).toBe(false);
   });
 });
 

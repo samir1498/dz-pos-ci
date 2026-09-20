@@ -48,7 +48,11 @@ pub async fn list(
     let found = state
         .blocking(move |c| service::list(c, shop, status.map(Into::into), supplier_id))
         .await?;
-    Ok(Json(found.into_iter().map(PurchaseDto::from).collect()))
+    let answered: Vec<PurchaseDto> = found
+        .into_iter()
+        .map(PurchaseDto::try_from)
+        .collect::<Result<_, ApiError>>()?;
+    Ok(Json(answered))
 }
 
 /// One order with its lines and its deliveries.
@@ -59,7 +63,7 @@ pub async fn get_one(
     let id = path_id(id)?;
     let shop = state.shop_id;
     let found = state.blocking(move |c| service::get(c, shop, id)).await?;
-    Ok(Json(PurchaseDetailDto::from(found)))
+    Ok(Json(PurchaseDetailDto::try_from(found)?))
 }
 
 /// An order, its lines, and when the goods came with the paper the whole
@@ -78,7 +82,10 @@ pub async fn create(
     let made = state
         .blocking(move |c| service::save(c, shop, user, new))
         .await?;
-    Ok((StatusCode::CREATED, Json(PurchaseDetailDto::from(made))))
+    Ok((
+        StatusCode::CREATED,
+        Json(PurchaseDetailDto::try_from(made)?),
+    ))
 }
 
 /// A delivery against an order. The stock rises and the supplier's account
@@ -98,7 +105,10 @@ pub async fn receive(
     let after = state
         .blocking(move |c| service::receive(c, shop, user, id, lines, note))
         .await?;
-    Ok((StatusCode::CREATED, Json(PurchaseDetailDto::from(after))))
+    Ok((
+        StatusCode::CREATED,
+        Json(PurchaseDetailDto::try_from(after)?),
+    ))
 }
 
 /// Goods handed back to the supplier. It writes no document: the stock
@@ -120,7 +130,10 @@ pub async fn returns(
     let after = state
         .blocking(move |c| service::return_to_supplier(c, shop, user, id, lines, note))
         .await?;
-    Ok((StatusCode::CREATED, Json(PurchaseDetailDto::from(after))))
+    Ok((
+        StatusCode::CREATED,
+        Json(PurchaseDetailDto::try_from(after)?),
+    ))
 }
 
 /// An order that never happened. Only while nothing has arrived against it.
@@ -137,7 +150,7 @@ pub async fn cancel(
     let after = state
         .blocking(move |c| service::cancel(c, shop, user, id, dto.reason))
         .await?;
-    Ok(Json(PurchaseDetailDto::from(after)))
+    Ok(Json(PurchaseDetailDto::try_from(after)?))
 }
 
 /// An order the rest of which will never come. What arrived stays; the rest
@@ -157,7 +170,7 @@ pub async fn close_short(
     let after = state
         .blocking(move |c| service::close_short(c, shop, user, id, dto.reason))
         .await?;
-    Ok(Json(PurchaseDetailDto::from(after)))
+    Ok(Json(PurchaseDetailDto::try_from(after)?))
 }
 
 /// `/purchases/abc` leaves in the same envelope as every other refusal rather

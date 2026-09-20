@@ -229,7 +229,7 @@ function PurchaseDetail({
               </Fact>
               {seeCostAndMargin ? (
                 <Fact label={t("col_extra_costs")}>
-                  <Money centimes={purchase.transport_centimes + purchase.extra_costs_centimes} />
+                  <Money centimes={purchase.extras_centimes} />
                 </Fact>
               ) : null}
             </dl>

@@ -97,7 +97,12 @@ const farine: ProductDto = {
 };
 
 /** Ten ordered, four in, one already back, with 50 000 centimes of transport
- *  landed on the line: 20 000 a unit plus 5 000 of transport. */
+ *  landed on the line: 20 000 a unit plus 5 000 of transport.
+ *
+ *  `extras_centimes` is 62 500 on purpose, which is not this order's transport
+ *  plus its extra costs. The API answers that field and the two screens print
+ *  it; a screen adding the two columns itself would print 500,00 here, and the
+ *  two assertions on 625,00 below are what catches it. */
 const partly: PurchaseDetailDto = {
   purchase: {
     id: 8,
@@ -108,6 +113,7 @@ const partly: PurchaseDetailDto = {
     due_date: null,
     transport_centimes: 50_000,
     extra_costs_centimes: 0,
+    extras_centimes: 62_500,
     status: "partially_received",
     user_id: 1,
     note: null,
@@ -259,7 +265,8 @@ describe("the list of orders", () => {
       "2026-09-10",
       "Sarl Amrani",
       "BL-77",
-      "500,00",
+      // The extras the API answered, not the two columns added here.
+      "625,00",
       fr.purchase_status_partially_received,
       fr.purchases_open,
     ]);
@@ -314,6 +321,18 @@ describe("one order", () => {
     expect(within(table).queryByRole("columnheader", { name: fr.col_unit_cost })).not.toBeInTheDocument();
     expect(within(table).queryByRole("columnheader", { name: fr.col_landed_cost })).not.toBeInTheDocument();
     expect(screen.queryByText(fr.col_extra_costs)).not.toBeInTheDocument();
+  });
+
+  /** The counterpart of the list's own extras cell. Both screens showed the
+   *  transport plus the extra costs added in JSX until T9; the stub answers a
+   *  figure that is neither column nor their sum, so a screen that went back to
+   *  adding them reads 500,00 here and this fails. */
+  test("the extra costs are the figure the API answered", async () => {
+    mountOrder();
+    const label = await screen.findByText(fr.col_extra_costs);
+    // `Fact` renders <dt>{label}</dt><dd>{children}</dd>, so the amount is the
+    // element right after the label.
+    expect(label.nextElementSibling).toHaveTextContent("625,00");
   });
 
   test("the delivery notes are listed with the number they took", async () => {

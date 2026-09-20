@@ -59,6 +59,11 @@ pub struct PurchaseDto {
     pub due_date: Option<String>,
     pub transport_centimes: i64,
     pub extra_costs_centimes: i64,
+    /// The two columns above as one amount, added in the core. The screens
+    /// show what the goods cost to get here under one heading, and a screen
+    /// that added the two itself would be a second answer to a question the
+    /// core already answers — and an unchecked one.
+    pub extras_centimes: i64,
     pub status: PurchaseStatusDto,
     pub user_id: i32,
     pub note: Option<String>,
@@ -66,9 +71,12 @@ pub struct PurchaseDto {
     pub created_at: String,
 }
 
-impl From<Purchase> for PurchaseDto {
-    fn from(p: Purchase) -> Self {
-        PurchaseDto {
+impl TryFrom<Purchase> for PurchaseDto {
+    type Error = ApiError;
+
+    fn try_from(p: Purchase) -> Result<Self, ApiError> {
+        let extras = p.extras().map_err(ApiError::from)?;
+        Ok(PurchaseDto {
             id: p.id,
             shop_id: p.shop_id,
             supplier_id: p.supplier_id,
@@ -77,11 +85,12 @@ impl From<Purchase> for PurchaseDto {
             due_date: p.due_date,
             transport_centimes: p.transport.as_centimes(),
             extra_costs_centimes: p.extra_costs.as_centimes(),
+            extras_centimes: extras.as_centimes(),
             status: p.status.into(),
             user_id: p.user_id,
             note: p.note,
             created_at: p.created_at.format(DATE_TIME_FORMAT).to_string(),
-        }
+        })
     }
 }
 
@@ -153,10 +162,12 @@ pub struct PurchaseDetailDto {
     pub receipts: Vec<PurchaseReceiptDto>,
 }
 
-impl From<PurchaseView> for PurchaseDetailDto {
-    fn from(v: PurchaseView) -> Self {
-        PurchaseDetailDto {
-            purchase: PurchaseDto::from(v.purchase),
+impl TryFrom<PurchaseView> for PurchaseDetailDto {
+    type Error = ApiError;
+
+    fn try_from(v: PurchaseView) -> Result<Self, ApiError> {
+        Ok(PurchaseDetailDto {
+            purchase: PurchaseDto::try_from(v.purchase)?,
             lines: v.lines.into_iter().map(PurchaseLineDto::from).collect(),
             receipts: v
                 .receipts
@@ -178,7 +189,7 @@ impl From<PurchaseView> for PurchaseDetailDto {
                         .collect(),
                 })
                 .collect(),
-        }
+        })
     }
 }
 
