@@ -7,4 +7,4 @@
  * which tray the cashier reached for and the shop does not; the layout is
  * chosen once and every facture follows it.
  */
-export type FactureLayoutDto = "standard" | "compact" | "half_sheet";
+export type FactureLayoutDto = "standard" | "compact" | "half_sheet" | "roll_80mm";

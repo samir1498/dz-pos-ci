@@ -29,12 +29,14 @@ const LAYOUT_LABEL: Record<FactureLayoutDto, Key> = {
   standard: "facture_layout_standard",
   compact: "facture_layout_compact",
   half_sheet: "facture_layout_half_sheet",
+  roll_80mm: "facture_layout_roll_80mm",
 };
 
 const LAYOUT_HINT: Record<FactureLayoutDto, Key> = {
   standard: "facture_layout_standard_hint",
   compact: "facture_layout_compact_hint",
   half_sheet: "facture_layout_half_sheet_hint",
+  roll_80mm: "facture_layout_roll_80mm_hint",
 };
 
 /** A layout the server offered that this build has no wording for is left

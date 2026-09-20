@@ -75,6 +75,7 @@ export const factureLayoutSchema = z.enum([
   "standard",
   "compact",
   "half_sheet",
+  "roll_80mm",
 ]) satisfies z.ZodType<FactureLayoutDto>;
 type _FactureLayout = Assert<Matches<FactureLayoutDto, typeof factureLayoutSchema>>;
 

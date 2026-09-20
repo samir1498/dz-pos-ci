@@ -285,6 +285,9 @@ fn render_in(layout: FactureLayout, view: FactureView) -> Result<String, CoreErr
         FactureLayout::HalfSheet => HalfSheetFactureView { facture: view }
             .render()
             .map_err(CoreError::from),
+        FactureLayout::Roll80 => Roll80FactureView { facture: view }
+            .render()
+            .map_err(CoreError::from),
     }
 }
 
@@ -301,5 +304,15 @@ pub(super) struct CompactFactureView {
 #[derive(Template)]
 #[template(path = "facture_half_sheet.html")]
 pub(super) struct HalfSheetFactureView {
+    pub(super) facture: FactureView,
+}
+
+/// The 80 mm roll. Same view again, and this is the layout that shows why
+/// the view is shared rather than copied: its markup is its own, so the only
+/// thing keeping it saying what the other three say is that it is filled
+/// from the same fields.
+#[derive(Template)]
+#[template(path = "facture_roll_80mm.html")]
+pub(super) struct Roll80FactureView {
     pub(super) facture: FactureView,
 }

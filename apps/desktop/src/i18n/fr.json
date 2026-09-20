@@ -764,5 +764,7 @@
   "facture_layout_compact": "Compact",
   "facture_layout_compact_hint": "Les mêmes mentions, en plus serré : un long panier tient sur une feuille.",
   "facture_layout_half_sheet": "Demi-feuille (A5)",
-  "facture_layout_half_sheet_hint": "Une facture remise au comptoir avec la marchandise. Dessinée pour le A5, et imprimée sur A5 même si l'impression demande du A4."
+  "facture_layout_half_sheet_hint": "Une facture remise au comptoir avec la marchandise. Dessinée pour le A5, et imprimée sur A5 même si l'impression demande du A4.",
+  "facture_layout_roll_80mm": "Rouleau 80 mm",
+  "facture_layout_roll_80mm_hint": "La facture sur le rouleau de la caisse. Toutes les mentions légales y sont, en une colonne : le client repart avec sa facture sans changer d'imprimante."
 }

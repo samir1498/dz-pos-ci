@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<title>INVOICE FA-2026-000042</title>
+<style>
+@page { size: 80mm auto; margin: 0 }
+body { margin: 0; background: #fff; color: #000 }
+.doc { inline-size: 72mm; margin: 0 auto; padding: 4mm 0; font: 11px/1.4 "DejaVu Sans", Arial, sans-serif }
+.center { text-align: center }
+.head h1 { font-size: 14px; margin: 0 0 1mm; text-align: center }
+.who { font-weight: 700 }
+.name { font-size: 13px; font-weight: 700 }
+.label { color: #333 }
+.dashed { border-block-start: 1px dashed #000; margin-block: 2mm }
+.rule { border-block-start: 1px solid #000; margin-block: 2mm }
+.row { display: flex; justify-content: space-between; gap: 3mm }
+.row .label { overflow-wrap: anywhere }
+/* Bidi. A value the shop did not write in Arabic keeps its own order on an
+Arabic page: a phone, an identifier with a space in it, a date beside a time,
+a period running from one day to another, a signed amount, a quantity against
+a unit price. Each of those is one left-to-right run, and the neutral
+characters inside it (a space, a slash, a minus sign) belong to that run and
+not to the Arabic line around it. Without this a phone prints back to front, a
+negative amount carries its sign on the far side, and a period reads from its
+last day to its first. The isolation sits on the inline span and never on the
+box around it, so a cell and a line keep the alignment the page gives them.
+Text the shop typed is wrapped in bdi instead, because an address or a product
+name can be in either script and bdi takes its direction from what is in it.
+Checked with fribidi against these goldens, 2026-09-12. */
+.amount, .num, .qty, .rate { direction: ltr; unicode-bidi: isolate }
+.cur { margin-inline-start: .4em }
+.party { margin-block-start: 2mm }
+.party h2 { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 1mm }
+.item { margin-block-start: 1.5mm }
+.item-name { overflow-wrap: anywhere }
+.item-detail { color: #333 }
+.net { font-weight: 700; font-size: 13px }
+.words { margin-block-start: 2mm }
+/* The cancelled mark is a banner and not a diagonal stamp. A rotated word
+across 72 mm of roll covers the amounts instead of sitting behind them, and a
+reprint whose figures cannot be read is worse than one whose mark is plain. */
+.annulee { margin-block: 2mm; border: 2px solid #000; padding: 1.5mm; text-align: center; font-size: 15px; font-weight: 700; letter-spacing: .12em }
+.cancelled { margin-block-start: 1mm; font-weight: 700 }
+.notice { margin: 2mm 0 0; border: 1px solid #000; padding: 1.5mm; font-weight: 700; text-align: center }
+.sign { margin-block-start: 5mm }
+.sign div { border-block-start: 1px solid #000; padding-block-start: 1.5mm; margin-block-start: 8mm }
+</style>
+</head>
+<body>
+<article class="doc">
+<header class="head">
+<h1>INVOICE</h1>
+<div class="center name"><bdi>Mon magasin</bdi></div>
+<div class="dashed"></div>
+<div class="row"><span class="num">FA-2026-000042</span><span class="num">09/09/2026</span></div>
+</header>
+<div class="dashed"></div>
+<section class="party">
+<h2>Seller</h2>
+<div class="who"><bdi>Mon magasin</bdi></div>
+<div><bdi>12 rue Didouche Mourad, Alger</bdi></div>
+<div><span class="num">0555 12 34 56</span></div>
+<div><span class="label">RC</span> <span class="num">16/00-1234567 B 25</span></div>
+<div><span class="label">NIF</span> <span class="num">000216001234567</span></div>
+<div><span class="label">NIS</span> <span class="num">000216001234567 00</span></div>
+<div><span class="label">AI</span> <span class="num">16001234567</span></div>
+</section>
+<section class="party">
+<h2>Customer</h2>
+<div class="who"><bdi>Yacine Meziane</bdi></div>
+<div><bdi>14 rue des Frères Bouadou, Bir Mourad Raïs</bdi></div>
+</section>
+<div class="dashed"></div>
+<div class="item">
+<div class="item-name"><bdi>Huile &#60;Elio&#62; &#38; Co 5 L</bdi></div>
+<div class="row">
+<span class="item-detail"><span class="qty qty-line">2</span> × <span class="amount amount-unit-price">150,00</span> · <span class="rate rate-line">19 %</span></span>
+<span><span class="amount amount-line">300,00</span></span>
+</div>
+</div>
+<div class="item">
+<div class="item-name"><bdi>Farine</bdi></div>
+<div class="row">
+<span class="item-detail"><span class="qty qty-line">1,5</span> × <span class="amount amount-unit-price">320,00</span> · <span class="rate rate-line">9 %</span></span>
+<span><span class="amount amount-line">480,00</span></span>
+</div>
+</div>
+<div class="item">
+<div class="item-name"><bdi>Pain</bdi></div>
+<div class="row">
+<span class="item-detail"><span class="qty qty-line">1</span> × <span class="amount amount-unit-price">80,00</span> · <span class="rate rate-line">0 %</span> · Discount <span class="amount amount-line-discount">-10,00</span></span>
+<span><span class="amount amount-line">70,00</span></span>
+</div>
+</div>
+<div class="rule"></div>
+<div class="row"><span>Total excl. tax</span><span><span class="amount amount-total">850,00</span><span class="cur">DZD</span></span></div>
+<div class="row"><span>Discount</span><span><span class="amount amount-discount">-20,00</span><span class="cur">DZD</span></span></div>
+<div class="row"><span>Subtotal excl. tax</span><span><span class="amount amount-subtotal">830,00</span><span class="cur">DZD</span></span></div>
+<div class="row"><span class="label">VAT <span class="rate rate-tva">0 %</span> Base <span class="amount amount-tva-base">68,36</span></span><span><span class="amount amount-tva">0,00</span><span class="cur">DZD</span></span></div>
+<div class="row"><span class="label">VAT <span class="rate rate-tva">9 %</span> Base <span class="amount amount-tva-base">468,69</span></span><span><span class="amount amount-tva">42,18</span><span class="cur">DZD</span></span></div>
+<div class="row"><span class="label">VAT <span class="rate rate-tva">19 %</span> Base <span class="amount amount-tva-base">292,95</span></span><span><span class="amount amount-tva">55,66</span><span class="cur">DZD</span></span></div>
+<div class="row"><span>Total incl. tax</span><span><span class="amount amount-total-ttc">927,84</span><span class="cur">DZD</span></span></div>
+<div class="row"><span>Stamp duty</span><span><span class="amount amount-stamp">10,00</span><span class="cur">DZD</span></span></div>
+<div class="rule"></div>
+<div class="row net"><span>Net to pay</span><span><span class="amount amount-net-to-pay">937,84</span><span class="cur">DZD</span></span></div>
+<p class="words">This invoice is closed at the sum of <strong class="in-words">nine hundred and thirty-seven dinars and eighty-four centimes</strong></p>
+<div class="dashed"></div>
+<section class="party">
+<h2>Payment mode</h2>
+<div>Cash</div>
+</section>
+<section class="sign">
+<div>Seller · Stamp and signature</div>
+<div>Customer · Stamp and signature</div>
+</section>
+</article>
+</body>
+</html>

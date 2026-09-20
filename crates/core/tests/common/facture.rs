@@ -227,6 +227,10 @@ pub(crate) fn half_sheet_goldens_dir() -> PathBuf {
     super::goldens_dir("facture_half_sheet")
 }
 
+pub(crate) fn roll_goldens_dir() -> PathBuf {
+    super::goldens_dir("facture_roll_80mm")
+}
+
 /// The seller as a facture prints them: the four identifiers décret 05-468
 /// art. 3 asks of the issuer, unlike the ticket fixture which carries two.
 pub(crate) fn seller() -> SellerBlock {
@@ -876,6 +880,7 @@ pub(crate) fn each_language_of_a_layout(case: Case, layout: FactureLayout) {
         FactureLayout::Standard => goldens_dir(),
         FactureLayout::Compact => compact_goldens_dir(),
         FactureLayout::HalfSheet => half_sheet_goldens_dir(),
+        FactureLayout::Roll80 => roll_goldens_dir(),
     };
     let mut updated = Vec::new();
     for lang in Lang::ALL {
@@ -958,4 +963,93 @@ pub(crate) fn page_rule(html: &str) -> String {
         .1;
     let end = rest.find('}').expect("the @page rule never closes");
     rest[..end].to_owned()
+}
+
+/// Every word the page prints, with the markup taken away.
+///
+/// For comparing two layouts whose markup is not the same. A layout may lay
+/// the same facts out differently and still has to carry the same wording:
+/// the labels, the titles, the legal mentions and the amounts as they are
+/// written. What this cannot see is where a word sits, which is the part a
+/// layout is allowed to change.
+pub(crate) fn words_of(html: &str) -> std::collections::BTreeSet<String> {
+    let body = html.split_once("</style>").map_or(html, |(_, rest)| rest);
+    let mut out = std::collections::BTreeSet::new();
+    let mut text = String::new();
+    let mut inside_tag = false;
+    for ch in body.chars() {
+        match ch {
+            '<' => inside_tag = true,
+            // A tag is a word boundary. Two cells of a table row touch in
+            // the source with nothing between them, so dropping the markup
+            // without leaving a space glues a rate onto the amount beside
+            // it and invents a word neither page prints.
+            '>' => {
+                inside_tag = false;
+                text.push(' ');
+            }
+            _ if !inside_tag => text.push(ch),
+            _ => {}
+        }
+    }
+    for word in text.split_whitespace() {
+        out.insert(word.to_owned());
+    }
+    out
+}
+
+/// A sheet render with the lines table's head cut out.
+///
+/// The captions above the columns are the one thing on the page that exists
+/// only because there is a table. Décret 05-468 art. 3 asks for the
+/// designation, the quantity and the unit price; it does not ask for the
+/// words above them, and a roll printing `2 × 150,00` has said both figures
+/// and has nowhere to put "Qté".
+///
+/// Cutting the block out, rather than collecting the caption words and
+/// letting those through, is the difference between a claim and a hole. A
+/// caption and a row label can be the same word: `rate_label` and the TVA
+/// recap row are both `Key::Tva`, and `line_discount_label` and the global
+/// discount row are both `Key::Discount`. An allowance by word therefore
+/// exempts those two rows on every page under the réel, and a roll that
+/// dropped either label would pass. Found by the test lens, 2026-09-20,
+/// which named the mutation: delete `{{ tva.label }}` from the roll.
+pub(crate) fn without_the_lines_table_head(html: &str) -> String {
+    let (before, rest) = html
+        .split_once("<thead>")
+        .expect("a sheet layout heads its lines table");
+    let (_, after) = rest
+        .split_once("</thead>")
+        .expect("the lines table head closes");
+    format!("{before}{after}")
+}
+
+/// Every `amount-<name>` a render carries, counted, and of those how many are
+/// followed by the currency span.
+///
+/// Read off the page rather than listed in a test, because a list cannot know
+/// about a field it was written before. A view that gains an amount, reaches
+/// the sheet and misses the roll, passes a hand-kept loop over fourteen
+/// names: the loop never asks about the fifteenth.
+///
+/// Counted rather than collected into a set, and counted per marker rather
+/// than in total, because both weaker shapes have a mutation that survives.
+/// A set misses a line printed twice. A single total of currency spans misses
+/// a roll that gave one amount two and another none, which is the same number
+/// of spans and a page where a figure sits with no DA beside it.
+pub(crate) fn amount_markers(html: &str) -> std::collections::BTreeMap<String, (usize, usize)> {
+    const OPEN: &str = "<span class=\"amount amount-";
+    let mut out: std::collections::BTreeMap<String, (usize, usize)> = Default::default();
+    let mut rest = html;
+    while let Some((_, after)) = rest.split_once(OPEN) {
+        let (name, body) = after.split_once('"').expect("the class attribute closes");
+        let (_, tail) = body.split_once("</span>").expect("an amount closes");
+        let entry = out.entry(name.to_owned()).or_default();
+        entry.0 += 1;
+        if tail.starts_with("<span class=\"cur\">") {
+            entry.1 += 1;
+        }
+        rest = tail;
+    }
+    out
 }

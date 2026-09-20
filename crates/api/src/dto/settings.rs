@@ -153,6 +153,12 @@ pub enum FactureLayoutDto {
     Standard,
     Compact,
     HalfSheet,
+    /// Named outright for the reason `crates/core`'s own variant is:
+    /// `snake_case` reads this as `roll80` and the stored spelling is
+    /// `roll_80mm`.
+    #[serde(rename = "roll_80mm")]
+    #[ts(rename = "roll_80mm")]
+    Roll80,
 }
 
 impl From<FactureLayout> for FactureLayoutDto {
@@ -161,6 +167,7 @@ impl From<FactureLayout> for FactureLayoutDto {
             FactureLayout::Standard => FactureLayoutDto::Standard,
             FactureLayout::Compact => FactureLayoutDto::Compact,
             FactureLayout::HalfSheet => FactureLayoutDto::HalfSheet,
+            FactureLayout::Roll80 => FactureLayoutDto::Roll80,
         }
     }
 }
@@ -171,6 +178,7 @@ impl From<FactureLayoutDto> for FactureLayout {
             FactureLayoutDto::Standard => FactureLayout::Standard,
             FactureLayoutDto::Compact => FactureLayout::Compact,
             FactureLayoutDto::HalfSheet => FactureLayout::HalfSheet,
+            FactureLayoutDto::Roll80 => FactureLayout::Roll80,
         }
     }
 }

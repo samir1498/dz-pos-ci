@@ -16,15 +16,32 @@
 //! This module holds the choice. `facture.rs` holds the page it produces, and
 //! is the only place that knows which template a layout is drawn by.
 
-/// The sheet the OS print dialog is given. It changes one line of the page,
-/// the `@page size`, and nothing else: an A5 facture is the same facture on
-/// a smaller sheet, not a second layout to keep in step (features.md §4,
-/// "A4/A5 through the OS dialog").
+/// The page a document is drawn onto. It changes one line, the `@page size`,
+/// and nothing else: an A5 facture is the same facture on a smaller sheet,
+/// not a second layout to keep in step (features.md §4, "A4/A5 through the
+/// OS dialog").
+///
+/// `A4` and `A5` are sheets a print dialog offers and a till may name on any
+/// print. `Roll80` is not: it is the continuous 80 mm paper a counter printer
+/// carries, and no dialog lets a cashier choose it for a page laid out for a
+/// sheet. It is here because it is still the `@page size` and splitting it
+/// into a second type would mean two ways to say the same line. What keeps a
+/// caller from asking for it is that the facture route's query string does
+/// not spell it: that handler takes a `Sheet`, which has two values, and the
+/// roll arrives only through the layout that names it
+/// (`FactureLayout::fixed_paper`). A comment is not a guard, so
+/// `the_roll_is_not_a_sheet_a_query_string_can_name` in
+/// `crates/api/tests/print_api.rs` is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum Paper {
     A4,
     A5,
+    /// Spelled the way the layout drawn for it is spelled, so a query string
+    /// naming a paper and one naming a layout do not disagree by a
+    /// character. `snake_case` alone would make this `roll80`.
+    #[serde(rename = "roll_80mm")]
+    Roll80,
 }
 
 impl Paper {
@@ -35,6 +52,9 @@ impl Paper {
         match self {
             Paper::A4 => "A4",
             Paper::A5 => "A5",
+            // A roll has a width and no end, which is what `auto` says. The
+            // ticket's own template has carried this literal since M2.
+            Paper::Roll80 => "80mm auto",
         }
     }
 }
@@ -80,15 +100,28 @@ pub enum FactureLayout {
     /// the A4 page on an A5 sheet is a page at 70% with margins to match,
     /// which is not the same thing as a page laid out for 148 mm.
     HalfSheet,
+    /// The roll a counter printer already has. 72 mm of content, so this is
+    /// the one layout that is not the standard page under another
+    /// stylesheet: the two party blocks stack, and a line becomes two rows
+    /// rather than six columns. Every mention décret 05-468 art. 3 asks for
+    /// is still on it, which is what makes it a facture and not a ticket
+    /// with a facture's title.
+    ///
+    /// Named outright because `snake_case` puts no boundary before a digit:
+    /// it reads `Roll80` as `roll80` while `as_str` stores `roll_80mm`, and
+    /// the two spellings have to be one.
+    #[serde(rename = "roll_80mm")]
+    Roll80,
 }
 
 impl FactureLayout {
     /// Every layout a shop may choose, in the order a settings screen lists
     /// them. The API hands this list to the UI so there is one source for it.
-    pub const ALL: [FactureLayout; 3] = [
+    pub const ALL: [FactureLayout; 4] = [
         FactureLayout::Standard,
         FactureLayout::Compact,
         FactureLayout::HalfSheet,
+        FactureLayout::Roll80,
     ];
 
     /// The one spelling: what is stored, what crosses the wire, and what a
@@ -99,6 +132,7 @@ impl FactureLayout {
             FactureLayout::Standard => "standard",
             FactureLayout::Compact => "compact",
             FactureLayout::HalfSheet => "half_sheet",
+            FactureLayout::Roll80 => "roll_80mm",
         }
     }
 
@@ -107,6 +141,7 @@ impl FactureLayout {
             "standard" => Some(FactureLayout::Standard),
             "compact" => Some(FactureLayout::Compact),
             "half_sheet" => Some(FactureLayout::HalfSheet),
+            "roll_80mm" => Some(FactureLayout::Roll80),
             _ => None,
         }
     }
@@ -124,6 +159,7 @@ impl FactureLayout {
         match self {
             FactureLayout::Standard | FactureLayout::Compact => None,
             FactureLayout::HalfSheet => Some(Paper::A5),
+            FactureLayout::Roll80 => Some(Paper::Roll80),
         }
     }
 }
@@ -223,31 +259,60 @@ mod tests {
     /// way to count an enum's variants without a derive, so a variant left
     /// out of `ALL` is invisible to any loop over `ALL` — including the two
     /// tests below and the settings route, all of which walk that constant.
-    /// The first version of this test looped over `ALL` asking whether `ALL`
-    /// contained its own elements, which cannot fail and said so in a name
-    /// that promised otherwise.
+    /// `ALL` carries every layout the type has, in the order it declares.
     ///
-    /// What actually holds it is the wildcard-free `match`: a variant added
-    /// to `FactureLayout` stops the build here until someone gives it a
-    /// position, and the position they must give it is its index in `ALL`.
+    /// A list cannot check itself, so `every` below is a second list, written
+    /// out rather than read from `ALL`. Iterating `ALL` and asking whether
+    /// `ALL` holds its own elements cannot fail; iterating a separate list
+    /// can, and the mutation it exists for is `ALL` shrunk back to three
+    /// entries with the fourth `match` arm left in place. The test lens named
+    /// that one on 2026-09-20, and it passed until this shape.
+    ///
+    /// The wildcard-free `match` is what brings an author here: a fifth
+    /// layout stops the build until it is given a position, and `every` is
+    /// the line above the arm they add.
     #[test]
-    fn every_layout_is_in_all() {
-        for (index, layout) in FactureLayout::ALL.iter().enumerate() {
-            let place = match layout {
+    fn all_carries_every_layout_the_type_has() {
+        let every = [
+            FactureLayout::Standard,
+            FactureLayout::Compact,
+            FactureLayout::HalfSheet,
+            FactureLayout::Roll80,
+        ];
+        for (place, layout) in every.into_iter().enumerate() {
+            let declared = match layout {
                 FactureLayout::Standard => 0,
                 FactureLayout::Compact => 1,
                 FactureLayout::HalfSheet => 2,
+                FactureLayout::Roll80 => 3,
             };
-            assert_eq!(index, place, "{layout:?} is not where ALL puts it");
+            assert_eq!(place, declared, "{layout:?} is not where this list puts it");
+            assert_eq!(
+                FactureLayout::ALL.get(place),
+                Some(&layout),
+                "ALL does not carry {layout:?} at {place}"
+            );
         }
+        assert_eq!(
+            FactureLayout::ALL.len(),
+            every.len(),
+            "ALL carries something this list does not"
+        );
     }
 
-    /// A sheet a layout pins is one the print dialog knows, and a layout
-    /// without a fixed sheet takes whatever the caller named.
+    /// `Page::paper` takes the layout's sheet when the layout pins one, and
+    /// the caller's when it does not.
+    ///
+    /// The expectation comes from `fixed_paper` itself, so this proves the
+    /// override is wired and not which sheet each layout pins. That second
+    /// claim is held by hand-typed constants elsewhere:
+    /// `the_roll_prints_on_the_roll_even_when_a_sheet_was_asked_for` and
+    /// `the_half_sheet_prints_on_a5_even_when_a4_was_asked_for` name A5 and
+    /// 80 mm in full.
     #[test]
     fn a_fixed_sheet_is_the_one_the_page_is_drawn_on() {
         for layout in FactureLayout::ALL {
-            for asked_for in [Paper::A4, Paper::A5] {
+            for asked_for in [Paper::A4, Paper::A5, Paper::Roll80] {
                 let page = Page {
                     paper: asked_for,
                     layout,

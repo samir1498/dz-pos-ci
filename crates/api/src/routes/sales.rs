@@ -201,10 +201,39 @@ pub async fn print_ticket(
 /// settings, and every facture follows that choice. Naming it here overrides
 /// the choice for one page, which is what a settings screen showing a preview
 /// of each layout needs and nothing else does.
+/// The sheet a query string may name.
+///
+/// `Paper` has a third value and this type deliberately does not. The roll is
+/// not a sheet a print dialog offers, and the one layout drawn for it names
+/// it itself (`FactureLayout::fixed_paper`), so there is nothing for a caller
+/// to say here. Without the narrowing,
+/// `?paper=roll_80mm&layout=standard` answers 200 with the six column A4
+/// body under `@page { size: 80mm auto; margin: 12mm }`: a table measured for
+/// 190 mm, on 80 mm of paper, with 24 mm of that given to the margins.
+///
+/// The TypeScript client already spells this type `"a4" | "a5"`
+/// (`packages/shared/src/client-response.ts`), so this is the two sides
+/// agreeing rather than a new restriction.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Sheet {
+    A4,
+    A5,
+}
+
+impl From<Sheet> for Paper {
+    fn from(sheet: Sheet) -> Paper {
+        match sheet {
+            Sheet::A4 => Paper::A4,
+            Sheet::A5 => Paper::A5,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 pub struct FactureQuery {
     lang: Lang,
-    paper: Paper,
+    paper: Sheet,
     layout: Option<FactureLayout>,
 }
 
@@ -280,7 +309,7 @@ pub async fn facture(
         },
         lang,
         Page {
-            paper,
+            paper: paper.into(),
             layout: chosen,
         },
     )?))

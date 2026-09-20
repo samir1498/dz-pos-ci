@@ -85,7 +85,7 @@ const seeded: SettingsDto = {
   regime_planned: null,
   theme: null,
   facture_layout: "standard",
-  facture_layouts: ["standard", "compact", "half_sheet"],
+  facture_layouts: ["standard", "compact", "half_sheet", "roll_80mm"],
   discount_threshold_bps: 0,
 };
 

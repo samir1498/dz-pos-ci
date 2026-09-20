@@ -718,7 +718,8 @@ first release.**
 ## 4. Printing (v1)
 
 - Templates: `ticket_80mm`, `facture_a4`, `facture_compact_a4`,
-  `facture_half_sheet`, `statement_a4`, `debt_slip_80mm`, each in ar/fr/en.
+  `facture_half_sheet`, `facture_roll_80mm`, `statement_a4`,
+  `debt_slip_80mm`, each in ar/fr/en.
   HTML rendered by the core, not the UI, so desktop and any server print the
   same bytes. `facture_a4` is one template for the three kinds that share a
   facture's blocks: it titles itself facture, avoir or proforma, so there is
@@ -811,7 +812,13 @@ first release.**
   (`fixtures/print/facture_half_sheet/`). Both are the standard page's own
   body under a different stylesheet, which their tests assert directly rather
   than as a list of fields, and both are held to the IFU rule even where
-  their goldens do not reach the IFU régime. What the row does not carry (the referenced
+  their goldens do not reach the IFU régime. `facture_roll_80mm` is the
+  exception and owes the most: 72 mm has no room for the sheet's markup, so
+  the party blocks stack and a line becomes two rows, and what holds it is a
+  field by field comparison against the standard page (every amount, every
+  rate, every quantity, the words line, the heading, the cancelled word and
+  both parties' identifiers) rather than a byte comparison. Its reduced
+  golden set is `fixtures/print/facture_roll_80mm/`. What the row does not carry (the referenced
   facture's number and day, the cancellation's day and reason) is handed to
   the renderer beside the document.
 - `statement_a4` and `debt_slip_80mm` are the customer's two papers, on the

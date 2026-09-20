@@ -9,6 +9,7 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use diesel::connection::SimpleConnection;
+use dzpos_api::routes::sales::Sheet;
 use dzpos_core::lang::Lang;
 use dzpos_core::print::{render_facture, render_ticket, FactureLayout, Page, Paper};
 use dzpos_core::services::documents;
@@ -307,10 +308,17 @@ async fn a_facture_is_the_html_the_core_renders_on_the_sheet_that_was_asked_for(
     let id = a_facture(&app).await;
 
     for lang in Lang::ALL {
-        for paper in [Paper::A4, Paper::A5] {
-            let sheet = match paper {
-                Paper::A4 => "a4",
-                Paper::A5 => "a5",
+        // Every sheet a query string can name. `Sheet` is the route's own
+        // type and has no roll in it, which is the subject of
+        // `the_roll_is_not_a_sheet_a_query_string_can_name`; the roll arrives
+        // through the layout that names it, which `the_roll_reaches_the_paper
+        // _as_a_roll` covers. The match below has no wildcard, so a third
+        // sheet stops the build here rather than going untested.
+        for sheet in [Sheet::A4, Sheet::A5] {
+            let paper = Paper::from(sheet);
+            let sheet = match sheet {
+                Sheet::A4 => "a4",
+                Sheet::A5 => "a5",
             };
             let (status, content_type, body) = call_text(
                 &app,
@@ -449,6 +457,57 @@ async fn the_half_sheet_reaches_the_paper_as_a5() {
     )
     .await;
     assert!(standard.contains("size: A4;"), "the standard layout on A4");
+}
+
+/// The roll reaches the paper as the roll, whatever the caller asked for.
+///
+/// Same claim as the half sheet's and the same reason for making it over the
+/// whole route rather than against the type alone: a query string, a stored
+/// setting and a render sit between `Page::paper` and the stylesheet.
+///
+/// The distinguishing signature is the `@page` rule itself. `80mm auto` is a
+/// size no sheet layout can produce, so this cannot pass by accident.
+#[tokio::test]
+async fn the_roll_reaches_the_paper_as_a_roll() {
+    let (_dir, _path, app) = app();
+    let id = a_facture(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/settings/facture-layout")
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "facture_layout": "roll_80mm" }).to_string(),
+        ))
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(req).await.unwrap().status(),
+        StatusCode::OK
+    );
+
+    // The till names A4, which is the case that matters: a counter printer
+    // is the tray it has, and the shop's standing choice has to win.
+    let (_, _, chosen) =
+        call_text(&app, &format!("/sales/{id}/facture?lang=fr&paper=a4"), true).await;
+    assert!(
+        chosen.contains("size: 80mm auto"),
+        "the roll pins its paper"
+    );
+    // And it is the roll's own markup, not the sheet's squeezed narrow.
+    assert!(
+        !chosen.contains("<table>"),
+        "the roll kept the sheet's table"
+    );
+
+    let (_, _, previewed) = call_text(
+        &app,
+        &format!("/sales/{id}/facture?lang=fr&paper=a4&layout=roll_80mm"),
+        true,
+    )
+    .await;
+    assert!(previewed.contains("size: 80mm auto"), "a previewed roll");
 }
 
 /// A layout nobody has a template for is refused rather than drawn on the
@@ -712,4 +771,51 @@ async fn a_proforma_prints_on_the_same_sheet_under_its_own_number() {
         body.contains(&printed("PF", 1)),
         "the proforma's own number"
     );
+}
+
+/// The roll is not a sheet a query string can name.
+///
+/// `Paper::Roll80` exists so the roll layout can name its own page size, and
+/// a caller naming it for a layout drawn on sheets gets a facture that cannot
+/// print: before the facture route's query took a `Sheet` rather than a
+/// `Paper`, this URL answered 200 with the standard six column table under
+/// `@page { size: 80mm auto; margin: 12mm }`, which is a 190 mm table on
+/// 56 mm of usable roll.
+///
+/// The refusal is read off the status and the message, not off the fact of an
+/// error: a 400 for a missing field would pass a status-only check and prove
+/// nothing about the paper.
+#[tokio::test]
+async fn the_roll_is_not_a_sheet_a_query_string_can_name() {
+    let (_dir, _path, app) = app();
+    let id = a_facture(&app).await;
+
+    for query in [
+        "lang=fr&paper=roll_80mm",
+        "lang=fr&paper=roll_80mm&layout=standard",
+        "lang=fr&paper=roll_80mm&layout=compact",
+        // Even with the layout that does print on the roll: the caller still
+        // has no business naming the paper, and the layout names it anyway.
+        "lang=fr&paper=roll_80mm&layout=roll_80mm",
+    ] {
+        let (status, _content_type, body) =
+            call_text(&app, &format!("/sales/{id}/facture?{query}"), true).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{query}: {body}");
+        assert!(
+            body.contains("paper a4 or a5"),
+            "{query} was refused for some other reason: {body}"
+        );
+    }
+
+    // And the layout that is drawn for the roll still reaches it, asked for
+    // on either sheet, so the narrowing took the caller's mistake away and
+    // not the layout.
+    let (status, _content_type, body) = call_text(
+        &app,
+        &format!("/sales/{id}/facture?lang=fr&paper=a4&layout=roll_80mm"),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert!(body.contains("size: 80mm auto"), "{body}");
 }
