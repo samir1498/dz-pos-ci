@@ -1,0 +1,723 @@
+
+##### SECTION salesSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	posProductSearchInput	text	Rechercher par nom de produit...	search	
+FIELD	posBarcodeScanInput	text	Scanner/Taper le code-barres...	barcode_scanner	
+FIELD	posCustomerSearchInput	text	Rechercher un client par nom ou ID...	person_search person_add	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN	posCategoryDropdownBtn	category expand_more
+BTN	posAdvFiltersBtn	tune
+BTN		add_circle
+BTN	returnModeToggleBtn	assignment_return
+BTN		add_shopping_cart
+BTN	posCustomizeBtn	dashboard_customize
+BTN	posPrevBtn	Précédent
+BTN	posNextBtn	Suivant
+BTN		person_add
+BTN		edit_note Remise / Majoration
+BTN		delete_sweep Annuler F4
+BTN		save_as Suspendre F2
+BTN		history Historique
+BTN		pause_circle Brouillons F3
+BTN	autoPrintReceiptBtn	print_disabled Impression F5
+BTN	posCheckoutBtn	receipt_long Payer F1
+BTN	saveAsProformaBtn	draft pro-forma
+BTN	saveAsOrderBtn	order_approve commande
+BTN	posPrintCenterBtn	print Imprimer
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION salesLogSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	history Historique des Ventes
+HEAD	TH	Vente N°
+HEAD	TH	Date & Heure
+HEAD	TH	Client
+HEAD	TH	Articles de la commande
+HEAD	TH	Total (DA)
+HEAD	TH	Actions
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN	salesLogFiltersBtn	tune Filtres Avancés
+BTN		filter_alt Filtrer
+BTN		summarize Récapitulatif
+BTN	salesPrevBtn	Précédent
+BTN	salesNextBtn	Suivant
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION caisseSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H1	Gestion de la Caisse
+HEAD	H2	Aucune session active
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	caisseOpeningBalance	number		Solde d'ouverture	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN	caisseTab-current	Session Actuelle
+BTN	caisseTab-history	Historique des Sessions
+BTN		play_arrow Ouvrir la session
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION productsSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	Gestion des Stocks & Produits
+HEAD	TH	Code-barres
+HEAD	TH	Nom du Produit
+HEAD	TH	Qté Valide
+HEAD	TH	Statut
+HEAD	TH	Actions
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	inventorySearch	text	Rechercher dans le stock (nom, code-barres)...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		add Ajouter un Nouveau Produit
+BTN		tune Filtres Avancés
+BTN	invPrevBtn	Précédent
+BTN	invNextBtn	Suivant
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION bundlesSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	Gestion des Packs
+HEAD	TH	Nom du pack
+HEAD	TH	Code-barres
+HEAD	TH	Nombre de produits
+HEAD	TH	Prix de Vente
+HEAD	TH	Statut
+HEAD	TH	Actions
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		add_circle Ajouter un nouveau pack
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION promotionsSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	Gestion des Promotions
+HEAD	TH	Produit
+HEAD	TH	Remise
+HEAD	TH	Validité
+HEAD	TH	Limite de quantité
+HEAD	TH	Statut
+HEAD	TH	Actions
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		add_circle Créer une nouvelle promotion
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION suppliersSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	Gestion des Fournisseurs
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	supplierSearch	text	Rechercher des noms de fournisseurs...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		person_add Ajouter un Nouveau Fournisseur
+BTN	supPrevBtn	Précédent
+BTN	supNextBtn	Suivant
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION purchasesSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	Journal des Factures d'Achat
+HEAD	TH	Numéro de Facture
+HEAD	TH	Fournisseur / Date
+HEAD	TH	Montant Total
+HEAD	TH	Payé
+HEAD	TH	Reste / Crédit
+HEAD	TH	Imprimer
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		add Nouvelle Facture d'Achat
+BTN	purcPrevBtn	Précédent
+BTN	purcNextBtn	Suivant
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION customersSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	Clients Réguliers
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	customerSearch	text	Rechercher par nom ou numéro de téléphone...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		person_add Ajouter un Client
+BTN	custPrevBtn	Précédent
+BTN	custNextBtn	Suivant
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION usersSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H1	manage_accounts Utilisateurs
+HEAD	TH	INFO UTILISATEUR
+HEAD	TH	NOM D'UTILISATEUR
+HEAD	TH	RÔLE & AUTORISATIONS
+HEAD	TH	STATUT
+HEAD	TH	ACTIONS
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		person_add Ajouter un Utilisateur
+BTN		edit Modifier
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION proformasSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	draft Factures pro-forma
+HEAD	TH	N° document
+HEAD	TH	Date & Heure
+HEAD	TH	Client
+HEAD	TH	Articles de la commande
+HEAD	TH	Total (DA)
+HEAD	TH	Statut
+HEAD	TH	Actions
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		refresh Actualiser
+BTN		Tous
+BTN		En attente
+BTN		Convertie
+BTN		Annulée
+BTN	proformasPrevBtn	Précédent
+BTN	proformasNextBtn	Suivant
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION ordersSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H2	order_approve Bons de commande
+HEAD	TH	N° document
+HEAD	TH	Date
+HEAD	TH	Date de livraison prévue
+HEAD	TH	Client
+HEAD	TH	Articles de la commande
+HEAD	TH	Total (DA)
+HEAD	TH	Acompte
+HEAD	TH	Reste
+HEAD	TH	Actions
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		refresh Actualiser
+BTN		Tous
+BTN		En attente
+BTN		Livrée
+BTN		Annulée
+BTN	ordersPrevBtn	Précédent
+BTN	ordersNextBtn	Suivant
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION analyticsSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H1	analytics Statistiques
+HEAD	H3	Bénéfice Net & Flux de Trésorerie
+HEAD	H3	emoji_events Produits les Plus Rentables
+HEAD	TH	PRODUIT
+HEAD	TH	CATÉGORIE
+HEAD	TH	QTÉ VENDUE
+HEAD	TH	REVENUS
+HEAD	TH	COÛT
+HEAD	TH	BÉNÉFICE
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	analyticsDateFrom	datetime-local		De ← À	
+FIELD	analyticsDateTo	datetime-local		De ← À	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		refresh Actualiser
+BTN		print
+BTN		Résumé Financier
+BTN		Statistiques avancées
+BTN		Dettes & Soldes
+BTN		Analyses du Stock
+BTN		Dépenses
+BTN		Mouvements de Caisse
+BTN		Graphiques
+BTN		Calculateur de Zakat
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?
+
+##### SECTION settingsSection
+HEAD	H1	Lumina POS
+HEAD	H3	VENTES
+HEAD	H3	STOCK & PRODUITS
+HEAD	H3	TIERS & COMPTES
+HEAD	H3	FINANCE & RAPPORTS
+HEAD	H3	SYSTÈME
+HEAD	H1	settings Paramètres
+HEAD	H2	Paramètres du Compte
+HEAD	H2	Rejoignez plus de 500 commerçants qui utilisent Lumina
+FIELD	globalSearch	text	Rechercher (F1)...	search	
+FIELD	settAccountCurrentUsername	text		NOM D'UTILISATEUR ACTUEL	
+FIELD	settAccountNewUsername	text	Entrez un nouveau nom d'utilisateur	NOUVEAU NOM D'UTILISATEUR	
+FIELD	settAccountCurrentPwd	password	••••••••	MOT DE PASSE ACTUEL	
+FIELD	settAccountNewPwd	password	••••••••	NOUVEAU MOT DE PASSE	
+FIELD	settAccountConfirmPwd	password	••••••••	CONFIRMER LE NOUVEAU MOT DE PASSE	
+FIELD	popupBuyName	text		NOM / MAGASIN	
+FIELD	popupBuyPhone	tel	055...	TÉLÉPHONE	
+FIELD	popupBuyWilaya	text		WILAYA	
+FIELD	popupBuyBaladiya	text		COMMUNE	
+BTN		chevron_left
+BTN	nav-salesSection	point_of_sale Point de Vente
+BTN	nav-salesLogSection	receipt_long Journal des Ventes
+BTN	nav-caisseSection	account_balance_wallet Caisse
+BTN	nav-productsSection	inventory_2 Stock
+BTN	nav-bundlesSection	package_2 Packs
+BTN	nav-promotionsSection	sell Promotions
+BTN	nav-suppliersSection	local_shipping Fournisseurs
+BTN	nav-purchasesSection	shopping_cart_checkout Achats
+BTN	nav-customersSection	groups Clients
+BTN	nav-usersSection	manage_accounts Utilisateurs
+BTN	nav-proformasSection	draft Pro-formas
+BTN	nav-ordersSection	order_approve Bons de commande
+BTN	nav-analyticsSection	analytics Statistiques
+BTN	nav-settingsSection	settings Paramètres
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem Offre spéciale ACTIVER MAINTENANT -20%
+BTN	darkModeToggle	dark_mode
+BTN		manage_accounts Compte
+BTN		tune Paramètres généraux
+BTN		receipt_long Factures
+BTN		lan Réseau
+BTN		sync_alt Import/Export
+BTN		verified_user Activation de l'Application
+BTN		app_shortcut Application Mobile
+BTN		update Mises à jour
+BTN		save Modifier le compte
+BTN		close Démarrer l'essai gratuit arrow_back
+BTN	popupPurchaseSubmitBtn	send Envoyer la demande
+BTN		key Ou avez-vous un code d'activation ?

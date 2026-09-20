@@ -1,0 +1,737 @@
+
+##### SECTION salesSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	posProductSearchInput	text	البحث باسم المنتج...	search	
+FIELD	posBarcodeScanInput	text	امسح/اكتب الباركود...	barcode_scanner	
+FIELD	posCustomerSearchInput	text	ابحث عن زبون بالاسم أو المعرّف...	person_search person_add	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN	posCategoryDropdownBtn	category expand_more
+BTN	posAdvFiltersBtn	tune
+BTN		add_circle
+BTN	returnModeToggleBtn	assignment_return
+BTN		add_shopping_cart
+BTN	posCustomizeBtn	dashboard_customize
+BTN	posPrevBtn	السابق
+BTN	posNextBtn	التالي
+BTN		person_add
+BTN		edit_note تخفيض / زيادة
+BTN		delete_sweep إلغاء F4
+BTN		save_as تعليق F2
+BTN		history سجل
+BTN		pause_circle مسودات F3
+BTN	autoPrintReceiptBtn	print_disabled طباعة F5
+BTN	posCheckoutBtn	receipt_long تسديد الفاتورة F1
+BTN	saveAsProformaBtn	draft حفظ كمبدئية
+BTN	saveAsOrderBtn	order_approve حفظ كطلبية
+BTN	posPrintCenterBtn	print الطباعة
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION salesLogSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	history سجل المبيعات والفواتير السابقة
+HEAD	TH	المبيعة #
+HEAD	TH	التاريخ والوقت
+HEAD	TH	الزبون
+HEAD	TH	عناصر الطلب
+HEAD	TH	الإجمالي (د.ج)
+HEAD	TH	إجراءات المبيعة
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN	salesLogFiltersBtn	tune الفلاتر
+BTN		filter_alt تصفية
+BTN		summarize ملخص الفترة
+BTN	salesPrevBtn	السابق
+BTN	salesNextBtn	التالي
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION caisseSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H1	إدارة الصندوق
+HEAD	H2	لا توجد مناوبة مفتوحة
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	caisseOpeningBalance	number		الرصيد الافتتاحي (DA)	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN	caisseTab-current	المناوبة الحالية
+BTN	caisseTab-history	سجل المناوبات
+BTN		play_arrow فتح المناوبة
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION productsSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	إدارة المخزون والمنتجات
+HEAD	TH	الباركود
+HEAD	TH	اسم المنتج
+HEAD	TH	الكمية الصالحة
+HEAD	TH	الحالة
+HEAD	TH	إجراءات
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	inventorySearch	text	ابحث في المخزون (اسم، باركود)...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		add إضافة منتج جديد
+BTN		tune الفلاتر
+BTN	invPrevBtn	السابق
+BTN	invNextBtn	التالي
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION bundlesSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	إدارة الحزم
+HEAD	TH	اسم الحزمة
+HEAD	TH	الباركود
+HEAD	TH	عدد المنتجات
+HEAD	TH	سعر البيع
+HEAD	TH	الحالة
+HEAD	TH	إجراءات
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		add_circle إنشاء حزمة جديدة
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION promotionsSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	إدارة التخفيضات والعروض
+HEAD	TH	المنتج
+HEAD	TH	التخفيض
+HEAD	TH	المدة
+HEAD	TH	حد الكمية
+HEAD	TH	الحالة
+HEAD	TH	الإجراءات
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		add_circle إنشاء عرض جديد
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION suppliersSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	إدارة الموردين
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	supplierSearch	text	ابحث في أسماء الموردين...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		person_add إضافة مورد جديد
+BTN	supPrevBtn	السابق
+BTN	supNextBtn	التالي
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION purchasesSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	سجل الفواتير والمشتريات
+HEAD	TH	رقم الفاتورة
+HEAD	TH	المورد / التاريخ
+HEAD	TH	المبلغ العام
+HEAD	TH	المدفوع
+HEAD	TH	الباقي / الأجل
+HEAD	TH	طباعة
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		add إدخال فاتورة مستلمة جديدة
+BTN	purcPrevBtn	السابق
+BTN	purcNextBtn	التالي
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION customersSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	الزبائن الدائمين
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	customerSearch	text	ابحث عن زبون بالاسم أو الهاتف...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		person_add إضافة زبون
+BTN	custPrevBtn	السابق
+BTN	custNextBtn	التالي
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION usersSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H1	manage_accounts إدارة المستخدمين
+HEAD	TH	معلومات المستخدم
+HEAD	TH	اسم الدخول (USERNAME)
+HEAD	TH	الدور والصلاحية
+HEAD	TH	الحالة
+HEAD	TH	الإجراءات
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		person_add إضافة مستخدم
+BTN		edit تعديل
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION proformasSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	draft الفواتير المبدئية
+HEAD	TH	رقم المستند
+HEAD	TH	التاريخ والوقت
+HEAD	TH	الزبون
+HEAD	TH	العناصر
+HEAD	TH	الإجمالي
+HEAD	TH	الحالة
+HEAD	TH	إجراءات
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		refresh تحديث
+BTN		الكل
+BTN		قيد الانتظار
+BTN		محوّلة
+BTN		ملغاة
+BTN	proformasPrevBtn	السابق
+BTN	proformasNextBtn	التالي
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION ordersSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H2	order_approve طلبيات التوصيل
+HEAD	TH	رقم المستند
+HEAD	TH	التاريخ
+HEAD	TH	تاريخ التسليم المتوقع
+HEAD	TH	الزبون
+HEAD	TH	العناصر
+HEAD	TH	الإجمالي
+HEAD	TH	العربون
+HEAD	TH	الباقي
+HEAD	TH	إجراءات
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		refresh تحديث
+BTN		الكل
+BTN		قيد الانتظار
+BTN		تم التسليم
+BTN		ملغاة
+BTN	ordersPrevBtn	السابق
+BTN	ordersNextBtn	التالي
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION analyticsSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H1	analytics الإحصائيات والتقارير
+HEAD	H3	صافي الأرباح والتدفق النقدي
+HEAD	H3	emoji_events أكثر المنتجات ربحية
+HEAD	TH	المنتج
+HEAD	TH	الفئة
+HEAD	TH	الكمية المباعة
+HEAD	TH	الإيرادات
+HEAD	TH	التكلفة
+HEAD	TH	الربح
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	analyticsDateFrom	datetime-local		من ← إلى	
+FIELD	analyticsDateTo	datetime-local		من ← إلى	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		refresh تحديث
+BTN		print
+BTN		الملخص المالي
+BTN		إحصائيات متقدمة
+BTN		الديون والأرصدة
+BTN		تحليلات المخزون
+BTN		المصاريف
+BTN		حركات الصندوق
+BTN		الرسوم البيانية
+BTN		حاسبة الزكاة
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟
+
+##### SECTION settingsSection
+HEAD	H1	Lumina POS
+HEAD	H3	المبيعات
+HEAD	H3	المخزون والمنتجات
+HEAD	H3	الأطراف والحسابات
+HEAD	H3	المالية والتقارير
+HEAD	H3	النظام
+HEAD	H1	settings الإعدادات
+HEAD	H2	إعدادات الحساب
+HEAD	H2	انضم لأكثر من 500 تاجر يستعملون Lumina
+FIELD	globalSearch	text	البحث باسم المنتج...	search	
+FIELD	settAccountCurrentUsername	text		اسم المستخدم الحالي	
+FIELD	settAccountNewUsername	text	أدخل الاسم الجديد	اسم المستخدم الجديد	
+FIELD	settAccountCurrentPwd	password	••••••••	كلمة المرور الحالية	
+FIELD	settAccountNewPwd	password	••••••••	كلمة المرور الجديدة	
+FIELD	settAccountConfirmPwd	password	••••••••	تأكيد كلمة المرور الجديدة	
+FIELD	popupBuyName	text		الاسم / المحل	
+FIELD	popupBuyPhone	tel	055...	رقم الهاتف	
+FIELD	popupBuyWilaya	text		الولاية	
+FIELD	popupBuyBaladiya	text		البلدية	
+BTN		chevron_right
+BTN	nav-salesSection	point_of_sale شاشة المبيعات
+BTN	nav-salesLogSection	receipt_long سجل المبيعات
+BTN	nav-caisseSection	account_balance_wallet الصندوق
+BTN	nav-productsSection	inventory_2 إدارة المخزون
+BTN	nav-bundlesSection	package_2 الحزم
+BTN	nav-promotionsSection	sell التخفيضات والعروض
+BTN	nav-suppliersSection	local_shipping إدارة الموردين
+BTN	nav-purchasesSection	shopping_cart_checkout مشتريات وفواتير
+BTN	nav-customersSection	groups إدارة الزبائن
+BTN	nav-usersSection	manage_accounts إدارة المستخدمين
+BTN	nav-proformasSection	draft الفواتير المبدئية
+BTN	nav-ordersSection	order_approve طلبيات التوصيل
+BTN	nav-analyticsSection	analytics الإحصائيات والتقارير
+BTN	nav-settingsSection	settings الإعدادات
+BTN		logout
+BTN	fullscreenToggle	fullscreen
+BTN	supportToggle	help
+BTN		play_circle
+BTN	shortcutsToggle	keyboard
+BTN	notificationToggle	notifications
+BTN	headerPromoBtn	redeem عرض محدود تفعيل الآن -20%
+BTN	relayStatusBtn	cloud_off
+BTN	darkModeToggle	dark_mode
+BTN		manage_accounts الحساب
+BTN		tune الإعدادات العامة
+BTN		receipt_long الفواتير
+BTN		lan الشبكة
+BTN		sync_alt استيراد وتصدير
+BTN		verified_user تفعيل البرنامج
+BTN		app_shortcut تطبيق الهاتف
+BTN		update التحديثات
+BTN		save تحديث الحساب
+BTN		close ابدأ تجربة مجانية arrow_back
+BTN	popupPurchaseSubmitBtn	send إرسال طلب التفعيل
+BTN		key أو هل تمتلك كود تفعيل مسبق؟

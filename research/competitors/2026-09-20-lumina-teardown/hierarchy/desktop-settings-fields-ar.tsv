@@ -1,0 +1,7 @@
+posProductSearchInput	text	البحث باسم المنتج...	search
+posBarcodeScanInput	text	امسح/اكتب الباركود...	barcode_scanner
+posCustomerSearchInput	text	ابحث عن زبون بالاسم أو المعرّف...	person_search person_add
+popupBuyName	text		الاسم / المحل
+popupBuyPhone	tel	055...	رقم الهاتف
+popupBuyWilaya	text		الولاية
+popupBuyBaladiya	text		البلدية

@@ -1,0 +1,293 @@
+globalSearch	INPUT:text	البحث باسم المنتج...	
+posProductSearchInput	INPUT:text	البحث باسم المنتج...	
+posBarcodeScanInput	INPUT:text	امسح/اكتب الباركود...	
+supportName	INPUT:text		
+supportPhone	INPUT:tel		
+supportMessage	TEXTAREA:textarea		
+caisseOpeningBalance	INPUT:number		
+caisseHistDateFrom	INPUT:date		
+caisseHistDateTo	INPUT:date		
+caisseHistUser	SELECT:select-one		جميع الموظفين
+caisseClosingBalance	INPUT:number		
+caisseCloseNote	INPUT:text		
+caisseTxType	INPUT:hidden		
+caisseTxAmount	INPUT:number		
+caisseTxCategory	SELECT:select-one		إيجار | كهرباء | ماء | رواتب | نقل | صيانة | أخرى | ➕ إضافة فئة جديدة
+caisseTxNewCategory	INPUT:text	اسم الفئة الجديدة...	
+caisseTxDesc	INPUT:text		
+settAccountCurrentUsername	INPUT:text		
+settAccountNewUsername	INPUT:text	أدخل الاسم الجديد	
+settAccountCurrentPwd	INPUT:password	••••••••	
+settAccountNewPwd	INPUT:password	••••••••	
+settAccountConfirmPwd	INPUT:password	••••••••	
+settLanguage	SELECT:select-one		العربية (Arabic) | English | Français (French)
+newExpenseCategoryInput	INPUT:text	اسم الفئة الجديدة...	
+settShopName	INPUT:text		
+settShopDesc	INPUT:text		
+settShopAddress	INPUT:text	شارع ديدوش مراد، الجزائر العاصمة	
+settShopPhone	INPUT:text	055XX XX XX	
+settShopLandline	INPUT:text	021 XX XX XX	
+settShopEmail	INPUT:text	contact@example.com	
+settShopRC	INPUT:text		
+settShopNIF	INPUT:text		
+settShopAI	INPUT:text		
+settShopNIS	INPUT:text		
+settShopTVA	INPUT:number	0	
+settSkipQuickSaleConfirm	INPUT:checkbox		
+settFinancialOnlyMode	INPUT:checkbox		
+settAllowNegativeStock	INPUT:checkbox		
+settNegativeStockConfirm	INPUT:checkbox		
+settPricingAverage	INPUT:checkbox		
+settStampDutyEnabled	INPUT:checkbox		
+settLogoInput	INPUT:file		
+invoiceLang	SELECT:select-one		العربية (Arabic) | الفرنسية (Français) | الإنجليزية (English)
+receiptLang	SELECT:select-one		العربية (Arabic) | الفرنسية (Français) | الإنجليزية (English)
+settShowReceiptBarcode	INPUT:checkbox		
+settSilentPrint	INPUT:checkbox		
+settReceiptPrinter	SELECT:select-one		طابعة النظام الافتراضية | OneNote for Windows 10 | RustDesk Printer (الافتراضي) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+settPosReceiptPrinter	SELECT:select-one		استخدام الطابعة الافتراضية أعلاه | OneNote for Windows 10 | RustDesk Printer (الافتراضي) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+settBarcodePrinter	SELECT:select-one		استخدام الطابعة الافتراضية أعلاه | OneNote for Windows 10 | RustDesk Printer (الافتراضي) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+settCashDrawerEnabled	INPUT:checkbox		
+settCashDrawerOnSale	INPUT:checkbox		
+settCashDrawerConn	SELECT:select-one		موصول بطابعة الإيصالات | منفذ USB / COM
+settCashDrawerPrinter	SELECT:select-one		استخدام طابعة وصل البيع | OneNote for Windows 10 | RustDesk Printer (الافتراضي) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+settCashDrawerComPort	INPUT:text	COM3	
+settCashDrawerComBaud	INPUT:number		
+settCashDrawerKickCode	SELECT:select-one		ESC p 0 (الافتراضي - منفذ 2) | ESC p 1 (منفذ 5) | DLE DC4 (طُرز أخرى) | نبضة DTR (أدراج USB قديمة)
+settLabelWidth	INPUT:number		
+settLabelHeight	INPUT:number		
+settBarcodeAutoHeight	INPUT:checkbox		
+settBarcodeHeight	INPUT:number		
+settLabelShowShop	INPUT:checkbox		
+settLabelShowName	INPUT:checkbox		
+settLabelShowPrice	INPUT:checkbox		
+settLabelShowPriceType	INPUT:checkbox		
+settLabelShowBcText	INPUT:checkbox		
+settLabelShowVariants	INPUT:checkbox		
+settLabelShowDiscount	INPUT:checkbox		
+settScaleEnabled	INPUT:checkbox		
+settScalePrefix	INPUT:text		
+settScalePluLength	INPUT:number		
+settScaleValueLength	INPUT:number		
+settScaleValueType	SELECT:select-one		وزن (كغ) | سعر
+settScaleValueDecimals	INPUT:number		
+settEnableCloudRelay	INPUT:checkbox		
+settCloudUrl	INPUT:text		
+settCloudToken	INPUT:password		
+settServerIP	INPUT:text		
+settServerPort	INPUT:text		
+settClientIP	INPUT:text	مثال: 192.168.1.10	
+settClientPort	INPUT:text		
+cloudDiagPhone	INPUT:tel	رقم هاتفك (اختياري)	
+cloudJoinCodeInput	INPUT:text	LMNA-XXXX-XXXX-XXXX	
+mobilePairingToggle	INPUT:checkbox		
+exportSalesDateFrom	INPUT:date		
+exportSalesDateTo	INPUT:date		
+buyName	INPUT:text		
+buyPhone	INPUT:tel	055...	
+buyWilaya	INPUT:text		
+buyBaladiya	INPUT:text		
+activation-hwid	INPUT:text		
+activation-input	INPUT:text	XXXX-XXXX-XXXX-XXXX	
+analyticsDateFrom	INPUT:datetime-local		
+analyticsDateTo	INPUT:datetime-local		
+advScopeType	SELECT:select-one		منتج / مجموعة منتجات | تصنيف | عائلة | كل المنتجات
+advProductSearch	INPUT:text	ابحث عن منتج...	
+advCategorySelect	SELECT:select-one		
+advFamilySelect	SELECT:select-one		
+advDateTo	INPUT:datetime-local		
+advDateFrom	INPUT:datetime-local		
+advCompare	INPUT:checkbox		
+expenseCategory	SELECT:select-one		إيجار | كهرباء | ماء | رواتب | نقل | صيانة | أخرى | ➕ إضافة فئة جديدة
+expenseNewCategory	INPUT:text	اسم الفئة الجديدة...	
+expenseDesc	INPUT:text	ملاحظة (اختياري)	
+expenseAmount	INPUT:number	0.00	
+expenseDate	INPUT:date		
+capitalCategory	SELECT:select-one		رأس مال شخصي | شريك | قرض | إعادة استثمار | أخرى
+capitalDesc	INPUT:text	ملاحظة (اختياري)	
+capitalAmount	INPUT:number	0.00	
+capitalDate	INPUT:date		
+caisseLogTypeFilter	SELECT:select-one		جميع الأنواع | إيداع نقدي | سحب نقدي | مصروف صندوق
+zakatCashInput	INPUT:number		
+zakatOtherDebtsInput	INPUT:number		
+zakatNisabInput	INPUT:number		
+posCategorySearchInput	INPUT:text	بحث في الفئات...	
+posFilterFamily	SELECT:select-one		جميع العائلات
+posFilterSupplier	SELECT:select-one		جميع الموردين
+posFilterStock	SELECT:select-one		جميع الحالات | متوفر | منخفض | نفد (0)
+posCustomerSelect	INPUT:hidden		
+posCustomerSearchInput	INPUT:text	ابحث عن زبون بالاسم أو المعرّف...	
+togglePosImages	INPUT:checkbox		
+orderExpectedDelivery	INPUT:date		
+orderDepositAmount	INPUT:number	0.00	
+orderDepositMethod	SELECT:select-one		نقداً | شيك | CCP | تحويل بنكي | بطاقة | أخرى
+orderNotes	TEXTAREA:textarea	شروط خاصة بالطلبية...	
+orderReservesStock	INPUT:checkbox		
+recapDateFrom	INPUT:date		
+recapDateTo	INPUT:date		
+recapPaymentMethod	SELECT:select-one		نقداً | شيك | CCP | تحويل بنكي | بطاقة
+cnOriginalInvoice	INPUT:text	مثال: FAC-2026-0042	
+cnOriginalDate	INPUT:date		
+cnReason	TEXTAREA:textarea	منتج تالف، خطأ في الطلب، ...	
+deliveryCarrierName	INPUT:text	اسم الناقل (اختياري)	
+deliveryVehiclePlate	INPUT:text	رقم المركبة (اختياري)	
+customProductNameInput	INPUT:text	مثال: خدمة توصيل، إصلاح...	
+customProductPriceInput	INPUT:number	0.00	
+customProductCostInput	INPUT:number	0.00	
+inventorySearch	INPUT:text	ابحث في المخزون (اسم، باركود)...	
+filterCategory	SELECT:select-one		جميع التصنيفات
+filterFamily	SELECT:select-one		جميع العائلات
+filterSupplier	SELECT:select-one		جميع الموردين
+filterStock	SELECT:select-one		جميع الحالات | متوفر (صالح) | منخفض المخزون | نفد (0) | فاسد (منتهي)
+bundleId	INPUT:hidden		
+bundleName	INPUT:text	مثال: حزمة المكتب الكاملة	
+bundleBarcode	INPUT:text	اختياري	
+bundleSellingPrice	INPUT:number		
+bundleCostPrice	INPUT:number		
+bundleDescription	INPUT:text	وصف اختياري للحزمة	
+bundleProductSearch	INPUT:text	ابحث عن منتج بالاسم أو الباركود...	
+promotionId	INPUT:hidden		
+promoProductSearch	INPUT:text	ابحث بالاسم أو الباركود...	
+promoSelectedProductId	INPUT:hidden		
+promoDiscountType	SELECT:select-one		نسبة مئوية (%) | مبلغ ثابت (-)
+promoDiscountValue	INPUT:number	مثلاً: 20	
+promoStartDate	INPUT:datetime-local		
+promoEndDate	INPUT:datetime-local		
+promoMaxQty	INPUT:number	عدد القطع المسموحة...	
+supplierSearch	INPUT:text	ابحث في أسماء الموردين...	
+salesLogIdFilter	INPUT:number	رقم الطلبية	
+salesLogCustomerFilter	INPUT:hidden		
+salesLogCustomerSearchInput	INPUT:text	جميع الزبائن	
+salesLogDateFrom	INPUT:date		
+salesLogDateTo	INPUT:date		
+invSupplier	SELECT:select-one		اختر المورد...
+invNumber	INPUT:text	مثال: INV-2023-001	
+invDate	INPUT:date		
+invTax	INPUT:number		
+invExtras	INPUT:number		
+invPaid	INPUT:number		
+invDueDate	INPUT:date		
+invProductSearch	INPUT:text	ابحث واختر المنتج لإضافته للفاتورة...	
+customerSearch	INPUT:text	ابحث عن زبون بالاسم أو الهاتف...	
+newPayAmount	INPUT:number	المبلغ...	
+newPayDate	INPUT:date		
+supplierId	INPUT:hidden		
+supName	INPUT:text		
+supPhone	INPUT:text		
+supAddress	INPUT:text		
+supRC	INPUT:text		
+supNIF	INPUT:text		
+supAI	INPUT:text		
+supNIS	INPUT:text		
+supInitialDebt	INPUT:number	0.00	
+productId	INPUT:hidden		
+productBarcode	INPUT:text	اتركه فارغاً للتوليد التلقائي	
+productName	INPUT:text	مثال: هاتف محمول...	
+productCategory	INPUT:text		
+productFamily	INPUT:text	مثال: عائلة كوكاكولا	
+productSupplier	INPUT:text	اختر من القائمة الموردين	
+productMinStock	INPUT:number		
+productLocation	INPUT:text		
+productDescription	TEXTAREA:textarea		
+productImage	INPUT:file		
+productStock	INPUT:number		
+productCost	INPUT:number		
+productMarkup	INPUT:number	0	
+productPrice	INPUT:number		
+productInitialWholesale	INPUT:number	اختياري	
+productExpiry	INPUT:date		
+productUnit	SELECT:select-one		قطعة | حبة | كرتون | علبة | كيس | باكيت | زجاجة | كيلوغرام (Kg) | غرام (g) | قنطار (Qt) | لتر (L) | مليلتر (ml) | متر (M) | سنتيمتر (cm)
+productWeight	INPUT:text	مثال: 500g	
+productColor	INPUT:text	مثال: أحمر	
+productPlu	INPUT:text	مثال: 00123	
+productWholesaleUnit	INPUT:text	يترك فارغاً إذا لا يوجد	
+productWholesaleQty	INPUT:number	مثال: 24 قطعة في العلبة	
+productHasVariants	INPUT:checkbox		
+vcolWholesaleChk	INPUT:checkbox		
+vcolExpiryChk	INPUT:checkbox		
+bulkVariantCost	INPUT:number		
+bulkVariantPrice	INPUT:number		
+bulkVariantWholesale	INPUT:number		
+bulkVariantStock	INPUT:number		
+variantsMasterActive	INPUT:checkbox		
+productStock	INPUT:number		
+productLocation	INPUT:text		
+productCost	INPUT:number		
+productPrice	INPUT:number		
+productInitialWholesale	INPUT:number	اختياري	
+productExpiry	INPUT:date		
+batchProductId	INPUT:hidden		
+batchEditId	INPUT:hidden		
+batchDisplayCode	INPUT:text	مثلاً: شحنة جانفي / المورد X	
+batchVariantId	SELECT:select-one		
+batchStock	INPUT:number		
+batchCost	INPUT:number		
+batchMarkup	INPUT:number	%	
+batchPrice	INPUT:number		
+batchWholesalePrice	INPUT:number	اختياري	
+batchExpiry	INPUT:date		
+batchSupplierId	SELECT:select-one		اختر مورداً...
+checkoutPaymentMethod	SELECT:select-one		نقداً | شيك | CCP | تحويل بنكي | بطاقة | أخرى
+checkoutPaidAmount	INPUT:number		
+customerId	INPUT:hidden		
+customerName	INPUT:text		
+customerPhone	INPUT:text		
+customerAddress	INPUT:text		
+customerNif	INPUT:text		
+customerRc	INPUT:text		
+customerAi	INPUT:text		
+customerNis	INPUT:text		
+customerInitialDebt	INPUT:number	0.00	
+customerCreditLimit	INPUT:number	0.00	
+cdActiveCustomerId	INPUT:hidden		
+cdPaymentAmount	INPUT:number	أدخل المبلغ المسدد من قبل الزبون...	
+cdPaymentDate	INPUT:date		
+cdPaymentMethod	SELECT:select-one		نقداً | شيك | CCP | تحويل بنكي | بطاقة | أخرى
+cdPaymentReference	INPUT:text	رقم الشيك / الحوالة...	
+cdPaymentNotes	INPUT:text	ملاحظات إضافية على الدفعة...	
+cdPaymentAutoPrint	INPUT:checkbox		
+sdActiveSupplierId	INPUT:hidden		
+sdSupPaymentAmount	INPUT:number	0.00	
+sdSupPaymentDate	INPUT:date		
+srSupplierId	INPUT:hidden		
+srReason	SELECT:select-one		منتج تالف | منتهي الصلاحية | فائض مخزون | منتج خاطئ | أخرى
+srDate	INPUT:date		
+srNotes	INPUT:text		
+srRefund	INPUT:number		
+srRefundMethod	SELECT:select-one		نقداً | تحويل بنكي
+numModalInput	INPUT:number		
+numModalPriceInput	INPUT:number		
+modAmountInput	INPUT:number	أدخل المبلغ (د.ج)...	
+bpBarcode	INPUT:text		
+bpProductName	INPUT:text		
+bpPriceType	SELECT:select-one		
+bpPriceValue	INPUT:number		
+bpQty	INPUT:number		
+bpLabelSize	SELECT:select-one		40 × 25 mm | 40 × 30 mm | 50 × 25 mm | 50 × 30 mm | 60 × 40 mm | مخصص...
+bpLabelW	INPUT:number	W (mm)	
+bpLabelH	INPUT:number	H (mm)	
+bpAutoHeight	INPUT:checkbox		
+bpBarcodeHeight	INPUT:number		
+bpShowShop	INPUT:checkbox		
+bpShowName	INPUT:checkbox		
+bpShowPrice	INPUT:checkbox		
+bpShowPriceType	INPUT:checkbox		
+bpShowBcText	INPUT:checkbox		
+bpShowVariants	INPUT:checkbox		
+bpShowDiscount	INPUT:checkbox		
+loginUsername	INPUT:text		
+loginPassword	INPUT:password		
+setupName	INPUT:text	الاسم الكامل	
+setupUsername	INPUT:text	اسم المستخدم (مثال: admin)	
+setupPassword	INPUT:password	كلمة المرور	
+setupConfirmPassword	INPUT:password	تأكيد كلمة المرور	
+userId	INPUT:hidden		
+userName	INPUT:text		
+userUsername	INPUT:text		
+userPassword	INPUT:password	اترك الحقل فارغاً عند التعديل إذا لم ترغب بتغييرها	
+userRole	SELECT:select-one		بائع (نقطة البيع + الصندوق فقط) | كاشير (نقطة البيع + الزبائن) | محاسب (مبيعات + موردين + مشتريات + تقارير) | مساعد (كل شيء عدا الإعدادات) | مدير عام (صلاحيات كاملة)
+userStatus	SELECT:select-one		نشط (حساب مفعل) | معطل (يمنع الدخول)
+popupBuyName	INPUT:text		
+popupBuyPhone	INPUT:tel	055...	
+popupBuyWilaya	INPUT:text		
+popupBuyBaladiya	INPUT:text		

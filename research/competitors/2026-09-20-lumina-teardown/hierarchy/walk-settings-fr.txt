@@ -1,0 +1,177 @@
+
+##### SETTINGS TAB account
+HEAD	Paramètres du Compte
+FIELD	settAccountCurrentUsername	text		NOM D'UTILISATEUR ACTUEL	
+FIELD	settAccountNewUsername	text	Entrez un nouveau nom d'utilisateur	NOUVEAU NOM D'UTILISATEUR	
+FIELD	settAccountCurrentPwd	password	••••••••	MOT DE PASSE ACTUEL	
+FIELD	settAccountNewPwd	password	••••••••	NOUVEAU MOT DE PASSE	
+FIELD	settAccountConfirmPwd	password	••••••••	CONFIRMER LE NOUVEAU MOT DE PASSE	
+BTN	manage_accounts Compte
+BTN	tune Paramètres généraux
+BTN	receipt_long Factures
+BTN	lan Réseau
+BTN	sync_alt Import/Export
+BTN	verified_user Activation de l'Application
+BTN	app_shortcut Application Mobile
+BTN	update Mises à jour
+BTN	save Modifier le compte
+
+##### SETTINGS TAB general
+HEAD	Paramètres généraux
+HEAD	language Paramètres de langue
+HEAD	sell Catégories de dépenses
+HEAD	store Informations du Magasin
+HEAD	point_of_sale Paramètres du point de vente
+HEAD	Vente rapide
+HEAD	Mode comptabilité financière uniquement
+HEAD	Autoriser le stock négatif (vendre avant réapprovisionnement)
+HEAD	Demander confirmation pour les ventes sans stock
+HEAD	Tarification au prix moyen (au lieu de lot par lot)
+HEAD	Activer le Droit de Timbre
+HEAD	LOGO DU MAGASIN
+FIELD	settLanguage	select-one		العربية (Arabic) English Français (French) expand_more	العربية (Arabic) | English | Français (French)
+FIELD	newExpenseCategoryInput	text	Nom de la nouvelle catégorie…	add Ajouter	
+FIELD	settShopName	text		NOM DU MAGASIN	
+FIELD	settShopDesc	text		DESCRIPTION DU MAGASIN	
+FIELD	settShopAddress	text	Exemple : Rue Didouche Mourad, Alger	ADRESSE	
+FIELD	settShopPhone	text	055XX XX XX	TÉLÉPHONE	
+FIELD	settShopLandline	text	021 XX XX XX	TÉLÉPHONE FIXE	
+FIELD	settShopEmail	text	contact@example.com	EMAIL	
+FIELD	settShopRC	text		RC (REGISTRE DE COMMERCE)	
+FIELD	settShopNIF	text		NIF (NUMÉRO D'IDENTIFICATION FISCALE)	
+FIELD	settShopAI	text		AI (ARTICLE D'IMPOSITION)	
+FIELD	settShopNIS	text		NIS (NUMÉRO D'IDENTIFICATION STATISTIQUE)	
+FIELD	settShopTVA	number	0	TAUX DE TVA GLOBAL (%)	
+FIELD	settSkipQuickSaleConfirm	checkbox			
+FIELD	settFinancialOnlyMode	checkbox			
+FIELD	settAllowNegativeStock	checkbox			
+FIELD	settNegativeStockConfirm	checkbox			
+FIELD	settPricingAverage	checkbox			
+FIELD	settStampDutyEnabled	checkbox			
+BTN	manage_accounts Compte
+BTN	tune Paramètres généraux
+BTN	receipt_long Factures
+BTN	lan Réseau
+BTN	sync_alt Import/Export
+BTN	verified_user Activation de l'Application
+BTN	app_shortcut Application Mobile
+BTN	update Mises à jour
+BTN	add Ajouter
+BTN	close
+BTN	save Enregistrer les Données
+
+##### SETTINGS TAB invoices
+HEAD	Factures & Tickets
+HEAD	description Modèle de Facture
+HEAD	receipt Modèle de Ticket
+HEAD	Afficher le code-barres sur le reçu
+HEAD	print Paramètres d'Impression Directe
+HEAD	Impression Silencieuse Directe
+HEAD	point_of_sale Tiroir-caisse
+HEAD	Activer le tiroir-caisse
+HEAD	qr_code_2 Paramètres de l'étiquette code-barres
+HEAD	scale Paramètres de la balance électronique
+FIELD	invoiceLang	select-one		Langue d'impression des factures : العربية (Arabic) الفرنسية (Français) الإنجليز	العربية (Arabic) | الفرنسية (Français) | الإنجليزية (English)
+FIELD	receiptLang	select-one		Langue d'impression des reçus : العربية (Arabic) الفرنسية (Français) الإنجليزية 	العربية (Arabic) | الفرنسية (Français) | الإنجليزية (English)
+FIELD	settShowReceiptBarcode	checkbox			
+FIELD	settSilentPrint	checkbox			
+FIELD	settReceiptPrinter	select-one		Imprimante par Défaut du Système OneNote for Windows 10 RustDesk Printer (Par dé	Imprimante par Défaut du Système | OneNote for Windows 10 | RustDesk Printer (Par défaut) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+FIELD	settPosReceiptPrinter	select-one		Utiliser l'imprimante par défaut ci-dessus OneNote for Windows 10 RustDesk Print	Utiliser l'imprimante par défaut ci-dessus | OneNote for Windows 10 | RustDesk Printer (Par défaut) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+FIELD	settBarcodePrinter	select-one		Utiliser l'imprimante par défaut ci-dessus OneNote for Windows 10 RustDesk Print	Utiliser l'imprimante par défaut ci-dessus | OneNote for Windows 10 | RustDesk Printer (Par défaut) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+FIELD	settCashDrawerEnabled	checkbox			
+FIELD	settLabelWidth	number		LARGEUR (MM)	
+FIELD	settLabelHeight	number		HAUTEUR (MM)	
+FIELD	settBarcodeAutoHeight	checkbox		HAUTEUR DU CODE-BARRES (MM) Auto	
+FIELD	settBarcodeHeight	number		HAUTEUR DU CODE-BARRES (MM) Auto Choisit automatiquement la meilleure hauteur po	
+FIELD	settLabelShowShop	checkbox		Nom du magasin	
+FIELD	settLabelShowName	checkbox		Nom du produit	
+FIELD	settLabelShowPrice	checkbox		Prix	
+FIELD	settLabelShowPriceType	checkbox		Type de prix	
+FIELD	settLabelShowBcText	checkbox		Numéro du code-barres	
+FIELD	settLabelShowVariants	checkbox		Variantes	
+FIELD	settLabelShowDiscount	checkbox		Remise	
+FIELD	settScaleEnabled	checkbox			
+BTN	manage_accounts Compte
+BTN	tune Paramètres généraux
+BTN	receipt_long Factures
+BTN	lan Réseau
+BTN	sync_alt Import/Export
+BTN	verified_user Activation de l'Application
+BTN	app_shortcut Application Mobile
+BTN	update Mises à jour
+BTN	save Enregistrer les factures
+
+##### SETTINGS TAB network
+HEAD	Paramètres Réseau
+HEAD	Appareil unique
+HEAD	Plusieurs appareils sur le même réseau (LAN)
+HEAD	Via Internet (Cloud)
+HEAD	Combiné : serveur + Cloud
+HEAD	Le système fonctionne localement
+HEAD	Association de l'application mobile
+FIELD	mobilePairingToggle	checkbox			
+BTN	manage_accounts Compte
+BTN	tune Paramètres généraux
+BTN	receipt_long Factures
+BTN	lan Réseau
+BTN	sync_alt Import/Export
+BTN	verified_user Activation de l'Application
+BTN	app_shortcut Application Mobile
+BTN	update Mises à jour
+BTN	Tester la Connexion
+BTN	Enregistrer les Paramètres Réseau
+
+##### SETTINGS TAB import-export
+HEAD	Base de Données et Système (ZIP)
+HEAD	Exporter une Sauvegarde
+HEAD	Restaurer les Données
+HEAD	Inventaire et Produits (Excel)
+HEAD	Exporter les Produits
+HEAD	Importer depuis Excel
+HEAD	Rapports Financiers (Excel)
+HEAD	Journal des Ventes
+HEAD	Liste des Clients
+HEAD	Liste des Fournisseurs
+HEAD	Zone de danger (actions sensibles)
+HEAD	Réinitialisation d'Usine (Effacer les Données)
+FIELD	exportSalesDateFrom	date			
+FIELD	exportSalesDateTo	date			
+BTN	manage_accounts Compte
+BTN	tune Paramètres généraux
+BTN	receipt_long Factures
+BTN	lan Réseau
+BTN	sync_alt Import/Export
+BTN	verified_user Activation de l'Application
+BTN	app_shortcut Application Mobile
+BTN	update Mises à jour
+BTN	download Sauvegarder Maintenant
+BTN	upload Importer et restaurer
+BTN	description Exporter vers un fichier
+BTN	upload_file Démarrer l'importation
+BTN	download Télécharger le Modèle Excel
+BTN	download Exporter Excel
+BTN	delete_forever Réinitialiser le Système Maintenant
+
+##### SETTINGS TAB activation
+HEAD	Activation de l'Application
+HEAD	Rejoignez plus de 500 commerçants qui utilisent
+HEAD	Offre de lancement exclusive
+HEAD	Envoyez une demande d'achat !
+FIELD	buyName	text		NOM / MAGASIN	
+FIELD	buyPhone	tel	055...	TÉLÉPHONE	
+FIELD	buyWilaya	text		WILAYA	
+FIELD	buyBaladiya	text		COMMUNE	
+FIELD	activation-hwid	text		content_copy	
+FIELD	activation-input	text	XXXX-XXXX-XXXX-XXXX	CODE D'ACTIVATION	
+BTN	manage_accounts Compte
+BTN	tune Paramètres généraux
+BTN	receipt_long Factures
+BTN	lan Réseau
+BTN	sync_alt Import/Export
+BTN	verified_user Activation de l'Application
+BTN	app_shortcut Application Mobile
+BTN	update Mises à jour
+BTN	send Envoyer la demande
+BTN	content_copy
+BTN	check_circle Activer Maintenant
+BTN	upload_file Activer via Fichier (Hors Ligne)

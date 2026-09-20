@@ -1,0 +1,178 @@
+
+##### SETTINGS TAB account
+HEAD	إعدادات الحساب
+FIELD	settAccountCurrentUsername	text		اسم المستخدم الحالي	
+FIELD	settAccountNewUsername	text	أدخل الاسم الجديد	اسم المستخدم الجديد	
+FIELD	settAccountCurrentPwd	password	••••••••	كلمة المرور الحالية	
+FIELD	settAccountNewPwd	password	••••••••	كلمة المرور الجديدة	
+FIELD	settAccountConfirmPwd	password	••••••••	تأكيد كلمة المرور الجديدة	
+BTN	manage_accounts الحساب
+BTN	tune الإعدادات العامة
+BTN	receipt_long الفواتير
+BTN	lan الشبكة
+BTN	sync_alt استيراد وتصدير
+BTN	verified_user تفعيل البرنامج
+BTN	app_shortcut تطبيق الهاتف
+BTN	update التحديثات
+BTN	save تحديث الحساب
+
+##### SETTINGS TAB general
+HEAD	الإعدادات العامة
+HEAD	language إعدادات اللغة والواجهة
+HEAD	sell فئات المصاريف
+HEAD	store معلومات المتجر
+HEAD	point_of_sale إعدادات نقطة البيع
+HEAD	تسريع البيع السريع
+HEAD	وضع المحاسبة المالية فقط
+HEAD	السماح بالمخزون السالب (البيع قبل الإدراج)
+HEAD	طلب تأكيد عند البيع بدون مخزون
+HEAD	التسعير بمتوسط السعر (بدل دفعة-بدفعة)
+HEAD	تفعيل حقّ الطابع (Droit de timbre)
+HEAD	شعار المتجر
+FIELD	settLanguage	select-one		العربية (Arabic) English Français (French) expand_more	العربية (Arabic) | English | Français (French)
+FIELD	newExpenseCategoryInput	text	اسم الفئة الجديدة...	add اضافة	
+FIELD	settShopName	text		اسم المتجر	
+FIELD	settShopDesc	text		وصف المتجر	
+FIELD	settShopAddress	text	شارع ديدوش مراد، الجزائر العاصمة	العنوان	
+FIELD	settShopPhone	text	055XX XX XX	رقم الهاتف	
+FIELD	settShopLandline	text	021 XX XX XX	الهاتف الثابت	
+FIELD	settShopEmail	text	contact@example.com	البريد الإلكتروني	
+FIELD	settShopRC	text		RC (السجل التجاري)	
+FIELD	settShopNIF	text		NIF (الرقم الجبائي)	
+FIELD	settShopAI	text		AI (المادة الجبائية)	
+FIELD	settShopNIS	text		NIS (رقم الإحصاء)	
+FIELD	settShopTVA	number	0	نسبة الضريبة العالمية (TVA %)	
+FIELD	settSkipQuickSaleConfirm	checkbox			
+FIELD	settFinancialOnlyMode	checkbox			
+FIELD	settAllowNegativeStock	checkbox			
+FIELD	settNegativeStockConfirm	checkbox			
+FIELD	settPricingAverage	checkbox			
+FIELD	settStampDutyEnabled	checkbox			
+BTN	manage_accounts الحساب
+BTN	tune الإعدادات العامة
+BTN	receipt_long الفواتير
+BTN	lan الشبكة
+BTN	sync_alt استيراد وتصدير
+BTN	verified_user تفعيل البرنامج
+BTN	app_shortcut تطبيق الهاتف
+BTN	update التحديثات
+BTN	add اضافة
+BTN	close
+BTN	save حفظ معلومات المتجر
+
+##### SETTINGS TAB invoices
+HEAD	الفواتير والإيصالات
+HEAD	description قالب الفاتورة
+HEAD	receipt قالب الوصل (الإيصال)
+HEAD	إظهار باركود الطلب في الوصل
+HEAD	print إعدادات الطباعة المباشرة
+HEAD	الطباعة الصامتة المباشرة
+HEAD	point_of_sale درج النقود
+HEAD	تفعيل درج النقود
+HEAD	qr_code_2 إعدادات ملصق الباركود
+HEAD	scale إعدادات الميزان الإلكتروني
+FIELD	invoiceLang	select-one		لغة الطباعة للفواتير: العربية (Arabic) الفرنسية (Français) الإنجليزية (English)	العربية (Arabic) | الفرنسية (Français) | الإنجليزية (English)
+FIELD	receiptLang	select-one		لغة الطباعة للوصولات: العربية (Arabic) الفرنسية (Français) الإنجليزية (English)	العربية (Arabic) | الفرنسية (Français) | الإنجليزية (English)
+FIELD	settShowReceiptBarcode	checkbox			
+FIELD	settSilentPrint	checkbox			
+FIELD	settReceiptPrinter	select-one		طابعة النظام الافتراضية OneNote for Windows 10 RustDesk Printer (الافتراضي) PDFi	طابعة النظام الافتراضية | OneNote for Windows 10 | RustDesk Printer (الافتراضي) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+FIELD	settPosReceiptPrinter	select-one		استخدام الطابعة الافتراضية أعلاه OneNote for Windows 10 RustDesk Printer (الافتر	استخدام الطابعة الافتراضية أعلاه | OneNote for Windows 10 | RustDesk Printer (الافتراضي) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+FIELD	settBarcodePrinter	select-one		استخدام الطابعة الافتراضية أعلاه OneNote for Windows 10 RustDesk Printer (الافتر	استخدام الطابعة الافتراضية أعلاه | OneNote for Windows 10 | RustDesk Printer (الافتراضي) | PDFill PDF&Image Writer | Microsoft XPS Document Writer | Microsoft Print to PDF | Fax | AnyDesk Printer
+FIELD	settCashDrawerEnabled	checkbox			
+FIELD	settLabelWidth	number		العرض (MM)	
+FIELD	settLabelHeight	number		الارتفاع (MM)	
+FIELD	settBarcodeAutoHeight	checkbox		ارتفاع الباركود (MM) تلقائي	
+FIELD	settBarcodeHeight	number		ارتفاع الباركود (MM) تلقائي يختار أفضل ارتفاع تلقائياً ليملأ المساحة المتبقّية م	
+FIELD	settLabelShowShop	checkbox		اسم المتجر	
+FIELD	settLabelShowName	checkbox		اسم المنتج	
+FIELD	settLabelShowPrice	checkbox		السعر	
+FIELD	settLabelShowPriceType	checkbox		نوع السعر	
+FIELD	settLabelShowBcText	checkbox		رقم الباركود	
+FIELD	settLabelShowVariants	checkbox		المتغيرات	
+FIELD	settLabelShowDiscount	checkbox		التخفيض	
+FIELD	settScaleEnabled	checkbox			
+BTN	manage_accounts الحساب
+BTN	tune الإعدادات العامة
+BTN	receipt_long الفواتير
+BTN	lan الشبكة
+BTN	sync_alt استيراد وتصدير
+BTN	verified_user تفعيل البرنامج
+BTN	app_shortcut تطبيق الهاتف
+BTN	update التحديثات
+BTN	save حفظ إعدادات الفواتير
+
+##### SETTINGS TAB network
+HEAD	إعدادات الشبكة
+HEAD	جهاز واحد
+HEAD	عدة أجهزة على نفس الشبكة (LAN)
+HEAD	عبر الإنترنت (Cloud)
+HEAD	مدمج: سيرفر + Cloud
+HEAD	النظام يعمل محلياً
+HEAD	اقتران تطبيق الهاتف
+FIELD	mobilePairingToggle	checkbox			
+BTN	manage_accounts الحساب
+BTN	tune الإعدادات العامة
+BTN	receipt_long الفواتير
+BTN	lan الشبكة
+BTN	sync_alt استيراد وتصدير
+BTN	verified_user تفعيل البرنامج
+BTN	app_shortcut تطبيق الهاتف
+BTN	update التحديثات
+BTN	wifi_find اختبار الاتصال
+BTN	حفظ إعدادات الشبكة
+
+##### SETTINGS TAB import-export
+HEAD	قاعدة البيانات والنظام (ZIP)
+HEAD	تصدير النسخة الاحتياطية
+HEAD	استعادة البيانات
+HEAD	إدارة المخزون والمنتجات (Excel)
+HEAD	تصدير المنتجات
+HEAD	استيراد من Excel
+HEAD	التقارير المالية والسجلات (Excel)
+HEAD	سجل المبيعات
+HEAD	قائمة العملاء
+HEAD	قائمة الموردين
+HEAD	منطقة الخطر (إجراءات حساسة)
+HEAD	إعادة ضبط المصنع (حذف كل البيانات)
+FIELD	exportSalesDateFrom	date			
+FIELD	exportSalesDateTo	date			
+BTN	manage_accounts الحساب
+BTN	tune الإعدادات العامة
+BTN	receipt_long الفواتير
+BTN	lan الشبكة
+BTN	sync_alt استيراد وتصدير
+BTN	verified_user تفعيل البرنامج
+BTN	app_shortcut تطبيق الهاتف
+BTN	update التحديثات
+BTN	download النسخ الاحتياطي الآن
+BTN	upload رفع واستعادة
+BTN	description تصدير للملف
+BTN	upload_file بدء الاستيراد
+BTN	download تحميل ملف فارغ (Inventory_test.xlsx)
+BTN	download تصدير Excel
+BTN	download تحميل ملف فارغ
+BTN	delete_forever إعداة ضبط النظام الآن
+
+##### SETTINGS TAB activation
+HEAD	تفعيل البرنامج
+HEAD	انضم لأكثر من 500 تاجر يستعملون Lumina
+HEAD	عرض الانطلاق الحصري
+HEAD	أرسل طلب شراء الآن!
+FIELD	buyName	text		الاسم الثلاثي أو اسم المحل	
+FIELD	buyPhone	tel	055...	رقم الهاتف	
+FIELD	buyWilaya	text		الولاية	
+FIELD	buyBaladiya	text		البلدية	
+FIELD	activation-hwid	text		content_copy	
+FIELD	activation-input	text	XXXX-XXXX-XXXX-XXXX	كود التفعيل	
+BTN	manage_accounts الحساب
+BTN	tune الإعدادات العامة
+BTN	receipt_long الفواتير
+BTN	lan الشبكة
+BTN	sync_alt استيراد وتصدير
+BTN	verified_user تفعيل البرنامج
+BTN	app_shortcut تطبيق الهاتف
+BTN	update التحديثات
+BTN	send إرسال طلب التفعيل
+BTN	content_copy
+BTN	check_circle تفعيل الآن
+BTN	upload_file تفعيل عبر ملف (Offline)

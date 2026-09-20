@@ -1,0 +1,30 @@
+appId: com.fikradevs.lumina
+---
+# Fills the owner-account form that adb-typed input could not get past: the
+# password and its confirmation field lost focus under `adb shell input`, so
+# both kept disagreeing even when they read the same length. Maestro's
+# `inputText` targets the focused field directly and `hideKeyboard` between
+# fields stops the next tap from landing on a field the keyboard is covering.
+# Run after the app is on the "owner account setup" screen (mode choice ->
+# "ابدأ الآن" on a freshly cleared install, since the trial's 50-invoice /
+# 10-customer cap is not worth spending on a retry).
+- tapOn:
+    point: "46%,61%"
+- inputText: "Samir Dinar"
+- hideKeyboard
+- tapOn:
+    point: "46%,72%"
+- inputText: "samir.owner"
+- hideKeyboard
+- tapOn:
+    point: "50%,86%"
+- inputText: "1234"
+- hideKeyboard
+- tapOn:
+    point: "50%,97%"
+- inputText: "1234"
+- hideKeyboard
+- swipe:
+    start: "50%,80%"
+    end: "50%,30%"
+- takeScreenshot: owner-account-filled
