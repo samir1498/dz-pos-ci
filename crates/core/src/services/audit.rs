@@ -279,6 +279,29 @@ pub fn list(conn: &mut SqliteConnection, shop_id: i32) -> Result<Vec<AuditEntry>
     repo::list(conn, shop_id)
 }
 
+/// One action's rows, newest first, for a service that wrote them and now
+/// wants to read them back. `stock.rs` is the caller: the recount writes a
+/// `ACTION_STOCK_DRIFT` row per product it corrected, and the screen that
+/// asks what the last run found reads that run off the log rather than
+/// keeping a second copy of it.
+///
+/// Newest first is the repo's order and the reason it differs from `list`'s:
+/// a caller asking for one action wants the last time it happened, and reads
+/// backwards until that run ends.
+///
+/// Here rather than straight off `repos::audit` because a service reaching
+/// into another domain's repo skips whatever that domain decides on the way
+/// past. Nothing is decided here today; the point is that the next thing
+/// decided about reading the log is decided once (architecture.md, the
+/// layers section).
+pub fn by_action(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    action: &str,
+) -> Result<Vec<AuditEntry>, CoreError> {
+    repo::by_action(conn, shop_id, action)
+}
+
 /// Rows a screen reads at a time (M4 T7). One shop's whole day almost never
 /// fills a page; a shop's whole lifetime will, eventually, and this is the
 /// number that keeps a screen open on it from asking for all of it.

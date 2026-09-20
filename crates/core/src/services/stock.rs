@@ -9,7 +9,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::stock::{Drift, Movement, StockMovement, StockMovementRowWrite};
 use crate::money::Money;
-use crate::repos::{audit as audit_repo, jobs, stock as repo};
+use crate::repos::{jobs, stock as repo};
 use crate::services::{audit, clock};
 
 /// The name the `jobs` table keeps the recount's last run under. One row per
@@ -163,7 +163,7 @@ pub fn last_recount(conn: &mut SqliteConnection, shop_id: i32) -> Result<LastRec
     // this day: the rows of one day sit together at the end of the log, and
     // a row whose JSON cannot be read says no day, which ends the run the
     // same way rather than refusing the whole screen.
-    let mut drifts: Vec<Drift> = audit_repo::by_action(conn, shop_id, audit::ACTION_STOCK_DRIFT)?
+    let mut drifts: Vec<Drift> = audit::by_action(conn, shop_id, audit::ACTION_STOCK_DRIFT)?
         .into_iter()
         .map_while(|entry| drift_of(&entry, &day))
         .collect();
