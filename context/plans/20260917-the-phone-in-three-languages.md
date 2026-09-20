@@ -12,7 +12,7 @@ tasks:
     status: 'done'
   - id: 'T2'
     desc: 'packages/shared/src/i18n: one TS object per domain, a barrel that merges them, the key type derived from the English object, and a check that every language has every key'
-    status: 'pending'
+    status: 'done'
   - id: 'T3'
     desc: 'The phone provider and hook reading those dictionaries, language persisted on the device, RTL for Arabic on every screen the phone has'
     status: 'pending'
