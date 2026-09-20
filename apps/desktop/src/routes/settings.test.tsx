@@ -23,6 +23,7 @@ import type { DatedRegimeDto, RegimeDto, SettingsDto, StoreDto } from "@dzpos/sh
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
+import { saleFactureQueryKey, saleTicketQueryKey } from "@/api";
 import { ThemeProvider } from "@/lib/theme";
 import { SessionProvider } from "@/lib/session";
 import { ME_CASHIER, ME_OWNER } from "@/test/session";
@@ -174,7 +175,7 @@ function mount(lang: Lang = "fr", path = "/settings/shop") {
     routeTree: rootRoute.addChildren([settingsRoute.addChildren(rooms)]),
     history: createMemoryHistory({ initialEntries: [path] }),
   });
-  return render(
+  const mounted = render(
     <I18nProvider lang={lang}>
       <QueryClientProvider client={client}>
         {/* The appearance room's control reads the provider. It shares the
@@ -192,6 +193,9 @@ function mount(lang: Lang = "fr", path = "/settings/shop") {
       </QueryClientProvider>
     </I18nProvider>,
   );
+  // The client comes back with the render, so a test can seed a cached page
+  // and say what became of it. Nothing else in this file needs it.
+  return Object.assign(mounted, { client });
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -580,6 +584,50 @@ describe("the printing room", () => {
       expect(label).toBeTruthy();
       expect(await screen.findByRole("option", { name: label })).toBeInTheDocument();
     }
+  });
+
+  /** A layout is the shop's standing choice, so it is not in the key a
+   *  rendered facture is cached under (`saleFactureQueryKey`, keyed by the
+   *  document, the language and the sheet). Changing the choice therefore
+   *  has to drop those pages by hand, or the owner who picks a new layout
+   *  and reopens the document they were just looking at is handed the old
+   *  one by the cache and concludes the setting does nothing.
+   *
+   *  Seeded with two pages of one facture and a ticket, because the fix is
+   *  a prefix and a prefix can be too wide as easily as too narrow: a
+   *  ticket is its own template on its own paper and no facture layout
+   *  reaches it, so it has to survive.
+   */
+  test("drops every facture already rendered, and leaves the tickets alone", async () => {
+    const user = userEvent.setup();
+    const { client } = mount("fr", "/settings/printing");
+    // Built from the factories the app itself caches under, not typed out.
+    // Typed out, this test passes while production breaks: rename the first
+    // element of `saleFactureQueryKey` and leave `everyFacturePagePrefix`
+    // alone, and the invalidation matches nothing while the keys written
+    // here still start with the old word. The test lens named that mutation
+    // on 2026-09-20 and it was green.
+    const a4 = saleFactureQueryKey(7, "fr", "a4");
+    const a5 = saleFactureQueryKey(7, "ar", "a5");
+    const ticket = saleTicketQueryKey(7, "fr");
+    client.setQueryData(a4, "<html>the A4 facture</html>");
+    client.setQueryData(a5, "<html>the A5 facture</html>");
+    client.setQueryData(ticket, "<html>the ticket</html>");
+
+    const picker = await screen.findByRole("combobox", { name: fr.settings_facture_layout });
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: fr.facture_layout_roll_80mm }));
+    await waitFor(() => expect(picker).toHaveTextContent(fr.facture_layout_roll_80mm));
+
+    // Invalidated, not deleted: the entry is still there and is marked
+    // stale, which is what makes the panel refetch it when it is next
+    // looked at rather than flashing empty.
+    for (const key of [a4, a5]) {
+      await waitFor(() =>
+        expect(client.getQueryState(key)?.isInvalidated).toBe(true),
+      );
+    }
+    expect(client.getQueryState(ticket)?.isInvalidated).toBe(false);
   });
 
   test("sends the half sheet and says it prints on A5", async () => {

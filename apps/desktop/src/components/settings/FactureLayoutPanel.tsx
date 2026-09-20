@@ -12,7 +12,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { FactureLayoutDto, SettingsDto } from "@dzpos/shared";
 
-import { api, settingsQueryKey } from "@/api";
+import { api, everyFacturePagePrefix, settingsQueryKey } from "@/api";
 import { PanelHeading } from "@/components/settings/PanelHeading";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import {
@@ -57,6 +57,10 @@ export function FactureLayoutPanel({ settings }: { settings: SettingsDto }) {
       setServerError(null);
       queryClient.setQueryData<SettingsDto>(settingsQueryKey, next);
       await queryClient.invalidateQueries({ queryKey: settingsQueryKey });
+      // And every facture already rendered, which the server would now draw
+      // differently. Without this the choice looks like it did nothing to
+      // the one person most likely to check it straight away.
+      await queryClient.invalidateQueries({ queryKey: everyFacturePagePrefix() });
     },
     onError: (error: unknown) => setServerError(errorKey(error)),
   });

@@ -266,6 +266,23 @@ export function saleSheetPrefixes(id: number): readonly (readonly (string | numb
   ];
 }
 
+/** Every facture page in the cache, whatever document, language or sheet.
+ *
+ * The layout a facture is drawn in is not in the key above, because it is
+ * the shop's standing choice rather than something a caller names. So the
+ * moment that choice changes, every page already rendered in this session
+ * is a picture of the old one, and the screen where that shows is the one
+ * an owner uses next: change the layout, reopen the document you were just
+ * looking at, and the cache hands back the sheet you were trying to leave.
+ *
+ * A prefix and not a list: naming each document, language and sheet would
+ * be a list that goes wrong the day a fourth sheet exists. Tickets are not
+ * in it; a ticket is its own template on its own paper and no facture
+ * layout reaches it. */
+export function everyFacturePagePrefix(): readonly string[] {
+  return ["sale-facture"];
+}
+
 /** One document read on its own, which is what the documents screen opens a
  * row into. A factory beside the list's, so the id is always the second
  * element and no call site spells the key out. */

@@ -124,9 +124,10 @@ test("a régime change dated ahead is planned; dated back it is in force", async
  *
  * The picker's own wiring is covered by the jsdom test beside the component.
  * What only a browser can say is this: the kit's select is a listbox the app
- * draws, and jsdom cannot open it. That the printed page then comes back in
- * the chosen layout is the API's business and is proved in
- * `crates/api/tests/print_api.rs`, against a real facture.
+ * draws, and jsdom cannot open it. This test is the choice surviving a round
+ * trip to the server; the facture that comes back drawn in it is
+ * `zzzz-facture-layouts.spec.ts`, which runs last because it needs a document to
+ * open and this file runs before the till.
  */
 test("the chosen facture layout survives a reload", async ({ page }) => {
   await page.goto("/settings/printing");
