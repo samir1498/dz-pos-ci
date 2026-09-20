@@ -90,15 +90,31 @@ cashier sees it at the count and can correct it, so it is visible rather than
 silent.
 
 **Ruling 3, the phone's offline sale replayed late.** It belongs to the shift
-that was open when it was rung, not the one open when it reaches the server.
-Nothing new is needed to know which: `apps/mobile/lib/queue.ts` stamps
-`createdAt` on every queued request and `NewSale` already carries an optional
-`issued_at`.
+open when it reaches the server. If none is open then, it is tagged as
+belonging to no shift, under ruling 2.
 
-If that shift has since closed and been counted, the sale is tagged as
-belonging to no shift, under ruling 2, rather than reopening a counted shift
-or landing in somebody else's. Its cash went into a drawer whose count is
-already signed, and moving the sale would make that signature false.
+Corrected the same day it was written. The first version of this ruling said
+the sale belonged to the shift open when it was *rung*, and that nothing new
+was needed to know which. That was wrong on the facts.
+`crates/api/src/dto/sales.rs:388` says it in its own words: "`issued_at` is
+not on the wire: the moment a sale happened is the server's to say, on the
+shop's calendar, and a till with a wrong clock would otherwise date a fiscal
+document." Line 461 hardcodes `issued_at: None` on the way in, and the
+`createdAt` in `apps/mobile/lib/queue.ts` is local queue bookkeeping that
+never reaches the server.
+
+Satisfying the first version meant putting a client-controlled timestamp on
+the sale wire, which reopens exactly the hole that comment closed, and buys a
+worse one: a phone controlling that field could place a cash sale outside
+every one of its own shifts, taking that cash off the count, with the only
+trace in an audit log `see_audit_log` reserves to the owner. Arrival time is
+the server's own and cannot be steered from the counter.
+
+The cost, named rather than found later. A sale rung offline at 18:00 and
+synced at 19:30, after that cashier closed at 19:00, is tagged rather than
+counted. Its cash was physically in the drawer at the count, so the close
+reads over by that amount and the tagged row is what explains it. The shift
+report shows tagged sales beside the difference for that reason.
 
 **Ruling 4, the count at close.** The expected figure is shown before the
 cashier types what is in the drawer, not after. Samir, 2026-09-20: following
@@ -210,12 +226,39 @@ they are nothing. `gramme` and `quintal` stay fractional like kg. No
 arithmetic changes either way, because a quantity is already stored in
 thousandths.
 
+**Ruling 10, who opens and closes.** A cashier opens and closes their own
+shift. Anyone else's is manager and owner. Samir, 2026-09-20.
+
+Ruling 2b depends on it: the shift opens at the first sign-in of the day, and
+the person signing in at a till is usually the cashier. A permission they do
+not hold would break that on every counter.
+
+One route serves both cases, so the coarse gate and the fine check are
+separate, the shape `DiscountAboveThreshold` and `ChangePriceAtTheTill`
+already use under the `Sell`-gated `POST /sales`: `gates.rs` gates the close
+route on `open_and_close_till`, which all three roles hold, and
+`services::shifts::close` calls `permissions::require` for the
+close-someone-else case when `opened_by` is not the caller.
+
+The two reads are gated apart, because one is a cashier's own till and the
+other is management. `GET /till/shifts/open` answers the caller's own open
+shift and needs no permission, since T5's close modal cannot show the
+expected figure without it. `GET /till/shifts/{id}` and the day's list are
+`see_reports`, because "whose count was short" is a management figure.
+`crates/api/tests/route_gates.rs` hardcodes which GET paths may carry a
+permission at all, and neither till path is on that list, so T4 widens it and
+names that file among the ones it touches.
+
 ## Rulings still open
 
 None. Every question this file opened was answered on 2026-09-20 and written
-above. Rulings 8 and 9 were taken without the hardware and the competitor
-listing that would have settled them outright, and each says so in its own
-words rather than reading as a fact.
+above, including two the first pass missed: who may open and close a shift
+(ruling 10), and what a replayed offline sale attaches to once it was clear
+that `issued_at` is not on the wire (ruling 3, corrected the same day).
+
+Rulings 8 and 9 were taken without the hardware and the competitor listing
+that would have settled them outright, and each says so in its own words
+rather than reading as a fact.
 
 ## Where the weekend loop actually stands, checked against the repo
 
@@ -380,8 +423,12 @@ two components print it. Files: `crates/api/src/dto/purchases.rs`,
 removes lines), `crates/api/tests/purchases_api.rs`. Spec: the Purchase
 paragraph of §1 and migration 000008's `transport_centimes` and
 `extra_costs_centimes` comments; no fiscal row, nothing charged changes.
-Done: no `+` between two `_centimes` fields in any `.tsx`, a lint or test
-that refuses one, and `just ci <branch> full` green on the mirror.
+Done: the two components read the total the API answers and compute none of
+their own, proven by mutation rather than by shape: put the hand-rolled sum
+back and the test goes red. A lint matching a literal `+` is not enough on
+its own, because a subtraction of a negative, a `reduce`, a line break or the
+same sum moved into a helper all walk past it. `just ci <branch> full` green
+on the mirror.
 `dz-money-builder`. Size S.
 
 **T4, in four branches, `progress` on each and `close` on the last.**
@@ -474,6 +521,16 @@ stored, so it is checkable and does not drift.
 
 The shift window is read on the shop clock against `created_at` of documents,
 `debt_ledger` and `supplier_ledger`, all of which the services stamp.
+
+`created_at` and not `issued_at`, deliberately, and it is ruling 3 that
+decides it. `documents` carries both: `created_at` is when the row was
+written, `issued_at` is the business moment. They differ only for a sale the
+phone queued offline, and `issued_at` is not client-settable
+(`crates/api/src/dto/sales.rs:388`, and `:461` hardcodes it to `None` on the
+way in), so it carries no information about the ring that `created_at` lacks.
+Arrival is also the one of the two a counter cannot steer. Every comparison
+in `services::shifts` reads `created_at`, and a test pins a replay that lands
+after its own shift closed and is tagged rather than counted.
 `expenses.created_at` is not stamped: there is no clock call in
 `services/expenses.rs` or `repos/expenses.rs`, so it takes the
 `DEFAULT (CURRENT_TIMESTAMP)` written in
@@ -523,8 +580,7 @@ and a manager who cannot read a day's shifts cannot run a floor.
 
 Permissions: opening and closing is a new permission, `open_and_close_till`,
 
-because a cashier may `sell` and nothing else today and ruling 5 decides
-where it sits. Adding it moves `permissions.rs` off thirteen and the match
+held by all three roles under ruling 10. Adding it moves `permissions.rs` off thirteen and the match
 refuses to compile until all three roles place it, which is the point. §5's
 "Thirteen permissions" and `gates.rs`'s count are rewritten in the same PR;
 `.claude/stale-homes.md` gains the row it does not have for the permission
@@ -537,9 +593,9 @@ count.
   reads the session window. Both are true at once and the page says which
   screen answers which question.
 - Closed by a different user: `closed_by` is its own column and the audit row
-  names both. Manager and owner only, from the permission table: a cashier
-  may `sell` and nothing else, and closing another person's till is a
-  correction.
+  names both. A cashier closes their own and nobody else's (ruling 10), and
+  the check is inside `services::shifts::close` rather than on the route,
+  because one route serves both cases.
 - A sale with no shift open: accepted and tagged, never refused (ruling 2).
   Nothing is stored on the sale: a sale belongs to no shift when its
   `created_at` falls outside every `[opened_at, closed_at)` of its `user_id`,
@@ -560,19 +616,24 @@ count.
   must not be dropped in silence, which T8 of the architecture plan found the
   phone doing once already.
 - Two tills in one shop: rule 5 of `docs/architecture.md` says exactly one
-  desktop is the server, and the phone is a thin client that rings into it,
-  so v1 has one drawer per shop and the partial unique index says so. A
-  second drawer is a second `till_id` column and a wider index later, not a
-  redesign; the page names that so nobody builds it early.
-- Cash handed back: ruling 6. If a paid-out covers it, nothing else moves.
-  If a refund is a ledger payment going out, `cash.rs`'s `refunds` stops
-  being zero and the cash paragraph's "nothing records cash handed back"
-  goes.
+  desktop is the server, and the phone is a thin client that rings into it.
+  The drawer is still per person, not per machine: two people on one desktop
+  each have their own shift, and the partial unique index is on
+  `(shop_id, opened_by)` and not on `(shop_id)`. A physical second box is a
+  `drawers` table and a wider index later, not a redesign; the page names
+  that so nobody builds it early.
+- Cash handed back: ruling 5. `cash.rs`'s `refunds` stops being a hard-coded
+  zero and the cash paragraph's "nothing records cash handed back" goes.
+  Three assertions pin today's zero and each is part of this change rather
+  than collateral: `crates/core/tests/cash_service.rs:161` and `:343`, and
+  the proptest invariant at `crates/core/tests/cash_prop.rs:153`. A task that
+  loosens one instead of replacing it with a positive test of the new
+  behaviour has not done the work.
 
 ### The tasks
 
-**T1: the page.** The design above with rulings 5 and 6 filled in, the
-schema, the awkward cases as decided. Rulings 1 to 4 are taken and written at
+**T1: the page.** The design above, the schema, the awkward cases as
+decided. Every ruling is taken and written at
 the top of this file. Bookkeeping, straight to `main`.
 
 **T2: the migration, the models, the repos.** Files:
@@ -584,7 +645,29 @@ the top of this file. Bookkeeping, straight to `main`.
 `migration.rs` passes, a second open shift for the same user is refused by
 the file while one for a different user is accepted, a close whose counted
 figure differs from the expected one with no note is refused by the file, and
-an expense written at 00:30 on the shop clock is stored at 00:30. Size M.
+an expense written at 00:30 on the shop clock is stored at 00:30.
+
+Three things that done-line does not say on its own, and which the task owes:
+
+- Every constraint is proven through a raw `INSERT`, not through
+  `services::shifts`, using `migration.rs`'s own `insert_with` and
+  `insert_with_all` helpers. The service will repeat each check for a kinder
+  message, and a test that goes through it passes with the index and the
+  CHECKs deleted.
+- The note CHECK is proven on both sides: a differing count with a note is
+  accepted, an equal count without one is accepted. The refusal alone is
+  satisfied by an unconditional `note IS NOT NULL`, which would break every
+  clean close.
+- The expense clock fix is proven on the rows written before the migration,
+  not only on new writes, and on the way back down.
+  `crates/core/tests/migration.rs:2280`,
+  `the_audit_log_moves_onto_the_shop_clock_with_the_rows_already_in_it`, is
+  the shape: seed a row at a UTC boundary, migrate, assert the stored value
+  moved by the hour, then revert and assert it moved back. Without it, a
+  migration that stamps new rows and leaves the old ones alone, which is the
+  bug this section exists for, passes.
+
+Size M.
 
 **T3: the service and the audit rows.** `services::shifts::{open, close,
 open_for, sales_outside_a_shift, report}`, the `cash::position` window, and
@@ -593,47 +676,79 @@ the three audit actions. Files: `crates/core/src/services/shifts.rs`,
 `crates/core/src/services/mod.rs`, `crates/core/tests/shifts_service.rs`.
 Spec: the cash position paragraph of §1, rewritten in this PR to say what a
 session adds; the fiscal rules table gains no row because no document
-changes what it charges. Done: a fixture with a float, two cash sales, one
-card sale, one customer payment, one expense, one paid-out and one
-supplier payment in cash, whose expected figure is written by hand in the
-test and not computed by the code under test; the difference is negative
-when counted is short; `REACHES_PAST_A_SIBLING` unchanged. Size M.
+changes what it charges. Done: a fixture with an opening cash figure, two cash sales, one card sale,
+one customer payment, one cash expense and one supplier payment in cash,
+whose expected figure is written by hand in the test and not computed by the
+code under test; the difference is negative when counted is short;
+`REACHES_PAST_A_SIBLING` unchanged.
 
-**T4: the routes, the gates, the permission.** `POST /till/sessions`,
-`POST /till/sessions/{id}/close`, `POST /till/sessions/{id}/movements`,
-`GET /till/sessions/open`, `GET /till/sessions/{id}`; the gate rows; the
-permission; the sale hook for ruling 2. Files: `crates/api/src/routes/till.rs`,
+No paid-out in the fixture: ruling 1 removed the movement, so cash leaving
+the drawer is the expense that is already in the list.
+
+The window comparison gets its own cases, because a fixture whose rows all
+sit inside one shift passes with the comparison inverted: a sale at exactly
+`opened_at` is in, a sale at exactly `closed_at` is out, and a sale whose
+`created_at` falls after its ringer's last shift closed with none open is
+tagged as belonging to no shift. Size M.
+
+**T4: the routes, the gates, the permission.** `POST /till/shifts`,
+`POST /till/shifts/{id}/close`, `GET /till/shifts/open`,
+`GET /till/shifts/{id}`; the gate rows; the permission; the tag hook for
+ruling 2. There is no movements route: ruling 1 removed the movement. Files: `crates/api/src/routes/till.rs`,
 `crates/api/src/dto/till.rs`, `crates/api/src/gates/table.rs`,
 `crates/api/src/router.rs`, `crates/core/src/services/permissions.rs`,
 `crates/core/src/services/sales.rs`, `crates/api/tests/till_api.rs`,
-`docs/features.md` §5. Done: `route_gates.rs` green with the new rows; a
-cashier's refusal names the permission; the sale-without-session case
-answers the code ruling 2 chose. Size M.
+`crates/api/tests/route_gates.rs`, `docs/features.md` §5.
 
-**T5: opening and closing at the till.** The banner (no session, or float
-and running expected figure if ruling 5 shows it), the open modal, the close
-modal with counted and difference. `till.tsx` is pinned at 905 and may not
+`route_gates.rs` is on that list on purpose: its own test hardcodes which GET
+paths may carry a permission at all, and neither till read is on it, so
+gating `GET /till/shifts/{id}` on `see_reports` means widening that
+allow-list in the same PR. Done: `route_gates.rs` green with the new rows; a
+cashier's refusal names the permission; a sale rung with no shift open
+returns 200 with the sale and writes the `till.sale_outside_shift` audit row,
+and no request path can refuse it. Size M.
+
+**T5: opening and closing at the till.** The open popup on the first sign-in
+of the day, pre-filled with the last close's counted figure and carrying the
+"do not ask again" box (ruling 2b), and the close modal, which shows the
+expected figure before the cashier types what is in the drawer (ruling 4) and
+requires a note the moment the two differ. `till.tsx` is pinned at 905 and may not
 grow, so every line goes in `apps/desktop/src/routes/-till/session.tsx`,
 wired from `till.tsx` in one import and one element. Files: the part file,
 `till.tsx` (a few lines), `packages/shared/src/client/till.ts`, the three
 dictionaries. Done: `till.test.tsx` (pinned at 1405, so new tests go in
-`-till/session.test.tsx`) proves open, close, short count shown negative,
-and the refusal wording; the app under `just e2e` opens a session, sells,
+`-till/session.test.tsx`) proves open, close, short count shown negative, the note field appearing
+and blocking the close when the figures differ, and the refusal wording; the app under `just e2e` opens a session, sells,
 closes, and the difference printed matches the fixture. Size M.
 
-**T6: movements, and the figure on the dashboard and the expenses screen.**
-Paid-in and paid-out from the till part, the dashboard's cash panel showing
-the float and expected-in-drawer when a session is open (in a component
-file, `dashboard.tsx` is pinned), the same beside the month's cash on
-`expenses.tsx` (pinned). Files: `apps/desktop/src/routes/-till/movements.tsx`,
+**T6: a refund that leaves the drawer, and the shift figure on screen.**
+Ruling 5: a reversal may be settled in cash, so `Outgoings.refunds` stops
+being a hard-coded zero. Both paths that reach it are in scope, the avoir
+against a facture and the cancelled cash ticket, which is where an anonymous
+customer's refund lands because there is no ledger to credit. Then the
+dashboard's cash panel shows the opening cash and the expected figure while a
+shift is open, in a component file because `dashboard.tsx` is pinned, and the
+same panel sits beside the month's cash on `expenses.tsx`.
+
+Files: `crates/core/src/services/cash.rs`, `avoir.rs`, `cancellation.rs`,
+`crates/core/tests/cash_service.rs`, `crates/core/tests/cash_prop.rs`,
 `apps/desktop/src/components/CashPanel.tsx` (lifted out of `expenses.tsx`,
 which shortens it and lowers its entry), `dashboard.tsx` (imports only).
-Done: a paid-out lowers the expected figure on all three screens without a
-reload; a cashier without the permission sees the button refused by the
-server, not hidden. Size S.
+
+Done: a cash refund lowers the day's cash figure and the open shift's
+expected figure by the same centimes; the three assertions that pin
+`refunds` at zero (`cash_service.rs:161`, `:343`, `cash_prop.rs:153`) are
+replaced by ones that pin the new behaviour rather than loosened; a partial
+avoir refunds its share and no more; the stamp is still never given back; and
+the cash paragraph of `docs/features.md` loses its "nothing records cash
+handed back" sentence in the same PR. Size M.
+
+This is the only task in the loop that changes a money figure the dashboard
+already answers, so it goes to `dz-money-builder` and takes the extra layer
+the quality gates ask for on money.
 
 **T7: the closing sweep.** The session report readable after close (a list
-under `/till/sessions`), the e2e with a real cashier per the M4 rule, the
+under `/till/shifts`), the e2e with a real cashier per the M4 rule, the
 docs sweep (`docs/features.md` §1 and §5, `docs/architecture.md`'s error
 table, `.claude/stale-homes.md`, `README.md` screens list). Done: the
 e2e names the refusal codes apart; `stale-check` finds nothing. Size S.
