@@ -32,9 +32,8 @@ use crate::models::product::Product;
 use crate::money::Money;
 use crate::print::number;
 use crate::print::strings::{text, Key};
-use crate::repos::categories as categories_repo;
 use crate::repos::documents as documents_repo;
-use crate::services::{audit, customers, products, suppliers};
+use crate::services::{audit, categories, customers, products, suppliers};
 
 /// Two decimals and a thousands separator: what a shop reads an amount as,
 /// and what keeps a column summable.
@@ -261,7 +260,7 @@ pub fn products(
     let rows = products::list(conn, shop_id)?;
     // The category is named rather than numbered: an id means nothing in a
     // spreadsheet and the import matches a category by its name.
-    let categories = categories_repo::list(conn, shop_id)?;
+    let categories = categories::list(conn, shop_id)?;
     let name_of = |id: Option<i32>| -> String {
         id.and_then(|id| categories.iter().find(|c| c.id == id))
             .map_or_else(String::new, |c| c.name.clone())

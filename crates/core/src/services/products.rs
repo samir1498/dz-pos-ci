@@ -8,10 +8,10 @@ use crate::error::CoreError;
 use crate::models::product::{NewProduct, Product, ProductRowWrite};
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Bps, Money};
-use crate::repos::categories as categories_repo;
 use crate::repos::counters;
 use crate::repos::products as repo;
 use crate::services::audit;
+use crate::services::categories;
 use crate::services::stock;
 
 /// GS1 prefix 2 is reserved for restricted circulation: codes a shop makes
@@ -184,12 +184,7 @@ fn validate(
     // only when it had to supply a rate, so a caller who named its own rate
     // could point a product at another shop's category (rule 3).
     let category_rate = match new.category_id {
-        Some(id) => Some(categories_repo::default_rate_bps(conn, shop_id, id)?.ok_or(
-            CoreError::NotFound {
-                entity: "category",
-                id,
-            },
-        )?),
+        Some(id) => Some(categories::rate_of(conn, shop_id, id)?),
         None => None,
     };
     let rate = resolve_rate(new, category_rate)?;

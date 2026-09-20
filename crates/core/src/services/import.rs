@@ -44,14 +44,12 @@ use std::io::Cursor;
 
 use crate::error::CoreError;
 use crate::lang::Lang;
-use crate::models::category::CategoryRowWrite;
 use crate::models::product::{NewProduct, Unit};
 use crate::money::{Bps, Money};
 use crate::print::barcode_label::is_ean13;
 use crate::print::strings::{text as word, Key};
-use crate::repos::categories as categories_repo;
 use crate::repos::products as products_repo;
-use crate::services::{audit, products};
+use crate::services::{audit, categories, products};
 
 pub use crate::services::export::PRODUCT_COLUMNS;
 
@@ -326,40 +324,13 @@ fn category_id(
     fields: &Fields,
     done: &mut Applied,
 ) -> Result<i32, CoreError> {
-    if let Some(found) = categories_repo::by_name(conn, shop_id, name)? {
+    if let Some(found) = categories::by_name(conn, shop_id, name)? {
         return Ok(found.id);
     }
     let rate = fields.rate_bps.ok_or_else(|| {
         CoreError::validation("rate_percent", "a new category needs the rate of its row")
     })?;
-    let made = categories_repo::insert(
-        conn,
-        &CategoryRowWrite {
-            shop_id,
-            name: name.to_string(),
-            default_rate_bps: i32::try_from(rate.as_u32())
-                .map_err(|_| CoreError::validation("rate_percent", "rate out of range"))?,
-        },
-    )?;
-    audit::record(
-        conn,
-        shop_id,
-        user_id,
-        audit::Change {
-            action: audit::ACTION_CREATE,
-            entity: "category",
-            entity_id: Some(made.id),
-            before: None,
-            after: Some(
-                serde_json::json!({
-                    "name": made.name,
-                    "default_rate_bps": made.default_rate_bps.as_u32(),
-                    "source": ACTION_IMPORT_PRODUCTS,
-                })
-                .to_string(),
-            ),
-        },
-    )?;
+    let made = categories::create(conn, shop_id, user_id, name, rate, ACTION_IMPORT_PRODUCTS)?;
     done.categories_created = done.categories_created.saturating_add(1);
     Ok(made.id)
 }
@@ -382,10 +353,7 @@ fn resolve_rate(
             "a row without a category must name its rate",
         )
     })?;
-    let raw = categories_repo::default_rate_bps(conn, shop_id, id)?.ok_or(CoreError::NotFound {
-        entity: "category",
-        id,
-    })?;
+    let raw = categories::rate_of(conn, shop_id, id)?;
     let raw = u32::try_from(raw)
         .map_err(|_| CoreError::validation("rate_percent", "rate out of range"))?;
     Ok(Bps::new(raw)?)
@@ -804,7 +772,7 @@ fn assess_row(
         let known = fields
             .category
             .as_deref()
-            .map(|name| categories_repo::by_name(conn, shop_id, name))
+            .map(|name| categories::by_name(conn, shop_id, name))
             .transpose()?
             .flatten();
         if known.is_none() {

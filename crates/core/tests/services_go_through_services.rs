@@ -39,22 +39,21 @@ use std::path::Path;
 /// joins the one below.
 const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency", "testdb"];
 
-/// What reaches past a sibling today, service by service. Seventeen of
-/// them across eleven services. Shrinking, never growing: the fix for a
+/// What reaches past a sibling today, service by service. Thirteen of
+/// them across nine services; it was seventeen across eleven until the
+/// category list got a door of its own. Shrinking, never growing: the fix for a
 /// row is to add the missing function to the sibling's service and call
 /// that, the way `stock.rs` now reads the audit log through
 /// `services::audit::by_action`.
-const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 11] = [
+const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 9] = [
     ("avoir", &["documents"]),
     ("cash", &["expenses"]),
     ("customers", &["documents"]),
     ("dashboard", &["debt", "supplier_debt"]),
     ("debt", &["customers", "documents"]),
-    ("export", &["categories", "documents"]),
-    ("import", &["categories", "products"]),
-    ("products", &["categories"]),
+    ("export", &["documents"]),
+    ("import", &["products"]),
     ("purchases", &["products", "supplier_debt"]),
-    ("seed", &["categories"]),
     ("supplier_debt", &["purchases", "suppliers"]),
 ];
 

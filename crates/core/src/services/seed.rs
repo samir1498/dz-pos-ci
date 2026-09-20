@@ -34,20 +34,18 @@ use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
-use crate::models::category::CategoryRowWrite;
 use crate::models::customer::NewCustomer;
 use crate::models::product::{NewProduct, Unit};
 use crate::models::shop::StoreBlock;
 use crate::models::sql_types::{PartyKind, PaymentMethod};
 use crate::models::supplier::NewSupplier;
-use crate::money::{Money, PaymentMode};
-use crate::repos::categories as categories_repo;
+use crate::money::{Bps, Money, PaymentMode};
 use crate::services::expenses::NewExpense;
 use crate::services::purchases::{NewLine, NewPurchase, ReceiveLine};
 use crate::services::sales::{NewSale, NewSaleLine, SaleKind};
 use crate::services::{
-    audit, avoir, cancellation, customers, debt, documents, expenses, products, purchases, sales,
-    shops, supplier_debt, suppliers, users,
+    avoir, cancellation, categories, customers, debt, documents, expenses, products, purchases,
+    sales, shops, supplier_debt, suppliers, users,
 };
 
 /// The name the seeded shop trades under. Public because the binary reads it
@@ -323,34 +321,7 @@ fn the_categories(
     ];
     let mut ids = Vec::with_capacity(ROWS.len());
     for (name, rate_bps) in ROWS {
-        let made = categories_repo::insert(
-            conn,
-            &CategoryRowWrite {
-                shop_id,
-                name: name.to_string(),
-                default_rate_bps: i32::try_from(rate_bps)
-                    .map_err(|_| CoreError::validation("rate_bps", "rate out of range"))?,
-            },
-        )?;
-        audit::record(
-            conn,
-            shop_id,
-            user_id,
-            audit::Change {
-                action: audit::ACTION_CREATE,
-                entity: "category",
-                entity_id: Some(made.id),
-                before: None,
-                after: Some(
-                    serde_json::json!({
-                        "name": made.name,
-                        "default_rate_bps": made.default_rate_bps.as_u32(),
-                        "source": "seed",
-                    })
-                    .to_string(),
-                ),
-            },
-        )?;
+        let made = categories::create(conn, shop_id, user_id, name, Bps::new(rate_bps)?, "seed")?;
         ids.push(made.id);
         counts.categories += 1;
     }

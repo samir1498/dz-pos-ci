@@ -17,7 +17,7 @@ use chrono::NaiveDate;
 use dzpos_core::money::Money;
 use dzpos_core::services::clock::{Month, Period};
 use dzpos_core::services::{
-    cash, dashboard, debt, documents, expenses, products, seed, sessions, suppliers, users,
+    audit, cash, dashboard, debt, documents, expenses, products, seed, sessions, suppliers, users,
 };
 
 mod common;
@@ -43,6 +43,41 @@ fn the_seeder_fills_an_empty_shop_with_a_catalogue_a_month_of_trading_and_the_pa
     assert_eq!(counts.suppliers, 5);
     assert_eq!(counts.days, 30);
     assert!(counts.categories >= 6, "{counts:?}");
+    // Every category the seeder opened says a seed opened it. An owner who
+    // finds a category nobody typed asks the log where it came from, and
+    // "seed" is the answer that stops the question; the import's own rows
+    // say `product.import` for the same reason. Both sides of
+    // `services::categories::create` are read here because only the import
+    // side was, and a seed that quietly stopped auditing would have shipped.
+    let entries = audit::list(&mut conn, SHOP).unwrap();
+    let opened: Vec<serde_json::Value> = entries
+        .iter()
+        .filter(|e| e.entity == "category" && e.action == audit::ACTION_CREATE)
+        .map(|e| serde_json::from_str(e.after.as_deref().unwrap_or("")).unwrap())
+        .collect();
+    assert_eq!(
+        opened.len(),
+        usize::try_from(counts.categories).unwrap(),
+        "the seeder made {} categories and audited {}",
+        counts.categories,
+        opened.len()
+    );
+    for made in &opened {
+        assert_eq!(
+            made["source"], "seed",
+            "a category does not say a seed made it"
+        );
+        assert!(
+            made["name"].is_string(),
+            "a category create has no name: {made}"
+        );
+        assert!(
+            made["default_rate_bps"]
+                .as_u64()
+                .is_some_and(|r| r <= 10_000),
+            "a category create carries no usable rate: {made}"
+        );
+    }
     // The window the brief asks for: twenty five to sixty sales a day.
     assert!(
         counts.sales >= 30 * 25 && counts.sales <= 30 * 60,
