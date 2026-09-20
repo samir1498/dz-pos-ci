@@ -224,6 +224,30 @@ mod tests {
         }
     }
 
+    /// Every query here takes a `shop_id`, and the customer ledger is the
+    /// column the dashboard reads its debt figure from, so a shop seeing the
+    /// shop next door's debtors is the worst answer this file can give. The
+    /// supplier ledger beside it is proved the same way
+    /// (`repos::supplier_debt`).
+    #[test]
+    fn a_shop_reads_its_own_ledger_and_never_the_shop_next_door() {
+        let (_dir, mut conn) = open();
+        let customer = a_customer(&mut conn, "Cliente Amrani");
+        append(&mut conn, &movement(customer, DebtKind::Sale, 100_000, 0)).unwrap();
+        diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Autre magasin')")
+            .execute(&mut conn)
+            .unwrap();
+
+        assert!(balances(&mut conn, 2).unwrap().is_empty());
+        assert!(ledger(&mut conn, 2, customer).unwrap().is_empty());
+        // And this shop still has what it wrote, so the two reads above are
+        // answering "not this shop's" rather than "nothing is there".
+        assert_eq!(
+            balances(&mut conn, SHOP).unwrap(),
+            vec![(customer, 100_000, 0)]
+        );
+    }
+
     #[test]
     fn a_movement_with_no_moment_on_it_is_refused_rather_than_dated_by_the_file() {
         // The column's default is SQLite's CURRENT_TIMESTAMP, which is UTC,

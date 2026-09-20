@@ -42,10 +42,10 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::sql_types::DocumentKind;
 use crate::money::Money;
-use crate::repos::{dashboard as repo, debt as debt_repo, supplier_debt as supplier_repo};
+use crate::repos::dashboard as repo;
 use crate::services::cash::{self, CashPosition};
 use crate::services::clock::{Month, Period};
-use crate::services::expenses;
+use crate::services::{debt, expenses, supplier_debt};
 
 /// How many products a top list names. Ten is what fits beside the rest of
 /// the screen; a shop wanting the whole catalogue exports it through the
@@ -247,8 +247,8 @@ pub fn read(
             .collect(),
         top_by_quantity: top(&monthly, |p| i128::from(p.qty_milli)),
         top_by_margin: top(&monthly, |p| i128::from(p.margin.as_centimes())),
-        customer_debt: owed(&debt_repo::balances(conn, shop_id)?)?,
-        supplier_debt: owed(&supplier_repo::balances(conn, shop_id)?)?,
+        customer_debt: owed(&debt::balances(conn, shop_id)?)?,
+        supplier_debt: owed(&supplier_debt::balances(conn, shop_id)?)?,
         open_purchases: repo::open_purchases(conn, shop_id)?,
     })
 }
@@ -505,18 +505,18 @@ fn add_signed(total: Money, kind: DocumentKind, amount: Money) -> Result<Money, 
     Ok(total.checked_add(amount)?)
 }
 
-/// The positive balances of one ledger, summed and counted. `balances` hands
-/// back the debit and the credit of each party; what is owed is the first
-/// less the second.
-fn owed(balances: &[(i32, i64, i64)]) -> Result<Owed, CoreError> {
+/// The positive balances of one ledger, summed and counted. `services::debt`
+/// and `services::supplier_debt` have already done the subtraction (debit
+/// less credit, checked); what is left here is the filter, the sum and the
+/// count.
+fn owed(balances: &HashMap<i32, Money>) -> Result<Owed, CoreError> {
     let mut total = Money::ZERO;
     let mut parties = 0i64;
-    for (_, debit, credit) in balances {
-        let balance = Money::centimes(*debit).checked_sub(Money::centimes(*credit))?;
+    for balance in balances.values() {
         if balance.as_centimes() <= 0 {
             continue;
         }
-        total = total.checked_add(balance)?;
+        total = total.checked_add(*balance)?;
         parties = parties
             .checked_add(1)
             .ok_or(crate::money::MoneyError::Overflow)?;

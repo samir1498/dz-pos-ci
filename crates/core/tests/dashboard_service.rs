@@ -523,11 +523,21 @@ fn the_top_lists_rank_by_units_and_by_margin_and_they_are_not_the_same_list() {
 fn the_debts_are_the_parties_in_the_red_and_a_party_in_credit_is_not_netted_off() {
     let (_dir, mut conn) = open_temp();
     let owing = common::an_identified_customer(&mut conn, "Benali");
+    let also_owing = common::an_identified_customer(&mut conn, "Entreprise Meziane");
     let in_credit = common::a_customer(&mut conn, "Cherif");
+    let paid_off = common::an_identified_customer(&mut conn, "Zerrouki");
     // One customer owes; the other is holding credit the shop owes back.
     common::a_payment_row(&mut conn, in_credit, 5_000);
     let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     sell(&mut conn, p, 3, SaleKind::Facture, Some(owing), 9);
+    // A second debtor, so the total is a sum of two rather than one figure
+    // passed through, and the count is a count.
+    sell(&mut conn, p, 1, SaleKind::Facture, Some(also_owing), 10);
+    // And one who bought on credit and paid the lot back. Debit equals
+    // credit, so the balance is exactly zero: not in the red, and not a
+    // party. Nothing stood on that edge before.
+    sell(&mut conn, p, 2, SaleKind::Facture, Some(paid_off), 11);
+    common::a_payment_row(&mut conn, paid_off, 20_000);
 
     let supplier = common::a_supplier(&mut conn, "Cimenterie");
     let purchase = common::a_purchase_row(&mut conn, supplier, "2026-09-10");
@@ -537,10 +547,11 @@ fn the_debts_are_the_parties_in_the_red_and_a_party_in_credit_is_not_netted_off(
     a_purchase(&mut conn, supplier, "cancelled");
 
     let read = dashboard::read(&mut conn, SHOP, day(15)).unwrap();
-    assert_eq!(read.customer_debt.total, Money::centimes(30_000));
+    assert_eq!(read.customer_debt.total, Money::centimes(40_000));
     assert_eq!(
-        read.customer_debt.parties, 1,
-        "the customer in credit owes nothing and is not counted"
+        read.customer_debt.parties, 2,
+        "the customer in credit and the one who paid off exactly owe nothing \
+         and neither is counted"
     );
     assert_eq!(read.supplier_debt.total, Money::centimes(40_000));
     assert_eq!(read.supplier_debt.parties, 1);

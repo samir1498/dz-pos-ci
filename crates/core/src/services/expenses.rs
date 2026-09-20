@@ -71,6 +71,26 @@ pub fn total_on(
     repo::total_between(conn, shop_id, &text, &text)
 }
 
+/// What a stretch of days, both included, came to. The range version beside
+/// `total` (a month) and `total_on` (a day): three functions over one
+/// column rather than two plus an exception a sibling service reaches
+/// around. Takes `NaiveDate` bounds, like `total_on`, rather than the
+/// formatted strings a caller may already hold, so the day format stays
+/// this file's own detail and a caller never has to know it to ask this
+/// column a question.
+pub fn total_between(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    from: chrono::NaiveDate,
+    to: chrono::NaiveDate,
+) -> Result<Money, CoreError> {
+    let (from_text, to_text) = (
+        from.format(DAY_FORMAT).to_string(),
+        to.format(DAY_FORMAT).to_string(),
+    );
+    repo::total_between(conn, shop_id, &from_text, &to_text)
+}
+
 /// Writes the expense and the audit entry in one transaction: money the shop
 /// spent with nobody's name on it is the failure the log exists to prevent
 /// (features.md §5).

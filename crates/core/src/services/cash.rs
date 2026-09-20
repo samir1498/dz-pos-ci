@@ -52,8 +52,9 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::debt::PaymentMethod;
 use crate::money::{Money, PaymentMode};
-use crate::repos::{cash as repo, expenses as expenses_repo};
+use crate::repos::cash as repo;
 use crate::services::clock::Period;
+use crate::services::expenses;
 
 /// Money that came in over the period.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,11 +125,6 @@ pub fn position(
     // Half open at the top, and worked out by the period itself so the
     // dashboard reading the same days compares against the same two moments.
     let (first_moment, after) = period.moments()?;
-    let day_format = "%Y-%m-%d";
-    let (first_text, last_text) = (
-        from.format(day_format).to_string(),
-        to.format(day_format).to_string(),
-    );
 
     let (cash_sales, cash_stamp) =
         repo::sales(conn, shop_id, first_moment, after, PaymentMode::Cash)?;
@@ -153,7 +149,7 @@ pub fn position(
             after,
             PaymentMethod::Cash,
         )?,
-        expenses: expenses_repo::total_between(conn, shop_id, &first_text, &last_text)?,
+        expenses: expenses::total_between(conn, shop_id, from, to)?,
     };
     let (card_sales, card_stamp) =
         repo::sales(conn, shop_id, first_moment, after, PaymentMode::Card)?;

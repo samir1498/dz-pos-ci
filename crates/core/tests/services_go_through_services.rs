@@ -51,10 +51,8 @@ const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency",
 /// through `services::documents` would close a ring the walk below refuses,
 /// `customers -> documents -> customers`. Breaking that back edge is its own
 /// task.
-const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 7] = [
-    ("cash", &["expenses"]),
+const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 5] = [
     ("customers", &["documents"]),
-    ("dashboard", &["debt", "supplier_debt"]),
     ("debt", &["customers", "documents"]),
     ("import", &["products"]),
     ("purchases", &["products", "supplier_debt"]),

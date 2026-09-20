@@ -136,10 +136,16 @@ fn pay_supplier(
 }
 
 fn spend(conn: &mut SqliteConnection, centimes: i64, on: NaiveDate) {
-    let category = expenses::categories(conn, SHOP).unwrap()[0].id;
+    spend_in(conn, SHOP, centimes, on);
+}
+
+/// The same, on whichever shop's books. Only the second-shop cases name a
+/// shop; everything else spends on this shop and reads better for it.
+fn spend_in(conn: &mut SqliteConnection, shop_id: i32, centimes: i64, on: NaiveDate) {
+    let category = expenses::categories(conn, shop_id).unwrap()[0].id;
     expenses::create(
         conn,
-        SHOP,
+        shop_id,
         OWNER,
         NewExpense {
             category_id: category,
@@ -329,6 +335,9 @@ fn the_day_counts_the_cash_that_moved_on_it_and_nothing_else() {
         None,
         at(11, 0),
     );
+    // One on each side. Without the day-before spend, pulling the expense
+    // window back a whole day left every test in this file green.
+    spend(&mut conn, 777_000, day(9));
     spend(&mut conn, 777_000, day(11));
     pay_supplier(&mut conn, SHOP, 1, 777_000, "cash", at(11, 8));
 
@@ -377,6 +386,18 @@ fn the_month_covers_its_first_and_its_last_day_and_no_other_shops() {
     );
     spend(&mut conn, 1_000, day(1));
     spend(&mut conn, 2_000, day(30));
+    // The last day of August and the first of October, so the month's own
+    // edges are proved on the expense column and not only on the sales one.
+    spend(
+        &mut conn,
+        999_000,
+        NaiveDate::from_ymd_opt(2026, 8, 31).unwrap(),
+    );
+    spend(
+        &mut conn,
+        999_000,
+        NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),
+    );
     // August and October, on either side of the month asked for.
     a_document(
         &mut conn,
@@ -419,6 +440,18 @@ fn the_month_covers_its_first_and_its_last_day_and_no_other_shops() {
         at(15, 12),
     );
     pay_supplier(&mut conn, 2, 2, 555_000, "cash", at(15, 12));
+    // Inside the month asked for, on the other shop's books. The expense
+    // total is read with a shop id like every other query, and until this
+    // line no test made the other shop spend anything at all. The first
+    // migration seeds categories for the shop it opens, so the second one
+    // gets its own before it can spend.
+    diesel::sql_query(
+        "INSERT INTO expense_categories (shop_id, key, sort_order, active) \
+         VALUES (2, 'rent', 1, 1)",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    spend_in(&mut conn, 2, 555_000, day(15));
 
     let month =
         cash::position(&mut conn, SHOP, Period::Month(Month::new(2026, 9).unwrap())).unwrap();
