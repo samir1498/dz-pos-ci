@@ -1,0 +1,109 @@
+---
+title: 'The last six reaches stand behind rings'
+slug: 'the-last-six-reaches-stand-behind-rings'
+status: 'active'
+category: 'architecture'
+created: 20260921
+tldr: 'Every pair left in the burn-down list is blocked by an import ring, and the shape the loop file proposed for them does not survive the walk that counts reaches. Two shapes are open and both cost something. Samir picks.'
+priority: 70
+tasks:
+  - id: 'T1'
+    desc: 'This page: what actually blocks each of the six, what the walk counts, and the two shapes with their costs'
+    status: 'done'
+  - id: 'T2'
+    desc: 'Close the walk blind spot: a service in a subdirectory is invisible to both walks'
+    status: 'pending'
+  - id: 'T3'
+    desc: 'The move, once Samir has picked a shape'
+    status: 'pending'
+---
+
+# The last six reaches stand behind rings
+
+`REACHES_PAST_A_SIBLING` in `crates/core/tests/services_go_through_services.rs`
+is down to four rows over six pairs, from seventeen over eleven. The loop
+file plans the rest as branch d, "the mutual pair", with the debt rows added
+to it on 2026-09-21. That framing is wrong in a way worth writing down before
+anybody builds: it is not that nobody got to these six. Every one of them has
+a ring standing in front of it.
+
+## What blocks each pair
+
+| Pair | The ring in front of it |
+|---|---|
+| `customers -> documents` | `documents.rs:23` imports `services::customers` |
+| `debt -> customers` | `customers.rs:22` imports `services::debt` |
+| `debt -> documents` | `documents.rs:23` to `customers.rs:22` to `debt` |
+| `purchases -> supplier_debt` | `supplier_debt.rs` imports `services::purchases` |
+| `supplier_debt -> purchases` | the same pair, the other way |
+| `supplier_debt -> suppliers` | `suppliers.rs:23` imports `services::supplier_debt` |
+
+In four of the six the sibling's service already has the exact function the
+reaching service wants. `services::suppliers` has `get` at line 82 and
+`supplier_belongs_to_shop` at line 88, which is precisely what
+`supplier_debt.rs:800` and `:814` reach into `repos::suppliers` for. The
+call cannot be written, because writing it closes a ring
+`RINGS_STILL_OPEN` refuses to grow.
+
+## Why the shape the loop file names does not work
+
+The loop file says to do what `services::pricing` did: put the piece both
+sides need in a module below both. That worked for pricing because
+`pricing.rs` contains no `repos::` at all. It is arithmetic.
+
+What these six need moved is not arithmetic. It is ownership predicates and
+single-row reads: does this customer belong to this shop, does this
+supplier, fetch this purchase. Every one of them queries a table.
+
+`no_service_reaches_a_repo_that_is_not_on_the_list` counts a reach as any
+`repos::Y` named in `services/X.rs` where Y is not X and not on the
+four-name no-service list. A new `services::ownership` holding those
+predicates therefore arrives as a new row of its own,
+`("ownership", ["customers", "documents", "suppliers"])`, and the constant
+is an exact-equality assertion that refuses growth in either direction. The
+shared module does not remove reaches. It relabels them and adds one.
+
+## The two shapes, and what each costs
+
+**Shape A, break the rings at the thin end.** Four of the six rings exist
+for one call each or close to it. `documents.rs` uses exactly one thing from
+`customers`, the ownership predicate at line 145. Lift that one operation to
+the caller that needs the answer, or have `documents::issue` take a customer
+it has already been told belongs to the shop, and `documents` stops
+importing `customers`. That frees `customers -> documents` and
+`debt -> documents` at once, because the chain through `customers` is what
+made the second a ring. Cost: the check moves up to every caller of
+`issue`, and a caller that forgets it is a customer of another shop on a
+document. That is the failure the predicate exists to prevent, so the move
+has to make forgetting impossible rather than merely unlikely, which means
+a type that can only be made by passing the check.
+
+**Shape B, let the constant carry one exemption.** Accept a shared
+repo-touching module and give it a row in `REACHES_PAST_A_SIBLING` with a
+comment saying what it is. Cost: the constant stops meaning "every reach
+that skips a sibling's rules" and starts meaning "every reach except the
+ones we decided were fine", which is the property that made it useful. It
+also cannot then be deleted, and deleting it is the stated end of this work.
+
+Shape A is the recommendation. It is more work and it keeps the gate
+meaning what it says.
+
+## A blind spot to close either way
+
+Both walks read `crates/core/src/services/` with a non-recursive
+`fs::read_dir` filtered to a `.rs` extension. A service in a subdirectory,
+`services/foo/mod.rs`, is invisible to the reach walk, to the ring walk and
+to `the_walk_cannot_be_stepped_around`, which covers `crate::schema::`,
+`repos::*`, `services::*` and `super::` but not this. `crates/api/src/gates/`
+is a folder already, so the shape is one somebody would reach for without
+meaning to evade anything. T2 closes it, and it is worth doing before T3
+whichever shape wins, because Shape B would otherwise be reachable by
+accident.
+
+## What is not in question
+
+The rows leave by moving a door, never by widening the list. Shorter is the
+only direction either constant goes. `debt.rs:581` writes
+`documents_repo::set_remaining_debt` and `remaining_debt` is a field of the
+§3 totals table, so whatever door it ends up behind is `pub(crate)`, like
+`avoirs_of` and `list_in_range` that #128 added, and never `pub`.
