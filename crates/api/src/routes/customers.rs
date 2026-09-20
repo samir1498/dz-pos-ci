@@ -18,7 +18,7 @@ use dzpos_core::models::document::SellerBlock;
 use dzpos_core::print::debt_slip::MOVEMENTS;
 use dzpos_core::print::{render_debt_slip, render_statement, Paper};
 use dzpos_core::services::customers::NewCustomer;
-use dzpos_core::services::{clock, customers as service, debt, shops};
+use dzpos_core::services::{clock, customers as service, debt, preferences, shops};
 use serde::Deserialize;
 
 use crate::dto::{
@@ -198,15 +198,18 @@ pub async fn payments(
     Ok(Json(found))
 }
 
-/// The days a statement covers and the language it prints in. Named by the
-/// caller on every call rather than read from a setting, like the ticket's:
-/// a document prints in the language the app is being used in, and the screen
-/// is the only place that knows which that is (features.md §4).
+/// The days a statement covers, named by the caller on every call because
+/// only the screen knows the range it is showing. `lang` is the app's own
+/// language, named the same way; `print_lang`, left out of most calls,
+/// overrides it for the one call, and between the two sits the shop's stored
+/// preference, resolved by `preferences::print_lang_for`
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`).
 #[derive(Deserialize)]
 pub struct StatementQuery {
     from: String,
     to: String,
     lang: Lang,
+    print_lang: Option<Lang>,
 }
 
 /// The statement of account for a range of days, as the HTML page the core
@@ -218,7 +221,12 @@ pub async fn statement(
     range: Result<Query<StatementQuery>, QueryRejection>,
 ) -> Result<Html<String>, ApiError> {
     let id = path_id(id)?;
-    let Query(StatementQuery { from, to, lang }) = range.map_err(|_| {
+    let Query(StatementQuery {
+        from,
+        to,
+        lang: caller,
+        print_lang: named,
+    }) = range.map_err(|_| {
         ApiError::BadRequest(
             "from and to are days written YYYY-MM-DD and lang is fr, en or ar".into(),
         )
@@ -234,19 +242,25 @@ pub async fn statement(
             // the other question, and the facture answers it.
             let customer = service::get(c, shop, id)?;
             let statement = debt::statement_between(c, shop, id, from, to)?;
+            // The language the page is drawn in comes out of the same call:
+            // the resolved language and the account it prints have to be
+            // read together.
+            let lang = preferences::print_lang_for(c, shop, named, caller)?;
             render_statement(&customer, &statement, lang, Paper::A4)
         })
         .await?;
     Ok(Html(page))
 }
 
-/// The language a counter paper prints in. Named by the caller, like the
-/// statement's and the ticket's: a document prints in the language the app is
-/// being used in and the screen is the only place that knows which that is
-/// (features.md §4).
+/// The language a counter paper prints in, named by the caller like the
+/// statement's. `print_lang`, left out of most calls, overrides it for the
+/// one call the same way, and between the two sits the shop's stored
+/// preference, resolved by `preferences::print_lang_for`
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`).
 #[derive(Deserialize)]
 pub struct PrintQuery {
     lang: Lang,
+    print_lang: Option<Lang>,
 }
 
 /// The 80 mm debt slip, as the HTML page the core rendered (features.md §2
@@ -264,8 +278,10 @@ pub async fn debt_slip(
     print: Result<Query<PrintQuery>, QueryRejection>,
 ) -> Result<Html<String>, ApiError> {
     let id = path_id(id)?;
-    let Query(PrintQuery { lang }) =
-        print.map_err(|_| ApiError::BadRequest("lang is fr, en or ar".into()))?;
+    let Query(PrintQuery {
+        lang: caller,
+        print_lang: named,
+    }) = print.map_err(|_| ApiError::BadRequest("lang is fr, en or ar".into()))?;
     let shop = state.shop_id;
     // The moment is the server's, the same clock the ledger's rows are
     // stamped by: a till whose clock is wrong must not date the paper it
@@ -276,6 +292,7 @@ pub async fn debt_slip(
             let seller = SellerBlock::from(shops::get(c, shop)?);
             let customer = service::get(c, shop, id)?;
             let slip = debt::recent(c, shop, id, MOVEMENTS)?;
+            let lang = preferences::print_lang_for(c, shop, named, caller)?;
             render_debt_slip(&seller, &customer, &slip, at, lang)
         })
         .await?;

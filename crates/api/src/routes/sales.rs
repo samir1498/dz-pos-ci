@@ -74,20 +74,26 @@ pub async fn get_one(
     }))
 }
 
-/// The language the ticket prints in. Named by the caller on every call
-/// rather than read from a setting: the ruling in `docs/features.md` §4 is
-/// that a document prints in the language the till is being used in, and
-/// the till is the only place that knows which that is.
+/// `lang` is the language the till is being used in, named by the caller on
+/// every call because the till is the only place that knows which that is.
+/// It is not what decides the paper on its own: `print_lang`, left out of
+/// most calls, overrides for the one call the way `?layout=` overrides the
+/// stored facture layout, and between the two sits the shop's own stored
+/// preference. `preferences::print_lang_for` (crates/core) is the one place
+/// that resolves the three steps
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`).
 #[derive(Deserialize)]
 pub struct TicketQuery {
     lang: Lang,
+    print_lang: Option<Lang>,
 }
 
 /// The 80 mm ticket for a stored sale, as an HTML page.
 ///
 /// The core renders it (features.md §4: the same bytes from the desktop and
-/// from a server with no screen), so this handler reads the document and
-/// hands the string over. A lang the app does not print, or none at all, is
+/// from a server with no screen), so this handler reads the document, the
+/// language it prints in comes out of the same look at the file, and the
+/// string is handed over. A lang the app does not print, or none at all, is
 /// the caller's mistake and answers 422 in the envelope like every other
 /// unreadable request. The id has to name a ticket: a facture squeezed onto
 /// a till slip is a facture nobody would take for one, so its id answers 404
@@ -95,41 +101,53 @@ pub struct TicketQuery {
 pub async fn ticket(
     State(state): State<AppState>,
     id: Result<Path<i32>, PathRejection>,
-    lang: Result<Query<TicketQuery>, QueryRejection>,
+    query: Result<Query<TicketQuery>, QueryRejection>,
 ) -> Result<Html<String>, ApiError> {
     let Path(id) =
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
-    let Query(TicketQuery { lang }) =
-        lang.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
+    let Query(TicketQuery {
+        lang: caller,
+        print_lang: named,
+    }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
-    let found = state
-        .blocking(move |c| documents::get_of_kind(c, shop, id, DocumentKind::Ticket))
+    let (found, lang) = state
+        .blocking(move |c| {
+            let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
+            let lang = preferences::print_lang_for(c, shop, named, caller)?;
+            Ok((found, lang))
+        })
         .await?;
     Ok(Html(render_ticket(&found, lang)?))
 }
 
 /// The same ticket as ESC/POS bytes for a thermal printer.
 ///
-/// Same document, same `lang`, same refusal as the HTML route when the
-/// row is not a ticket or carries an IFU TVA recap. Returns the raw bytes
-/// the head eats, so the desktop can write them to a file, a USB-serial
-/// device or a TCP printer on port 9100. The transport stays out of the
-/// API: the caller here decides whether those bytes go to a spool file or
-/// over the wire, and `crates/core/src/print/escpos.rs` is what that caller
-/// calls next.
+/// Same document, same `lang` and `print_lang`, same refusal as the HTML
+/// route when the row is not a ticket or carries an IFU TVA recap. Returns
+/// the raw bytes the head eats, so the desktop can write them to a file, a
+/// USB-serial device or a TCP printer on port 9100. The transport stays out
+/// of the API: the caller here decides whether those bytes go to a spool
+/// file or over the wire, and `crates/core/src/print/escpos.rs` is what that
+/// caller calls next.
 pub async fn ticket_escpos(
     State(state): State<AppState>,
     id: Result<Path<i32>, PathRejection>,
-    lang: Result<Query<TicketQuery>, QueryRejection>,
+    query: Result<Query<TicketQuery>, QueryRejection>,
 ) -> Result<axum::response::Response, ApiError> {
     use axum::http::{header, HeaderValue};
     let Path(id) =
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
-    let Query(TicketQuery { lang }) =
-        lang.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
+    let Query(TicketQuery {
+        lang: caller,
+        print_lang: named,
+    }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
-    let found = state
-        .blocking(move |c| documents::get_of_kind(c, shop, id, DocumentKind::Ticket))
+    let (found, lang) = state
+        .blocking(move |c| {
+            let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
+            let lang = preferences::print_lang_for(c, shop, named, caller)?;
+            Ok((found, lang))
+        })
         .await?;
     let bytes = render_ticket_escpos(&found, lang)?;
     let mut res = axum::response::Response::new(axum::body::Body::from(bytes));
@@ -148,20 +166,29 @@ pub async fn ticket_escpos(
 /// same bytes `ticket_escpos` would return. Spool is `spool/ticket-<id>-<lang>.bin`
 /// beside the shop file (never pruned), and if `DZPOS_PRINTER_ADDR` (e.g.
 /// `192.168.1.50:9100`) is set the bytes are also pushed to that TCP printer.
-/// Idempotent: re-printing overwrites the same spool file.
+/// Idempotent: re-printing overwrites the same spool file. `<lang>` in the
+/// spool name and the `"lang"` this answers with are both the resolved
+/// language, never the caller's own `lang`: the spool file and the paper it
+/// stands for have to agree.
 pub async fn print_ticket(
     State(state): State<AppState>,
     id: Result<Path<i32>, PathRejection>,
-    lang: Result<Query<TicketQuery>, QueryRejection>,
+    query: Result<Query<TicketQuery>, QueryRejection>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     use serde_json::json;
     let Path(id) =
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
-    let Query(TicketQuery { lang }) =
-        lang.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
+    let Query(TicketQuery {
+        lang: caller,
+        print_lang: named,
+    }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
-    let found = state
-        .blocking(move |c| documents::get_of_kind(c, shop, id, DocumentKind::Ticket))
+    let (found, lang) = state
+        .blocking(move |c| {
+            let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
+            let lang = preferences::print_lang_for(c, shop, named, caller)?;
+            Ok((found, lang))
+        })
         .await?;
     let bytes = render_ticket_escpos(&found, lang)?;
     let spool_dir = state
@@ -191,10 +218,14 @@ pub async fn print_ticket(
     })))
 }
 
-/// The language and the sheet, both named by the caller on every call. The
-/// sheet is not a setting: the same facture goes on A4 in the office and on
-/// A5 at the counter, and the till is the only place that knows which the
-/// cashier reached for (features.md §4).
+/// The sheet, named by the caller on every call and not a setting: the same
+/// facture goes on A4 in the office and on A5 at the counter, and the till
+/// is the only place that knows which the cashier reached for (features.md
+/// §4). `lang` is named the same way, for the same reason, but does not
+/// decide the paper on its own: `print_lang` overrides it for one call and
+/// the shop's stored preference sits between the two, resolved by
+/// `preferences::print_lang_for`
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`).
 ///
 /// The layout is the opposite and is left out of most calls. It is how the
 /// page is drawn rather than what it is drawn on, the shop chooses it once in
@@ -235,6 +266,7 @@ pub struct FactureQuery {
     lang: Lang,
     paper: Sheet,
     layout: Option<FactureLayout>,
+    print_lang: Option<Lang>,
 }
 
 /// The A4 or A5 sheet for a stored facture, avoir or proforma, as an HTML
@@ -260,16 +292,17 @@ pub async fn facture(
     let Path(id) =
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
     let Query(FactureQuery {
-        lang,
+        lang: caller,
         paper,
         layout,
+        print_lang: named,
     }) = query.map_err(|_| {
         ApiError::BadRequest(
             "lang must be fr, en or ar, paper a4 or a5, and layout one the shop has".into(),
         )
     })?;
     let shop = state.shop_id;
-    let (found, referenced, chosen) = state
+    let (found, referenced, chosen, lang) = state
         .blocking(move |c| {
             let found = documents::get(c, shop, id)?;
             if !matches!(
@@ -294,7 +327,10 @@ pub async fn facture(
                 Some(layout) => layout,
                 None => preferences::facture_layout(c, shop)?,
             };
-            Ok((found, referenced, chosen))
+            // Same shape as the layout above, and the same read: the language
+            // the page is drawn in comes out of the same look at the file.
+            let lang = preferences::print_lang_for(c, shop, named, caller)?;
+            Ok((found, referenced, chosen, lang))
         })
         .await?;
     let cancellation = found.cancellation.as_ref().map(|c| Cancellation {

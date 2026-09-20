@@ -71,6 +71,22 @@ async fn call_text(
     )
 }
 
+/// Sets the shop's stored print language through the same route the
+/// settings panel calls, so these tests reach the preference the way a shop
+/// would rather than by opening the file.
+async fn set_print_lang(app: &axum::Router, lang: Lang) {
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/settings/print-lang")
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "print_lang": lang.tag() }).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
 fn error_code(body: &str) -> String {
     let parsed: Value = serde_json::from_str(body).unwrap_or(Value::Null);
     parsed["error"]["code"].as_str().unwrap_or("").to_owned()
@@ -171,6 +187,47 @@ async fn a_ticket_for_a_sale_that_does_not_exist_is_404_in_the_envelope() {
     let (status, _, body) = call_text(&app, "/sales/404/ticket?lang=fr", true).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(error_code(&body), "not_found");
+}
+
+/// The shop's stored print language beats the language the caller is
+/// working in, and a `print_lang` named on the one call beats the stored
+/// setting in turn
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`).
+#[tokio::test]
+async fn the_ticket_follows_the_stored_print_language_over_the_callers_own() {
+    let (_dir, path, app) = app();
+    let id = a_sale(&app).await;
+    set_print_lang(&app, Lang::Ar).await;
+
+    let (status, _, body) = call_text(&app, &format!("/sales/{id}/ticket?lang=fr"), true).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let mut conn = dzpos_core::db::open(&path).unwrap();
+    let stored = documents::get(&mut conn, SHOP, i32::try_from(id).unwrap()).unwrap();
+    assert_eq!(
+        body,
+        render_ticket(&stored, Lang::Ar).unwrap(),
+        "the stored Arabic did not win over ?lang=fr"
+    );
+    assert_ne!(
+        body,
+        render_ticket(&stored, Lang::Fr).unwrap(),
+        "the caller's own lang printed instead of the stored setting"
+    );
+
+    // `?print_lang=` on the one call wins over the stored setting too, the
+    // way `?layout=` already wins over the stored facture layout.
+    let (status, _, body) = call_text(
+        &app,
+        &format!("/sales/{id}/ticket?lang=fr&print_lang=en"),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        body,
+        render_ticket(&stored, Lang::En).unwrap(),
+        "?print_lang= did not win over the stored Arabic"
+    );
 }
 
 /// Rule 3: every query is scoped by shop. The server answers for one shop
@@ -346,6 +403,42 @@ async fn a_facture_is_the_html_the_core_renders_on_the_sheet_that_was_asked_for(
             );
         }
     }
+}
+
+/// Same precedence as the ticket's, on the facture route.
+#[tokio::test]
+async fn the_facture_follows_the_stored_print_language_over_the_callers_own() {
+    let (_dir, path, app) = app();
+    let id = a_facture(&app).await;
+    set_print_lang(&app, Lang::Ar).await;
+
+    let (status, _, body) =
+        call_text(&app, &format!("/sales/{id}/facture?lang=fr&paper=a4"), true).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let mut conn = dzpos_core::db::open(&path).unwrap();
+    let stored = documents::get(&mut conn, SHOP, i32::try_from(id).unwrap()).unwrap();
+    let page = Page {
+        paper: Paper::A4,
+        layout: FactureLayout::Standard,
+    };
+    assert_eq!(
+        body,
+        render_facture(&stored, Lang::Ar, page).unwrap(),
+        "the stored Arabic did not win over ?lang=fr"
+    );
+
+    let (status, _, body) = call_text(
+        &app,
+        &format!("/sales/{id}/facture?lang=fr&paper=a4&print_lang=en"),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        body,
+        render_facture(&stored, Lang::En, page).unwrap(),
+        "?print_lang= did not win over the stored Arabic"
+    );
 }
 
 /// The layout the shop chose reaches the paper, and a layout named in the

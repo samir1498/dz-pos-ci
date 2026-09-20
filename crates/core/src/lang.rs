@@ -8,8 +8,11 @@
 use serde::{Deserialize, Serialize};
 
 /// The print language of a document. The same three the screen has
-/// (`apps/desktop/src/i18n`), because the ruling in `docs/features.md` §4
-/// is that a document prints in the language the till is being used in.
+/// (`apps/desktop/src/i18n`). A document prints in the language the caller
+/// asked in unless the shop has stored a print language of its own, which
+/// `preferences::print_lang_for` resolves
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`, replacing
+/// the earlier `docs/features.md` §4 ruling that named only the caller).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Lang {

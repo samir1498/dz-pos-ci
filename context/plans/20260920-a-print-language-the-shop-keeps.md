@@ -46,8 +46,11 @@ and a barcode that are already on the shelf.
 
 ## The precedence, in one line
 
-`?lang=` on the call, then the shop's stored `print_lang`, then the
-language the caller asked in. No step is French-by-default.
+`?print_lang=` on the call, then the shop's stored `print_lang`, then
+`?lang=`, the language the caller asked in. No step is French-by-default.
+It is `?print_lang=` and not `?lang=` because every desktop caller already
+sends `?lang=` as the till's own language on all six routes, so `?lang=`
+becoming the override would mean the stored setting was never reached.
 
 The first step already exists in the same shape: `?layout=` wins over the
 stored facture layout for a preview at `crates/api/src/routes/sales.rs:293`.
@@ -72,7 +75,7 @@ The six routes that answer a fiscal paper:
 
 - `GET /sales/{id}/ticket`
 - `GET /sales/{id}/ticket/escpos`
-- `POST /sales/{id}/ticket/print`
+- `POST /sales/{id}/print`
 - `GET /sales/{id}/facture`
 - `GET /customers/{id}/statement`
 - `GET /customers/{id}/debt-slip`

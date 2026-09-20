@@ -31,16 +31,20 @@ export function salesClient({ send, sendText }: Transport) {
 
     /** The 80 mm ticket for a sale, as the HTML page the core rendered.
      * The UI prints these bytes and never builds a document of its own:
-     * the desktop and a server print the same paper (features.md §4). The
-     * language is the one the till is being used in. */
+     * the desktop and a server print the same paper (features.md §4).
+     * `lang` names the language this screen is open in, but the server may
+     * print in a different one: the shop's own stored print language, when
+     * it has chosen one, wins over the screen every time
+     * (`context/plans/20260920-a-print-language-the-shop-keeps.md`). */
     async getSaleTicket(id: number, lang: PrintLang): Promise<string> {
       return sendText(`/sales/${id}/ticket?lang=${lang}`);
     },
 
     /** The A4 or A5 facture for a sale, as the HTML page the core rendered.
-     * The same contract as the ticket, plus the sheet: the UI prints these
-     * bytes and never lays a document out itself. The id has to name a
-     * facture; a ticket's id is a 404, because a ticket is its own paper. */
+     * The same contract as the ticket, plus the sheet, and `lang` is
+     * resolved against the shop's stored print language the same way. The
+     * id has to name a facture; a ticket's id is a 404, because a ticket is
+     * its own paper. */
     async getSaleFacture(id: number, lang: PrintLang, paper: PrintPaper): Promise<string> {
       return sendText(`/sales/${id}/facture?lang=${lang}&paper=${paper}`);
     },

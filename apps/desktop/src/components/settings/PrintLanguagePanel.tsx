@@ -2,10 +2,10 @@
 // customer statement and the debt slip alike (one setting, not a knob per
 // document -- context/plans/20260920-a-print-language-the-shop-keeps.md).
 //
-// Independent of the screen's own language (`@/i18n`'s `Lang`), and nothing
-// reads it yet: the document routes take it over as `?lang=` and the stored
-// preference in a later task. This screen stops at the setting existing and
-// being settable.
+// Independent of the screen's own language (`@/i18n`'s `Lang`). The six
+// document routes read it: the shop's stored choice beats the language a
+// screen happens to be open in, and a `print_lang` named on one call beats
+// the stored choice in turn.
 //
 // `null` is not "nothing chosen and refused": it is the shop asking to
 // follow the till, which is today's behaviour and stays the default. Radix's

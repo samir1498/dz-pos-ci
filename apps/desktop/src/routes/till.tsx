@@ -835,9 +835,9 @@ function Confirmation({
  * the printer will put on paper, down to the rounding, rather than at a
  * second rendering of the same numbers that could disagree with it.
  *
- * The language is the one the till is being used in. The core prints in the
- * language it is told, and a cashier working in Arabic hands over an Arabic
- * ticket.
+ * The language named here is the till's own, but a shop with a stored print
+ * language keeps every fiscal paper in it regardless of the screen a
+ * cashier has open (`context/plans/20260920-a-print-language-the-shop-keeps.md`).
  *
  * `srcDoc` rather than a `src` URL: the page arrives as a string the client
  * already fetched with the launch token, and an iframe pointed at the route

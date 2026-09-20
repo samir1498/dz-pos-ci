@@ -191,6 +191,41 @@ pub fn set_print_lang(
     }
 }
 
+/// Which language a fiscal paper prints in, three steps deep
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`):
+///
+/// 1. `named`, a `?print_lang=` on the one call, when the caller sent one.
+///    A preview of another language wins over everything else, the same
+///    shape `?layout=` already takes over `facture_layout` for one page.
+/// 2. The shop's own `print_lang`, when it has ever chosen one.
+/// 3. `caller`, the language the till (or the phone, or the server's own
+///    caller) is being used in right now, `?lang=` on the same call.
+///
+/// No step defaults to French. A fresh shop running an Arabic till that
+/// never opens the settings panel has to keep printing Arabic paper, or
+/// nobody would ever connect the French ticket in their hand to a setting
+/// they have not found yet.
+///
+/// Step 1 carries no permission of its own, which is deliberate and worth
+/// saying because the gate row on `PUT /settings/print-lang` says a cashier
+/// does not choose the language. That row is about the stored choice, which
+/// outlives the call and every paper after it. One call naming its own
+/// language decides one sheet, the way `?layout=` decides one facture's
+/// layout over the stored one. It also takes reach away rather than adding
+/// it: before this resolver every caller named the print language outright
+/// on all six routes and no step consulted the shop at all.
+pub fn print_lang_for(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    named: Option<Lang>,
+    caller: Lang,
+) -> Result<Lang, CoreError> {
+    if let Some(named) = named {
+        return Ok(named);
+    }
+    Ok(print_lang(conn, shop_id)?.unwrap_or(caller))
+}
+
 /// How long a session survives with nothing happening on it.
 ///
 /// A stored figure this build cannot read, or one outside the bounds, reads

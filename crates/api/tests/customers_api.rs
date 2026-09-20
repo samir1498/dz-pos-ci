@@ -880,6 +880,19 @@ async fn page(app: &axum::Router, uri: &str) -> (StatusCode, String) {
     (status, String::from_utf8(bytes.to_vec()).unwrap())
 }
 
+/// Sets the shop's stored print language through the same route the
+/// settings panel calls.
+async fn set_print_lang(app: &axum::Router, lang: &str) {
+    let (status, _) = call(
+        app,
+        "PUT",
+        "/settings/print-lang",
+        Some(json!({ "print_lang": lang })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
 #[tokio::test]
 async fn the_statement_prints_the_range_with_the_closing_balance_in_words() {
     let h = harness();
@@ -1007,4 +1020,95 @@ async fn a_debt_slip_for_a_customer_this_shop_does_not_have_is_not_found() {
 
     assert_eq!(status, StatusCode::NOT_FOUND, "{html}");
     assert!(html.contains("\"not_found\""), "{html}");
+}
+
+/// The statement follows the same precedence the ticket's does: the shop's
+/// stored print language beats `?lang=`, and `?print_lang=` on the one call
+/// beats the stored setting
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`).
+#[tokio::test]
+async fn the_statement_follows_the_stored_print_language_over_the_callers_own() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = id_of(&made);
+    set_print_lang(&h.app, "ar").await;
+
+    let (status, html) = page(
+        &h.app,
+        &format!("/customers/{id}/statement?from=2026-01-01&to=2099-12-31&lang=fr"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{html}");
+    assert!(
+        html.contains("<html lang=\"ar\" dir=\"rtl\">"),
+        "the stored Arabic did not win over ?lang=fr: {html}"
+    );
+
+    let (status, html) = page(
+        &h.app,
+        &format!("/customers/{id}/statement?from=2026-01-01&to=2099-12-31&lang=fr&print_lang=en"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{html}");
+    assert!(
+        html.contains("<html lang=\"en\" dir=\"ltr\">"),
+        "?print_lang= did not win over the stored Arabic: {html}"
+    );
+}
+
+/// Same precedence as the statement's, on the debt slip.
+#[tokio::test]
+async fn the_debt_slip_follows_the_stored_print_language_over_the_callers_own() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = id_of(&made);
+    set_print_lang(&h.app, "ar").await;
+
+    let (status, html) = page(&h.app, &format!("/customers/{id}/debt-slip?lang=fr")).await;
+    assert_eq!(status, StatusCode::OK, "{html}");
+    assert!(
+        html.contains("<html lang=\"ar\" dir=\"rtl\">"),
+        "the stored Arabic did not win over ?lang=fr: {html}"
+    );
+
+    let (status, html) = page(
+        &h.app,
+        &format!("/customers/{id}/debt-slip?lang=fr&print_lang=en"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{html}");
+    assert!(
+        html.contains("<html lang=\"en\" dir=\"ltr\">"),
+        "?print_lang= did not win over the stored Arabic: {html}"
+    );
+}
+
+/// The third step of the precedence, which the two tests above cannot
+/// reach: with nothing stored and nothing named, the paper prints in the
+/// language the caller asked in. Both of those tests call with `?lang=fr`,
+/// so a route that stopped forwarding the caller's language and fell back
+/// to French would leave them green. This one asks in Arabic.
+#[tokio::test]
+async fn with_nothing_stored_the_statement_and_the_slip_print_in_the_callers_own_language() {
+    let h = harness();
+    let made = create(&h.app, draft("Entreprise Benali")).await;
+    let id = id_of(&made);
+
+    let (status, html) = page(
+        &h.app,
+        &format!("/customers/{id}/statement?from=2026-01-01&to=2099-12-31&lang=ar"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{html}");
+    assert!(
+        html.contains("<html lang=\"ar\" dir=\"rtl\">"),
+        "the statement did not follow ?lang=ar with nothing stored: {html}"
+    );
+
+    let (status, html) = page(&h.app, &format!("/customers/{id}/debt-slip?lang=ar")).await;
+    assert_eq!(status, StatusCode::OK, "{html}");
+    assert!(
+        html.contains("<html lang=\"ar\" dir=\"rtl\">"),
+        "the debt slip did not follow ?lang=ar with nothing stored: {html}"
+    );
 }

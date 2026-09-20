@@ -16,8 +16,9 @@ use diesel::{RunQueryDsl, SqliteConnection};
 use dzpos_core::lang::Lang;
 use dzpos_core::print::FactureLayout;
 use dzpos_core::services::preferences::{
-    facture_layout, print_lang, session_idle, set_facture_layout, set_print_lang, set_session_idle,
-    set_theme, theme, Theme, DEFAULT_SESSION_IDLE_MINUTES, MAX_SESSION_IDLE_MINUTES,
+    facture_layout, print_lang, print_lang_for, session_idle, set_facture_layout, set_print_lang,
+    set_session_idle, set_theme, theme, Theme, DEFAULT_SESSION_IDLE_MINUTES,
+    MAX_SESSION_IDLE_MINUTES,
 };
 
 mod common;
@@ -89,5 +90,38 @@ fn a_shop_reads_its_own_preferences_and_never_the_shop_next_door() {
     assert_eq!(
         session_idle(&mut conn, NEIGHBOUR).unwrap(),
         Duration::minutes(MAX_SESSION_IDLE_MINUTES)
+    );
+}
+
+/// The three steps of `print_lang_for`, each one able to fail on its own:
+/// a resolver that ignored `named`, one that skipped the stored read, or one
+/// that defaulted to French instead of the caller's own language would each
+/// pass two of the three assertions below and fail the third.
+///
+/// The first assertion is deliberately not asked in French: a resolver with
+/// a hidden `unwrap_or(Lang::Fr)` instead of `unwrap_or(caller)` would still
+/// pass a check made in French, since the shop has nothing stored yet.
+#[test]
+fn the_print_language_resolves_the_override_then_the_setting_then_the_caller() {
+    let (_dir, mut conn) = open_temp();
+
+    // Step 3: a shop with nothing stored prints in the language the caller
+    // asked in.
+    assert_eq!(
+        print_lang_for(&mut conn, SHOP, None, Lang::En).unwrap(),
+        Lang::En
+    );
+
+    // Step 2: the shop's stored setting beats the caller once it has one.
+    set_print_lang(&mut conn, SHOP, Some(Lang::Ar), at()).unwrap();
+    assert_eq!(
+        print_lang_for(&mut conn, SHOP, None, Lang::En).unwrap(),
+        Lang::Ar
+    );
+
+    // Step 1: a `print_lang` named on the one call beats the stored setting.
+    assert_eq!(
+        print_lang_for(&mut conn, SHOP, Some(Lang::En), Lang::Fr).unwrap(),
+        Lang::En
     );
 }

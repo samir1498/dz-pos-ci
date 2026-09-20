@@ -97,7 +97,10 @@ export function customersClient({ send, sendText }: Transport) {
 
     /** The statement of account over a range of days, as the HTML page the
      * core rendered. The UI prints these bytes and never builds a document of
-     * its own (features.md §4). The days are `YYYY-MM-DD`. */
+     * its own (features.md §4). The days are `YYYY-MM-DD`. `lang` names the
+     * language this screen is open in, but the shop's own stored print
+     * language, when it has chosen one, wins over it
+     * (`context/plans/20260920-a-print-language-the-shop-keeps.md`). */
     async customerStatement(
       id: number,
       from: string,
@@ -111,7 +114,8 @@ export function customersClient({ send, sendText }: Transport) {
     /** The 80 mm debt slip, as the HTML page the core rendered: what the
      * customer owes now and the newest movements behind it. No range, because
      * the slip is about today rather than about a period, and the server's
-     * clock dates it. */
+     * clock dates it. `lang` is resolved against the shop's stored print
+     * language the same way the statement's is. */
     async customerDebtSlip(id: number, lang: PrintLang): Promise<string> {
       const query = new URLSearchParams({ lang });
       return sendText(`/customers/${id}/debt-slip?${query.toString()}`);

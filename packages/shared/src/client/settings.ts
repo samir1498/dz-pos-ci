@@ -77,9 +77,10 @@ export function settingsClient({ send }: Transport) {
 
     /** Records the language every fiscal paper prints in, or `null` to put
      * every fiscal paper back on the till's own language. Answers the whole
-     * settings page, the way `setTheme` does. Nothing reads this yet: the
-     * document routes take `?lang=` and the stored preference in a later
-     * task. */
+     * settings page, the way `setTheme` does. The six fiscal-paper document
+     * routes read this back and print in it ahead of the screen's own
+     * language (`context/plans/20260920-a-print-language-the-shop-keeps.md`);
+     * the barcode label and the import template deliberately do not. */
     async setPrintLang(lang: PrintLangDto | null): Promise<SettingsDto> {
       const body = await send("/settings/print-lang", {
         method: "PUT",

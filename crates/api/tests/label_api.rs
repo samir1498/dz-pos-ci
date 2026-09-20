@@ -233,3 +233,52 @@ async fn a_selection_past_the_cap_is_refused_before_a_single_row_is_read() {
     assert_eq!(value["error"]["code"], json!("validation"));
     assert_eq!(value["error"]["field"], json!("ids"));
 }
+
+/// Neither the label nor the sheet is a fiscal paper, and Samir's ruling
+/// keeps both on the caller's own `?lang=` regardless of what the shop has
+/// stored (`context/plans/20260920-a-print-language-the-shop-keeps.md`). A
+/// later change that quietly routed either one through the stored
+/// preference should turn this red.
+#[tokio::test]
+async fn the_label_and_the_sheet_keep_following_the_callers_lang_with_arabic_stored() {
+    let h = harness();
+    let id = create(&h.app, "Café moulu 250 g", Some("2000010000074")).await;
+
+    let (status, _, _) = call(
+        &h.app,
+        "PUT",
+        "/settings/print-lang",
+        Some(json!({ "print_lang": "ar" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _, body) = call(
+        &h.app,
+        "GET",
+        &format!("/products/{id}/label?lang=fr"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let stored = h.state.with_conn(|c| products::get(c, SHOP, id)).unwrap();
+    assert_eq!(
+        body,
+        render_label(&stored, Lang::Fr).unwrap(),
+        "the label followed the stored Arabic instead of ?lang=fr"
+    );
+
+    let (status, _, body) = call(
+        &h.app,
+        "POST",
+        "/labels/sheet?lang=fr",
+        Some(json!({ "ids": [id] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(
+        body,
+        render_label_sheet(&[stored], Lang::Fr).unwrap(),
+        "the sheet followed the stored Arabic instead of ?lang=fr"
+    );
+}

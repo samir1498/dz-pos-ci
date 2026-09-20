@@ -5,9 +5,10 @@
 // a hardcoded sentence, in every language.
 
 import { expect, test } from "./auth";
-import type { Locator, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { apiHeaders, apiUrl } from "./api";
 import { currentLang, t } from "./messages";
 import { fillDate } from "./date-field";
 
@@ -150,4 +151,109 @@ test("the chosen facture layout survives a reload", async ({ page }) => {
   await reloaded.click();
   await page.getByRole("option", { name: t("facture_layout_standard") }).click();
   await expect(reloaded).toContainText(t("facture_layout_standard"));
+});
+
+const PRINT_LANG_PRODUCT = "Café print-lang e2e";
+
+async function seedPrintLangProduct(request: APIRequestContext): Promise<number> {
+  const res = await request.post(`${apiUrl()}/products`, {
+    headers: apiHeaders(),
+    data: {
+      name: PRINT_LANG_PRODUCT,
+      barcode: null,
+      category_id: null,
+      unit: "piece",
+      cost_centimes: 0,
+      selling_centimes: 15_000,
+      wholesale_centimes: null,
+      qty_on_hand_milli: 10_000,
+      low_stock_at_milli: 0,
+      rate_bps: 1900,
+      active: true,
+    },
+  });
+  expect(res.status()).toBe(201);
+  const created: { id: number } = await res.json();
+  return created.id;
+}
+
+async function ringUpCashTicket(
+  request: APIRequestContext,
+  productId: number,
+): Promise<{ printed_number: string }> {
+  const res = await request.post(`${apiUrl()}/sales`, {
+    headers: apiHeaders(),
+    data: {
+      lines: [
+        {
+          product_id: productId,
+          qty_milli: 1_000,
+          unit_price_centimes: null,
+          line_discount_centimes: 0,
+        },
+      ],
+      global_discount_centimes: 0,
+      payment_mode: "cash",
+      tendered_centimes: 100_000_000,
+      customer_id: null,
+      override: false,
+      kind: "ticket",
+    },
+  });
+  expect(res.status()).toBe(201);
+  return res.json();
+}
+
+const LANG_NAME_KEY = {
+  fr: "lang_name_fr",
+  en: "lang_name_en",
+  ar: "lang_name_ar",
+} as const;
+
+/**
+ * The stored print language through a real browser, on a real printed
+ * ticket.
+ *
+ * The picker's own wiring is covered by the jsdom test beside the
+ * component; what only a browser and a real document prove is the sentence
+ * the ruling is about: a shop stores a print language, and every fiscal
+ * paper comes back in it even when the screen printing it is open in a
+ * different one (`context/plans/20260920-a-print-language-the-shop-keeps.md`).
+ *
+ * The target is deliberately never the suite's own UI language: this file
+ * runs once per Playwright project (fr, en, ar) against its own empty
+ * database, and setting the print language to the language the suite is
+ * already running in would prove nothing, since the ticket would come back
+ * in it whether the stored setting won or the screen's own language did.
+ */
+test("the stored print language wins over the screen printing the ticket", async ({
+  page,
+  request,
+}) => {
+  const target = currentLang() === "ar" ? "fr" : "ar";
+  const product = await seedPrintLangProduct(request);
+  const ticket = await ringUpCashTicket(request, product);
+
+  await page.goto("/settings/printing");
+  const picker = page.getByRole("combobox", { name: t("settings_print_lang") });
+  await picker.click();
+  await page.getByRole("option", { name: t(LANG_NAME_KEY[target]) }).click();
+  await expect(picker).toContainText(t(LANG_NAME_KEY[target]));
+
+  await page.getByTestId("nav-documents").click();
+  await page.getByRole("button", { name: ticket.printed_number }).click();
+  const sheet = page.frameLocator('[data-testid="documents-sheet"]');
+  await expect(sheet.locator("html")).toHaveAttribute("lang", target);
+  await expect(sheet.locator("html")).toHaveAttribute("dir", target === "ar" ? "rtl" : "ltr");
+
+  // Hand the shop back on following the till. Every spec in a run shares
+  // one database, and the specs after this one were written against that
+  // default, the way `zzzz-facture-layouts.spec.ts` restores the standard
+  // layout it leaves with.
+  await page.getByTestId("nav-settings").click();
+  await page.getByRole("link", { name: t("settings_nav_printing") }).click();
+  const reloaded = page.getByRole("combobox", { name: t("settings_print_lang") });
+  await reloaded.click();
+  await page.getByRole("option", { name: t("print_lang_follow_till") }).click();
+  await expect(reloaded).toContainText(t("print_lang_follow_till"));
 });

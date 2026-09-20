@@ -839,11 +839,22 @@ first release.**
   balance the shop owes and whose way it goes, and the slip carries the line
   in each language that says it has no fiscal value. The slip's balance is the
   ledger's, so the golden proves the ten rows shown do not add up to it.
-- The print language is the language the till is being used in, passed by
-  the caller on each call as `?lang=fr|en|ar`, on every print route:
-  `GET /sales/{id}/ticket`, `/sales/{id}/facture`,
-  `/customers/{id}/statement` and `/customers/{id}/debt-slip`. There is no
-  separate print-language setting in v1.
+- The print language is resolved the same way on all six fiscal-paper
+  routes -- `GET /sales/{id}/ticket`, `/sales/{id}/ticket/escpos`,
+  `POST /sales/{id}/print`, `GET /sales/{id}/facture`,
+  `/customers/{id}/statement` and `/customers/{id}/debt-slip` -- by
+  `preferences::print_lang_for` (`crates/core`), three steps deep: a
+  `?print_lang=fr|en|ar` named on the one call wins outright; failing that,
+  the shop's own stored print language (`PUT /settings/print-lang`) wins;
+  failing that, `?lang=fr|en|ar`, the language the caller (the till, the
+  phone, or a server with no screen) is being used in, is what prints. No
+  step defaults to French: a shop that has never opened the settings panel
+  keeps today's behaviour, printing in the language the caller names.
+  `GET /labels/sheet`, `GET /products/{id}/label` and
+  `GET /import/products/template` are not fiscal papers and deliberately do
+  not take part: all three keep following the caller's own `?lang=`
+  whatever the shop has stored
+  (`context/plans/20260920-a-print-language-the-shop-keeps.md`).
 - Numbers are Western digits in every language, comma decimal, thousands
   grouped with a narrow no-break space (U+202F), and no currency word on a
   line: `fixtures/money/format_centimes.json` pins the core's formatter and
@@ -1068,7 +1079,8 @@ hash). The Expo thin client (`apps/mobile`, `dinar-mobile`, `expo` + `react-nati
 desktop (rule 1), never knows which mode it is in: `pair` (QR), `till` (fetch
 `GET /products`, `POST /sales` with `Sell`, `SeeCost` redaction reused), `cart`,
 `pay`, `ticket` (print through desktop `POST /sales/{id}/print?lang=` → `spool/ticket-<id>-<lang>.bin`
-beside the shop file, never pruned, and optionally `DZPOS_PRINTER_ADDR` TCP
+beside the shop file, never pruned, where `<lang>` is the language §4's
+precedence resolved and not always the one the phone sent, and optionally `DZPOS_PRINTER_ADDR` TCP
 `9100` via `write_ticket_escpos_to_file` / `send_ticket_escpos_tcp`), `products`,
 `customers`, `more`, with Maestro `apps/mobile/maestro/pair-and-sell.yaml` over
 Tailscale (`100.111.55.62`). Windows Firewall is the known trap: detect the
@@ -1146,11 +1158,13 @@ and the grep tests that hold the rule.
 **Language.** French, English and Arabic (RTL) on every screen, switched
 from a control in the app shell and independent of the theme: the choice is
 per browser, kept in local storage on the machine rather than in the shop
-file, and it is not the same choice as the print language, which a caller
-passes per document (§4, Printing). Arabic flips direction on the document
-root, and Radix, which defaults to left to right whatever the document
-says, is told the direction explicitly so an Arabic select takes the arrow
-keys the right way.
+file, and it is not the same choice as the print language: a shop may
+store one language for every fiscal paper, and where it has, that language
+beats the screen's own on every document. A shop that has stored none keeps
+printing in the screen's language (§4, Printing). Arabic flips
+direction on the document root, and Radix, which defaults to left to right
+whatever the document says, is told the direction explicitly so an Arabic
+select takes the arrow keys the right way.
 
 **The dev-only seeder.** `just seed` fills `.dev/dev.db` with a catalogue,
 twelve customers, five suppliers and thirty days of trading to develop

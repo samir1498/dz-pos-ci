@@ -239,6 +239,35 @@ async fn the_template_downloads_and_comes_back_through_the_dry_run_clean() {
     assert_eq!(after.json()[0]["name"], json!("Café moulu 250 g"));
 }
 
+/// The import template is not a fiscal paper, and Samir's ruling keeps it on
+/// the caller's own `?lang=` regardless of what the shop has stored
+/// (`context/plans/20260920-a-print-language-the-shop-keeps.md`). A later
+/// change that quietly routed it through the stored preference should turn
+/// this red.
+#[tokio::test]
+async fn the_template_keeps_following_the_callers_lang_with_arabic_stored() {
+    let (_dir, app) = app();
+
+    let put = Request::builder()
+        .method("PUT")
+        .uri("/settings/print-lang")
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "print_lang": "ar" }).to_string()))
+        .unwrap();
+    let res = app.clone().oneshot(put).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let template = call(&app, "GET", "/import/products/template?lang=fr", None).await;
+    assert_eq!(template.status, StatusCode::OK);
+    assert_eq!(
+        template.body,
+        dzpos_core::services::import::template(dzpos_core::lang::Lang::Fr).unwrap(),
+        "the template followed the stored Arabic instead of ?lang=fr"
+    );
+}
+
 #[tokio::test]
 async fn a_body_past_the_import_cap_is_refused_before_the_parser_sees_it() {
     let (_dir, app) = app();
