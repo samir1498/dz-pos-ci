@@ -22,6 +22,9 @@ tasks:
   - id: 'T5'
     desc: 'A lint or a test that fails on a literal string inside JSX in apps/mobile, so the next screen cannot reintroduce one'
     status: 'pending'
+  - id: 'T6'
+    desc: 'A record from the core error codes to keys on the phone, the shape apps/desktop/src/lib/fields.tsx has. Until it exists a 422 tells the cashier only its status number'
+    status: 'pending'
 acceptance:
   - 'Every string a cashier can read on the phone comes from a dictionary'
   - 'The phone in Arabic lays out right to left, proven on a real device, not only in a test'
@@ -71,6 +74,74 @@ React Native lays out through `I18nManager`, which on Android needs the app
 restarted before a flip takes effect. That is why T3's acceptance says a real
 device: a green vitest run proves the strings resolve and says nothing about
 which side the back arrow is on.
+
+## What T4 gave up, and why it is T6 rather than a comment
+
+The phone used to show the server's own sentence on a refusal whenever it
+had one. That sentence comes out of `crates/api/src/error.rs`'s `fn message`,
+which is a Rust `Display` string, so it is English whatever the cashier
+reads. On an Arabic counter every refusal came back in English, which is the
+thing this plan exists to stop.
+
+So T4 answers in keys. The cost is precision. A 422 that said "tendered is
+invalid: less than the amount to pay" now says "Refused (422)" in the
+cashier's own language, because six error keys is what the dictionaries
+carry and the last of them is a catch-all with the status in it.
+
+Narrower than it first looked, and the difference is worth writing down.
+The one money 422 this phone can provoke is a short tender, and the core
+never sent a figure with it either (`crates/core/src/services/sales.rs`:
+the field and the sentence, no amount, no shortfall). A credit-limit 422
+cannot be reached at all, because the till hardcodes a cash payment and
+sends no customer. So what a cashier loses is which 422 fired, not a number
+that used to be on the screen, and the screen already refuses a short tender
+before the call is made.
+
+The fix is the shape the desktop already has at
+`apps/desktop/src/lib/fields.tsx:63`: a record from the core's error codes to
+keys, with `error_unknown` underneath. It was not written with T4 because the
+phone rings cash sales and nothing else, so the list of codes it can actually
+provoke is short and not yet known. Writing the map from the full set of core
+codes would be seventy keys in three languages, one of them Arabic nobody has
+reviewed, most of them unreachable. The honest order is: drive the phone
+against a real core, write down which codes come back, then map those.
+
+## What the device run has to look at
+
+T3's acceptance already asks for Arabic on a real phone rather than in a
+test. Two things join that list, both found on 2026-09-20 and neither
+resolvable from this machine.
+
+An amount and its currency are one string: `formatCentimes(owed)`, a space,
+then `currency_suffix`, which is `دج` in Arabic. Latin digits beside Arabic
+letters under a right-to-left paragraph is the case Unicode's bidi algorithm
+resolves by the paragraph's own direction, and which side of the figure the
+suffix lands on is a question about a renderer, not about this code. Three
+places: `PayPanel.tsx`, `ProductRow.tsx`, and `till_change_due` on the till.
+Nothing is changed on a guess; inserting direction marks to fix a problem
+nobody has seen would be the worse mistake.
+
+The thousands separator is already known not to be part of it. It is U+202F,
+a narrow no-break space, pinned in `packages/shared/src/money.test.ts`, so
+the groups inside a figure stay one run and cannot reorder among themselves.
+
+## The Maestro flows now assert a language nobody pinned
+
+`apps/mobile/maestro/*.yaml` check for "Pair this phone", "Basket empty",
+"Send now" and "1 sale waiting to be sent". Those are English, the phone now
+opens in whatever its handset's locale resolves to and falls back to French,
+and the French strings genuinely differ: `pairing_title` is "Appairer ce
+téléphone".
+
+Nothing catches it. The flows are run by hand and are not in `just gates` or
+`just e2e`; `just e2e` is the desktop's Playwright suite. So the flows will
+fail on a French or Arabic handset and pass on an English one, and which it
+is depends on a setting in the emulator nobody wrote down.
+
+The fix is to assert on test ids rather than on sentences, which is the point
+of having them. It is not done here because no gate would verify the rewrite,
+and a blind rewrite of the only thing that drives these screens is worse than
+a known gap. It goes with the device run.
 
 ## Not in this plan
 

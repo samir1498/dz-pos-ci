@@ -2,83 +2,113 @@
 // server would never accept was resent for ever and a cashier whose session
 // had idled out kept handing goods over with nothing recorded.
 //
-// Each case below names what the server actually answers, from
-// crates/api/src/error.rs and the gates.
+// Each row below names what the server actually answers, from
+// crates/api/src/error.rs and the gates, and asserts the whole answer. Six
+// of these read only `.kind` until 2026-09-20, which said nothing about the
+// sentence: swapping `error_sign_in_again` for `error_pair_again` left all
+// twelve green while a cashier whose session had idled out was sent to find
+// a manager for a fresh QR. The tests lens found it.
 
 import { describe, expect, it } from "vitest";
 
-import { outcomeOf } from "./outcome";
+import { outcomeOf, type ApiError, type Outcome } from "./outcome";
+
+/** The English every row hands in, so that comparing the whole answer is
+ *  also the proof that the server's own prose never reaches a screen. It is
+ *  a Rust `Display` string and it is English whatever the cashier reads. */
+const SERVERS_OWN_WORDS = "tendered is invalid: less than the amount to pay";
+
+const RANG: [string, number][] = [
+  ["the sale was written", 201],
+  // The server answers 200 with the stored paper, not a second sale.
+  ["the retry key replayed the original", 200],
+];
+
+const REFUSED: [string, number, ApiError, Outcome][] = [
+  // The person's token and nothing else, so a PIN fixes it.
+  [
+    "the session died",
+    401,
+    { code: "session_required", message: SERVERS_OWN_WORDS },
+    { kind: "sign-in-again", say: { key: "error_sign_in_again" } },
+  ],
+  // The phone itself. Signing in again would not help; a manager has to
+  // hand over a new QR.
+  [
+    "the device was revoked",
+    401,
+    { code: "device_refused", message: SERVERS_OWN_WORDS },
+    { kind: "pair-again", say: { key: "error_pair_again" } },
+  ],
+  // The secret just typed, and it clears nothing. This one used to read as
+  // the device gate, and on 2026-09-16 one mistyped digit sent a phone back
+  // to the QR screen.
+  [
+    "the PIN was wrong",
+    401,
+    { code: "auth_refused", message: SERVERS_OWN_WORDS },
+    { kind: "refused", say: { key: "error_wrong_secret" } },
+  ],
+  // A role. Neither re-pairing nor signing in again changes it.
+  [
+    "the role does not reach it",
+    403,
+    { code: "forbidden", message: SERVERS_OWN_WORDS },
+    { kind: "refused", say: { key: "error_not_allowed" } },
+  ],
+  // The case the old till queued for ever: tendered under what is owed,
+  // resent with the same dead credentials to earn the same refusal.
+  [
+    "the request did not validate",
+    422,
+    { code: "validation", message: SERVERS_OWN_WORDS },
+    { kind: "refused", say: { key: "error_refused", vars: { status: 422 } } },
+  ],
+  // A key the server already knows. The core answers 409 two ways on the
+  // same code and field: a key whose winner is readable, worth sending
+  // again, and a key reused on a different basket, which no retry will fix.
+  // Only the prose tells them apart, and queueing on a message string is
+  // how the bug this module exists to kill got written. Both are shown, and
+  // the cashier rings again with a fresh key.
+  [
+    "the idempotency key was already spent",
+    409,
+    { code: "conflict", message: SERVERS_OWN_WORDS },
+    { kind: "refused", say: { key: "error_refused", vars: { status: 409 } } },
+  ],
+  // And a body with nothing in it says the same as one with everything in
+  // it, because nothing in the answer was ever where the sentence came
+  // from. Written out rather than compared with the row above, which would
+  // have been the function agreeing with itself.
+  [
+    "the body carried nothing",
+    422,
+    null,
+    { kind: "refused", say: { key: "error_refused", vars: { status: 422 } } },
+  ],
+];
+
+const QUEUED: [string, number | null, ApiError][] = [
+  // Airplane mode, desktop asleep, Wi-Fi gone. This is what the queue is for.
+  ["fetch itself threw", null, null],
+  ["the server could not answer at all", 500, { code: "internal", message: "" }],
+  ["the server was not there to answer", 503, null],
+];
 
 describe("a call that reached a server", () => {
-  it("rang, when the sale was written", () => {
-    expect(outcomeOf(201, null).kind).toBe("rang");
-  });
-
-  it("rang, when the retry key replayed the original", () => {
-    // The server answers 200 with the stored paper, not a second sale.
-    expect(outcomeOf(200, null).kind).toBe("rang");
+  it.each(RANG)("rang, when %s", (_case, status) => {
+    expect(outcomeOf(status, null)).toEqual({ kind: "rang" });
   });
 });
 
 describe("a call the server refused", () => {
-  it("sends the person back to sign in when their session died", () => {
-    const outcome = outcomeOf(401, { code: "session_required", message: "sign in" });
-    expect(outcome.kind).toBe("sign-in-again");
-  });
-
-  it("sends the phone back to pairing when the device was revoked", () => {
-    // `device_refused` is the device gate, not the person: signing in again
-    // would not help, a manager has to hand over a new QR.
-    const outcome = outcomeOf(401, { code: "device_refused", message: "revoked" });
-    expect(outcome.kind).toBe("pair-again");
-  });
-
-  it("shows a wrong PIN and clears nothing", () => {
-    // The bug of 2026-09-16: `auth_refused` used to read as the device gate,
-    // and one mistyped digit sent the phone back to the QR.
-    const outcome = outcomeOf(401, { code: "auth_refused", message: "no" });
-    expect(outcome).toEqual({ kind: "refused", message: "no" });
-  });
-
-  it("shows a role refusal without signing anyone out", () => {
-    const outcome = outcomeOf(403, { code: "forbidden", message: "not allowed" });
-    expect(outcome.kind).toBe("refused");
-  });
-
-  it("shows a validation refusal and does not queue it", () => {
-    // The case the old screen queued for ever: tendered under what is owed.
-    const outcome = outcomeOf(422, {
-      code: "validation",
-      message: "tendered is invalid: less than the amount to pay",
-    });
-    expect(outcome.kind).toBe("refused");
-    expect(outcome.kind).not.toBe("queue");
-  });
-
-  it("shows a conflict rather than resending a key the server already knows", () => {
-    const outcome = outcomeOf(409, { code: "conflict", message: "already rang a different sale" });
-    expect(outcome.kind).toBe("refused");
-  });
-
-  it("carries the server's own words when it has some", () => {
-    const outcome = outcomeOf(422, { code: "validation", message: "less than the amount to pay" });
-    expect(outcome.kind === "refused" && outcome.message).toBe("less than the amount to pay");
-  });
-
-  it("still says something when the body carried no message", () => {
-    const outcome = outcomeOf(422, null);
-    expect(outcome.kind === "refused" && outcome.message.length > 0).toBe(true);
+  it.each(REFUSED)("%s", (_case, status, error, expected) => {
+    expect(outcomeOf(status, error)).toEqual(expected);
   });
 });
 
 describe("a call that got no answer", () => {
-  it("queues when fetch itself threw", () => {
-    // Airplane mode, desktop asleep, Wi-Fi gone. This is what the queue is for.
-    expect(outcomeOf(null, null).kind).toBe("queue");
-  });
-
-  it("queues when the server could not answer at all", () => {
-    expect(outcomeOf(500, { code: "internal", message: "" }).kind).toBe("queue");
-    expect(outcomeOf(503, null).kind).toBe("queue");
+  it.each(QUEUED)("queues when %s", (_case, status, error) => {
+    expect(outcomeOf(status, error)).toEqual({ kind: "queue" });
   });
 });

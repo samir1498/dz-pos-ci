@@ -8,6 +8,7 @@ import { Pressable, View } from "react-native";
 import { Text } from "../../components/ui";
 import { useTheme } from "../../design/theme";
 import { formatCentimes, type Product } from "../../lib/basket";
+import { useTranslation } from "../../providers/LanguageProvider";
 
 export function ProductRow({
   product,
@@ -20,10 +21,11 @@ export function ProductRow({
   onAdd: () => void;
 }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Add ${product.name}`}
+      accessibilityLabel={t("till_add_product", { name: product.name })}
       onPress={onAdd}
       style={({ pressed }) => ({
         minHeight: theme.layout["control-h-lg"],
@@ -45,7 +47,7 @@ export function ProductRow({
           {product.name}
         </Text>
         <Text variant="caption" tone="secondary">
-          {formatCentimes(product.selling_centimes)} DA
+          {formatCentimes(product.selling_centimes)} {t("currency_suffix")}
         </Text>
       </View>
       {inCart > 0 && (

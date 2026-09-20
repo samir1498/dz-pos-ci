@@ -8,7 +8,7 @@
 
 import Constants from "expo-constants";
 
-import { outcomeOf, type ApiError, type Outcome } from "./outcome";
+import { outcomeOf, type ApiError, type Outcome, type Refusal, type Say } from "./outcome";
 
 /** Where the shop's core is, and the operator's secret for reaching it. */
 export const API_BASE: string =
@@ -24,12 +24,24 @@ export class ApiRefusal extends Error {
   constructor(
     readonly status: number,
     readonly code: string | null,
-    message: string,
+    /** What `outcomeOf` made of the answer, whole.
+     *
+     *  Not just the sentence. A screen reads the kind from here rather
+     *  than working it out again from the status and the code, so a read
+     *  behind the device gate reaches the same conclusion a write behind
+     *  it does: the sign-in screen finds out a phone was revoked from the
+     *  staff list, which is a `useQuery`, not from the login call. The
+     *  rule is docs/architecture.md's, map once and never re-derive.
+     *
+     *  The `Error` message beside it names the status for a log and a
+     *  stack trace; it is English and no screen shows it. */
+    readonly outcome: Refusal,
   ) {
-    super(message);
+    super(`refused ${status}${code === null ? "" : ` (${code})`}`);
     this.name = "ApiRefusal";
   }
 }
+
 
 export type Credentials = {
   deviceToken?: string | null;
@@ -82,7 +94,12 @@ export async function get<T>(path: string, credentials: Credentials): Promise<T>
   const { outcome, body, status } = await call<T>(path, { method: "GET", credentials });
   if (outcome.kind === "rang" && body !== null) return body;
   if (outcome.kind === "queue") throw new Error("no answer from the shop's core");
-  const message = "message" in outcome ? outcome.message : `refused (${status ?? "?"})`;
+  // `rang` with no body is the one refusal `outcomeOf` cannot name: the
+  // server said yes and sent nothing a caller can use.
+  const refusal: Refusal =
+    "say" in outcome
+      ? outcome
+      : { kind: "refused", say: { key: "error_refused", vars: { status: status ?? 0 } } };
   const code = (body as { error?: ApiError } | null)?.error?.code ?? null;
-  throw new ApiRefusal(status ?? 0, code, message);
+  throw new ApiRefusal(status ?? 0, code, refusal);
 }

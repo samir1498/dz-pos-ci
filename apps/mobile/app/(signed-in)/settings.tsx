@@ -13,11 +13,13 @@ import { Button, Callout, Screen, Text } from "../../components/ui";
 import { useTheme } from "../../design/theme";
 import { API_BASE } from "../../lib/api";
 import { list } from "../../lib/queue";
+import { useTranslation } from "../../providers/LanguageProvider";
 import { useSession } from "../../providers/SessionProvider";
 
 export default function Settings() {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const { session, device, signOut, deviceLost } = useSession();
   const [queued, setQueued] = useState(0);
 
@@ -29,32 +31,33 @@ export default function Settings() {
     <Screen scroll>
       <View style={{ gap: theme.space[4], paddingTop: theme.space[4] }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space[3] }}>
-          <Button title="Back" variant="secondary" onPress={() => router.back()} />
-          <Text variant="title">This phone</Text>
+          <Button title={t("action_back")} variant="secondary" onPress={() => router.back()} />
+          <Text variant="title">{t("settings_title")}</Text>
         </View>
 
-        <Row label="Signed in as" value={session === null ? "nobody" : `${session.name} · ${session.role}`} />
-        <Row label="Till computer" value={API_BASE} />
+        <Row
+          label={t("settings_signed_in_as")}
+          value={session === null ? t("settings_nobody") : `${session.name} · ${session.role}`}
+        />
+        <Row label={t("settings_till_computer")} value={API_BASE} />
         {/* The first eight characters are enough to tell two phones apart in
             the till computer's device list, and short enough to read out
             over the counter. The rest is a credential. */}
-        <Row label="Paired as" value={device === null ? "not paired" : `${device.slice(0, 8)}…`} />
-        <Row label="Sales waiting to be sent" value={String(queued)} />
+        <Row
+          label={t("settings_paired_as")}
+          value={device === null ? t("settings_not_paired") : `${device.slice(0, 8)}…`}
+        />
+        <Row label={t("settings_queue_waiting")} value={String(queued)} />
 
-        {queued > 0 && (
-          <Callout tone="info">
-            Unpairing now would leave those sales unsent. Get back on the shop Wi-Fi and send them
-            from the till screen first.
-          </Callout>
-        )}
+        {queued > 0 && <Callout tone="info">{t("settings_unpair_would_lose")}</Callout>}
 
         <View style={{ gap: theme.space[2], paddingTop: theme.space[2] }}>
-          <Button title="Sign out" variant="secondary" onPress={() => void signOut()} />
+          <Button title={t("auth_sign_out")} variant="secondary" onPress={() => void signOut()} />
           <Button
-            title="Forget this phone"
+            title={t("settings_forget_phone")}
             variant="danger"
             onPress={() => {
-              void deviceLost("This phone was unpaired here. Ask a manager for a fresh QR.");
+              void deviceLost({ key: "pairing_lost" });
               router.replace("/pair");
             }}
           />

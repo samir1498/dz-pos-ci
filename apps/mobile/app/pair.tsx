@@ -20,19 +20,22 @@ import { View } from "react-native";
 
 import { Button, Callout, Field, Screen, Text } from "../components/ui";
 import { call } from "../lib/api";
+import type { Say } from "../lib/outcome";
 import { tokenFromScan } from "../lib/pairing";
 import { useTheme } from "../design/theme";
+import { useTranslation } from "../providers/LanguageProvider";
 import { useSession } from "../providers/SessionProvider";
 
 export default function Pair() {
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const { paired, lost } = useSession();
   const [permission, requestPermission] = useCameraPermissions();
   const [typing, setTyping] = useState(false);
   const [token, setToken] = useState("");
   const [name, setName] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<Say | null>(null);
   const [busy, setBusy] = useState(false);
   // A QR in frame fires this callback many times a second. Without the latch
   // the phone posts the same single-use token a dozen times and every claim
@@ -50,7 +53,7 @@ export default function Pair() {
         method: "POST",
         body: JSON.stringify({
           pairing_token: pairingToken,
-          device_name: name.trim() === "" ? "Phone" : name.trim(),
+          device_name: name.trim() === "" ? t("pairing_default_device_name") : name.trim(),
         }),
       });
       setBusy(false);
@@ -61,10 +64,10 @@ export default function Pair() {
         // anything the cashier did wrong.
         setProblem(
           outcome.kind === "queue"
-            ? "No answer from the till computer. Check the Wi-Fi and try again."
-            : "message" in outcome
-              ? outcome.message
-              : "That code did not work. Ask for a fresh QR — they last a minute.",
+            ? { key: "error_no_answer" }
+            : "say" in outcome
+              ? outcome.say
+              : { key: "pairing_code_refused" },
         );
         // Released only on failure: a success navigates away, and a latch
         // that reopened on the way out would let a lingering frame fire a
@@ -75,7 +78,7 @@ export default function Pair() {
       await paired(body.device_token);
       router.replace("/sign-in");
     },
-    [name, paired, router],
+    [name, paired, router, t],
   );
 
   const scanning = !typing && permission?.granted === true;
@@ -83,11 +86,11 @@ export default function Pair() {
   return (
     <Screen scroll>
       <View style={{ gap: theme.space[4], paddingTop: theme.space[6] }}>
-        <Text variant="title">Pair this phone</Text>
+        <Text variant="title">{t("pairing_title")}</Text>
         <Text variant="body" tone="secondary">
-          Ask a manager to show the code on the till computer, then point the camera at it.
+          {t("pairing_hint")}
         </Text>
-        {lost !== null && <Callout tone="danger">{lost}</Callout>}
+        {lost !== null && <Callout tone="danger">{t(lost.key, lost.vars)}</Callout>}
 
         {scanning ? (
           <View
@@ -107,7 +110,7 @@ export default function Pair() {
               onBarcodeScanned={({ data }) => {
                 const found = tokenFromScan(data);
                 if (found === null) {
-                  setProblem("That is not a Dinar pairing code.");
+                  setProblem({ key: "pairing_not_a_code" });
                   return;
                 }
                 void claim(found);
@@ -118,28 +121,22 @@ export default function Pair() {
 
         {!scanning && !typing ? (
           <View style={{ gap: theme.space[3] }}>
-            <Text variant="body">
-              The camera reads the code off the till computer&apos;s screen. Nothing is photographed
-              or kept.
-            </Text>
+            <Text variant="body">{t("pairing_camera_hint")}</Text>
             <Button
-              title="Use the camera"
+              title={t("pairing_use_camera")}
               onPress={() => void requestPermission()}
               disabled={permission?.canAskAgain === false}
             />
             {permission?.canAskAgain === false && (
-              <Callout tone="info">
-                The camera is switched off for this app in the phone&apos;s settings. Turn it back
-                on there, or type the code instead.
-              </Callout>
+              <Callout tone="info">{t("pairing_camera_blocked")}</Callout>
             )}
           </View>
         ) : null}
 
         {typing ? (
           <Field
-            label="Code from the QR"
-            placeholder="64 characters"
+            label={t("pairing_code_label")}
+            placeholder={t("pairing_code_placeholder", { count: 64 })}
             autoCapitalize="none"
             autoCorrect={false}
             value={token}
@@ -147,23 +144,32 @@ export default function Pair() {
           />
         ) : null}
 
-        <Field label="Name for this phone" placeholder="Phone" value={name} onChangeText={setName} />
+        <Field
+          label={t("pairing_device_name_label")}
+          placeholder={t("pairing_default_device_name")}
+          value={name}
+          onChangeText={setName}
+        />
 
-        {problem !== null && <Callout tone="danger">{problem}</Callout>}
+        {problem !== null && <Callout tone="danger">{t(problem.key, problem.vars)}</Callout>}
 
         {typing ? (
           <Button
-            title="Pair"
+            title={t("pairing_submit")}
             onPress={() => void claim(token.trim())}
             busy={busy}
             disabled={token.trim() === ""}
           />
         ) : (
-          busy && <Text variant="body" tone="secondary">Pairing…</Text>
+          busy && (
+            <Text variant="body" tone="secondary">
+              {t("pairing_in_progress")}
+            </Text>
+          )
         )}
 
         <Button
-          title={typing ? "Use the camera instead" : "Type the code instead"}
+          title={typing ? t("pairing_switch_to_camera") : t("pairing_switch_to_code")}
           variant="secondary"
           onPress={() => {
             setProblem(null);

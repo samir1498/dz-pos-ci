@@ -10,6 +10,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import type { Say } from "../lib/outcome";
 import {
   clearDevice,
   clearSession,
@@ -28,13 +29,15 @@ type SessionState = {
   /** False until both have been read off disk. The gate renders nothing
    * until then, so nobody sees a flash of the pairing screen. */
   ready: boolean;
-  /** Why the person is looking at a sign-in screen they did not ask for. */
-  lost: string | null;
+  /** Why the person is looking at a sign-in screen they did not ask for,
+   *  as a key the screen puts in their own language rather than as a
+   *  sentence this file would have to spell three times. */
+  lost: Say | null;
   paired: (deviceToken: string) => Promise<void>;
   signedIn: (session: Session) => Promise<void>;
   signOut: () => Promise<void>;
-  sessionLost: (message: string) => Promise<void>;
-  deviceLost: (message: string) => Promise<void>;
+  sessionLost: (say: Say) => Promise<void>;
+  deviceLost: (say: Say) => Promise<void>;
 };
 
 const SessionContext = createContext<SessionState | null>(null);
@@ -49,7 +52,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [device, setDevice] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
-  const [lost, setLost] = useState<string | null>(null);
+  const [lost, setLost] = useState<Say | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -79,18 +82,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setLost(null);
   }, []);
 
-  const sessionLost = useCallback(async (message: string) => {
+  const sessionLost = useCallback(async (say: Say) => {
     await clearSession();
     setSession(null);
-    setLost(message);
+    setLost(say);
   }, []);
 
-  const deviceLost = useCallback(async (message: string) => {
+  const deviceLost = useCallback(async (say: Say) => {
     await clearSession();
     await clearDevice();
     setSession(null);
     setDevice(null);
-    setLost(message);
+    setLost(say);
   }, []);
 
   const value = useMemo(

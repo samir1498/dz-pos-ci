@@ -19,6 +19,19 @@ import { format, type Lang as MessageLang, type Message } from "./message";
  *  named it on 2026-09-20 and proved it with a fake `es`. */
 const LANG_CODES: Lang[] = Object.keys(LANGS).filter(isLang);
 
+/** The languages that are checked *against* English, which is every one
+ *  except English.
+ *
+ *  Three describes below hand each language the English dictionary and
+ *  compare. For English that is the dictionary compared with itself, so
+ *  those rows passed whatever anyone did to them: a key deleted, a plural
+ *  flattened, a placeholder dropped. Three green rows that were green
+ *  before the file was written. English is not unchecked as a result, it
+ *  is what the other two are measured by, and the centimes lens's thread
+ *  on 2026-09-20 is what showed the rows were empty: dropping `{amount}`
+ *  from English's `till_change_due` fails `fr` and `ar` and never `en`. */
+const MEASURED_AGAINST_ENGLISH: Lang[] = LANG_CODES.filter((code) => code !== "en");
+
 /** Every leaf sentence in a dictionary, with the key it came from. A plural
  *  is several. */
 function sentences(dictionary: Record<string, Message>): [string, string][] {
@@ -39,7 +52,7 @@ function isPlural(message: Message): message is Exclude<Message, string> {
  *  says both, and a failure prints which keys and which way round, where two
  *  membership filters said it in two tests and each said half. */
 describe("every language carries English's keys and no others", () => {
-  test.each(LANG_CODES)("%s", (lang) => {
+  test.each(MEASURED_AGAINST_ENGLISH)("%s", (lang) => {
     expect(Object.keys(LANGS[lang]).sort()).toEqual(Object.keys(en).sort());
   });
 });
@@ -106,7 +119,7 @@ describe("a plural entry carries every category its language uses", () => {
   /** And a key is a plural in every language or in none. English's one and
    *  other is the exception, so a sentence written flat in French because it
    *  reads fine at one and at two is a sentence that is wrong at zero. */
-  test.each(LANG_CODES)("%s agrees with English on which keys count", (lang) => {
+  test.each(MEASURED_AGAINST_ENGLISH)("%s agrees with English on which keys count", (lang) => {
     const dictionary: Record<string, Message> = LANGS[lang];
     const plurals = (entries: Record<string, Message>) =>
       Object.keys(entries)
@@ -153,7 +166,7 @@ describe("the placeholders agree across languages", () => {
    *  that does not name the number leaves the reader without it. */
   const MATCHES_ONE_NUMBER = ["zero", "one", "two"];
 
-  test.each(LANG_CODES)("%s", (lang) => {
+  test.each(MEASURED_AGAINST_ENGLISH)("%s", (lang) => {
     const dictionary: Record<string, Message> = LANGS[lang];
     for (const [key, message] of Object.entries(en)) {
       const theirs = dictionary[key];

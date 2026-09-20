@@ -10,25 +10,39 @@
 // A refusal is not a disconnection. Only a call that never reached a
 // server, or one the server could not answer, is worth queueing.
 
+import type { Key, Vars } from "@dzpos/shared";
+
+/** What the cashier is told, in a form the screen can put in their own
+ *  language.
+ *
+ *  A key, not a sentence. The server's `message` is a Rust `Display`
+ *  string (`crates/api/src/error.rs`, `fn message`) and it is English,
+ *  always: the till used to show it, so every refusal on an Arabic counter
+ *  came back in English. The desktop settled this shape at
+ *  `apps/desktop/src/lib/fields.tsx:63`, where the error's code picks a key
+ *  and the server's own prose never reaches a screen. */
+export type Say = { key: Key; vars?: Vars };
+
 /** What the till does next. */
 export type Outcome =
   /** The sale is stored; the server rang it (fresh or replayed). */
   | { kind: "rang" }
   /** Nobody is signed in any more: drop the session, show the sign-in. */
-  | { kind: "sign-in-again"; message: string }
+  | { kind: "sign-in-again"; say: Say }
   /** This phone is no longer trusted: drop the device token too, re-pair. */
-  | { kind: "pair-again"; message: string }
+  | { kind: "pair-again"; say: Say }
   /** The server read the request and said no. Show it; queue nothing. */
-  | { kind: "refused"; message: string }
+  | { kind: "refused"; say: Say }
   /** The call did not get an answer. Queue it and retry later. */
   | { kind: "queue" };
 
-/** The error body every refusal carries (`ApiErrorPayloadDto`). */
-export type ApiError = { code?: string; message?: string } | null;
+/** The outcomes that carry something to tell the cashier, and therefore
+ *  the ones a thrown refusal can be built from. */
+export type Refusal = Extract<Outcome, { say: Say }>;
 
-const SIGN_IN_AGAIN = "Session expired — sign in again.";
-const PAIR_AGAIN = "This phone is no longer paired. Ask a manager for a new QR.";
-const WRONG_SECRET = "That is not the right PIN or password.";
+/** The error body every refusal carries (`ApiErrorPayloadDto`). Its
+ *  `message` is on the wire and is deliberately not read here; see `Say`. */
+export type ApiError = { code?: string; message?: string } | null;
 
 /**
  * Sorts one HTTP answer.
@@ -49,16 +63,15 @@ export function outcomeOf(status: number | null, error: ApiError): Outcome {
   if (status >= 200 && status < 300) return { kind: "rang" };
   if (status >= 500) return { kind: "queue" };
 
-  const message = error?.message ?? "";
   if (status === 401) {
-    if (error?.code === "device_refused") return { kind: "pair-again", message: message || PAIR_AGAIN };
-    if (error?.code === "auth_refused") return { kind: "refused", message: message || WRONG_SECRET };
-    return { kind: "sign-in-again", message: message || SIGN_IN_AGAIN };
+    if (error?.code === "device_refused") return { kind: "pair-again", say: { key: "error_pair_again" } };
+    if (error?.code === "auth_refused") return { kind: "refused", say: { key: "error_wrong_secret" } };
+    return { kind: "sign-in-again", say: { key: "error_sign_in_again" } };
   }
   if (status === 403) {
     // The person is signed in; their role does not reach this. Neither
     // re-pairing nor signing in again changes that.
-    return { kind: "refused", message: message || "You are not allowed to do that." };
+    return { kind: "refused", say: { key: "error_not_allowed" } };
   }
   // 409 is a refusal, not a queue. The core answers it two ways on the same
   // code and field (`CoreError::conflict("idempotency_key", …)`): a key
@@ -67,5 +80,13 @@ export function outcomeOf(status: number | null, error: ApiError): Outcome {
   // them apart, and queueing on a message string is how the bug this
   // module exists to kill got written. Both are shown to the cashier, who
   // rings again with a fresh key.
-  return { kind: "refused", message: message || `Refused (${status}).` };
+  //
+  // The status is all that sentence has to offer, and on a 422 that is less
+  // than the server said. What would close the gap is the desktop's shape: a
+  // record from the core's error codes to keys, so a credit limit or a
+  // validation failure gets its own sentence. It is not written here because
+  // the phone rings cash sales and nothing else yet, and a map built from
+  // guesses is a dictionary of keys no screen reaches. It is on the plan page
+  // rather than in this comment, so it is visible without opening this file.
+  return { kind: "refused", say: { key: "error_refused", vars: { status } } };
 }

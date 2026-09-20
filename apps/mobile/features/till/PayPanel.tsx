@@ -12,6 +12,7 @@ import { TextInput, View } from "react-native";
 import { Button, Callout, Text } from "../../components/ui";
 import { useTheme } from "../../design/theme";
 import { formatCentimes, type CartLine } from "../../lib/basket";
+import { useTranslation } from "../../providers/LanguageProvider";
 
 export function PayPanel({
   lines,
@@ -39,6 +40,7 @@ export function PayPanel({
   noRegime: boolean;
 }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   const count = lines.reduce((total, line) => total + line.qty, 0);
 
   return (
@@ -53,33 +55,30 @@ export function PayPanel({
       <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
         <View style={{ gap: theme.space[1], flex: 1 }}>
           <Text variant="label" tone="secondary">
-            {count === 0 ? "Basket empty" : `${count} item${count === 1 ? "" : "s"}`}
+            {count === 0 ? t("till_basket_empty") : t("till_basket_count", { count })}
           </Text>
-          <Text variant="amount">{owed === null ? "—" : `${formatCentimes(owed)} DA`}</Text>
+          <Text variant="amount">
+            {owed === null ? t("till_basket_no_total") : `${formatCentimes(owed)} ${t("currency_suffix")}`}
+          </Text>
         </View>
-        {count > 0 && <Button title="Clear" variant="secondary" onPress={onClear} />}
+        {count > 0 && <Button title={t("till_basket_clear")} variant="secondary" onPress={onClear} />}
       </View>
 
-      {noRegime && (
-        <Callout tone="danger">
-          No total yet — the shop settings have not loaded, so the phone cannot tell whether a price
-          tag includes the TVA.
-        </Callout>
-      )}
+      {noRegime && <Callout tone="danger">{t("till_no_settings")}</Callout>}
 
       <TenderedInput value={tendered} onChangeText={onTenderedChange} />
 
       <View style={{ flexDirection: "row", gap: theme.space[2] }}>
         {owed !== null && (
           <Button
-            title="Exact"
+            title={t("till_tendered_exact")}
             variant="secondary"
             onPress={() => onTenderedChange(formatCentimes(owed))}
             style={{ flex: 1 }}
           />
         )}
         <Button
-          title="Pay cash"
+          title={t("till_pay_cash")}
           onPress={onPay}
           busy={busy}
           disabled={!canPay}
@@ -87,7 +86,7 @@ export function PayPanel({
         />
       </View>
 
-      {short && <Callout tone="danger">Less than the amount to pay.</Callout>}
+      {short && <Callout tone="danger">{t("till_tendered_short")}</Callout>}
     </View>
   );
 }
@@ -103,10 +102,11 @@ function TenderedInput({
   onChangeText: (typed: string) => void;
 }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   return (
     <TextInput
-      accessibilityLabel="Tendered"
-      placeholder="Amount handed over"
+      accessibilityLabel={t("till_tendered_label")}
+      placeholder={t("till_tendered_placeholder")}
       placeholderTextColor={theme.colors.text.tertiary}
       keyboardType="decimal-pad"
       value={value}

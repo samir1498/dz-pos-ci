@@ -20,6 +20,7 @@ import { useRing } from "../../features/till/useRing";
 import { formatCentimes, priceBasket, readTendered } from "../../lib/basket";
 import type { Session } from "../../lib/session";
 import { useCart } from "../../providers/CartProvider";
+import { useTranslation } from "../../providers/LanguageProvider";
 import { useSession } from "../../providers/SessionProvider";
 
 // The gate above this route guarantees a session, but the type does not, and
@@ -34,6 +35,7 @@ export default function Till() {
 
 function Counter({ session }: { session: Session }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   const { sessionLost, deviceLost, signOut } = useSession();
   const { lines, add, clear } = useCart();
   const [tendered, setTendered] = useState("");
@@ -79,20 +81,22 @@ function Counter({ session }: { session: Session }) {
           </View>
           <View style={{ flexDirection: "row", gap: theme.space[2] }}>
             <Link href="/settings" asChild>
-              <Button title="Settings" variant="secondary" />
+              <Button title={t("till_settings")} variant="secondary" />
             </Link>
-            <Button title="Sign out" variant="secondary" onPress={() => void signOut()} />
+            <Button title={t("auth_sign_out")} variant="secondary" onPress={() => void signOut()} />
           </View>
         </View>
 
         {ringing.queued > 0 && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space[2] }}>
             <Text variant="label" tone="secondary" style={{ flex: 1 }}>
-              {ringing.queued} sale{ringing.queued === 1 ? "" : "s"} waiting to be sent
-              {ringing.skipped > 0 ? ` · ${ringing.skipped} under another sign-in` : ""}
+              {t("till_queue_waiting", { count: ringing.queued })}
+              {ringing.skipped > 0
+                ? ` · ${t("till_queue_other_signin", { count: ringing.skipped })}`
+                : ""}
             </Text>
             <Button
-              title="Send now"
+              title={t("till_queue_send_now")}
               variant="secondary"
               onPress={() => void ringing.retryQueued()}
               busy={ringing.busy}
@@ -100,16 +104,19 @@ function Counter({ session }: { session: Session }) {
           </View>
         )}
 
-        {ringing.notice !== null && <Callout tone="danger">{ringing.notice}</Callout>}
-        {ringing.change !== null && (
-          <Callout tone="success">{`Change: ${formatCentimes(ringing.change)} DA`}</Callout>
+        {ringing.notice !== null && (
+          <Callout tone="danger">{t(ringing.notice.key, ringing.notice.vars)}</Callout>
         )}
-
-        {products.isError && (
-          <Callout tone="danger">
-            Could not read what is for sale. Check the Wi-Fi, then pull to refresh.
+        {ringing.change !== null && (
+          <Callout tone="success">
+            {t("till_change_due", {
+              amount: formatCentimes(ringing.change),
+              currency: t("currency_suffix"),
+            })}
           </Callout>
         )}
+
+        {products.isError && <Callout tone="danger">{t("till_products_unreadable")}</Callout>}
 
         <FlatList
           style={{ flex: 1 }}
@@ -120,7 +127,7 @@ function Counter({ session }: { session: Session }) {
           ListEmptyComponent={
             products.isLoading ? null : (
               <Text variant="body" tone="secondary">
-                Nothing for sale yet — add products on the till computer.
+                {t("till_products_empty")}
               </Text>
             )
           }

@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { call } from "../../lib/api";
 import type { CartLine } from "../../lib/basket";
+import type { Say } from "../../lib/outcome";
 import { enqueue, list, newIdempotencyKey, retry } from "../../lib/queue";
 import type { Session } from "../../lib/session";
 
@@ -29,7 +30,7 @@ export type Ringing = {
   /** Waiting, but queued by somebody else — this signer cannot send them. */
   skipped: number;
   /** The last thing the server refused, in words a cashier can act on. */
-  notice: string | null;
+  notice: Say | null;
   /** The change the server worked out for the sale just rung. */
   change: number | null;
   busy: boolean;
@@ -50,12 +51,12 @@ export function useRing({
   /** Clears the basket. Called for a sale that is done with, queued or not:
    * either way this customer has been served. */
   onRung: () => void;
-  onSessionLost: (message: string) => void;
-  onDeviceLost: (message: string) => void;
+  onSessionLost: (say: Say) => void;
+  onDeviceLost: (say: Say) => void;
 }): Ringing {
   const [queued, setQueued] = useState(0);
   const [skipped, setSkipped] = useState(0);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Say | null>(null);
   const [change, setChange] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -89,13 +90,13 @@ export function useRing({
         case "rang":
           return { done: true, sale: parsed };
         case "sign-in-again":
-          onSessionLost(outcome.message);
+          onSessionLost(outcome.say);
           return { done: true, sale: null };
         case "pair-again":
-          onDeviceLost(outcome.message);
+          onDeviceLost(outcome.say);
           return { done: true, sale: null };
         case "refused":
-          setNotice(outcome.message);
+          setNotice(outcome.say);
           return { done: true, sale: null };
         case "queue":
           return { done: false, sale: null };
