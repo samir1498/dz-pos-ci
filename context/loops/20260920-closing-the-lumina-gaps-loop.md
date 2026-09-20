@@ -445,28 +445,42 @@ service to that repo has moved, so a branch is sized by whole rows.
   `services::expenses::total_between` and `services::{debt,supplier_debt}::balances`
   are added and called. The sums stay where they are; only the door moves.
   Three rows leave. `dz-builder`, hands back if a sum has to move. Size S.
-- T4 branch c, the debt service and the product cost: `debt -> documents`
-  is the sharpest row on the list, because `debt.rs:581` writes
+- T4 branch c, the product cost: `import -> products` (`by_barcode`) and
+  `purchases -> products` (`get`, `set_cost`, where `set_cost` writes a
+  landed cost the purchase computed). Spec: the Cost of goods sold row for
+  `set_cost`. Both are ring-free: `import.rs` already imports
+  `services::products`, and `products`' whole import closure (audit,
+  categories, stock, users, sessions, preferences, clock) reaches back to
+  neither caller. Two rows leave. `dz-money-builder`, and `just ci <branch>
+  full` on the mirror. Size S.
+
+  The debt rows this branch used to carry moved to branch d on 2026-09-21,
+  on reading the import graph rather than on trying it: `customers.rs:22`
+  imports `services::debt` and `documents.rs:23` imports
+  `services::customers`, so routing `debt` through either sibling's service
+  closes a ring the ring test refuses to grow. The row cannot leave by
+  moving the door; it needs the shape branch d already carries.
+- T4 branch d, the rows a ring stands in front of. Two groups, one shape.
+  The mutual pair, `purchases -> supplier_debt` and `supplier_debt ->
+  purchases, suppliers`. And the debt rows branch c handed over,
+  `debt -> documents` and `debt -> customers`: `debt.rs:581` writes
   `documents_repo::set_remaining_debt`, and `remaining_debt` is a field of
   the §3 totals table ("from the ledger at issue time", the balance triple
-  paragraph under it). The reads beside it (`kinds_and_numbers`, `get`,
-  `belongs_to_shop`) move in the same branch or the row stays. With it
-  `debt -> customers` (`belongs_to_shop`), and `import -> products` plus
-  `purchases -> products` (`by_barcode`, `get`, `set_cost`, where
-  `set_cost` writes a landed cost the purchase computed). Spec: the balance
-  triple paragraph of §3 for `set_remaining_debt`, the Cost of goods sold
-  row for `set_cost`. Four rows leave. `dz-money-builder`, and `just ci
-  <branch> full` on the mirror. Size M.
-- T4 branch d, the mutual pair: `purchases -> supplier_debt` and
-  `supplier_debt -> purchases, suppliers`. Routing each through the other's
-  service makes a ring the ring test refuses, so this is the T3 shape: the
-  piece both need (the purchase's landed total and its supplier) moves to a
-  module below both, the way `services::pricing` went under `sales` and
-  `proforma`. Three rows leave and `RINGS_STILL_OPEN` does not grow.
-  `dz-money-builder`, a supplier balance is on the path. Size M.
+  paragraph under it), with the reads beside it (`kinds_and_numbers`, `get`,
+  `belongs_to_shop`) leaving in the same branch or the row staying. Routing
+  any of them through the other's service makes a ring the ring test
+  refuses, so this is the T3 shape: the piece both need moves to a module
+  below both, the way `services::pricing` went under `sales` and `proforma`.
+  Before it starts, the read that decides the shape is what `customers.rs`
+  uses from `debt` and what `documents.rs:135` uses from `customers`: if
+  either is one operation, lifting that one above both is cheaper than a new
+  module. Five rows leave, the constant is deleted with them, and
+  `RINGS_STILL_OPEN` does not grow. `dz-money-builder`, a supplier balance
+  and a customer's remaining debt are both on the path. Size L.
 
-Three, three, four and three: the thirteen rows, and the constant is
-deleted with the last one.
+Three, three, two and five: the thirteen rows, and the constant is deleted
+with the last one. Branch c gave three of its four to branch d on
+2026-09-21, for the ring reason written under it.
 
 Before Phase 2 starts: the advisor, with the per-PR Sonnet lenses having
 run on each Phase 1 merge as always, because Phase 2 builds on `cash.rs`
