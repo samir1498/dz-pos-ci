@@ -85,7 +85,7 @@ const seeded: SettingsDto = {
   regime_planned: null,
   theme: null,
   facture_layout: "standard",
-  facture_layouts: ["standard", "compact"],
+  facture_layouts: ["standard", "compact", "half_sheet"],
   discount_threshold_bps: 0,
 };
 
@@ -221,8 +221,12 @@ beforeEach(() => {
     if (init?.method === "PUT" && url.endsWith("/settings/facture-layout")) {
       const body: unknown = JSON.parse(String(init.body));
       if (typeof body !== "object" || body === null) throw new Error("no body");
-      const chosen = "facture_layout" in body && body.facture_layout === "compact";
-      current = { ...current, facture_layout: chosen ? "compact" : "standard" };
+      const asked = "facture_layout" in body ? body.facture_layout : undefined;
+      // Narrowed against the fixture's own list rather than asserted: the
+      // point of the round trip is that the screen reads back what the
+      // server stored, so a value neither of them knows must not pass.
+      const chosen = seeded.facture_layouts.find((layout) => layout === asked);
+      current = { ...current, facture_layout: chosen ?? "standard" };
       return Promise.resolve(json(200, current));
     }
     if (init?.method === "POST" && url.endsWith("/settings/regime")) {
@@ -559,6 +563,35 @@ describe("the printing room", () => {
     // rather than trusting the click that sent it.
     await waitFor(() => expect(picker).toHaveTextContent(fr.facture_layout_compact));
     expect(screen.getByText(fr.facture_layout_compact_hint)).toBeInTheDocument();
+  });
+
+  /** Every layout the server names is on the screen under its own wording.
+   * Driven by the fixture's own list, so a layout added in Rust and given
+   * its three translations is covered here without this test being edited,
+   * and one added without wording fails rather than appearing as a code
+   * name. */
+  test("names every layout the server offers", async () => {
+    const user = userEvent.setup();
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_facture_layout });
+    await user.click(picker);
+    for (const layout of seeded.facture_layouts) {
+      const label = fr[`facture_layout_${layout}` as keyof typeof fr];
+      expect(label).toBeTruthy();
+      expect(await screen.findByRole("option", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  test("sends the half sheet and says it prints on A5", async () => {
+    const user = userEvent.setup();
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_facture_layout });
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: fr.facture_layout_half_sheet }));
+    await waitFor(() => expect(sent("PUT").url).toContain("/settings/facture-layout"));
+    expect(sent("PUT").body).toEqual({ facture_layout: "half_sheet" });
+    await waitFor(() => expect(picker).toHaveTextContent(fr.facture_layout_half_sheet));
+    expect(screen.getByText(fr.facture_layout_half_sheet_hint)).toBeInTheDocument();
   });
 
   /** The list is the server's. A build that offered every layout it has

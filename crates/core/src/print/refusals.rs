@@ -14,7 +14,8 @@
 use crate::error::CoreError;
 use crate::models::document::{Document, DocumentKind, DocumentStatus, PartyBlock};
 use crate::money::{Money, Regime};
-use crate::print::facture::{carries_a_debt, FactureInput};
+use crate::print::facture::FactureInput;
+use crate::print::facture_view::carries_a_debt;
 
 /// The buyer block, once the document has been found printable.
 ///

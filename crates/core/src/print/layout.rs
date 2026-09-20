@@ -55,8 +55,16 @@ impl Paper {
 /// failing, the way an unknown theme reads as no choice: the cost of being
 /// wrong is a facture on the wrong layout, and the alternative is a shop that
 /// cannot print because a newer build once wrote a name this one never heard.
+///
+/// `snake_case` and not `lowercase`: serde has to spell a name the way
+/// `as_str` does, because one of them is what a query string carries and the
+/// other is what the shop's setting stores. Under `lowercase` a two-word
+/// layout is `halfsheet` on the wire and `half_sheet` in the database, which
+/// is one value with two spellings and a preview that silently ignores the
+/// layout it was asked for. `the_wire_and_the_store_spell_a_layout_the_same`
+/// is what holds this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum FactureLayout {
     /// The page this repo has printed since M2. Generous spacing, one line
     /// per article with room to read it.
@@ -67,12 +75,21 @@ pub enum FactureLayout {
     /// for is on it; what changes is the size and the spacing, because a
     /// layout that saved a line by dropping the NIF would not be a facture.
     Compact,
+    /// The half sheet, drawn for it rather than squeezed onto it. A counter
+    /// that hands a facture over with the goods wants the smaller paper, and
+    /// the A4 page on an A5 sheet is a page at 70% with margins to match,
+    /// which is not the same thing as a page laid out for 148 mm.
+    HalfSheet,
 }
 
 impl FactureLayout {
     /// Every layout a shop may choose, in the order a settings screen lists
     /// them. The API hands this list to the UI so there is one source for it.
-    pub const ALL: [FactureLayout; 2] = [FactureLayout::Standard, FactureLayout::Compact];
+    pub const ALL: [FactureLayout; 3] = [
+        FactureLayout::Standard,
+        FactureLayout::Compact,
+        FactureLayout::HalfSheet,
+    ];
 
     /// The one spelling: what is stored, what crosses the wire, and what a
     /// query string carries. One name, so a value written by an older build
@@ -81,6 +98,7 @@ impl FactureLayout {
         match self {
             FactureLayout::Standard => "standard",
             FactureLayout::Compact => "compact",
+            FactureLayout::HalfSheet => "half_sheet",
         }
     }
 
@@ -88,7 +106,24 @@ impl FactureLayout {
         match value {
             "standard" => Some(FactureLayout::Standard),
             "compact" => Some(FactureLayout::Compact),
+            "half_sheet" => Some(FactureLayout::HalfSheet),
             _ => None,
+        }
+    }
+
+    /// The sheet a layout can only be drawn on, when it has one.
+    ///
+    /// Most layouts have none: the standard page and the compact one are A4
+    /// designs that the print dialog may put on A5, and a shop doing that
+    /// gets a smaller version of the same page, which is a choice it is
+    /// allowed to make. The half sheet is the other kind. Its type sizes and
+    /// its column widths are measured for 148 mm, so drawing it on A4 would
+    /// leave a small facture in the corner of a large sheet, and no caller
+    /// asking for A4 means that.
+    pub const fn fixed_paper(self) -> Option<Paper> {
+        match self {
+            FactureLayout::Standard | FactureLayout::Compact => None,
+            FactureLayout::HalfSheet => Some(Paper::A5),
         }
     }
 }
@@ -111,4 +146,117 @@ impl Page {
         paper: Paper::A4,
         layout: FactureLayout::Standard,
     };
+
+    /// The sheet this page is actually drawn on: what the caller asked for,
+    /// unless the layout only fits one, in which case that one wins.
+    ///
+    /// The layout wins rather than refusing the call because the two are
+    /// answered by different people. The caller naming A4 is a till saying
+    /// which tray to use, and the shop having chosen the half sheet is a
+    /// standing decision about what its factures look like. A shop that
+    /// wants A4 paper picks an A4 layout; nobody is served by a print that
+    /// fails because a query string and a setting disagree.
+    pub const fn paper(self) -> Paper {
+        match self.layout.fixed_paper() {
+            Some(fixed) => fixed,
+            None => self.paper,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Tests may panic; the deny is for shipped code.
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    /// A layout has one name, and these are the two places it is written.
+    ///
+    /// `as_str` is what the shop's setting stores and what `parse` reads back;
+    /// serde is what a `?layout=` query string carries and what the settings
+    /// screen sends. They are declared separately, so nothing but this test
+    /// stops them drifting, and the drift is silent: a preview would ask for a
+    /// layout under a name the route cannot read and be handed the shop's
+    /// standing one instead, with no error anywhere.
+    ///
+    /// It walks `ALL`, so a layout added without a thought about its spelling
+    /// fails here rather than in a shop.
+    #[test]
+    fn the_wire_and_the_store_spell_a_layout_the_same() {
+        for layout in FactureLayout::ALL {
+            let on_the_wire = serde_json::to_string(&layout).expect("a layout serialises");
+            assert_eq!(
+                on_the_wire,
+                format!("\"{}\"", layout.as_str()),
+                "{layout:?} is spelled one way on the wire and another in the store"
+            );
+            assert_eq!(
+                FactureLayout::parse(layout.as_str()),
+                Some(layout),
+                "{layout:?} does not read back out of its own spelling"
+            );
+        }
+    }
+
+    /// No two layouts answer to the same name.
+    ///
+    /// `ALL` is what the settings screen offers and what several tests walk,
+    /// so a duplicate spelling would hide one layout behind another
+    /// everywhere at once.
+    #[test]
+    fn no_two_layouts_share_a_name() {
+        assert_eq!(
+            FactureLayout::ALL.len(),
+            FactureLayout::ALL
+                .iter()
+                .map(|layout| layout.as_str())
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            "two layouts share a name"
+        );
+    }
+
+    /// Every layout the enum has is in `ALL`, in the order `ALL` gives.
+    ///
+    /// This is the one property Rust cannot check on its own: there is no
+    /// way to count an enum's variants without a derive, so a variant left
+    /// out of `ALL` is invisible to any loop over `ALL` — including the two
+    /// tests below and the settings route, all of which walk that constant.
+    /// The first version of this test looped over `ALL` asking whether `ALL`
+    /// contained its own elements, which cannot fail and said so in a name
+    /// that promised otherwise.
+    ///
+    /// What actually holds it is the wildcard-free `match`: a variant added
+    /// to `FactureLayout` stops the build here until someone gives it a
+    /// position, and the position they must give it is its index in `ALL`.
+    #[test]
+    fn every_layout_is_in_all() {
+        for (index, layout) in FactureLayout::ALL.iter().enumerate() {
+            let place = match layout {
+                FactureLayout::Standard => 0,
+                FactureLayout::Compact => 1,
+                FactureLayout::HalfSheet => 2,
+            };
+            assert_eq!(index, place, "{layout:?} is not where ALL puts it");
+        }
+    }
+
+    /// A sheet a layout pins is one the print dialog knows, and a layout
+    /// without a fixed sheet takes whatever the caller named.
+    #[test]
+    fn a_fixed_sheet_is_the_one_the_page_is_drawn_on() {
+        for layout in FactureLayout::ALL {
+            for asked_for in [Paper::A4, Paper::A5] {
+                let page = Page {
+                    paper: asked_for,
+                    layout,
+                };
+                match layout.fixed_paper() {
+                    Some(fixed) => assert_eq!(page.paper(), fixed, "{layout:?}"),
+                    None => assert_eq!(page.paper(), asked_for, "{layout:?}"),
+                }
+            }
+        }
+    }
 }

@@ -28,11 +28,13 @@ import { errorKey } from "@/lib/fields";
 const LAYOUT_LABEL: Record<FactureLayoutDto, Key> = {
   standard: "facture_layout_standard",
   compact: "facture_layout_compact",
+  half_sheet: "facture_layout_half_sheet",
 };
 
 const LAYOUT_HINT: Record<FactureLayoutDto, Key> = {
   standard: "facture_layout_standard_hint",
   compact: "facture_layout_compact_hint",
+  half_sheet: "facture_layout_half_sheet_hint",
 };
 
 /** A layout the server offered that this build has no wording for is left

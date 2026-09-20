@@ -392,6 +392,65 @@ async fn the_facture_comes_back_in_the_layout_the_shop_chose() {
     );
 }
 
+/// The half sheet reaches the paper as A5, whatever the caller asked for.
+///
+/// The override lives in `Page::paper` and is proved there against the type;
+/// this is the same claim over the whole route, because a query string, a
+/// stored setting and a render sit between the two and any of them could
+/// drop it. A shop on the half sheet whose till asked for A4 would otherwise
+/// hand a customer a small facture in the corner of a large page.
+///
+/// Read off the `@page` rule, which is the one line `Paper` sets.
+#[tokio::test]
+async fn the_half_sheet_reaches_the_paper_as_a5() {
+    let (_dir, _path, app) = app();
+    let id = a_facture(&app).await;
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/settings/facture-layout")
+        .header("authorization", format!("Bearer {TOKEN}"))
+        .header(common::SESSION_HEADER, common::OWNER_SESSION)
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({ "facture_layout": "half_sheet" }).to_string(),
+        ))
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(req).await.unwrap().status(),
+        StatusCode::OK
+    );
+
+    // The till names A4, which is the case that matters: the setting has to
+    // win, and it is the only way a shop reaches this by accident.
+    let (_, _, chosen) =
+        call_text(&app, &format!("/sales/{id}/facture?lang=fr&paper=a4"), true).await;
+    assert!(
+        chosen.contains("size: A5;"),
+        "the half sheet pins its sheet"
+    );
+    assert!(chosen.contains("margin: 7mm"), "the half sheet stylesheet");
+
+    // Named in the query rather than stored, the same thing holds.
+    let (_, _, previewed) = call_text(
+        &app,
+        &format!("/sales/{id}/facture?lang=fr&paper=a4&layout=half_sheet"),
+        true,
+    )
+    .await;
+    assert!(previewed.contains("size: A5;"), "a previewed half sheet");
+
+    // And a layout with no fixed sheet still takes the one it was given, so
+    // the override belongs to the half sheet and not to every print.
+    let (_, _, standard) = call_text(
+        &app,
+        &format!("/sales/{id}/facture?lang=fr&paper=a4&layout=standard"),
+        true,
+    )
+    .await;
+    assert!(standard.contains("size: A4;"), "the standard layout on A4");
+}
+
 /// A layout nobody has a template for is refused rather than drawn on the
 /// default: a preview that quietly showed the standard page when asked for
 /// one that does not exist would say a layout works when it does not.

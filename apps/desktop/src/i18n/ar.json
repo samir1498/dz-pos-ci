@@ -758,9 +758,11 @@
   "phones_revoke_confirm_hint": "سيتوقّف عن البيع عند أول إجراء تالٍ وسيحتاج إلى اقتران جديد برمز جديد.",
   "settings_nav_printing": "الطباعة",
   "settings_facture_layout": "نموذج الفاتورة",
-  "settings_facture_layout_hint": "كيف تُرسم الفاتورة. حجم الورق، A4 أو A5، يُختار عند الطباعة.",
+  "settings_facture_layout_hint": "كيف تُرسم الفاتورة. حجم الورق، A4 أو A5، يُختار عند الطباعة، إلا إذا كانت المرسومة تفرض حجمها.",
   "facture_layout_standard": "قياسي",
   "facture_layout_standard_hint": "تباعد واسع، سطر لكل مادة، سهل القراءة.",
   "facture_layout_compact": "مضغوط",
-  "facture_layout_compact_hint": "نفس البيانات، بشكل مضغوط: سلة طويلة تدخل في ورقة واحدة."
+  "facture_layout_compact_hint": "نفس البيانات، بشكل مضغوط: سلة طويلة تدخل في ورقة واحدة.",
+  "facture_layout_half_sheet": "نصف ورقة (A5)",
+  "facture_layout_half_sheet_hint": "فاتورة تُسلَّم عند المنضدة مع البضاعة. مرسومة لمقاس A5، وتُطبع على A5 حتى إذا طلبت الطباعة A4."
 }

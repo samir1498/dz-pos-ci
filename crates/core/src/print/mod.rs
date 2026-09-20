@@ -15,6 +15,7 @@ pub mod barcode_label;
 pub mod debt_slip;
 pub mod escpos;
 pub mod facture;
+pub(crate) mod facture_view;
 pub mod layout;
 mod refusals;
 pub mod statement;

@@ -223,6 +223,10 @@ pub(crate) fn compact_goldens_dir() -> PathBuf {
     super::goldens_dir("facture_compact_a4")
 }
 
+pub(crate) fn half_sheet_goldens_dir() -> PathBuf {
+    super::goldens_dir("facture_half_sheet")
+}
+
 /// The seller as a facture prints them: the four identifiers décret 05-468
 /// art. 3 asks of the issuer, unlike the ticket fixture which carries two.
 pub(crate) fn seller() -> SellerBlock {
@@ -871,6 +875,7 @@ pub(crate) fn each_language_of_a_layout(case: Case, layout: FactureLayout) {
     let dir = match layout {
         FactureLayout::Standard => goldens_dir(),
         FactureLayout::Compact => compact_goldens_dir(),
+        FactureLayout::HalfSheet => half_sheet_goldens_dir(),
     };
     let mut updated = Vec::new();
     for lang in Lang::ALL {
@@ -937,4 +942,20 @@ pub(crate) fn names_no_tax(html: &str, lang: Lang) {
             "the {lang:?} IFU facture keeps a {absent} row"
         );
     }
+}
+
+/// The `@page` rule, as the file carries it: the one line `Paper` sets.
+///
+/// Read as the rule and not as text anywhere on the page, because a test
+/// asking whether a sheet reached the stylesheet has to look where the sheet
+/// is written. A whole-file search for "size: A5" would pass on a page that
+/// happened to echo the value somewhere else and had lost it here.
+pub(crate) fn page_rule(html: &str) -> String {
+    let opening = "@page {";
+    let rest = html
+        .split_once(opening)
+        .unwrap_or_else(|| panic!("the page carries no @page rule"))
+        .1;
+    let end = rest.find('}').expect("the @page rule never closes");
+    rest[..end].to_owned()
 }

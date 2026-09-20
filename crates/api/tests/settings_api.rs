@@ -6,6 +6,7 @@
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use dzpos_core::print::FactureLayout;
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
@@ -104,7 +105,14 @@ async fn the_seeded_shop_reads_as_its_name_reel_and_nothing_planned() {
             "regime_planned": null,
             "theme": null,
             "facture_layout": "standard",
-            "facture_layouts": ["standard", "compact"],
+            // Read off the enum rather than typed here. A layout added in
+            // crates/core has to reach this route, and a hand-typed list
+            // would make that a failing assertion to edit rather than a
+            // thing that just works.
+            "facture_layouts": FactureLayout::ALL
+                .iter()
+                .map(|layout| layout.as_str())
+                .collect::<Vec<_>>(),
             // A shop that has never set one refuses a cashier every
             // discount, which is the safe reading of "nobody has decided"
             // and the reason the settings screen has to offer the field.
@@ -162,7 +170,9 @@ async fn choosing_nothing_puts_the_shop_back_on_the_machine() {
 #[tokio::test]
 async fn every_facture_layout_survives_the_round_trip() {
     let h = harness();
-    for name in ["compact", "standard"] {
+    // Off the enum, not typed here. The test says "every" and a hand-typed
+    // pair made that false the moment a third layout existed.
+    for name in FactureLayout::ALL.map(FactureLayout::as_str) {
         let (status, body) = call(
             &h.app,
             "PUT",

@@ -717,13 +717,21 @@ first release.**
 
 ## 4. Printing (v1)
 
-- Templates: `ticket_80mm`, `facture_a4`, `statement_a4`, `debt_slip_80mm`,
-  each in ar/fr/en. HTML rendered by the core, not the UI, so desktop and
-  any server print the same bytes. `facture_a4` is one template for the
-  three kinds that share a facture's blocks: it titles itself facture,
-  avoir or proforma, and A5 is a `Paper` argument that changes the `@page`
-  size line and nothing else, so there is no separate `facture_a5`,
-  `proforma_a4` or `avoir_a4` file to keep in step. What an avoir does not
+- Templates: `ticket_80mm`, `facture_a4`, `facture_compact_a4`,
+  `facture_half_sheet`, `statement_a4`, `debt_slip_80mm`, each in ar/fr/en.
+  HTML rendered by the core, not the UI, so desktop and any server print the
+  same bytes. `facture_a4` is one template for the three kinds that share a
+  facture's blocks: it titles itself facture, avoir or proforma, so there is
+  no separate `proforma_a4` or `avoir_a4` file to keep in step.
+- Two questions decide which page comes out, answered by different people.
+  `Paper` is the sheet, named on every print because the till knows which
+  tray the cashier reached for; it changes the `@page` size line and nothing
+  else. `FactureLayout` is how the page is drawn, chosen once in settings and
+  followed by every facture after it. A layout may pin its own sheet
+  (`FactureLayout::fixed_paper`), and when it does that sheet wins over the
+  one the caller named: the half sheet is measured for 148 mm, so a till
+  asking for A4 would otherwise get a small facture in the corner of a large
+  page. The layouts that pin nothing take whatever they are given. What an avoir does not
   share with a facture is a title, the line naming the facture it corrects,
   a words line saying avoir, and the stamp row it never carries, against a
   second copy of the parties, the lines, the totals and the signatures.
@@ -796,7 +804,14 @@ first release.**
   heading, the mark and the cancellation line only, that an avoir carrying a
   droit de timbre and a proforma carrying a debt are refused rather than
   quietly stripped, and that A5 differs from A4 in the `@page` line on every
-  one of the six cases. What the row does not carry (the referenced
+  one of the six cases. `facture_compact_a4` owes the full six cases by three
+  languages (`fixtures/print/facture_compact_a4/`); `facture_half_sheet` is
+  chosen for the counter rather than for everything, so it owes the reduced
+  set, plain, cash and avoir by three languages
+  (`fixtures/print/facture_half_sheet/`). Both are the standard page's own
+  body under a different stylesheet, which their tests assert directly rather
+  than as a list of fields, and both are held to the IFU rule even where
+  their goldens do not reach the IFU régime. What the row does not carry (the referenced
   facture's number and day, the cancellation's day and reason) is handed to
   the renderer beside the document.
 - `statement_a4` and `debt_slip_80mm` are the customer's two papers, on the

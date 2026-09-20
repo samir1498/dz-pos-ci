@@ -758,9 +758,11 @@
   "phones_revoke_confirm_hint": "Il cesse de vendre dès sa prochaine action et devra être appairé à nouveau avec un nouveau code.",
   "settings_nav_printing": "Impression",
   "settings_facture_layout": "Modèle de facture",
-  "settings_facture_layout_hint": "Comment la facture est dessinée. Le format du papier, A4 ou A5, se choisit à l'impression.",
+  "settings_facture_layout_hint": "Comment la facture est dessinée. Le format du papier, A4 ou A5, se choisit à l'impression, sauf pour une mise en page qui impose le sien.",
   "facture_layout_standard": "Standard",
   "facture_layout_standard_hint": "Espacement large, une ligne par article, facile à lire.",
   "facture_layout_compact": "Compact",
-  "facture_layout_compact_hint": "Les mêmes mentions, en plus serré : un long panier tient sur une feuille."
+  "facture_layout_compact_hint": "Les mêmes mentions, en plus serré : un long panier tient sur une feuille.",
+  "facture_layout_half_sheet": "Demi-feuille (A5)",
+  "facture_layout_half_sheet_hint": "Une facture remise au comptoir avec la marchandise. Dessinée pour le A5, et imprimée sur A5 même si l'impression demande du A4."
 }

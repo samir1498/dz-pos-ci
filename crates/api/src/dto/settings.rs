@@ -148,10 +148,11 @@ pub struct ThemeChoiceDto {
 /// chosen once and every facture follows it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export_to = "FactureLayoutDto.ts")]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum FactureLayoutDto {
     Standard,
     Compact,
+    HalfSheet,
 }
 
 impl From<FactureLayout> for FactureLayoutDto {
@@ -159,6 +160,7 @@ impl From<FactureLayout> for FactureLayoutDto {
         match layout {
             FactureLayout::Standard => FactureLayoutDto::Standard,
             FactureLayout::Compact => FactureLayoutDto::Compact,
+            FactureLayout::HalfSheet => FactureLayoutDto::HalfSheet,
         }
     }
 }
@@ -168,6 +170,7 @@ impl From<FactureLayoutDto> for FactureLayout {
         match dto {
             FactureLayoutDto::Standard => FactureLayout::Standard,
             FactureLayoutDto::Compact => FactureLayout::Compact,
+            FactureLayoutDto::HalfSheet => FactureLayout::HalfSheet,
         }
     }
 }

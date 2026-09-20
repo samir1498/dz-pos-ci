@@ -17,7 +17,6 @@
     "apps/desktop/src/routes/till.tsx": 905,
     "crates/api/src/lib.rs": 710,
     "crates/api/tests/sales_api.rs": 1591,
-    "crates/core/src/print/facture.rs": 616,
     "crates/core/src/print/strings.rs": 638,
     "crates/core/src/services/avoir.rs": 988,
     "crates/core/src/services/backup.rs": 629,

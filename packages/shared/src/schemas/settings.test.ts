@@ -38,8 +38,7 @@ const settings: SettingsDto = {
   regime_planned: null,
   theme: null,
   facture_layout: "standard",
-
-  facture_layouts: ["standard", "compact"],
+  facture_layouts: ["standard", "compact", "half_sheet"],
   discount_threshold_bps: 0,
 };
 
@@ -123,6 +122,21 @@ describe("settingsSchema", () => {
 
   test("refuses a planned change that is neither a régime nor null", () => {
     expect(settingsSchema.safeParse({ ...settings, regime_planned: "reel" }).success).toBe(false);
+  });
+
+  /** A layout is one name on both sides. The Rust enum spells it
+   *  `half_sheet` (crates/core, print::layout), so the schema reading a
+   *  server's answer has to spell it that way too: `halfsheet` here would
+   *  refuse every page a shop on the half sheet loads. */
+  test("takes every layout the server can name and refuses a misspelling", () => {
+    for (const layout of settings.facture_layouts) {
+      expect(settingsSchema.parse({ ...settings, facture_layout: layout }).facture_layout).toBe(
+        layout,
+      );
+    }
+    expect(settingsSchema.safeParse({ ...settings, facture_layout: "halfsheet" }).success).toBe(
+      false,
+    );
   });
 });
 

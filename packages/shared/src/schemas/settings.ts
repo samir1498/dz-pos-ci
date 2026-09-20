@@ -71,7 +71,11 @@ type _Theme = Assert<Matches<ThemeDto, typeof themeSchema>>;
 
 /** Which layout a facture is drawn in. Not the paper: the sheet is named on
  *  each print, because the till knows which tray the cashier reached for. */
-export const factureLayoutSchema = z.enum(["standard", "compact"]) satisfies z.ZodType<FactureLayoutDto>;
+export const factureLayoutSchema = z.enum([
+  "standard",
+  "compact",
+  "half_sheet",
+]) satisfies z.ZodType<FactureLayoutDto>;
 type _FactureLayout = Assert<Matches<FactureLayoutDto, typeof factureLayoutSchema>>;
 
 export const settingsSchema = z.object({
