@@ -28,7 +28,7 @@ use dzpos_core::services::customers::{NewCustomer, PartyKind};
 use dzpos_core::services::export::{self, DayRange};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
 use dzpos_core::services::suppliers::NewSupplier;
-use dzpos_core::services::{customers, documents, products, suppliers};
+use dzpos_core::services::{cancellation, customers, products, suppliers};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
@@ -344,7 +344,7 @@ fn a_cancelled_document_is_in_the_file_with_cancelled_in_its_status_column() {
         },
     )
     .unwrap();
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,

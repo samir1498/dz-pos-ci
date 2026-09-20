@@ -14,7 +14,7 @@ use dzpos_core::money::{Bps, Money, PaymentMode};
 use dzpos_core::services::dashboard;
 use dzpos_core::services::documents::Document;
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
-use dzpos_core::services::{avoir, cash, clock, documents, products};
+use dzpos_core::services::{avoir, cancellation, cash, clock, products};
 
 mod common;
 
@@ -238,7 +238,7 @@ fn a_cancelled_sale_leaves_both_sides_of_the_margin_at_once() {
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     let ticket = sell(&mut conn, p, 3, SaleKind::Ticket, None, 9);
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -271,7 +271,7 @@ fn a_cancelled_facture_and_the_credit_note_it_issued_leave_together() {
     let p = product(&mut conn, "Ciment", 10_000, 6_000, 0);
     let c = common::an_identified_customer(&mut conn, "Entreprise Benali");
     let facture = sell(&mut conn, p, 3, SaleKind::Facture, Some(c), 9);
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -655,7 +655,7 @@ fn cancelling_a_facture_takes_the_avoirs_written_against_it_and_no_others() {
     )
     .unwrap();
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -804,7 +804,7 @@ fn a_month_of_trading(conn: &mut SqliteConnection) {
     // And a ticket that never happened, so a cancelled paper is inside the
     // window on both sides.
     let void = sell_on(conn, sable, 5, 6, 16);
-    documents::cancel(
+    cancellation::cancel(
         conn,
         SHOP,
         OWNER,

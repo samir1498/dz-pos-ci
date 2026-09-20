@@ -160,7 +160,7 @@ pub struct Document {
     pub change: Option<Money>,
     pub status: DocumentStatus,
     /// Filled exactly when `status` is `Cancelled`. The two are written
-    /// together by `documents::cancel` and read back together below.
+    /// together by `cancellation::cancel` and read back together below.
     pub cancellation: Option<Cancellation>,
     pub lines: Vec<DocumentLine>,
     pub created_at: NaiveDateTime,

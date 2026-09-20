@@ -38,7 +38,7 @@ use dzpos_core::services::documents::Document;
 use dzpos_core::services::expenses::{self, NewExpense};
 use dzpos_core::services::purchases::{self, NewLine, NewPurchase, ReceiveLine};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
-use dzpos_core::services::{avoir, documents, products};
+use dzpos_core::services::{avoir, cancellation, products};
 use proptest::prelude::*;
 
 mod common;
@@ -526,7 +526,7 @@ proptest! {
                         None,
                         Some(moment(when.day(), nth.wrapping_add(30))),
                     ).unwrap();
-                    documents::cancel(
+                    cancellation::cancel(
                         &mut conn, SHOP, OWNER, facture.id,
                         "erreur de saisie".to_string(),
                         Some(moment(when.later(later).day(), nth.wrapping_add(45))),
@@ -541,7 +541,7 @@ proptest! {
                         &mut conn, ids[product], qty_milli, 0,
                         PaymentMode::Cash, customer, at,
                     );
-                    documents::cancel(
+                    cancellation::cancel(
                         &mut conn, SHOP, OWNER, ticket.id,
                         "erreur de saisie".to_string(),
                         Some(moment(when.later(later).day(), nth.wrapping_add(45))),

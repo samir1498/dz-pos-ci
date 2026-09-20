@@ -26,6 +26,7 @@ use dzpos_core::money::{Bps, Money, PaymentMode, Regime, TvaLine};
 use dzpos_core::print::FactureLayout;
 use dzpos_core::services::avoir::AvoirLine;
 use dzpos_core::services::backup::Backup;
+use dzpos_core::services::cancellation::CancelEffect;
 use dzpos_core::services::cash::{CashPosition, Outgoings, Takings};
 use dzpos_core::services::clock::Month;
 use dzpos_core::services::customers::{CustomerWithBalance, NewCustomer, PartyKind};
@@ -33,7 +34,6 @@ use dzpos_core::services::dashboard::{
     Dashboard, Figures, LowStock, Owed, Series, SeriesPoint, TopProduct,
 };
 use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
-use dzpos_core::services::documents::CancelEffect;
 use dzpos_core::services::expenses::{Expense, ExpenseCategory, NewExpense};
 use dzpos_core::services::import::{Applied, DryRun, Outcome, RowReport};
 use dzpos_core::services::permissions::{Permission, Role};

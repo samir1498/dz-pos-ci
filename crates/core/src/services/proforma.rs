@@ -22,8 +22,8 @@ use crate::money::{compute_totals, Money, TotalsOptions};
 use crate::services::documents::{
     BalanceTriple, Document, DocumentKind, NewDocument, NewDocumentLine, SellerBlock,
 };
-use crate::services::sales::NewSale;
-use crate::services::{clock, customers, documents, sales, settings, shops};
+use crate::services::pricing::{self, NewSale};
+use crate::services::{clock, customers, documents, settings, shops};
 
 /// Writes the quotation: its number out of the proforma series, its document
 /// with the lines and the TVA recap, and nothing else at all.
@@ -79,9 +79,9 @@ pub fn issue(
             ));
         }
 
-        let priced = sales::price_lines(conn, shop_id, regime, &new.lines)?;
-        let money_lines = sales::money_lines(&priced);
-        let total_ht = sales::sum_line_totals(&money_lines)?;
+        let priced = pricing::price_lines(conn, shop_id, regime, &new.lines)?;
+        let money_lines = pricing::money_lines(&priced);
+        let total_ht = pricing::sum_line_totals(&money_lines)?;
         if new.global_discount > total_ht {
             return Err(CoreError::validation(
                 "global_discount",
@@ -97,11 +97,11 @@ pub fn issue(
             &TotalsOptions {
                 global_discount: new.global_discount,
                 payment_mode: new.payment_mode,
-                stamp_enabled: sales::STAMP_ENABLED,
+                stamp_enabled: pricing::STAMP_ENABLED,
                 regime,
             },
         )
-        .map_err(sales::too_large("lines"))?;
+        .map_err(pricing::too_large("lines"))?;
 
         documents::issue(
             conn,
@@ -114,7 +114,7 @@ pub fn issue(
                 payment_mode: new.payment_mode,
                 seller,
                 customer_id: Some(customer_id),
-                buyer: Some(sales::buyer_block(&customer)),
+                buyer: Some(pricing::buyer_block(&customer)),
                 ref_document_id: None,
                 // Three zeros rather than no triple at all. The customer is
                 // named, so the paper has a debt block, and what it has to say

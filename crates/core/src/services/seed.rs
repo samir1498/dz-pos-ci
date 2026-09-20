@@ -46,8 +46,8 @@ use crate::services::expenses::NewExpense;
 use crate::services::purchases::{NewLine, NewPurchase, ReceiveLine};
 use crate::services::sales::{NewSale, NewSaleLine, SaleKind};
 use crate::services::{
-    audit, avoir, customers, debt, documents, expenses, products, purchases, sales, shops,
-    supplier_debt, suppliers, users,
+    audit, avoir, cancellation, customers, debt, documents, expenses, products, purchases, sales,
+    shops, supplier_debt, suppliers, users,
 };
 
 /// The name the seeded shop trades under. Public because the binary reads it
@@ -907,7 +907,7 @@ fn the_counter(
                     && d.status == crate::models::sql_types::DocumentStatus::Issued
             });
         if let Some(paper) = latest {
-            documents::cancel(
+            cancellation::cancel(
                 conn,
                 shop_id,
                 user_id,

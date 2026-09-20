@@ -19,7 +19,7 @@ use dzpos_core::money::{Bps, Money, PaymentMode};
 use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::documents::{Document, DocumentStatus};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
-use dzpos_core::services::{debt, documents, products, shops};
+use dzpos_core::services::{cancellation, debt, documents, products, shops};
 use proptest::prelude::*;
 
 const SHOP: i32 = 1;
@@ -160,7 +160,7 @@ proptest! {
 
         // The cancellation writes the closing avoir, which is the whole point:
         // it must never be refused for a centime of rounding.
-        documents::cancel(
+        cancellation::cancel(
             &mut conn,
             SHOP,
             OWNER,

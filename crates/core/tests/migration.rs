@@ -3457,7 +3457,7 @@ fn a_document_is_annulee_exactly_when_it_says_when_by_whom_and_why() {
         );
     }
     // The avoir a cancellation issued exists only where the cancellation
-    // does: `documents::cancel` writes the four together and nothing else
+    // does: `cancellation::cancel` writes the four together and nothing else
     // writes the column at all.
     assert!(
         kind_row(&mut conn, "'facture'", &[("cancel_avoir_document_id", "1")]).is_err(),
@@ -3769,7 +3769,7 @@ fn a_database_whose_documents_take_any_block_on_any_kind_takes_the_kind_rules() 
 
 #[test]
 fn only_a_ticket_and_a_facture_are_annulled() {
-    // `documents::cancel` (services/documents.rs:119) names the two kinds it
+    // `cancellation::cancel` (services/cancellation.rs) names the two kinds it
     // knows how to undo and refuses every other by not being on the list, so
     // that a kind added later is refused until somebody decides what undoing
     // it means. An annulée proforma or an annulée avoir is a row no service

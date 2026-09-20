@@ -17,10 +17,14 @@
 //! `crates/core/tests/repos_own_the_queries.rs` already use. It keys off the
 //! text after `repos::`, which catches a renamed import
 //! (`use crate::repos::audit as audit_repo`) because the module's real name
-//! is what sits there. Three ways past it are closed below by their own
-//! assertion rather than left as a comment: a wildcard import, a service
-//! going round `repos` to `crate::schema` and querying the table itself,
-//! and a service that becomes a folder the walk does not descend into.
+//! is what sits there. The same walk over `services::` says which services
+//! import each other, which Rust compiles without a word.
+//!
+//! Five ways past both walks are closed below by their own assertion rather
+//! than left as a comment: either wildcard import, a sibling named through
+//! `super::` instead of `crate::services::`, a service going round `repos`
+//! to `crate::schema` and querying the table itself, and a service that
+//! becomes a folder the walk does not descend into.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -59,14 +63,22 @@ const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 11] = [
 /// in this crate, and a walk that saw only one of them would pass over half
 /// the reaches it is looking for.
 fn repos_named_in(source: &str) -> BTreeSet<String> {
+    modules_named_in(source, "repos::")
+}
+
+/// Every module named after `prefix` in a file, by a `use …{a, b}`, a
+/// `use …a::{T, U}` or a `…a::f()` at the call site. One walk for the repos
+/// and the services, because two hand-copies of it drift the day one learns
+/// something the other does not: the nested brace below was read wrong by
+/// both until 2026-09-20.
+fn modules_named_in(source: &str, prefix: &str) -> BTreeSet<String> {
     let mut found = BTreeSet::new();
     let stripped = code_of(source);
     let mut rest = stripped.as_str();
-    while let Some(at) = rest.find("repos::") {
-        rest = &rest[at + "repos::".len()..];
+    while let Some(at) = rest.find(prefix) {
+        rest = &rest[at + prefix.len()..];
         if let Some(inner) = rest.strip_prefix('{') {
-            let close = inner.find('}').unwrap_or(inner.len());
-            for item in inner[..close].split(',') {
+            for item in top_level_items(inner) {
                 if let Some(name) = first_ident(item.trim()) {
                     found.insert(name);
                 }
@@ -76,6 +88,32 @@ fn repos_named_in(source: &str) -> BTreeSet<String> {
         }
     }
     found
+}
+
+/// The comma-separated items of a brace list, cut at the brace that closes
+/// it rather than at the first `}` seen. `use crate::repos::{a::{X}, b}`
+/// loses `b` to the naive read, and losing an item loses a reach.
+fn top_level_items(inner: &str) -> Vec<&str> {
+    let mut depth = 0usize;
+    let mut items = Vec::new();
+    let mut start = 0usize;
+    for (at, c) in inner.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' if depth == 0 => {
+                items.push(&inner[start..at]);
+                return items;
+            }
+            '}' => depth -= 1,
+            ',' if depth == 0 => {
+                items.push(&inner[start..at]);
+                start = at + 1;
+            }
+            _ => {}
+        }
+    }
+    items.push(&inner[start..]);
+    items
 }
 
 /// The source with its line comments cut off, so prose about a repo is not
@@ -169,6 +207,114 @@ fn no_service_reaches_a_repo_that_is_not_on_the_list() {
     );
 }
 
+/// Every sibling service named in a file, by a `use crate::services::{a, b}`,
+/// a `use crate::services::a::{T, U}` or a `crate::services::a::f()` at the
+/// call site. The same walk as `repos_named_in` over a different prefix: one
+/// text, `services::`, and whatever module name sits after it.
+fn services_named_in(source: &str) -> BTreeSet<String> {
+    modules_named_in(source, "services::")
+}
+
+/// The rings still standing, the same burn-down shape as the reach list
+/// above. Each one is written from its alphabetically first service, which
+/// is also the only start the walk below reports it from, so the same ring
+/// always prints the same string.
+///
+/// All three are the same corner: a user is written with an audit row, the
+/// audit row names a user, a session belongs to a user, and a preference is
+/// read while writing one. Untangling that is its own task, on a plan that
+/// can say what the shared kernel there is. The two the architecture review
+/// named, `avoir -> documents` and `proforma -> sales`, are gone.
+const RINGS_STILL_OPEN: [&str; 3] = [
+    "audit -> users -> audit",
+    "audit -> users -> sessions -> preferences -> audit",
+    "sessions -> users -> sessions",
+];
+
+/// Two services that import each other cannot be read, moved or tested
+/// apart: whichever one you open first assumes the other. Rust compiles an
+/// intra-crate cycle without a word, so nothing said so while `documents`
+/// and `avoir` imported each other and `sales` and `proforma` did the same.
+///
+/// The fix in both cases was a third module: the shared kernel comes out
+/// underneath, or the operation that needs both goes above, and the edge
+/// that remains points one way. This test is what keeps the edge from being
+/// put back, and it looks for a ring of any length rather than only the
+/// pair, because a three-hop ring is the same problem with one more file to
+/// read before you find it.
+#[test]
+fn no_service_imports_a_sibling_that_imports_it_back() {
+    let edges: Vec<(String, BTreeSet<String>)> = service_files()
+        .into_iter()
+        .map(|path| {
+            let own = stem(&path);
+            let source = fs::read_to_string(&path).expect("a service file is readable");
+            let mut named = services_named_in(&source);
+            named.remove(&own);
+            (own, named)
+        })
+        .collect();
+
+    // Every ring is enumerated from its alphabetically first service, and
+    // the walk from that service never steps to one that sorts before it.
+    // So each ring is found once, written one way, and found at all: a walk
+    // that remembered which services it had already finished with would
+    // miss the second ring through a shared service, which is how the
+    // four-hop one here disappeared the moment `audit` was given a second
+    // way back to itself.
+    let mut rings: Vec<String> = Vec::new();
+    for (start, _) in &edges {
+        let mut path = vec![start.clone()];
+        rings_through(start, start, &mut path, &edges, &mut rings);
+    }
+    rings.sort();
+    rings.dedup();
+
+    let pinned: Vec<String> = RINGS_STILL_OPEN.iter().map(|r| (*r).to_string()).collect();
+    assert_eq!(
+        rings, pinned,
+        "the list of services that import each other has changed. Shorter is \
+         the only direction it goes: put what both need in a module \
+         underneath them, or lift the one operation that needs both above \
+         them, then take the row out of RINGS_STILL_OPEN. A longer list \
+         means neither of two services can now be read or moved without the \
+         other."
+    );
+}
+
+/// Every ring that closes back on `start`, walking forward from `node` and
+/// never visiting a service that sorts before `start`. That one rule is
+/// what makes the enumeration terminate, report each ring once, and write
+/// it from the same end every time.
+fn rings_through(
+    start: &str,
+    node: &str,
+    path: &mut Vec<String>,
+    edges: &[(String, BTreeSet<String>)],
+    found: &mut Vec<String>,
+) {
+    let Some((_, out)) = edges.iter().find(|(name, _)| name == node) else {
+        return;
+    };
+    for next in out {
+        if next.as_str() < start {
+            continue;
+        }
+        if next == start {
+            let mut ring = path.clone();
+            ring.push(start.to_string());
+            found.push(ring.join(" -> "));
+            continue;
+        }
+        if path.iter().any(|n| n == next) || !edges.iter().any(|(name, _)| name == next) {
+            continue;
+        }
+        path.push(next.clone());
+        rings_through(start, next, path, edges, found);
+        path.pop();
+    }
+}
+
 /// The three ways round the walk above, each closed here rather than left
 /// as a comment. None of them is in the tree today, which is what makes
 /// them cheap to close: a rule written while nothing breaks it is a rule
@@ -198,6 +344,42 @@ fn the_walk_cannot_be_stepped_around() {
         wildcard.is_empty(),
         "{wildcard:?} imports every repo at once. Name the ones it uses, or \
          the walk above cannot tell which."
+    );
+
+    // The same wildcard, aimed at the siblings rather than the repos:
+    // `use crate::services::*` would put every service in scope under a
+    // bare name and the ring walk would see no module to attribute.
+    let all_siblings = services_containing("services::*");
+    assert!(
+        all_siblings.is_empty(),
+        "{all_siblings:?} imports every service at once. Name the ones it \
+         uses, or the ring walk above cannot tell which."
+    );
+
+    // `super::` is the other spelling of a sibling: every service file's
+    // parent is `crate::services`, so `use super::sales` reaches one
+    // without the text `services::` the walk keys off. Ten files write
+    // `super::` today and every one of them is inside its own
+    // `#[cfg(test)]` module, reaching back into itself, which is why this
+    // asserts on the name after it rather than on the word.
+    let siblings: BTreeSet<String> = service_files().iter().map(|path| stem(path)).collect();
+    let by_super: Vec<String> = service_files()
+        .into_iter()
+        .filter(|path| {
+            let own = stem(path);
+            let source = code_of(&fs::read_to_string(path).expect("a service file is readable"));
+            source.match_indices("super::").any(|(at, _)| {
+                first_ident(&source[at + "super::".len()..])
+                    .is_some_and(|name| name != own && siblings.contains(&name))
+            })
+        })
+        .map(|path| format!("{}.rs", stem(&path)))
+        .collect();
+    assert!(
+        by_super.is_empty(),
+        "{by_super:?} names a sibling service through `super::`, which the \
+         ring walk above does not read. Write `crate::services::` so the \
+         edge is counted."
     );
 
     // The walk reads one directory and does not descend.

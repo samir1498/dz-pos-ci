@@ -19,6 +19,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
+use dzpos_core::services::cancellation;
 use dzpos_core::services::cash;
 use dzpos_core::services::clock::{Month, Period};
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
@@ -281,7 +282,7 @@ proptest! {
                     let id = a_document(
                         &mut conn, SHOP, DocumentKind::Ticket, mode, total_ttc, 0, moment(day, hour), None,
                     );
-                    documents::cancel(
+                    cancellation::cancel(
                         &mut conn, SHOP, OWNER, id, "erreur".to_string(), Some(moment(day, hour)),
                     ).unwrap();
                     // The delta stays empty: an annulled ticket is money that

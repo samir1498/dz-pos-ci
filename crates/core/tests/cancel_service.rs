@@ -16,7 +16,9 @@ use dzpos_core::services::customers::NewCustomer;
 use dzpos_core::services::debt::{DebtKind, PaymentMethod};
 use dzpos_core::services::documents::{Document, DocumentKind, DocumentStatus};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
-use dzpos_core::services::{audit, avoir, customers, debt, documents, products, stock};
+use dzpos_core::services::{
+    audit, avoir, cancellation, customers, debt, documents, products, stock,
+};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
@@ -121,7 +123,7 @@ fn a_cash_ticket_is_cancelled_the_stock_comes_back_and_the_number_stays() {
         10,
     );
 
-    let cancelled = documents::cancel(
+    let cancelled = cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -189,7 +191,7 @@ fn a_facture_carrying_debt_is_cancelled_through_a_whole_avoir() {
         Money::centimes(200_000)
     );
 
-    let cancelled = documents::cancel(
+    let cancelled = cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -268,7 +270,7 @@ fn a_facture_already_paid_is_cancelled_and_leaves_the_customer_in_credit() {
     )
     .unwrap();
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -303,7 +305,7 @@ fn a_document_is_cancelled_once_and_an_avoir_or_a_proforma_never() {
 
     // An avoir is the instrument that undoes a facture; undoing it in turn
     // would be a second reversal nobody can read against the first.
-    let err = documents::cancel(
+    let err = cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -319,7 +321,7 @@ fn a_document_is_cancelled_once_and_an_avoir_or_a_proforma_never() {
 
     // A second cancellation of the same document is refused: the first one is
     // what the paper says, and a second would overwrite who took it and why.
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -328,7 +330,7 @@ fn a_document_is_cancelled_once_and_an_avoir_or_a_proforma_never() {
         Some(at(12)),
     )
     .unwrap();
-    let again = documents::cancel(
+    let again = cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -364,7 +366,7 @@ fn a_facture_already_credited_in_full_is_cancelled_without_a_second_avoir() {
     );
     avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(11))).unwrap();
 
-    let cancelled = documents::cancel(
+    let cancelled = cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -408,7 +410,7 @@ fn a_cancellation_is_audited_and_another_shops_document_is_not_found() {
         10,
     );
 
-    let err = documents::cancel(
+    let err = cancellation::cancel(
         &mut conn,
         2,
         OWNER,
@@ -422,7 +424,7 @@ fn a_cancellation_is_audited_and_another_shops_document_is_not_found() {
         "{err:?}"
     );
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -462,7 +464,7 @@ fn a_cancellation_needs_a_reason() {
     );
     // A document annulled for no stated reason is exactly what the log exists
     // to prevent, and a field of spaces is no reason.
-    let err = documents::cancel(
+    let err = cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -513,7 +515,7 @@ fn a_credit_ticket_is_cancelled_by_a_ledger_row_and_not_by_an_avoir() {
         Money::centimes(300_000)
     );
 
-    let cancelled = documents::cancel(
+    let cancelled = cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -598,7 +600,7 @@ fn a_paid_credit_ticket_leaves_the_customer_holding_what_they_paid() {
         Money::centimes(200_000)
     );
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -624,7 +626,7 @@ fn only_a_ticket_and_a_facture_are_cancelled() {
     let p = product(&mut conn, "Ciment", 100_000);
     let c = a_customer(&mut conn);
     let quittance = a_document_of_kind(&mut conn, DocumentKind::Quittance, c);
-    let err = documents::cancel(
+    let err = cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -647,7 +649,7 @@ fn only_a_ticket_and_a_facture_are_cancelled() {
         SaleKind::Ticket,
         10,
     );
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -663,7 +665,7 @@ fn only_a_ticket_and_a_facture_are_cancelled() {
 /// and still nothing happens.
 #[test]
 fn the_effect_of_a_cancellation_is_answered_before_it_is_taken() {
-    use dzpos_core::services::documents::CancelEffect;
+    use dzpos_core::services::cancellation::CancelEffect;
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Bougie", 50);
     let c = a_customer(&mut conn);
@@ -678,7 +680,7 @@ fn the_effect_of_a_cancellation_is_answered_before_it_is_taken() {
         10,
     );
     assert_eq!(
-        documents::cancel_effect(&mut conn, SHOP, ticket.id).unwrap(),
+        cancellation::cancel_effect(&mut conn, SHOP, ticket.id).unwrap(),
         CancelEffect::StockBack
     );
 
@@ -692,7 +694,7 @@ fn the_effect_of_a_cancellation_is_answered_before_it_is_taken() {
         11,
     );
     assert_eq!(
-        documents::cancel_effect(&mut conn, SHOP, facture.id).unwrap(),
+        cancellation::cancel_effect(&mut conn, SHOP, facture.id).unwrap(),
         CancelEffect::StockBackAndAvoir {
             amount: facture.totals.total_ttc
         }
@@ -713,7 +715,7 @@ fn the_effect_of_a_cancellation_is_answered_before_it_is_taken() {
         Some(at(12)),
     )
     .unwrap();
-    let left = documents::cancel_effect(&mut conn, SHOP, facture.id).unwrap();
+    let left = cancellation::cancel_effect(&mut conn, SHOP, facture.id).unwrap();
     let credited: i64 = avoir::list_for(&mut conn, SHOP, facture.id)
         .unwrap()
         .iter()
@@ -729,7 +731,7 @@ fn the_effect_of_a_cancellation_is_answered_before_it_is_taken() {
     // Credited in full: nothing left to undo at all.
     avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(13))).unwrap();
     assert_eq!(
-        documents::cancel_effect(&mut conn, SHOP, facture.id).unwrap(),
+        cancellation::cancel_effect(&mut conn, SHOP, facture.id).unwrap(),
         CancelEffect::NothingToReverse
     );
 }
@@ -847,7 +849,7 @@ fn the_life_of_a_document_reads_back_from_one_query() {
         Some(at(11)),
     )
     .unwrap();
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -980,7 +982,7 @@ fn a_cancelled_ticket_returns_the_goods_at_the_cost_of_the_sale() {
     move_the_cost(&mut conn, p, "Ciment", 100_000, now_worth.as_centimes());
     assert_ne!(sold_at, now_worth, "the fiche has to have moved");
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -1023,7 +1025,7 @@ fn a_cancelled_ticket_whose_movement_is_gone_is_refused_rather_than_priced_off_t
     .execute(&mut conn)
     .unwrap();
 
-    let refused = documents::cancel(
+    let refused = cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,

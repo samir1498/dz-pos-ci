@@ -14,7 +14,7 @@ use dzpos_core::print::{
 };
 use dzpos_core::services::documents::DocumentKind;
 use dzpos_core::services::sales::{NewSale, SaleKind};
-use dzpos_core::services::{avoir, documents, preferences, sales};
+use dzpos_core::services::{avoir, cancellation, documents, preferences, sales};
 use serde::Deserialize;
 
 use crate::dto::{CancelDocumentDto, NewAvoirDto, NewSaleDto, SaleDto, SaleKindDto};
@@ -64,7 +64,7 @@ pub async fn get_one(
     let (found, effect) = state
         .blocking(move |c| {
             let found = documents::get(c, shop, id)?;
-            let effect = documents::cancel_effect(c, shop, id)?;
+            let effect = cancellation::cancel_effect(c, shop, id)?;
             Ok((found, effect))
         })
         .await?;
@@ -402,7 +402,7 @@ pub async fn cancel(
     let shop = state.shop_id;
     let user = who.id;
     let done = state
-        .blocking(move |c| documents::cancel(c, shop, user, id, reason, None))
+        .blocking(move |c| cancellation::cancel(c, shop, user, id, reason, None))
         .await?;
     Ok(Json(SaleDto::from(done)))
 }

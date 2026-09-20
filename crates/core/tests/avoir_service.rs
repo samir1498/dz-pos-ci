@@ -17,7 +17,7 @@ use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::debt::{DebtKind, PaymentMethod};
 use dzpos_core::services::documents::{Document, DocumentKind, DocumentStatus};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
-use dzpos_core::services::{audit, debt, documents, products, settings, stock};
+use dzpos_core::services::{audit, cancellation, debt, documents, products, settings, stock};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
@@ -745,7 +745,7 @@ fn a_facture_annulled_after_partial_avoirs_is_left_asking_for_nothing() {
 
     // The cancellation writes the closing avoir for what is left of the unit
     // and of the centime, and the facture asks for nothing afterwards.
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -881,7 +881,7 @@ fn a_partial_that_empties_a_rate_gives_back_that_rate_s_remise() {
     )
     .unwrap();
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -960,7 +960,7 @@ fn two_partials_never_give_back_more_tax_at_a_rate_than_was_charged() {
     )
     .unwrap();
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -1029,7 +1029,7 @@ fn the_closing_avoir_is_written_for_nothing_when_nothing_is_left_to_credit() {
     );
     let on_hand = products::get(&mut conn, SHOP, p).unwrap().qty_on_hand_milli;
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -1111,7 +1111,7 @@ fn an_ifu_partial_carries_its_share_of_the_remise() {
     assert_eq!(partial.totals.net_to_pay, Money::centimes(99_950));
 
     // And the two of them still reproduce the facture.
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -1165,7 +1165,7 @@ fn a_slice_is_never_worth_more_than_the_line_it_credits_has_left() {
         .unwrap_or_else(|e| panic!("the half unit of day {day} was refused: {e:?}"));
     }
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -1239,7 +1239,7 @@ fn a_slice_of_a_discounted_line_never_stores_a_line_below_zero() {
         "the slice gave back more than the line it credits was worth"
     );
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
@@ -1311,7 +1311,7 @@ fn the_closing_avoir_writes_no_line_for_goods_that_have_all_come_back() {
         .unwrap();
     }
 
-    documents::cancel(
+    cancellation::cancel(
         &mut conn,
         SHOP,
         OWNER,
