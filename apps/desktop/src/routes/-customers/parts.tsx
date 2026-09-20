@@ -5,7 +5,7 @@
 // Nothing here fetches and nothing here computes an amount: a balance is the
 // core's (`services::debt`) and arrives already added up.
 
-import type { CustomerDto, DebtKindDto, PartyKindDto, PaymentMethodDto } from "@dzpos/shared";
+import type { CustomerDto, DebtKindDto, PartyKindDto } from "@dzpos/shared";
 import { useId } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,13 +19,6 @@ export const PARTY_KINDS: readonly PartyKindDto[] = ["company", "consumer"];
 export const PARTY_KEY: Readonly<Record<PartyKindDto, Key>> = {
   company: "party_company",
   consumer: "party_consumer",
-};
-
-export const PAYMENT_METHODS: readonly PaymentMethodDto[] = ["cash", "card"];
-
-export const PAYMENT_METHOD_KEY: Readonly<Record<PaymentMethodDto, Key>> = {
-  cash: "payment_cash",
-  card: "payment_card",
 };
 
 export const DEBT_KIND_KEY: Readonly<Record<DebtKindDto, Key>> = {

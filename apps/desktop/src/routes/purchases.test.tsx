@@ -520,6 +520,28 @@ describe("the order form", () => {
     });
   });
 
+  /** The mode the form opens with is cash, which the test above pins. This
+   *  is the other one, and it is the only place any test opens this screen's
+   *  payment list: the two names in it come from `lib/payment.ts`, shared
+   *  with the customers fiche and the supplier statement since the suppliers
+   *  screen split, so a wrong name there is a wrong name on three screens. */
+  test("a purchase paid by card sends the mode the buyer picked", async () => {
+    const user = userEvent.setup();
+    mountForm();
+    await pick(user, fr.col_supplier, "Sarl Amrani");
+    await pick(user, fr.col_product, "Farine 5kg");
+    await user.type(screen.getByRole("textbox", { name: fr.col_qty }), "10");
+    await user.type(screen.getByRole("textbox", { name: fr.col_unit_cost }), "200,00");
+    await user.type(screen.getByLabelText(fr.field_paid_now), "1000,00");
+    await pick(user, fr.field_payment_mode, fr.payment_card);
+    await user.click(screen.getByRole("button", { name: fr.purchases_save }));
+    await waitFor(() => {
+      expect(sent("POST").body).toMatchObject({
+        paid_now: { amount_centimes: 100_000, payment_mode: "card" },
+      });
+    });
+  });
+
   test("a half-filled line never leaves the screen", async () => {
     const user = userEvent.setup();
     mountForm();

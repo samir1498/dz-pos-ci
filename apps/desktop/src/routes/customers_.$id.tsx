@@ -63,14 +63,13 @@ import {
 import { useTranslation, type Key } from "@/i18n";
 import { useShopToday } from "@/lib/clock";
 import { cleared, errorKey } from "@/lib/fields";
+import { PAYMENT_METHODS, PAYMENT_METHOD_KEY } from "@/lib/payment";
 
 import { CustomerFicheSheet } from "./-customers/fiche";
 import {
   ChoiceRow,
   CustomerStatus,
   DEBT_KIND_KEY,
-  PAYMENT_METHODS,
-  PAYMENT_METHOD_KEY,
   balanceLabel,
   useFieldError,
 } from "./-customers/parts";

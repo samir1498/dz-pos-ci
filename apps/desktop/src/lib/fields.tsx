@@ -67,11 +67,17 @@ export function errorKey(error: unknown, overrides?: Readonly<Record<string, Key
   return "error_unknown";
 }
 
-/** An amount drawn positive whatever its sign. A balance is one signed
- *  number, and "Créance -1 000,00" is not a sentence anyone says at a
- *  counter, so the sign is spent on the word beside the figure instead. */
+/** An amount is drawn positive whatever its sign; the word beside it carries
+ *  the direction, because "Créance -1 000,00" is not a sentence anyone says
+ *  at a counter. */
+export function positive(centimes: number): number {
+  return Math.abs(centimes);
+}
+
+/** The same, formatted, for a screen that draws the figure itself rather
+ *  than handing it to `<Money>`. */
 export function shownPositive(centimes: number): string {
-  return formatCentimes(Math.abs(centimes));
+  return formatCentimes(positive(centimes));
 }
 
 /** Blank is "nothing", not an empty string: the column is cleared. */

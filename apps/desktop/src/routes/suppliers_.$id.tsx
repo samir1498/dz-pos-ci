@@ -4,15 +4,15 @@
 // The trailing underscore on `suppliers_` keeps this out from under the list
 // screen's route rather than nesting inside it, the way the customer fiche's
 // does: `/suppliers` is a whole page of its own and not a layout with an
-// outlet. The page itself lives in `suppliers.tsx` beside the panel that
-// shows the same fiche, so the two ways in cannot drift apart.
+// outlet. The fiche itself lives in `-suppliers/fiche.tsx` beside the panel
+// that shows the same fiche, so the two ways in cannot drift apart.
 
 import { Link, createFileRoute } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n";
 
-import { SupplierFiche } from "./suppliers";
+import { SupplierFiche } from "./-suppliers/fiche";
 
 export const Route = createFileRoute("/suppliers_/$id")({ component: OneSupplier });
 

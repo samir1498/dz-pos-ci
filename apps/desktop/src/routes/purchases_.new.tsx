@@ -45,19 +45,13 @@ import { api, productsQueryKey, purchasesQueryKey, suppliersQueryKey } from "@/a
 import { useTranslation, type Key } from "@/i18n";
 import { useShopToday } from "@/lib/clock";
 import { cleared, errorKey } from "@/lib/fields";
+import { PAYMENT_METHODS, PAYMENT_METHOD_KEY } from "@/lib/payment";
 
 export const Route = createFileRoute("/purchases_/new")({ component: NewPurchaseScreen });
 
 /** Exported for the screen's own tests, which mount it under a memory router
  *  rather than through the file route. */
 export { NewPurchaseScreen };
-
-const PAYMENT_METHODS: readonly PaymentMethodDto[] = ["cash", "card"];
-
-const PAYMENT_METHOD_KEY: Record<PaymentMethodDto, Key> = {
-  cash: "payment_cash",
-  card: "payment_card",
-};
 
 /** One row of the line editor, as it is typed. The quantity is text until
  *  the request is built, because a half-typed quantity is not a number yet;

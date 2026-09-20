@@ -26,7 +26,8 @@ import type { SupplierDto, SupplierLedgerDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
-import { SupplierFiche, SuppliersScreen } from "./suppliers";
+import { SuppliersScreen } from "./suppliers";
+import { SupplierFiche } from "./-suppliers/fiche";
 
 /**
  * The amounts as they are read back. packages/shared groups thousands with
