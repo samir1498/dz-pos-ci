@@ -39,13 +39,13 @@ use crate::error::CoreError;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Money, MoneyError};
+use crate::services::avoir_remaining::{below_zero, Coming, Remaining, SliceLine};
+use crate::services::avoir_slice::slice_totals;
+use crate::services::cash_refunds::Refund;
 use crate::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
     NewDocumentLine,
 };
-use crate::services::avoir_remaining::{below_zero, Coming, Remaining, SliceLine};
-use crate::services::avoir_slice::slice_totals;
-use crate::services::cash_refunds::Refund;
 use crate::services::{
     audit, cash_refunds, clock, customers, debt, documents, optional_field, stock,
 };
@@ -83,7 +83,16 @@ pub fn issue(
     reason: Option<String>,
     at: Option<NaiveDateTime>,
 ) -> Result<Document, CoreError> {
-    issue_settling(conn, shop_id, user_id, facture_id, lines, reason, at, Refund::None)
+    issue_settling(
+        conn,
+        shop_id,
+        user_id,
+        facture_id,
+        lines,
+        reason,
+        at,
+        Refund::None,
+    )
 }
 
 /// The same credit note, saying how the money goes back (ruling 5 of the
@@ -96,11 +105,11 @@ pub fn issue(
 /// customer is holding notes, not credit, and writing both would give the
 /// money back twice.
 ///
-/// Cash is refused while the facture is still owed for. Handing notes over
-/// against goods nobody has paid for is paying somebody to take them: the
-/// credit belongs on the account, where it cancels the debt. `unpaid_on` is
-/// the deciding read, and it is taken before the avoir is written so the
-/// refusal burns no number.
+/// **Cash is bounded by what came in, not by what is still owed.** The read is
+/// `cash_refunds::still_to_hand_back` (its doc says why not `remaining_debt`), taken before
+/// the avoir is written so a refusal burns no number: what was paid in against the facture
+/// less what has gone back, so a half-paid credit facture hands back that half and no more.
+/// `cancel_settling` bounds by what is left on the facture, and refuses a credit document.
 ///
 /// A facture with no customer takes the cash path and writes its refund row.
 /// That is the case ruling 5 exists for: the anonymous walk-in has no ledger
