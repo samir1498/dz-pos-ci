@@ -68,8 +68,10 @@ const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency",
 /// up and no longer needs to look one up itself.
 ///
 /// `debt -> customers` stays: four calls from `customers.rs` into
-/// `services::debt`, one of them the ledger write at line 129, so the ring
-/// there is thick rather than an accident.
+/// `services::debt`, one of them the ledger write in `debt::append`, so the
+/// ring there is thick rather than an accident. Named by function and not by
+/// line: the line was written as 129 and had drifted to 157 before anyone
+/// looked.
 const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 2] = [
     ("debt", &["customers"]),
     ("supplier_debt", &["purchases", "suppliers"]),
