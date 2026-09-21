@@ -26,7 +26,10 @@ theirs). No file of theirs was read to write a task.
 ## Rulings Samir took, 2026-09-20
 
 Answered in conversation, written here so the build does not ask again.
-Rulings 1 to 3 are settled; 4 to 9 below still wait on him.
+All of them are settled, including ruling 10 and the correction to ruling 3
+that the first pass missed; see "Rulings still open" below, which says none
+are. This line said 4 to 9 were still waiting until 2026-09-21, which was
+true for the hour between the first three answers and the rest.
 
 **The word.** A till session is called a **shift**, never a session.
 `crates/core/src/services/sessions.rs` is the auth session, and
