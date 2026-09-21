@@ -24,6 +24,35 @@ use crate::print::{number, payment_mode_key, percent, some_amount};
 /// printing it is a format and never a conversion.
 const STAMP_FORMAT: &str = "%d/%m/%Y %H:%M";
 
+/// Columns on an 80 mm head. The text path counts one byte per column and
+/// the raster path draws 42 glyphs of a monospaced face across the head's
+/// dots (`print::raster`), so both papers have the same budget and a line
+/// padded to fit one fits the other.
+pub(crate) const WIDTH: usize = 42;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Align {
+    Left,
+    Center,
+}
+
+/// One thing the ticket does, in the order it does it.
+///
+/// This is the whole ticket, and it is the only place its words are
+/// decided. `escpos::encode` turns this list into bytes a text-mode head
+/// prints; `raster::draw` turns the same list into dots for a head with no
+/// Arabic table. Neither of them formats an amount: by the time an `Item`
+/// exists every number on the paper is already a string, so the two papers
+/// cannot disagree about a total
+/// (`the_raster_draws_the_lines_the_text_path_prints`).
+pub(crate) enum Item {
+    Align(Align),
+    Bold(bool),
+    Line(String),
+    Feed(u8),
+    Cut,
+}
+
 /// The seller's identifiers, in the order a ticket prints them. Only the
 /// ones the document snapshotted appear: a ticket carries the seller
 /// identity and no empty rows (features.md, party identifiers row; a
@@ -248,5 +277,130 @@ fn line(line: &DocumentLine, reel: bool) -> LineView {
         rate: reel.then(|| percent(line.rate_bps)),
         discount: some_amount(line.line_discount),
         total: format_centimes(line.line_total),
+    }
+}
+
+/// The ticket as a list of things to put on paper, from the same view the
+/// HTML template renders. Moved here from the ESC/POS encoder when the
+/// raster path landed: a line model with two readers has to sit above both
+/// of them, or the second reader starts building its own strings.
+pub(crate) fn items(view: &TicketView) -> Vec<Item> {
+    let mut out = Items::new();
+    out.align(Align::Center);
+    out.bold(true);
+    out.line(view.title);
+    out.bold(false);
+    out.line(&view.seller.name);
+    if let Some(address) = &view.seller.address {
+        out.line(address);
+    }
+    if let Some(phone) = &view.seller.phone {
+        out.line(phone);
+    }
+    for id in &view.seller.ids {
+        out.line(&format!("{} {}", id.label, id.value));
+    }
+    out.line(&view.number);
+    out.line(&view.issued_at);
+    out.rule();
+    out.align(Align::Left);
+    for line in &view.lines {
+        out.line(&line.name);
+        let mut qty = format!("{} × {}", line.qty, line.unit_price);
+        if let Some(rate) = &line.rate {
+            qty = format!("{qty}  {rate}");
+        }
+        out.pair(&qty, &line.total);
+        if let Some(discount) = &line.discount {
+            out.pair(view.discount_label, &format!("-{discount}"));
+        }
+    }
+    out.rule();
+    out.pair(view.total_label, &view.total_amount);
+    if let Some(discount) = &view.discount {
+        out.pair(view.discount_label, &format!("-{discount}"));
+    }
+    for row in &view.tva_rows {
+        out.pair(&format!("{} {}", row.label, row.rate), &row.amount);
+    }
+    if let Some(stamp) = &view.stamp {
+        out.pair(view.stamp_label, stamp);
+    }
+    out.bold(true);
+    out.pair(view.net_to_pay_label, &view.net_to_pay);
+    out.bold(false);
+    out.pair(view.payment_mode_label, view.payment_mode);
+    if let Some(tendered) = &view.tendered {
+        out.pair(view.tendered_label, tendered);
+    }
+    if let Some(change) = &view.change {
+        out.pair(view.change_label, change);
+    }
+    if let Some(balance) = &view.balance {
+        out.rule();
+        out.line(balance.title);
+        out.pair(balance.old_label, &balance.old);
+        out.pair(balance.this_label, &balance.this);
+        out.pair(balance.total_label, &balance.total);
+    }
+    out.align(Align::Center);
+    out.feed(1);
+    out.line(view.thank_you);
+    out.line(view.currency);
+    out.feed(2);
+    out.cut();
+    out.into_items()
+}
+
+/// The padding rules, in one place. A label and an amount on the same row
+/// are spaced to the column budget here and nowhere else, so the raster
+/// draws the spacing the text path counted rather than a second guess at it.
+struct Items(Vec<Item>);
+
+impl Items {
+    const fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    fn into_items(self) -> Vec<Item> {
+        self.0
+    }
+
+    fn align(&mut self, align: Align) {
+        self.0.push(Item::Align(align));
+    }
+
+    fn bold(&mut self, on: bool) {
+        self.0.push(Item::Bold(on));
+    }
+
+    fn feed(&mut self, lines: u8) {
+        self.0.push(Item::Feed(lines));
+    }
+
+    fn cut(&mut self) {
+        self.0.push(Item::Cut);
+    }
+
+    fn line(&mut self, s: &str) {
+        self.0.push(Item::Line(s.to_owned()));
+    }
+
+    fn rule(&mut self) {
+        self.line(&"-".repeat(WIDTH));
+    }
+
+    fn pair(&mut self, label: &str, amount: &str) {
+        let gap = WIDTH
+            .saturating_sub(label.chars().count())
+            .saturating_sub(amount.chars().count());
+        let pad = if gap == 0 { 1 } else { gap };
+        let mut line = String::new();
+        line.push_str(label);
+        for _ in 0..pad {
+            line.push(' ');
+        }
+        line.push_str(amount);
+        self.line(&line);
     }
 }

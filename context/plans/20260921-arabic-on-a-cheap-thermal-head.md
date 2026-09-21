@@ -109,15 +109,25 @@ is exactly the case the bidi algorithm exists for and the reason
 
 ## What it costs, to record before T2 starts
 
-- **Build time.** To be measured in T2's worktree before its first commit:
-  `just claim`, add the three crates, `just clippy` cold and warm, and write
-  the two numbers here. `rustybuzz` is the largest of the three; `ab_glyph`
-  and `unicode-bidi` are small. Nothing here links C, so the Windows release
-  target (`windows-latest` in `.github/workflows/release.yml`) needs no
-  toolchain change; T2 confirms it by the mirror's Windows job going green on
-  its branch before merge. If cold build time grows by more than a minute on
-  the WSL box, that is worth a line here but not a reason to change the
-  choice.
+- **Build time, measured 2026-09-21** in T2's worktree with the three
+  crates added (`rustybuzz =0.20.1`, `ab_glyph =0.2.32`, `unicode-bidi
+  =0.3.18`, which pull in `ttf-parser`, `owned_ttf_parser`,
+  `ab_glyph_rasterizer` and four small `unicode-*` crates):
+  **`just clippy` cold 29.1 s, warm 28.1 s** (`time just clippy`, WSL box,
+  shared build folder). Cold is the run that compiled the new crates from
+  nothing with our three crates touched; warm is the same command straight
+  after. Both numbers carry `desktop-dist`'s pnpm build, about 14 s of
+  each; cargo's own part was 14.6 s cold against 12.1 s warm, so the new
+  dependencies cost roughly **2.5 s** on a build that was rebuilding our
+  crates anyway — far inside the minute this page said would be worth
+  arguing about. The one number that looks bigger is the very first run in
+  a fresh worktree (1 min 20 s), and that is the price of switching
+  worktrees, not of these crates: `just claim` touches every source file
+  when another checkout used the folder last.
+- **Windows.** Nothing here links C, so the release target
+  (`windows-latest` in `.github/workflows/release.yml`) needs no toolchain
+  change. Nobody on this box can prove that: it is the mirror's Windows job
+  on this branch, before merge, and not a claim T2 gets to make.
 - **Binary size.** Two fonts, roughly 250 KB, plus the crates. Under a
   megabyte on a Tauri binary that already carries a webview.
 - **Print time.** A 576-dot-wide raster of a 40-line ticket is about 576 × 1

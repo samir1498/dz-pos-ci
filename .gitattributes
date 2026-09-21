@@ -2,5 +2,12 @@
 # checkout that rewrites their line endings (Windows autocrlf) breaks the
 # test without changing a character. Pin them to LF on every platform.
 fixtures/print/** text eol=lf
+# Except the raster goldens, which are pictures. A PNG carries a CR LF pair
+# in its own eight-byte signature for exactly this reason: a transfer that
+# rewrites line endings corrupts the file, and the signature is where it
+# shows. `binary` turns off both the rewriting and the line diff.
+fixtures/print/**/*.png binary
+# The two vendored faces are outlines, not text (crates/core/fonts/README).
+crates/core/fonts/*.ttf binary
 crates/core/templates/** text eol=lf
 fixtures/money/** text eol=lf

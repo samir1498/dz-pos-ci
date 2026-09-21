@@ -17,6 +17,8 @@ pub mod escpos;
 pub mod facture;
 pub(crate) mod facture_view;
 pub mod layout;
+mod png;
+pub mod raster;
 mod refusals;
 pub mod statement;
 pub mod strings;
@@ -25,12 +27,14 @@ pub mod ticket;
 pub use barcode_label::{render_label, render_label_sheet};
 pub use debt_slip::render_debt_slip;
 pub use escpos::{
-    dump_ticket_escpos, render_ticket_escpos, send_ticket_escpos_tcp, write_ticket_escpos_to_file,
+    draw_ticket_raster, dump_ticket_escpos, dump_ticket_escpos_png, render_ticket_escpos,
+    render_ticket_escpos_raster, send_ticket_escpos_tcp, write_ticket_escpos_to_file,
 };
 pub use facture::{
     render_facture, render_facture_with, render_facture_with_reference, Cancellation, FactureInput,
 };
 pub use layout::{FactureLayout, Page, Paper};
+pub use raster::HEAD_WIDTH_DOTS;
 pub use statement::render_statement;
 pub use ticket::render_ticket;
 

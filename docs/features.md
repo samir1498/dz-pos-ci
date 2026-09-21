@@ -914,18 +914,40 @@ first release.**
   where the réel one prints "Prix unitaire HT".
 - Thermal: the 80 mm ticket is HTML and ESC/POS, both golden-filed in three
   languages (`fixtures/print/ticket_80mm/` and `ticket_80mm_escpos/`). The
-  ESC/POS golden is a dump of the bytes (`<init>`, `<codepage 19>`, the text,
-  `<cut>`), so a reviewer reads it without a printer. The wire is
-  `ESC t 19` (PC858 / ISO 8859-15, the emulator's own table) with `U+202F`
-  → space, so `Café` is 4 columns (one `0xE9`) and the emulator shows
-  `Café` instead of the UTF-8 split `CafÃ©`; Arabic outside that table is
-  sent as UTF-8 and the dump decodes it, but a cheap head will need a
-  different codepage — the bytes move through
-  `write_ticket_escpos_to_file` (spool file, USB-serial device path) and
-  `send_ticket_escpos_tcp` (network printer on port 9100,
-  `escpos-emulator` for a look without hardware); USB is not wired yet.
-  `GET /sales/{id}/ticket/escpos?lang=` returns the same bytes. A4/A5 goes
-  through the OS print dialog.
+  ticket is built once, as a list of lines with their alignment
+  (`print::ticket::items`), and the two ESC/POS paths only carry that list:
+  **text for French and English, a raster for Arabic**. The core renders
+  both today; the route still hands every language the text path, and the
+  preference that picks the raster is the task after this one
+  (`context/plans/20260921-arabic-on-a-cheap-thermal-head.md`, T3).
+  - Text path: the wire is `ESC t 19` (PC858 / ISO 8859-15, the emulator's
+    own table) with `U+202F` → space, so `Café` is 4 columns (one `0xE9`)
+    and the emulator shows `Café` instead of the UTF-8 split `CafÃ©`. Its
+    golden is a dump of the bytes (`<init>`, `<codepage 19>`, the text,
+    `<cut>`): `fr*.txt` and `en*.txt`, read without a printer.
+  - Raster path: no codepage at all. There is no single-byte table with
+    Arabic in it, and a cheap head neither joins letters nor runs right to
+    left, so the same lines are drawn into a 1-bit bitmap at the head's
+    width (576 dots on 80 mm, 384 on 58 mm, a parameter) and sent as
+    `GS v 0` bands. `unicode-bidi` orders each line, `rustybuzz` shapes it,
+    `ab_glyph` draws it, and the two faces are vendored under
+    `crates/core/fonts/` (Noto Naskh Arabic and IBM Plex Mono, both OFL
+    1.1, `include_bytes!`) so no machine's font list can change the paper.
+    Digits stay Western. The goldens are pictures a reviewer opens —
+    `ar.png`, `ar-ifu.png`, `ar-card.png` — decoded back out of the bytes
+    the head is sent, and the dump names a band `<raster 576x1184>`. A line
+    that does not fit the width is refused, never trimmed.
+  - The numbers are pinned equal across the two paths:
+    `the_raster_draws_the_lines_the_text_path_prints` asserts the raster's
+    source lines are, string for string, the lines the text golden carries
+    for the same fixture, so a total cannot read one way on a French ticket
+    and another on the Arabic one beside it. Amounts are formatted once, in
+    the line model; nothing in the drawing code knows what an amount is.
+  - Either path's bytes move through `write_ticket_escpos_to_file` (spool
+    file, USB-serial device path) and `send_ticket_escpos_tcp` (network
+    printer on port 9100, `escpos-emulator` for a look without hardware);
+    USB is not wired yet. `GET /sales/{id}/ticket/escpos?lang=` returns the
+    same bytes. A4/A5 goes through the OS print dialog.
 - Later: a QR code on the ticket, the shop's logo, and a footer text the
   owner sets.
 
