@@ -1,13 +1,18 @@
 ---
 title: 'Scanner loop: a scanner is a keyboard, and every model types differently'
 slug: 'scanner-loop'
-status: 'active'
+status: 'done'
 category: 'loops'
 created: 20260917
 tldr: 'Runs the barcode scanner plan task by task on the WSL box: the pure burst rule, the hook, the till, an e2e spec that simulates every model behaviour headless, and Stryker over the rule. Samir tests the two rows a browser cannot reach, on the laptop and a phone, at the end.'
 plan: 'barcode-scanners-every-model-behaves-differently'
 ---
 # Scanner loop
+
+Closed 2026-09-21: every row a browser can reach is merged. The one task left
+on the plan is the pair a browser cannot reach, Samir's laptop with a virtual
+keyboard on the fr layout and a phone as a Bluetooth scanner, and it lives on
+the plan as his by-hand pass, not here.
 
 Anouar, 2026-09-17, through Samir: test the barcode scanners, there are
 several models, and nobody knows which. The plan is

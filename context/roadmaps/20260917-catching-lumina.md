@@ -28,7 +28,7 @@ entries:
     note: 'Not a Lumina gap. Anouar asked on 2026-09-21 for a shared core with a module per trade; this decides it on evidence rather than argument, and blocks nothing in the loop'
   - ref: 'till-shifts-a-float-and-a-count'
     status: 'active'
-    note: 'Gap 2. The table, the service and the four routes are merged; the two screens, the cash refund and the closing sweep are what is left'
+    note: 'Gap 2. The table, the service, the four routes and the open and close screens are merged; the cash refund and the closing sweep are what is left'
 ---
 # Catching Lumina
 

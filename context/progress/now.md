@@ -4,29 +4,33 @@ updated: '2026-09-21'
 ---
 ## Active
 
-**2026-09-21: closing the gaps the Lumina teardown found.** The live loop is
-`context/loops/20260920-closing-the-lumina-gaps-loop.md`, which Samir opened
-after taking all nine of its design rulings on 2026-09-20. It finishes what
-the weekend loop left open and then closes three gaps in our own spec: a
-print language the shop keeps, till shifts with an opening float and a count,
-and Arabic on a cheap thermal head.
+**2026-09-21 afternoon: finish everything but the clinic decision.** Samir's
+word at 13:49. The live loop is
+`context/loops/20260921-a-clean-context-then-the-till-finished.md`; the
+previous one, `20260920-closing-the-lumina-gaps-loop.md`, stays the reference
+for its nine rulings until this one's review closes.
 
-Phase 0 is done: the gates table is a folder and the shared client is split
-by domain. Phase 1 is done: the shop stores the language its paper prints in
-and the six fiscal papers print in it, and the cross-domain reach list is
-down from nine services to two rows, each kept with its reason. Phase 2, till
-shifts, is in flight: the table, its models and repos, the expense clock fix,
-the service that counts one cashier's own cash and the four routes with the
-two permissions are all merged. What is left is the open and close screens,
-a refund that leaves the drawer with the shift figure beside it, and the
-closing sweep. Phase 3 and the whole-loop review have not started.
+The till is two tasks from done. Merged today: the open popup at the first
+sign-in and the close modal with the server's expected figure (PR #144), on
+top of the table, the service that counts one cashier's own cash, and the
+four routes with the two permissions. Left: a refund that leaves the drawer
+with the shift figure on the dashboard and expenses screens, which goes to the
+money builder because it moves a figure the dashboard already answers and the
+schema with it, and then the closing sweep. After the till: Arabic on a cheap
+thermal head, one whole-loop review on the three lenses at fable, the standup.
 
-The loop file changed on 2026-09-21: the live one is
-`context/loops/20260921-a-clean-context-then-the-till-finished.md`, which
-cleans the pages first and then finishes the till, because Samir asked for a
-replan of Dinar as a modular product once this pass closes and a replan reads
-these pages. Nothing about that replan is designed yet and no plan here is
-void.
+The modular question is a decision plan,
+`context/plans/20260921-whether-dinar-becomes-a-core-and-modules.md`, and it
+is out of scope for this pass on Samir's word. What he settled today: the
+permission list stays one global enum, no generated code, no runtime
+registry; plugins loaded at runtime are out; module shape itself waits for a
+fable brainstorm after lunch. The database is the one technical question he
+left open. Nothing about the replan is written yet and no plan here is void.
+
+Held by people: the amount in words, parked by Samir until after the replan;
+the comptable review, Anouar's; the scanner plan's last row, Samir's own
+laptop and phone. Paused by earlier decision and untouched: the TanStack
+table under the DataTable, and TLS on the shop LAN.
 
 Open for Samir: the scanner plan's last task, which needs his own phone and
 laptop, and the shared-lockout ruling across the PIN and the password.
