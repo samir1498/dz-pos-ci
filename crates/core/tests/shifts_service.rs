@@ -30,6 +30,8 @@ use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::audit;
 use dzpos_core::services::cancellation;
 use dzpos_core::services::cash;
+use dzpos_core::services::clock;
+use dzpos_core::services::customers;
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
 use dzpos_core::services::documents::{
     self, DocumentKind, NewDocument, NewDocumentLine, SellerBlock,
@@ -38,9 +40,13 @@ use dzpos_core::services::expenses::{self, NewExpense};
 use dzpos_core::services::shifts::{self, NewShift, TillCount};
 
 mod common;
-use common::{a_customer, open_temp};
+use common::{a_fiche, open_temp};
 
 const SHOP: i32 = 1;
+/// A second shop on the same file. Every query in the crate is scoped by
+/// `shop_id` (rule 3), and a fixture living entirely in shop 1 passes with
+/// that filter deleted.
+const OTHER_SHOP: i32 = 2;
 /// The shift's own cashier, the user the first migration seeds.
 const AMINA: i32 = 1;
 /// The second person at the same till. The point of most of this file: her
@@ -63,6 +69,16 @@ fn the_whole_day() -> (NaiveDateTime, NaiveDateTime) {
         day().and_hms_opt(0, 0, 0).unwrap(),
         day().succ_opt().unwrap().and_hms_opt(0, 0, 0).unwrap(),
     )
+}
+
+/// A second shop on the same file, so a query that dropped its `shop_id` has
+/// somewhere to go wrong.
+fn a_second_shop(conn: &mut SqliteConnection) {
+    diesel::sql_query(format!(
+        "INSERT INTO shops (id, name) VALUES ({OTHER_SHOP}, 'Autre magasin')"
+    ))
+    .execute(conn)
+    .unwrap();
 }
 
 /// A second person at the till. The seeded file carries one user, and a
@@ -91,7 +107,20 @@ fn a_sale(
     total_ttc: i64,
     issued_at: NaiveDateTime,
 ) -> i32 {
-    a_sale_with_stamp(conn, user_id, mode, total_ttc, 0, issued_at)
+    a_sale_with_stamp(conn, SHOP, user_id, mode, total_ttc, 0, issued_at)
+}
+
+/// The same, on whichever shop's books. Only the second-shop cases name a
+/// shop; everything else sells in this one and reads better for it.
+fn a_sale_in(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    mode: PaymentMode,
+    total_ttc: i64,
+    issued_at: NaiveDateTime,
+) -> i32 {
+    a_sale_with_stamp(conn, shop_id, user_id, mode, total_ttc, 0, issued_at)
 }
 
 /// The same, on a facture carrying a droit de timbre. The customer hands the
@@ -99,6 +128,7 @@ fn a_sale(
 /// `total_ttc`.
 fn a_sale_with_stamp(
     conn: &mut SqliteConnection,
+    shop_id: i32,
     user_id: i32,
     mode: PaymentMode,
     total_ttc: i64,
@@ -109,7 +139,7 @@ fn a_sale_with_stamp(
     let stamp = Money::centimes(stamp);
     documents::issue(
         conn,
-        SHOP,
+        shop_id,
         NewDocument {
             kind: DocumentKind::Ticket,
             issued_at,
@@ -164,10 +194,17 @@ fn a_sale_with_stamp(
 
 /// A customer who owes money, so somebody can hand cash over against it.
 fn a_debtor(conn: &mut SqliteConnection, owes: i64, when: NaiveDateTime) -> i32 {
-    let customer = a_customer(conn, "Entreprise Benali");
+    a_debtor_in(conn, SHOP, owes, when)
+}
+
+/// The same, on whichever shop's books.
+fn a_debtor_in(conn: &mut SqliteConnection, shop_id: i32, owes: i64, when: NaiveDateTime) -> i32 {
+    let customer = customers::create(conn, shop_id, AMINA, a_fiche("Entreprise Benali"), None)
+        .unwrap()
+        .id;
     debt::append_at(
         conn,
-        SHOP,
+        shop_id,
         NewDebtEntry {
             customer_id: customer,
             document_id: None,
@@ -181,6 +218,41 @@ fn a_debtor(conn: &mut SqliteConnection, owes: i64, when: NaiveDateTime) -> i32 
     )
     .unwrap();
     customer
+}
+
+/// Cash handed over against what a customer owes. `debt::pay` stamps the row
+/// with the moment the money was given and with the user who took it, which is
+/// the pair `takings_for` reads.
+fn a_debt_payment(
+    conn: &mut SqliteConnection,
+    user_id: i32,
+    customer_id: i32,
+    centimes: i64,
+    when: NaiveDateTime,
+) {
+    a_debt_payment_in(conn, SHOP, user_id, customer_id, centimes, when);
+}
+
+/// The same, on whichever shop's books.
+fn a_debt_payment_in(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    customer_id: i32,
+    centimes: i64,
+    when: NaiveDateTime,
+) {
+    debt::pay(
+        conn,
+        shop_id,
+        user_id,
+        customer_id,
+        Money::centimes(centimes),
+        PaymentMethod::Cash,
+        None,
+        when,
+    )
+    .unwrap();
 }
 
 /// Money to a supplier, written in SQL: what this file needs is the
@@ -236,7 +308,7 @@ fn created_at_of(conn: &mut SqliteConnection, document_id: i32) -> NaiveDateTime
 
 fn opened_at_nine(opening_cash: i64) -> NewShift {
     NewShift {
-        opened_at: at(9, 0, 0),
+        opened_at: Some(at(9, 0, 0)),
         opening_cash: Money::centimes(opening_cash),
     }
 }
@@ -254,6 +326,7 @@ fn the_expected_figure_is_this_cashiers_own_cash_and_nothing_else() {
     a_sale(&mut conn, AMINA, PaymentMode::Cash, 120_000, at(10, 0, 0));
     a_sale_with_stamp(
         &mut conn,
+        SHOP,
         AMINA,
         PaymentMode::Cash,
         300_000,
@@ -272,11 +345,20 @@ fn the_expected_figure_is_this_cashiers_own_cash_and_nothing_else() {
     )
     .unwrap();
 
-    // Four things inside the same window that may not reach it. A card sale
-    // never touches a drawer; an expense and a supplier payment are the
-    // shop's money going out under `commit_money`, which a cashier does not
-    // hold; and Karim's cash is Karim's. Karim's sale is the point of the
-    // fixture: without it this test passes against a shop-wide sum.
+    // Four things that may not reach it. A card sale never touches a drawer;
+    // an expense and a supplier payment are the shop's money going out under
+    // `commit_money`, which a cashier does not hold; and Karim's cash is
+    // Karim's. Karim's sale is the point of the fixture: without it this test
+    // passes against a shop-wide sum.
+    //
+    // Three of the four sit inside the window by their own stamp. The expense
+    // does not, and cannot: `expenses::create` takes `expense_date`, a bare
+    // date with no hour on it, and the row's own moment is the wall clock of
+    // whenever this test ran. An expense is kept out structurally instead —
+    // `takings_for` asks `repos::cash` for sales and debt payments and never
+    // asks `repos::expenses` anything — so this row proves the shape of the
+    // sum and not a bound on it. That is also the plan's reason for leaving
+    // expenses out: `expense_date` has no shift-sized slice to ask for.
     a_sale(&mut conn, AMINA, PaymentMode::Card, 90_000, at(13, 0, 0));
     spend(&mut conn, 40_000);
     pay_a_supplier(&mut conn, 60_000, at(15, 0, 0));
@@ -362,6 +444,26 @@ fn a_difference_with_no_reason_is_refused_before_anything_is_written() {
     assert!(
         matches!(&refused, Err(CoreError::Validation { field, .. }) if field == "note"),
         "a drawer 10 000 short closed with no reason came back as {refused:?}"
+    );
+    // Over is a difference too. The rule is "the two figures differ", not
+    // "the drawer is light": a count above what was expected is money nobody
+    // can account for, the same question from the other side. Without this
+    // case the comparison narrows to "counted is less than expected" and
+    // ships green.
+    let over = shifts::close(
+        &mut conn,
+        SHOP,
+        shift.id,
+        AMINA,
+        TillCount {
+            counted: Money::centimes(160_000),
+            note: None,
+            at: Some(at(19, 0, 0)),
+        },
+    );
+    assert!(
+        matches!(&over, Err(CoreError::Validation { field, .. }) if field == "note"),
+        "a drawer 10 000 over closed with no reason came back as {over:?}"
     );
     // A blank note is no note: the column would be cleared, and the file's
     // CHECK would refuse the row as a diesel error an API cannot hang on an
@@ -602,7 +704,7 @@ fn a_float_or_a_count_below_nothing_is_refused_and_a_sum_past_the_range_is_an_er
         SHOP,
         AMINA,
         NewShift {
-            opened_at: at(9, 0, 0),
+            opened_at: Some(at(9, 0, 0)),
             opening_cash: Money::centimes(-1),
         },
     );
@@ -631,9 +733,17 @@ fn a_float_or_a_count_below_nothing_is_refused_and_a_sum_past_the_range_is_an_er
     // A float at the top of the range and one centime of takings. Checked
     // arithmetic answers an error; a bare `+` would have wrapped to a figure
     // the shop is owed money against.
+    //
+    // The variant is named rather than left as a bare `is_err`: every refusal
+    // above is also an error, so `is_err` alone passes when the sum never
+    // happens at all and something else refuses first.
     a_sale(&mut conn, AMINA, PaymentMode::Cash, 100, at(10, 0, 0));
-    assert!(shifts::report(&mut conn, SHOP, shift.id).is_err());
-    assert!(shifts::close(
+    let live = shifts::report(&mut conn, SHOP, shift.id);
+    assert!(
+        matches!(&live, Err(CoreError::Money(_))),
+        "a float at the top of the range plus takings came back as {live:?}"
+    );
+    let counted = shifts::close(
         &mut conn,
         SHOP,
         shift.id,
@@ -643,8 +753,11 @@ fn a_float_or_a_count_below_nothing_is_refused_and_a_sum_past_the_range_is_an_er
             note: Some("erreur".to_string()),
             at: Some(at(19, 0, 0)),
         },
-    )
-    .is_err());
+    );
+    assert!(
+        matches!(&counted, Err(CoreError::Money(_))),
+        "closing against a sum past the range came back as {counted:?}"
+    );
     // And the drawer is still open, so nothing was signed against a figure
     // nobody could compute.
     assert!(shifts::open_for(&mut conn, SHOP, AMINA).unwrap().is_some());
@@ -781,23 +894,307 @@ fn takings_for_answers_one_person_over_one_window_and_never_the_shop() {
     // where a shift happens to use it.
     let (_dir, mut conn) = open_temp();
     a_second_cashier(&mut conn);
+    let customer = a_debtor(&mut conn, 500_000, at(8, 0, 0));
     a_sale(&mut conn, AMINA, PaymentMode::Cash, 10_000, at(9, 0, 0));
     a_sale(&mut conn, AMINA, PaymentMode::Cash, 20_000, at(12, 0, 0));
     a_sale(&mut conn, AMINA, PaymentMode::Cash, 40_000, at(14, 0, 0));
     a_sale(&mut conn, KARIM, PaymentMode::Cash, 80_000, at(12, 0, 0));
+    // The debt half of the window is its own query on its own column, and it
+    // needs its own rows on the two bounds: the sales half above goes on
+    // passing with `customer_payments_of`'s `ge`/`lt` inverted.
+    a_debt_payment(&mut conn, AMINA, customer, 1_000, at(9, 0, 0));
+    a_debt_payment(&mut conn, AMINA, customer, 2_000, at(11, 0, 0));
+    a_debt_payment(&mut conn, AMINA, customer, 4_000, at(14, 0, 0));
+    a_debt_payment(&mut conn, KARIM, customer, 9_000, at(12, 0, 0));
 
     let hers = cash::takings_for(&mut conn, SHOP, AMINA, at(9, 0, 0), at(14, 0, 0)).unwrap();
     // 10 000 at the lower bound, which is in; 20 000; and not the 40 000 at
     // the upper bound, which is out. 30 000, by hand.
     assert_eq!(hers.sales, Money::centimes(30_000));
-    assert_eq!(hers.total().unwrap(), Money::centimes(30_000));
+    // 1 000 at the lower bound and 2 000, and not the 4 000 at the upper one.
+    // 3 000, by hand.
+    assert_eq!(hers.customer_payments, Money::centimes(3_000));
+    assert_eq!(hers.total().unwrap(), Money::centimes(33_000));
 
     let his = cash::takings_for(&mut conn, SHOP, KARIM, at(9, 0, 0), at(14, 0, 0)).unwrap();
     assert_eq!(his.sales, Money::centimes(80_000));
+    assert_eq!(his.customer_payments, Money::centimes(9_000));
+
+    // Another shop's rows, written against the same user id, which is the one
+    // way to tell a `shop_id` filter from a `user_id` one: a fixture living
+    // entirely in shop 1 passes with either of them deleted.
+    a_second_shop(&mut conn);
+    a_sale_in(
+        &mut conn,
+        OTHER_SHOP,
+        AMINA,
+        PaymentMode::Cash,
+        700_000,
+        at(12, 0, 0),
+    );
+    let elsewhere = a_debtor_in(&mut conn, OTHER_SHOP, 900_000, at(8, 0, 0));
+    a_debt_payment_in(
+        &mut conn,
+        OTHER_SHOP,
+        AMINA,
+        elsewhere,
+        600_000,
+        at(12, 0, 0),
+    );
+    let still_hers = cash::takings_for(&mut conn, SHOP, AMINA, at(9, 0, 0), at(14, 0, 0)).unwrap();
+    assert_eq!(still_hers, hers, "another shop's till is not this one's");
 
     // An empty window answers zeros rather than nothing.
     let none = cash::takings_for(&mut conn, SHOP, AMINA, at(15, 0, 0), at(16, 0, 0)).unwrap();
     assert_eq!(none.sales, Money::ZERO);
     assert_eq!(none.stamp, Money::ZERO);
     assert_eq!(none.customer_payments, Money::ZERO);
+}
+
+#[test]
+fn a_sale_rung_while_the_drawer_is_still_open_is_not_tagged() {
+    // The open arm of the window: a shift with no `closed_at` has no upper
+    // bound, so every moment at or after `opened_at` belongs to it.
+    //
+    // Its own test because every other case in this file closes the shift
+    // first, and a closed shift never takes that arm. Without it the arm can
+    // be turned to "an open shift covers nothing" and the suite stays green —
+    // and that is the arm the till's own hook asks on every sale rung during
+    // a shift, so the log would fill with a tag on each of them.
+    let (_dir, mut conn) = open_temp();
+    shifts::open(&mut conn, SHOP, AMINA, opened_at_nine(0)).unwrap();
+    let during = a_sale(&mut conn, AMINA, PaymentMode::Cash, 5_000, at(10, 0, 0));
+    let last_thing = a_sale(&mut conn, AMINA, PaymentMode::Cash, 7_000, at(23, 59, 59));
+    let before = a_sale(&mut conn, AMINA, PaymentMode::Cash, 1_000, at(8, 0, 0));
+
+    assert!(
+        !shifts::tag_if_outside_a_shift(&mut conn, SHOP, AMINA, during, at(10, 0, 0)).unwrap(),
+        "a sale rung while the drawer is open belongs to that shift"
+    );
+    assert!(
+        !shifts::tag_if_outside_a_shift(&mut conn, SHOP, AMINA, last_thing, at(23, 59, 59))
+            .unwrap(),
+        "an open shift has no upper bound, however late the sale"
+    );
+    assert!(
+        shifts::tag_if_outside_a_shift(&mut conn, SHOP, AMINA, before, at(8, 0, 0)).unwrap(),
+        "and it still has a lower one"
+    );
+
+    let (from, until) = the_whole_day();
+    let hers = shifts::sales_outside_a_shift(&mut conn, SHOP, AMINA, from, until).unwrap();
+    let ids: Vec<i32> = hers.sales.iter().map(|s| s.document_id).collect();
+    assert_eq!(ids, vec![before]);
+    assert_eq!(hers.cash, Money::centimes(1_000));
+    // One row, for the one sale that fell outside.
+    let tagged = audit::list(&mut conn, SHOP)
+        .unwrap()
+        .into_iter()
+        .filter(|e| e.action == audit::ACTION_SALE_OUTSIDE_SHIFT)
+        .count();
+    assert_eq!(tagged, 1);
+}
+
+#[test]
+fn a_new_drawer_that_reaches_back_into_the_last_one_is_refused() {
+    // The file cannot refuse this. Its unique index is
+    // `WHERE closed_at IS NULL`, so it holds "one drawer open at a time" and
+    // says nothing about two closed windows of the same person. Two that
+    // overlap each sum the sale in the overlap into their own stored expected
+    // figure, and the cashier held that money once.
+    let (_dir, mut conn) = open_temp();
+    a_second_cashier(&mut conn);
+    let first = shifts::open(&mut conn, SHOP, AMINA, opened_at_nine(0)).unwrap();
+    a_sale(&mut conn, AMINA, PaymentMode::Cash, 40_000, at(11, 30, 0));
+    shifts::close(
+        &mut conn,
+        SHOP,
+        first.id,
+        AMINA,
+        TillCount {
+            counted: Money::centimes(40_000),
+            note: None,
+            at: Some(at(12, 0, 0)),
+        },
+    )
+    .unwrap();
+
+    let reaching_back = shifts::open(
+        &mut conn,
+        SHOP,
+        AMINA,
+        NewShift {
+            opened_at: Some(at(11, 0, 0)),
+            opening_cash: Money::ZERO,
+        },
+    );
+    assert!(
+        matches!(&reaching_back, Err(CoreError::Validation { field, .. }) if field == "opened_at"),
+        "a drawer opened back inside the last one came back as {reaching_back:?}"
+    );
+    // The moment of the last count belongs to the shift that was counted, so
+    // a new one starting on it would take that second twice.
+    let on_the_dot = shifts::open(
+        &mut conn,
+        SHOP,
+        AMINA,
+        NewShift {
+            opened_at: Some(at(12, 0, 0)),
+            opening_cash: Money::ZERO,
+        },
+    );
+    assert!(
+        matches!(&on_the_dot, Err(CoreError::Validation { field, .. }) if field == "opened_at"),
+        "a drawer opened at the second the last was counted came back as {on_the_dot:?}"
+    );
+    // Karim is not held to Amina's clock: this is per person, like the index.
+    assert!(shifts::open(&mut conn, SHOP, KARIM, opened_at_nine(0)).is_ok());
+    // And one second after the count is a new evening.
+    assert!(shifts::open(
+        &mut conn,
+        SHOP,
+        AMINA,
+        NewShift {
+            opened_at: Some(at(12, 0, 1)),
+            opening_cash: Money::ZERO,
+        },
+    )
+    .is_ok());
+}
+
+#[test]
+fn a_till_opened_or_counted_later_than_now_is_refused() {
+    // A window whose far end is in the future keeps taking in sales after it
+    // was signed, so the expected figure moves under a count somebody already
+    // agreed to.
+    let (_dir, mut conn) = open_temp();
+    let ahead = clock::now() + chrono::Duration::hours(1);
+    let opened_ahead = shifts::open(
+        &mut conn,
+        SHOP,
+        AMINA,
+        NewShift {
+            opened_at: Some(ahead),
+            opening_cash: Money::ZERO,
+        },
+    );
+    assert!(
+        matches!(&opened_ahead, Err(CoreError::Validation { field, .. }) if field == "opened_at"),
+        "a drawer opened an hour from now came back as {opened_ahead:?}"
+    );
+
+    let shift = shifts::open(&mut conn, SHOP, AMINA, opened_at_nine(0)).unwrap();
+    let counted_ahead = shifts::close(
+        &mut conn,
+        SHOP,
+        shift.id,
+        AMINA,
+        TillCount {
+            counted: Money::ZERO,
+            note: None,
+            at: Some(ahead),
+        },
+    );
+    assert!(
+        matches!(&counted_ahead, Err(CoreError::Validation { field, .. }) if field == "closed_at"),
+        "a drawer counted an hour from now came back as {counted_ahead:?}"
+    );
+
+    // Counted at the second it opened is not the future and is a real
+    // evening: a till opened by mistake and shut again holds its float and
+    // nothing else.
+    let closed = shifts::close(
+        &mut conn,
+        SHOP,
+        shift.id,
+        AMINA,
+        TillCount {
+            counted: Money::ZERO,
+            note: None,
+            at: Some(at(9, 0, 0)),
+        },
+    )
+    .unwrap();
+    let close = closed.close.unwrap();
+    assert_eq!(close.closed_at, at(9, 0, 0));
+    assert_eq!(close.expected, Money::ZERO);
+}
+
+#[test]
+fn a_shift_with_no_moment_on_it_takes_the_shops_clock_at_both_ends() {
+    // The default both `NewShift::opened_at` and `TillCount::at` exist for,
+    // and the one T4's route passes. Nothing else in this file runs it: every
+    // other case names its moments, so either `unwrap_or_else(clock::now)`
+    // could answer anything at all and the suite would stay green.
+    let (_dir, mut conn) = open_temp();
+    let before_open = clock::now();
+    let shift = shifts::open(
+        &mut conn,
+        SHOP,
+        AMINA,
+        NewShift {
+            opened_at: None,
+            opening_cash: Money::centimes(1_000),
+        },
+    )
+    .unwrap();
+    let after_open = clock::now();
+    assert!(
+        shift.opened_at >= before_open && shift.opened_at <= after_open,
+        "{} is not between {before_open} and {after_open}",
+        shift.opened_at
+    );
+
+    let before_close = clock::now();
+    let closed = shifts::close(
+        &mut conn,
+        SHOP,
+        shift.id,
+        AMINA,
+        TillCount {
+            counted: Money::centimes(1_000),
+            note: None,
+            at: None,
+        },
+    )
+    .unwrap();
+    let after_close = clock::now();
+    let close = closed.close.unwrap();
+    assert!(
+        close.closed_at >= before_close && close.closed_at <= after_close,
+        "{} is not between {before_close} and {after_close}",
+        close.closed_at
+    );
+    // The shop's clock and not the column's own CURRENT_TIMESTAMP, which is
+    // UTC while Algiers is an hour ahead.
+    let utc = chrono::Utc::now().naive_utc();
+    let ahead = (close.closed_at - utc).num_seconds();
+    assert!(
+        (3500..=3600).contains(&ahead),
+        "{} is not an Algerian hour ahead of {utc}",
+        close.closed_at
+    );
+    assert_eq!(close.expected, Money::centimes(1_000));
+}
+
+#[test]
+fn the_window_sales_outside_a_shift_is_asked_over_has_its_own_two_edges() {
+    // `rung_by`'s bounds, which every other case here asks over a whole day
+    // and so never touches. Asked with no shift open at all, so what is left
+    // in the answer is the window and nothing else.
+    let (_dir, mut conn) = open_temp();
+    let at_the_start = a_sale(&mut conn, AMINA, PaymentMode::Cash, 1_000, at(10, 0, 0));
+    let inside = a_sale(&mut conn, AMINA, PaymentMode::Cash, 2_000, at(11, 0, 0));
+    let at_the_end = a_sale(&mut conn, AMINA, PaymentMode::Cash, 4_000, at(12, 0, 0));
+    let before = a_sale(&mut conn, AMINA, PaymentMode::Cash, 8_000, at(9, 59, 59));
+
+    let found =
+        shifts::sales_outside_a_shift(&mut conn, SHOP, AMINA, at(10, 0, 0), at(12, 0, 0)).unwrap();
+    let ids: Vec<i32> = found.sales.iter().map(|s| s.document_id).collect();
+    assert_eq!(ids, vec![at_the_start, inside]);
+    // 1 000 + 2 000, by hand: the sale at the far edge is out, and so is the
+    // one a second before the near one.
+    assert_eq!(found.cash, Money::centimes(3_000));
+    assert!(!ids.contains(&at_the_end));
+    assert!(!ids.contains(&before));
 }

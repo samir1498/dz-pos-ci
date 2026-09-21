@@ -118,6 +118,18 @@ pub struct OutsideShifts {
 /// index on `(shop_id, opened_by)`), and the repo turns that into a `Conflict`
 /// with a field on it. Per person and not per shop, because shifts of
 /// different people overlap on purpose.
+///
+/// Two further refusals the file cannot make, because its index only looks at
+/// rows with no `closed_at`:
+///
+/// - A drawer opened in the future. Its window would keep taking in sales
+///   nobody has rung yet, so the expected figure would move after it was
+///   signed.
+/// - A drawer opened at or before the moment this person's last one was
+///   counted. Two closed windows of one person that overlap each sum the sale
+///   in the overlap into their own stored expected figure, and the cashier
+///   held that money once. One guard closes it, and it has to be here:
+///   nothing about a row carrying a `closed_at` is held by the index.
 pub fn open(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -132,13 +144,32 @@ pub fn open(
             "a drawer opens with nothing in it or with money in it, never with less",
         ));
     }
+    let opened_at = new.opened_at.unwrap_or_else(clock::now);
+    if opened_at > clock::now() {
+        return Err(CoreError::validation(
+            "opened_at",
+            "a till cannot be opened later than now",
+        ));
+    }
     conn.transaction(|conn| {
+        if let Some(last) = repo::last_close_for(conn, shop_id, user_id)? {
+            if opened_at <= last {
+                return Err(CoreError::validation(
+                    "opened_at",
+                    &format!(
+                        "that person's last till was counted at {}, and a new \
+                         one starts after that",
+                        last.format("%Y-%m-%d %H:%M")
+                    ),
+                ));
+            }
+        }
         let made = repo::insert(
             conn,
             &ShiftRowWrite {
                 shop_id,
                 opened_by: user_id,
-                opened_at: new.opened_at,
+                opened_at,
                 opening_cash_centimes: new.opening_cash.as_centimes(),
             },
         )?;
@@ -215,6 +246,15 @@ pub fn close(
             return Err(CoreError::validation(
                 "closed_at",
                 "a till cannot be counted before it was opened",
+            ));
+        }
+        // Equal is fine: a drawer opened by mistake and counted straight away
+        // is a real evening with an empty window. Later than now is not, for
+        // the reason `open` gives above.
+        if closed_at > clock::now() {
+            return Err(CoreError::validation(
+                "closed_at",
+                "a till cannot be counted later than now",
             ));
         }
         let takings =

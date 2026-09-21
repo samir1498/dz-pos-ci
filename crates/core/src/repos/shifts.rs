@@ -118,6 +118,32 @@ pub fn list_between(
     Ok(rows.into_iter().map(Shift::from).collect())
 }
 
+/// The latest moment this person's drawer was counted, or None when they have
+/// never closed one.
+///
+/// The partial unique index is `WHERE closed_at IS NULL`, so it refuses two
+/// drawers open at once and says nothing at all about two closed windows. Two
+/// closed shifts of one person that overlap would each sum the sale in the
+/// overlap into their own stored expected figure, and the cashier held that
+/// money once. This is what `services::shifts::open` holds a new `opened_at`
+/// against.
+///
+/// `MAX` and not "the newest row's close": the list is ordered by `opened_at`,
+/// and a shift opened earlier can be counted later.
+pub fn last_close_for(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+) -> Result<Option<NaiveDateTime>, CoreError> {
+    let latest: Option<Option<NaiveDateTime>> = shifts::table
+        .filter(shifts::shop_id.eq(shop_id))
+        .filter(shifts::opened_by.eq(user_id))
+        .select(diesel::dsl::max(shifts::closed_at))
+        .first(conn)
+        .optional()?;
+    Ok(latest.flatten())
+}
+
 /// Every shift one person has held, newest first. This is the list a sale is
 /// held against to see whether it fell inside any of that person's own
 /// windows; a shop-wide list would say a sale belonged to a shift somebody

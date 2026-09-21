@@ -327,10 +327,20 @@ refuses a route split into a folder, because its walk reads one directory
 deep and skips every `mod.rs`, which is exactly where a folder route's
 handler would live.
 
+Neither moment reaches the wire. `NewShift::opened_at` and `TillCount::at`
+are both `Option`, and the route passes `None` for each, the way
+`NewSaleDto` hardcodes `issued_at: None` (`crates/api/src/dto/sales.rs:388`
+says why: when a thing happened is the server's to say). A DTO field for
+either is a client that can backdate a window and move an expected figure,
+so neither DTO grows one. T3 refuses a moment in the future and one that
+reaches back into the same person's last closed shift, but those guards are
+the floor and not a licence to accept the field.
+
 Done: `route_gates.rs` green with the new rows; a cashier's refusal names the
 permission; a sale rung with no shift open returns 200 with the sale and
 writes the `till.sale_outside_shift` audit row, and no request path can
-refuse it. Size M.
+refuse it; neither till DTO carries a moment, proved by the DTO test rather
+than by reading. Size M.
 
 **T5: opening and closing at the till.** The open popup on the first sign-in
 of the day, pre-filled with the last close's counted figure and carrying the
