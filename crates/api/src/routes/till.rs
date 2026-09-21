@@ -23,10 +23,12 @@
 //! expected figure before they count it.
 
 use axum::extract::rejection::{JsonRejection, QueryRejection};
-use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::extract::{MatchedPath, Path, Query, State};
+use axum::http::{Method, StatusCode};
 use axum::Json;
+use dzpos_core::error::CoreError;
 use dzpos_core::services::clock;
+use dzpos_core::services::permissions;
 use dzpos_core::services::shifts::{self as service, NewShift, TillCount};
 use serde::Deserialize;
 
@@ -62,9 +64,23 @@ pub async fn open(
 /// else counting a drawer that was walked away from: which of the two it is
 /// is `services::shifts::close`'s to decide, and the row it writes names
 /// both people.
+///
+/// A refusal is logged here and not where it is decided. `session.rs` writes
+/// the row for every refusal the gate table decides, and this one is the only
+/// refusal in the product that the table cannot decide — whose drawer it is
+/// is a fact about the row — so without these lines a cashier reaching for a
+/// colleague's till is the one refusal an owner reading the log never sees.
+/// The core cannot write it itself for two reasons: it refuses inside the
+/// transaction `close` opens, which then rolls the row back with the refusal,
+/// and the row carries the method and the route, which are this layer's
+/// facts and not the till's (`permissions::record_refusal`'s own doc). By the
+/// time the error is in hand here the transaction is finished, so the insert
+/// commits on its own the way it does in `session.rs`.
 pub async fn close(
     State(state): State<AppState>,
     who: CurrentUser,
+    method: Method,
+    matched: MatchedPath,
     Path(id): Path<i32>,
     body: Result<Json<TillCountDto>, JsonRejection>,
 ) -> Result<Json<ShiftDto>, ApiError> {
@@ -72,8 +88,18 @@ pub async fn close(
     let count = TillCount::try_from(dto)?;
     let shop = state.shop_id;
     let user = who.id;
+    // The matched path and not the request's own: the row says which route
+    // was refused, never which drawer was reached for.
+    let route = matched.as_str().to_owned();
+    let method = method.as_str().to_owned();
     let closed = state
-        .blocking(move |c| service::close(c, shop, id, user, count))
+        .blocking(move |c| match service::close(c, shop, id, user, count) {
+            Err(CoreError::Forbidden { permission }) => {
+                permissions::record_refusal(c, shop, user, permission, &method, &route)?;
+                Err(CoreError::forbidden(permission))
+            }
+            other => other,
+        })
         .await?;
     Ok(Json(ShiftDto::try_from(closed)?))
 }

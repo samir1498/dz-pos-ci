@@ -585,6 +585,33 @@ async fn a_cashier_opens_their_own_till_and_is_refused_another_cashiers_shift() 
         "{refused}"
     );
 
+    // And the log holds it, the way it holds a refusal the table decided:
+    // the row is written in `routes::till::close` after the service answered
+    // no, because the service's own refusal happens inside the transaction
+    // that then rolls back (`permissions::record_refusal`'s doc). Without
+    // it, one cashier reaching for another's drawer leaves an owner reading
+    // the log nothing at all — which is the finding this assertion closes.
+    let mut reached = rows_for(&app, "permission.refused")
+        .await
+        .into_iter()
+        .filter(|row| {
+            serde_json::from_str::<Value>(row["after"].as_str().unwrap_or_default())
+                .map(|after| after["permission"] == "close_another_persons_till")
+                .unwrap_or(false)
+        });
+    let row = reached
+        .next()
+        .expect("a refused close of somebody else's drawer wrote no row");
+    assert_eq!(row["user_id"], staff.cashier, "{row}");
+    assert_eq!(row["entity"], "permission", "{row}");
+    let after: Value = serde_json::from_str(row["after"].as_str().unwrap()).unwrap();
+    assert_eq!(after["method"], "POST", "{row}");
+    assert_eq!(
+        after["route"], "/till/shifts/{id}/close",
+        "the route is the matched path and not the id that was reached for"
+    );
+    assert!(reached.next().is_none(), "one reach, one row");
+
     // The refusal left the drawer open and stored no figure, so the person it
     // belongs to still counts it themselves.
     let (status, still) = call_as(

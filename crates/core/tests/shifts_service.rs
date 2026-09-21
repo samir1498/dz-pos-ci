@@ -290,7 +290,9 @@ fn the_expected_figure_is_this_cashiers_own_cash_and_nothing_else() {
 
     // 500 000 float + 120 000 + 302 000 (300 000 and the 2 000 stamp the
     // customer handed over with it) + 75 000 against the debt = 997 000.
-    // Written out here; never asked of the code.
+    // Written out here; never asked of the code. A shop-wide sum over the
+    // same window would have answered 1 280 000, which is the figure the
+    // assertions below are refusing by reading 997 000 back.
     let expected = Money::centimes(997_000);
 
     let live = shifts::report(&mut conn, SHOP, shift.id).unwrap();
@@ -299,10 +301,6 @@ fn the_expected_figure_is_this_cashiers_own_cash_and_nothing_else() {
     assert_eq!(live.takings.stamp, Money::centimes(2_000));
     assert_eq!(live.takings.customer_payments, Money::centimes(75_000));
     assert_eq!(live.difference, None, "nothing has been counted yet");
-
-    // What a shop-wide sum would have answered, so the number this test
-    // refuses is on the page beside the one it asks for.
-    assert_ne!(expected, Money::centimes(1_280_000));
 
     let counted = Money::centimes(977_000);
     let closed = shifts::close(

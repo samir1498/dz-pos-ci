@@ -128,3 +128,121 @@ fn a_sale_rung_after_the_evening_close_is_counted_at_the_next_mornings_drawer() 
     // float alone, because that sale fell outside this shift's own window.
     assert_eq!(report.expected, Money::centimes(500_000));
 }
+
+/// The floor of the stretch, the other end of the test above: a sale already
+/// counted at one drawer is not counted again at the next one.
+///
+/// The count reaches back to this person's last close and no further. Without
+/// that floor every drawer would carry every untagged sale that person ever
+/// rang, and the figure would climb for the rest of the shop's life — a
+/// number that only ever grows is one nobody reads twice.
+#[test]
+fn a_tagged_sale_before_the_last_close_is_not_counted_at_the_next_drawer() {
+    let (_dir, mut conn) = open_temp();
+
+    // Rung at 07:00 with the shutters up and no drawer open yet.
+    a_sale_rung_with_no_drawer(&mut conn, AMINA, at(7, 0, 0));
+
+    // The day's drawer, 09:00 to 18:00. Its stretch starts at midnight —
+    // nothing has ever been closed — so the 07:00 sale is this drawer's to
+    // answer for, which is what makes the next assertion mean something: the
+    // sale was counted once, here.
+    let today = shifts::open(&mut conn, SHOP, AMINA, opened_at_nine(500_000)).unwrap();
+    shifts::close(
+        &mut conn,
+        SHOP,
+        today.id,
+        AMINA,
+        TillCount {
+            counted: Money::centimes(500_000),
+            note: None,
+            at: Some(at(18, 0, 0)),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        shifts::report(&mut conn, SHOP, today.id)
+            .unwrap()
+            .rung_outside_shift,
+        1,
+        "the 07:00 sale belongs to the drawer whose stretch covers it"
+    );
+
+    // The next morning's drawer, 08:00 to 18:00. Its stretch starts at
+    // yesterday's 18:00 close, which is after the 07:00 sale.
+    let next = day().succ_opt().unwrap();
+    let tomorrow = shifts::open(
+        &mut conn,
+        SHOP,
+        AMINA,
+        NewShift {
+            opened_at: Some(next.and_hms_opt(8, 0, 0).unwrap()),
+            opening_cash: Money::centimes(500_000),
+        },
+    )
+    .unwrap();
+    shifts::close(
+        &mut conn,
+        SHOP,
+        tomorrow.id,
+        AMINA,
+        TillCount {
+            counted: Money::centimes(500_000),
+            note: None,
+            at: Some(next.and_hms_opt(18, 0, 0).unwrap()),
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        shifts::report(&mut conn, SHOP, tomorrow.id)
+            .unwrap()
+            .rung_outside_shift,
+        0,
+        "yesterday's tagged sale was counted a second time at this drawer"
+    );
+}
+
+/// The midnight fallback and its two edges: somebody who has never closed a
+/// drawer answers for the day they are in, from 00:00:00 inclusive, and for
+/// nothing before it.
+///
+/// `rung_outside_a_shift` falls back to `opened_at.date().and_time(MIN)` and
+/// `repos::audit` filters `created_at >= from`, so midnight itself is inside
+/// the stretch and the second before it is outside. A sale at 23:59:59 the
+/// night before is yesterday's business; a sale at 00:00:00 is today's, and a
+/// count that skipped it would lose it for good, because this person has no
+/// earlier close for a later stretch to reach back to.
+#[test]
+fn the_midnight_floor_takes_the_stroke_of_midnight_and_not_the_second_before_it() {
+    let (_dir, mut conn) = open_temp();
+
+    // 23:59:59 the night before: outside the stretch.
+    let yesterday = day().pred_opt().unwrap();
+    a_sale_rung_with_no_drawer(&mut conn, AMINA, yesterday.and_hms_opt(23, 59, 59).unwrap());
+    // 00:00:00 on the fixture day: the first moment inside it.
+    a_sale_rung_with_no_drawer(&mut conn, AMINA, day().and_hms_opt(0, 0, 0).unwrap());
+
+    // Her first drawer ever, so there is no close for the stretch to start
+    // at and midnight is the floor.
+    let first = shifts::open(&mut conn, SHOP, AMINA, opened_at_nine(500_000)).unwrap();
+    shifts::close(
+        &mut conn,
+        SHOP,
+        first.id,
+        AMINA,
+        TillCount {
+            counted: Money::centimes(500_000),
+            note: None,
+            at: Some(at(18, 0, 0)),
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        shifts::report(&mut conn, SHOP, first.id)
+            .unwrap()
+            .rung_outside_shift,
+        1,
+        "the stretch takes the sale at 00:00:00 and leaves the one at 23:59:59"
+    );
+}

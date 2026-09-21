@@ -131,10 +131,12 @@ pub async fn require(
                         // the same seam that just decided to refuse and
                         // before the handler's own transaction, if this route
                         // has one, has opened: `permissions::record_refusal`'s
-                        // own doc says why this is the only place it is
-                        // called from and what is deliberately not recorded
-                        // (a 401 with no actor, `ungated_write`, which names
-                        // no permission).
+                        // own doc says why a call belongs outside a
+                        // transaction that is about to roll back, and what is
+                        // deliberately not recorded (a 401 with no actor,
+                        // `ungated_write`, which names no permission). Every
+                        // refusal the table decides is written here;
+                        // `routes::till::close` writes the one it cannot.
                         let shop = state.shop_id;
                         let actor_id = current.id;
                         let route = matched.as_str().to_owned();

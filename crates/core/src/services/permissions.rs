@@ -255,9 +255,17 @@ pub fn require(role: Role, permission: Permission) -> Result<(), CoreError> {
 /// The API layer calls this rather than building the row itself
 /// (`docs/architecture.md` § Transport and auth: an audit row is business,
 /// never transport), and it is a single `INSERT` that commits on its own, the
-/// way `services::users::settle`'s failure counter does: the refusal that
-/// triggers it happens before any handler transaction has opened, so there is
-/// nothing here for a later rollback to undo.
+/// way `services::users::settle`'s failure counter does.
+///
+/// Which is also what decides where it may be called from: nothing here
+/// survives a rollback, so it belongs outside any transaction that is about
+/// to end in one. `session.rs` calls it before the handler's transaction has
+/// opened at all. `routes::till::close` calls it after `services::shifts::
+/// close` has answered `Forbidden` and its own transaction has finished —
+/// the one refusal the gate table cannot decide, because whose drawer it is
+/// is a fact about the row. A call from inside a service's transaction would
+/// be a row that vanishes with the refusal that wrote it, which is why
+/// neither of those two places is inside one.
 pub fn record_refusal(
     conn: &mut SqliteConnection,
     shop_id: i32,

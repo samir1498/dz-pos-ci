@@ -671,3 +671,100 @@ fn an_avoir_on_a_facture_naming_nobody_still_writes_the_cash_that_left() {
         Money::centimes(200_000)
     );
 }
+
+/// The two edges of the window a drawer subtracts its refunds over: the
+/// moment it opened belongs to it, the moment it was counted does not.
+///
+/// `repos::cash_refunds::total_of` filters `refunded_at >= from` and
+/// `refunded_at < until`, and `shifts::close` hands it `opened_at` and
+/// `closed_at`. Half open at the top is what keeps two drawers of one person
+/// that meet at a moment from both claiming the same notes — the same shape
+/// `services::shifts::covers` gives a sale — and closed at the bottom is what
+/// stops a refund handed over the second the drawer opened from belonging to
+/// nobody. A test that only refunded at half past the hour passes under `>`
+/// and under `>=` alike, which is why both refunds here sit exactly on a
+/// bound.
+///
+/// The figure, by hand: 10 000,00 float, plus the 5 000,00 ticket rung at
+/// 10:00 inside the window (a cash sale handed straight back stays in the
+/// takings of the day it was rung, which is what the head of this file is
+/// about), less the 3 000,00 handed back at 09:00:00 exactly. 1 000 000 +
+/// 500 000 - 300 000 = 1 200 000 centimes.
+#[test]
+fn a_refund_at_the_opening_moment_is_this_drawers_and_one_at_the_counting_moment_is_not() {
+    let (_dir, mut conn) = open_temp();
+    let shift = shifts::open(
+        &mut conn,
+        SHOP,
+        AMINA,
+        NewShift {
+            opened_at: Some(common::shifts::at(9, 0, 0)),
+            opening_cash: Money::centimes(1_000_000),
+        },
+    )
+    .unwrap();
+
+    // Rung at 08:00, before this drawer was opened, and handed back at
+    // 09:00:00 — the opening moment itself. The sale is outside the takings
+    // window and the refund is inside the refund window, so this drawer is
+    // short by it and took nothing for it.
+    let earlier = a_sale(
+        &mut conn,
+        AMINA,
+        PaymentMode::Cash,
+        300_000,
+        common::shifts::at(8, 0, 0),
+    );
+    cancellation::cancel_settling(
+        &mut conn,
+        SHOP,
+        AMINA,
+        earlier,
+        "retour de la veille".to_string(),
+        Some(common::shifts::at(9, 0, 0)),
+        Refund::Cash,
+    )
+    .unwrap();
+
+    // Rung at 10:00 and handed back at 19:00:00 — the moment the drawer is
+    // counted, which the next stretch owns. The takings keep it; the refund
+    // is the next drawer's problem.
+    let inside = a_sale(
+        &mut conn,
+        AMINA,
+        PaymentMode::Cash,
+        500_000,
+        common::shifts::at(10, 0, 0),
+    );
+    cancellation::cancel_settling(
+        &mut conn,
+        SHOP,
+        AMINA,
+        inside,
+        "retour au comptoir".to_string(),
+        Some(common::shifts::at(19, 0, 0)),
+        Refund::Cash,
+    )
+    .unwrap();
+
+    let closed = shifts::close(
+        &mut conn,
+        SHOP,
+        shift.id,
+        AMINA,
+        TillCount {
+            counted: Money::centimes(1_200_000),
+            note: Some("compté à la fermeture".to_string()),
+            at: Some(common::shifts::at(19, 0, 0)),
+        },
+    )
+    .unwrap();
+    let close = closed.close.clone().unwrap();
+    assert_eq!(close.expected, Money::centimes(1_200_000));
+    assert_eq!(close.difference().unwrap(), Money::ZERO);
+
+    // And the report reads the same window back: one refund of the two.
+    let report = shifts::report(&mut conn, SHOP, shift.id).unwrap();
+    assert_eq!(report.refunds, Money::centimes(300_000));
+    assert_eq!(report.takings.sales, Money::centimes(500_000));
+}

@@ -25,15 +25,18 @@
 //! 3. **The dots.** Nothing is clipped, no character falls back to the box
 //!    glyph, and the Arabic pictures are goldens a reviewer opens.
 //!
-//! The amounts are not written out by hand here for a reason worth saying:
-//! what this suite tests is the printing, and the arithmetic that turned
-//! three lines into a TVA recap is pinned by name in `fixtures/money/` and
-//! by `money_fixtures.rs`. Restating the apportionment here would be a
-//! second definition of the rule, which the money skill names as the bug
-//! even when both copies agree. What this file asserts is that the print
-//! path carries the stored figures unchanged and invents none — plus the
-//! three line totals below, which are the one place a hand can check the
-//! whole chain at a glance.
+//! Most of the amounts are not written out by hand here, for a reason worth
+//! saying: what this suite tests is the printing, and the arithmetic that
+//! turned three lines into a TVA recap is pinned by name in `fixtures/money/`
+//! and by `money_fixtures.rs`. Those fixtures stay the rule, and nothing here
+//! redefines it. The exception is
+//! `a_hand_checked_facture_prints_the_centimes_the_rows_add_up_to`, which
+//! writes the three line totals and the closing figures of the cash case out
+//! as constants derived from the fixture's own rows, with the derivation in
+//! the comment above them: one place where a reader with a pen can check the
+//! whole chain — apportionment, rounding, stamp — against the paper, without
+//! running anything. It reads each of them off the label it is printed under,
+//! so a page carrying the right figures on the wrong rows fails there.
 
 mod common;
 
@@ -220,6 +223,32 @@ fn amounts_in(line: &str) -> Vec<i64> {
     found
 }
 
+/// The figures on the one row whose text opens with `prefix`, in the order
+/// they are printed.
+///
+/// A closing figure read off its own label and not out of the multiset: two
+/// amounts swapped under each other's labels leave the multiset untouched,
+/// and the paper a customer pays from is the row and not the set.
+fn amounts_on_the_row(lines: &[String], prefix: &str) -> Vec<i64> {
+    let row = lines
+        .iter()
+        .find(|line| line.starts_with(prefix))
+        .unwrap_or_else(|| panic!("no row on the roll opens with {prefix:?}: {lines:?}"));
+    amounts_in(row)
+}
+
+/// The single figure on the row the key's own label opens.
+fn figure_on(lines: &[String], key: Key, lang: Lang) -> i64 {
+    let label = text(key, lang);
+    let found = amounts_on_the_row(lines, label);
+    assert_eq!(
+        found.len(),
+        1,
+        "{label:?} does not hold one figure: {found:?}"
+    );
+    found[0]
+}
+
 /// Every figure the document holds that its facture prints, in centimes.
 /// Built off the stored document and never off the render, so the two sides
 /// of the comparison below share nothing.
@@ -319,6 +348,53 @@ fn a_hand_checked_facture_prints_the_centimes_the_rows_add_up_to() {
         printed.contains(&-1_000),
         "the line discount is not printed as what it takes off"
     );
+
+    // The closing figures, worked out here by hand from the same three rows
+    // and read back off the label each one is printed under.
+    //
+    // The 20,00 global discount is spread over the rate groups by their
+    // share of the 850,00 HT, each share floored, and what the floors leave
+    // over goes to the group holding the most HT
+    // (`discount_spread_largest_remainder`, features.md §3, the fiscal rules
+    // table). In centimes, the group HTs being 7 000, 48 000 and 30 000:
+    //   0 %:  2 000 × 7 000 / 85 000 = 164,7 → 164
+    //   9 %:  2 000 × 48 000 / 85 000 = 1 129,4 → 1 129
+    //   19 %: 2 000 × 30 000 / 85 000 = 705,9 → 705
+    // which allocates 1 998 of 2 000, so the two centimes left go to the
+    // 9 % group, the largest of the three. The discounted bases are then
+    // 6 836, 46 869 and 29 295 centimes — 68,36, 468,69 and 292,95 — and TVA
+    // is rounded once per group, half away from zero
+    // (`tva_rounding_once_per_rate`):
+    //   9 %:  46 869 × 9 % = 4 218,21 → 42,18
+    //   19 %: 29 295 × 19 % = 5 566,05 → 55,66
+    // Total TTC is 830,00 + 0,00 + 42,18 + 55,66 = 927,84. The droit de
+    // timbre is cash only and this case is cash: 927,84 is above the 300,00
+    // floor and cut into 100,00 tranches rounded up, ten of them, at 1,00 a
+    // tranche in the band up to 30 000,00 (`stamp_progressive_tranches`),
+    // so 10,00. Net à payer is 927,84 + 10,00 = 937,84.
+    const TVA_9: i64 = 4_218;
+    const TVA_19: i64 = 5_566;
+    const BASE_9: i64 = 46_869;
+    const BASE_19: i64 = 29_295;
+    const TOTAL_TTC: i64 = 92_784;
+    const STAMP: i64 = 1_000;
+    const NET_TO_PAY: i64 = 93_784;
+
+    let lines = lines_of(&fixture, Lang::Fr);
+    let tva = text(Key::Tva, Lang::Fr);
+    // The narrow no-break space `percent` writes before the sign, which is
+    // what the line model holds (the wire turns it into a plain space).
+    let rate = |bps: &str| format!("{tva} {bps}\u{202f}%");
+    // Base and tax on one row, in the order the row prints them, so a page
+    // that carried the tax against the wrong base comes back wrong here.
+    assert_eq!(amounts_on_the_row(&lines, &rate("9")), vec![BASE_9, TVA_9]);
+    assert_eq!(
+        amounts_on_the_row(&lines, &rate("19")),
+        vec![BASE_19, TVA_19]
+    );
+    assert_eq!(figure_on(&lines, Key::TotalTtc, Lang::Fr), TOTAL_TTC);
+    assert_eq!(figure_on(&lines, Key::Stamp, Lang::Fr), STAMP);
+    assert_eq!(figure_on(&lines, Key::NetToPay, Lang::Fr), NET_TO_PAY);
 }
 
 /// Every closing row carries the figure its own label names.
@@ -335,37 +411,24 @@ fn each_closing_row_carries_the_figure_its_own_label_names() {
     let fixture = Fixture::of(Case::Cash);
     let totals = &fixture.doc.totals;
     let lines = lines_of(&fixture, Lang::Fr);
-    let figure_on = |key: Key| -> i64 {
-        let label = text(key, Lang::Fr);
-        let row = lines
-            .iter()
-            .find(|line| line.starts_with(label))
-            .unwrap_or_else(|| panic!("no row on the roll opens with {label:?}: {lines:?}"));
-        let found = amounts_in(row);
-        assert_eq!(
-            found.len(),
-            1,
-            "{label:?} does not hold one figure: {row:?}"
-        );
-        found[0]
-    };
+    let figure = |key: Key| figure_on(&lines, key, Lang::Fr);
     assert_eq!(
-        figure_on(Key::TotalHt),
+        figure(Key::TotalHt),
         totals.total_ht.as_centimes(),
         "the total before tax is not on its own row"
     );
     assert_eq!(
-        figure_on(Key::TotalTtc),
+        figure(Key::TotalTtc),
         totals.total_ttc.as_centimes(),
         "the TTC row does not carry the stored TTC"
     );
     assert_eq!(
-        figure_on(Key::Stamp),
+        figure(Key::Stamp),
         totals.stamp.as_centimes(),
         "the droit de timbre row does not carry the stored stamp"
     );
     assert_eq!(
-        figure_on(Key::NetToPay),
+        figure(Key::NetToPay),
         totals.net_to_pay.as_centimes(),
         "the row the customer pays does not carry the stored net"
     );

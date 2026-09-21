@@ -245,7 +245,7 @@ pub const ROUTE_GATES: &[Gate] = &[
         method: "POST",
         path: "/sales/{id}/avoir",
         permission: Some(Permission::CorrectLedger),
-        why: "an avoir undoes a document already handed to a customer (M2 carry-in, 2026-09-09), and since ruling 5 of the 2026-09-20 loop it also opens the drawer: a body carrying refund: cash hands notes back over the counter and writes the cash_refunds row that lowers the day's cash and the ringer's shift",
+        why: "an avoir undoes a document already handed to a customer (M2 carry-in, 2026-09-09), and since ruling 5 of the 2026-09-20 loop it also opens the drawer: a body carrying refund: cash hands notes back over the counter and writes the cash_refunds row that lowers the day's cash and the shift of whoever handed the notes over, who is the caller here and not the person who rang the sale up (services::shifts::close subtracts by the shift's opener against cash_refunds.user_id)",
     },
     Gate {
         method: "POST",
