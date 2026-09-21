@@ -284,13 +284,17 @@ on 2026-09-20 says:
 - Phase 3, architecture: T2, T3, T5, T6, T7 and T8 are done (#109, #118 to
   #121, #124, #125). Four stay open and are the unfinished work this loop
   starts with:
-  - T4: `REACHES_PAST_A_SIBLING` in
-    `crates/core/tests/services_go_through_services.rs` pins thirteen
-    reaches across nine services (down from seventeen across eleven).
-  - T9: the two JSX money sums are still there,
-    `apps/desktop/src/routes/purchases.tsx:260` and
-    `apps/desktop/src/routes/purchases_.$id.tsx:232`, each adding
-    `transport_centimes + extra_costs_centimes` in the component.
+  - T4: done on 2026-09-21. `REACHES_PAST_A_SIBLING` in
+    `crates/core/tests/services_go_through_services.rs` is down to two rows
+    and three reaches (#132, #133, #135, #136), from seventeen across eleven
+    when it was written. What is left is thick rather than accidental and
+    each row says why: `debt -> customers` is four calls from `customers.rs`
+    into `services::debt`, one of them the ledger write, and the two
+    supplier rows are five calls from `suppliers.rs`. The constant is not
+    deleted; see `plan:the-last-six-reaches-stand-behind-rings`.
+  - T9: done, #129. `PurchaseDto` answers `extras_centimes` and both screens
+    print it; neither names `transport_centimes` or `extra_costs_centimes`
+    any more.
   - T10: `scripts/file-sizes.json` holds 27 entries (from 32);
     `suppliers.tsx` left the list with #119. `till.tsx` (905),
     `dashboard.tsx` (659), `expenses.tsx` (668), `crates/api/src/lib.rs`
