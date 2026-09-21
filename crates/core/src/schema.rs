@@ -450,6 +450,26 @@ diesel::table! {
     }
 }
 
+// ---- migrations/2026-09-21-000017_shifts ----
+
+diesel::table! {
+    shifts (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        opened_by -> Integer,
+        // The shop's clock, like a document's issued_at.
+        opened_at -> Timestamp,
+        opening_cash_centimes -> BigInt,
+        // The four close columns are null together or set together; the
+        // migration's CHECK is what holds that, not this declaration.
+        closed_at -> Nullable<Timestamp>,
+        closed_by -> Nullable<Integer>,
+        counted_centimes -> Nullable<BigInt>,
+        expected_at_close_centimes -> Nullable<BigInt>,
+        note -> Nullable<Text>,
+    }
+}
+
 diesel::joinable!(categories -> shops (shop_id));
 diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
@@ -511,6 +531,10 @@ diesel::joinable!(paired_devices -> shops (shop_id));
 diesel::joinable!(paired_devices -> users (created_by));
 diesel::joinable!(sale_idempotency_keys -> shops (shop_id));
 diesel::joinable!(sale_idempotency_keys -> documents (sale_id));
+diesel::joinable!(shifts -> shops (shop_id));
+// Only the opener, the way `documents` declares its author and not its
+// canceller: diesel takes one join path per pair of tables.
+diesel::joinable!(shifts -> users (opened_by));
 
 diesel::allow_tables_to_appear_in_same_query!(
     audit_log,
@@ -535,6 +559,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     preferences,
     sessions,
     settings,
+    shifts,
     shops,
     stock_movements,
     supplier_allocations,

@@ -51,6 +51,41 @@ fn spend(conn: &mut SqliteConnection, category_id: i32, centimes: i64, on: &str)
 }
 
 #[test]
+fn an_expense_is_stamped_on_the_shop_clock_and_never_left_to_sqlite() {
+    // The column carries `DEFAULT (CURRENT_TIMESTAMP)`, which SQLite answers
+    // in UTC while Algiers is an hour ahead all year, so a row that took the
+    // default was an hour early and an expense filed at 00:30 read as 23:30
+    // the day before. Migration 000017 moved the rows written up to then;
+    // this is the stamp that keeps the next one right.
+    //
+    // Asserted as the distance from UTC rather than against a fixed moment,
+    // because the service reads the wall clock: what is being pinned is which
+    // clock, and that answer is the same at every hour of the day.
+    let (_dir, mut conn) = open_temp();
+    let rent = category(&mut conn, "rent");
+    let made = expenses::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewExpense {
+            category_id: rent,
+            amount: Money::centimes(3_000_000),
+            expense_date: day("2026-09-10"),
+            note: None,
+        },
+    )
+    .unwrap();
+    let ahead_of_utc = made
+        .created_at
+        .signed_duration_since(chrono::Utc::now().naive_utc())
+        .num_seconds();
+    assert!(
+        (3_590..=3_610).contains(&ahead_of_utc),
+        "the expense was stamped {ahead_of_utc} seconds from UTC, and the shop runs 3600 ahead"
+    );
+}
+
+#[test]
 fn the_shop_starts_with_the_seven_seeded_categories_in_their_order() {
     let (_dir, mut conn) = open_temp();
     let keys: Vec<String> = expenses::categories(&mut conn, SHOP)

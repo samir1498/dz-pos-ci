@@ -121,6 +121,15 @@ mod tests {
     use super::*;
     use crate::repos::testdb::{open, OWNER, SHOP};
 
+    /// A moment on the shop's clock, so nothing below depends on the wall
+    /// clock. 00:30 is the hour the column's own UTC default used to store as
+    /// 23:30 the day before, which migration 000017 put right.
+    fn filed_at() -> chrono::NaiveDateTime {
+        chrono::NaiveDate::from_ymd_opt(2026, 9, 11)
+            .and_then(|d| d.and_hms_opt(0, 30, 0))
+            .unwrap()
+    }
+
     #[test]
     fn the_shop_starts_with_the_seven_categories_the_spec_names_in_their_order() {
         // The migration seeds them per shop and the row carries the i18n key,
@@ -187,11 +196,15 @@ mod tests {
                 expense_date: "2026-09-10".to_string(),
                 note: Some("loyer septembre".to_string()),
                 user_id: OWNER,
+                created_at: filed_at(),
             },
         )
         .unwrap();
         let read = get(&mut conn, SHOP, made.id).unwrap();
         assert_eq!(read, made);
+        // The moment the caller stamped, unchanged. Written by the service
+        // from the shop's clock, never left to the column's UTC default.
+        assert_eq!(read.created_at, filed_at());
         assert_eq!(read.amount, crate::money::Money::centimes(3_000_000));
         assert_eq!(read.category_id, rent);
         assert_eq!(read.note.as_deref(), Some("loyer septembre"));
@@ -213,6 +226,7 @@ mod tests {
                         expense_date: day.to_string(),
                         note: None,
                         user_id: OWNER,
+                        created_at: filed_at(),
                     },
                 )
                 .unwrap()
@@ -257,6 +271,7 @@ mod tests {
                     expense_date: day.to_string(),
                     note: None,
                     user_id: OWNER,
+                    created_at: filed_at(),
                 },
             )
             .unwrap();

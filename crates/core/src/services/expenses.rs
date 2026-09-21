@@ -20,7 +20,7 @@ use crate::error::CoreError;
 use crate::models::expense::ExpenseRowWrite;
 use crate::money::Money;
 use crate::repos::expenses as repo;
-use crate::services::clock::Month;
+use crate::services::clock::{self, Month};
 use crate::services::{audit, optional_field};
 
 pub use crate::models::expense::{Expense, ExpenseCategory, NewExpense};
@@ -130,6 +130,12 @@ pub fn create(
                 expense_date: fields.expense_date.format(DAY_FORMAT).to_string(),
                 note: note.clone(),
                 user_id,
+                // The shop's clock, not the column's own default. SQLite
+                // answers CURRENT_TIMESTAMP in UTC and Algiers is an hour
+                // ahead all year, so an expense filed at 00:30 was stored as
+                // 23:30 the day before. `expense_date` is written by this
+                // service and was always right; this is the moment beside it.
+                created_at: clock::now(),
             },
         )?;
         audit::record(
