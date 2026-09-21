@@ -19,15 +19,11 @@ import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { ApiError, parseAmountToCentimes } from "@dzpos/shared";
-import type {
-  CashPositionDto,
-  ExpenseCategoryDto,
-  ExpenseDto,
-  ExpensesDto,
-} from "@dzpos/shared";
+import type { ExpenseCategoryDto, ExpenseDto, ExpensesDto } from "@dzpos/shared";
 import { Plus, Receipt } from "lucide-react";
 import { useState } from "react";
 
+import { CashPanel } from "@/components/CashPanel";
 import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
@@ -48,7 +44,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
   SheetContent,
@@ -61,7 +56,6 @@ import { api, cashQueryKey, expenseCategoriesQueryKey, expensesQueryKey } from "
 import { isKey, useTranslation, type Key } from "@/i18n";
 import { errorKey } from "@/lib/fields";
 import { useShopToday } from "@/lib/clock";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/expenses")({ component: ExpensesScreen });
 
@@ -248,112 +242,6 @@ function TotalCard({ month, pending }: { month: ExpensesDto | undefined; pending
         </CardTitle>
       </CardHeader>
     </Card>
-  );
-}
-
-/**
- * The cash position of the month. Every figure is the server's: the panel
- * shows what the core summed and adds nothing up, so the box and the
- * dashboard can never be two answers to one question.
- */
-function CashPanel({ position }: { position: CashPositionDto }) {
-  const { t } = useTranslation();
-  return (
-    <Card data-testid="cash-position" className="h-full">
-      <CardHeader>
-        <CardTitle>{t("cash_title")}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              {t("cash_in")}
-            </h3>
-            <Figure label={t("cash_sales")} centimes={position.cash_in.sales_centimes} />
-            {/* Inside the line above, not beside it: the drawer took the stamp
-                with the rest, and this says how much of what it took is tax
-                the shop is holding for the state. */}
-            <Figure
-              label={t("cash_stamp")}
-              centimes={position.cash_in.stamp_centimes}
-              testId="cash-in-stamp"
-            />
-            <Figure
-              label={t("cash_customer_payments")}
-              centimes={position.cash_in.customer_payments_centimes}
-            />
-            <Figure
-              label={t("cash_total")}
-              centimes={position.cash_in.total_centimes}
-              testId="cash-in-total"
-              strong
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              {t("cash_out")}
-            </h3>
-            <Figure
-              label={t("cash_supplier_payments")}
-              centimes={position.cash_out.supplier_payments_centimes}
-            />
-            <Figure
-              label={t("cash_expenses")}
-              centimes={position.cash_out.expenses_centimes}
-              testId="cash-out-expenses"
-            />
-            <Figure
-              label={t("cash_refunds")}
-              centimes={position.cash_out.refunds_centimes}
-              hint={t("cash_refunds_hint")}
-            />
-            <Figure
-              label={t("cash_total")}
-              centimes={position.cash_out.total_centimes}
-              testId="cash-out-total"
-              strong
-            />
-          </div>
-        </div>
-        <Separator />
-        <Figure
-          label={t("cash_net")}
-          centimes={position.cash_centimes}
-          testId="cash-net"
-          strong
-        />
-        <Figure
-          label={t("cash_card_in")}
-          centimes={position.card_in.total_centimes}
-          testId="card-in-total"
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-/** One labelled amount. The figure is `Money`, which carries the figure face
- *  and the `dir="ltr"` an amount needs on the Arabic screen too. */
-function Figure({
-  label,
-  centimes,
-  testId,
-  hint,
-  strong = false,
-}: {
-  label: string;
-  centimes: number;
-  testId?: string;
-  hint?: string;
-  strong?: boolean;
-}) {
-  return (
-    <p className={cn("flex items-baseline justify-between gap-4 text-sm", strong && "font-semibold")}>
-      <span className={strong ? "text-foreground" : "text-muted-foreground"} title={hint}>
-        {label}
-      </span>
-      <Money centimes={centimes} data-testid={testId} />
-    </p>
   );
 }
 

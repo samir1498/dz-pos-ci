@@ -37,6 +37,7 @@ import type {
 import { formatQty } from "@dzpos/shared";
 
 import { api, dashboardQueryKey, dashboardSeriesQueryKey } from "@/api";
+import { CashPanel } from "@/components/CashPanel";
 import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { Money } from "@/components/Money";
@@ -126,6 +127,8 @@ function Day({ day }: { day: string }) {
       {dashboard.isSuccess ? (
         <div className="flex flex-col gap-4">
           <Figures dashboard={dashboard.data} seeCostAndMargin={seeCostAndMargin} />
+          {/* Where `figure-cash` above gets its one number from. */}
+          <CashPanel position={dashboard.data.cash_today} />
 
           <Card data-testid="dashboard-chart-card">
             <CardHeader>
@@ -244,14 +247,10 @@ function Figures({
         />
         <Card data-testid="figure-open-purchases">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {t("dashboard_open_purchases")}
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t("dashboard_open_purchases")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-numeric font-medium tabular-nums" dir="ltr">
-              {dashboard.open_purchases}
-            </p>
+            <p className="text-2xl font-numeric font-medium tabular-nums" dir="ltr">{dashboard.open_purchases}</p>
           </CardContent>
           {/* No sub-line: an order is either open or it is not, and there is
               no second period to compare it against. */}
