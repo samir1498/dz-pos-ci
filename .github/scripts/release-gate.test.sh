@@ -53,7 +53,7 @@ check() {
 echo "=== 1. manual dispatch: always dry-run, always succeeds, carries the real version ==="
 out="$("$GATE" workflow_dispatch "" "deadbeef" "" "$cargo_toml" "$tauri_conf" 2>&1)"
 rc=$?
-if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^version=0.1.0$" && echo "$out" | grep -q "^mode=dry-run$"; then
+if [ "$rc" -eq 0 ] && grep -q "^version=0.1.0$" <<<"$out" && grep -q "^mode=dry-run$" <<<"$out"; then
     echo "ok   - dispatch dry-run carries the checked-in version, not a timestamp"
     pass=$((pass+1))
 else
@@ -109,7 +109,7 @@ version = "1.0.0+build.5"
 EOF
 out="$("$GATE" push refs/tags/v1.0.0+build.5 deadbeef true "$cargo_toml.build" "$tauri_conf.build" 2>&1)"
 rc=$?
-if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^mode=release$" && echo "$out" | grep -q "^prerelease=false$"; then
+if [ "$rc" -eq 0 ] && grep -q "^mode=release$" <<<"$out" && grep -q "^prerelease=false$" <<<"$out"; then
     echo "ok   - v1.0.0+build.5 releases and is not treated as a prerelease"
     pass=$((pass+1))
 else
@@ -146,7 +146,7 @@ version = "1.0.0-rc.1"
 EOF
 out="$("$GATE" push refs/tags/v1.0.0-rc.1 deadbeef true "$cargo_toml.pre" "$tauri_conf.pre" 2>&1)"
 rc=$?
-if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^prerelease=true$"; then
+if [ "$rc" -eq 0 ] && grep -q "^prerelease=true$" <<<"$out"; then
     echo "ok   - prerelease tag releases and sets prerelease=true"
     pass=$((pass+1))
 else
@@ -178,7 +178,7 @@ echo "=== 9. updater manifest: never published without the signing key, never fr
 # make visible in a diff, not one this script can stop by itself.
 out="$("$GATE" push refs/tags/v0.1.0 deadbeef true "$cargo_toml" "$tauri_conf" 2>&1)"
 rc=$?
-if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^updater=skip$"; then
+if [ "$rc" -eq 0 ] && grep -q "^updater=skip$" <<<"$out"; then
     echo "ok   - no signing key means the release still ships, but with no updater manifest"
     pass=$((pass+1))
 else
@@ -188,7 +188,7 @@ fi
 
 out="$("$GATE" push refs/tags/v0.1.0 deadbeef true "$cargo_toml" "$tauri_conf" false 2>&1)"
 rc=$?
-if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^updater=skip$"; then
+if [ "$rc" -eq 0 ] && grep -q "^updater=skip$" <<<"$out"; then
     echo "ok   - an explicit 'false' for the signing key also skips the manifest"
     pass=$((pass+1))
 else
@@ -198,7 +198,7 @@ fi
 
 out="$("$GATE" push refs/tags/v0.1.0 deadbeef true "$cargo_toml" "$tauri_conf" true 2>&1)"
 rc=$?
-if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^updater=publish$"; then
+if [ "$rc" -eq 0 ] && grep -q "^updater=publish$" <<<"$out"; then
     echo "ok   - the signing key present publishes the manifest"
     pass=$((pass+1))
 else
@@ -208,7 +208,7 @@ fi
 
 out="$("$GATE" workflow_dispatch "" deadbeef "" "$cargo_toml" "$tauri_conf" true 2>&1)"
 rc=$?
-if [ "$rc" -eq 0 ] && echo "$out" | grep -q "^updater=skip$"; then
+if [ "$rc" -eq 0 ] && grep -q "^updater=skip$" <<<"$out"; then
     echo "ok   - a dry run skips the manifest even if the signing key is present"
     pass=$((pass+1))
 else
