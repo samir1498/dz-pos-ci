@@ -14,6 +14,27 @@ checkpoint tasks. Each branch lives in its own worktree under
 the PR itself when the branch is ready; Samir does not have to ask for it
 (2026-09-21).
 
+## One PR per unit of work, not per commit
+
+Samir, 2026-09-21: "group work and avoid creating a ton of PRs that
+wastes CI minutes." A PR is one plan task or one coherent change a
+reviewer reads in one sitting. What rides on an existing branch instead
+of getting its own PR: a fix the review lenses asked for, a test the
+change should have carried, a follow-up screen for the same task, a fix
+for something the same task broke (the e2e suite that went red with the
+till dialog went into the shift-list PR, not beside it). Two tasks of one
+plan that touch the same files ship as one PR. What still goes alone: a
+different plan, a change to money or the schema that a reviewer must see
+on its own, a hotfix `main` needs before the branch is ready.
+
+CI minutes are spent on the mirror (`samir1498/dz-pos-ci`), never by a
+PR on the org repo: `just ci <branch>` runs the light job on every push
+it makes, `just ci` after a merge runs the full job, and `windows` adds a
+13-minute runner. So: `just ci` once after the day's last merge, not
+after each one; ask for `windows` only when a change touches paths, files
+or the OS, and let it ride with the next full run rather than on its own
+one-line branch. `context/` and `*.md` never start a run.
+
 ## Gates first, evidence in hand
 
 Run these from the repo root and keep the tail of each output for the body:

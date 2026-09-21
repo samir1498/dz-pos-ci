@@ -19,6 +19,13 @@ tldr: 'Branch + PR, ctx trailer, the context store and session rituals'
   subject, the way `observeone-context` pushes to its own main. A PR per
   progress line is friction nobody reads.
 - WIP commits on a branch are fine; the laptop pulls them. Squash at merge.
+- One PR per plan task or coherent change, never per commit (Samir,
+  2026-09-21). A review fix, a missing test, a follow-up screen or a fix
+  for what the same task broke rides on the task's branch; two tasks of
+  one plan touching the same files ship together. CI minutes are spent
+  only on the mirror through `just ci`: run it once after the day's last
+  merge, and ask for the Windows job only for a path, file or OS change,
+  batched with the next full run. The `dz-pr` skill has the full rule.
 - Never `git reset --hard`, `git clean -fd` or force-push without asking.
 - Every commit carries `ctx: <plan-slug>[/T<n>] <start|progress|close>`
   in the same block as the other trailers; `.githooks/commit-msg` rejects
