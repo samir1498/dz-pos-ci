@@ -4,32 +4,46 @@ updated: '2026-09-21'
 ---
 ## Active
 
-**2026-09-21 afternoon: finish everything but the clinic decision.** Samir's
-word at 13:49. The live loop is
+**2026-09-21 evening: three merges, two branches left.** Samir's word at
+13:49 was to finish everything but the clinic decision. The live loop is
 `context/loops/20260921-a-clean-context-then-the-till-finished.md`; the
 previous one, `20260920-closing-the-lumina-gaps-loop.md`, stays the reference
 for its nine rulings until this one's review closes.
 
-The till is two tasks from done. Merged today: the open popup at the first
-sign-in and the close modal with the server's expected figure (PR #144), on
-top of the table, the service that counts one cashier's own cash, and the
-four routes with the two permissions. Left: a refund that leaves the drawer
-with the shift figure on the dashboard and expenses screens, which goes to the
-money builder because it moves a figure the dashboard already answers and the
-schema with it, and then the closing sweep. After the till: Arabic on a cheap
-thermal head, one whole-loop review on the three lenses at fable, the standup.
+Merged today: the open popup at the first sign-in and the close modal with
+the server's expected figure (`f9c54be`); the Arabic ticket drawn as a raster
+with every Latin run isolated before the bidi algorithm (`373c149`); the
+day's shift list for a manager, a real cashier in the browser suite, and the
+repair of the 27 specs the open dialog had blocked since the morning
+(`767055a`); the accountant question page's addendum and the Windows path
+fix in the source-walk test. Two branches are being built and share the one
+build folder: the cash refund (core, schema and API reviewed twice and
+green; the screens, the shared cash panel and the "rung before the till
+opened" field are in progress, one PR for all of it) and the thermal-mode
+preference with the 80 mm facture roll (one PR). After those: the till docs
+sweep, `just ci` once, the whole-loop review on the three lenses at fable,
+the standup with the next steps, the architecture brainstorm first among
+them.
+
+Rules that changed today: one PR per plan task or coherent change, review
+fixes ride the branch, `just ci` once after the day's last merge
+(`dz-pr`, `git-and-planning`); a review lens never mutates the worktree a
+gates run is on, and one worktree holds the build folder for a whole gates
+run or the run is void (two raster runs were voided that way before the
+builders were told to wait).
 
 The modular question is a decision plan,
-`context/plans/20260921-whether-dinar-becomes-a-core-and-modules.md`, and it
-is out of scope for this pass on Samir's word. What he settled today: the
-permission list stays one global enum, no generated code, no runtime
-registry; plugins loaded at runtime are out; module shape itself waits for a
-fable brainstorm after lunch. The database is the one technical question he
-left open. Nothing about the replan is written yet and no plan here is void.
+`context/plans/20260921-whether-dinar-becomes-a-core-and-modules.md`, out of
+scope for this pass on Samir's word. What he settled today: the permission
+list stays one global enum, no generated code, no runtime registry; loading
+Rust code into the running binary is out, a microservice-shaped module
+behind an API is not; module shape itself waits for a fable brainstorm, one
+subagent per candidate, the session judging (D7 on the plan). The database
+is the one technical question he left open.
 
 Held by people: the amount in words, parked by Samir until after the replan;
-the comptable review, Anouar's; the scanner plan's last row, Samir's own
-laptop and phone. Paused by earlier decision and untouched: the TanStack
+the scanner plan's last row, Samir's own laptop and phone. The comptable
+review is optional and blocked on nobody; nobody asked for it. Paused by earlier decision and untouched: the TanStack
 table under the DataTable, and TLS on the shop LAN.
 
 Open for Samir: the scanner plan's last task, which needs his own phone and

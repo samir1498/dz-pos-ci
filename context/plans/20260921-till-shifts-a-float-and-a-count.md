@@ -444,9 +444,9 @@ table, `.claude/stale-homes.md`, the `README.md` screens list). Done: the
 e2e names the refusal codes apart; `stale-check` finds nothing.
 `dz-builder`. Size S.
 
-Built 2026-09-21 on `feat/the-shift-list-and-a-cashier-in-the-e2e` (list,
-screen, e2e; docs sweep after T6 merges). Two things the review left
-open on purpose. The list's default window is "today" by the shop clock
+Merged 2026-09-21 as `767055a` (list, screen, e2e, and the browser-suite
+repair below); the docs sweep waits for T6 to merge so it names the refund
+too. Two things the review left open on purpose. The list's default window is "today" by the shop clock
 (`clock::now().date()`, Algiers); a slip to UTC would only show between
 00:00 and 01:00 Algiers time, and no test pins that hour because the API
 tests have no injectable clock (the same gap as the two wall-clock gates
@@ -454,7 +454,11 @@ in `gates-has-two-wall-clock-tests`). And the browser suite on `main`
 went red with T5: the open dialog sits over `/till` in 27 specs that
 never open a shift, and `just gates` does not run `just e2e`, so nothing
 said so; the fix is in the sign-in fixture (`apps/desktop/e2e/auth.ts`
-opens a shift at the door), on its own branch.
+opens a shift at the door) and went in with the list. After a browser run
+the ten tracked screenshots and the landing page's product shots
+(`apps/landing`, `pnpm run shots`) are regenerated and have to be
+committed with the change that moved the screens, or the landing test
+fails on stale bytes.
 
 ## How it is run
 
