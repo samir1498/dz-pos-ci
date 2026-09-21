@@ -4,7 +4,7 @@ slug: 'the-last-six-reaches-stand-behind-rings'
 status: 'active'
 category: 'architecture'
 created: 20260921
-tldr: 'Every pair left in the burn-down list is blocked by an import ring, and the shape the loop file proposed for them does not survive the walk that counts reaches. Two shapes are open and both cost something. Samir picks.'
+tldr: 'Three of the six pairs are blocked by an import ring and three are not, corrected on 2026-09-21 by reading the imports. The shape the loop file proposed does not survive the walk that counts reaches; the loop file own one-operation rule picks the shape instead.'
 priority: 70
 tasks:
   - id: 'T1'
@@ -14,7 +14,10 @@ tasks:
     desc: 'Close the blind spot in the raw-SQL walk and the handler walk: a folder is invisible to both'
     status: 'done'
   - id: 'T3'
-    desc: 'The move, once Samir has picked a shape'
+    desc: 'The purchases door onto supplier_debt: three repo calls, no ring in front of them'
+    status: 'pending'
+  - id: 'T4'
+    desc: 'The ownership lift at documents.rs:145, which frees customers -> documents and debt -> documents together'
     status: 'pending'
 ---
 
@@ -31,12 +34,26 @@ a ring standing in front of it.
 
 | Pair | The ring in front of it |
 |---|---|
-| `customers -> documents` | `documents.rs:23` imports `services::customers` |
-| `debt -> customers` | `customers.rs:22` imports `services::debt` |
+| `customers -> documents` | `documents.rs:23` imports `services::customers`, for one call |
 | `debt -> documents` | `documents.rs:23` to `customers.rs:22` to `debt` |
-| `purchases -> supplier_debt` | `supplier_debt.rs` imports `services::purchases` |
-| `supplier_debt -> purchases` | the same pair, the other way |
-| `supplier_debt -> suppliers` | `suppliers.rs:23` imports `services::supplier_debt` |
+| `debt -> customers` | `customers.rs:22` imports `services::debt`, four calls, one a write |
+| `supplier_debt -> purchases` | `purchases.rs` imports `services::supplier_debt`, seven calls |
+| `supplier_debt -> suppliers` | `suppliers.rs:23` imports `services::supplier_debt`, five calls |
+| `purchases -> supplier_debt` | nothing. Corrected 2026-09-21, see below |
+
+**The row with no ring.** This page first said `supplier_debt.rs` imports
+`services::purchases` and called the purchases pair mutual. It does not.
+`supplier_debt.rs:30` imports `repos::purchases`, and its only sibling
+services are `audit`, `clock` and a field helper. `purchases.rs` is the one
+that imports `services::supplier_debt`, and calls it in seven places
+already. So the three `debt_repo::{balance, append}` calls at
+`purchases.rs:754-775` are not held up by anything: they are a door that was
+never added, in a function whose own doc says why it does not go through
+`supplier_debt::pay` (that one refuses money above the balance, and this
+path is allowed to). `services::supplier_debt` gains the door that writes
+the entry this path needs, `purchases` calls it, and the row leaves with no
+ring touched. That is T3, and it is the shape of T4 branches a, b and c
+rather than anything new.
 
 In four of the six the sibling's service already has the exact function the
 reaching service wants. `services::suppliers` has `get` at line 82 and
@@ -85,8 +102,34 @@ that skips a sibling's rules" and starts meaning "every reach except the
 ones we decided were fine", which is the property that made it useful. It
 also cannot then be deleted, and deleting it is the stated end of this work.
 
-Shape A is the recommendation. It is more work and it keeps the gate
-meaning what it says.
+Shape A is what gets built, and it is not a ruling Samir has to give: the
+loop file's own pre-flight line for this branch says to check "what
+`customers.rs` uses from `debt` and what `documents.rs:135` uses from
+`customers`: if either is one operation, lifting that one above both is
+cheaper than a new module." `documents.rs` uses exactly one operation from
+`customers`, so the loop file resolves itself on that reading. Shape B also
+cannot be the answer on its own terms, because it ends with a constant that
+can never be deleted and deleting it is the stated end of this work. If
+Samir later prefers B, nothing built under A is wasted: the rows A removes
+are gone, and there is nothing left to exempt.
+
+## What is actually reachable, and what stays
+
+Shape A plus the door above take three of the six pairs out:
+
+- `purchases -> supplier_debt`, on the door, no ring involved (T3).
+- `customers -> documents` and `debt -> documents`, both freed by lifting
+  the one ownership call at `documents.rs:145` (T4).
+
+Three stay, and each is thick rather than blocked by an accident:
+`debt -> customers` (four calls into `services::debt` from `customers.rs`,
+one of them the ledger write at line 129), `supplier_debt -> purchases`
+and `supplier_debt -> suppliers` (five calls from `suppliers.rs`). So
+`REACHES_PAST_A_SIBLING` goes from four rows over six pairs to two rows over
+three, the `customers` and `purchases` rows leave whole, and the constant is
+not deleted. The trailer verb for this work is `progress`, not `close`, and
+the loop file's "five rows leave, the constant is deleted with them" is
+wrong for the same reason the table above was.
 
 ## A blind spot in the neighbouring walks
 
