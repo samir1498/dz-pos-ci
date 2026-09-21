@@ -80,6 +80,35 @@ pub struct NewSupplierAllocation {
     pub amount: Money,
 }
 
+/// One order the shop still owes on: which purchase, what it is still asking
+/// for, and what it was worth on the ledger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenPurchase {
+    pub purchase_id: i32,
+    /// What is left on it: its value on the ledger less everything placed on
+    /// it. Always above zero where `open_purchases` answers it; an order
+    /// nothing is owed on is left out.
+    pub remaining: Money,
+    /// What the order is worth on the ledger: the debits a receipt wrote for
+    /// it, less the credits a return took off it.
+    pub value: Money,
+}
+
+/// What a payment left behind: the movement, what it settled and where the
+/// balance stood once it had landed. All three are read inside the payment's
+/// own transaction, so the figure the caller answers, the figure the audit
+/// records and the figure the ledger sums to are one figure read once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Payment {
+    pub entry: SupplierEntry,
+    /// Oldest order first, which is the order the money filled them in.
+    /// Empty when no order is owed on at all: an opening balance and a
+    /// correction cite none, and money against those settles the balance
+    /// without settling a piece of paper.
+    pub allocations: Vec<SupplierAllocation>,
+    pub balance_after: Money,
+}
+
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
 #[diesel(table_name = supplier_ledger)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]

@@ -31,9 +31,8 @@ use crate::models::purchase::{
     PurchaseLineRowWrite, PurchaseReceiptLineRowWrite, PurchaseReceiptRowWrite, PurchaseRowWrite,
 };
 use crate::models::stock::Movement;
-use crate::models::supplier_debt::SupplierDebtRowWrite;
 use crate::money::Money;
-use crate::repos::{counters, purchases as repo, supplier_debt as debt_repo};
+use crate::repos::{counters, purchases as repo};
 use crate::services::{
     audit, bounded_field, clock, optional_field, products, stock, supplier_debt,
 };
@@ -735,10 +734,11 @@ fn receive_inside(
 /// Not routed through `supplier_debt::pay`: that one refuses money above the
 /// balance, which is the ordinary case here (an order paid the day it is
 /// placed has no `purchase` row yet), and it writes an audit entry of its own
-/// where this movement is part of saving an order. The row itself is written
-/// exactly as `pay` writes it, mode and stamp included, and settled through
-/// the same `settle_oldest_first`, so what a payment does to the orders is
-/// decided in one place.
+/// where this movement is part of saving an order. It goes through
+/// `supplier_debt::hand_over` instead, which is the function `pay` writes its
+/// own row through: the row, its mode, its stamp and the orders it settles are
+/// decided in one place, and what is decided here is only the log entry, which
+/// names the order beside the payment.
 ///
 /// What no order can take stays on the balance as credit, and the next
 /// receipt's `place_credit_on` puts it where it belongs.
@@ -750,28 +750,22 @@ fn hand_over(
     purchase_id: i32,
     paid: Paid,
 ) -> Result<(), CoreError> {
-    let at = clock::now();
-    let before = debt_repo::balance(conn, shop_id, supplier_id)?;
-    let entry = debt_repo::append(
+    // Through the sibling's own door rather than into its repo: the balance
+    // read here is the one `services::supplier_debt` answers, which checks the
+    // supplier belongs to this shop on the way. `save` has already refused an
+    // order whose supplier does not, so nothing new is refused; what changes
+    // is that this path can no longer be the one that stops asking.
+    let before = supplier_debt::balance(conn, shop_id, supplier_id)?;
+    let handed = supplier_debt::hand_over(
         conn,
-        &SupplierDebtRowWrite {
-            shop_id,
-            supplier_id,
-            // A payment settles orders through its allocations, which can be
-            // several: the column that names one order would have to pick.
-            purchase_id: None,
-            kind: supplier_debt::SupplierDebtKind::Payment,
-            debit_centimes: 0,
-            credit_centimes: paid.amount.as_centimes(),
-            user_id,
-            note: None,
-            payment_mode: Some(paid.mode),
-            created_at: Some(at),
-        },
+        shop_id,
+        user_id,
+        supplier_id,
+        paid.amount,
+        paid.mode,
+        None,
+        clock::now(),
     )?;
-    let allocations =
-        supplier_debt::settle_oldest_first(conn, shop_id, supplier_id, entry.id, paid.amount)?;
-    let after = debt_repo::balance(conn, shop_id, supplier_id)?;
     // The same entry `supplier_debt::pay` writes, under the same action: this
     // is the one path on which money leaves the drawer while an order is being
     // saved, and a log that stayed quiet about it would be the only payment to
@@ -790,12 +784,13 @@ fn hand_over(
             ),
             after: Some(
                 serde_json::json!({
-                    "balance_centimes": after.as_centimes(),
+                    "balance_centimes": handed.balance_after.as_centimes(),
                     "amount_centimes": paid.amount.as_centimes(),
                     "payment_mode": paid.mode.as_str(),
-                    "ledger_id": entry.id,
+                    "ledger_id": handed.entry.id,
                     "purchase_id": purchase_id,
-                    "allocations": allocations
+                    "allocations": handed
+                        .allocations
                         .iter()
                         .map(|a| serde_json::json!({
                             "purchase_id": a.purchase_id,
