@@ -1,5 +1,10 @@
 # Questions pour le comptable (2026-09-08)
 
+Écrit le 2026-09-08 avec huit questions. Un ajout daté du 2026-09-21, en bas
+de page, porte les sept lectures que le logiciel a fixées depuis sans qu'un
+texte ne les tranche ; la liste à jour de chaque hypothèse est le tableau
+« Fiscal rules: current assumptions » de `docs/features.md`.
+
 Une page, huit questions. Chacune donne la règle telle que nous l'avons lue,
 la source, et la raison de la question. Les textes cités sont dans
 `research/legal-fiscal/sources/`. Nous cherchons la pratique constatée sur les
@@ -117,3 +122,107 @@ nous la fixerons par un test.
 Chaque réponse est reportée dans la colonne Source du tableau des règles fiscales
 de `docs/features.md`, avec votre nom et la date, et fixée par un cas de test
 nommé. Une règle sans source ni test n'existe pas chez nous.
+
+## Ajout du 2026-09-21 : sept lectures fixées depuis, à confirmer
+
+Le logiciel a grandi de la caisse simple à la facture, l'avoir, l'annulation, le
+stock et la marge. Chaque fois qu'aucun texte ne tranchait, nous avons choisi
+une lecture, l'avons fixée par un test nommé, et l'avons marquée « à confirmer »
+dans `docs/features.md`. Ce sont ces sept-là. Même forme que plus haut : la
+règle telle que nous l'appliquons, la source ou son absence, et la question.
+
+## 9. La base du droit de timbre : le total TTC avant le timbre lui-même
+
+Règle appliquée : le timbre se calcule sur le total TTC de la facture, c'est à
+dire le montant avant que le timbre ne s'y ajoute. Le net à payer est le total
+TTC plus le timbre.
+Source : le code du timbre 2026, art. 100-I, dit « montant » et ne nomme pas
+de base.
+Pourquoi : la base est-elle bien le total TTC, ou le timbre se calcule-t-il sur
+une base qui l'inclut déjà, ce qui changerait le résultat d'une tranche sur les
+montants proches d'un seuil ?
+
+## 10. Le timbre n'est jamais restitué : sur l'avoir, et sur l'annulation d'un ticket réglé en espèces
+
+Règle appliquée : un avoir ne porte pas de droit de timbre et ne restitue pas
+celui de la facture qu'il crédite ; le total des avoirs sur une facture ne
+dépasse jamais son total TTC. Depuis le 2026-09-21, un ticket en espèces annulé
+peut être remboursé au client en espèces, et ce remboursement porte sur le net à
+payer moins le timbre : le client récupère le prix des marchandises, pas le
+timbre versé.
+Source : le code du timbre taxe le paiement et ne dit rien d'une contre-passation.
+Pourquoi : c'est une lecture, pas une phrase du code. Lorsqu'une vente en
+espèces est annulée le jour même ou la semaine suivante et que le client est
+remboursé, la pratique restitue-t-elle le timbre au client, le garde-t-elle
+pour le Trésor, ou l'affaire ne se pose-t-elle pas parce que le ticket annulé
+n'est jamais déclaré ?
+
+## 11. Annuler un ticket de caisse sans document numéroté
+
+Règle appliquée : un ticket ou une facture s'annule, jamais ne s'efface : il
+garde son numéro et sa ligne, et enregistre quand, par qui et pourquoi. Une
+facture qui avait mis de l'argent sur le compte d'un client est défaite par un
+avoir entier ; un ticket à crédit est défait par une seule écriture au grand
+livre du client, sans numéro pris dans la série des avoirs ; un ticket ou une
+facture en espèces ne devait rien à personne, seules les marchandises reviennent.
+Source : le décret 05-468 régit la facture et ne dit rien de la contre-passation
+d'un ticket de caisse.
+Pourquoi : défaire un ticket sans émettre de document numéroté tient-il en
+pratique, ou un contrôle attend-il un avoir même pour un ticket ?
+
+## 12. L'arrondi d'une ligne vendue au poids ou au volume
+
+Règle appliquée : une quantité est un nombre entier de millièmes d'unité
+(1 500 pour 1,5 kg), le montant brut de la ligne est le prix unitaire multiplié
+par la quantité en millièmes, divisé par mille, arrondi au centime une seule
+fois, au plus proche et à demi loin de zéro, avant toute remise de ligne.
+Source : aucun texte ne dit comment une ligne pesée s'arrondit.
+Pourquoi : les balances et les logiciels que vous voyez arrondissent-ils la
+ligne au centime, au dinar, ou le prix au kilo est-il déjà exprimé de façon à
+ne jamais produire de fraction ?
+
+## 13. Les remises sur un avoir partiel, et la somme des avoirs
+
+Règle appliquée : un avoir partiel crédite la même part de la remise de ligne et
+de la remise globale qu'il crédite de la ligne et du panier, chaque part
+arrondie au centime inférieur, parce qu'une remise est ce que le client n'a pas
+payé et qu'arrondir au supérieur créditerait un centime que personne n'a versé.
+Les avoirs sur une même facture se somment à cette facture moins le timbre ;
+l'avoir qui solde la facture est la facture moins les avoirs précédents, champ
+par champ, de sorte que la somme tombe juste même si les tranches, prises une à
+une, arrondissent d'un centime de part et d'autre.
+Source : aucun texte ne dit comment une remise se répartit sur une
+contre-passation partielle, ni comment une contre-passation en plusieurs fois
+s'arrondit.
+Pourquoi : c'est la somme que vous lisez qui tranche. Un contrôle vérifie-t-il
+que les avoirs d'une facture se somment exactement à elle, ou tolère-t-il un
+centime d'écart né des arrondis par tranche ?
+
+## 14. Le coût des marchandises vendues et la base de la marge
+
+Règle appliquée : ce qu'une unité a coûté est le coût au moment de la sortie,
+écrit sur le mouvement de stock de la vente, jamais le prix de revient de la
+fiche, qui est celui de la dernière livraison et bouge à chaque achat. Un avoir
+ou une annulation remet les marchandises au coût de la vente qu'il défait. La
+marge du tableau de bord se lit sur les documents encore debout, et son chiffre
+d'affaires est le HT des lignes moins la remise globale, parce qu'une remise est
+un revenu jamais encaissé.
+Source : aucun texte ne prescrit une valorisation de stock ni une base de marge
+à un commerce qui tient ses propres comptes.
+Pourquoi : la valorisation au coût de sortie (et non au dernier coût, ni au
+coût moyen pondéré) est-elle celle qu'un comptable attend d'une supérette au
+réel, et la marge lue nette de remise est-elle celle que vous calculez ? Un
+chiffre de gestion lu d'une façon à la caisse et d'une autre dans les livres est
+l'erreur que nous voulons éviter.
+
+## 15. L'article d'imposition sur la facture
+
+Règle appliquée : la facture porte le RC et le NIS des deux parties (décret
+05-468, art. 3), le NIF (loi 04-02, art. 34 ; LF 2006, art. 42) et l'article
+d'imposition du vendeur, celui-ci parce que toutes les factures en circulation
+le portent et non parce qu'un texte l'exige.
+Source : aucun texte ne fait de l'AI une mention de la facture ; le CIDTA
+art. 183 ter demande au grossiste de tenir l'AI de chaque client pour son état
+clients.
+Pourquoi : cette lecture tient-elle ? Faut-il l'AI de l'acheteur sur une facture
+à une société, ou celui du vendeur suffit-il ?
