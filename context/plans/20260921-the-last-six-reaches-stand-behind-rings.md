@@ -18,7 +18,7 @@ tasks:
     status: 'done'
   - id: 'T4'
     desc: 'The ownership lift at documents.rs:145, which frees customers -> documents and debt -> documents together'
-    status: 'pending'
+    status: 'done'
 ---
 
 # The last six reaches stand behind rings
