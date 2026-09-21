@@ -32,8 +32,23 @@ fn no_handler_outside_the_two_routes_mod_names_reads_a_permission() {
     let routes = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/routes");
     let mut found: Vec<String> = Vec::new();
 
+    // One directory deep, and a `.rs` only. A route split into a folder
+    // would be a handler this walk never opens, so the shape is refused
+    // below rather than read past. `crates/api/src/gates/` is a folder
+    // already, so it is one somebody reaches for without meaning to.
+    let mut folders: Vec<String> = Vec::new();
+
     for entry in fs::read_dir(&routes).expect("crates/api/src/routes is readable") {
         let path = entry.expect("a directory entry").path();
+        if path.is_dir() {
+            folders.push(
+                path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("a folder")
+                    .to_string(),
+            );
+            continue;
+        }
         if path.extension().and_then(|e| e.to_str()) != Some("rs") {
             continue;
         }
@@ -51,6 +66,19 @@ fn no_handler_outside_the_two_routes_mod_names_reads_a_permission() {
         }
     }
     found.sort();
+    folders.sort();
+
+    assert!(
+        folders.is_empty(),
+        "{folders:?} is a route split into a folder, and this walk reads one \
+         directory deep. Descending is not enough on its own: the skip \
+         above drops every `mod.rs`, because a flat route's module \
+         declaration never names a permission, and a folder route's \
+         `mod.rs` is exactly where its handler would live. Teach the walk \
+         to descend and give it a reason to read that file before landing \
+         this, or a handler inside the folder decides a permission with \
+         nothing watching."
+    );
 
     let mut allowed: Vec<String> = MAY_ASK_CAN.iter().map(|s| s.to_string()).collect();
     allowed.sort();

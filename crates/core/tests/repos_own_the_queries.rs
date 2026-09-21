@@ -36,6 +36,29 @@ const ASKS_A_QUESTION: [&str; 2] = ["backup.rs", "support_bundle.rs"];
 /// writes outside every repo and every `shop_id` filter.
 const RUNS_A_STATEMENT: [&str; 2] = ["backup.rs", "pairing.rs"];
 
+/// A service split into a folder, which both walks in this file would read
+/// past: they read one directory deep and keep only a `.rs`, so
+/// `services/foo/mod.rs` is a service no rule here applies to. The sibling
+/// gate in `services_go_through_services.rs` refuses the same shape for the
+/// same reason, and this one matters more: what escapes here is a statement
+/// that writes outside every repo and every `shop_id` filter.
+fn service_folders() -> Vec<String> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/services");
+    let mut found: Vec<String> = fs::read_dir(&dir)
+        .expect("crates/core/src/services is readable")
+        .map(|entry| entry.expect("a directory entry").path())
+        .filter(|path| path.is_dir())
+        .map(|path| {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("a folder")
+                .to_string()
+        })
+        .collect();
+    found.sort();
+    found
+}
+
 /// Every file in `src/services` whose source mentions `marker`.
 fn services_mentioning(marker: &str) -> Vec<String> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/services");
@@ -80,6 +103,18 @@ fn no_service_outside_the_lists_talks_to_sqlite_itself() {
          belongs to an aggregate, and then it belongs in that aggregate's \
          repo, or it asks about the database file itself, and then \
          docs/architecture.md says so and this list grows by one."
+    );
+
+    let folders = service_folders();
+    assert!(
+        folders.is_empty(),
+        "{folders:?} is a service split into a folder, and both walks in \
+         this file read one directory deep. Descending is not enough on \
+         its own: `services_mentioning` names what it found by the bare \
+         file name, so every folder's `mod.rs` collapses to one key and \
+         the failure cannot say which folder it means. Teach them to \
+         descend and to keep the path before landing this, or a service's \
+         raw SQL is a rule nothing here applies."
     );
 
     assert_eq!(

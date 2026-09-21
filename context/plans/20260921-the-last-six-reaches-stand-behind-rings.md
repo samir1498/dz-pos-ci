@@ -11,8 +11,8 @@ tasks:
     desc: 'This page: what actually blocks each of the six, what the walk counts, and the two shapes with their costs'
     status: 'done'
   - id: 'T2'
-    desc: 'Close the walk blind spot: a service in a subdirectory is invisible to both walks'
-    status: 'pending'
+    desc: 'Close the blind spot in the raw-SQL walk and the handler walk: a folder is invisible to both'
+    status: 'done'
   - id: 'T3'
     desc: 'The move, once Samir has picked a shape'
     status: 'pending'
@@ -88,17 +88,23 @@ also cannot then be deleted, and deleting it is the stated end of this work.
 Shape A is the recommendation. It is more work and it keeps the gate
 meaning what it says.
 
-## A blind spot to close either way
+## A blind spot in the neighbouring walks
 
-Both walks read `crates/core/src/services/` with a non-recursive
-`fs::read_dir` filtered to a `.rs` extension. A service in a subdirectory,
-`services/foo/mod.rs`, is invisible to the reach walk, to the ring walk and
-to `the_walk_cannot_be_stepped_around`, which covers `crate::schema::`,
-`repos::*`, `services::*` and `super::` but not this. `crates/api/src/gates/`
-is a folder already, so the shape is one somebody would reach for without
-meaning to evade anything. T2 closes it, and it is worth doing before T3
-whichever shape wins, because Shape B would otherwise be reachable by
-accident.
+Written wrong the first time and corrected here.
+`the_walk_cannot_be_stepped_around` does refuse a folder under
+`crates/core/src/services/`, at its own last assertion, so the reach walk
+and the ring walk are covered.
+
+The two walks beside them are not. `repos_own_the_queries.rs` reads the same
+directory one deep and keeps only a `.rs`, so a service at
+`services/foo/mod.rs` is one no rule in that file applies to, and that file
+holds the sharper rule: its own comment says a statement escaping it "can
+write, and it writes outside every repo and every `shop_id` filter".
+`crates/api/tests/one_handler_decides.rs` has the same shape over
+`crates/api/src/routes/`, where a handler in a folder would decide a
+permission with nothing watching. `crates/api/src/gates/` is a folder
+already, so this is a shape somebody reaches for without meaning to evade
+anything. T2 gives both the assertion the first walk already had.
 
 ## What is not in question
 
