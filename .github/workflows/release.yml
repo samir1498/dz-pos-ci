@@ -11,7 +11,7 @@ name: Release
 # Windows minutes are the same capped organisation budget, so releases are
 # cut from the public mirror, not the org: push the tag to both remotes
 # (`just release vX.Y.Z`), the mirror spends Samir's free minutes building
-# all three installers, and the publish job creates the release on
+# both installers, and the publish job creates the release on
 # Dinar-dz/dz-pos by API call (no minutes). A tag on Dinar-dz alone starts
 # no runner until the budget is restored. A dry run without a tag:
 #   gh workflow run Release --repo samir1498/dz-pos-ci --ref <branch-or-tag>
@@ -145,7 +145,7 @@ jobs:
             echo "version: \`$VERSION\`"
             if [ "$MODE" = "dry-run" ]; then
               echo
-              echo "This is a manual dry run. It builds all three installers"
+              echo "This is a manual dry run. It builds both installers"
               echo "(Windows, Linux) and uploads them as run artifacts."
               echo "**No release is created and no tag is touched.**"
             else
@@ -414,7 +414,7 @@ jobs:
 
       # `tauri build` writes each installer and its `.sig` sidecar but never
       # a combined manifest, so this assembles `latest.json` by hand across
-      # the three platforms. `size` is not part of the plugin's own manifest
+      # the two platforms. `size` is not part of the plugin's own manifest
       # shape at all -- the About screen's "what it weighs" only exists
       # because this step adds it, and reads it back off `raw_json`
       # (`src-tauri/src/updater.rs`). Unexercised against a real key: updater=publish only
@@ -471,8 +471,24 @@ jobs:
           UPDATER: ${{ needs.gate.outputs.updater }}
         run: |
           set -euo pipefail
+          # One line per entry in the build matrix above, checked by name.
+          # This counted to three until 2026-09-21 and the matrix has built
+          # two since macOS was dropped on 2026-09-16, so the first real
+          # release would have failed here; no tag has been cut in between,
+          # which is the only reason it was never seen. A name also says
+          # which platform is missing, where a count of two is satisfied by
+          # two Windows installers and no Linux one.
+          expected=(Dinar-Setup.exe Dinar.AppImage)
           mapfile -t assets < <(find dist -maxdepth 2 -type f \( -name '*.exe' -o -name '*.AppImage' \) | sort)
-          [ "${#assets[@]}" -eq 3 ] || { echo "::error::expected 3 installers under dist/, found ${#assets[@]}"; exit 1; }
+          names=" ${assets[*]##*/} "
+          for want in "${expected[@]}"; do
+            case "$names" in
+              *" $want "*) ;;
+              *) echo "::error::no $want under dist/; found:${names}"; exit 1 ;;
+            esac
+          done
+          [ "${#assets[@]}" -eq "${#expected[@]}" ] \
+            || { echo "::error::expected ${#expected[@]} installers under dist/, found ${#assets[@]}:${names}"; exit 1; }
 
           if [ "$UPDATER" = "publish" ]; then
             [ -f dist/latest.json ] || { echo "::error::updater=publish but dist/latest.json was not assembled"; exit 1; }

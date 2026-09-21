@@ -211,7 +211,7 @@ fn every_exported_dto_is_in_the_list_and_none_uses_the_bare_export() {
     listed.sort_unstable();
     assert_eq!(
         named, listed,
-        "the export_to names in dto.rs and FILES in this test differ"
+        "the export_to names in crates/api/src/dto/ and FILES in this test differ"
     );
     assert!(
         !DTO_SOURCE.contains("#[ts(export)]"),

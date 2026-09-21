@@ -231,7 +231,8 @@ async fn a_validation_failure_is_422() {
 #[tokio::test]
 async fn an_amount_past_what_a_json_number_carries_is_refused_at_the_edge() {
     // 2^53 rounds silently in every JavaScript caller; 2^53 - 1 does not.
-    // The bound in dto.rs is enforced, not only written in a comment.
+    // The bound in crates/api/src/dto/ is enforced, not only written in a
+    // comment.
     let h = harness();
     for field in ["selling_centimes", "cost_centimes", "qty_on_hand_milli"] {
         let mut d = draft();
