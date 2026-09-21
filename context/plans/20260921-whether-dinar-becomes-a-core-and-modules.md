@@ -282,12 +282,14 @@ brainstorm does not begin by rediscovering it.
 
 - One offline desktop in a shop, a phone on the LAN, no server. A power cut
   is an ordinary day.
-- Windows only. Shops buy a PC for the till and it runs Windows 10, sometimes
-  still Windows 7. Linux and macOS are not targets. This is a hard filter:
-  Tauri's WebView2 stopped at version 109 on Windows 7 in January 2023, and
-  Electron dropped Windows 7 at version 23, so any candidate has to say what
-  it does on a Windows 7 machine, and the brainstorm's first job is to find
-  out whether Windows 7 is real in the shops Anouar knows or a guess.
+- Windows only. Samir's expectation, 2026-09-21: a shop would buy a PC for
+  the till and it would run Windows 10, possibly still Windows 7. Linux and
+  macOS are not targets. Nobody has a shop, a pilot or a customer yet, so
+  this is a guess to verify and not an observation. It is still a hard
+  filter: Tauri's WebView2 stopped at version 109 on Windows 7 in January
+  2023, and Electron dropped Windows 7 at version 23, so any candidate has
+  to say what it does on a Windows 7 machine, and the brainstorm's first
+  job is to decide whether Windows 7 is a target at all.
 - Money writes stay atomic. A sale writes the document, its lines, the stock
   movement and the ledger in one transaction today
   (`crates/core/src/services/sales.rs:228`), and a shape that gives that up
