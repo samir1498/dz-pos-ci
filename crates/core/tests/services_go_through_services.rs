@@ -39,8 +39,8 @@ use std::path::Path;
 /// joins the one below.
 const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency", "testdb"];
 
-/// What reaches past a sibling today, service by service. Six reaches
-/// across four services; it was seventeen across eleven when the list was
+/// What reaches past a sibling today, service by service. Five reaches
+/// across three services; it was seventeen across eleven when the list was
 /// written. Shrinking, never growing: the fix for a
 /// row is to add the missing function to the sibling's service and call
 /// that, the way `stock.rs` now reads the audit log through
@@ -58,10 +58,15 @@ const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency",
 /// `documents.rs` imports `services::customers`, so routing `debt`'s reads
 /// through either sibling closes a ring too. Both want the shared piece
 /// moved into a module underneath, which is its own task.
-const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 4] = [
+///
+/// `purchases` left on 2026-09-21 with no ring to untangle first: the three
+/// `repos::supplier_debt` calls saving an order paid at once made were the
+/// ledger row, its settlement and the balance either side of it, and
+/// `supplier_debt::hand_over` is now the one function that writes that row,
+/// for `pay` and for the purchase alike.
+const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 3] = [
     ("customers", &["documents"]),
     ("debt", &["customers", "documents"]),
-    ("purchases", &["supplier_debt"]),
     ("supplier_debt", &["purchases", "suppliers"]),
 ];
 

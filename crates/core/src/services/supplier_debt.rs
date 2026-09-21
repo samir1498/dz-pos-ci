@@ -33,8 +33,8 @@ use crate::repos::suppliers as suppliers_repo;
 use crate::services::{audit, clock, optional_field};
 
 pub use crate::models::supplier_debt::{
-    NewSupplierAllocation, NewSupplierEntry, PaymentMethod, SupplierAllocation, SupplierDebtKind,
-    SupplierEntry,
+    NewSupplierAllocation, NewSupplierEntry, OpenPurchase, Payment, PaymentMethod,
+    SupplierAllocation, SupplierDebtKind, SupplierEntry,
 };
 
 /// What the shop owes this supplier right now: the sum of the ledger, never a
@@ -181,19 +181,6 @@ pub fn statement_between(
     })
 }
 
-/// One order the shop still owes on: which purchase, what it is still asking
-/// for, and what it was worth on the ledger.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OpenPurchase {
-    pub purchase_id: i32,
-    /// What is left on it: its value on the ledger less everything placed on
-    /// it. Always above zero here; an order nothing is owed on is left out.
-    pub remaining: Money,
-    /// What the order is worth on the ledger: the debits a receipt wrote for
-    /// it, less the credits a return took off it.
-    pub value: Money,
-}
-
 /// The supplier's orders that are still asking to be paid, oldest first
 /// (features.md §2, oldest-first settlement). Three queries whatever the
 /// number of orders: the orders in date order, the ledger summed per order,
@@ -236,21 +223,6 @@ pub fn open_purchases(
     Ok(open)
 }
 
-/// What a payment left behind: the movement, what it settled and where the
-/// balance stood once it had landed. All three are read inside the payment's
-/// own transaction, so the figure the caller answers, the figure the audit
-/// records and the figure the ledger sums to are one figure read once.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Payment {
-    pub entry: SupplierEntry,
-    /// Oldest order first, which is the order the money filled them in.
-    /// Empty when no order is owed on at all: an opening balance and a
-    /// correction cite none, and money against those settles the balance
-    /// without settling a piece of paper.
-    pub allocations: Vec<SupplierAllocation>,
-    pub balance_after: Money,
-}
-
 /// Money to a supplier, in cash or by card. One transaction: the credit
 /// movement, the allocations that say which orders it settled and the audit
 /// entry either all land or none of them does.
@@ -278,6 +250,9 @@ pub fn pay(
     at: NaiveDateTime,
 ) -> Result<Payment, CoreError> {
     ensure_supplier(conn, shop_id, supplier_id)?;
+    // Before the balance below, and repeated inside the door: a zero read
+    // second comes back as money above the debt of a supplier holding credit,
+    // pointing a screen at the account rather than at the amount box.
     if amount.as_centimes() <= 0 {
         return Err(CoreError::validation(
             "amount_centimes",
@@ -298,32 +273,7 @@ pub fn pay(
                 outstanding_centimes: outstanding.as_centimes().max(0),
             });
         }
-        let entry = repo::append(
-            conn,
-            &SupplierDebtRowWrite {
-                shop_id,
-                supplier_id,
-                // A payment settles orders through its allocations, which can
-                // be several: the column that names one order would have to
-                // pick.
-                purchase_id: None,
-                kind: SupplierDebtKind::Payment,
-                debit_centimes: 0,
-                credit_centimes: amount.as_centimes(),
-                user_id,
-                note,
-                payment_mode: Some(mode),
-                // Never left to the column's own default, which is
-                // CURRENT_TIMESTAMP and so UTC: the cash position reads the
-                // cash payments of one day off this column on the shop's
-                // calendar, and one hour a day the two disagree about which
-                // day the money left the drawer. `append_at` does the same
-                // for every other kind.
-                created_at: Some(at),
-            },
-        )?;
-        let allocations = settle_oldest_first(conn, shop_id, supplier_id, entry.id, amount)?;
-        let after = repo::balance(conn, shop_id, supplier_id)?;
+        let paid = hand_over(conn, shop_id, user_id, supplier_id, amount, mode, note, at)?;
         audit::record(
             conn,
             shop_id,
@@ -338,21 +288,71 @@ pub fn pay(
                 ),
                 after: Some(
                     serde_json::json!({
-                        "balance_centimes": after.as_centimes(),
+                        "balance_centimes": paid.balance_after.as_centimes(),
                         "amount_centimes": amount.as_centimes(),
                         "payment_mode": mode.as_str(),
-                        "ledger_id": entry.id,
-                        "allocations": allocated_json(&allocations),
+                        "ledger_id": paid.entry.id,
+                        "allocations": allocated_json(&paid.allocations),
                     })
                     .to_string(),
                 ),
             },
         )?;
-        Ok(Payment {
-            entry,
-            allocations,
-            balance_after: after,
-        })
+        Ok(paid)
+    })
+}
+
+/// The `payment` row, the orders it settles and what it left on the balance:
+/// everything a payment does to the ledger and nothing it does to the log.
+/// Runs inside the caller's transaction and opens none of its own.
+///
+/// What the two callers differ on is left to them. `pay` measures the money
+/// against the balance first and logs the payment after; `services::purchases`
+/// can measure nothing, because an order paid the day it is placed carries no
+/// ledger row yet, and it logs an entry that names the order. What they must
+/// not differ on is this row, so it is written here: stamped rather than left
+/// to the column's UTC CURRENT_TIMESTAMP, which the cash position would read a
+/// day's cash off on the wrong day, and with the note `optional_field` left.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn hand_over(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    supplier_id: i32,
+    amount: Money,
+    mode: PaymentMethod,
+    note: Option<String>,
+    at: NaiveDateTime,
+) -> Result<Payment, CoreError> {
+    if amount.as_centimes() <= 0 {
+        return Err(CoreError::validation(
+            "amount_centimes",
+            "a payment of nothing pays nothing",
+        ));
+    }
+    let entry = repo::append(
+        conn,
+        &SupplierDebtRowWrite {
+            shop_id,
+            supplier_id,
+            // A payment settles orders through its allocations, which can be
+            // several: the column that names one order would have to pick.
+            purchase_id: None,
+            kind: SupplierDebtKind::Payment,
+            debit_centimes: 0,
+            credit_centimes: amount.as_centimes(),
+            user_id,
+            note,
+            payment_mode: Some(mode),
+            created_at: Some(at),
+        },
+    )?;
+    let allocations = settle_oldest_first(conn, shop_id, supplier_id, entry.id, amount)?;
+    let balance_after = repo::balance(conn, shop_id, supplier_id)?;
+    Ok(Payment {
+        entry,
+        allocations,
+        balance_after,
     })
 }
 
@@ -706,8 +706,8 @@ pub fn append_at(
             credit_centimes: entry.credit.as_centimes(),
             user_id: entry.user_id,
             note,
-            // A movement that is not a payment was not handed over in
-            // anything. `pay` is the one writer that fills the mode in.
+            // A movement that is not a payment was handed over in nothing;
+            // `hand_over` is the one writer that fills the mode in.
             payment_mode: None,
             created_at: Some(at.unwrap_or_else(clock::now)),
         },

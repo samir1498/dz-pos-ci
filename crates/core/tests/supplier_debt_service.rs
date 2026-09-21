@@ -25,7 +25,9 @@ const OWNER: i32 = 1;
 
 mod common;
 
-use common::{a_purchase_ledger_row, a_purchase_row, a_supplier, open_temp};
+use common::{
+    a_purchase_ledger_row, a_purchase_row, a_supplier, a_supplier_payment_row, open_temp,
+};
 
 fn second_shop(conn: &mut SqliteConnection) {
     diesel::sql_query("INSERT INTO shops (id, name) VALUES (2, 'Deuxième magasin')")
@@ -243,6 +245,44 @@ fn a_payment_to_a_supplier_owed_nothing_says_nothing_is_owed() {
 fn a_payment_of_nothing_pays_nothing() {
     let (_dir, mut conn) = open_temp();
     let (supplier, _older, _newer) = two_orders(&mut conn);
+    for amount in [Money::ZERO, Money::centimes(-100)] {
+        let err = supplier_debt::pay(
+            &mut conn,
+            SHOP,
+            OWNER,
+            supplier,
+            amount,
+            PaymentMethod::Cash,
+            None,
+            clock::now(),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(&err, CoreError::Validation { field, .. } if field == "amount_centimes"),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn a_payment_of_nothing_says_so_even_to_a_supplier_holding_the_shop_s_money() {
+    // Which of the two refusals a payment can get is decided by the order the
+    // two checks are read in, and the corner where it shows is a supplier the
+    // shop is in credit with: nothing is owed there, so every amount is above
+    // what is owed, and a zero read second would be refused as money above the
+    // debt. The screen would point at the account when what is wrong is the
+    // amount box. The amount is read first, and stays read first however the
+    // row below it comes to be written.
+    let (_dir, mut conn) = open_temp();
+    let supplier = a_supplier(&mut conn, "Sarl Amrani");
+    // Money handed over against an order that has not arrived: the supplier
+    // holds 50 000 centimes of the shop's, which `purchases::save` leaves
+    // behind every time an order is paid for the day it is written.
+    a_supplier_payment_row(&mut conn, supplier, 50_000);
+    assert_eq!(
+        supplier_debt::balance(&mut conn, SHOP, supplier).unwrap(),
+        Money::centimes(-50_000)
+    );
     for amount in [Money::ZERO, Money::centimes(-100)] {
         let err = supplier_debt::pay(
             &mut conn,
