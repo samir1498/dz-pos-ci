@@ -1,7 +1,7 @@
 ---
 title: 'The last six reaches stand behind rings'
 slug: 'the-last-six-reaches-stand-behind-rings'
-status: 'active'
+status: 'done'
 category: 'architecture'
 created: 20260921
 tldr: 'Three of the six pairs are blocked by an import ring and three are not, corrected on 2026-09-21 by reading the imports. The shape the loop file proposed does not survive the walk that counts reaches; the loop file own one-operation rule picks the shape instead.'

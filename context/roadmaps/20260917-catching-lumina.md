@@ -9,13 +9,13 @@ tldr: 'Anouar made Lumina the benchmark on 2026-09-17. Seven real gaps, three of
 priority: 95
 entries:
   - ref: 'architecture-fixes-without-a-domain-split'
-    status: 'planned'
+    status: 'active'
     note: 'Goes first. Splitting crates/api/src/dto.rs by domain has to land before the Lumina branches start appending wire types to it in parallel'
   - ref: 'invoice-layouts-a-shop-can-choose'
-    status: 'planned'
+    status: 'done'
     note: 'Gap 1 and the priority Anouar named. The picker first, then a dense A4, an A5 and an 80mm facture'
   - ref: 'the-phone-in-three-languages'
-    status: 'planned'
+    status: 'done'
     note: 'Not a Lumina gap, we are ahead of them on languages. It is our own hole, and it is where the i18n refactor shape gets built small'
 ---
 # Catching Lumina

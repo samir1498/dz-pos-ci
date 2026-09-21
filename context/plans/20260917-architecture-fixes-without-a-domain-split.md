@@ -17,8 +17,8 @@ tasks:
     desc: 'Break the two service cycles: documents imports avoir while avoir imports documents, sales imports proforma while proforma imports sales. The shared types move to a module both import'
     status: 'done'
   - id: 'T4'
-    desc: 'The nine services that reach past a sibling service into its repo go through the service instead; the missing functions get added to the sibling. Sharpest case is services/debt.rs:25,27 writing through repos::customers and repos::documents'
-    status: 'pending'
+    desc: 'The services that reach past a sibling service into its repo go through the service instead; the missing functions get added to the sibling. Started at nine; REACHES_PAST_A_SIBLING now pins two rows, debt into customers and supplier_debt into purchases and suppliers, each kept with its reason'
+    status: 'done'
   - id: 'T5'
     desc: 'services/stock.rs:12 calls services::audit::record instead of repos::audit, so the audit row gets the shop clock'
     status: 'done'
@@ -33,7 +33,7 @@ tasks:
     status: 'done'
   - id: 'T9'
     desc: 'The two JSX money sums, purchases.tsx:260 and purchases_.$id.tsx:232, stop adding transport and extra costs in the component; the API answers the total. Money work, so the money builder and a mirror CI run'
-    status: 'pending'
+    status: 'done'
   - id: 'T11'
     desc: 'The three rings the ring walk still pins: users, sessions, audit and preferences import each other. Needs its own page saying what the shared piece is before anything moves; RINGS_STILL_OPEN in crates/core/tests/services_go_through_services.rs is the list'
     status: 'pending'
@@ -157,10 +157,12 @@ The test lens caught both blob fixtures short of several fields at once, so
 deleting the check the test named left it green. Mutation confirmed it. A
 row per field is the shape that holds.
 
-Still open in T8: `suppliers.tsx` at 1086 lines becomes `routes/-suppliers/`,
-and `PAYMENT_METHODS` plus `supplierBalanceLabel` move to `components/`
-instead of sitting in both `suppliers.tsx:73-80` and
-`-customers/parts.tsx:24,49`. That half is also T10's largest file.
+Closed in T8: `suppliers.tsx` is 168 lines with `routes/-suppliers/`
+holding `fiche.tsx`, `parts.tsx` and `statement.tsx`, and the duplication is
+gone. `supplierBalanceLabel` sits in `-suppliers/parts.tsx` and
+`PAYMENT_METHODS` in `@/lib/payment`, which is not the `components/` this
+page proposed; the copy in two screens is what mattered and it is one place
+now.
 
 
 ## T6 and T7, and what checking them changed, 2026-09-20

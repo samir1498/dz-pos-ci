@@ -180,7 +180,7 @@ log, because `see_audit_log` is the owner's alone (`docs/features.md` line
 Opening and closing is a new permission, `open_and_close_till`, held by all
 three roles under ruling 10. Adding it moves `permissions.rs` off thirteen
 and the match refuses to compile until all three roles place it, which is the
-point. §5's "Thirteen permissions" and the count in `gates.rs` are rewritten
+point. §5's "Thirteen permissions" and the count in `gates/mod.rs` are rewritten
 in the same PR, and `.claude/stale-homes.md` gains the row it does not have
 for the permission count.
 
@@ -244,7 +244,7 @@ far by the hour they are short.
 ## The tasks
 
 **T2: the migration, the models, the repos.** Files:
-`crates/core/migrations/2026-09-2x-000017_shifts/{up,down}.sql`,
+`crates/core/migrations/2026-09-21-000017_shifts/{up,down}.sql`,
 `crates/core/src/schema.rs`, `crates/core/src/models/shift.rs`,
 `crates/core/src/repos/shifts.rs`,
 `crates/core/src/services/expenses.rs` (stamping),

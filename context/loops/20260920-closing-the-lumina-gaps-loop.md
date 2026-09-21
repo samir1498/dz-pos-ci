@@ -298,11 +298,12 @@ on 2026-09-20 says:
   - T9: done, #129. `PurchaseDto` answers `extras_centimes` and both screens
     print it; neither names `transport_centimes` or `extra_costs_centimes`
     any more.
-  - T10: `scripts/file-sizes.json` holds 27 entries (from 32);
-    `suppliers.tsx` left the list with #119. `till.tsx` (905),
-    `dashboard.tsx` (659), `expenses.tsx` (668), `crates/api/src/lib.rs`
-    (710) and `packages/shared/src/client.ts` (994) are pinned and may not
-    grow, which shapes every task below that touches them.
+  - T10: `scripts/file-sizes.json` holds 26 entries (from 32);
+    `suppliers.tsx` left the list with #119 and
+    `packages/shared/src/client.ts` left it when the client split shipped.
+    `till.tsx` (905), `dashboard.tsx` (659), `expenses.tsx` (668) and
+    `crates/api/src/lib.rs` (710) are pinned and may not grow, which shapes
+    every task below that touches them.
   - T11: `RINGS_STILL_OPEN` pins three rings through `users`, `sessions`,
     `audit` and `preferences`. Its page is not written.
 - Phase 4, the whole-loop review on the sharper model and the standup:
@@ -342,9 +343,13 @@ architecture tasks while Samir answers the rulings, then till sessions, then
 the raster, with the rings and the file splits as filler whenever an agent
 slot is free.
 
-## Phase 0: room to add, alone, before anything else
+## Phase 0 (done 2026-09-20): room to add, alone, before anything else
 
-Two files sit on the line and every task below adds to them. The same reason
+Both slices merged: the gates table is a folder (#127) and the shared client
+is split by domain (#126). What follows is the record of what was decided,
+kept because the reasoning still governs what may be added to those files.
+
+Two files sat on the line and every task below adds to them. The same reason
 the dto split went first last time.
 
 `architecture-fixes-without-a-domain-split` / T10, first two slices.
@@ -370,7 +375,12 @@ paid out, close session). `client/{sales,settings,customers,...}.ts` with
 `apps/desktop` and `apps/mobile` clean, vitest count unchanged, entry
 deleted. `dz-builder`. Size S.
 
-## Phase 1: the print language, and the carried-in architecture work
+## Phase 1 (done 2026-09-21): the print language, and the carried-in architecture work
+
+All of it merged: the shop stores the language its paper prints in (#130)
+and the six fiscal papers print in it (#131), with the carried-in reach work
+in #128, #132, #133, #135 and #136. `REACHES_PAST_A_SIBLING` is down to two
+rows. What follows is the record of what was decided.
 
 Plan slug `a-print-language-the-shop-keeps`. The plan page is written and
 committed to `main` (context bookkeeping) before any builder commits, or the
@@ -494,7 +504,7 @@ run on each Phase 1 merge as always, because Phase 2 builds on `cash.rs`
 and `expenses.rs`. The sharper model runs once per loop, at the close, as
 the 2026-09-17 ruling says; not here.
 
-## Phase 2: till shifts
+## Phase 2 (in flight): till shifts
 
 Plan slug `till-shifts-a-float-and-a-count`. `dz-money-builder` end to end:
 the schema, and every figure is centimes. Two branches at once at most.
@@ -622,7 +632,8 @@ refused (ruling 2). The tag is derived, not stored: a sale belongs to no shift
 when its `issued_at` falls outside every `[opened_at, closed_at)` of that
 `user_id`. The close screen reads that as its own figure beside the expected
 one, so a morning rung before the shift opened does not read as a shortage. A
-replayed offline sale lands the same way, on `issued_at` rather than arrival
+replayed offline sale lands the same way, on `issued_at`, which is the moment
+the server stamped it on arrival and not the moment the phone rang it up
 (ruling 3).
 
 Three audit actions: `till.open` (opening cash), `till.close` (expected,
@@ -663,12 +674,16 @@ count.
   `till-reversals-and-quotations`, `settlement`, `scanner`), `just seed`, the
   demo recordings and the Maestro flows all ring sales with no shift open.
   Refusing would have meant opening a shift in every one of them.
-- The phone's queue replaying after close: the sale belongs to the shift that
-  was open when it was rung, read off `issued_at` and not off arrival
-  (ruling 3). `apps/mobile/lib/queue.ts` stamps `createdAt` on every queued
-  request and `NewSale` carries `issued_at`, so nothing new is needed to know
-  which. If that shift is closed and counted, the sale is tagged rather than
-  reopening a signed count. The replay goes through `issue_idempotent` and
+- The phone's queue replaying after close: the sale belongs to the shift open
+  when it reaches the server, read off `issued_at`, which is that arrival
+  stamp (ruling 3). Nothing new is needed to know which, but not for the
+  reason this bullet gave until 2026-09-21: `NewSaleDto` carries no
+  `issued_at` at all. Its own doc says the moment a sale happened is the
+  server's to say, `crates/api/src/dto/sales.rs:461` hardcodes
+  `issued_at: None`, and the `createdAt` in `apps/mobile/lib/queue.ts` is
+  local queue bookkeeping that never leaves the phone. If no shift is open on
+  arrival, the sale is tagged as belonging to none rather than reopening a
+  signed count. The replay goes through `issue_idempotent` and
   must not be dropped in silence, which T8 of the architecture plan found the
   phone doing once already.
 - Two tills in one shop: rule 5 of `docs/architecture.md` says exactly one
@@ -1028,7 +1043,9 @@ rather than a list of ids.
 
 ## What waits for Samir, none of it a task here
 
-- The nine rulings above, and the shared lockout one.
+- The shared lockout, across the PIN and the password. The nine rulings this
+  file opened are not here: all nine were taken on 2026-09-20 and are written
+  above, which "Rulings still open" already says.
 - A real printer for Phase 3: the raster is golden-filed as PNG here, and
   whether a head prints it is proven the day M1 T6 is, on the laptop with a
   head on the desk.

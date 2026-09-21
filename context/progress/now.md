@@ -1,25 +1,33 @@
 ---
 type: 'now'
-updated: '2026-09-17'
+updated: '2026-09-21'
 ---
 ## Active
 
-**2026-09-17: Lumina is the benchmark, and the weekend builds against it.**
-Anouar asked for it as the priority. The comparison is
+**2026-09-21: closing the gaps the Lumina teardown found.** The live loop is
+`context/loops/20260920-closing-the-lumina-gaps-loop.md`, which Samir opened
+after taking all nine of its design rulings on 2026-09-20. It finishes what
+the weekend loop left open and then closes three gaps in our own spec: a
+print language the shop keeps, till shifts with an opening float and a count,
+and Arabic on a cheap thermal head.
+
+Phase 0 is done: the gates table is a folder and the shared client is split
+by domain. Phase 1 is done: the shop stores the language its paper prints in
+and the six fiscal papers print in it, and the cross-domain reach list is
+down from nine services to two rows, each kept with its reason. Phase 2, till
+shifts, is in flight: the `shifts` table, its models and repos and the
+expense clock fix are merged, and the service half is building now. Phase 3
+and the whole-loop review have not started.
+
+Open for Samir: the scanner plan's last task, which needs his own phone and
+laptop, and the shared-lockout ruling across the PIN and the password.
+
+The Lumina comparison this all came from is
 `context/references/20260917-dinar-against-lumina-what-is-missing-and-what-is-already-ahe.md`:
-it found eight gaps, one of which was wrong (supplier opening debt has been
-built since M2) and was withdrawn, so seven stand. Roadmap
-`context/roadmaps/20260917-catching-lumina.md`, three plans, one loop over
-18 and 19 September: the `crates/api/src/dto.rs` split first so the parallel
-branches stop colliding in one 3071-line file, then the facture layout picker
-with a dense A4, an A5 and an 80 mm layout, then the phone in three languages,
-then the rest of the architecture fixes. Batches, variants, bundles,
-promotions, invoice scanning, cloud sync and delivery notes are parked on the
-roadmap with what unparks each. The work goes to six agents in
-`.claude/agents/`; the loop file
-`context/loops/20260917-catching-lumina-weekend-loop.md` says which agent
-takes what and carries the guardrails. Open for Samir: the scanner plan's last
-task, which is his phone and his laptop, and the shared-lockout ruling.
+eight gaps, one withdrawn because supplier opening debt has been built since
+M2, so seven stand. Batches, variants, bundles, promotions, invoice scanning,
+cloud sync and delivery notes stay parked on
+`context/roadmaps/20260917-catching-lumina.md` with what unparks each.
 
 **2026-09-16 evening: sign-in by name, four-digit PIN, phone proven on
 Samir's phone (PRs #97-#99).** The pairing plan is closed: scan the QR,
@@ -63,7 +71,7 @@ auth already clean), T6 (Maestro pair-and-sell on a real phone over
 Tailscale), T7 (docs sweep) — each with `dz-review` + `Restricted` green
 before merge. Laptop `tmux dz` api/dev/mobile all 200, sign-in switcher
 live, Vite warning gone. No manual test until green is now green — see
-the manual test matrix in `context/plans/archived/20260915-m7-paired-phone-proven.md`
+the manual test matrix in `context/plans/20260915-m7-paired-phone-proven.md`
 and the loop file for the `tmux` health check. Next: pick the next
 milestone or polish.
 

@@ -15,7 +15,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'The six document routes take ?lang= as an override and read the preference when it is absent; docs features.md 4 and 8 rewritten in the same PR'
-    status: 'pending'
+    status: 'done'
 ---
 # A print language the shop keeps
 
