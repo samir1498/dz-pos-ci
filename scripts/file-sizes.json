@@ -10,7 +10,7 @@
     "apps/desktop/src/routes/expenses.tsx": 668,
     "apps/desktop/src/routes/purchases_.$id.tsx": 610,
     "apps/desktop/src/routes/till.test.tsx": 1405,
-    "apps/desktop/src/routes/till.tsx": 905,
+    "apps/desktop/src/routes/till.tsx": 904,
     "crates/api/src/lib.rs": 710,
     "crates/api/tests/sales_api.rs": 1591,
     "crates/core/src/print/strings.rs": 638,

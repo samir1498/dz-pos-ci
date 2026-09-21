@@ -109,6 +109,10 @@ export type { LastStockRecountDto } from "./generated/LastStockRecountDto";
 export type { StockDriftDto } from "./generated/StockDriftDto";
 export type { StockRecountDto } from "./generated/StockRecountDto";
 export type { TakingsDto } from "./generated/TakingsDto";
+export type { NewShiftDto } from "./generated/NewShiftDto";
+export type { ShiftDto } from "./generated/ShiftDto";
+export type { ShiftReportDto } from "./generated/ShiftReportDto";
+export type { TillCountDto } from "./generated/TillCountDto";
 
 export { ApiError, createClient } from "./client";
 // One zod schema per DTO, the check the client runs on every answer. They

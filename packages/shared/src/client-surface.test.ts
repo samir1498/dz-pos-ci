@@ -36,6 +36,7 @@ import { settingsClient } from "./client/settings";
 import { stockClient } from "./client/stock";
 import { suppliersClient } from "./client/suppliers";
 import { supportClient } from "./client/support";
+import { tillClient } from "./client/till";
 import { usersClient } from "./client/users";
 
 /** Every call the client answers, by the file that owns it. A method added
@@ -106,6 +107,7 @@ const SURFACE: Readonly<Record<string, readonly string[]>> = {
     "supplierStatement",
   ],
   support: ["supportBundle"],
+  till: ["openShift", "closeShift", "getOpenShift", "getShift"],
   users: ["listUsers", "createUser", "setUserPin", "deactivateUser", "reactivateUser"],
 };
 
@@ -141,6 +143,7 @@ const FACTORIES: Readonly<Record<string, () => object>> = {
   stock: () => stockClient(unused),
   suppliers: () => suppliersClient(unused),
   support: () => supportClient(unused),
+  till: () => tillClient(unused),
   users: () => usersClient(unused),
 };
 

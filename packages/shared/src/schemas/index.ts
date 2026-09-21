@@ -80,6 +80,7 @@ export {
   paymentSchema,
 } from "./customer";
 export { lastStockRecountSchema, stockDriftSchema, stockRecountSchema } from "./stock";
+export { shiftReportSchema, shiftSchema } from "./till";
 export {
   closeOrderSchema,
   newPurchaseLineSchema,

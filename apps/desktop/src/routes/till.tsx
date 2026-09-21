@@ -75,13 +75,11 @@ import { useTranslation, type Key } from "@/i18n";
 import { errorKey } from "@/lib/fields";
 import { useSession } from "@/lib/session";
 
-import { Cart, CartHeader, ONE_UNIT_MILLI, readLine } from "./-till/cart";
-import type { CartLine } from "./-till/cart";
+import { Cart, CartHeader, ONE_UNIT_MILLI, readLine, type CartLine } from "./-till/cart";
 import { Choice, ChoiceGroup } from "./-till/choice";
-import { CustomerPanel, PartyIdsRefused, partyRefusal, takesCredit } from "./-till/customer";
-import type { PartyRefusal } from "./-till/customer";
-import { PaymentPanel, creditRefusal } from "./-till/payment";
-import type { CreditRefusal } from "./-till/payment";
+import { CustomerPanel, PartyIdsRefused, partyRefusal, takesCredit, type PartyRefusal } from "./-till/customer";
+import { PaymentPanel, creditRefusal, type CreditRefusal } from "./-till/payment";
+import { TillShiftBar } from "./-till/session";
 
 export const Route = createFileRoute("/till")({ component: TillScreen });
 
@@ -518,6 +516,7 @@ export function TillScreen() {
     // without scrolling a panel sideways: 34rem is what those five need at
     // the counter's smallest window, and the grid takes the rest.
     <section className="grid gap-4 lg:grid-cols-[1fr_34rem]">
+      <TillShiftBar className="lg:col-span-2" />
       <div className="flex min-w-0 flex-col gap-3">
         <PageHeader
           title={t("till_title")}

@@ -45,6 +45,7 @@ import { settingsClient } from "./client/settings";
 import { stockClient } from "./client/stock";
 import { suppliersClient } from "./client/suppliers";
 import { supportClient } from "./client/support";
+import { tillClient } from "./client/till";
 import { usersClient } from "./client/users";
 
 export type ApiClient = ReturnType<typeof createClient>;
@@ -205,5 +206,6 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     ...purchasesClient(transport),
     ...stockClient(transport),
     ...supportClient(transport),
+    ...tillClient(transport),
   };
 }
