@@ -351,6 +351,12 @@ pub const ROUTE_GATES: &[Gate] = &[
     },
     Gate {
         method: "GET",
+        path: "/till/shifts",
+        permission: Some(Permission::SeeReports),
+        why: "the shop's shifts over a day window, newest first: the same report a manager runs the floor off as one shift by id below, widened to a list rather than narrowed to a row, and not the audit log, which is the owner's alone (docs/features.md §5). A cashier reads their own open drawer through GET /till/shifts/open, which names nobody and carries no row (plan till-shifts-a-float-and-a-count T7, 2026-09-21)",
+    },
+    Gate {
+        method: "GET",
         path: "/till/shifts/{id}",
         permission: Some(Permission::SeeReports),
         why: "one shift with what that person took over its window and what the shop expects them to be holding: a report a manager runs the floor off, and not the audit log, which is the owner's alone (docs/features.md §5). A cashier reads their own open drawer through GET /till/shifts/open, which names nobody and carries no row (plan till-shifts-a-float-and-a-count T4, 2026-09-21)",

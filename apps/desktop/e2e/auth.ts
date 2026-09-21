@@ -26,6 +26,17 @@
 // every route but the auth ones (`crates/api/src/session.rs::require`), so
 // both are signed in here; a spec that never destructures `request` never
 // pays for the second login, fixtures only run when a test asks for them.
+//
+// Since the till shifts landed (plan till-shifts-a-float-and-a-count, T5)
+// the till route asks anyone who signs in with no shift open to count a
+// float before the first sale: `TillShiftBar` puts `till-open-dialog` over
+// the screen and every click under it misses. A real cashier answers it
+// once a day; a spec that only wants to ring something up would answer it
+// in 27 places. So the door does what the cashier does: after the sign-in,
+// if this person has no shift open, one is opened through the same
+// endpoint the dialog calls, with an empty drawer. What the dialog itself
+// does, and what a close with a wrong count refuses, is driven for real in
+// `till-shifts.spec.ts`; every other spec starts with the drawer counted.
 
 import type { APIRequestContext } from "@playwright/test";
 import { expect, test as base } from "@playwright/test";
@@ -52,6 +63,28 @@ async function signIn(api: APIRequestContext): Promise<void> {
       `e2e/auth.ts: the fixed owner credential was refused (${res.status()} ${await res.text()}). ` +
         "Did globalSetup.ts run, and does its hash still match OWNER_PASSWORD above?",
     );
+  }
+  await openShiftIfNone(api);
+}
+
+/** Opens a shift for whoever `api` is signed in as, unless they hold one
+ * already: `GET /till/shifts/open` answers `null` when nobody does, and
+ * `POST /till/shifts` is the call the open dialog makes. The drawer starts
+ * empty; a spec that cares what the drawer holds says so itself. Exported
+ * for the specs that sign a cashier of their own in (`till-cashier.spec.ts`),
+ * who meets the same dialog. */
+export async function openShiftIfNone(api: APIRequestContext): Promise<void> {
+  const open = await api.get(`${apiUrl()}/till/shifts/open`, { headers: apiHeaders() });
+  if (!open.ok()) {
+    throw new Error(`e2e/auth.ts: could not read the open shift (${open.status()} ${await open.text()})`);
+  }
+  if ((await open.json()) !== null) return;
+  const opened = await api.post(`${apiUrl()}/till/shifts`, {
+    headers: apiHeaders(),
+    data: { opening_cash_centimes: 0 },
+  });
+  if (!opened.ok()) {
+    throw new Error(`e2e/auth.ts: could not open a shift at the door (${opened.status()} ${await opened.text()})`);
   }
 }
 

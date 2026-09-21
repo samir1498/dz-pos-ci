@@ -155,6 +155,14 @@ export const purchasesQueryKey: readonly string[] = ["purchases"];
  * appended by the screen, the same way the purchase list's are. */
 export const auditLogQueryKey: readonly string[] = ["audit-log"];
 
+/** The manager's shift list (plan till-shifts-a-float-and-a-count T7). The
+ * day window is appended by the screen, the same way the audit log's own
+ * filters are: a shift closed while the screen is open invalidates
+ * `OPEN_SHIFT_QUERY_KEY` in `-till/session.tsx`, a different key entirely,
+ * so this one is left to refetch on its own schedule rather than react to
+ * that. */
+export const tillShiftsQueryKey: readonly string[] = ["till", "shifts", "list"];
+
 /** One order with its lines and its deliveries. Its own key rather than a
  * slice of the list's: the list answers a row per order and this answers the
  * whole thing, and a delivery makes both stale. */

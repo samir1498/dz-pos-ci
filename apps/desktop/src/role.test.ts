@@ -41,6 +41,9 @@ const SRC = join(process.cwd(), "src");
  *  behind; the two roles on it are the same kind of data.
  *  `FirstSetupScreen.test.tsx` answers `/auth/first-setup` with a session,
  *  and a session carries the new owner's role the same way.
+ *  `till_.shifts.test.tsx` (plan till-shifts-a-float-and-a-count T7) stubs
+ *  `GET /auth/staff` with the fiches the shift list resolves a name against,
+ *  and staff have roles the same way `settings.users.test.tsx`'s do.
  *
  * Named one by one rather than "any test file", so a branch cannot hide in
  * a test either. Adding a file here is a claim that its role name is data;
@@ -53,6 +56,7 @@ const ALLOWED: ReadonlySet<string> = new Set([
   join("lib", "session.test.tsx"),
   join("routes", "audit.test.tsx"),
   join("routes", "settings.users.test.tsx"),
+  join("routes", "till_.shifts.test.tsx"),
   join("test", "session.ts"),
   "role.test.ts",
 ]);

@@ -788,5 +788,16 @@
   "error_shift_note_required": "الملاحظة مطلوبة: العدّ لا يطابق المبلغ المتوقع.",
   "till_shift_difference": "الفرق",
   "action_closing_till": "جارٍ الإغلاق…",
-  "till_shift_closed": "تم إغلاق الصندوق"
+  "till_shift_closed": "تم إغلاق الصندوق",
+  "nav_till_shifts": "سجل الصناديق",
+  "till_shifts_title": "سجل الصناديق",
+  "till_shifts_filter_from": "من",
+  "till_shifts_filter_to": "إلى",
+  "col_shift_opened_at": "الفتح",
+  "col_shift_closed_at": "الإغلاق",
+  "col_shift_counted": "المعدود",
+  "till_shifts_still_open": "لا تزال مفتوحة",
+  "till_shifts_loading": "جارٍ تحميل سجل الصناديق…",
+  "till_shifts_empty": "لا توجد صناديق في هذه الفترة.",
+  "till_shifts_empty_hint": "وسّع التواريخ لرؤية المزيد."
 }

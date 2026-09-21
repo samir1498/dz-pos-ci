@@ -788,5 +788,16 @@
   "error_shift_note_required": "Une note est requise : le compte ne correspond pas au montant attendu.",
   "till_shift_difference": "Écart",
   "action_closing_till": "Fermeture…",
-  "till_shift_closed": "Caisse fermée"
+  "till_shift_closed": "Caisse fermée",
+  "nav_till_shifts": "Historique des caisses",
+  "till_shifts_title": "Historique des caisses",
+  "till_shifts_filter_from": "Du",
+  "till_shifts_filter_to": "Au",
+  "col_shift_opened_at": "Ouverture",
+  "col_shift_closed_at": "Fermeture",
+  "col_shift_counted": "Compté",
+  "till_shifts_still_open": "Toujours ouverte",
+  "till_shifts_loading": "Chargement de l'historique des caisses…",
+  "till_shifts_empty": "Aucune caisse sur cette période.",
+  "till_shifts_empty_hint": "Élargissez les dates pour en voir plus."
 }

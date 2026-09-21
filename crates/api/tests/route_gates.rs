@@ -387,6 +387,12 @@ fn the_table_is_about_writes_and_the_reads_that_carry_lists_or_reports_out() {
         Some(Permission::SeeReports),
         "GET /till/shifts/{{id}} should carry SeeReports"
     );
+    // The list T7 adds, gated the same way as one shift by id above (2026-09-21).
+    assert_eq!(
+        gate_for("GET", "/till/shifts").and_then(|g| g.permission),
+        Some(Permission::SeeReports),
+        "GET /till/shifts should carry SeeReports"
+    );
     assert!(
         gate_for("GET", "/till/shifts/open").is_none(),
         "GET /till/shifts/open answers about the caller alone and is not this table's business"

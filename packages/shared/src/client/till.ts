@@ -8,6 +8,8 @@
 // way `dto/till.rs`'s own doc explains, and a body naming either is refused
 // outright rather than quietly dropped.
 
+import { z } from "zod";
+
 import type { NewShiftDto } from "../generated/NewShiftDto";
 import type { ShiftDto } from "../generated/ShiftDto";
 import type { ShiftReportDto } from "../generated/ShiftReportDto";
@@ -61,6 +63,25 @@ export function tillClient({ send }: Transport) {
      * after it, never from here. */
     async getShift(id: number): Promise<ShiftReportDto> {
       return narrow(await send(`/till/shifts/${id}`), shiftReportSchema, "shift report");
+    },
+
+    /** The shop's shifts over a day window, newest first: the row only, not
+     * this person's report — a report per row is a query per row, and
+     * `getShift` is already what a screen asks for one at a time. Every
+     * filter is optional; left out, `from` and `to` are both today on the
+     * shop's own clock (`routes/till.rs::list`). Gated on `see_reports`,
+     * the same permission `getShift` carries. */
+    async listShifts(filters?: {
+      from?: string;
+      to?: string;
+      userId?: number;
+    }): Promise<ShiftDto[]> {
+      const query = new URLSearchParams();
+      if (filters?.from !== undefined) query.set("from", filters.from);
+      if (filters?.to !== undefined) query.set("to", filters.to);
+      if (filters?.userId !== undefined) query.set("user_id", String(filters.userId));
+      const suffix = query.toString() === "" ? "" : `?${query.toString()}`;
+      return narrow(await send(`/till/shifts${suffix}`), z.array(shiftSchema), "shift list");
     },
   };
 }

@@ -41,7 +41,7 @@
 //! queue replays after its cashier closed lands here too, because `issued_at`
 //! is the server's to say and it says the moment the sale arrived.
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
@@ -51,7 +51,7 @@ use crate::money::{Money, PaymentMode};
 use crate::repos::shifts as repo;
 use crate::services::audit;
 use crate::services::cash::{self, Takings};
-use crate::services::clock;
+use crate::services::clock::{self, Period};
 use crate::services::documents;
 use crate::services::permissions::{self, Permission};
 use crate::services::{optional_field, role_of};
@@ -327,6 +327,31 @@ pub fn close(
         )?;
         Ok(closed)
     })
+}
+
+/// The shop's shifts opened over a day window, newest first, narrowed to one
+/// person when a manager asks for one. Row only: `report`'s takings figure is
+/// a query of its own, and a manager scanning a week is a list, not a report
+/// per row.
+///
+/// `from` and `to` are both included, the shop's calendar day the way every
+/// other day filter in this crate reads one; `clock::Period::Day` on each end
+/// is what turns the pair into the half-open pair of moments the column is
+/// compared against, and is what refuses a day outside the calendar chrono
+/// can hold rather than this function inventing a second refusal for it. A
+/// window with `to` before `from` is not a caller error worth its own
+/// refusal: the moments come out the wrong way round and the query between
+/// them answers nothing, which is the right answer to an empty window.
+pub fn list(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    from: NaiveDate,
+    to: NaiveDate,
+    user_id: Option<i32>,
+) -> Result<Vec<Shift>, CoreError> {
+    let (from_moment, _) = Period::Day(from).moments()?;
+    let (_, until_moment) = Period::Day(to).moments()?;
+    repo::list_between(conn, shop_id, from_moment, until_moment, user_id)
 }
 
 /// One shift and the figures a screen puts beside it.

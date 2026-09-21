@@ -23,6 +23,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
+  Banknote,
   CalendarDays,
   ClipboardList,
   FileText,
@@ -115,6 +116,13 @@ export const NAV: readonly NavItem[] = [
     permission: "see_reports",
   },
   { to: "/till", label: "nav_till", icon: ShoppingCart, section: "sales" },
+  {
+    to: "/till/shifts",
+    label: "nav_till_shifts",
+    icon: Banknote,
+    section: "sales",
+    permission: "see_reports",
+  },
   { to: "/customers", label: "nav_customers", icon: Users, section: "sales" },
   { to: "/documents", label: "nav_documents", icon: FileText, section: "sales" },
   {

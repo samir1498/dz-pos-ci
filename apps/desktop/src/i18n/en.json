@@ -788,5 +788,16 @@
   "error_shift_note_required": "A note is required: the count does not match what was expected.",
   "till_shift_difference": "Difference",
   "action_closing_till": "Closing…",
-  "till_shift_closed": "Till closed"
+  "till_shift_closed": "Till closed",
+  "nav_till_shifts": "Shift history",
+  "till_shifts_title": "Shift history",
+  "till_shifts_filter_from": "From",
+  "till_shifts_filter_to": "To",
+  "col_shift_opened_at": "Opened",
+  "col_shift_closed_at": "Closed",
+  "col_shift_counted": "Counted",
+  "till_shifts_still_open": "Still open",
+  "till_shifts_loading": "Loading the shift history…",
+  "till_shifts_empty": "No shifts in this window.",
+  "till_shifts_empty_hint": "Widen the dates to see more."
 }

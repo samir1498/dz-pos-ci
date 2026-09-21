@@ -42,7 +42,7 @@
 import { test, expect, request as pwRequest } from "@playwright/test";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { apiHeaders, apiUrl } from "./api";
-import { OWNER_NAME, OWNER_PASSWORD } from "./auth";
+import { OWNER_NAME, OWNER_PASSWORD, openShiftIfNone } from "./auth";
 import { t } from "./messages";
 
 const CASHIER_NAME = "Caissière e2e";
@@ -75,6 +75,7 @@ async function signInCashier(api: APIRequestContext): Promise<void> {
   if (!res.ok()) {
     throw new Error(`till-cashier.spec.ts: cashier sign-in refused (${res.status()} ${await res.text()})`);
   }
+  await openShiftIfNone(api);
 }
 
 /** Playwright starts a fresh worker process for the tests after any test in

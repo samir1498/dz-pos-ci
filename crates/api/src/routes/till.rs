@@ -16,19 +16,21 @@
 //! does for every other route here. Opening and counting are
 //! `OpenAndCloseTill`, which all three roles hold (ruling 10): the person
 //! who counts a drawer is the person standing at it. Reading somebody's
-//! shift by id is `SeeReports`, because the shift list is a report a manager
-//! runs the floor off. `GET /till/shifts/open` carries no row at all: it
-//! answers about the caller and nobody else, and a cashier who cannot read
-//! their own open drawer cannot be shown the expected figure before they
-//! count it.
+//! shift by id, or the shop's shifts as a list, is `SeeReports`, because
+//! both are a report a manager runs the floor off. `GET /till/shifts/open`
+//! carries no row at all: it answers about the caller and nobody else, and a
+//! cashier who cannot read their own open drawer cannot be shown the
+//! expected figure before they count it.
 
-use axum::extract::rejection::JsonRejection;
-use axum::extract::{Path, State};
+use axum::extract::rejection::{JsonRejection, QueryRejection};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
+use dzpos_core::services::clock;
 use dzpos_core::services::shifts::{self as service, NewShift, TillCount};
+use serde::Deserialize;
 
-use crate::dto::{NewShiftDto, ShiftDto, ShiftReportDto, TillCountDto};
+use crate::dto::{parse_day, NewShiftDto, ShiftDto, ShiftReportDto, TillCountDto};
 use crate::error::ApiError;
 use crate::session::CurrentUser;
 use crate::AppState;
@@ -111,4 +113,48 @@ pub async fn get_one(
         .blocking(move |c| service::report(c, shop, id))
         .await?;
     Ok(Json(ShiftReportDto::try_from(found)?))
+}
+
+/// A day window, both ends optional, and an optional person. Left out, the
+/// window is today alone, on the shop's clock: the manager's screen opens on
+/// what is happening now rather than the whole shop's history.
+#[derive(Deserialize)]
+pub struct ListQuery {
+    #[serde(default)]
+    from: Option<String>,
+    #[serde(default)]
+    to: Option<String>,
+    #[serde(default)]
+    user_id: Option<i32>,
+}
+
+/// The shop's shifts opened over a day window, newest first: the row only,
+/// never the report each carries — a report per row is a query per row, and
+/// `GET /till/shifts/{id}` is already what a screen asks for one at a time.
+pub async fn list(
+    State(state): State<AppState>,
+    query: Result<Query<ListQuery>, QueryRejection>,
+) -> Result<Json<Vec<ShiftDto>>, ApiError> {
+    let Query(ListQuery { from, to, user_id }) = query.map_err(|_| {
+        ApiError::BadRequest("from and to are days written YYYY-MM-DD, user_id is a number".into())
+    })?;
+    let today = clock::now().date();
+    let from = match from.as_deref() {
+        Some(text) => parse_day("from", text)?,
+        None => today,
+    };
+    let to = match to.as_deref() {
+        Some(text) => parse_day("to", text)?,
+        None => today,
+    };
+    let shop = state.shop_id;
+    let found = state
+        .blocking(move |c| service::list(c, shop, from, to, user_id))
+        .await?;
+    Ok(Json(
+        found
+            .into_iter()
+            .map(ShiftDto::try_from)
+            .collect::<Result<Vec<_>, _>>()?,
+    ))
 }

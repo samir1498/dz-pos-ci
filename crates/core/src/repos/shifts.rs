@@ -98,20 +98,31 @@ pub fn close(
     Ok(Shift::from(row))
 }
 
-/// The shop's shifts opened inside a half open window, newest first. Half
-/// open on `opened_at` for the reason `clock::Period::moments` gives: every
-/// moment of the last day counts and the next day's first does not.
-#[cfg_attr(not(test), allow(dead_code))]
+/// The shop's shifts opened inside a half open window, newest first, and
+/// optionally one person's alone. Half open on `opened_at` for the reason
+/// `clock::Period::moments` gives: every moment of the last day counts and
+/// the next day's first does not.
+///
+/// `user_id` is the manager's list narrowing to one person, not the per-user
+/// scoping every other query in this file carries: a manager runs the whole
+/// floor off the plain window, and the filter is added only when a screen
+/// asks for it.
 pub fn list_between(
     conn: &mut SqliteConnection,
     shop_id: i32,
     from: NaiveDateTime,
     until: NaiveDateTime,
+    user_id: Option<i32>,
 ) -> Result<Vec<Shift>, CoreError> {
-    let rows: Vec<ShiftRow> = shifts::table
+    let mut query = shifts::table
         .filter(shifts::shop_id.eq(shop_id))
         .filter(shifts::opened_at.ge(from))
         .filter(shifts::opened_at.lt(until))
+        .into_boxed();
+    if let Some(user_id) = user_id {
+        query = query.filter(shifts::opened_by.eq(user_id));
+    }
+    let rows: Vec<ShiftRow> = query
         .order((shifts::opened_at.desc(), shifts::id.desc()))
         .select(ShiftRow::as_select())
         .load(conn)?;
@@ -338,7 +349,7 @@ mod tests {
         let karim = second_cashier(&mut conn);
         let mine = insert(&mut conn, &opening(OWNER, 21, 9, 100)).unwrap().id;
         let theirs = insert(&mut conn, &opening(karim, 22, 9, 100)).unwrap().id;
-        let ids: Vec<i32> = list_between(&mut conn, SHOP, moment(21, 0), moment(23, 0))
+        let ids: Vec<i32> = list_between(&mut conn, SHOP, moment(21, 0), moment(23, 0), None)
             .unwrap()
             .into_iter()
             .map(|s| s.id)
@@ -346,12 +357,23 @@ mod tests {
         assert_eq!(ids, vec![theirs, mine]);
         // Half open: the first moment of the window is in, the moment the
         // window ends is out.
-        let ids: Vec<i32> = list_between(&mut conn, SHOP, moment(21, 9), moment(22, 9))
+        let ids: Vec<i32> = list_between(&mut conn, SHOP, moment(21, 9), moment(22, 9), None)
             .unwrap()
             .into_iter()
             .map(|s| s.id)
             .collect();
         assert_eq!(ids, vec![mine]);
+        // The manager's list narrowed to one person, over the same window a
+        // narrower one already proved: the whole-shop answer above holds
+        // both rows, and naming a user here is what tells that filter apart
+        // from the window one.
+        let ids: Vec<i32> =
+            list_between(&mut conn, SHOP, moment(21, 0), moment(23, 0), Some(karim))
+                .unwrap()
+                .into_iter()
+                .map(|s| s.id)
+                .collect();
+        assert_eq!(ids, vec![theirs]);
         let ids: Vec<i32> = list_for_user(&mut conn, SHOP, karim)
             .unwrap()
             .into_iter()

@@ -236,7 +236,10 @@ pub fn router_with_origin(
         // The static segment before the `{id}` one: matchit prefers a
         // literal to a parameter, so `/till/shifts/open` never reaches
         // `get_one` with "open" where an id should be.
-        .route("/till/shifts", post(routes::till::open))
+        .route(
+            "/till/shifts",
+            get(routes::till::list).post(routes::till::open),
+        )
         .route("/till/shifts/open", get(routes::till::open_shift))
         .route("/till/shifts/{id}", get(routes::till::get_one))
         .route("/till/shifts/{id}/close", post(routes::till::close))

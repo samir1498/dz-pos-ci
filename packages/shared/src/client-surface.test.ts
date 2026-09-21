@@ -107,7 +107,7 @@ const SURFACE: Readonly<Record<string, readonly string[]>> = {
     "supplierStatement",
   ],
   support: ["supportBundle"],
-  till: ["openShift", "closeShift", "getOpenShift", "getShift"],
+  till: ["openShift", "closeShift", "getOpenShift", "getShift", "listShifts"],
   users: ["listUsers", "createUser", "setUserPin", "deactivateUser", "reactivateUser"],
 };
 

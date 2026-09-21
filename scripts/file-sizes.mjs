@@ -26,8 +26,14 @@ const SRC_LIMIT = 600;
  * this it is several suites that have not been named separately yet. */
 const TEST_LIMIT = 1200;
 
-/** Written by ts-rs from the Rust wire types; not ours to shorten. */
-const IGNORED = [/^packages\/shared\/src\/generated\//];
+/** Generated, not written by hand, and not ours to shorten: the ts-rs
+ * bindings from the Rust wire types, and the TanStack Router file tree,
+ * which grows by construction every time a route file is added regardless
+ * of how small that route is. */
+const IGNORED = [
+  /^packages\/shared\/src\/generated\//,
+  /^apps\/desktop\/src\/routeTree\.gen\.ts$/,
+];
 
 const isTest = (path) =>
   /(^|\/)tests\//.test(path) ||

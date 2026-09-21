@@ -35,6 +35,7 @@ import { Route as SettingsRegimeRouteImport } from "./routes/settings.regime"
 import { Route as SettingsShopRouteImport } from "./routes/settings.shop"
 import { Route as SettingsUsersRouteImport } from "./routes/settings.users"
 import { Route as SuppliersIdRouteImport } from "./routes/suppliers_.$id"
+import { Route as TillShiftsRouteImport } from "./routes/till_.shifts"
 
 const IndexRoute = IndexRouteImport.update({
   id: "/",
@@ -166,6 +167,11 @@ const SuppliersIdRoute = SuppliersIdRouteImport.update({
   path: "/suppliers/$id",
   getParentRoute: () => rootRouteImport,
 } as any)
+const TillShiftsRoute = TillShiftsRouteImport.update({
+  id: "/till_/shifts",
+  path: "/till/shifts",
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
@@ -193,6 +199,7 @@ export interface FileRoutesByFullPath {
   "/settings/shop": typeof SettingsShopRoute
   "/settings/users": typeof SettingsUsersRoute
   "/suppliers/$id": typeof SuppliersIdRoute
+  "/till/shifts": typeof TillShiftsRoute
   "/settings/": typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -220,6 +227,7 @@ export interface FileRoutesByTo {
   "/settings/shop": typeof SettingsShopRoute
   "/settings/users": typeof SettingsUsersRoute
   "/suppliers/$id": typeof SuppliersIdRoute
+  "/till/shifts": typeof TillShiftsRoute
   "/settings": typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -249,6 +257,7 @@ export interface FileRoutesById {
   "/settings/shop": typeof SettingsShopRoute
   "/settings/users": typeof SettingsUsersRoute
   "/suppliers_/$id": typeof SuppliersIdRoute
+  "/till_/shifts": typeof TillShiftsRoute
   "/settings/": typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -279,6 +288,7 @@ export interface FileRouteTypes {
     | "/settings/shop"
     | "/settings/users"
     | "/suppliers/$id"
+    | "/till/shifts"
     | "/settings/"
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -306,6 +316,7 @@ export interface FileRouteTypes {
     | "/settings/shop"
     | "/settings/users"
     | "/suppliers/$id"
+    | "/till/shifts"
     | "/settings"
   id:
     | "__root__"
@@ -334,6 +345,7 @@ export interface FileRouteTypes {
     | "/settings/shop"
     | "/settings/users"
     | "/suppliers_/$id"
+    | "/till_/shifts"
     | "/settings/"
   fileRoutesById: FileRoutesById
 }
@@ -354,6 +366,7 @@ export interface RootRouteChildren {
   PurchasesIdRoute: typeof PurchasesIdRoute
   PurchasesNewRoute: typeof PurchasesNewRoute
   SuppliersIdRoute: typeof SuppliersIdRoute
+  TillShiftsRoute: typeof TillShiftsRoute
 }
 
 declare module "@tanstack/react-router" {
@@ -540,6 +553,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof SuppliersIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    "/till_/shifts": {
+      id: "/till_/shifts"
+      path: "/till/shifts"
+      fullPath: "/till/shifts"
+      preLoaderRoute: typeof TillShiftsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -590,6 +610,7 @@ const rootRouteChildren: RootRouteChildren = {
   PurchasesIdRoute: PurchasesIdRoute,
   PurchasesNewRoute: PurchasesNewRoute,
   SuppliersIdRoute: SuppliersIdRoute,
+  TillShiftsRoute: TillShiftsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

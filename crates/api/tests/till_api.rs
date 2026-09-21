@@ -820,3 +820,256 @@ async fn the_offline_replay_path_rings_and_tags_once_and_is_never_refused() {
     );
     assert_eq!(tagged[0]["entity_id"], first["id"]);
 }
+
+// ---------------------------------------------------------------------------
+// T7: the shift list a manager runs the floor off
+// ---------------------------------------------------------------------------
+
+/// Overwrites a shift's `opened_at` directly on the file, the only way this
+/// suite can put a row outside the default day window: the API never takes a
+/// moment on either DTO (`dto/till.rs`'s own doc), so a test that wants one
+/// on the wrong day has to plant it the way a phone's drifted clock never
+/// could.
+fn backdate_shift(db: &std::path::Path, id: i64, opened_at: &str) {
+    use diesel::prelude::*;
+    let mut conn = dzpos_core::db::open(db).expect("the test's shop file will not open");
+    diesel::sql_query("UPDATE shifts SET opened_at = ? WHERE id = ?")
+        .bind::<diesel::sql_types::Text, _>(opened_at)
+        .bind::<diesel::sql_types::Integer, _>(id as i32)
+        .execute(&mut conn)
+        .expect("the test could not backdate the shift");
+}
+
+#[tokio::test]
+async fn a_cashier_is_refused_the_list_naming_the_permission() {
+    let (_dir, app) = app();
+    let (status, body) = call_as(&app, "GET", "/till/shifts", None, common::CASHIER_SESSION).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert_eq!(code(&body), "forbidden");
+    assert_eq!(body["error"]["permission"], "see_reports", "{body}");
+}
+
+#[tokio::test]
+async fn a_manager_reads_the_shop_shifts_newest_first_row_only() {
+    let (_dir, app, staff) = app_with_two_cashiers();
+
+    let (status, first) = call_as(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 100_000 })),
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{first}");
+    let (status, second) = call_as(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 200_000 })),
+        common::SECOND_CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{second}");
+
+    let (status, body) = call_as(&app, "GET", "/till/shifts", None, common::MANAGER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let rows = body.as_array().expect("a list, not a report");
+    let ids: Vec<i64> = rows.iter().map(|r| r["id"].as_i64().unwrap()).collect();
+    // Newest first: the second cashier opened after the first, and neither
+    // row carries a takings figure or an expected one — a row, not a report.
+    assert_eq!(
+        ids,
+        vec![
+            second["id"].as_i64().unwrap(),
+            first["id"].as_i64().unwrap()
+        ]
+    );
+    assert_eq!(rows[0]["opened_by"], staff.second_cashier, "{body}");
+    assert_eq!(rows[1]["opened_by"], staff.cashier, "{body}");
+    assert!(
+        rows[0].get("takings").is_none(),
+        "the list answered a report, not a row: {body}"
+    );
+}
+
+#[tokio::test]
+async fn a_short_drawer_reads_the_same_in_the_list_as_on_its_own_and_user_id_narrows_it() {
+    let (_dir, app, staff) = app_with_two_cashiers();
+
+    let (status, first) = call_as(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 100_000 })),
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{first}");
+    let first_id = first["id"].as_i64().unwrap();
+    let (status, second) = call_as(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 200_000 })),
+        common::SECOND_CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{second}");
+
+    // Nothing was sold, so the drawer should hold its float; 98 000 is two
+    // thousand centimes short, and short is negative.
+    let (status, closed) = call_as(
+        &app,
+        "POST",
+        &format!("/till/shifts/{first_id}/close"),
+        Some(json!({ "counted_centimes": 98_000, "note": "un billet manquant" })),
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{closed}");
+
+    // The list and the single read are two routes to the same row, and the
+    // three money fields must not differ between them by one centime.
+    let (status, one) = call_as(
+        &app,
+        "GET",
+        &format!("/till/shifts/{first_id}"),
+        None,
+        common::MANAGER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{one}");
+    let (status, body) = call_as(
+        &app,
+        "GET",
+        &format!("/till/shifts?user_id={}", staff.cashier),
+        None,
+        common::MANAGER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let rows = body.as_array().expect("a list, not a report");
+    // `user_id` over the wire narrows to that cashier: the second cashier's
+    // open drawer is not in it.
+    assert_eq!(rows.len(), 1, "{body}");
+    let row = &rows[0];
+    assert_eq!(row["id"], first_id, "{body}");
+    assert_eq!(row["expected_at_close_centimes"], 100_000);
+    assert_eq!(row["counted_centimes"], 98_000);
+    assert_eq!(row["difference_centimes"], -2_000);
+    for field in [
+        "expected_at_close_centimes",
+        "counted_centimes",
+        "difference_centimes",
+        "note",
+    ] {
+        assert_eq!(
+            row[field], one["shift"][field],
+            "{field}: list {body} vs one {one}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn another_shops_shifts_never_appear_in_this_ones_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
+    common::sign_in_as(&path, SHOP, "manager", common::MANAGER_SESSION);
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    let app = dzpos_api::router(state, &token());
+
+    let (status, ours) = call(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 50_000 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{ours}");
+
+    // The same file, answered as shop 2 (the pattern
+    // `crates/api/tests/purchases_api.rs::other_shop` uses): its own owner,
+    // its own drawer, on the same SQLite file this test's own list is asked
+    // against.
+    const OTHER_SHOP: i32 = 2;
+    let elsewhere = common::signed_in_router(&path, OTHER_SHOP, &token());
+    let (status, theirs) = call(
+        &elsewhere,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 90_000 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{theirs}");
+
+    let (status, body) = call_as(&app, "GET", "/till/shifts", None, common::MANAGER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let ids: Vec<i64> = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(ids, vec![ours["id"].as_i64().unwrap()]);
+    assert!(
+        !ids.contains(&theirs["id"].as_i64().unwrap()),
+        "another shop's shift leaked into this one's list: {body}"
+    );
+}
+
+#[tokio::test]
+async fn a_day_window_excludes_a_shift_opened_outside_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.db");
+    common::sign_in(&path, SHOP);
+    common::sign_in_as(&path, SHOP, "manager", common::MANAGER_SESSION);
+    let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
+    let app = dzpos_api::router(state, &token());
+
+    let (status, opened) = call(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 70_000 })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{opened}");
+    let id = opened["id"].as_i64().unwrap();
+    backdate_shift(&path, id, "2020-01-05 09:00:00");
+
+    // No window named: the default is today, on the shop's calendar, and a
+    // shift planted on a Sunday in January of 2020 is not on it.
+    let (status, today) = call_as(&app, "GET", "/till/shifts", None, common::MANAGER_SESSION).await;
+    assert_eq!(status, StatusCode::OK, "{today}");
+    let ids: Vec<i64> = today
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_i64().unwrap())
+        .collect();
+    assert!(
+        !ids.contains(&id),
+        "the default window answered a shift from 2020: {today}"
+    );
+
+    // The same day, named directly, is what brings it back — proving the
+    // shift above was excluded by the window and not lost some other way.
+    let (status, that_day) = call_as(
+        &app,
+        "GET",
+        "/till/shifts?from=2020-01-05&to=2020-01-05",
+        None,
+        common::MANAGER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{that_day}");
+    let ids: Vec<i64> = that_day
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(ids, vec![id], "{that_day}");
+}

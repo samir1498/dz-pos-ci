@@ -49,6 +49,43 @@ const SHOP: i32 = 1;
 /// that filter deleted.
 const OTHER_SHOP: i32 = 2;
 
+/// A shift opened and closed clean, at the two moments and the float named:
+/// `list`'s own fixture wants several of these and nothing about the reason
+/// each closed clean, so this is the shared shape rather than three open/close
+/// pairs written out by hand.
+fn opened_and_closed(
+    conn: &mut SqliteConnection,
+    shop: i32,
+    user: i32,
+    opened_at: NaiveDateTime,
+    closed_at: NaiveDateTime,
+    centimes: i64,
+) -> i32 {
+    let made = shifts::open(
+        conn,
+        shop,
+        user,
+        NewShift {
+            opened_at: Some(opened_at),
+            opening_cash: Money::centimes(centimes),
+        },
+    )
+    .unwrap();
+    shifts::close(
+        conn,
+        shop,
+        made.id,
+        user,
+        TillCount {
+            counted: Money::centimes(centimes),
+            note: None,
+            at: Some(closed_at),
+        },
+    )
+    .unwrap();
+    made.id
+}
+
 /// Midnight opening the fixture day and midnight opening the next: the window
 /// the "which sales belonged to no shift" question is asked over.
 fn the_whole_day() -> (NaiveDateTime, NaiveDateTime) {
@@ -1076,4 +1113,72 @@ fn the_window_sales_outside_a_shift_is_asked_over_has_its_own_two_edges() {
     assert_eq!(found.cash, Money::centimes(3_000));
     assert!(!ids.contains(&at_the_end));
     assert!(!ids.contains(&before));
+}
+
+#[test]
+fn list_answers_a_day_window_newest_first_narrowed_to_this_shop_and_optionally_one_person() {
+    // T7's read: a manager's list, row only. `report`'s own takings figure is
+    // a query per row and this fixture never reads one back — only which
+    // rows come out and in what order.
+    let (_dir, mut conn) = open_temp();
+    a_second_cashier(&mut conn);
+
+    // Yesterday's, excluded by the window alone: a real, closed shift of
+    // this shop's own Amina, so nothing but the day filter drops it.
+    let yesterday = day().pred_opt().unwrap();
+    let before = opened_and_closed(
+        &mut conn,
+        SHOP,
+        AMINA,
+        yesterday.and_hms_opt(8, 0, 0).unwrap(),
+        yesterday.and_hms_opt(9, 0, 0).unwrap(),
+        0,
+    );
+    let amina = opened_and_closed(&mut conn, SHOP, AMINA, at(8, 0, 0), at(9, 0, 0), 100_000);
+    let karim = opened_and_closed(&mut conn, SHOP, KARIM, at(10, 0, 0), at(11, 0, 0), 50_000);
+
+    // Another shop's shift for the same person: the one way to tell the
+    // `shop_id` filter from the `user_id` one (`a_second_shop`'s own reason).
+    a_second_shop(&mut conn);
+    let elsewhere = shifts::open(
+        &mut conn,
+        OTHER_SHOP,
+        AMINA,
+        NewShift {
+            opened_at: Some(at(12, 0, 0)),
+            opening_cash: Money::ZERO,
+        },
+    )
+    .unwrap()
+    .id;
+
+    // Newest first: Karim opened after Amina today, and neither yesterday's
+    // shift nor the other shop's leaks past their filters.
+    let ids: Vec<i32> = shifts::list(&mut conn, SHOP, day(), day(), None)
+        .unwrap()
+        .iter()
+        .map(|s| s.id)
+        .collect();
+    assert_eq!(ids, vec![karim, amina]);
+    assert!(
+        !ids.contains(&before) && !ids.contains(&elsewhere),
+        "{ids:?}"
+    );
+
+    // Naming a person narrows to that person alone.
+    let just_amina: Vec<i32> = shifts::list(&mut conn, SHOP, day(), day(), Some(AMINA))
+        .unwrap()
+        .iter()
+        .map(|s| s.id)
+        .collect();
+    assert_eq!(just_amina, vec![amina]);
+
+    // Both ends of the window are shop-calendar days and both are included:
+    // widening `from` back to yesterday brings the excluded shift back in.
+    let wider: Vec<i32> = shifts::list(&mut conn, SHOP, yesterday, day(), None)
+        .unwrap()
+        .iter()
+        .map(|s| s.id)
+        .collect();
+    assert_eq!(wider, vec![karim, amina, before]);
 }
