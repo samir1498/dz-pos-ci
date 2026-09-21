@@ -15,9 +15,9 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::cash_refund::{CashRefund, CashRefundRow, CashRefundRowWrite};
-use crate::money::Money;
 use crate::models::debt::DebtKind;
 use crate::models::sql_types::DocumentKind;
+use crate::money::Money;
 use crate::schema::{cash_refunds, debt_allocations, debt_ledger, documents};
 
 /// Writes the row that says the drawer opened. The unique index on
@@ -136,10 +136,20 @@ pub fn still_to_hand_back(
         None => {
             let total: Option<i64> = debt_allocations::table
                 .inner_join(debt_ledger::table)
+                // Both sides of the join are scoped (rule 3). The allocation
+                // alone is not enough: the join follows a foreign key this
+                // query does not own, and a query that narrows one table by
+                // shop and reads a column off another unnarrowed is the shape
+                // a cross-shop read hides in. Today the key makes the two
+                // agree; the filter is what keeps that true when it stops
+                // being the only way a row gets here.
                 .filter(debt_allocations::shop_id.eq(shop_id))
+                .filter(debt_ledger::shop_id.eq(shop_id))
                 .filter(debt_allocations::document_id.eq(document_id))
                 .filter(debt_ledger::kind.eq(DebtKind::Payment))
-                .select(sql::<Nullable<BigInt>>("SUM(debt_allocations.amount_centimes)"))
+                .select(sql::<Nullable<BigInt>>(
+                    "SUM(debt_allocations.amount_centimes)",
+                ))
                 .first(conn)?;
             Money::centimes(total.unwrap_or(0))
         }
