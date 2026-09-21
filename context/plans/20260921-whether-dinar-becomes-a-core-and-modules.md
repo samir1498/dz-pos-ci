@@ -25,6 +25,9 @@ tasks:
   - id: 'D6'
     desc: 'The decision, written against criteria set down before the evidence arrives'
     status: 'pending'
+  - id: 'D7'
+    desc: 'The brainstorm on module shape: one subagent per candidate with pros and cons against the same constraints, then the session judges with advisor guidance; Samir listed the candidates on 2026-09-21'
+    status: 'pending'
 ---
 # Whether Dinar becomes a core and modules
 
@@ -154,13 +157,12 @@ the match is still exhaustive. **Cost 3 is paid**: the gate walk only had to
 learn to read more than one router if permissions split per module, and they do
 not.
 
-**Runtime plugins are off the table**, and the reason is the one Samir gave
-rather than a technical preference. Rust has no stable way to load code at
-runtime, so a real plugin needs a C boundary or an embedded scripting language
-inside Dinar, which is the most complex option available and the opposite of
-what he asked for. A doctor build and a shop build sharing a core comes from
-compiling one binary per trade out of shared crates instead: still typed, still
-checked, nothing loaded at runtime.
+**Loading Rust code into the running binary is out**; that is the one
+shape ruled out, not plugins as such. Samir said the same afternoon that what
+he means by plugin is closer to a microservice with an API boundary, and that a
+full rewrite on a stack built for plugins is on the table. So the module shape
+is an open question with several candidates, and D7 below is how it gets
+answered rather than argued.
 
 **The schema is the one thing left open.** Samir said he is not sure about the
 database, and it is the right thing to be unsure about: per-module migrations
@@ -267,6 +269,79 @@ criteria: the number from D1, the size of D3's tear list, and whether D5
 found a cost that cannot be paid. Recorded in this file with the date and
 who decided, the way the rulings are. Size S.
 
+## D7: the brainstorm on module shape, for after this pass
+
+Samir, 2026-09-21, 15:29, on how the module question gets worked when the
+current loop closes: consider every case, one subagent brainstorms each with
+its pros and cons, then the session is the final judge with the advisor's
+guidance. The `superpowers` plugin's brainstorming skill is used if it earns
+its place. Nothing below is decided; it is the list to start from so the
+brainstorm does not begin by rediscovering it.
+
+**The constraints every candidate is judged against, the same for all:**
+
+- One offline desktop in a shop, a phone on the LAN, no server. A power cut
+  is an ordinary day.
+- Windows only. Shops buy a PC for the till and it runs Windows 10, sometimes
+  still Windows 7. Linux and macOS are not targets. This is a hard filter:
+  Tauri's WebView2 stopped at version 109 on Windows 7 in January 2023, and
+  Electron dropped Windows 7 at version 23, so any candidate has to say what
+  it does on a Windows 7 machine, and the brainstorm's first job is to find
+  out whether Windows 7 is real in the shops Anouar knows or a guess.
+- Money writes stay atomic. A sale writes the document, its lines, the stock
+  movement and the ledger in one transaction today
+  (`crates/core/src/services/sales.rs:228`), and a shape that gives that up
+  has to say how it gets it back.
+- The safety Anouar actually asked for: adding a module cannot break an
+  existing one. Today five source-walk tests and an exhaustive permission
+  match give that; a candidate says which of those survive it.
+- Less complex is what Samir wants. A candidate that is elegant and heavier
+  loses to one that is plain and lighter.
+- Permissions stay one global list (decided above).
+
+**The candidates, Samir's list plus the ones it implies:**
+
+1. **Compile-time domains.** One workspace, a crate per trade depending on a
+   kernel crate, one binary built per trade with cargo features. The current
+   code, rearranged. The cheapest and the one the measurements on this page
+   favour.
+2. **Microservice-shaped modules on one machine, one database.** Each module
+   is its own process talking to the core over HTTP on localhost, all reading
+   one SQLite file. Has to answer the single-writer lock and the transaction
+   question.
+3. **The same, with data separated per module**, in one of three ways: one
+   database with a table prefix per module; one SQLite file per module
+   `ATTACH`ed to the core's; or a schema per module, which SQLite does not
+   have and which would mean leaving SQLite. Each is its own case because the
+   foreign keys and the joins the dashboard needs behave differently in each.
+4. **Keep Tauri and Rust, split the kernel from retail, and make retail the
+   first module on the current stack.** The in-process version of the
+   plugin idea: a trait per extension point, modules registered at startup,
+   one binary. Where D4's boundary test leads if it is followed through.
+5. **A full rewrite on a stack built for plugins.** The candidates worth
+   naming so they are priced rather than imagined: .NET on Windows (WPF or
+   WinUI, plugins as assemblies loaded at runtime, the shape most Windows
+   till software already has); Electron or a plain web app with a local
+   server and JavaScript plugins; a Rust core hosting **WebAssembly**
+   modules (`wasmtime` or `extism`), which is the one way to get real
+   runtime plugins without leaving Rust and is not the C boundary the
+   earlier paragraph dismissed.
+6. **Fork per trade.** Copy the repo, delete what does not fit, lift the
+   shared parts out later with two real cases in hand. Not a module system
+   at all, which is why it belongs on the list: it is the baseline every
+   other candidate has to beat.
+7. **The Odoo shape as Odoo actually does it.** One process, one database, a
+   module registry, models extended at runtime by a dynamic ORM. Priced
+   honestly rather than admired, because it is the reference Anouar named.
+
+**How it runs.** One subagent per numbered case, all handed the same
+constraints block above, each returning pros, cons, what it costs to get from
+today's code to it, what it does on Windows 7, and the one thing that would
+kill it. Two agents at a time within the four-agent cap. Then the session
+reads all seven, calls the advisor on the comparison, and writes D6 against
+the criteria already set down. Anything a subagent invents beyond its case is
+noted and not acted on.
+
 ## What this plan does not do
 
 It does not design the module system, it does not name the crates beyond
@@ -279,6 +354,6 @@ anybody reads it.
 
 D1 goes out today because it is a question to a person and everything else
 is cheaper once it is answered. D2 is Samir's research and runs on its own
-clock. D4 waits for T11. D3 waits for D2. D5 waits for D1. D6 waits for all
-of them, and the current loop's remaining work finishes regardless, because
+clock. D4 waits for T11. D3 waits for D2. D5 waits for D1. D7 runs when the current loop closes and D6 waits for it and the rest,
+and the current loop's remaining work finishes regardless, because
 a till that opens and closes is worth having in any trade that takes cash.
