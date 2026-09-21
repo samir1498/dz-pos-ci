@@ -20,7 +20,7 @@ tasks:
     desc: 'Draw the kernel line as a rule with a test, no code moved, worth doing either way'
     status: 'pending'
   - id: 'D5'
-    desc: 'The composition spike: can migrations, the permission match and the gate walk survive being split per module'
+    desc: 'Cut to one question on 2026-09-21: only the database is open, because global permissions settled the other two. Waits for a second product to have a name'
     status: 'pending'
   - id: 'D6'
     desc: 'The decision, written against criteria set down before the evidence arrives'
@@ -128,6 +128,45 @@ So D1 is answered and the plan below is not cancelled by it. D4 becomes the
 task that gives him what he is actually asking for, and D2, D3 and D5 wait
 for a product that has a name.
 
+## What Samir decided, 2026-09-21
+
+Asked how the permission list should work if Dinar ever grows a second trade,
+he said a global model, and that less complexity is what he wants. Shown the
+build-time middle option, where each trade crate declares its permissions and a
+macro stitches them into one enum at compile time, he turned it down.
+
+**Permissions stay one global list.** Every permission lives in the one enum in
+`crates/core/src/services/permissions.rs:39`, doctor ones added to the same
+list on the day they exist, and the role table stays the exhaustive match at
+`:206`. No generated code, no runtime registry. A shop build carries a few
+variants it never uses, which costs nothing: the whole table is about twenty
+lines for fifteen permissions.
+
+This is reversible for free. Every check in the codebase is
+`permissions::require(role, Permission::X)` and reads exactly the same whether
+the enum was written by hand or generated, so the generated version can be
+adopted the day the hand-written list gets genuinely ugly with three trades in
+it, without touching a single call site.
+
+Two of the four costs below fall out of that decision. **Cost 2 is paid**: the
+compile error that caught a real mistake twice in September survives, because
+the match is still exhaustive. **Cost 3 is paid**: the gate walk only had to
+learn to read more than one router if permissions split per module, and they do
+not.
+
+**Runtime plugins are off the table**, and the reason is the one Samir gave
+rather than a technical preference. Rust has no stable way to load code at
+runtime, so a real plugin needs a C boundary or an embedded scripting language
+inside Dinar, which is the most complex option available and the opposite of
+what he asked for. A doctor build and a shop build sharing a core comes from
+compiling one binary per trade out of shared crates instead: still typed, still
+checked, nothing loaded at runtime.
+
+**The schema is the one thing left open.** Samir said he is not sure about the
+database, and it is the right thing to be unsure about: per-module migrations
+that compose is the largest single piece of work in the idea. See D5 below,
+which is now a much smaller question than the one it was written as.
+
 ## The two shapes, and only one is affordable
 
 **Build-time verticals.** A `dzpos-kernel` crate holding money, auth, users,
@@ -203,13 +242,24 @@ it stops the boundary getting harder to draw while the answer is pending,
 and on the day of a split the line is already proven. Roughly a day.
 Depends on T11 being done first, or it will fail on the rings. Size S.
 
-**D5: the composition spike.** Take the four costs above and price them, in
-a throwaway branch that is never merged: can diesel migrations be composed
-from more than one source directory, can the permission match stay
-exhaustive with a second crate contributing variants, can the gate walk read
-two routers. A week is too long; two days and an honest answer of "this one
-does not compose" is the result we want. Only start it if D1 comes back with
-more than two trades. Size M.
+**D5: the migration spike, cut down from three questions to one.** Samir's
+decision on 2026-09-21 answered two of the three it was written for: the
+permission match stays exhaustive because permissions stay global, and the
+gate walk keeps reading one router for the same reason. What is left is the
+database, which he said he was unsure about, and it is the part worth being
+unsure about.
+
+The question, in a throwaway branch that is never merged: can diesel
+migrations be composed from more than one source directory, or does a second
+trade have to put its tables in the same ordered list as the shop's. The
+cheap answer, which needs no spike, is one shared list for everything: a shop
+install carries the doctor tables sitting empty, and every module's migrations
+live in one sequence in one repo. That costs nothing at this scale and is
+what "less complex" buys. The spike is only worth running if that shared list
+turns out to be unacceptable for a reason nobody has named yet.
+
+So: not started, and not startable until a second product has a name. Size S
+now rather than M. Still gated on D1 naming a trade.
 
 **D6: the decision.** Written against criteria set down before the evidence,
 so the evidence is not read backwards to fit a preference already held. The
