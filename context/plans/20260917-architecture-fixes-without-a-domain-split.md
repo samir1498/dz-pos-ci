@@ -1,7 +1,7 @@
 ---
 title: 'Architecture fixes without a domain split'
 slug: 'architecture-fixes-without-a-domain-split'
-status: 'active'
+status: 'done'
 category: 'refactor'
 created: 20260917
 tldr: 'Every problem the architecture review found has a fix that costs one file or one function. None of them needs the layer split turned into domain modules, and the dto.rs split has to land before the Lumina branches start adding wire types to it.'
@@ -36,16 +36,17 @@ tasks:
     status: 'done'
   - id: 'T11'
     desc: 'The three rings the ring walk still pins: users, sessions, audit and preferences import each other. Needs its own page saying what the shared piece is before anything moves; RINGS_STILL_OPEN in crates/core/tests/services_go_through_services.rs is the list'
-    status: 'pending'
+    status: 'done'
   - id: 'T10'
     desc: 'Burn the file-size list down. Samir, 2026-09-17: no huge files. The gate is in and pins the list in scripts/file-sizes.json, which is where the count lives. suppliers.tsx was split on 2026-09-19 and is 168 lines with its parts under -suppliers/; the ones still worth splitting are products.tsx at 929, customers_.$id.tsx at 897 and documents.tsx at 724, because a screen that long is the one nobody reads before changing it. The Rust services on the list are a separate argument and stay pinned for now'
-    status: 'pending'
+    status: 'done'
 acceptance:
   - 'No file in crates/api is over a thousand lines and no import outside dto/ changed'
   - 'No service imports a sibling that imports it back'
   - 'No service calls a repo that belongs to another domain'
   - 'No component computes a total the API could answer, and no f64 sits anywhere near an amount in any app'
   - 'scripts/file-sizes.json is shorter than the 32 entries it started with, and no entry grew'
+completed_at: '2026-09-21'
 ---
 # Architecture fixes without a domain split
 

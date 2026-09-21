@@ -9,7 +9,7 @@ tldr: 'Anouar made Lumina the benchmark on 2026-09-17. Seven real gaps; a weeken
 priority: 95
 entries:
   - ref: 'architecture-fixes-without-a-domain-split'
-    status: 'active'
+    status: 'done'
     note: 'Goes first. Splitting crates/api/src/dto.rs by domain has to land before the Lumina branches start appending wire types to it in parallel'
   - ref: 'invoice-layouts-a-shop-can-choose'
     status: 'done'
