@@ -1,7 +1,7 @@
 ---
 title: 'Closing loop'
 slug: 'closing-loop'
-status: 'active'
+status: 'done'
 category: 'loops'
 created: 20260913
 tldr: 'Finish what a session can finish without a native speaker, a comptable, or a printer: Dinar rename, M5 sweep, laptop clone, M1 T6 dropped'

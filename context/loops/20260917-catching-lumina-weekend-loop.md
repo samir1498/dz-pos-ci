@@ -1,7 +1,7 @@
 ---
 title: 'Catching Lumina: the weekend loop'
 slug: 'catching-lumina-weekend-loop'
-status: 'active'
+status: 'done'
 category: 'loops'
 created: 20260917
 tldr: 'Runs three plans unattended across 18 and 19 September: the dto split first because the other branches all touch that file, then the facture layout picker and three layouts, then the phone in three languages, then the rest of the architecture fixes. Work goes to named agents; the session keeps every ruling and every review verdict.'
