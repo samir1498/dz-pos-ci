@@ -1081,8 +1081,8 @@ line it named. What came back:
 
 The day's `just ci` on `main`: the full run on `ca584b0` green on all four
 jobs (rust, windows, coverage, web); the Restricted job failed a shell test
-on a pipe race in the test script itself, fixed in `81c6f1e`; one more run
-on `f7d0c3d` closes the day. The loop is closed; what it leaves for Samir is
+on a pipe race in the test script itself, fixed in `81c6f1e`; the run on
+`f7d0c3d`, the day's last merge, is green on both workflows (20:55). The loop is closed; what it leaves for Samir is
 the refund question above, the modular decision plan, the amount in words,
 and the scanner's last row.
 
