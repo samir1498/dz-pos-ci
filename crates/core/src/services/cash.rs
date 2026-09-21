@@ -20,24 +20,28 @@
 //!   mode is cash.
 //!
 //! What goes out
-//! - Refunds: nothing. An avoir credits the customer's ledger and brings the
-//!   goods back on `return` movements (`services::avoir`); no row anywhere
-//!   says the drawer opened for it, and an avoir issued by a cancellation
-//!   reverses a sale the sales column has already dropped. The field is here
-//!   and reads zero so the day an avoir does pay somebody back in cash, there
-//!   is one place to fill in. Until such a row exists this figure is off by
-//!   whatever cash a shop actually handed back over the counter, and no test
-//!   here can catch that: the file has nothing to compare against.
-//!
-//! A cancelled sale leaves the day it was sold on and appears on no other. A
-//! ticket rung up on Monday and annulled on Wednesday is out of Monday's
-//! takings, which is right for Monday's own figure and wrong for the drawer
-//! on Wednesday, where the money physically went back; nothing marks the day
-//! it left.
+//! - Refunds: cash handed back over the counter, a `cash_refunds` row per
+//!   reversal that was settled in notes (`services::cash_refunds`). Two paths
+//!   write one: an avoir against a facture that is paid for, and a cancelled
+//!   cash ticket or facture, which is where an anonymous customer's refund
+//!   lands because there is no ledger to credit. A reversal settled on the
+//!   ledger writes nothing here, because no notes moved. The row is dated the
+//!   day the cash changed hands, so a ticket sold Monday and refunded
+//!   Wednesday lowers Wednesday.
 //! - Cash to suppliers: a `payment` row of `supplier_ledger` whose mode is
 //!   cash.
 //! - Expenses: everything the month or the day was filed under, whatever the
 //!   category.
+//!
+//! A cancelled sale leaves the day it was sold on unless its cash went back,
+//! and then it stays. A ticket rung up on Monday and annulled on Wednesday
+//! with nothing handed over is out of Monday's takings, which is right: that
+//! money never stayed. A ticket rung up on Monday and refunded in cash on
+//! Wednesday is still in Monday's takings, because the drawer did take it on
+//! Monday, and the refund is out of Wednesday's. Over the month the two net
+//! to nothing on that ticket, and neither day is short by it twice. That
+//! second arm is in `repos::cash::sales_of`, and without it the reversal is
+//! felt twice.
 //!
 //! The card figure has the same shape on the way in, because a shop counting
 //! its drawer wants to know what the TPE took that the drawer will never
@@ -54,7 +58,7 @@ use crate::models::debt::PaymentMethod;
 use crate::money::{Money, PaymentMode};
 use crate::repos::cash as repo;
 use crate::services::clock::Period;
-use crate::services::expenses;
+use crate::services::{cash_refunds, expenses};
 
 /// Money that came in over the period.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,8 +84,9 @@ impl Takings {
 /// Cash that left over the period.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Outgoings {
-    /// Money given back to a customer. Always zero today; see the module
-    /// comment.
+    /// Cash handed back over the counter on a reversal, on the day the notes
+    /// changed hands. A reversal settled on a customer's ledger is not here:
+    /// no notes moved.
     pub refunds: Money,
     pub supplier_payments: Money,
     pub expenses: Money,
@@ -140,8 +145,7 @@ pub fn position(
         )?,
     };
     let cash_out = Outgoings {
-        // See the module comment: no avoir moves cash in this app.
-        refunds: Money::ZERO,
+        refunds: cash_refunds::total_for_shop(conn, shop_id, first_moment, after)?,
         supplier_payments: repo::supplier_payments(
             conn,
             shop_id,
@@ -224,4 +228,25 @@ pub fn takings_for(
             PaymentMethod::Cash,
         )?,
     })
+}
+
+/// The cash one person handed back over one stretch of the clock: what comes
+/// off that drawer's expected figure at the close.
+///
+/// Here beside `takings_for` and not asked of `services::cash_refunds`
+/// directly, so a till shift keeps putting all of its money questions to one
+/// module. The window is half open the same way, so a refund handed over at
+/// the second a shift closed belongs to the next one and is counted once.
+///
+/// By the person who handed the notes over and never by whoever rang the
+/// sale. Cashier B refunding cashier A's ticket is B's drawer that is light,
+/// and A's evening is untouched by it.
+pub fn refunds_for(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    from: NaiveDateTime,
+    until: NaiveDateTime,
+) -> Result<Money, CoreError> {
+    cash_refunds::total_for_user(conn, shop_id, user_id, from, until)
 }

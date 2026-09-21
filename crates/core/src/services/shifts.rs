@@ -41,7 +41,7 @@
 //! queue replays after its cashier closed lands here too, because `issued_at`
 //! is the server's to say and it says the moment the sale arrived.
 
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
@@ -82,9 +82,14 @@ pub struct ShiftReport {
     pub shift: Shift,
     /// The cash this person took over the window, read off the ledgers now.
     pub takings: Takings,
+    /// Cash this person handed back over the window on a reversal, read off
+    /// `cash_refunds` now. By whoever handed the notes over and never by
+    /// whoever rang the sale: cashier B refunding cashier A's ticket is B's
+    /// drawer that is light.
+    pub refunds: Money,
     /// What the shop expects them to be holding: `opening_cash` plus the
-    /// takings while the shift is open, and the figure stored at the close
-    /// once it is closed.
+    /// takings less the refunds while the shift is open, and the figure
+    /// stored at the close once it is closed.
     ///
     /// The two are not the same read and are not meant to be. A ticket
     /// annulled on Wednesday drops out of Monday's takings, so a derived
@@ -99,6 +104,22 @@ pub struct ShiftReport {
     /// shift. On the report so a screen showing a live figure can say as of
     /// when.
     pub until: NaiveDateTime,
+    /// How many sales this person rang while holding no drawer at all, over
+    /// the stretch of the day this shift is the one to explain
+    /// (`rung_outside_a_shift` below says which stretch and why).
+    ///
+    /// **Not a figure inside the window.** A sale tagged
+    /// `till.sale_outside_shift` fell inside none of this person's own
+    /// windows, by the definition `tag_if_outside_a_shift` writes it under,
+    /// so a count taken over `opened_at..until` is zero for every shift ever
+    /// opened. The useful question, and the one the plan's own wire-gap
+    /// paragraph asks, is what this person rang before they opened up.
+    ///
+    /// A count and not an amount: what those sales were worth is a second
+    /// question (`sales_outside_a_shift` answers it), and a drawer's count is
+    /// reconciled against the window it was held over. This is the sentence
+    /// that says why the drawer may read over, not a term in the arithmetic.
+    pub rung_outside_shift: i64,
 }
 
 /// This person's sales that fell inside none of their own shifts.
@@ -280,7 +301,16 @@ pub fn close(
         }
         let takings =
             cash::takings_for(conn, shop_id, shift.opened_by, shift.opened_at, closed_at)?;
-        let expected = shift.opening_cash.checked_add(takings.total()?)?;
+        // By whoever handed the notes over, which is this drawer's holder and
+        // never the person who rang the sale. Cashier B refunding cashier A's
+        // ticket is B's drawer that is light, and a filter on the document's
+        // author would take it off A's evening and leave both counts wrong.
+        let refunds =
+            cash::refunds_for(conn, shop_id, shift.opened_by, shift.opened_at, closed_at)?;
+        let expected = shift
+            .opening_cash
+            .checked_add(takings.total()?)?
+            .checked_sub(refunds)?;
         if count.counted != expected && note.is_none() {
             return Err(CoreError::validation(
                 "note",
@@ -366,18 +396,89 @@ pub fn report(
         None => clock::now(),
     };
     let takings = cash::takings_for(conn, shop_id, shift.opened_by, shift.opened_at, until)?;
+    let refunds = cash::refunds_for(conn, shop_id, shift.opened_by, shift.opened_at, until)?;
     let (expected, difference) = match &shift.close {
         // The snapshot, not a fresh sum: see `ShiftReport::expected`.
         Some(close) => (close.expected, Some(close.difference()?)),
-        None => (shift.opening_cash.checked_add(takings.total()?)?, None),
+        // The same arithmetic `close` writes, so the figure on the screen
+        // while the drawer is open is the figure it will be counted against.
+        None => (
+            shift
+                .opening_cash
+                .checked_add(takings.total()?)?
+                .checked_sub(refunds)?,
+            None,
+        ),
     };
+    let rung_outside_shift = rung_outside_a_shift(conn, shop_id, &shift, until)?;
     Ok(ShiftReport {
         shift,
         takings,
+        refunds,
         expected,
         difference,
         until,
+        rung_outside_shift,
     })
+}
+
+/// How many sales this person rang while holding no drawer, over the stretch
+/// of the day this shift has to explain.
+///
+/// **The stretch.** From this person's last close before this shift opened,
+/// whatever day that close was on; from midnight of the day this shift opened
+/// only when they have never closed one. Up to `until` either way.
+///
+/// Their last close and not the later of that and midnight. The floor used to
+/// be `max(midnight, last close)`, which loses every sale rung between an
+/// evening close and midnight: the closing shift's own report ended at its
+/// `closed_at` and never saw them, and the next morning's report started at
+/// midnight and skipped them too, so a till rung at 20:00 with the drawer
+/// shut was counted by nobody. Reaching back to the close is what makes the
+/// two reports meet, and it is why this cannot double-count either: every
+/// stretch begins exactly where the previous one ended.
+///
+/// Not from `opened_at`, for the reason `ShiftReport::rung_outside_shift`
+/// gives — that window is empty by construction.
+///
+/// Through `services::audit` and never `repos::audit`: the log is the only
+/// place this count exists, and one domain reaching into another's repo skips
+/// whatever that domain decides on the way past (architecture.md, the layers
+/// section).
+fn rung_outside_a_shift(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    shift: &Shift,
+    until: NaiveDateTime,
+) -> Result<i64, CoreError> {
+    let last_close = repo::list_for_user(conn, shop_id, shift.opened_by)?
+        .iter()
+        .filter_map(|held| held.close.as_ref().map(|close| close.closed_at))
+        .filter(|closed_at| *closed_at <= shift.opened_at)
+        .max();
+    let from = match last_close {
+        Some(closed_at) => closed_at,
+        // Never closed a drawer, so there is no previous stretch to meet.
+        // Infallible: `NaiveTime::MIN` is midnight and every date has one;
+        // the `and_hms_opt(0, 0, 0)` spelling would hand back an `Option`
+        // this file has no honest way to unwrap.
+        None => shift.opened_at.date().and_time(NaiveTime::MIN),
+    };
+    // A shift whose window somehow ends before the stretch begins counts
+    // nothing rather than reading the range backwards, which SQLite would
+    // answer zero for anyway; saying so here is cheaper than leaving the next
+    // reader to work out that it does.
+    if until <= from {
+        return Ok(0);
+    }
+    audit::count_for_user_between(
+        conn,
+        shop_id,
+        shift.opened_by,
+        audit::ACTION_SALE_OUTSIDE_SHIFT,
+        from,
+        until,
+    )
 }
 
 /// This person's sales over a stretch of the clock that fall inside none of

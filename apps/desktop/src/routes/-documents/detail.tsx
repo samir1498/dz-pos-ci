@@ -62,7 +62,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTranslation, type Key } from "@/i18n";
 
-import { Refusal, day } from "./parts";
+import { RefundChoice, Refusal, day, refundField, type Settlement } from "./parts";
 
 export function DocumentDetail({ id, onClose }: { id: number; onClose: () => void }) {
   const { t } = useTranslation();
@@ -195,6 +195,9 @@ function AvoirPanel({ facture }: { facture: SaleDto }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [qty, setQty] = useState<Record<number, string>>({});
+  // "No notes move" until somebody says otherwise, which is what the wire
+  // carried before the field existed.
+  const [settlement, setSettlement] = useState<Settlement>("ledger");
   const avoirs = useQuery({
     queryKey: saleAvoirsQueryKey(facture.id),
     queryFn: () => api.listAvoirs(facture.id),
@@ -205,11 +208,13 @@ function AvoirPanel({ facture }: { facture: SaleDto }) {
       api.createAvoir(facture.id, {
         lines,
         reason: reason.trim() === "" ? null : reason.trim(),
+        ...refundField(settlement),
       }),
     onSuccess: async () => {
       setOpen(false);
       setQty({});
       setReason("");
+      setSettlement("ledger");
       await everythingItTouched(queryClient, facture.id, facture.customer_id);
     },
   });
@@ -303,6 +308,14 @@ function AvoirPanel({ facture }: { facture: SaleDto }) {
               )}
             </FormField>
 
+            {/* The facture decides what is on offer, not the avoir being
+                written: a credit facture's money is on the account however
+                much of it comes back. No `figures`: what leaves the drawer is
+                the avoir's own `net_to_pay`, which carries no stamp and
+                depends on the quantities above, so the facture's totals would
+                be the wrong number on the first avoir already. */}
+            <RefundChoice document={facture} value={settlement} onChange={setSettlement} />
+
             {write.isError ? <Refusal error={write.error} /> : null}
 
             <DialogFooter>
@@ -385,11 +398,13 @@ function CancelPanel({ document }: { document: SaleDto }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [settlement, setSettlement] = useState<Settlement>("ledger");
   const cancel = useMutation({
-    mutationFn: () => api.cancelSale(document.id, { reason }),
+    mutationFn: () => api.cancelSale(document.id, { reason, ...refundField(settlement) }),
     onSuccess: async () => {
       setOpen(false);
       setReason("");
+      setSettlement("ledger");
       await everythingItTouched(queryClient, document.id, document.customer_id);
     },
   });
@@ -443,6 +458,16 @@ function CancelPanel({ document }: { document: SaleDto }) {
                 <Input {...parts} value={reason} onChange={(e) => setReason(e.target.value)} />
               )}
             </FormField>
+
+            {/* `figures` because a cancellation hands back the paper on the
+                screen, so its own stored totals are the right two figures to
+                show. The avoir dialog above passes none. */}
+            <RefundChoice
+              document={document}
+              value={settlement}
+              onChange={setSettlement}
+              figures
+            />
 
             {cancel.isError ? <Refusal error={cancel.error} /> : null}
 

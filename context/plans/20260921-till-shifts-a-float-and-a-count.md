@@ -433,6 +433,17 @@ the rest of the day, which is the honest shape but not the useful one. T6 adds
 the field beside `takings` and the close screen reads it, because T6 is already
 the task that moves what the cash panel answers.
 
+Left open on purpose, and the follow-up this task does not do: a
+server-computed preview of the exact figure about to leave the drawer.
+Neither dialog can work it out. The cancel dialog shows the document's own
+stored `net_to_pay` and stamp, which overstates the moment a partial avoir
+has already taken cash off that facture — `cancel_effect` answers
+`stock_back` with no amount on a cash sale, and the real figure is
+`avoir::what_is_left`, which only the server can read. The avoir dialog shows
+no figure at all, because an avoir refunds its own `net_to_pay` and that
+depends on the lines being typed. Closing this means a field on the wire, not
+a subtraction on a screen.
+
 This is the only task in the loop that changes a money figure the dashboard
 already answers, so it goes to `dz-money-builder` and takes the extra layer
 the quality gates ask for on money. Size M.

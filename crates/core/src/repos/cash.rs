@@ -24,7 +24,7 @@
 use chrono::NaiveDateTime;
 use diesel::dsl::sql;
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Nullable};
+use diesel::sql_types::{BigInt, Bool, Integer, Nullable};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
@@ -39,9 +39,25 @@ use crate::schema::{debt_ledger, documents, supplier_ledger};
 ///
 /// Only a ticket and a facture: a proforma is a quotation nobody paid, an
 /// avoir is a credit note, and the papers the supply side writes are not
-/// sales. Only a document that still stands: an annulled ticket is money that
-/// did not stay in the drawer, and the avoir a cancellation issues is not
-/// counted either, so the reversal is felt once.
+/// sales. A document that still stands, or one whose cash was handed back
+/// over the counter: an annulled ticket nobody was paid back for is money
+/// that never stayed in the drawer and drops out of its day, but a ticket
+/// refunded in cash did come in on its own day and goes out again on the day
+/// the notes did, as a `cash_refunds` row.
+///
+/// Without that second arm the reversal is felt twice. A cashier rings
+/// 3 000 DA cash and cancels it with the notes back inside one shift: the
+/// drawer is where it started, and `opening + takings - refunds` would read
+/// `opening - 3 000` because the sale had already left the takings. Over a
+/// month the same ticket would be subtracted once for leaving the sales
+/// column and once again as a refund.
+///
+/// An avoir on its own needs no arm: the facture it credits keeps its
+/// `Issued` status and never left the takings, and the avoir itself is
+/// neither a ticket nor a facture, so the kind filter above leaves it out.
+/// What does need one is the facture that was part credited in notes and
+/// then annulled — its refund row names the avoir, not the facture — and
+/// that is the second arm of the `EXISTS` in `sales_of` below.
 ///
 /// `net_to_pay` and not `total_ttc`: what the drawer took is what the customer
 /// handed over, and on a cash facture that is the amount plus the stamp
@@ -91,10 +107,34 @@ fn sales_of(
     until: NaiveDateTime,
     mode: PaymentMode,
 ) -> Result<(Money, Money), CoreError> {
+    // Still standing, or handed back in cash. `EXISTS` and not a join: a
+    // sum is the wrong place to find out that a join somebody widened later
+    // counts a document twice.
+    //
+    // Two ways a paper can have had cash handed back on it, and both count.
+    // The row names the document itself when a cash sale was cancelled with
+    // the notes going back. It names an **avoir** when the money went back on
+    // a credit note, and that avoir carries `ref_document_id` to the facture.
+    // Reading only the first arm loses the second the moment such a facture
+    // is annulled: it drops out of the day it was sold on and the day reads
+    // `0 - the refund` where the drawer held the sale less the refund. That
+    // state does not need a service to produce it — a file restored from a
+    // backup can already hold it — so the query is where it is answered.
+    //
+    // Scoped by `shop_id` on both arms (rule 3): one shop's refund may not
+    // decide what another shop's day reads.
+    let refunded = sql::<Bool>("EXISTS (SELECT 1 FROM cash_refunds r WHERE r.shop_id = ")
+        .bind::<Integer, _>(shop_id)
+        .sql(
+            " AND (r.document_id = documents.id \
+             OR r.document_id IN (SELECT a.id FROM documents a \
+             WHERE a.shop_id = r.shop_id AND a.kind = 'avoir' \
+             AND a.ref_document_id = documents.id)))",
+        );
     let mut query = documents::table
         .filter(documents::shop_id.eq(shop_id))
         .filter(documents::kind.eq_any([DocumentKind::Ticket, DocumentKind::Facture]))
-        .filter(documents::status.eq(DocumentStatus::Issued))
+        .filter(documents::status.eq(DocumentStatus::Issued).or(refunded))
         .filter(documents::payment_mode.eq(payment_mode_stored(mode)))
         .filter(documents::issued_at.ge(from))
         .filter(documents::issued_at.lt(until))

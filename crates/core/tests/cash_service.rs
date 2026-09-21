@@ -14,6 +14,7 @@ use diesel::sqlite::SqliteConnection;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::cancellation;
 use dzpos_core::services::cash;
+use dzpos_core::services::cash_refunds::Refund;
 use dzpos_core::services::clock::{Month, Period};
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
 use dzpos_core::services::documents::{
@@ -164,6 +165,9 @@ fn a_day_with_nothing_on_it_answers_zero_everywhere_rather_than_nothing() {
     assert_eq!(empty.cash_in.sales, Money::ZERO);
     assert_eq!(empty.cash_in.stamp, Money::ZERO);
     assert_eq!(empty.cash_in.customer_payments, Money::ZERO);
+    // Zero and not nothing: `SUM` over no rows answers NULL, and every one of
+    // these six reads is coalesced. `cash_refunds` is the newest of them and
+    // the easiest to add without one.
     assert_eq!(empty.cash_out.refunds, Money::ZERO);
     assert_eq!(empty.cash_out.supplier_payments, Money::ZERO);
     assert_eq!(empty.cash_out.expenses, Money::ZERO);
@@ -308,7 +312,29 @@ fn the_day_counts_the_cash_that_moved_on_it_and_nothing_else() {
     )
     .unwrap();
 
-    // Money out.
+    // Money out. A cash ticket of 150,00 rung the same day and handed back
+    // over the counter: the drawer took it and the drawer gave it back, so it
+    // is in the takings above and out again here.
+    let refunded = a_document(
+        &mut conn,
+        SHOP,
+        DocumentKind::Ticket,
+        PaymentMode::Cash,
+        15_000,
+        0,
+        None,
+        at(10, 18),
+    );
+    cancellation::cancel_settling(
+        &mut conn,
+        SHOP,
+        OWNER,
+        refunded,
+        "rendu".to_string(),
+        Some(at(10, 19)),
+        Refund::Cash,
+    )
+    .unwrap();
     pay_supplier(&mut conn, SHOP, 1, 40_000, "cash", at(10, 17));
     pay_supplier(&mut conn, SHOP, 1, 11_000, "card", at(10, 17));
     spend(&mut conn, 25_000, day(10));
@@ -342,16 +368,21 @@ fn the_day_counts_the_cash_that_moved_on_it_and_nothing_else() {
     pay_supplier(&mut conn, SHOP, 1, 777_000, "cash", at(11, 8));
 
     let position = cash::position(&mut conn, SHOP, Period::Day(day(10))).unwrap();
-    // 1 000,00 of ticket and 2 020,00 of facture: its 2 000,00 plus the
-    // 20,00 stamp that came over the counter with it.
-    assert_eq!(position.cash_in.sales, Money::centimes(302_000));
+    // 1 000,00 of ticket, 2 020,00 of facture (its 2 000,00 plus the 20,00
+    // stamp that came over the counter with it) and the 150,00 ticket that
+    // was handed back. The refunded one stays in the takings: the drawer did
+    // take that money on this day, and what it gave back is `refunds` below.
+    // Drop it from the sales column and the day is short of it twice.
+    assert_eq!(position.cash_in.sales, Money::centimes(317_000));
     assert_eq!(position.cash_in.stamp, Money::centimes(2_000));
     assert_eq!(position.cash_in.customer_payments, Money::centimes(30_000));
-    // An avoir moves no cash in this app: it credits the ledger and brings
-    // the goods back, and no row anywhere says the drawer opened.
-    assert_eq!(position.cash_out.refunds, Money::ZERO);
+    // The notes that went back over the counter, on the day they went. The
+    // avoir written against the standing facture above is not here: that one
+    // was settled on the customer's ledger and no drawer opened for it.
+    assert_eq!(position.cash_out.refunds, Money::centimes(15_000));
     assert_eq!(position.cash_out.supplier_payments, Money::centimes(40_000));
     assert_eq!(position.cash_out.expenses, Money::centimes(30_000));
+    // 317 000 + 30 000 taken, 15 000 + 40 000 + 30 000 paid out.
     assert_eq!(position.cash, Money::centimes(262_000));
     assert_eq!(position.card_in.sales, Money::centimes(50_000));
     // The app writes no stamp on a card document: the droit de timbre is due

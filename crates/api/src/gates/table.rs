@@ -245,13 +245,13 @@ pub const ROUTE_GATES: &[Gate] = &[
         method: "POST",
         path: "/sales/{id}/avoir",
         permission: Some(Permission::CorrectLedger),
-        why: "an avoir undoes a document already handed to a customer (M2 carry-in, 2026-09-09)",
+        why: "an avoir undoes a document already handed to a customer (M2 carry-in, 2026-09-09), and since ruling 5 of the 2026-09-20 loop it also opens the drawer: a body carrying refund: cash hands notes back over the counter and writes the cash_refunds row that lowers the day's cash and the ringer's shift",
     },
     Gate {
         method: "POST",
         path: "/sales/{id}/cancel",
         permission: Some(Permission::CorrectLedger),
-        why: "the same, and this one voids the document outright (M2 carry-in, 2026-09-09)",
+        why: "the same, including the drawer on a refund: cash body, and this one voids the document outright (M2 carry-in, 2026-09-09)",
     },
     Gate {
         method: "PUT",

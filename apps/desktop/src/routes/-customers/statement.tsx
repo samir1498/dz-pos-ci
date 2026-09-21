@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Receipt, ScrollText, Wallet } from "lucide-react";
 import { useState } from "react";
 
+import { ChoiceRow } from "@/components/ChoiceRow";
 import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
@@ -48,7 +49,7 @@ import { useTranslation, type Key } from "@/i18n";
 import { cleared, errorKey } from "@/lib/fields";
 import { PAYMENT_METHODS, PAYMENT_METHOD_KEY } from "@/lib/payment";
 
-import { ChoiceRow, DEBT_KIND_KEY, useFieldError } from "./parts";
+import { DEBT_KIND_KEY, useFieldError } from "./parts";
 
 /** The movements, newest first, with the balance each one left behind. */
 export function Ledger({ customer }: { customer: CustomerDto }) {

@@ -299,3 +299,127 @@ test("credits a facture in part, cancels another whole, leaves a credit, quotes 
     });
   }
 });
+
+/** The ticket this case rings, on its own name and barcode: the file is
+ *  shared with the case above and a second row under one barcode is refused
+ *  by the index. */
+const SUGAR = "Sucre reversals e2e";
+const SUGAR_BARCODE = "6130009300020";
+
+async function shopToday(request: APIRequestContext): Promise<string> {
+  const res = await request.get(`${apiUrl()}/clock`, { headers: apiHeaders() });
+  expect(res.ok()).toBe(true);
+  const body: { today: string } = await res.json();
+  return body.today;
+}
+
+/** `cash_out.refunds_centimes` for a month, off the same route the panel
+ *  itself calls. */
+async function refundsThisMonth(request: APIRequestContext, month: string): Promise<number> {
+  const res = await request.get(`${apiUrl()}/cash?month=${month}`, { headers: apiHeaders() });
+  expect(res.ok()).toBe(true);
+  const position: { cash_out: { refunds_centimes: number } } = await res.json();
+  return position.cash_out.refunds_centimes;
+}
+
+/**
+ * A cash ticket cancelled in notes, through the browser, and the figure that
+ * appears on the cash panel because of it.
+ *
+ * The whole of ruling 5 end to end. Before it, `refunds` was a hard-coded
+ * zero and a shop that handed 1 000,00 back over the counter had no record of
+ * it anywhere. This is the only case in the suite that clicks the refund
+ * choice, so it is also what proves the dialog's radio actually reaches the
+ * body: every other test of that is a stub.
+ *
+ * The stamp is the fiscal half and it is worked out here by hand, never read
+ * back off the answer. One unit at 1 000,00 with no TVA is 100 000 c TTC;
+ * the droit de timbre is ceil(1 000 DA / 100 DA) = 10 tranches, at 1 DA each
+ * in the band under 30 000 DA, so 10,00 DA = 1 000 c, over the 5 DA minimum;
+ * the customer handed 101 000 c over. What comes back is the 100 000 c and
+ * not the stamp, which is never given back (features.md §1, "Cash handed
+ * back").
+ */
+test("cancels a cash ticket in notes, and the cash panel shows the drawer is lighter", async ({
+  page,
+  request,
+}) => {
+  const month = (await shopToday(request)).slice(0, 7);
+  // Nothing has been handed back on this file yet, and this case is the only
+  // spec that hands anything back. If this ever fails, the literals below
+  // stopped being the whole of the figure rather than the rule changing.
+  expect(await refundsThisMonth(request, month)).toBe(0);
+
+  const created = await request.post(`${apiUrl()}/products`, {
+    headers: apiHeaders(),
+    data: {
+      name: SUGAR,
+      barcode: SUGAR_BARCODE,
+      category_id: 1,
+      unit: "piece",
+      cost_centimes: 0,
+      selling_centimes: UNIT,
+      wholesale_centimes: null,
+      qty_on_hand_milli: 100_000,
+      low_stock_at_milli: 0,
+      rate_bps: 0,
+      active: true,
+    },
+  });
+  expect(created.status()).toBe(201);
+  const sugar: { id: number } = await created.json();
+
+  // One unit over the counter, paid in cash, no customer named: the walk-in
+  // whose refund has no ledger to land on, which is the case ruling 5 was
+  // taken for.
+  const rung = await request.post(`${apiUrl()}/sales`, {
+    headers: apiHeaders(),
+    data: {
+      lines: [{ product_id: sugar.id, qty_milli: 1_000 }],
+      payment_mode: "cash",
+      tendered_centimes: 200_000,
+      kind: "ticket",
+    },
+  });
+  expect(rung.status()).toBe(201);
+  const ticket: Sale & { totals: { total_ttc_centimes: number; stamp_centimes: number } } =
+    await rung.json();
+  expect(ticket.totals.total_ttc_centimes).toBe(100_000);
+  expect(ticket.totals.stamp_centimes).toBe(1_000);
+  expect(ticket.totals.net_to_pay_centimes).toBe(101_000);
+
+  // ---- the cancellation, clicked rather than posted.
+  await page.goto("/documents");
+  await page.getByRole("button", { name: ticket.printed_number }).click();
+  const detail = page.getByRole("region", { name: t("documents_detail") });
+  await detail.getByRole("button", { name: t("documents_cancel") }).click();
+
+  // A cash ticket names nobody, so the other way out of the dialog is the
+  // drawer staying shut rather than an account to credit.
+  await expect(page.getByRole("radio", { name: t("documents_refund_nothing") })).toBeVisible();
+  await expect(page.getByTestId("refund-figures")).toHaveCount(0);
+  await page.getByRole("radio", { name: t("documents_refund_cash") }).click();
+
+  // Chosen: the two stored figures the rule is written on appear, and the
+  // avoir dialog's sentence does not.
+  await expect(page.getByTestId("refund-paid-in")).toHaveText("1 010,00");
+  await expect(page.getByTestId("refund-stamp-kept")).toHaveText("10,00");
+  await expect(page.getByTestId("refund-avoir-note")).toHaveCount(0);
+
+  await page.getByLabel(t("documents_reason")).fill("le client a rendu le sucre");
+  await page.getByRole("button", { name: t("documents_cancel_confirm") }).click();
+  await expect(detail.getByText(t("documents_cancelled_on"))).toBeVisible();
+
+  // ---- what left the drawer, as the server sums it.
+  const refunded = await refundsThisMonth(request, month);
+  expect(refunded).toBe(100_000);
+
+  // ---- and the panel puts that same figure on the screen. The two
+  // assertions are the pair: the line above says the route answered
+  // 100 000 c, and this one says the panel renders those centimes the way
+  // the shop reads them. Written out rather than formatted here, because a
+  // second formatter in the test would agree with a broken one on screen.
+  await page.goto("/expenses");
+  await expect(page.getByTestId("cash-position")).toBeVisible();
+  await expect(page.getByTestId("cash-out-refunds")).toHaveText("1 000,00");
+});

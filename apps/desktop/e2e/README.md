@@ -303,6 +303,12 @@ here. These are all of them.
 | `till-party-ids-missing` | `till.tsx` | Absent until an identifier a facture needs is missing. |
 | `till-override-dialog` | `till.tsx` | The ask before forcing a credit-blocked sale through; the spec confirms it rather than answering a browser box. |
 | `documents-sheet` | `documents.tsx` | The iframe holding the page the core rendered; an iframe has no accessible text. |
+| `refund-credit-only` | `-documents/parts.tsx` | Absent unless the paper was sold on credit, so a spec counts it; it replaces the choice rather than disabling it. |
+| `refund-figures` | `-documents/parts.tsx` | The cancel dialog's two stored figures. Absent on the avoir dialog and absent until the notes are chosen, so its absence is the assertion. |
+| `refund-paid-in` | `-documents/parts.tsx` | An amount inside `refund-figures`, so its text is a number in three locales. |
+| `refund-stamp-kept` | `-documents/parts.tsx` | An amount inside `refund-figures`, and absent when the paper carries no stamp. |
+| `refund-avoir-note` | `-documents/parts.tsx` | The avoir dialog's sentence in place of a figure; absent on the cancel dialog, which shows figures instead. |
+| `till-rung-outside` | `-till/session.tsx` | Absent unless sales were rung before the drawer opened, so a spec counts it rather than reading a zero. |
 | `customer-fiche` | `-customers/fiche.tsx` | The panel the form opens in; a test waits for it before it types into a field the list also has. |
 | `customer-close-reason` | `-customers/fiche.tsx` | Absent until a fiche with an account behind it is being closed, so a test counts it. |
 | `customer-balance` | `customers_.$id.tsx` | The card carrying what is owed; the same figure appears again in the ledger below it. |
@@ -324,12 +330,13 @@ here. These are all of them.
 | `expense-amount` | `expenses.tsx` | An amount field, translated label, and `col_amount` reads the same word. |
 | `expense-date` | `expenses.tsx` | A date field, and `col_date` reads the same word. |
 | `expense-note` | `expenses.tsx` | A note field, and `col_note` reads the same word. |
-| `cash-position` | `expenses.tsx` | The figures panel; every figure inside it is a number in three locales. |
-| `cash-in-total` | `expenses.tsx` | An amount, and both sides carry a row labelled "total". |
-| `cash-out-expenses` | `expenses.tsx` | An amount, and the same word labels the screen itself. |
-| `cash-out-total` | `expenses.tsx` | The other row labelled "total". |
-| `cash-net` | `expenses.tsx` | An amount, and the one figure that goes below zero. |
-| `card-in-total` | `expenses.tsx` | An amount, translated label. |
+| `cash-position` | `CashPanel.tsx` | The figures panel; every figure inside it is a number in three locales. The expenses screen and the dashboard each mount one, so a spec that names it stays on one page. |
+| `cash-in-total` | `CashPanel.tsx` | An amount, and both sides carry a row labelled "total". |
+| `cash-out-expenses` | `CashPanel.tsx` | An amount, and the same word labels the screen itself. |
+| `cash-out-refunds` | `CashPanel.tsx` | Cash handed back over the counter on a reversal, the figure ruling 5 stopped pinning at zero. |
+| `cash-out-total` | `CashPanel.tsx` | The other row labelled "total". |
+| `cash-net` | `CashPanel.tsx` | An amount, and the one figure that goes below zero. |
+| `card-in-total` | `CashPanel.tsx` | An amount, translated label. |
 | `page-header` | `PageHeader.tsx` | The screen's own header block, so a count can be read without matching the same figure inside the list. |
 | `products-search` | `products.tsx` | The search box; its label and its placeholder are translated and the placeholder repeats the barcode column's word. |
 | `products-clear-filters` | `products.tsx` | Absent until a filter is set, so a test counts it, and it says the same words as the empty screen's own button. |

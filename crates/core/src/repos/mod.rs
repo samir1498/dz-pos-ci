@@ -1,6 +1,7 @@
 //! The only modules that run diesel queries. Every query takes a `shop_id`.
 pub mod audit;
 pub mod cash;
+pub mod cash_refunds;
 pub mod categories;
 pub mod counters;
 pub mod customers;

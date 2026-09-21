@@ -1,5 +1,6 @@
 //! Plain structs and their diesel rows. No business rules live here.
 pub mod audit;
+pub mod cash_refund;
 pub mod category;
 pub mod customer;
 pub mod debt;

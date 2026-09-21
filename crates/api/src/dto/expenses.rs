@@ -121,9 +121,15 @@ impl TryFrom<Takings> for TakingsDto {
     }
 }
 
-/// Cash that left over the period. `refunds_centimes` is zero in this
-/// version: an avoir credits the customer's ledger and brings the goods back,
-/// and nothing says the drawer opened for it.
+/// Cash that left over the period.
+///
+/// `refunds_centimes` is money handed back over the counter on a reversal, on
+/// the day the notes changed hands: an avoir against a facture that was paid
+/// for, or a cancelled cash sale. A reversal settled on a customer's ledger
+/// is not in it, because no notes moved. The sale it reverses stays in
+/// `cash_in.sales` on the day it was rung, so a ticket sold and refunded in
+/// one month nets to nothing across the two figures rather than being
+/// subtracted twice.
 #[derive(Debug, Clone, Copy, Serialize, TS)]
 #[ts(export_to = "OutgoingsDto.ts")]
 pub struct OutgoingsDto {
@@ -173,5 +179,34 @@ impl TryFrom<CashPosition> for CashPositionDto {
             cash_centimes: p.cash.as_centimes(),
             card_in: TakingsDto::try_from(p.card_in)?,
         })
+    }
+}
+
+/// How the money goes back on a reversal (features.md §1, the cash position).
+///
+/// Here and not beside the two bodies that carry it (`NewAvoirDto` and
+/// `CancelDocumentDto` in `sales.rs`), because what it decides is whether a
+/// row lands on the cash position this module is about, and `sales.rs` is
+/// already at the line limit.
+///
+/// One variant, and the field that carries it is optional with a serde
+/// default, so a body that says nothing settles the way it always did: a
+/// credit note goes on the customer's ledger and a cancelled cash sale moves
+/// goods alone. `cash` is the caller's statement that notes came out of the
+/// drawer, which nothing on the server can work out on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[ts(export_to = "RefundDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum RefundDto {
+    Cash,
+}
+
+impl RefundDto {
+    /// `None` when the field was absent, which is the ledger path.
+    pub fn refund(value: Option<Self>) -> Refund {
+        match value {
+            Some(RefundDto::Cash) => Refund::Cash,
+            None => Refund::None,
+        }
     }
 }

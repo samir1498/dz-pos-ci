@@ -560,6 +560,11 @@ pub struct AvoirLineDto {
 pub struct NewAvoirDto {
     pub lines: Option<Vec<AvoirLineDto>>,
     pub reason: Option<String>,
+    /// Absent is the ledger credit, which is what every caller sent before
+    /// the field existed and what the desktop still sends.
+    #[serde(default)]
+    #[ts(optional)]
+    pub refund: Option<RefundDto>,
 }
 
 impl NewAvoirDto {
@@ -583,4 +588,9 @@ impl NewAvoirDto {
 #[serde(deny_unknown_fields)]
 pub struct CancelDocumentDto {
     pub reason: String,
+    /// Absent is the cancellation that moves no notes, which is what every
+    /// caller sent before the field existed.
+    #[serde(default)]
+    #[ts(optional)]
+    pub refund: Option<RefundDto>,
 }

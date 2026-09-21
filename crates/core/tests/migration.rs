@@ -36,6 +36,7 @@ fn migration_creates_every_table() {
         names,
         vec![
             "audit_log",
+            "cash_refunds",
             "categories",
             "counters",
             "customers",
@@ -2075,16 +2076,15 @@ fn the_migration_reverts_and_reapplies() {
         1
     );
 
-    // The seventeenth (shifts, and the expense clock beside it) is now the
-    // top of the stack, with canonical barcodes, sale idempotency and pairing
-    // under it and the thirteenth (audit clock) below those: the hour the
-    // audit log's rows were short. Most of them add a table and move no data;
-    // the audit clock moves data and adds no table, so what its down has to
-    // undo is an arithmetic and not a shape, and the seventeenth does both at
-    // once. One audit row, written at a moment this test picks, is what both
-    // directions are read off here; the expense half of the seventeenth has
-    // its own test in `migration_shifts.rs`, which seeds a row before the
-    // migration rather than after it.
+    // The eighteenth (cash refunds) is now the top of the stack, with shifts
+    // and the expense clock under it, then canonical barcodes, sale
+    // idempotency and pairing, and the thirteenth (audit clock) below those:
+    // the hour the audit log's rows were short. Most of them add a table and
+    // move no data; the audit clock moves data and adds no table, so what its
+    // down has to undo is an arithmetic and not a shape, and the seventeenth
+    // does both at once. One audit row, written at a moment this test picks,
+    // is what both directions are read off here; the expense half of the
+    // seventeenth is tested in `migration_shifts.rs`, on a row seeded first.
     assert_eq!(
         diesel::sql_query(
             "INSERT INTO audit_log (shop_id, user_id, action, entity, created_at) \
@@ -2094,9 +2094,10 @@ fn the_migration_reverts_and_reapplies() {
         .unwrap(),
         1
     );
-    // Shifts, canonical barcodes, idempotency keys, sale idempotency and
-    // pairing sit on top of the audit clock: revert down to it.
-    for _ in 0..5 {
+    // Cash refunds, shifts, canonical barcodes, idempotency keys and pairing
+    // sit on top of the audit clock: revert down to it, one turn per
+    // migration added above the thirteenth.
+    for _ in 0..6 {
         conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
             .unwrap();
     }
@@ -2120,10 +2121,9 @@ fn the_migration_reverts_and_reapplies() {
         1,
         "the audit clock up.sql did not take the hour back"
     );
-    // Shifts (17), canonical barcodes (16), sale idempotency (15), pairing
-    // (14) and the audit clock (13) are now on top, so drop all five before
-    // the sessions check.
-    for _ in 0..5 {
+    // Cash refunds (18), shifts (17), barcodes (16), sale idempotency (15),
+    // pairing (14) and the audit clock (13) are on top: drop all six.
+    for _ in 0..6 {
         conn.revert_last_migration(dzpos_core::db::MIGRATIONS)
             .unwrap();
     }

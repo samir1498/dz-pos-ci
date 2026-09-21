@@ -34,7 +34,7 @@ use dzpos_api::dto::{
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 119] = [
+const FILES: [&str; 120] = [
     "LoginDto.ts",
     "MeDto.ts",
     "SessionDto.ts",
@@ -76,6 +76,7 @@ const FILES: [&str; 119] = [
     "SaleCancellationDto.ts",
     "AvoirLineDto.ts",
     "NewAvoirDto.ts",
+    "RefundDto.ts",
     "CancelDocumentDto.ts",
     "PartyKindDto.ts",
     "DebtKindDto.ts",

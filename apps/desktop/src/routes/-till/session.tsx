@@ -469,6 +469,24 @@ function CloseShiftDialog({
           {expected === null ? null : <Money centimes={expected} data-testid="till-expected" />}
         </p>
 
+        {/* Only when there were any. A line saying "0" would train a cashier
+            to skip the block on the evenings it matters.
+
+            It is not a term in the expected figure and must not read as one:
+            that money is physically in the drawer, but it was rung outside
+            the window the figure is summed over, so this is the sentence
+            that explains a count reading over rather than a number that
+            moves it (`ShiftReportDto::rung_outside_shift`). */}
+        {report !== null && report.rung_outside_shift > 0 ? (
+          <p
+            role="status"
+            data-testid="till-rung-outside"
+            className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn"
+          >
+            {t("till_shift_rung_outside").replace("{count}", String(report.rung_outside_shift))}
+          </p>
+        ) : null}
+
         <FormField
           label={t("field_counted_cash")}
           error={countInvalid ? t("error_price_invalid") : undefined}

@@ -13,6 +13,7 @@
 //! fiches below are as empty as a fiche is allowed to be and a test that
 //! needs a limit, a note or an opening balance sets it itself.
 
+pub mod cash_refunds;
 pub mod facture;
 pub mod migrations;
 pub mod shifts;

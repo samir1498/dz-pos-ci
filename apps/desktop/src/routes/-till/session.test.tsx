@@ -48,6 +48,7 @@ function reportOf(
   shift: ShiftDto,
   expectedCentimes: number,
   takingsTotalCentimes: number = expectedCentimes - shift.opening_cash_centimes,
+  rungOutsideShift = 0,
 ): ShiftReportDto {
   return {
     shift,
@@ -57,9 +58,16 @@ function reportOf(
       customer_payments_centimes: 0,
       total_centimes: takingsTotalCentimes,
     },
+    // No reversal was handed back in any of these fixtures, so the expected
+    // figure below is the takings whole. The screen that shows this figure
+    // is the second half of T6 and not here.
+    refunds_centimes: 0,
     expected_centimes: expectedCentimes,
     difference_centimes: null,
     until: "2026-09-21 12:00:00",
+    // Zero unless a case says otherwise: the drawer was open the whole time
+    // in every fixture but the one that names this.
+    rung_outside_shift: rungOutsideShift,
   };
 }
 
@@ -305,6 +313,33 @@ describe("closing the till", () => {
     const user = userEvent.setup();
     const dialog = await openTheTill(user, 800_000);
     expect(within(dialog).getByTestId("till-expected")).toHaveTextContent(/^8 000,00$/);
+  });
+
+  test("says how many sales were rung before the drawer was opened, and stays silent when none were", async () => {
+    // Those sales' cash is physically in the drawer, but they fell outside
+    // the window the expected figure is summed over, so the count is a
+    // sentence explaining a drawer that reads over and never a term in the
+    // arithmetic: the expected figure below it does not move.
+    const user = userEvent.setup();
+    const shift = shiftDto({ opening_cash_centimes: 500_000 });
+    openState = reportOf(shift, 800_000, 300_000, 3);
+    mount();
+    await screen.findByTestId("till-shift-badge");
+    await user.click(screen.getByTestId("till-close-trigger"));
+    const dialog = await screen.findByTestId("till-close-dialog");
+
+    expect(within(dialog).getByTestId("till-rung-outside").textContent).toBe(
+      fr.till_shift_rung_outside.replace("{count}", "3"),
+    );
+    expect(within(dialog).getByTestId("till-expected")).toHaveTextContent(/^8 000,00$/);
+  });
+
+  test("a drawer that was open the whole time shows no such line at all", async () => {
+    // A line reading "0" would train a cashier to skip the block on the
+    // evenings it matters.
+    const user = userEvent.setup();
+    const dialog = await openTheTill(user, 800_000);
+    expect(within(dialog).queryByTestId("till-rung-outside")).not.toBeInTheDocument();
   });
 
   test("an exact count needs no note and closes straight away", async () => {
