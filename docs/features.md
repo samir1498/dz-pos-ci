@@ -307,8 +307,46 @@ on `return` movements, and nothing in the file says the drawer opened for
 it. The card figure has the same shape on the way in and none on the way
 out, because money paid to a supplier by card moves the bank account rather
 than the till. The figure is a net movement over the period and not the
-money in the drawer: there is no opening float and no count at close, so it
-goes below zero on a day that paid out more than it took.
+money in any drawer: it carries no opening float and no count at close, so
+it goes below zero on a day that paid out more than it took.
+
+**What a shift adds, and what it must not.** A cashier opens the till with
+what is in the drawer and at close types what is in the drawer again, and
+the shop learns whether the two agree. That is a second, narrower question
+put to the same figures and never a new input to the one above: a shift
+answers whose count is short, where the cash position answers what the shop
+took. The dashboard reads no shift at all, which is what keeps a 15 000 DA
+handover to the owner from reading as the shop losing 3 000 on a day it took
+12 000.
+
+What the shop expects a cashier to be holding is their opening float, plus
+their own cash sales at `net_to_pay`, plus the cash they were handed against
+a customer's debt, and nothing else. Every term is integer centimes and every
+addition is checked. A card sale never reaches a drawer. An expense and a
+payment to a supplier are the shop's money going out, written by somebody who
+holds "commit money", which a cashier does not, so neither lowers a cashier's
+expected figure; cash handed to the owner during the day is said in the note
+at close. And another cashier's takings are theirs: two people hold
+overlapping shifts on purpose, because each drawer is physically their own,
+so a shop-wide sum handed to each of them would record both of them short by
+the other's takings for doing nothing wrong.
+
+The window is the shift's own, from the moment it opened up to but not
+including the moment it closed, read on `issued_at` and on the debt
+movement's own stamp, both of which are the shop's clock. The difference is
+what was counted less what was expected, negative when the drawer is short,
+and a difference with no reason written beside it is refused. The expected
+figure is the one number in this section that is stored rather than derived:
+a ticket annulled on Wednesday drops out of Monday's takings, and a count
+somebody signed on Monday evening must not move afterwards.
+
+A sale rung while its cashier had no shift open is accepted and never
+refused; it is tagged as belonging to no shift, derived by holding its
+`issued_at` against that person's own windows rather than stored on a column.
+A phone whose queue reaches the server after its cashier closed lands there
+too, because the moment a sale happened is the server's to say. The close
+screen shows that figure beside the expected one, so a morning rung up before
+the till was opened reads as what it is instead of as a drawer that is over.
 
 Two things the figure cannot yet say. Nothing records cash handed back over
 the counter, so the position is off by any refund a shop actually paid out.
@@ -1014,7 +1052,13 @@ credit-block overrides, cancellations and avoirs, settings and régime
 changes, the discount threshold and the idle time, recount drifts, supplier
 and purchase corrections, every user operation, and lockouts, plus a refused
 credit sale, a refused discount, a refused typed-under price and a refused
-permission whichever way each was refused, and an export or a restore.
+permission whichever way each was refused, and an export or a restore. A
+till adds three: opening a drawer with a float, counting and closing it —
+that row carries the expected figure, the count, the difference, the reason
+given and the opener's name whenever somebody else did the counting — and a
+sale that fell inside none of its ringer's own shifts, which is the whole of
+what marks such a sale, since nothing on the document says which shift it
+belongs to.
 
 The owner reads it on one screen, filtered by day, by user and by kind, with
 the before and the after of each change. There is no editing and no

@@ -211,6 +211,25 @@ pub(crate) fn regime_parse(value: &str) -> Result<Regime, CoreError> {
     }
 }
 
+/// A sale as a till shift reads it: which paper, when it was rung, how it was
+/// paid and what the customer handed over. Four columns and no lines, because
+/// the question a shift puts to `documents` is which of one person's sales
+/// fell in none of their own windows, and reading each document whole to
+/// answer it would be three more queries a row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RungSale {
+    pub document_id: i32,
+    /// The shop's clock. Never `created_at`, which SQLite answers in UTC while
+    /// Algiers is an hour ahead: a sale tagged off that column would be put on
+    /// the wrong side of every shift boundary for an hour a day.
+    pub issued_at: NaiveDateTime,
+    pub payment_mode: PaymentMode,
+    /// What the customer handed over, the droit de timbre included. The same
+    /// figure `repos::cash::sales` sums, so a sale that falls outside every
+    /// shift is worth here exactly what it would have been worth inside one.
+    pub net_to_pay: Money,
+}
+
 pub(crate) const fn payment_mode_stored(mode: PaymentMode) -> &'static str {
     match mode {
         PaymentMode::Cash => "cash",

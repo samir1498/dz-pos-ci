@@ -46,7 +46,7 @@
 //! about the till.
 //!
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
@@ -172,5 +172,56 @@ pub fn position(
         cash_out,
         cash,
         card_in,
+    })
+}
+
+/// The cash one person took over one stretch of the clock: their own cash
+/// sales at `net_to_pay`, and the cash they were handed against a customer's
+/// debt. The window is half open, `from <= the moment < until`, so a sale rung
+/// at the second a shift opened is in it and one rung at the second it closed
+/// is not.
+///
+/// A second, narrower question put to this module and never a new input to
+/// `position` above. `position` keeps summing the whole shop from sales, both
+/// ledgers and expenses; a shift asks what one cashier should be holding. That
+/// is what stops a 15 000 DA handover from reading as the shop losing 3 000 on
+/// a day it took 12 000, and it is why the dashboard reads no shift at all.
+///
+/// What is deliberately not in it:
+///
+/// - Another cashier's takings. Two people hold overlapping shifts on purpose
+///   (each drawer is physically their own), so the filter is the point of the
+///   function rather than a refinement of it.
+/// - Card sales. A card sale never reaches a drawer.
+/// - Expenses and supplier payments. Both are `commit_money` work, which a
+///   cashier does not hold: they are the shop's money going out, not this
+///   drawer's. `repos::expenses::total_between` also filters `expense_date`,
+///   a date and not a moment, so there is no shift-sized slice of it to ask
+///   for.
+///
+/// `Takings` and not a type of its own: the same three figures, about one
+/// person instead of the shop, and `total()` is the same checked addition.
+/// `stamp` travels for the same reason it does above, so a close screen can
+/// say how much of the drawer is tax being held for the state.
+pub fn takings_for(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    from: NaiveDateTime,
+    until: NaiveDateTime,
+) -> Result<Takings, CoreError> {
+    let (sales, stamp) =
+        repo::sales_by_user(conn, shop_id, user_id, from, until, PaymentMode::Cash)?;
+    Ok(Takings {
+        sales,
+        stamp,
+        customer_payments: repo::customer_payments_by_user(
+            conn,
+            shop_id,
+            user_id,
+            from,
+            until,
+            PaymentMethod::Cash,
+        )?,
     })
 }

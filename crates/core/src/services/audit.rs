@@ -116,6 +116,32 @@ pub const ACTION_CANCEL: &str = "document.cancel";
 /// read by a person and an id is a number they would have to look up.
 pub const ACTION_CREATE_EXPENSE: &str = "expense.create";
 
+/// A till opened with a float (features.md §1, the cash position). The entry
+/// carries what was in the drawer when the person took it over. There is no
+/// `before`: a shift is a row that did not exist a moment ago.
+pub const ACTION_OPEN_TILL: &str = "till.open";
+
+/// A till counted and closed. The entry carries what the shop expected that
+/// person to be holding, what they counted, the difference between the two and
+/// the reason given for it, and it names the opener whenever the closer is
+/// somebody else, because a drawer closed by a second person is the one case
+/// where "whose count was short" and "who signed for it" are different
+/// answers.
+///
+/// The expected figure travels as the row's own copy of the snapshot the
+/// column stores. It is not recomputed when the log is read: a ticket annulled
+/// on Wednesday must not move a figure somebody signed on Monday.
+pub const ACTION_CLOSE_TILL: &str = "till.close";
+
+/// A sale rung while its ringer had no shift open, or rung by a phone whose
+/// queue reached the server after they closed. Accepted and never refused, so
+/// this row is the whole of what marks it: a shift is derived from the moments
+/// either side of it and no column on `documents` says which shift a sale
+/// belongs to. The entry carries the document and the moment it was issued, so
+/// a close that reads over by exactly that amount has the row that explains
+/// it.
+pub const ACTION_SALE_OUTSIDE_SHIFT: &str = "till.sale_outside_shift";
+
 /// A cached quantity on hand the ledger did not explain, corrected by the
 /// recount (features.md §1). The entry carries the product's name beside its
 /// id, both quantities and the difference between them, because it is the

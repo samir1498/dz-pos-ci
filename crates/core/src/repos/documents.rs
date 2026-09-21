@@ -4,11 +4,15 @@
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
+use chrono::NaiveDateTime;
+
 use crate::error::CoreError;
 use crate::models::document::{
-    assemble, CancelWrite, Document, DocumentKind, DocumentLineRow, DocumentLineRowWrite,
-    DocumentRow, DocumentRowWrite, DocumentStatus, DocumentTvaRow, DocumentTvaRowWrite,
+    assemble, payment_mode_parse, CancelWrite, Document, DocumentKind, DocumentLineRow,
+    DocumentLineRowWrite, DocumentRow, DocumentRowWrite, DocumentStatus, DocumentTvaRow,
+    DocumentTvaRowWrite, RungSale,
 };
+use crate::money::Money;
 use crate::schema::{document_lines, document_tva, documents, products};
 
 /// Whether the series string ends in the year the row says it counts in:
@@ -311,6 +315,50 @@ pub fn list_in_range(
         .load(conn)?;
     rows.into_iter()
         .map(|row| with_children(conn, shop_id, row))
+        .collect()
+}
+
+/// What one person rang up over one half-open stretch of the clock, oldest
+/// first, four columns a row. A ticket or a facture that still stands, the
+/// same set `repos::cash::sales` sums: a proforma is a quotation nobody paid,
+/// an avoir is a credit note, and an annulled ticket is money that did not
+/// stay in the drawer.
+///
+/// `issued_at` and not `created_at`, for the reason `RungSale` gives.
+///
+/// The bounds are half open, `>= from` and `< until`, the same shape every
+/// query in this directory takes over a stretch of time.
+pub fn rung_by(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    from: NaiveDateTime,
+    until: NaiveDateTime,
+) -> Result<Vec<RungSale>, CoreError> {
+    let rows: Vec<(i32, NaiveDateTime, String, i64)> = documents::table
+        .filter(documents::shop_id.eq(shop_id))
+        .filter(documents::user_id.eq(user_id))
+        .filter(documents::kind.eq_any([DocumentKind::Ticket, DocumentKind::Facture]))
+        .filter(documents::status.eq(DocumentStatus::Issued))
+        .filter(documents::issued_at.ge(from))
+        .filter(documents::issued_at.lt(until))
+        .order((documents::issued_at.asc(), documents::id.asc()))
+        .select((
+            documents::id,
+            documents::issued_at,
+            documents::payment_mode,
+            documents::net_to_pay_centimes,
+        ))
+        .load(conn)?;
+    rows.into_iter()
+        .map(|(document_id, issued_at, mode, net_to_pay)| {
+            Ok(RungSale {
+                document_id,
+                issued_at,
+                payment_mode: payment_mode_parse(&mode)?,
+                net_to_pay: Money::centimes(net_to_pay),
+            })
+        })
         .collect()
 }
 

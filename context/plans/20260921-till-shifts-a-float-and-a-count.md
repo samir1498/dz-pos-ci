@@ -307,6 +307,26 @@ tagged as belonging to no shift.
 
 `dz-money-builder`. Size M.
 
+Two things T3 settled while it was built, written down because neither reads
+off the code:
+
+A clock that steps backward refuses the open. `open` rejects an `opened_at`
+at or before that person's own last `closed_at`, so a shop PC whose clock
+drifts back after sleep cannot open a till until the clock passes that
+moment, and the refusal says which moment it is waiting for. Nothing else
+writes `shifts`, and T4 keeps the moment off the wire, so a wrong clock is
+the only caller that can reach the guard, which is what it is for. Importing
+old shifts would need its own service function, and none is planned.
+
+The other shop's rows in
+`takings_for_answers_one_person_over_one_window_and_never_the_shop` are rows
+only the fixture can write. Every user update reads the row through its own
+`shop_id` and writes that same `shop_id` back, so nobody moves shops and one
+user id never holds rows in two of them. The test stays anyway: shop 2's rows
+against user 1 are the only way to tell the `shop_id` filter from the
+`user_id` one, and with every row in one shop either filter can be deleted
+and the test still passes.
+
 **T4: the routes, the gates, the permission.** `POST /till/shifts`,
 `POST /till/shifts/{id}/close`, `GET /till/shifts/open`,
 `GET /till/shifts/{id}`; the gate rows; the permission; the tag hook for
@@ -327,10 +347,20 @@ refuses a route split into a folder, because its walk reads one directory
 deep and skips every `mod.rs`, which is exactly where a folder route's
 handler would live.
 
+Neither moment reaches the wire. `NewShift::opened_at` and `TillCount::at`
+are both `Option`, and the route passes `None` for each, the way
+`NewSaleDto` hardcodes `issued_at: None` (`crates/api/src/dto/sales.rs:388`
+says why: when a thing happened is the server's to say). A DTO field for
+either is a client that can backdate a window and move an expected figure,
+so neither DTO grows one. T3 refuses a moment in the future and one that
+reaches back into the same person's last closed shift, but those guards are
+the floor and not a licence to accept the field.
+
 Done: `route_gates.rs` green with the new rows; a cashier's refusal names the
 permission; a sale rung with no shift open returns 200 with the sale and
 writes the `till.sale_outside_shift` audit row, and no request path can
-refuse it. Size M.
+refuse it; neither till DTO carries a moment, proved by the DTO test rather
+than by reading. Size M.
 
 **T5: opening and closing at the till.** The open popup on the first sign-in
 of the day, pre-filled with the last close's counted figure and carrying the

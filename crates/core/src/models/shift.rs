@@ -63,7 +63,16 @@ impl Shift {
 /// comes from the caller's identity, the way it does on every other write.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewShift {
-    pub opened_at: NaiveDateTime,
+    /// The moment the drawer was taken over. `None` is now, on the shop's
+    /// clock, which is what a till opening at the counter wants and what the
+    /// route passes.
+    ///
+    /// Optional and not required, the same shape `NewSale::issued_at` takes
+    /// (`services::sales::issue` defaults it from `clock::now`, and the DTO
+    /// hardcodes `None`). A required field would make every caller name a
+    /// moment, which is the primitive this type exists to keep off the wire:
+    /// when a shift began is the server's to say.
+    pub opened_at: Option<NaiveDateTime>,
     pub opening_cash: Money,
 }
 
