@@ -2,7 +2,6 @@
 name: dz-pr
 description: Open a pull request in the dz-pos repo. Use whenever a dz-pos branch is ready for review or merge, or Samir says "PR it", "open the PR", "ship it". Covers branch naming, the gate run that must precede it, and the PR body sections including the fiscal assumptions list.
 argument-hint: [<base-branch>]
-disable-model-invocation: true
 ---
 
 ## Branch
@@ -10,8 +9,10 @@ disable-model-invocation: true
 `feature/<name>`, `fix/<name>`, `chore/<name>`, `docs/<name>` off
 `origin/main`; inside a milestone, `m<N>/<task>` off the milestone branch
 (`m1/2026-09-09`), and the milestone branch itself goes to `main` at its
-checkpoint tasks. One session works this repo per machine, so no worktree; if
-that changes, `CLAUDE.md` says what to do.
+checkpoint tasks. Each branch lives in its own worktree under
+`.claude/worktrees/` (`just worktree <name> <branch>`), and the session opens
+the PR itself when the branch is ready; Samir does not have to ask for it
+(2026-09-21).
 
 ## Gates first, evidence in hand
 
