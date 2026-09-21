@@ -66,10 +66,15 @@ CREATE TABLE shifts (
     -- through with no note, and only a close whose two figures disagree is
     -- made to say why. `counted = expected` is safe against NULL because the
     -- CHECK above has already forced the two to be non-null together.
+    --
+    -- `trim(note) <> ''` because a space is not a reason. The service reaches
+    -- the column through `optional_field`, which trims and turns blank into
+    -- NULL, so the only way a row of spaces arrives here is a writer that
+    -- forgot, which is the case this line is the backstop for.
     CONSTRAINT shifts_a_difference_carries_a_reason CHECK (
         counted_centimes IS NULL
         OR counted_centimes = expected_at_close_centimes
-        OR note IS NOT NULL
+        OR (note IS NOT NULL AND trim(note) <> '')
     )
 ) STRICT;
 

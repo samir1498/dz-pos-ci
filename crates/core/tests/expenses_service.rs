@@ -58,11 +58,13 @@ fn an_expense_is_stamped_on_the_shop_clock_and_never_left_to_sqlite() {
     // the day before. Migration 000017 moved the rows written up to then;
     // this is the stamp that keeps the next one right.
     //
-    // Asserted as the distance from UTC rather than against a fixed moment,
-    // because the service reads the wall clock: what is being pinned is which
-    // clock, and that answer is the same at every hour of the day.
+    // Asserted against the two UTC readings that bracket the call rather than
+    // against a fixed moment, because the service reads the wall clock: what
+    // is being pinned is which clock, and that answer is the same at every
+    // hour of the day.
     let (_dir, mut conn) = open_temp();
     let rent = category(&mut conn, "rent");
+    let before = chrono::Utc::now().naive_utc();
     let made = expenses::create(
         &mut conn,
         SHOP,
@@ -75,13 +77,18 @@ fn an_expense_is_stamped_on_the_shop_clock_and_never_left_to_sqlite() {
         },
     )
     .unwrap();
-    let ahead_of_utc = made
-        .created_at
-        .signed_duration_since(chrono::Utc::now().naive_utc())
-        .num_seconds();
+    let after = chrono::Utc::now().naive_utc();
+    // Bracketed by the two UTC readings rather than by a tolerance: the stamp
+    // is `Utc::now() + 3600`, so it cannot land past `after + 3600`, and a
+    // tolerance around 3600 would have to be wider than the slowest this test
+    // ever runs. `before` is taken above the `create` call for the same reason.
     assert!(
-        (3_590..=3_610).contains(&ahead_of_utc),
-        "the expense was stamped {ahead_of_utc} seconds from UTC, and the shop runs 3600 ahead"
+        made.created_at >= before + chrono::Duration::seconds(3_600)
+            && made.created_at <= after + chrono::Duration::seconds(3_600),
+        "the expense was stamped {}, outside the shop-clock window {} to {}",
+        made.created_at,
+        before + chrono::Duration::seconds(3_600),
+        after + chrono::Duration::seconds(3_600)
     );
 }
 

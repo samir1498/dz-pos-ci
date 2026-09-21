@@ -201,8 +201,8 @@ fn every_table_is_strict() {
 #[test]
 fn every_money_and_rate_column_refuses_a_real_a_text_and_a_negative() {
     // Rule 6: money is integer centimes. 19.99 was once read back as
-    // Money(19). Every constrained column of every table is probed, so a
-    // dropped CHECK on any one of them goes red here.
+    // Money(19). These are the `products` columns and the two counters; a
+    // table with its own migration test probes its columns there instead.
     let (_dir, mut conn) = open_temp();
     let money_columns = [
         ("products", "cost_centimes"),

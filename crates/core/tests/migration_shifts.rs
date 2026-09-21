@@ -186,6 +186,17 @@ fn a_count_that_differs_from_the_expected_figure_carries_a_reason() {
         "a drawer over by 30 000 centimes was filed with no reason"
     );
 
+    // A row of spaces is not a reason either. `optional_field` would have
+    // turned it into NULL on the way through a service; this is what stops a
+    // writer that skips one.
+    for blank in ["''", "'   '"] {
+        let short_blank_reason = closed(OWNER, "1180000", "1200000", blank);
+        assert!(
+            write_shift(&mut conn, &borrowed(&short_blank_reason)).is_err(),
+            "a drawer 20 000 centimes short was filed with {blank} as its reason"
+        );
+    }
+
     // With a reason, the same short close stands.
     let short_with_reason = closed(OWNER, "1180000", "1200000", "'20 000 remis au patron'");
     assert!(
@@ -235,8 +246,12 @@ fn the_money_columns_of_a_shift_are_integer_centimes() {
         );
     }
     // The top of the range: i64::MAX is an integer the column takes, and one
-    // more than it is a float by the time SQLite has read the literal, so it
-    // is the typeof clause and not the sign clause that stops it.
+    // more than it is a real by the time SQLite has tokenised the literal, so
+    // STRICT refuses it before either half of the CHECK is reached. Same for
+    // the three non-integer literals above: only `-1` gets far enough for the
+    // sign bound to answer. The `typeof` halves stay as a statement of intent,
+    // which is what `migration.rs`'s
+    // `a_lossless_real_is_stored_as_an_integer_by_strict_itself` pins.
     assert!(accept(&mut conn, "9223372036854775807"));
     assert!(probe(
         &mut conn,
@@ -254,6 +269,9 @@ fn the_money_columns_of_a_shift_are_integer_centimes() {
         ("1.5", "1", "'x'", false),
         ("'abc'", "1", "'x'", false),
         ("-1", "0", "'x'", false),
+        // The expected figure's own type, refused by STRICT the same way.
+        ("1", "1.5", "'x'", false),
+        ("1", "'abc'", "'x'", false),
     ] {
         let row = closed(OWNER, counted, expected, note);
         assert_eq!(
@@ -265,7 +283,10 @@ fn the_money_columns_of_a_shift_are_integer_centimes() {
 
     // The expected figure carries no sign bound, on purpose: a cash refund
     // leaving the drawer subtracts from it, so a drawer that paid out more
-    // than it took in is arithmetic and not an error.
+    // than it took in is arithmetic and not an error. Its type is held by
+    // STRICT alone, like every other integer column in the file; what is left
+    // for this case to show is that a negative is taken where its sibling
+    // refuses one.
     let paid_out = closed(OWNER, "0", "-5000", "'remboursement en espèces'");
     assert!(write_shift(&mut conn, &borrowed(&paid_out)).is_ok());
 }

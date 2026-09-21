@@ -275,6 +275,43 @@ mod tests {
     }
 
     #[test]
+    fn a_short_close_with_no_reason_cannot_borrow_the_one_the_open_row_held() {
+        // The case the changeset exists for, and the one that goes red without
+        // it: a drawer 20 000 centimes short, closed with no reason given, over
+        // a row carrying a sentence about the opening. Skipping the `None`
+        // would leave `ouverte en retard` standing in as the explanation and
+        // `shifts_a_difference_carries_a_reason` would be satisfied by it, so
+        // the close would land. Nulling the column is what makes the file
+        // refuse the row.
+        let (_dir, mut conn) = open();
+        let made = insert(&mut conn, &opening(OWNER, 21, 9, 500_000)).unwrap();
+        diesel::sql_query("UPDATE shifts SET note = 'ouverte en retard'")
+            .execute(&mut conn)
+            .unwrap();
+        let refused = close(
+            &mut conn,
+            SHOP,
+            made.id,
+            &ShiftCloseWrite {
+                closed_at: moment(21, 19),
+                closed_by: OWNER,
+                counted_centimes: 1_180_000,
+                expected_at_close_centimes: 1_200_000,
+                note: None,
+            },
+        );
+        assert!(
+            refused.is_err(),
+            "a drawer 20 000 short closed with no reason, against the note the \
+             shift opened with"
+        );
+        // And the row is left as it was, still open.
+        let after = get(&mut conn, SHOP, made.id).unwrap();
+        assert!(after.is_open());
+        assert_eq!(after.note.as_deref(), Some("ouverte en retard"));
+    }
+
+    #[test]
     fn the_lists_are_newest_first_and_the_user_list_holds_only_that_person() {
         let (_dir, mut conn) = open();
         let karim = second_cashier(&mut conn);
