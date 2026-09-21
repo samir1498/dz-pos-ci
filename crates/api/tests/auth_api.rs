@@ -116,10 +116,24 @@ async fn a_pin_signs_the_till_in_and_the_answer_says_who_is_acting() {
     assert_eq!(body["idle_minutes"], 15);
 
     // The permission list is the core's table, walked, not a list the API
-    // keeps of its own: an owner holds every one of them.
+    // keeps of its own: an owner holds every one of them. Counted off
+    // `Permission::ALL` rather than written out, because "every one" is the
+    // claim and a literal here is a second home for how many there are
+    // (`.claude/stale-homes.md`); the spot checks under it are what stop the
+    // count passing against a list of the wrong names.
     let held = body["me"]["permissions"].as_array().unwrap();
-    assert_eq!(held.len(), 13, "{held:?}");
-    for wanted in ["sell", "manage_users", "see_audit_log", "commit_money"] {
+    assert_eq!(
+        held.len(),
+        dzpos_core::services::permissions::Permission::ALL.len(),
+        "{held:?}"
+    );
+    for wanted in [
+        "sell",
+        "manage_users",
+        "see_audit_log",
+        "commit_money",
+        "open_and_close_till",
+    ] {
         assert!(held.iter().any(|p| p == wanted), "{wanted} is missing");
     }
 

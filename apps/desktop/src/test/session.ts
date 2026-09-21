@@ -28,6 +28,8 @@ const ALL_PERMISSIONS: readonly PermissionDto[] = [
   "export_and_import",
   "change_price_at_the_till",
   "see_audit_log",
+  "open_and_close_till",
+  "close_another_persons_till",
 ];
 
 export const ME_OWNER: MeDto = {
@@ -41,10 +43,10 @@ export const ME_OWNER: MeDto = {
 };
 
 /** `services::permissions::can`'s own table: a cashier holds `sell` and
- *  nothing else. */
+ *  `open_and_close_till`, and nothing else. */
 export const ME_CASHIER: MeDto = {
   user_id: 2,
   name: "Karim",
   role: "cashier",
-  permissions: ["sell"],
+  permissions: ["sell", "open_and_close_till"],
 };

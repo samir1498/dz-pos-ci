@@ -38,7 +38,8 @@ fn every_row_is_filled_in_and_no_route_is_named_twice() {
                     || gate.path == "/suppliers/{id}/ledger"
                     || gate.path == "/backups"
                     || gate.path == "/support-bundle"
-                    || gate.path == "/pairing/devices",
+                    || gate.path == "/pairing/devices"
+                    || gate.path == "/till/shifts/{id}",
                 "{} is a read this table was not opened for; widen this allow-list deliberately \
                  and say why in ROUTE_GATES's own `why` (M4 T5 review, 2026-09-11: /dashboard, \
                  /dashboard/series, /purchases and /purchases/{{id}} joined the exports, the \
@@ -47,7 +48,10 @@ fn every_row_is_filled_in_and_no_route_is_named_twice() {
                  /suppliers/{{id}}/ledger and /backups joined them, the money the shop spends \
                  and owes having been readable by a cashier while the pages that sum it were \
                  not. M5 T3: /support-bundle joined them, the zip a shop sends out gated the \
-                 same way the backups block beside it is). M6 T4: /pairing/devices joined them, same gate as the QR.",
+                 same way the backups block beside it is). M6 T4: /pairing/devices joined them, same gate as the QR. \
+                 Till shifts, 2026-09-21: /till/shifts/{{id}} joined them, one person's evening being a \
+                 report a manager runs the floor off; its sibling /till/shifts/open stayed off the table \
+                 because it answers about the caller and names nobody else.",
                 gate.path
             );
         } else {

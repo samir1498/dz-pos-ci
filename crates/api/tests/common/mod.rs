@@ -170,3 +170,47 @@ pub fn signed_in_router(db: &Path, shop: i32, token: &dzpos_api::LaunchToken) ->
     let state = dzpos_api::AppState::open(db, shop).expect("the test's shop file will not open");
     dzpos_api::router(state, token)
 }
+
+/// A second cashier's session, and the shop's floor manager's.
+///
+/// `sign_in_as` above takes the *first* active user of a role, so calling it
+/// twice for "cashier" hands back the same person twice. A test about one
+/// person reaching for another person's drawer needs two of the same role, so
+/// this one always makes a fresh fiche under the name it is given and returns
+/// the id it made.
+pub const SECOND_CASHIER_SESSION: &str = "dz-pos-test-session-for-a-second-cashier";
+
+/// Makes a user of `role` named `name` in `shop`, opens a session for them
+/// under `token`, and answers their id.
+pub fn sign_in_new(db: &Path, shop: i32, role: &str, name: &str, token: &str) -> i32 {
+    let mut conn = dzpos_core::db::open(db).expect("the test's shop file will not open");
+
+    diesel::sql_query("INSERT OR IGNORE INTO shops (id, name) VALUES (?, 'Test')")
+        .bind::<diesel::sql_types::Integer, _>(shop)
+        .execute(&mut conn)
+        .expect("the test shop could not be made");
+
+    #[derive(QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+    let made: Id =
+        diesel::sql_query("INSERT INTO users (shop_id, name, role) VALUES (?, ?, ?) RETURNING id")
+            .bind::<diesel::sql_types::Integer, _>(shop)
+            .bind::<diesel::sql_types::Text, _>(name)
+            .bind::<diesel::sql_types::Text, _>(role)
+            .get_result(&mut conn)
+            .expect("the test user could not be made");
+
+    diesel::sql_query(
+        "INSERT OR REPLACE INTO sessions (shop_id, user_id, token_hash, created_at, last_seen_at) \
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+    )
+    .bind::<diesel::sql_types::Integer, _>(shop)
+    .bind::<diesel::sql_types::Integer, _>(made.id)
+    .bind::<diesel::sql_types::Text, _>(dzpos_core::services::sessions::token_digest(token))
+    .execute(&mut conn)
+    .expect("the test session could not be opened");
+    made.id
+}

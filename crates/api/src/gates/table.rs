@@ -344,6 +344,24 @@ pub const ROUTE_GATES: &[Gate] = &[
         why: "a zip the shop sends to whoever is fixing something, reached from the settings screen and gated the same way the backups block beside it is (M5 T3); its own doc names why it carries no customer, product, price or document and an audit row still travels with it, the same as an export's, because the file is on its way out of the shop even though what is in it never is",
     },
     Gate {
+        method: "POST",
+        path: "/till/shifts",
+        permission: Some(Permission::OpenAndCloseTill),
+        why: "opening a drawer with what is in it; all three roles hold the permission (plan till-shifts-a-float-and-a-count ruling 10, 2026-09-20), because the person who counts a drawer is the person standing at it and a cashier who cannot open their own till cannot start a day. Named rather than left blank for the reason POST /sales is: it is a permission and not an absence of one",
+    },
+    Gate {
+        method: "GET",
+        path: "/till/shifts/{id}",
+        permission: Some(Permission::SeeReports),
+        why: "one shift with what that person took over its window and what the shop expects them to be holding: a report a manager runs the floor off, and not the audit log, which is the owner's alone (docs/features.md §5). A cashier reads their own open drawer through GET /till/shifts/open, which names nobody and carries no row (plan till-shifts-a-float-and-a-count T4, 2026-09-21)",
+    },
+    Gate {
+        method: "POST",
+        path: "/till/shifts/{id}/close",
+        permission: Some(Permission::OpenAndCloseTill),
+        why: "counting the drawer and closing it, the other half of opening it and the same permission. The coarse half of a pair: one route serves both a cashier counting their own and somebody counting a drawer that was walked away from, so whose drawer it is is decided in services::shifts::close, which asks for Permission::CloseAnotherPersonsTill when the closer is not the opener (ruling 10). A row here cannot make that call, because it is a fact about the row and not about the path",
+    },
+    Gate {
         method: "GET",
         path: "/users",
         permission: Some(Permission::ManageUsers),

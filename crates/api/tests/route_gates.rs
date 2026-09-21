@@ -374,6 +374,23 @@ fn the_table_is_about_writes_and_the_reads_that_carry_lists_or_reports_out() {
             "GET {read} should carry SeeCostAndMargin after the M4 T5 review"
         );
     }
+    // The till's two reads, which the plan's ruling 10 split on purpose
+    // (2026-09-21). One shift by id is one person's evening beside what the
+    // shop expected them to hold, a report and therefore `SeeReports`; a
+    // cashier reading their own open drawer takes no parameter naming
+    // anybody, so it carries no row and stays open. Both halves are pinned:
+    // a row appearing on `/open` would quietly refuse a cashier the figure
+    // they are about to count against, and a row lost off `/{id}` would let
+    // one read every colleague's.
+    assert_eq!(
+        gate_for("GET", "/till/shifts/{id}").and_then(|g| g.permission),
+        Some(Permission::SeeReports),
+        "GET /till/shifts/{{id}} should carry SeeReports"
+    );
+    assert!(
+        gate_for("GET", "/till/shifts/open").is_none(),
+        "GET /till/shifts/open answers about the caller alone and is not this table's business"
+    );
 }
 
 /// The gate's own default when the walk above is not looking.

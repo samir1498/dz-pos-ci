@@ -53,7 +53,8 @@ use crate::services::audit;
 use crate::services::cash::{self, Takings};
 use crate::services::clock;
 use crate::services::documents;
-use crate::services::optional_field;
+use crate::services::permissions::{self, Permission};
+use crate::services::{optional_field, role_of};
 
 pub use crate::models::document::RungSale;
 pub use crate::models::shift::{NewShift, Shift, ShiftClose};
@@ -219,6 +220,16 @@ pub fn open_for(
 /// migration's `shifts_a_difference_carries_a_reason` CHECK is the backstop
 /// and would refuse the row too, as a diesel error an API has no field to hang
 /// on an input; this is the same rule with a sentence a screen can print.
+///
+/// **Whose drawer.** Ruling 10: a cashier counts their own and nobody else's.
+/// The check is here and not on the route because one route serves both
+/// cases, and which case it is is a fact about the row rather than about the
+/// path: the route is gated on `OpenAndCloseTill`, which all three roles
+/// hold, and `CloseAnotherPersonsTill` is asked for only when the closer is
+/// not the opener. Without it, every holder of the coarse permission could
+/// close any open drawer in the shop by id, and be handed that person's
+/// expected figure and difference in the answer — the same two figures
+/// `GET /till/shifts/{id}` refuses a cashier under `SeeReports`.
 pub fn close(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -240,6 +251,16 @@ pub fn close(
                 field: "closed_at".to_string(),
                 message: "that till was already counted and closed".to_string(),
             });
+        }
+        // Asked of the role the row names rather than of a role handed in
+        // beside it, which is what `role_of`'s own doc is about. Before the
+        // takings are summed: a refusal that had already read somebody
+        // else's figures would be a refusal that still did the thing.
+        if closed_by != shift.opened_by {
+            permissions::require(
+                role_of(conn, shop_id, closed_by)?,
+                Permission::CloseAnotherPersonsTill,
+            )?;
         }
         let closed_at = count.at.unwrap_or_else(clock::now);
         if closed_at < shift.opened_at {
@@ -370,6 +391,23 @@ pub fn sales_outside_a_shift(
 /// never refused: seven e2e specs, `just seed`, the demo recordings and the
 /// Maestro flows all ring sales with no shift open, and a shop that forgot to
 /// open the till in the morning has sold real goods either way.
+///
+/// `services::sales::issue_inner` is the caller, and it calls this inside the
+/// transaction that wrote the document. The tag is derived and stored
+/// nowhere, so this row is the whole of what marks such a sale: a sale
+/// committed with the row rolled back off it would be one nothing can tell
+/// apart from a sale rung inside a shift. A refusal here is a file that will
+/// not write, not a rule about drawers, and it takes the sale down with it
+/// the way every other write in that transaction does.
+///
+/// A replay through `issue_idempotent` never reaches it. That path answers
+/// the stored paper and returns before the document is written, so a phone
+/// retrying a lost answer tags once and not twice. Its first arrival does
+/// reach here, with `issued_at` the moment it arrived (ruling 3), so a sale
+/// rung offline at 18:00 and synced at 19:30 after that cashier closed at
+/// 19:00 is tagged rather than counted — its cash was physically in the
+/// drawer at the count, and this row is what explains the close reading
+/// over.
 pub fn tag_if_outside_a_shift(
     conn: &mut SqliteConnection,
     shop_id: i32,

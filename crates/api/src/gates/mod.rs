@@ -7,7 +7,7 @@
 //! mutating route with no row here fails, and a row naming a route that is not
 //! there fails.
 //!
-//! **Eighteen reads are in it.** The table is otherwise about writes, because a
+//! **Nineteen reads are in it.** The table is otherwise about writes, because a
 //! read of a list a cashier is already looking at needs no permission. The
 //! four exports and the import template are the exception the M3 carry-in
 //! named in words: an export is the whole customer list, the whole supplier
@@ -43,6 +43,28 @@
 //! `GET /suppliers/{id}/ledger` sit with `GET /purchases` for the same
 //! reason: the buying side of the shop, gated whole because no till flow
 //! reads either.
+//!
+//! One more joined on the till shifts (2026-09-21): `GET /till/shifts/{id}`
+//! is one person's evening, the cash they took over its window beside what
+//! the shop expected them to be holding, which is a report a manager runs
+//! the floor off — `Permission::SeeReports`, and not `SeeAuditLog`, which is
+//! the owner's alone. Its sibling `GET /till/shifts/open` deliberately has
+//! no row: it answers about the caller and takes no parameter naming anybody
+//! else, so there is nothing on it a role could be refused, and a cashier
+//! who cannot read their own open drawer cannot be shown the expected figure
+//! before they count it.
+//!
+//! **What a row cannot say.** A gate answers for a whole route before the
+//! handler runs, so it can only ask about the caller and the path, never
+//! about the row the caller named. Where a rule turns on the row, the table
+//! carries the coarse half and the service carries the fine one: `POST
+//! /sales` is `Sell` here and `services::sales` asks for
+//! `DiscountAboveThreshold` and `ChangePriceAtTheTill` on the baskets that
+//! need them, and `POST /till/shifts/{id}/close` is `OpenAndCloseTill` here
+//! while `services::shifts::close` asks for `CloseAnotherPersonsTill` when
+//! the closer is not the opener. A fine permission never has a row of its
+//! own, so reading this table alone does not tell you everything a role may
+//! be refused for; `services::permissions::Permission`'s own docs do.
 //!
 //! **Where it is applied.** T2 shipped the mechanism, the table's shape and
 //! the actor. T3 applied it: `crates/api/src/session.rs::require` looks the

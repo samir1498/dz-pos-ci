@@ -20,20 +20,21 @@ use dzpos_api::dto::{
     HealthDto, ImportAppliedDto, ImportDryRunDto, ImportOutcomeDto, ImportRowDto, LabelSheetDto,
     LastStockRecountDto, LoginDto, LowStockDto, MeDto, NewAvoirDto, NewCustomerDto, NewExpenseDto,
     NewPaymentDto, NewProductDto, NewPurchaseDto, NewPurchaseLineDto, NewReceiptDto, NewSaleDto,
-    NewSaleLineDto, NewSupplierDto, NewUserDto, OutgoingsDto, OwedDto, PaidNowDto, PairedDeviceDto,
-    PairingQrDto, PartyKindDto, PaymentAllocationDto, PaymentDto, PaymentMethodDto, PaymentModeDto,
-    PermissionDto, PrintLangChoiceDto, PrintLangDto, ProductDto, PurchaseDetailDto, PurchaseDto,
-    PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto, PurchaseStatusDto, ReceiveLineDto,
-    RegimeChangeDto, RegimeDto, RestoreDto, RoleDto, SaleBalanceDto, SaleCancelEffectDto,
-    SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto, SaleTotalsDto, SaleTvaDto,
-    SaleWarningDto, SessionDto, SessionIdleDto, SetPasswordDto, SetPinDto, SettingsDto, StaffDto,
-    StockDriftDto, StockRecountDto, StoreDto, SupplierAllocationDto, SupplierDebtKindDto,
-    SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto,
-    TakingsDto, ThemeChoiceDto, ThemeDto, TopProductDto, UnitDto, UserDto,
+    NewSaleLineDto, NewShiftDto, NewSupplierDto, NewUserDto, OutgoingsDto, OwedDto, PaidNowDto,
+    PairedDeviceDto, PairingQrDto, PartyKindDto, PaymentAllocationDto, PaymentDto,
+    PaymentMethodDto, PaymentModeDto, PermissionDto, PrintLangChoiceDto, PrintLangDto, ProductDto,
+    PurchaseDetailDto, PurchaseDto, PurchaseLineDto, PurchaseReceiptDto, PurchaseReceiptLineDto,
+    PurchaseStatusDto, ReceiveLineDto, RegimeChangeDto, RegimeDto, RestoreDto, RoleDto,
+    SaleBalanceDto, SaleCancelEffectDto, SaleCancellationDto, SaleDto, SaleKindDto, SaleLineDto,
+    SaleTotalsDto, SaleTvaDto, SaleWarningDto, SessionDto, SessionIdleDto, SetPasswordDto,
+    SetPinDto, SettingsDto, ShiftDto, ShiftReportDto, StaffDto, StockDriftDto, StockRecountDto,
+    StoreDto, SupplierAllocationDto, SupplierDebtKindDto, SupplierDto, SupplierEntryDto,
+    SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto, TakingsDto, ThemeChoiceDto,
+    ThemeDto, TillCountDto, TopProductDto, UnitDto, UserDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 115] = [
+const FILES: [&str; 119] = [
     "LoginDto.ts",
     "MeDto.ts",
     "SessionDto.ts",
@@ -149,6 +150,10 @@ const FILES: [&str; 115] = [
     "DeviceTokenDto.ts",
     "PairedDeviceDto.ts",
     "StaffDto.ts",
+    "ShiftDto.ts",
+    "ShiftReportDto.ts",
+    "NewShiftDto.ts",
+    "TillCountDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -193,7 +198,8 @@ const DTO_SOURCE: &str = concat!(
     include_str!("../src/dto/auth.rs"),
     include_str!("../src/dto/audit.rs"),
     include_str!("../src/dto/users.rs"),
-    include_str!("../src/dto/pairing.rs")
+    include_str!("../src/dto/pairing.rs"),
+    include_str!("../src/dto/till.rs")
 );
 
 #[test]
@@ -346,6 +352,10 @@ fn export_bindings() {
     DeviceTokenDto::export_all(&cfg).unwrap();
     PairedDeviceDto::export_all(&cfg).unwrap();
     StaffDto::export_all(&cfg).unwrap();
+    ShiftDto::export_all(&cfg).unwrap();
+    ShiftReportDto::export_all(&cfg).unwrap();
+    NewShiftDto::export_all(&cfg).unwrap();
+    TillCountDto::export_all(&cfg).unwrap();
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

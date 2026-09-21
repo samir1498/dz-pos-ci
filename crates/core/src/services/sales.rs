@@ -25,12 +25,12 @@ use crate::models::document::{
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{compute_totals, Line, Money, PaymentMode, TotalsOptions};
 use crate::repos::sale_idempotency as idempotency;
-use crate::services::permissions::{self, Permission, Role};
+use crate::services::permissions::{self, Permission};
 use crate::services::pricing::{
     buyer_block, money_lines, price_lines, sum_line_totals, too_large, STAMP_ENABLED,
 };
 use crate::services::{
-    audit, clock, customers, debt, documents, proforma, settings, shops, stock, users,
+    audit, clock, customers, debt, documents, proforma, role_of, settings, shifts, shops, stock,
 };
 
 /// The basket a till sends, and the paper it asks for. They live in
@@ -104,11 +104,7 @@ fn fingerprint(new: &NewSale) -> String {
             line.line_discount.as_centimes()
         ));
     }
-    let mode = match new.payment_mode {
-        PaymentMode::Cash => "cash",
-        PaymentMode::Card => "card",
-        PaymentMode::Credit => "credit",
-    };
+    let mode = payment_mode_stored(new.payment_mode);
     let kind = match new.kind {
         SaleKind::Ticket => "ticket",
         SaleKind::Facture => "facture",
@@ -514,6 +510,10 @@ fn issue_inner(
                 },
             )?;
         }
+
+        // Ruling 2, and above the cash arm's early return below or a ticket
+        // never reaches it; `shifts::tag_if_outside_a_shift` says the rest.
+        shifts::tag_if_outside_a_shift(conn, shop_id, user_id, document.id, issued_at)?;
 
         let Some(credit) = credit else {
             return Ok(Sale {
@@ -1000,15 +1000,6 @@ fn credit_check(
 /// The basket's HT, read back to compare the global discount against it.
 /// A sum that does not fit is a basket the caller sent, so it is named as
 /// one rather than raised as a money fault.
-/// The role the permission table is asked about, read from the user the sale
-/// is being written under. Read here rather than taken as an argument so the
-/// role that was checked and the user the document and the audit row name are
-/// the same person: a role handed in beside a `user_id` is a second statement
-/// of who is acting, and two statements can disagree.
-fn role_of(conn: &mut SqliteConnection, shop_id: i32, user_id: i32) -> Result<Role, CoreError> {
-    Ok(users::get(conn, shop_id, user_id)?.role)
-}
-
 /// What the basket was worth before anything came off it: the base the
 /// discount threshold is a percentage of.
 fn sum_line_gross(lines: &[Line]) -> Result<Money, CoreError> {

@@ -21,25 +21,26 @@
 //! float. On a fixture dated today the two columns are an hour apart and the
 //! swap survives.
 
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::sql_types::Timestamp;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
-use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
+use dzpos_core::money::{Money, PaymentMode};
 use dzpos_core::services::audit;
 use dzpos_core::services::cancellation;
 use dzpos_core::services::cash;
 use dzpos_core::services::clock;
 use dzpos_core::services::customers;
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
-use dzpos_core::services::documents::{
-    self, DocumentKind, NewDocument, NewDocumentLine, SellerBlock,
-};
 use dzpos_core::services::expenses::{self, NewExpense};
 use dzpos_core::services::shifts::{self, NewShift, TillCount};
 
 mod common;
+use common::shifts::{
+    a_floor_manager, a_sale, a_sale_in, a_sale_with_stamp, a_second_cashier, at, day, AMINA, KARIM,
+    LEILA,
+};
 use common::{a_fiche, open_temp};
 
 const SHOP: i32 = 1;
@@ -47,20 +48,6 @@ const SHOP: i32 = 1;
 /// `shop_id` (rule 3), and a fixture living entirely in shop 1 passes with
 /// that filter deleted.
 const OTHER_SHOP: i32 = 2;
-/// The shift's own cashier, the user the first migration seeds.
-const AMINA: i32 = 1;
-/// The second person at the same till. The point of most of this file: her
-/// takings are hers, and a shop-wide sum would hand them to Amina.
-const KARIM: i32 = 2;
-
-fn day() -> NaiveDate {
-    NaiveDate::from_ymd_opt(2026, 9, 14).unwrap()
-}
-
-/// A moment on the fixture day, on the shop's clock.
-fn at(hour: u32, minute: u32, second: u32) -> NaiveDateTime {
-    day().and_hms_opt(hour, minute, second).unwrap()
-}
 
 /// Midnight opening the fixture day and midnight opening the next: the window
 /// the "which sales belonged to no shift" question is asked over.
@@ -79,117 +66,6 @@ fn a_second_shop(conn: &mut SqliteConnection) {
     ))
     .execute(conn)
     .unwrap();
-}
-
-/// A second person at the till. The seeded file carries one user, and a
-/// fixture with one user cannot tell a per-cashier figure from a shop-wide
-/// one.
-fn a_second_cashier(conn: &mut SqliteConnection) {
-    diesel::sql_query(format!(
-        "INSERT INTO users (id, shop_id, name, role) \
-         VALUES ({KARIM}, {SHOP}, 'Karim', 'cashier')"
-    ))
-    .execute(conn)
-    .unwrap();
-}
-
-/// A document written straight through `services::documents`, with its totals
-/// stated rather than computed: what is under test is whose cash a shift
-/// counts, not how a basket adds up.
-///
-/// `user_id` is a parameter and not a constant, which is the whole reason this
-/// helper is not `cash_service.rs`'s: a fixture that could not name a second
-/// ringer could not tell the two figures apart.
-fn a_sale(
-    conn: &mut SqliteConnection,
-    user_id: i32,
-    mode: PaymentMode,
-    total_ttc: i64,
-    issued_at: NaiveDateTime,
-) -> i32 {
-    a_sale_with_stamp(conn, SHOP, user_id, mode, total_ttc, 0, issued_at)
-}
-
-/// The same, on whichever shop's books. Only the second-shop cases name a
-/// shop; everything else sells in this one and reads better for it.
-fn a_sale_in(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    user_id: i32,
-    mode: PaymentMode,
-    total_ttc: i64,
-    issued_at: NaiveDateTime,
-) -> i32 {
-    a_sale_with_stamp(conn, shop_id, user_id, mode, total_ttc, 0, issued_at)
-}
-
-/// The same, on a facture carrying a droit de timbre. The customer hands the
-/// stamp over with the rest, so the drawer holds `net_to_pay` and not
-/// `total_ttc`.
-fn a_sale_with_stamp(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    user_id: i32,
-    mode: PaymentMode,
-    total_ttc: i64,
-    stamp: i64,
-    issued_at: NaiveDateTime,
-) -> i32 {
-    let ttc = Money::centimes(total_ttc);
-    let stamp = Money::centimes(stamp);
-    documents::issue(
-        conn,
-        shop_id,
-        NewDocument {
-            kind: DocumentKind::Ticket,
-            issued_at,
-            user_id,
-            regime: Regime::Ifu,
-            payment_mode: mode,
-            seller: SellerBlock {
-                name: "Mon magasin".to_string(),
-                rc: None,
-                nif: None,
-                nis: None,
-                ai: None,
-                address: None,
-                phone: None,
-            },
-            customer: None,
-            buyer: None,
-            ref_document_id: None,
-            balance: None,
-            totals: Totals {
-                total_ht: ttc,
-                discount: Money::ZERO,
-                subtotal_ht: ttc,
-                tva_by_rate: vec![TvaLine {
-                    rate: Bps::ZERO,
-                    base: ttc,
-                    amount: Money::ZERO,
-                }],
-                tva: Money::ZERO,
-                total_ttc: ttc,
-                stamp,
-                net_to_pay: ttc.checked_add(stamp).unwrap(),
-            },
-            tendered: None,
-            change: None,
-            lines: vec![NewDocumentLine {
-                product_id: None,
-                name: "Article".to_string(),
-                barcode: None,
-                qty_milli: 1_000,
-                unit_price: ttc,
-                line_discount: Money::ZERO,
-                rate_bps: Bps::ZERO,
-                line_total: ttc,
-                ref_line_id: None,
-            }],
-        },
-    )
-    .unwrap()
-    .id
 }
 
 /// A customer who owes money, so somebody can hand cash over against it.
@@ -812,8 +688,11 @@ fn a_till_counted_before_it_was_opened_is_refused() {
 
 #[test]
 fn the_log_holds_the_float_the_count_and_the_opener_when_somebody_else_closed() {
+    // Leila the floor manager closes, not a second cashier: ruling 10 makes
+    // counting a drawer that is not your own manager and owner work, and
+    // `shifts::close` refuses a cashier who reaches for one.
     let (_dir, mut conn) = open_temp();
-    a_second_cashier(&mut conn);
+    a_floor_manager(&mut conn);
     let shift = shifts::open(&mut conn, SHOP, AMINA, opened_at_nine(100_000)).unwrap();
     a_sale(&mut conn, AMINA, PaymentMode::Cash, 20_000, at(10, 0, 0));
     // 100 000 + 20 000 = 120 000, by hand; counted 5 000 over.
@@ -821,10 +700,10 @@ fn the_log_holds_the_float_the_count_and_the_opener_when_somebody_else_closed() 
         &mut conn,
         SHOP,
         shift.id,
-        KARIM,
+        LEILA,
         TillCount {
             counted: Money::centimes(125_000),
-            note: Some("Amina partie, caisse comptée par Karim".to_string()),
+            note: Some("Amina partie, caisse comptée par Leila".to_string()),
             at: Some(at(19, 0, 0)),
         },
     )
@@ -848,7 +727,7 @@ fn the_log_holds_the_float_the_count_and_the_opener_when_somebody_else_closed() 
         .find(|e| e.action == audit::ACTION_CLOSE_TILL)
         .unwrap();
     // The row is the closer's, and it names the opener because the two differ.
-    assert_eq!(closed.user_id, KARIM);
+    assert_eq!(closed.user_id, LEILA);
     let after = closed.after.clone().unwrap();
     assert!(
         after.contains("\"expected_at_close_centimes\":120000"),

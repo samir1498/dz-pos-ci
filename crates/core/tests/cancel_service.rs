@@ -898,9 +898,18 @@ fn the_life_of_a_document_reads_back_from_one_query() {
 
     // Two credit notes: the partial the shop wrote, and the closing one the
     // cancellation wrote to take back what was left.
+    //
+    // The first row is the till tag: this fixture opens no shift before
+    // ringing, so the sale falls inside none of its ringer's own windows and
+    // `services::shifts::tag_if_outside_a_shift` marks it (plan
+    // `till-shifts-a-float-and-a-count` ruling 2). It belongs in this list
+    // rather than being filtered out of it — the point of the test is that
+    // one query answers the whole life of the paper, and a tag saying its
+    // money was never in anybody's counted drawer is part of that life.
     assert_eq!(
         actions("document", facture.id),
         [
+            "till.sale_outside_shift",
             "document.issue_override",
             "document.avoir",
             "document.avoir",

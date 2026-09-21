@@ -938,19 +938,22 @@ person can hold both.
 
 ### The permission table
 
-Thirteen permissions, one `can(role, permission)` table in
+Fifteen permissions, one `can(role, permission)` table in
 `crates/core/src/services/permissions.rs`, and that table is the only place
 in the codebase where a role is compared to decide anything. Every route,
 screen and service asks it.
 
-A cashier may `sell`, and that is the whole list. A manager answers like an
+A cashier may `sell` and `open_and_close_till`, and that is the whole
+list: the person who counts a drawer is the person standing at it, so a
+cashier who could not open their own till could not start a day. A manager
+answers like an
 owner on everything except two things: `manage_users` and `see_audit_log`
 are the owner's alone, because a staff list the staff can add themselves to
 and a log the watched can read are not controls. The milestone's own demo
 line, "the owner sees the audit log of a price change", is where that split
 came from.
 
-The other eleven: `discount_above_threshold` (a discount strictly above the
+The other thirteen: `discount_above_threshold` (a discount strictly above the
 shop's own setting), `override_credit_block`, `see_cost_and_margin` (the
 cost and margin columns on products, redacted rather than hidden; the
 purchase and supplier routes, closed outright since no till flow reads
@@ -964,10 +967,23 @@ stock recount, and undoing a document already handed to a customer),
 `export_and_import` (the four exports, the product template, both imports;
 a label needs nobody, since a name, a price and a barcode are already on the
 shelf), `change_price_at_the_till` (a line sold at a price that is not the
-product's own), and `see_audit_log`.
+product's own), `see_audit_log`, `open_and_close_till` (opening a till
+with a float and counting it at close; reading somebody's shift back is not
+this, it is `see_reports`, because the shift list is a report a manager runs
+the floor off and the audit log is the owner's alone), and
+`close_another_persons_till`.
+
+The last of those is the fine half of a pair, the shape
+`discount_above_threshold` and `change_price_at_the_till` already take under
+the `sell`-gated sale route. One route counts every drawer, so the route is
+gated on `open_and_close_till`, which everybody holds, and the service asks
+for `close_another_persons_till` only when the closer is not the opener: a
+cashier counts their own and a manager counts the one a cashier walked away
+from. A route-level gate could not tell the two apart, because whose drawer
+it is is a fact about the row and not about the path.
 
 The table is matched on the permission first rather than on the pair, so a
-fourteenth permission fails to compile until somebody places it for all
+sixteenth permission fails to compile until somebody places it for all
 three roles. Nothing falls through a wildcard.
 
 A permission is applied in one seam and not in each handler.
@@ -1053,12 +1069,16 @@ changes, the discount threshold and the idle time, recount drifts, supplier
 and purchase corrections, every user operation, and lockouts, plus a refused
 credit sale, a refused discount, a refused typed-under price and a refused
 permission whichever way each was refused, and an export or a restore. A
-till adds three: opening a drawer with a float, counting and closing it —
+till adds three: `till.open`, opening a drawer with a float; `till.close`,
+counting and closing it —
 that row carries the expected figure, the count, the difference, the reason
-given and the opener's name whenever somebody else did the counting — and a
+given and the opener's name whenever somebody else did the counting — and
+`till.sale_outside_shift`, a
 sale that fell inside none of its ringer's own shifts, which is the whole of
 what marks such a sale, since nothing on the document says which shift it
-belongs to.
+belongs to. Such a sale is accepted and tagged and never refused: a shop
+that forgot to open the till in the morning has sold real goods either
+way.
 
 The owner reads it on one screen, filtered by day, by user and by kind, with
 the before and the after of each change. There is no editing and no
