@@ -107,12 +107,8 @@ fn a_facture_part_refunded_in_cash_keeps_its_day_when_it_is_later_annulled() {
     assert_eq!(sixteenth.cash_out.refunds, Money::ZERO);
 
     // And the month holds both days and nothing else.
-    let month = cash::position(
-        &mut conn,
-        SHOP,
-        Period::Month(Month::new(2026, 9).unwrap()),
-    )
-    .unwrap();
+    let month =
+        cash::position(&mut conn, SHOP, Period::Month(Month::new(2026, 9).unwrap())).unwrap();
     assert_eq!(month.cash_in.sales, Money::centimes(404_000));
     assert_eq!(month.cash_out.refunds, Money::centimes(100_000));
     assert_eq!(month.cash, Money::centimes(304_000));
@@ -213,13 +209,29 @@ fn a_credit_facture_paid_in_full_is_refunded_in_cash_for_the_whole_of_it() {
     assert_eq!(position.cash, Money::ZERO);
 }
 
-/// A credit facture half paid hands back the half and not a centime more.
+/// A credit facture part paid hands back what came in, and not what is still
+/// owed on it.
+///
+/// **The two bounds are different numbers here on purpose.** 4 units at
+/// 1 000,00 is 4 000,00 on the account; 1 000,00 of it is paid. So what came
+/// in is 100 000 c and what is still owed is 300 000 c, and every figure
+/// below is chosen so that a guard standing on the wrong one answers
+/// differently: asking for 2 units (200 000 c) is over the paid-in bound and
+/// comfortably under the owed one. The test was 2 000,00 paid on a 4 000,00
+/// facture until 2026-09-21, which made both bounds 200 000 c and left it
+/// unable to tell the rule from its opposite.
+///
+/// Why the paid-in bound is the right one is on `still_to_hand_back`'s own
+/// doc: a downward adjustment zeroes `remaining_debt` with nothing coming in
+/// (features.md §3), so a written-off facture reads as settled and a guard
+/// on that column would hand notes over for goods nobody ever paid for.
 #[test]
-fn a_credit_facture_half_paid_is_refunded_in_cash_up_to_that_half() {
+fn a_credit_facture_part_paid_is_refunded_in_cash_up_to_what_came_in() {
     let (_dir, mut conn) = open_temp_selling_factures();
     let p = product(&mut conn, "Ciment", 100_000, 0);
     let c = an_identified_customer(&mut conn, "Entreprise Benali");
-    // 4 units at 1 000,00 on credit: 4 000,00, of which 2 000,00 is paid.
+    // 4 units at 1 000,00 on credit: 4 000,00, of which 1 000,00 is paid.
+    // Still owed: 3 000,00.
     let facture = a_facture(&mut conn, c, vec![line(p, 4_000)], PaymentMode::Credit, 14);
     let line_id = facture.lines[0].id;
     debt::pay(
@@ -227,7 +239,7 @@ fn a_credit_facture_half_paid_is_refunded_in_cash_up_to_that_half() {
         SHOP,
         OWNER,
         c,
-        Money::centimes(200_000),
+        Money::centimes(100_000),
         PaymentMethod::Cash,
         None,
         at(14, 11),
@@ -240,13 +252,15 @@ fn a_credit_facture_half_paid_is_refunded_in_cash_up_to_that_half() {
             qty_milli: qty,
         }])
     };
-    // Three units is 3 000,00, more than the 2 000,00 that came in.
+    // Two units is 2 000,00: over the 1 000,00 that came in, and well under
+    // the 3 000,00 still owed. This is the assertion that goes red if the
+    // bound were the owed figure.
     let err = avoir::issue_settling(
         &mut conn,
         SHOP,
         OWNER,
         facture.id,
-        asked(3_000),
+        asked(2_000),
         Some("trop".to_string()),
         Some(at(14, 13)),
         Refund::Cash,
@@ -257,29 +271,30 @@ fn a_credit_facture_half_paid_is_refunded_in_cash_up_to_that_half() {
         "{err:?}"
     );
 
-    // Two units is exactly what came in, so it goes back.
+    // One unit is exactly what came in, so it goes back.
     let credit = avoir::issue_settling(
         &mut conn,
         SHOP,
         OWNER,
         facture.id,
-        asked(2_000),
-        Some("la moitié".to_string()),
+        asked(1_000),
+        Some("ce qui a été versé".to_string()),
         Some(at(14, 14)),
         Refund::Cash,
     )
     .unwrap();
-    assert_eq!(credit.totals.net_to_pay, Money::centimes(200_000));
+    assert_eq!(credit.totals.net_to_pay, Money::centimes(100_000));
     assert_eq!(
         cash::position(&mut conn, SHOP, Period::Day(day(14)))
             .unwrap()
             .cash_out
             .refunds,
-        Money::centimes(200_000)
+        Money::centimes(100_000)
     );
 
-    // And a second credit note cannot take the same money again: the half is
-    // spent, so one more unit is refused.
+    // And a second credit note cannot take the same money again: the
+    // 1 000,00 that came in is spent, so one more unit is refused even
+    // though 2 000,00 is still owed on the paper.
     let err = avoir::issue_settling(
         &mut conn,
         SHOP,
@@ -480,12 +495,8 @@ fn a_sale_on_the_last_of_the_month_refunded_on_the_first_of_the_next_splits_acro
     )
     .unwrap();
 
-    let september = cash::position(
-        &mut conn,
-        SHOP,
-        Period::Month(Month::new(2026, 9).unwrap()),
-    )
-    .unwrap();
+    let september =
+        cash::position(&mut conn, SHOP, Period::Month(Month::new(2026, 9).unwrap())).unwrap();
     // September took it and gave nothing back: the sale stays on the month
     // it was rung even though it was annulled the next day.
     assert_eq!(september.cash_in.sales, Money::centimes(300_000));
@@ -521,7 +532,14 @@ fn one_shops_refund_never_reaches_another_shops_day() {
     let (_dir, mut conn) = open_temp();
     a_second_shop(&mut conn);
 
-    let mine = a_sale_in(&mut conn, SHOP, AMINA, PaymentMode::Cash, 300_000, at(14, 11));
+    let mine = a_sale_in(
+        &mut conn,
+        SHOP,
+        AMINA,
+        PaymentMode::Cash,
+        300_000,
+        at(14, 11),
+    );
     let theirs = a_sale_in(&mut conn, 2, AMINA, PaymentMode::Cash, 500_000, at(14, 11));
 
     // Shop 1 annuls with nothing handed back.
@@ -693,4 +711,3 @@ fn the_audit_log_says_whether_the_notes_went_back_or_the_ledger_did() {
     assert_eq!(quiet_cancel["settlement"], "ledger");
     assert_eq!(quiet_cancel["cash_back_centimes"], serde_json::Value::Null);
 }
-
