@@ -8,8 +8,8 @@ tldr: 'Anouar wants a shared core with a module per trade, doctors first, the wa
 priority: 85
 tasks:
   - id: 'D1'
-    desc: 'The one question for Anouar: how many trades, over what horizon, and is any of them sold before it is built'
-    status: 'pending'
+    desc: 'Answered 2026-09-21: no trade is named and none is sold. The goal is that adding a module never breaks existing logic, which is a safety ask and not an architecture one'
+    status: 'done'
   - id: 'D2'
     desc: 'What a clinic day actually is, one page, from Samir research rather than from imagination'
     status: 'pending'
@@ -85,6 +85,49 @@ is why it holds there. Odoo did not start modular for verticals it hoped to
 sell; it was an ERP first, the accounting core proved itself, and the
 verticals came after. The order matters.
 
+## What Anouar answered, 2026-09-21, 10:19
+
+Asked in effect how many trades and over what horizon, he said it does not
+have to be a doctor, it can be anything, and that the important thing is to
+make it modular enough that **adding new modules will not break the logic**.
+
+That is worth reading carefully, because it changes the question twice.
+
+**No second product is named and none is sold.** The horizon question is
+answered, and the answer is that there is no second customer yet. Extension
+points designed for modules nobody has specified is the ordinary way to
+build an abstraction that fits nothing, and then to live with it.
+
+**But the goal underneath is not really modularity.** It is that feature six
+must not break feature two. That is a legitimate fear and a better-defined
+goal than a module system, and Dinar answers it already, by a mechanism
+nobody has told him about:
+
+- a route with no permission row fails `crates/api/tests/route_gates.rs`,
+  which reads the router's own source and walks it in both directions.
+- a service reaching past a sibling into its repo fails an exact-equality
+  assert in `crates/core/tests/services_go_through_services.rs`.
+- a new permission refuses to compile until all three roles place it. That
+  compile error caught a real mistake twice in September.
+- a pinned file fails `scripts/file-sizes.mjs` for growing **and** for
+  shrinking without the pin being lowered.
+- the layer rule, the one-handler rule and the ring walk are each a test
+  rather than a convention.
+
+That is what keeps an addition from breaking what exists, and it is stronger
+than module isolation, because it holds inside a module as well as between
+two of them.
+
+**The irony to put to him plainly:** a plugin system would weaken two of
+these. The exhaustive permission match becomes a runtime registry and the
+compile error goes away, and the gate walk has to learn to read more than
+one router. The thing he wants protection from is the thing a plugin system
+makes harder to check.
+
+So D1 is answered and the plan below is not cancelled by it. D4 becomes the
+task that gives him what he is actually asking for, and D2, D3 and D5 wait
+for a product that has a name.
+
 ## The two shapes, and only one is affordable
 
 **Build-time verticals.** A `dzpos-kernel` crate holding money, auth, users,
@@ -126,7 +169,8 @@ carve**, and that is a cheaper thing to find out than a refactor.
 
 ## The tasks
 
-**D1: the question for Anouar.** How many trades, over what horizon, and is
+**D1: the question for Anouar. Answered on 2026-09-21, see above.** The
+original question was: how many trades, over what horizon, and is
 any of them sold before it is built? This one answer moves the decision more
 than anything else on this page. A module system pays for itself around the
 third vertical. At one hypothetical second product, copying the repo and
