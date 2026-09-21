@@ -21,7 +21,10 @@ use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::document::{Document, DocumentKind, DocumentStatus};
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Money, PaymentMode};
-use crate::services::{audit, avoir, clock, debt, documents, optional_field, stock};
+use crate::services::cash_refunds::Refund;
+use crate::services::{
+    audit, avoir, cash_refunds, clock, debt, documents, optional_field, stock,
+};
 
 /// Annuls a document (features.md §3). It keeps its number and its row, so the
 /// series never gaps (décret 05-468 art. 10); what it stops doing is asking for
@@ -49,6 +52,10 @@ use crate::services::{audit, avoir, clock, debt, documents, optional_field, stoc
 /// Cancelling a ticket that has already been printed stays allowed: until M4
 /// brings roles there is nobody to refuse it, and the audit entry carries the
 /// name of whoever took the decision.
+///
+/// The money goes back the way the document put it out: a credit sale comes
+/// off the account, a cash sale moves nothing but goods. `cancel_settling`
+/// beside it is the same write with notes handed over the counter.
 pub fn cancel(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -56,6 +63,45 @@ pub fn cancel(
     document_id: i32,
     reason: String,
     at: Option<NaiveDateTime>,
+) -> Result<Document, CoreError> {
+    cancel_settling(conn, shop_id, user_id, document_id, reason, at, Refund::None)
+}
+
+/// The same cancellation, saying how the money goes back (ruling 5 of the
+/// 2026-09-20 loop).
+///
+/// `Refund::None` is what every caller wrote before, and `cancel` above is
+/// that call with the argument spelled out. `Refund::Cash` adds one row
+/// saying the drawer opened, and it is the arm most real refunds land on: an
+/// anonymous cash ticket handed back has no customer, so there is no ledger
+/// to credit and no avoir to write against a ticket.
+///
+/// **The amount is `net_to_pay` less the stamp.** A cash sale's `net_to_pay`
+/// is what the customer handed over, the droit de timbre included, and the
+/// stamp is not given back: it is paid on money that changed hands (Code du
+/// timbre 2026 art. 100-I) and a reversal does not unmake that. The same
+/// reading the avoir path takes by never carrying a stamp at all. It is an
+/// assumption, written out in the fiscal rules table of `docs/features.md`
+/// with the R8 pointer beside the other stamp reading.
+///
+/// **A credit sale is refused.** The money is on the customer's account and
+/// comes off it there, by the avoir or the ledger reversal below; handing
+/// notes over as well would give it back twice. A card sale is not refused:
+/// the shop may well settle a returned card sale out of the drawer, the card
+/// takings keep the sale and the cash outgoing says where the notes went.
+///
+/// A second refund against the same document is refused by the unique index
+/// on `cash_refunds.document_id`, which the repo turns into a validation
+/// error rather than a bare query failure.
+#[allow(clippy::too_many_arguments)]
+pub fn cancel_settling(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    document_id: i32,
+    reason: String,
+    at: Option<NaiveDateTime>,
+    refund: Refund,
 ) -> Result<Document, CoreError> {
     let Some(reason) = optional_field("reason", Some(&reason))? else {
         return Err(CoreError::validation(
@@ -87,6 +133,16 @@ pub fn cancel(
             }
         }
         let at = at.unwrap_or_else(clock::now);
+
+        // Refused before the goods move, so a refusal costs nothing. A credit
+        // sale's money is on the account and comes off it there; notes on top
+        // of that would hand it back twice.
+        if refund.is_cash() && document.payment_mode == PaymentMode::Credit {
+            return Err(CoreError::validation(
+                "refund",
+                "this sale was not paid over the counter; its money comes off the account",
+            ));
+        }
 
         // A facture that put money on an account is undone by an avoir, which
         // brings the goods and the money back in one numbered document. A
@@ -120,6 +176,24 @@ pub fn cancel(
                 None
             }
         };
+
+        // The cash half, and the only one a cancelled cash sale has. The row
+        // names the cancelled document itself: there is no avoir here to name
+        // and it is the paper a reader is holding when they ask why the
+        // drawer is lighter. Dated `at`, the cancellation moment, so a ticket
+        // sold Monday and handed back Wednesday lowers Wednesday's drawer and
+        // leaves Monday's takings where they were.
+        //
+        // The stamp comes off first, and never comes back.
+        // `hand_over` refuses an amount that is not money, so a document worth
+        // nothing but its stamp is a refusal with a field on it.
+        if refund.is_cash() {
+            let handed_back = document
+                .totals
+                .net_to_pay
+                .checked_sub(document.totals.stamp)?;
+            cash_refunds::hand_over(conn, shop_id, user_id, document_id, handed_back, at)?;
+        }
 
         documents::mark_cancelled(
             conn,

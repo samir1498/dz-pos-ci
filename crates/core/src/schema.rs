@@ -470,7 +470,30 @@ diesel::table! {
     }
 }
 
+// ---- migrations/2026-09-21-000018_cash_refunds ----
+
+diesel::table! {
+    cash_refunds (id) {
+        id -> Integer,
+        shop_id -> Integer,
+        // The avoir on the avoir path, the cancelled document on the other:
+        // whichever paper a reader is holding when they ask why the drawer
+        // is lighter. Unique, so one document is refunded once.
+        document_id -> Integer,
+        // Whoever handed the notes over, which is not always whoever rang
+        // the sale.
+        user_id -> Integer,
+        amount_centimes -> BigInt,
+        // The shop's clock, like a document's issued_at: the day the cash
+        // went back and not the day the sale was rung.
+        refunded_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(categories -> shops (shop_id));
+diesel::joinable!(cash_refunds -> shops (shop_id));
+diesel::joinable!(cash_refunds -> documents (document_id));
+diesel::joinable!(cash_refunds -> users (user_id));
 diesel::joinable!(counters -> shops (shop_id));
 diesel::joinable!(products -> categories (category_id));
 diesel::joinable!(preferences -> shops (shop_id));
@@ -538,6 +561,7 @@ diesel::joinable!(shifts -> users (opened_by));
 
 diesel::allow_tables_to_appear_in_same_query!(
     audit_log,
+    cash_refunds,
     categories,
     counters,
     customers,

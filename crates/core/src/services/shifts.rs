@@ -82,9 +82,14 @@ pub struct ShiftReport {
     pub shift: Shift,
     /// The cash this person took over the window, read off the ledgers now.
     pub takings: Takings,
+    /// Cash this person handed back over the window on a reversal, read off
+    /// `cash_refunds` now. By whoever handed the notes over and never by
+    /// whoever rang the sale: cashier B refunding cashier A's ticket is B's
+    /// drawer that is light.
+    pub refunds: Money,
     /// What the shop expects them to be holding: `opening_cash` plus the
-    /// takings while the shift is open, and the figure stored at the close
-    /// once it is closed.
+    /// takings less the refunds while the shift is open, and the figure
+    /// stored at the close once it is closed.
     ///
     /// The two are not the same read and are not meant to be. A ticket
     /// annulled on Wednesday drops out of Monday's takings, so a derived
@@ -280,7 +285,15 @@ pub fn close(
         }
         let takings =
             cash::takings_for(conn, shop_id, shift.opened_by, shift.opened_at, closed_at)?;
-        let expected = shift.opening_cash.checked_add(takings.total()?)?;
+        // By whoever handed the notes over, which is this drawer's holder and
+        // never the person who rang the sale. Cashier B refunding cashier A's
+        // ticket is B's drawer that is light, and a filter on the document's
+        // author would take it off A's evening and leave both counts wrong.
+        let refunds = cash::refunds_for(conn, shop_id, shift.opened_by, shift.opened_at, closed_at)?;
+        let expected = shift
+            .opening_cash
+            .checked_add(takings.total()?)?
+            .checked_sub(refunds)?;
         if count.counted != expected && note.is_none() {
             return Err(CoreError::validation(
                 "note",
@@ -341,14 +354,24 @@ pub fn report(
         None => clock::now(),
     };
     let takings = cash::takings_for(conn, shop_id, shift.opened_by, shift.opened_at, until)?;
+    let refunds = cash::refunds_for(conn, shop_id, shift.opened_by, shift.opened_at, until)?;
     let (expected, difference) = match &shift.close {
         // The snapshot, not a fresh sum: see `ShiftReport::expected`.
         Some(close) => (close.expected, Some(close.difference()?)),
-        None => (shift.opening_cash.checked_add(takings.total()?)?, None),
+        // The same arithmetic `close` writes, so the figure on the screen
+        // while the drawer is open is the figure it will be counted against.
+        None => (
+            shift
+                .opening_cash
+                .checked_add(takings.total()?)?
+                .checked_sub(refunds)?,
+            None,
+        ),
     };
     Ok(ShiftReport {
         shift,
         takings,
+        refunds,
         expected,
         difference,
         until,

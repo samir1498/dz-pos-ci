@@ -32,16 +32,30 @@ use crate::models::debt::{DebtKind, PaymentMethod};
 use crate::models::document::payment_mode_stored;
 use crate::models::sql_types::{DocumentKind, DocumentStatus, SupplierDebtKind};
 use crate::money::{Money, PaymentMode};
-use crate::schema::{debt_ledger, documents, supplier_ledger};
+use crate::schema::{cash_refunds, debt_ledger, documents, supplier_ledger};
 
 /// What the shop sold and was paid for on the spot, and how much droit de
 /// timbre came over the counter inside it.
 ///
 /// Only a ticket and a facture: a proforma is a quotation nobody paid, an
 /// avoir is a credit note, and the papers the supply side writes are not
-/// sales. Only a document that still stands: an annulled ticket is money that
-/// did not stay in the drawer, and the avoir a cancellation issues is not
-/// counted either, so the reversal is felt once.
+/// sales. A document that still stands, or one whose cash was handed back
+/// over the counter: an annulled ticket nobody was paid back for is money
+/// that never stayed in the drawer and drops out of its day, but a ticket
+/// refunded in cash did come in on its own day and goes out again on the day
+/// the notes did, as a `cash_refunds` row.
+///
+/// Without that second arm the reversal is felt twice. A cashier rings
+/// 3 000 DA cash and cancels it with the notes back inside one shift: the
+/// drawer is where it started, and `opening + takings - refunds` would read
+/// `opening - 3 000` because the sale had already left the takings. Over a
+/// month the same ticket would be subtracted once for leaving the sales
+/// column and once again as a refund.
+///
+/// The `avoir` path needs no arm here: a facture credited by an avoir keeps
+/// its `Issued` status and never left the takings in the first place, and the
+/// avoir itself is not a ticket or a facture so the kind filter above already
+/// leaves it out.
 ///
 /// `net_to_pay` and not `total_ttc`: what the drawer took is what the customer
 /// handed over, and on a cash facture that is the amount plus the stamp
@@ -91,10 +105,19 @@ fn sales_of(
     until: NaiveDateTime,
     mode: PaymentMode,
 ) -> Result<(Money, Money), CoreError> {
+    // Still standing, or handed back in cash. `exists` and not a join: a
+    // document has at most one refund row (a unique index says so), but a
+    // join that anybody later widened would double the sum, and a sum is the
+    // wrong place to find that out.
+    let refunded = diesel::dsl::exists(
+        cash_refunds::table
+            .filter(cash_refunds::shop_id.eq(shop_id))
+            .filter(cash_refunds::document_id.nullable().eq(documents::id.nullable())),
+    );
     let mut query = documents::table
         .filter(documents::shop_id.eq(shop_id))
         .filter(documents::kind.eq_any([DocumentKind::Ticket, DocumentKind::Facture]))
-        .filter(documents::status.eq(DocumentStatus::Issued))
+        .filter(documents::status.eq(DocumentStatus::Issued).or(refunded))
         .filter(documents::payment_mode.eq(payment_mode_stored(mode)))
         .filter(documents::issued_at.ge(from))
         .filter(documents::issued_at.lt(until))
