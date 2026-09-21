@@ -929,6 +929,18 @@ touches the same file.
   `log.txt` from the scan is the one answer to refuse, because
   `services/support_bundle.rs`'s own doc names that file as where a leak
   walks out. Size S.
+- No walk pins a visibility, found 2026-09-21 by the reach lens on the
+  supplier door. `services::supplier_debt::hand_over` writes a supplier
+  payment with no upper bound on the amount, and the only thing keeping it
+  away from a route is the `pub(crate)` on it; `crates/core/src/lib.rs:13`'s
+  `pub(crate) mod repos`, which is the whole layering rule, rests on the same
+  one word. Both are held by the compiler today, which is real enforcement
+  and catches the call rather than the edit: what nothing catches is the edit
+  itself, widening either one in a diff that adds no caller and so goes
+  green. One walk that reads both declarations as text would pin the pair.
+  Worth doing as a pair or not at all, because pinning the narrower one and
+  leaving the layering rule unpinned is the wrong way round. One branch,
+  `dz-builder`. Size S.
 
 ## Out of scope, and why each is parked
 
