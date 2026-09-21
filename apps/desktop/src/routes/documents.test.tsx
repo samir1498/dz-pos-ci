@@ -122,6 +122,25 @@ const avoir: SaleDto = {
   lines: [{ ...facture.lines[0], id: 31, qty_milli: 1_000, ref_line_id: 11 }],
 };
 
+/** The same facture paid over the counter. Its money came in as notes, so a
+ *  reversal may hand them back, and it carries the droit de timbre a cash
+ *  sale carries.
+ *
+ *  Both figures are worked out by hand from features.md's stamp row rather
+ *  than from any code: total_ttc is 300 000 c = 3 000,00 DA, tranches are
+ *  ceil(3 000 / 100) = 30, the whole amount sits in the first band at 1 DA a
+ *  tranche, so the stamp is 30 DA = 3 000 c (over the 5 DA minimum), and
+ *  net_to_pay is 300 000 + 3 000 = 303 000 c. */
+const cashFacture: SaleDto = {
+  ...facture,
+  id: 10,
+  number: 10,
+  printed_number: "FA-2026-000010",
+  payment_mode: "cash",
+  balance: null,
+  totals: { ...totals, stamp_centimes: 3_000, net_to_pay_centimes: 303_000 },
+};
+
 /** The row a cell sits in. `closest` answers null when nothing matches, and
  *  a test that read through that null would fail on a property rather than on
  *  the sentence it means to check. */
@@ -497,5 +516,136 @@ describe("the cancellation", () => {
     expect(posted.find((p) => p.url.includes("/cancel"))?.body).toEqual({
       reason: "commande annulée",
     });
+  });
+});
+
+describe("how the money goes back", () => {
+  test("the avoir carries refund cash, spelled the way the wire spells it", async () => {
+    // `RefundDto` is a bare string on the wire, not an object with a kind:
+    // `packages/shared/src/generated/RefundDto.ts` is `export type RefundDto
+    // = "cash"`, and tsc refuses anything else here.
+    list = [cashFacture, ticket];
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("FA-2026-000010");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000010" }));
+    await user.click(await screen.findByRole("button", { name: fr.documents_avoir_new }));
+
+    const qty = await screen.findByLabelText(`${fr.documents_avoir_qty} Ciment CPJ 45`);
+    await user.type(qty, "2");
+    await user.click(screen.getByRole("radio", { name: fr.documents_refund_cash }));
+    await user.click(screen.getByRole("button", { name: fr.documents_avoir_write }));
+
+    await waitFor(() => {
+      expect(posted.some((p) => p.url.includes("/avoir"))).toBe(true);
+    });
+    expect(posted.find((p) => p.url.includes("/avoir"))?.body).toEqual({
+      lines: [{ document_line_id: 11, qty_milli: 2_000 }],
+      reason: null,
+      refund: "cash",
+    });
+  });
+
+  test("crediting the account leaves the field off the body rather than naming it", async () => {
+    // Absent is the ledger credit, which is what every caller sent before
+    // the field existed (`NewAvoirDto`'s own doc). A body carrying
+    // `refund: null` or `refund: "ledger"` would be refused by
+    // `deny_unknown_fields` or read as a word the enum has no variant for.
+    list = [cashFacture, ticket];
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("FA-2026-000010");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000010" }));
+    await user.click(await screen.findByRole("button", { name: fr.documents_avoir_new }));
+
+    const qty = await screen.findByLabelText(`${fr.documents_avoir_qty} Ciment CPJ 45`);
+    await user.type(qty, "2");
+    // The account is where the dialog already stands: nothing is clicked.
+    await user.click(screen.getByRole("button", { name: fr.documents_avoir_write }));
+
+    await waitFor(() => {
+      expect(posted.some((p) => p.url.includes("/avoir"))).toBe(true);
+    });
+    const sent = posted.find((p) => p.url.includes("/avoir"));
+    expect(sent?.body).toEqual({
+      lines: [{ document_line_id: 11, qty_milli: 2_000 }],
+      reason: null,
+    });
+  });
+
+  test("a credit sale is offered no cash at all, in the words the server would answer with", async () => {
+    // The facture fixture is sold on credit. `services::cancellation`
+    // refuses `refund: "cash"` on one outright, so the dialog never offers
+    // the button and says why instead.
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("FA-2026-000004");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000004" }));
+    await user.click(await screen.findByRole("button", { name: fr.documents_avoir_new }));
+
+    expect(screen.queryByRole("radio", { name: fr.documents_refund_cash })).toBeNull();
+    expect(screen.getByTestId("refund-credit-only").textContent).toBe(
+      fr.documents_refund_credit_only,
+    );
+  });
+
+  test("the cancellation carries refund cash, and an anonymous ticket is offered nothing instead of an account", async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("TK-2026-000012");
+    await user.click(screen.getByRole("button", { name: "TK-2026-000012" }));
+    await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
+
+    // The ticket names nobody, so there is no account to credit and the
+    // other way out of the dialog is the drawer staying shut.
+    expect(screen.getByRole("radio", { name: fr.documents_refund_nothing })).toBeTruthy();
+    expect(screen.queryByRole("radio", { name: fr.documents_refund_account })).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: fr.documents_refund_cash }));
+    await user.type(screen.getByLabelText(fr.documents_reason), "erreur de saisie");
+    await user.click(screen.getByRole("button", { name: fr.documents_cancel_confirm }));
+
+    await waitFor(() => {
+      expect(posted.some((p) => p.url.includes("/cancel"))).toBe(true);
+    });
+    expect(posted.find((p) => p.url.includes("/cancel"))?.body).toEqual({
+      reason: "erreur de saisie",
+      refund: "cash",
+    });
+  });
+
+  test("the drawer figures are the document's own stored totals, with no subtraction on the screen", async () => {
+    // What actually leaves the drawer is `cash_going_back` in the core, and
+    // its own doc says a facture's cannot be read off its totals: an avoir
+    // already written lowers it. So the dialog shows what came in and the
+    // stamp that stays, both straight off `totals`, and neither figure is
+    // the difference between them.
+    list = [cashFacture, ticket];
+    const user = userEvent.setup();
+    mount();
+    await screen.findByText("FA-2026-000010");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000010" }));
+    await user.click(await screen.findByRole("button", { name: fr.documents_cancel }));
+    await user.click(screen.getByRole("radio", { name: fr.documents_refund_cash }));
+
+    // The thousands separator is the narrow no-break space `formatCentimes`
+    // writes, spelled as its escape so the expectation cannot be read as a
+    // plain space nobody notices.
+    const shown = within(screen.getByTestId("refund-figures"));
+    expect(shown.getByTestId("refund-paid-in").textContent).toBe("3\u202f030,00");
+    expect(shown.getByTestId("refund-stamp-kept").textContent).toBe("30,00");
+    // 303 000 - 3 000 = 300 000 would read "3 000,00", and nothing in the
+    // block says it: the subtraction belongs to the core.
+    expect(shown.queryByText("3\u202f000,00")).toBeNull();
+  });
+
+  test("the choice reads in Arabic through the same keys", async () => {
+    list = [cashFacture, ticket];
+    const user = userEvent.setup();
+    mount("ar");
+    await screen.findByText("FA-2026-000010");
+    await user.click(screen.getByRole("button", { name: "FA-2026-000010" }));
+    await user.click(await screen.findByRole("button", { name: ar.documents_cancel }));
+    expect(screen.getByRole("radio", { name: ar.documents_refund_cash })).toBeTruthy();
   });
 });

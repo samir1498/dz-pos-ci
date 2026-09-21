@@ -92,6 +92,7 @@ export type { SaleCancellationDto } from "./generated/SaleCancellationDto";
 export type { AvoirLineDto } from "./generated/AvoirLineDto";
 export type { NewAvoirDto } from "./generated/NewAvoirDto";
 export type { CancelDocumentDto } from "./generated/CancelDocumentDto";
+export type { RefundDto } from "./generated/RefundDto";
 export type { CashPositionDto } from "./generated/CashPositionDto";
 export type { DashboardDto } from "./generated/DashboardDto";
 export type { DashboardFiguresDto } from "./generated/DashboardFiguresDto";
