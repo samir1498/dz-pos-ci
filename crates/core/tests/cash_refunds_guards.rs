@@ -353,6 +353,51 @@ fn a_cancellation_after_a_partial_avoir_puts_back_only_what_is_left() {
     );
 }
 
+/// A card facture credited in notes: the card is money that came in, so the
+/// bound on the refund is the whole of what the paper asked for.
+///
+/// The decision this pins is that `still_to_hand_back` counts a card document
+/// as paid on the spot, beside a cash one. A shop settling a returned card
+/// sale out of the drawer is ordinary — the TPE keeps the sale and the
+/// outgoing says where the notes went — and reading a card facture the way a
+/// credit one is read would look for payment allocations it never has and
+/// refuse every refund on it.
+///
+/// A card facture carries no droit de timbre (the stamp is on cash), so the
+/// 2 000,00 of goods is the whole of `net_to_pay` and the whole of the avoir.
+#[test]
+fn a_card_facture_credited_in_cash_hands_back_the_whole_of_what_the_card_took() {
+    let (_dir, mut conn) = open_temp_selling_factures();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let c = an_identified_customer(&mut conn, "Entreprise Benali");
+    let facture = a_facture(&mut conn, c, vec![line(p, 2_000)], PaymentMode::Card, 14);
+    // Typed from the fixture: two units at 1 000,00 with no TVA, and no stamp
+    // on a card document.
+    assert_eq!(facture.totals.net_to_pay, Money::centimes(200_000));
+    assert_eq!(facture.totals.stamp, Money::ZERO);
+
+    let credit = avoir::issue_settling(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        None,
+        Some("retour".to_string()),
+        Some(at(14, 12)),
+        Refund::Cash,
+    )
+    .unwrap();
+    assert_eq!(credit.totals.net_to_pay, Money::centimes(200_000));
+
+    let position = cash::position(&mut conn, SHOP, Period::Day(day(14))).unwrap();
+    // The TPE took it and the card column keeps it; the drawer wears the
+    // payout it never took in.
+    assert_eq!(position.card_in.sales, Money::centimes(200_000));
+    assert_eq!(position.cash_in.sales, Money::ZERO);
+    assert_eq!(position.cash_out.refunds, Money::centimes(200_000));
+    assert_eq!(position.cash, Money::centimes(-200_000));
+}
+
 /// A card sale handed back in cash. The card takings keep the sale — the TPE
 /// did take that money — the drawer wears the payout, and the cashier's
 /// expected figure drops by it even though no card sale ever reached it.

@@ -52,10 +52,12 @@ use crate::schema::{debt_ledger, documents, supplier_ledger};
 /// month the same ticket would be subtracted once for leaving the sales
 /// column and once again as a refund.
 ///
-/// The `avoir` path needs no arm here: a facture credited by an avoir keeps
-/// its `Issued` status and never left the takings in the first place, and the
-/// avoir itself is not a ticket or a facture so the kind filter above already
-/// leaves it out.
+/// An avoir on its own needs no arm: the facture it credits keeps its
+/// `Issued` status and never left the takings, and the avoir itself is
+/// neither a ticket nor a facture, so the kind filter above leaves it out.
+/// What does need one is the facture that was part credited in notes and
+/// then annulled — its refund row names the avoir, not the facture — and
+/// that is the second arm of the `EXISTS` in `sales_of` below.
 ///
 /// `net_to_pay` and not `total_ttc`: what the drawer took is what the customer
 /// handed over, and on a cash facture that is the amount plus the stamp
