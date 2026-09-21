@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 94238144a501231f4625828178159ed5d43261a1671e8c88ac2f1e94e3acbb80 # shrinks to events = [(OnTheDay, SellThenCancel(Cash, 10000))]
+cc d268729b79583c99425fe7c9bfa82ec0833b6707f5c963f23d1f0c75e5c620a6 # shrinks to events = [(DayBefore, SellThenRefund(10000, 0))]
