@@ -21,7 +21,7 @@ tasks:
     status: 'done'
   - id: 'T5'
     desc: 'Opening at sign-in and closing at the till, both in -till/session.tsx'
-    status: 'pending'
+    status: 'done'
   - id: 'T6'
     desc: 'A refund that leaves the drawer, and the shift figure on the dashboard and expenses screens'
     status: 'pending'
