@@ -57,9 +57,19 @@ which of the plan's claims were verified against code rather than assumed.
 
 ## Pass 2: challenge every finding
 
-This pass stays with the session. The lenses find; the session proves. An
-agent that both reports a finding and rules on it has marked its own paper,
-and the two review fixes that opened new holes came from exactly that.
+The lenses find; a different agent proves; the session rules. An agent
+that both reports a finding and rules on it has marked its own paper, and
+the two review fixes that opened new holes came from exactly that.
+
+Since 2026-09-21 (Samir: save the session's tokens) the proving goes to
+`dz-review-prover`, one per lens report, spawned as soon as that report
+lands with the findings pasted in, the worktree, and whether it may run
+cargo (never while a gates run is on that worktree). It reads or runs, and
+answers PROVEN, DROPPED or DESIGN CALL per finding with the quoted line or
+the log's own tail. The session reads that list, spot-reads one proven
+finding per report itself, rules on the design calls, and hands the proven
+ones to the builder. A prover verdict with no quote under it is not a
+verdict; send it back.
 
 Each finding is a claim. Sort it:
 1. **Provable by reading code.** Read it yourself. Quote the line.

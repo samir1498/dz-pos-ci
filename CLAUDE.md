@@ -38,6 +38,8 @@ where each duplicated fact lives and how a fix is routed.
 `dz-builder` (ordinary work), `dz-money-builder` (anything touching centimes,
 the schema or a printed total), `dz-review-centimes` / `dz-review-reach` /
 `dz-review-tests` (the three `dz-review` lenses, which find but never rule),
+`dz-review-prover` (settles one lens's findings with a quoted line or a
+run; never the lens that found them),
 `dz-verifier` (runs named commands and reports the output, no judgement).
 Each file's frontmatter decides its model; a caller may override it, which is
 how the whole-loop review runs the lenses on a sharper model.
