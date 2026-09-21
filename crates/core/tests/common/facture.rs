@@ -227,6 +227,14 @@ pub(crate) fn half_sheet_goldens_dir() -> PathBuf {
     super::goldens_dir("facture_half_sheet")
 }
 
+/// The roll down the other wire: the ESC/POS dump a thermal head is sent,
+/// and the pictures of the Arabic one. Beside the HTML roll's goldens and
+/// not inside them, because a `.txt` dump and an `.html` page are read by
+/// different eyes.
+pub(crate) fn escpos_roll_goldens_dir() -> PathBuf {
+    super::goldens_dir("facture_roll_80mm_escpos")
+}
+
 pub(crate) fn roll_goldens_dir() -> PathBuf {
     super::goldens_dir("facture_roll_80mm")
 }

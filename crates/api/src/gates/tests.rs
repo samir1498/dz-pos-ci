@@ -166,4 +166,14 @@ fn the_carry_in_rulings_are_what_the_table_says() {
         wants("PUT", "/settings/facture-layout"),
         Some(Permission::EditSettings)
     );
+    // The language every fiscal paper prints in is the paper too.
+    assert_eq!(
+        wants("PUT", "/settings/print-lang"),
+        Some(Permission::EditSettings)
+    );
+    // So is which wire the thermal head is sent down.
+    assert_eq!(
+        wants("PUT", "/settings/thermal-mode"),
+        Some(Permission::EditSettings)
+    );
 }

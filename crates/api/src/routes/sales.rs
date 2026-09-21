@@ -9,8 +9,8 @@ use axum::Json;
 use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
 use dzpos_core::print::{
-    render_facture_with, render_ticket, render_ticket_escpos, Cancellation, FactureInput,
-    FactureLayout, Page, Paper,
+    render_facture_escpos, render_facture_with, render_ticket, render_ticket_escpos_in,
+    Cancellation, FactureInput, FactureLayout, Page, Paper,
 };
 use dzpos_core::services::documents::DocumentKind;
 use dzpos_core::services::sales::{NewSale, SaleKind};
@@ -129,6 +129,14 @@ pub async fn ticket(
 /// of the API: the caller here decides whether those bytes go to a spool
 /// file or over the wire, and `crates/core/src/print/escpos.rs` is what that
 /// caller calls next.
+/// Which path the head is sent is read here in the same look at the file as
+/// the document and the language, the shape `facture` reads its layout in:
+/// the bytes and the mode they were chosen under have to be answers about
+/// one document. `lang=ar` comes back as raster bands whatever the shop
+/// stored, because there is no single-byte table with Arabic in it; `fr`
+/// and `en` come back as text until the shop's preference says otherwise
+/// (`preferences::thermal_mode_for`, which is the only place that rule
+/// lives).
 pub async fn ticket_escpos(
     State(state): State<AppState>,
     id: Result<Path<i32>, PathRejection>,
@@ -142,14 +150,15 @@ pub async fn ticket_escpos(
         print_lang: named,
     }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
-    let (found, lang) = state
+    let (found, lang, mode) = state
         .blocking(move |c| {
             let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
             let lang = preferences::print_lang_for(c, shop, named, caller)?;
-            Ok((found, lang))
+            let mode = preferences::thermal_mode_for(c, shop, lang)?;
+            Ok((found, lang, mode))
         })
         .await?;
-    let bytes = render_ticket_escpos(&found, lang)?;
+    let bytes = render_ticket_escpos_in(&found, lang, mode)?;
     let mut res = axum::response::Response::new(axum::body::Body::from(bytes));
     res.headers_mut().insert(
         header::CONTENT_TYPE,
@@ -163,13 +172,18 @@ pub async fn ticket_escpos(
 }
 
 /// Print through desktop (M6 T6): the phone POSTs, the desktop spools the
-/// same bytes `ticket_escpos` would return. Spool is `spool/ticket-<id>-<lang>.bin`
-/// beside the shop file (never pruned), and if `DZPOS_PRINTER_ADDR` (e.g.
-/// `192.168.1.50:9100`) is set the bytes are also pushed to that TCP printer.
-/// Idempotent: re-printing overwrites the same spool file. `<lang>` in the
-/// spool name and the `"lang"` this answers with are both the resolved
-/// language, never the caller's own `lang`: the spool file and the paper it
-/// stands for have to agree.
+/// same bytes `ticket_escpos` would return. Spool is
+/// `spool/ticket-<id>-<lang>-<mode>.bin` beside the shop file (never
+/// pruned), and if `DZPOS_PRINTER_ADDR` (e.g. `192.168.1.50:9100`) is set
+/// the bytes are also pushed to that TCP printer. Idempotent: re-printing
+/// overwrites the same spool file.
+///
+/// `<lang>` and `<mode>` in the spool name, and the two this answers with,
+/// are both the resolved answers and never the caller's own: the spool file
+/// and the paper it stands for have to agree. The mode is in the name
+/// because the two paths produce bytes nothing about the file says apart —
+/// one is text and one is a bitmap — and a phone that inherits the desktop's
+/// spool should be able to see which it is holding without decoding it.
 pub async fn print_ticket(
     State(state): State<AppState>,
     id: Result<Path<i32>, PathRejection>,
@@ -183,21 +197,27 @@ pub async fn print_ticket(
         print_lang: named,
     }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
-    let (found, lang) = state
+    let (found, lang, mode) = state
         .blocking(move |c| {
             let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
             let lang = preferences::print_lang_for(c, shop, named, caller)?;
-            Ok((found, lang))
+            let mode = preferences::thermal_mode_for(c, shop, lang)?;
+            Ok((found, lang, mode))
         })
         .await?;
-    let bytes = render_ticket_escpos(&found, lang)?;
+    let bytes = render_ticket_escpos_in(&found, lang, mode)?;
     let spool_dir = state
         .db_path()
         .parent()
         .unwrap_or(std::path::Path::new("."))
         .join("spool");
     std::fs::create_dir_all(&spool_dir).map_err(|e| ApiError::from(CoreError::from(e)))?;
-    let spool_path = spool_dir.join(format!("ticket-{}-{}.bin", id, lang.tag()));
+    let spool_path = spool_dir.join(format!(
+        "ticket-{}-{}-{}.bin",
+        id,
+        lang.tag(),
+        mode.as_str()
+    ));
     std::fs::write(&spool_path, &bytes).map_err(|e| ApiError::from(CoreError::from(e)))?;
     if let Ok(addr) = std::env::var("DZPOS_PRINTER_ADDR") {
         if !addr.is_empty() {
@@ -205,7 +225,11 @@ pub async fn print_ticket(
                 let found = found.clone();
                 let addr = addr.clone();
                 move || {
-                    let _ = dzpos_core::print::send_ticket_escpos_tcp(&found, lang, &addr);
+                    // The same mode the spool file was written under. The
+                    // sender resolves it again through the same rule, so
+                    // the file on disk and the bytes on the wire are the
+                    // same bytes for the same document.
+                    let _ = dzpos_core::print::send_ticket_escpos_tcp(&found, lang, mode, &addr);
                 }
             })
             .await;
@@ -215,6 +239,7 @@ pub async fn print_ticket(
         "spooled": spool_path.display().to_string(),
         "bytes": bytes.len(),
         "lang": lang.tag(),
+        "thermal_mode": mode.as_str(),
     })))
 }
 
@@ -349,6 +374,78 @@ pub async fn facture(
             layout: chosen,
         },
     )?))
+}
+
+/// The same facture as ESC/POS bytes for a thermal head, on the 80 mm roll.
+///
+/// Same document, same `lang` and `print_lang`, same refusals as the HTML
+/// route: an IFU document carrying a TVA recap, a document with no buyer
+/// block, an avoir carrying a droit de timbre, a proforma carrying a debt.
+/// They are one list in `print::refusals` and this route reaches it through
+/// the same `built_view` the four HTML layouts do, so a page drawn on a roll
+/// refuses exactly what a page drawn on A4 refuses.
+///
+/// No `paper` and no `layout`: a thermal head has one width and no tray, and
+/// the roll is the only layout drawn for it. The second document an avoir
+/// names and the day a cancellation was taken are read here for the reason
+/// the HTML route reads them — this is the layer that can open a second row.
+pub async fn facture_escpos(
+    State(state): State<AppState>,
+    id: Result<Path<i32>, PathRejection>,
+    query: Result<Query<TicketQuery>, QueryRejection>,
+) -> Result<axum::response::Response, ApiError> {
+    use axum::http::{header, HeaderValue};
+    let Path(id) =
+        id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
+    let Query(TicketQuery {
+        lang: caller,
+        print_lang: named,
+    }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
+    let shop = state.shop_id;
+    let (found, referenced, lang, mode) = state
+        .blocking(move |c| {
+            let found = documents::get(c, shop, id)?;
+            if !matches!(
+                found.kind,
+                DocumentKind::Facture | DocumentKind::Avoir | DocumentKind::Proforma
+            ) {
+                return Err(CoreError::NotFound {
+                    entity: DocumentKind::Facture.as_str(),
+                    id,
+                });
+            }
+            let referenced = match found.ref_document_id {
+                Some(ref_id) => Some(documents::get(c, shop, ref_id)?),
+                None => None,
+            };
+            let lang = preferences::print_lang_for(c, shop, named, caller)?;
+            let mode = preferences::thermal_mode_for(c, shop, lang)?;
+            Ok((found, referenced, lang, mode))
+        })
+        .await?;
+    let cancellation = found.cancellation.as_ref().map(|c| Cancellation {
+        at: c.at,
+        reason: &c.reason,
+    });
+    let bytes = render_facture_escpos(
+        &found,
+        &FactureInput {
+            referenced: referenced.as_ref(),
+            cancellation,
+        },
+        lang,
+        mode,
+    )?;
+    let mut res = axum::response::Response::new(axum::body::Body::from(bytes));
+    res.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    res.headers_mut().insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static("attachment; filename=\"facture.bin\""),
+    );
+    Ok(res)
 }
 
 pub async fn create(

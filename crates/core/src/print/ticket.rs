@@ -355,42 +355,47 @@ pub(crate) fn items(view: &TicketView) -> Vec<Item> {
 /// The padding rules, in one place. A label and an amount on the same row
 /// are spaced to the column budget here and nowhere else, so the raster
 /// draws the spacing the text path counted rather than a second guess at it.
-struct Items(Vec<Item>);
+///
+/// Shared with `print::facture_roll`, which builds the same kind of list
+/// for the 80 mm facture. The two papers say different things and both owe
+/// the head lines of at most `WIDTH` columns, so the padding and the
+/// wrapping belong to one builder rather than to each paper.
+pub(crate) struct Items(Vec<Item>);
 
 impl Items {
-    const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self(Vec::new())
     }
 
-    fn into_items(self) -> Vec<Item> {
+    pub(crate) fn into_items(self) -> Vec<Item> {
         self.0
     }
 
-    fn align(&mut self, align: Align) {
+    pub(crate) fn align(&mut self, align: Align) {
         self.0.push(Item::Align(align));
     }
 
-    fn bold(&mut self, on: bool) {
+    pub(crate) fn bold(&mut self, on: bool) {
         self.0.push(Item::Bold(on));
     }
 
-    fn feed(&mut self, lines: u8) {
+    pub(crate) fn feed(&mut self, lines: u8) {
         self.0.push(Item::Feed(lines));
     }
 
-    fn cut(&mut self) {
+    pub(crate) fn cut(&mut self) {
         self.0.push(Item::Cut);
     }
 
-    fn line(&mut self, s: &str) {
+    pub(crate) fn line(&mut self, s: &str) {
         self.0.push(Item::Line(s.to_owned()));
     }
 
-    fn rule(&mut self) {
+    pub(crate) fn rule(&mut self) {
         self.line(&"-".repeat(WIDTH));
     }
 
-    fn pair(&mut self, label: &str, amount: &str) {
+    pub(crate) fn pair(&mut self, label: &str, amount: &str) {
         let gap = WIDTH
             .saturating_sub(label.chars().count())
             .saturating_sub(amount.chars().count());
@@ -402,5 +407,157 @@ impl Items {
         }
         line.push_str(amount);
         self.line(&line);
+    }
+
+    /// A label and an amount on one row where they fit the budget, and the
+    /// label wrapped above a right-aligned amount where they do not.
+    ///
+    /// The ticket never needs this: its labels are single words chosen to
+    /// sit beside a figure. A facture's are sentences the law names
+    /// ("Montant de l'avoir", "TVA 19 % base 12 345,67"), and `pair` would
+    /// run them past the edge of the roll, where `raster::draw` refuses the
+    /// whole document rather than trim a total. Pushing the amount onto its
+    /// own row keeps the figure whole, which is the part of the row a
+    /// reader cannot reconstruct.
+    pub(crate) fn row(&mut self, label: &str, amount: &str) {
+        let amount_cols = amount.chars().count();
+        if label.chars().count().saturating_add(amount_cols) < WIDTH {
+            self.pair(label, amount);
+            return;
+        }
+        self.wrapped(label);
+        self.pair("", amount);
+    }
+
+    /// A sentence broken across as many rows as it needs, on the spaces
+    /// between its words.
+    ///
+    /// Only on U+0020. The narrow no-break space U+202F groups the
+    /// thousands of every amount on the paper (features.md §4), and
+    /// breaking a line there would leave "12" at the end of one row and
+    /// "345,67" at the start of the next: two numbers where the document
+    /// stores one. A single word longer than the budget — a product
+    /// reference, an email — is cut by characters, because the alternative
+    /// is a line the head refuses and a facture that does not print at all.
+    pub(crate) fn wrapped(&mut self, text: &str) {
+        let mut row = String::new();
+        let mut cols = 0usize;
+        for word in text.split(' ').filter(|w| !w.is_empty()) {
+            let word_cols = word.chars().count();
+            if cols > 0 && cols.saturating_add(1).saturating_add(word_cols) > WIDTH {
+                self.line(&row);
+                row = String::new();
+                cols = 0;
+            }
+            if word_cols > WIDTH {
+                if cols > 0 {
+                    self.line(&row);
+                    row = String::new();
+                    cols = 0;
+                }
+                for chunk in chunks(word) {
+                    self.line(&chunk);
+                }
+                continue;
+            }
+            if cols > 0 {
+                row.push(' ');
+                cols = cols.saturating_add(1);
+            }
+            row.push_str(word);
+            cols = cols.saturating_add(word_cols);
+        }
+        if cols > 0 {
+            self.line(&row);
+        }
+    }
+}
+
+/// One unbreakable word, cut into rows of at most `WIDTH` characters.
+fn chunks(word: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut row = String::new();
+    let mut cols = 0usize;
+    for ch in word.chars() {
+        row.push(ch);
+        cols = cols.saturating_add(1);
+        if cols == WIDTH {
+            out.push(std::mem::take(&mut row));
+            cols = 0;
+        }
+    }
+    if cols > 0 {
+        out.push(row);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    /// A label too long to sit beside its figure takes the rows above it,
+    /// and the figure keeps a row of its own.
+    ///
+    /// No golden reaches this arm: every label on the three facture
+    /// fixtures is short enough for `pair`. A shop reaches it on its first
+    /// paper all the same — "Montant de la taxe sur la valeur ajoutée"
+    /// beside a five-figure sum is past the budget on a 42-column head —
+    /// and what must not happen there is the figure losing its thousands
+    /// to the edge of the roll. A label a reader loses half of is still a
+    /// label they can name; half an amount is a different amount.
+    #[test]
+    fn a_label_too_long_to_sit_beside_its_amount_leaves_the_amount_a_row() {
+        let label = "Montant de la taxe sur la valeur ajoutee";
+        // The narrow no-break space the formatter groups thousands with,
+        // so this is the shape of a real figure and not a test's idea of
+        // one.
+        let amount = "12\u{202f}345,67";
+        assert_eq!(label.chars().count(), 40);
+        assert_eq!(amount.chars().count(), 9);
+        assert!(
+            label.chars().count() + amount.chars().count() >= WIDTH,
+            "this label and amount fit the budget, so the test misses the arm"
+        );
+
+        let mut items = Items::new();
+        items.row(label, amount);
+        let lines: Vec<String> = items
+            .into_items()
+            .into_iter()
+            .map(|item| match item {
+                Item::Line(line) => line,
+                _ => panic!("row wrote something that is not a line"),
+            })
+            .collect();
+
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert_eq!(lines[0], label, "the label did not get the row to itself");
+        assert!(
+            !lines[0].contains("345,67"),
+            "the figure rode along on the label's row: {lines:?}"
+        );
+        assert_eq!(
+            lines[1].trim_start(),
+            amount,
+            "the figure is not alone on its row: {lines:?}"
+        );
+        assert!(
+            lines[1].starts_with(' '),
+            "the figure is not right-aligned: {lines:?}"
+        );
+        assert_eq!(
+            lines[1].chars().count(),
+            WIDTH,
+            "the figure's row does not reach the right edge: {lines:?}"
+        );
+        for line in &lines {
+            assert!(
+                line.chars().count() <= WIDTH,
+                "{line:?} is wider than the head"
+            );
+        }
     }
 }

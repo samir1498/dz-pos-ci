@@ -16,6 +16,7 @@ mod bidi;
 pub mod debt_slip;
 pub mod escpos;
 pub mod facture;
+pub mod facture_roll;
 pub(crate) mod facture_view;
 pub mod layout;
 mod png;
@@ -23,20 +24,27 @@ pub mod raster;
 mod refusals;
 pub mod statement;
 pub mod strings;
+pub mod thermal;
 pub mod ticket;
 
 pub use barcode_label::{render_label, render_label_sheet};
 pub use debt_slip::render_debt_slip;
 pub use escpos::{
     draw_ticket_raster, dump_ticket_escpos, dump_ticket_escpos_png, render_ticket_escpos,
-    render_ticket_escpos_raster, send_ticket_escpos_tcp, write_ticket_escpos_to_file,
+    render_ticket_escpos_in, render_ticket_escpos_raster, send_ticket_escpos_tcp,
+    write_ticket_escpos_to_file,
 };
 pub use facture::{
     render_facture, render_facture_with, render_facture_with_reference, Cancellation, FactureInput,
 };
+pub use facture_roll::{
+    draw_facture_raster, facture_roll_lines, render_facture_escpos, render_facture_escpos_raster,
+    render_facture_escpos_text,
+};
 pub use layout::{FactureLayout, Page, Paper};
 pub use raster::HEAD_WIDTH_DOTS;
 pub use statement::render_statement;
+pub use thermal::ThermalMode;
 pub use ticket::render_ticket;
 
 use crate::models::document::Document;

@@ -1,0 +1,59 @@
+<init>
+<codepage 19>
+<align center>
+<bold on>
+FACTURE
+<bold off>
+<align left>
+FA-2026-000042                  09/09/2026
+------------------------------------------
+<align left>
+<bold on>
+Vendeur
+<bold off>
+Mon magasin
+12 rue Didouche Mourad, Alger
+0555 12 34 56
+RC 16/00-1234567 B 25
+NIF 000216001234567
+NIS 000216001234567 00
+AI 16001234567
+<bold on>
+Client
+<bold off>
+Yacine Meziane
+14 rue des Frères Bouadou, Bir Mourad Raïs
+------------------------------------------
+Huile <Elio> & Co 5 L
+2 × 150,00  19 %                    300,00
+Farine
+1,5 × 320,00  9 %                   480,00
+Pain
+1 × 80,00  0 %                       70,00
+Remise                              -10,00
+------------------------------------------
+Total HT                            850,00
+Remise                              -20,00
+Sous-total HT                       830,00
+TVA 0 % Base 68,36                    0,00
+TVA 9 % Base 468,69                  42,18
+TVA 19 % Base 292,95                 55,66
+Total TTC                           927,84
+Droit de timbre                      10,00
+<bold on>
+Net à payer                         937,84
+<bold off>
+------------------------------------------
+Arrêtée la présente facture à la somme de
+neuf-cent-trente-sept dinars et
+quatre-vingt-quatre centimes
+Mode de paiement                   Espèces
+------------------------------------------
+Vendeur · Cachet et signature
+<feed 2>
+Client · Cachet et signature
+<align center>
+<feed 1>
+DA
+<feed 2>
+<cut>

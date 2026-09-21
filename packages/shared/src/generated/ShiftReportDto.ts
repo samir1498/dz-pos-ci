@@ -34,8 +34,9 @@ difference_centimes: number | null,
  */
 until: string, 
 /**
- * How many sales this person rang while holding no drawer at all, since
- * their last close or midnight, whichever is later. Zero on a shift
+ * How many sales this person rang while holding no drawer at all, over
+ * the stretch from their last close before this shift, or midnight of the
+ * day it opened when they have never closed one. Zero on a shift
  * where the drawer was open the whole time, which is why the close
  * screen shows it only when it is not.
  *

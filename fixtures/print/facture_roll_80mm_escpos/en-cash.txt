@@ -1,0 +1,59 @@
+<init>
+<codepage 19>
+<align center>
+<bold on>
+INVOICE
+<bold off>
+<align left>
+FA-2026-000042                  09/09/2026
+------------------------------------------
+<align left>
+<bold on>
+Seller
+<bold off>
+Mon magasin
+12 rue Didouche Mourad, Alger
+0555 12 34 56
+RC 16/00-1234567 B 25
+NIF 000216001234567
+NIS 000216001234567 00
+AI 16001234567
+<bold on>
+Customer
+<bold off>
+Yacine Meziane
+14 rue des Frères Bouadou, Bir Mourad Raïs
+------------------------------------------
+Huile <Elio> & Co 5 L
+2 × 150,00  19 %                    300,00
+Farine
+1,5 × 320,00  9 %                   480,00
+Pain
+1 × 80,00  0 %                       70,00
+Discount                            -10,00
+------------------------------------------
+Total excl. tax                     850,00
+Discount                            -20,00
+Subtotal excl. tax                  830,00
+VAT 0 % Base 68,36                    0,00
+VAT 9 % Base 468,69                  42,18
+VAT 19 % Base 292,95                 55,66
+Total incl. tax                     927,84
+Stamp duty                           10,00
+<bold on>
+Net to pay                          937,84
+<bold off>
+------------------------------------------
+This invoice is closed at the sum of nine
+hundred and thirty-seven dinars and
+eighty-four centimes
+Payment mode                          Cash
+------------------------------------------
+Seller · Stamp and signature
+<feed 2>
+Customer · Stamp and signature
+<align center>
+<feed 1>
+DZD
+<feed 2>
+<cut>

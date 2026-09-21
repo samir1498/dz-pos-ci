@@ -8,6 +8,7 @@ import type { RegimeChangeDto } from "../generated/RegimeChangeDto";
 import type { SettingsDto } from "../generated/SettingsDto";
 import type { StoreDto } from "../generated/StoreDto";
 import type { ThemeDto } from "../generated/ThemeDto";
+import type { ThermalModeDto } from "../generated/ThermalModeDto";
 import { narrow } from "../client-response";
 import type { Transport } from "../client";
 import { settingsSchema, storeSchema } from "../schemas/settings";
@@ -71,6 +72,25 @@ export function settingsClient({ send }: Transport) {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ facture_layout: layout }),
+      });
+      return narrow(body, settingsSchema, "settings");
+    },
+
+    /** Records which ESC/POS wire the shop's thermal head is sent: one byte
+     * per column down a single-byte table, or the same lines drawn into dots
+     * and sent as `GS v 0` bands. Answers the whole settings page, the way
+     * `setTheme` does.
+     *
+     * No `null` arm, unlike `setPrintLang`: a head is always on one of the
+     * two wires. What the choice does not reach is Arabic, which is drawn
+     * whatever the shop stores, because no single-byte table a cheap head
+     * carries has Arabic in it and a text-mode head prints a box per byte
+     * (`context/plans/20260921-arabic-on-a-cheap-thermal-head.md`). */
+    async setThermalMode(mode: ThermalModeDto): Promise<SettingsDto> {
+      const body = await send("/settings/thermal-mode", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ thermal_mode: mode }),
       });
       return narrow(body, settingsSchema, "settings");
     },

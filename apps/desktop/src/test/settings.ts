@@ -27,5 +27,6 @@ export const SETTINGS: SettingsDto = {
   facture_layout: "standard",
   facture_layouts: ["standard", "compact"],
   print_lang: null,
+  thermal_mode: "text",
   discount_threshold_bps: 0,
 };

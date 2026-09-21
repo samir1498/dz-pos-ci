@@ -290,6 +290,12 @@ pub const ROUTE_GATES: &[Gate] = &[
         why: "the language every fiscal paper prints in is the same kind of decision as the facture layout beside it, not the theme: it changes what a customer is handed and what a comptable files, so a cashier does not choose it (plan a-print-language-the-shop-keeps, 2026-09-20)",
     },
     Gate {
+        method: "PUT",
+        path: "/settings/thermal-mode",
+        permission: Some(Permission::EditSettings),
+        why: "which wire the shop's thermal head is sent is the same class of decision as the facture layout and the print language beside it: it decides whether a customer is handed a printed ticket or a roll of boxes, and a cashier who flipped it would break every paper the shop prints until somebody found the setting (plan arabic-on-a-cheap-thermal-head, 2026-09-21)",
+    },
+    Gate {
         method: "POST",
         path: "/stock/recount",
         permission: Some(Permission::CorrectLedger),

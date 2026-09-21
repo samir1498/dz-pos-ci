@@ -4,6 +4,7 @@ import type { FactureLayoutDto } from "./FactureLayoutDto";
 import type { PrintLangDto } from "./PrintLangDto";
 import type { StoreDto } from "./StoreDto";
 import type { ThemeDto } from "./ThemeDto";
+import type { ThermalModeDto } from "./ThermalModeDto";
 
 /**
  * What the settings screen reads: the store block, the régime in force
@@ -28,10 +29,16 @@ facture_layouts: Array<FactureLayoutDto>,
 /**
  * The language every fiscal paper prints in. `null` when the shop has
  * never chosen one, which is not French by default: the till prints in
- * whatever language it is being used in (T3 reads this; nothing does
- * yet).
+ * whatever language it is being used in.
  */
 print_lang: PrintLangDto | null, 
+/**
+ * Which ESC/POS path its thermal head is sent. Never null: a shop that
+ * has never chosen is on `text`, so the screen has a value to show and
+ * the head has a wire to eat. An Arabic paper is drawn whatever this
+ * says, which the panel's own hint tells the owner.
+ */
+thermal_mode: ThermalModeDto, 
 /**
  * How much a cashier may take off a basket before the sale needs
  * someone holding `discount_above_threshold`, in basis points of the

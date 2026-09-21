@@ -891,6 +891,24 @@ first release.**
   golden set is `fixtures/print/facture_roll_80mm/`. What the row does not carry (the referenced
   facture's number and day, the cancellation's day and reason) is handed to
   the renderer beside the document.
+  The same roll goes down the ESC/POS wire as well, for a head with no
+  driver: `GET /sales/{id}/facture/escpos` builds the facture's own line
+  model (`print::facture_roll`) from that one `FactureView` and hands it to
+  the two writers the ticket uses, text or raster by `thermal_mode` with
+  Arabic always drawn. Its goldens are
+  `fixtures/print/facture_roll_80mm_escpos/`: the same reduced set of cases
+  by three languages as `.txt` dumps, plus `ar*.png` pictures a reviewer
+  opens. What holds it is not the dump: every amount in the line model is
+  parsed back to centimes, by a reader that shares no code with the
+  formatter, and the multiset is compared against what the document stores,
+  so a roll that dropped a row or drew a total the document does not hold
+  fails there and not at a counter
+  (`the_escpos_roll_prints_the_amounts_the_document_stores`). It refuses
+  exactly what the sheet refuses, because both reach `print::refusals`
+  through the same builder. A label too long to share a row with its amount
+  is wrapped above it and a sentence is broken on its spaces; a figure is
+  never shortened, and a line that still does not fit the head is refused
+  rather than trimmed.
 - `statement_a4` and `debt_slip_80mm` are the customer's two papers, on the
   same mechanics: `fixtures/print/statement_a4/{fr,en,ar}.html` is a month of
   a company's account, opening balance, movements and closing balance, pinned
@@ -902,9 +920,10 @@ first release.**
   balance the shop owes and whose way it goes, and the slip carries the line
   in each language that says it has no fiscal value. The slip's balance is the
   ledger's, so the golden proves the ten rows shown do not add up to it.
-- The print language is resolved the same way on all six fiscal-paper
+- The print language is resolved the same way on all seven fiscal-paper
   routes -- `GET /sales/{id}/ticket`, `/sales/{id}/ticket/escpos`,
   `POST /sales/{id}/print`, `GET /sales/{id}/facture`,
+  `/sales/{id}/facture/escpos`,
   `/customers/{id}/statement` and `/customers/{id}/debt-slip` -- by
   `preferences::print_lang_for` (`crates/core`), three steps deep: a
   `?print_lang=fr|en|ar` named on the one call wins outright; failing that,
@@ -941,9 +960,17 @@ first release.**
   languages (`fixtures/print/ticket_80mm/` and `ticket_80mm_escpos/`). The
   ticket is built once, as a list of lines with their alignment
   (`print::ticket::items`), and the two ESC/POS paths only carry that list:
-  **text for French and English, a raster for Arabic**. The core renders
-  both today; the route still hands every language the text path, and the
-  preference that picks the raster is the task after this one
+  **text for French and English, a raster for Arabic**. Which path a shop's
+  head is sent is one preference, `thermal_mode` (`text` or `raster`,
+  default `text`, `PUT /settings/thermal-mode`, the printing panel),
+  resolved by `preferences::thermal_mode_for` and nowhere else: Arabic
+  answers raster bands under either stored value, because there is no
+  single-byte table with Arabic in it, and French and English answer text
+  until the shop flips it. The default is text because it is the faster
+  wire on a slow serial link and the two languages that can use it lose
+  nothing by it. The spool file names the mode it was written under
+  (`spool/ticket-<id>-<lang>-<mode>.bin`) so the file on disk and the bytes
+  pushed to a TCP head are never two different papers
   (`context/plans/20260921-arabic-on-a-cheap-thermal-head.md`, T3).
   - Text path: the wire is `ESC t 19` (PC858 / ISO 8859-15, the emulator's
     own table) with `U+202F` → space, so `Café` is 4 columns (one `0xE9`)
@@ -1210,9 +1237,10 @@ hash). The Expo thin client (`apps/mobile`, `dinar-mobile`, `expo` + `react-nati
 `App.tsx` → `src/screens/Till.tsx`) talks the same HTTP contract as the
 desktop (rule 1), never knows which mode it is in: `pair` (QR), `till` (fetch
 `GET /products`, `POST /sales` with `Sell`, `SeeCost` redaction reused), `cart`,
-`pay`, `ticket` (print through desktop `POST /sales/{id}/print?lang=` → `spool/ticket-<id>-<lang>.bin`
+`pay`, `ticket` (print through desktop `POST /sales/{id}/print?lang=` → `spool/ticket-<id>-<lang>-<mode>.bin`
 beside the shop file, never pruned, where `<lang>` is the language §4's
-precedence resolved and not always the one the phone sent, and optionally `DZPOS_PRINTER_ADDR` TCP
+precedence resolved and not always the one the phone sent and `<mode>` is
+the thermal path the shop is on with Arabic always drawn, and optionally `DZPOS_PRINTER_ADDR` TCP
 `9100` via `write_ticket_escpos_to_file` / `send_ticket_escpos_tcp`), `products`,
 `customers`, `more`, with Maestro `apps/mobile/maestro/pair-and-sell.yaml` over
 Tailscale (`100.111.55.62`). Windows Firewall is the known trap: detect the

@@ -1,0 +1,62 @@
+<init>
+<codepage 19>
+<align center>
+<bold on>
+AVOIR
+<bold off>
+<align left>
+AV-2026-000003                  12/09/2026
+Avoir sur facture FA-2026-000042 du
+09/09/2026
+------------------------------------------
+<align left>
+<bold on>
+Vendeur
+<bold off>
+Mon magasin
+12 rue Didouche Mourad, Alger
+0555 12 34 56
+RC 16/00-1234567 B 25
+NIF 000216001234567
+NIS 000216001234567 00
+AI 16001234567
+<bold on>
+Client
+<bold off>
+Sarl Amine Distribution
+05 boulevard Krim Belkacem, Alger
+RC 16/00-7654321 B 20
+NIF 000216007654321
+NIS 000216007654321 00
+AI 16007654321
+------------------------------------------
+Huile <Elio> & Co 5 L
+1 × 150,00  19 %                    150,00
+Farine
+0,5 × 320,00  9 %                   160,00
+------------------------------------------
+Total HT                            310,00
+TVA 9 % Base 160,00                  14,40
+TVA 19 % Base 150,00                 28,50
+Total TTC                           352,90
+<bold on>
+Montant de l’avoir                  352,90
+<bold off>
+------------------------------------------
+Arrêté le présent avoir à la somme de
+trois-cent-cinquante-deux dinars et
+quatre-vingt-dix centimes
+------------------------------------------
+Solde
+Ancien solde                        300,00
+Ce document                        -352,90
+Solde créditeur                     -52,90
+------------------------------------------
+Vendeur · Cachet et signature
+<feed 2>
+Client · Cachet et signature
+<align center>
+<feed 1>
+DA
+<feed 2>
+<cut>

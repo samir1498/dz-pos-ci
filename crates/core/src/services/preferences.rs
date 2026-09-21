@@ -20,7 +20,7 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::lang::Lang;
-use crate::print::FactureLayout;
+use crate::print::{FactureLayout, ThermalMode};
 use crate::repos::preferences as repo;
 use crate::services::audit;
 
@@ -32,6 +32,9 @@ pub const FACTURE_LAYOUT: &str = "facture_layout";
 
 /// The key the shop's chosen print language is stored under.
 pub const PRINT_LANG: &str = "print_lang";
+
+/// The key the shop's chosen thermal path is stored under.
+pub const THERMAL_MODE: &str = "thermal_mode";
 
 /// The key the session idle time is stored under, in whole minutes.
 pub const SESSION_IDLE_MINUTES: &str = "session_idle_minutes";
@@ -224,6 +227,55 @@ pub fn print_lang_for(
         return Ok(named);
     }
     Ok(print_lang(conn, shop_id)?.unwrap_or(caller))
+}
+
+/// Which ESC/POS path the shop's thermal head is sent.
+///
+/// Not an `Option`, the way the facture layout is not: a shop that has never
+/// chosen still prints thermal tickets, and the path it prints them down is
+/// `Text`. A stored name this build cannot read falls back the same way,
+/// because printing on the default beats refusing to print.
+///
+/// This is the shop's answer and not the final one. Arabic has no
+/// single-byte table on a cheap head, so it is drawn whatever is stored
+/// here; `ThermalMode::for_lang` is the one place that decides it and every
+/// caller goes through `thermal_mode_for` below.
+pub fn thermal_mode(conn: &mut SqliteConnection, shop_id: i32) -> Result<ThermalMode, CoreError> {
+    Ok(repo::value(conn, shop_id, THERMAL_MODE)?
+        .as_deref()
+        .and_then(ThermalMode::parse)
+        .unwrap_or_default())
+}
+
+/// Records the path the shop's thermal head is sent.
+///
+/// No audit row, for the reason `set_facture_layout` has none and with the
+/// same reach: the two paths are pinned to carry the same strings line for
+/// line (`the_raster_draws_the_lines_the_text_path_prints`), so the paper
+/// says the same words and the same totals either way. What changes is how
+/// the head is addressed, not what a customer is handed.
+pub fn set_thermal_mode(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    mode: ThermalMode,
+    at: NaiveDateTime,
+) -> Result<(), CoreError> {
+    repo::put(conn, shop_id, THERMAL_MODE, mode.as_str(), at)
+}
+
+/// The path a document in `lang` is actually sent down: the shop's stored
+/// answer, put through the rule that Arabic has no text path at all.
+///
+/// One resolver, the shape `print_lang_for` above has, and for the same
+/// reason: the ESC/POS route, the spool writer and the TCP sender all have
+/// to agree about one document, and a handler working it out for itself is
+/// how a spool file and a wire end up carrying different bytes.
+pub fn thermal_mode_for(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    lang: Lang,
+) -> Result<ThermalMode, CoreError> {
+    Ok(thermal_mode(conn, shop_id)?.for_lang(lang))
 }
 
 /// How long a session survives with nothing happening on it.
@@ -469,6 +521,61 @@ mod tests {
             repo::value(&mut conn, SHOP, PRINT_LANG).unwrap().as_deref(),
             Some("de")
         );
+    }
+
+    #[test]
+    fn a_shop_that_has_never_chosen_prints_thermal_as_text() {
+        let (_dir, mut conn) = open();
+        assert_eq!(thermal_mode(&mut conn, SHOP).unwrap(), ThermalMode::Text);
+    }
+
+    #[test]
+    fn every_thermal_mode_survives_a_round_trip() {
+        let (_dir, mut conn) = open();
+        for chosen in ThermalMode::ALL {
+            set_thermal_mode(&mut conn, SHOP, chosen, at()).unwrap();
+            assert_eq!(thermal_mode(&mut conn, SHOP).unwrap(), chosen);
+        }
+    }
+
+    /// A row a newer build, or a hand, wrote: the head is sent the default
+    /// path rather than the route refusing, the way an unknown facture
+    /// layout prints on the standard one. The row is left alone, because
+    /// the build that wrote it knows what it means.
+    #[test]
+    fn a_thermal_mode_this_build_never_heard_of_prints_as_text() {
+        let (_dir, mut conn) = open();
+        repo::put(&mut conn, SHOP, THERMAL_MODE, "holograph", at()).unwrap();
+        assert_eq!(thermal_mode(&mut conn, SHOP).unwrap(), ThermalMode::Text);
+        assert_eq!(
+            repo::value(&mut conn, SHOP, THERMAL_MODE)
+                .unwrap()
+                .as_deref(),
+            Some("holograph")
+        );
+    }
+
+    /// The resolver, against the shop file rather than against the enum:
+    /// Arabic is drawn under both stored answers, and the other two follow
+    /// what the shop stored.
+    #[test]
+    fn arabic_resolves_to_a_raster_whatever_the_shop_stored() {
+        let (_dir, mut conn) = open();
+        for stored in ThermalMode::ALL {
+            set_thermal_mode(&mut conn, SHOP, stored, at()).unwrap();
+            assert_eq!(
+                thermal_mode_for(&mut conn, SHOP, Lang::Ar).unwrap(),
+                ThermalMode::Raster,
+                "{stored:?}"
+            );
+            for lang in [Lang::Fr, Lang::En] {
+                assert_eq!(
+                    thermal_mode_for(&mut conn, SHOP, lang).unwrap(),
+                    stored,
+                    "{stored:?} {lang:?}"
+                );
+            }
+        }
     }
 
     /// The setting outlives the connection that wrote it: a fresh handle on

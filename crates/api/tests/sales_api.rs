@@ -1517,7 +1517,7 @@ async fn the_ticket_print_spools_the_same_bytes_the_get_returns() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     let spooled_path = body["spooled"].as_str().unwrap().to_string();
-    assert!(spooled_path.contains(&format!("ticket-{ticket_id}-fr.bin")));
+    assert!(spooled_path.contains(&format!("ticket-{ticket_id}-fr-text.bin")));
     assert!(body["bytes"].as_i64().unwrap() > 0);
     // The spool file exists and is the same bytes the GET would return.
     let file_bytes = std::fs::read(&spooled_path).expect("spool file not found");

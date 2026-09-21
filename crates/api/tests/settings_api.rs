@@ -116,6 +116,11 @@ async fn the_seeded_shop_reads_as_its_name_reel_and_nothing_planned() {
             // `null` is not French by default: a shop that has never chosen
             // prints in whatever language the till is being used in.
             "print_lang": null,
+            // Never null, unlike the two above: a head is always on one of
+            // the two ESC/POS wires, and a shop that has never chosen is on
+            // text. Arabic is drawn whatever this says, which is the core's
+            // rule and not this route's.
+            "thermal_mode": "text",
             // A shop that has never set one refuses a cashier every
             // discount, which is the safe reading of "nobody has decided"
             // and the reason the settings screen has to offer the field.

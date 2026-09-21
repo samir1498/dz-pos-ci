@@ -47,6 +47,8 @@ export type { FactureLayoutDto } from "./generated/FactureLayoutDto";
 export type { FactureLayoutChoiceDto } from "./generated/FactureLayoutChoiceDto";
 export type { PrintLangDto } from "./generated/PrintLangDto";
 export type { PrintLangChoiceDto } from "./generated/PrintLangChoiceDto";
+export type { ThermalModeDto } from "./generated/ThermalModeDto";
+export type { ThermalModeChoiceDto } from "./generated/ThermalModeChoiceDto";
 export type { ThemeDto } from "./generated/ThemeDto";
 export type { ThemeChoiceDto } from "./generated/ThemeChoiceDto";
 export type { RegimeChangeDto } from "./generated/RegimeChangeDto";

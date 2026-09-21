@@ -256,6 +256,53 @@ where
     Option::deserialize(d).map(Some)
 }
 
+/// Which ESC/POS path the shop's thermal head is sent: one byte per column
+/// down a single-byte table, or the same lines drawn into dots and sent as
+/// `GS v 0` bands
+/// (`context/plans/20260921-arabic-on-a-cheap-thermal-head.md`).
+///
+/// It is not the whole answer for a given paper. Arabic has no single-byte
+/// table on a cheap head, so it is drawn whatever a shop stores here; the
+/// core's `ThermalMode::for_lang` is the one place that decides it, and no
+/// handler repeats the rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "ThermalModeDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum ThermalModeDto {
+    Text,
+    Raster,
+}
+
+impl From<ThermalMode> for ThermalModeDto {
+    fn from(m: ThermalMode) -> Self {
+        match m {
+            ThermalMode::Text => ThermalModeDto::Text,
+            ThermalMode::Raster => ThermalModeDto::Raster,
+        }
+    }
+}
+
+impl From<ThermalModeDto> for ThermalMode {
+    fn from(d: ThermalModeDto) -> Self {
+        match d {
+            ThermalModeDto::Text => ThermalMode::Text,
+            ThermalModeDto::Raster => ThermalMode::Raster,
+        }
+    }
+}
+
+/// The path the settings screen is putting the shop's head on.
+///
+/// No `null` arm, unlike the print language beside it, and for the reason
+/// `FactureLayoutChoiceDto` has none: a head is always sent down one of the
+/// two paths, and "none" would be `text` under another name.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "ThermalModeChoiceDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct ThermalModeChoiceDto {
+    pub thermal_mode: ThermalModeDto,
+}
+
 /// What the settings screen reads: the store block, the régime in force
 /// and, when the owner has dated a change ahead, the one coming.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -275,9 +322,13 @@ pub struct SettingsDto {
     pub facture_layouts: Vec<FactureLayoutDto>,
     /// The language every fiscal paper prints in. `null` when the shop has
     /// never chosen one, which is not French by default: the till prints in
-    /// whatever language it is being used in (T3 reads this; nothing does
-    /// yet).
+    /// whatever language it is being used in.
     pub print_lang: Option<PrintLangDto>,
+    /// Which ESC/POS path its thermal head is sent. Never null: a shop that
+    /// has never chosen is on `text`, so the screen has a value to show and
+    /// the head has a wire to eat. An Arabic paper is drawn whatever this
+    /// says, which the panel's own hint tells the owner.
+    pub thermal_mode: ThermalModeDto,
     /// How much a cashier may take off a basket before the sale needs
     /// someone holding `discount_above_threshold`, in basis points of the
     /// basket before any discount (250 is 2,5 %). Zero on a shop that has

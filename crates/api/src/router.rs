@@ -195,6 +195,10 @@ pub fn router_with_origin(
         )
         .route("/sales/{id}/print", post(routes::sales::print_ticket))
         .route("/sales/{id}/facture", get(routes::sales::facture))
+        .route(
+            "/sales/{id}/facture/escpos",
+            get(routes::sales::facture_escpos),
+        )
         .route("/settings", get(routes::settings::read))
         .route("/settings/store", put(routes::settings::update_store))
         .route("/settings/regime", post(routes::settings::change_regime))
@@ -210,6 +214,10 @@ pub fn router_with_origin(
         .route(
             "/settings/print-lang",
             put(routes::settings::set_print_lang),
+        )
+        .route(
+            "/settings/thermal-mode",
+            put(routes::settings::set_thermal_mode),
         )
         .route(
             "/stock/recount",

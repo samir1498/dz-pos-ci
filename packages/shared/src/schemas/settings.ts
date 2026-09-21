@@ -16,6 +16,7 @@ import type { StoreDto } from "../generated/StoreDto";
 import type { FactureLayoutDto } from "../generated/FactureLayoutDto";
 import type { PrintLangDto } from "../generated/PrintLangDto";
 import type { ThemeDto } from "../generated/ThemeDto";
+import type { ThermalModeDto } from "../generated/ThermalModeDto";
 import { day, exactInteger } from "./common";
 import type { Assert, Matches } from "./drift";
 
@@ -85,6 +86,12 @@ type _FactureLayout = Assert<Matches<FactureLayoutDto, typeof factureLayoutSchem
 export const printLangSchema = z.enum(["fr", "en", "ar"]) satisfies z.ZodType<PrintLangDto>;
 type _PrintLang = Assert<Matches<PrintLangDto, typeof printLangSchema>>;
 
+/** Which ESC/POS wire the shop's thermal head is sent. Not the whole answer
+ *  for a given paper: Arabic is drawn whatever this says, because no
+ *  single-byte table a cheap head carries has Arabic in it. */
+export const thermalModeSchema = z.enum(["text", "raster"]) satisfies z.ZodType<ThermalModeDto>;
+type _ThermalMode = Assert<Matches<ThermalModeDto, typeof thermalModeSchema>>;
+
 export const settingsSchema = z.object({
   store: storeSchema,
   regime: datedRegimeSchema,
@@ -99,6 +106,8 @@ export const settingsSchema = z.object({
   /** `null` when the shop has never chosen one, which is not French by
    *  default: the till prints in whatever language it is being used in. */
   print_lang: printLangSchema.nullable(),
+  /** Never null: a shop that has never chosen is on `text`. */
+  thermal_mode: thermalModeSchema,
   /** Basis points of the basket, so a whole number: 250 is 2,5 %. Zero on
    *  a shop that has never set one, which refuses a cashier every
    *  discount. */

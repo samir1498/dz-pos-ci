@@ -16,8 +16,8 @@ use dzpos_core::money::{compute_totals, Bps, Line, Money, PaymentMode, Regime, T
 use dzpos_core::print::strings::{text, Key};
 use dzpos_core::print::{
     draw_ticket_raster, dump_ticket_escpos, dump_ticket_escpos_png, render_ticket_escpos,
-    render_ticket_escpos_raster, send_ticket_escpos_tcp, write_ticket_escpos_to_file,
-    HEAD_WIDTH_DOTS,
+    render_ticket_escpos_in, render_ticket_escpos_raster, send_ticket_escpos_tcp,
+    write_ticket_escpos_to_file, ThermalMode, HEAD_WIDTH_DOTS,
 };
 use dzpos_core::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, PartyBlock, PartyKind,
@@ -355,11 +355,15 @@ fn a_ticket_written_to_a_file_is_the_rendered_bytes() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ticket.bin");
     for lang in Lang::ALL {
-        write_ticket_escpos_to_file(&doc, lang, &path).unwrap();
+        write_ticket_escpos_to_file(&doc, lang, ThermalMode::Text, &path).unwrap();
         let on_disk = std::fs::read(&path).unwrap();
+        // The writer resolves the mode the way the route does, so a shop on
+        // the default text wire still gets a raster in Arabic and the file
+        // holds that. Comparing against the bare text renderer here would
+        // be asserting the bug T3 removed.
         assert_eq!(
             on_disk,
-            render_ticket_escpos(&doc, lang).unwrap(),
+            render_ticket_escpos_in(&doc, lang, ThermalMode::Text).unwrap(),
             "{lang:?} file is not the rendered bytes"
         );
     }
@@ -379,7 +383,7 @@ fn a_ticket_sent_over_tcp_is_the_rendered_bytes() {
         stream.read_to_end(&mut buf).unwrap();
         buf
     });
-    send_ticket_escpos_tcp(&doc, lang, &addr).unwrap();
+    send_ticket_escpos_tcp(&doc, lang, ThermalMode::Text, &addr).unwrap();
     assert_eq!(received.join().unwrap(), expected);
 }
 
@@ -393,12 +397,12 @@ fn a_refused_ticket_writes_no_file_and_opens_no_connection() {
     });
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ticket.bin");
-    let err = write_ticket_escpos_to_file(&doc, Lang::Fr, &path).unwrap_err();
+    let err = write_ticket_escpos_to_file(&doc, Lang::Fr, ThermalMode::Text, &path).unwrap_err();
     assert_eq!(err.code(), "print");
     assert!(!path.exists(), "a refused ticket left a file behind");
     // A closed port would fail with an io error; the render refusal must
     // come first, before any connection is attempted.
-    let err = send_ticket_escpos_tcp(&doc, Lang::Fr, "127.0.0.1:9").unwrap_err();
+    let err = send_ticket_escpos_tcp(&doc, Lang::Fr, ThermalMode::Text, "127.0.0.1:9").unwrap_err();
     assert_eq!(err.code(), "print");
 }
 
@@ -697,4 +701,93 @@ fn the_arabic_wire_keeps_utf8_for_script_outside_the_table() {
             .any(|w| w == [0xD8, 0xAA] || w == [0xD8, 0xAA]),
         "no UTF-8 Arabic bytes on the wire"
     );
+}
+
+/// **T3's rule at the core boundary.** Arabic comes back as bands whatever
+/// the shop stored, because there is no single-byte table with Arabic in it
+/// and a text-mode head would print a box per byte. French and English come
+/// back as text until the shop flips the preference.
+///
+/// The two paths are told apart by what the wire carries and not by its
+/// length: text selects a codepage and spells the words, a raster selects
+/// none and carries `GS v 0` bands.
+#[test]
+fn arabic_answers_bands_under_either_preference_and_the_others_follow_it() {
+    let doc = fixed_sale(Case::Reel);
+    for stored in ThermalMode::ALL {
+        let ar = dump_ticket_escpos(&render_ticket_escpos_in(&doc, Lang::Ar, stored).unwrap());
+        assert!(
+            ar.contains("<raster 576x") && !ar.contains("<codepage"),
+            "{stored:?}: Arabic went down the text path"
+        );
+        for lang in [Lang::Fr, Lang::En] {
+            let dump = dump_ticket_escpos(&render_ticket_escpos_in(&doc, lang, stored).unwrap());
+            match stored {
+                ThermalMode::Text => assert!(
+                    dump.contains("<codepage 19>") && !dump.contains("<raster "),
+                    "{lang:?} under text is not the text wire"
+                ),
+                ThermalMode::Raster => assert!(
+                    dump.contains("<raster 576x") && !dump.contains("<codepage"),
+                    "{lang:?} under raster is not the raster wire"
+                ),
+            }
+        }
+    }
+}
+
+/// The text path's bytes are exactly what the old two-argument renderer
+/// gave, so the nine `.txt` goldens still describe what a shop on the
+/// default gets. A mode that quietly changed the French wire would pass
+/// every golden and change every ticket.
+#[test]
+fn the_text_mode_bytes_are_the_bytes_the_goldens_pin() {
+    for case in Case::ALL {
+        let doc = fixed_sale(case);
+        for lang in [Lang::Fr, Lang::En] {
+            assert_eq!(
+                render_ticket_escpos_in(&doc, lang, ThermalMode::Text).unwrap(),
+                render_ticket_escpos(&doc, lang).unwrap(),
+                "{lang:?} {:?}",
+                case.suffix()
+            );
+        }
+    }
+}
+
+/// The spool file and the wire are one document. Before the mode reached
+/// the two senders, a shop on the raster spooled a bitmap and pushed text
+/// down the socket, which on an Arabic ticket is the difference between a
+/// receipt and a page of boxes.
+#[test]
+fn the_spool_file_and_the_socket_carry_the_same_bytes_in_either_mode() {
+    use std::io::Read as _;
+    let doc = fixed_sale(Case::Reel);
+    let dir = tempfile::tempdir().unwrap();
+    for mode in ThermalMode::ALL {
+        for lang in Lang::ALL {
+            let path = dir.path().join("ticket.bin");
+            write_ticket_escpos_to_file(&doc, lang, mode, &path).unwrap();
+            let spooled = std::fs::read(&path).unwrap();
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let addr = listener.local_addr().unwrap().to_string();
+            let received = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut buf = Vec::new();
+                stream.read_to_end(&mut buf).unwrap();
+                buf
+            });
+            send_ticket_escpos_tcp(&doc, lang, mode, &addr).unwrap();
+            assert_eq!(
+                received.join().unwrap(),
+                spooled,
+                "{mode:?} {lang:?}: the spool file and the wire differ"
+            );
+            assert_eq!(
+                spooled,
+                render_ticket_escpos_in(&doc, lang, mode).unwrap(),
+                "{mode:?} {lang:?}: the spool file is not the rendered bytes"
+            );
+        }
+    }
 }

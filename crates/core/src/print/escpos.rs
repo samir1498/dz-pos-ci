@@ -17,7 +17,8 @@ use crate::models::document::Document;
 use crate::money::Regime;
 use crate::print::png;
 use crate::print::raster;
-use crate::print::ticket::{self, Align, Item, TicketView};
+use crate::print::thermal::ThermalMode;
+use crate::print::ticket::{self, Align, Item};
 
 const ESC: u8 = 0x1b;
 const GS: u8 = 0x1d;
@@ -38,7 +39,27 @@ pub fn render_ticket_escpos(doc: &Document, lang: Lang) -> Result<Vec<u8>, CoreE
             "an IFU document carries a TVA recap and has no printable form",
         ));
     }
-    Ok(encode(&ticket::view(doc, lang)))
+    Ok(encode(&ticket::items(&ticket::view(doc, lang))))
+}
+
+/// The ticket down whichever path the shop's head is on.
+///
+/// `mode` is the shop's stored answer and not the last word: it is put
+/// through `ThermalMode::for_lang`, so Arabic is drawn whatever a shop
+/// chose and the other two follow the choice. Every caller that moves
+/// ticket bytes — the route, the spool file, the TCP sender — comes through
+/// here, which is what keeps a spool file and a wire carrying the same
+/// bytes for the same document
+/// (`context/plans/20260921-arabic-on-a-cheap-thermal-head.md`, T3).
+pub fn render_ticket_escpos_in(
+    doc: &Document,
+    lang: Lang,
+    mode: ThermalMode,
+) -> Result<Vec<u8>, CoreError> {
+    match mode.for_lang(lang) {
+        ThermalMode::Text => render_ticket_escpos(doc, lang),
+        ThermalMode::Raster => render_ticket_escpos_raster(doc, lang, raster::HEAD_WIDTH_DOTS),
+    }
 }
 
 /// The bytes as a reviewer reads them: commands on their own line, text
@@ -102,12 +123,18 @@ fn band_with_data(bytes: &[u8], at: usize) -> Option<(usize, usize, usize, &[u8]
 /// path, or anything else that eats bytes from the filesystem. Fails
 /// closed on a render refusal, so no file is left holding half a ticket:
 /// the bytes are fully rendered before the first write.
+///
+/// `mode` is the shop's stored path and goes through the same resolver the
+/// route uses. Without it here the spool file would always hold text bytes
+/// while the head that reads it was sent a raster, which on an Arabic
+/// ticket is the difference between a receipt and a page of boxes.
 pub fn write_ticket_escpos_to_file(
     doc: &Document,
     lang: Lang,
+    mode: ThermalMode,
     path: &std::path::Path,
 ) -> Result<(), CoreError> {
-    let bytes = render_ticket_escpos(doc, lang)?;
+    let bytes = render_ticket_escpos_in(doc, lang, mode)?;
     std::fs::write(path, bytes)?;
     Ok(())
 }
@@ -117,21 +144,33 @@ pub fn write_ticket_escpos_to_file(
 /// without hardware. The address is `host:port`; a refused connection is
 /// an error, never a silent drop. Like the file sender, this renders first
 /// and connects second, so a refused ticket never opens a connection.
-pub fn send_ticket_escpos_tcp(doc: &Document, lang: Lang, addr: &str) -> Result<(), CoreError> {
+///
+/// `mode` for the reason the file sender takes one: the spool file beside
+/// this call and the bytes on this wire stand for one piece of paper.
+pub fn send_ticket_escpos_tcp(
+    doc: &Document,
+    lang: Lang,
+    mode: ThermalMode,
+    addr: &str,
+) -> Result<(), CoreError> {
     use std::io::Write as _;
-    let bytes = render_ticket_escpos(doc, lang)?;
+    let bytes = render_ticket_escpos_in(doc, lang, mode)?;
     let mut stream = std::net::TcpStream::connect(addr)?;
     stream.write_all(&bytes)?;
     Ok(())
 }
 
-/// The ticket's own list of things to print, one byte sequence per item.
-/// The list is built in `ticket::items` and this only spells it out, which
-/// is why the nine goldens did not move when the raster path landed.
-fn encode(view: &TicketView) -> Vec<u8> {
+/// A list of things to print, one byte sequence per item.
+///
+/// It takes the list and not the paper: `ticket::items` and
+/// `facture_roll::items` both build one, and neither of them formats an
+/// amount, so nothing in this file ever learns what a total is. That is why
+/// the nine ticket goldens did not move when the raster path landed and did
+/// not move again when the facture came down the same wire.
+pub(crate) fn encode(items: &[Item]) -> Vec<u8> {
     let mut out = Buf::new();
     out.init();
-    for item in &ticket::items(view) {
+    for item in items {
         match item {
             Item::Align(align) => out.align(*align),
             Item::Bold(on) => out.bold(*on),
@@ -156,10 +195,17 @@ pub fn render_ticket_escpos_raster(
     lang: Lang,
     width_dots: u32,
 ) -> Result<Vec<u8>, CoreError> {
-    let drawn = draw_ticket_raster(doc, lang, width_dots)?;
+    encode_raster(&draw_ticket_raster(doc, lang, width_dots)?.bitmap)
+}
+
+/// A drawn bitmap as the bytes a head eats: reset, left margin, the `GS v 0`
+/// bands, cut. Takes the bitmap and not the document for the reason
+/// `encode` takes the item list — the facture draws its own and sends it
+/// down this same wire.
+pub(crate) fn encode_raster(bitmap: &raster::Bitmap) -> Result<Vec<u8>, CoreError> {
     let mut out = Buf::new();
     out.init_raster();
-    out.raster(&drawn.bitmap)?;
+    out.raster(bitmap)?;
     out.cut();
     Ok(out.into_bytes())
 }

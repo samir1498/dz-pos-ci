@@ -40,6 +40,7 @@ const settings: SettingsDto = {
   facture_layout: "standard",
   facture_layouts: ["standard", "compact", "half_sheet", "roll_80mm"],
   print_lang: null,
+  thermal_mode: "text",
   discount_threshold_bps: 0,
 };
 

@@ -1,0 +1,62 @@
+<init>
+<codepage 19>
+<align center>
+<bold on>
+CREDIT NOTE
+<bold off>
+<align left>
+AV-2026-000003                  12/09/2026
+Credit note against invoice FA-2026-000042
+dated 09/09/2026
+------------------------------------------
+<align left>
+<bold on>
+Seller
+<bold off>
+Mon magasin
+12 rue Didouche Mourad, Alger
+0555 12 34 56
+RC 16/00-1234567 B 25
+NIF 000216001234567
+NIS 000216001234567 00
+AI 16001234567
+<bold on>
+Customer
+<bold off>
+Sarl Amine Distribution
+05 boulevard Krim Belkacem, Alger
+RC 16/00-7654321 B 20
+NIF 000216007654321
+NIS 000216007654321 00
+AI 16007654321
+------------------------------------------
+Huile <Elio> & Co 5 L
+1 × 150,00  19 %                    150,00
+Farine
+0,5 × 320,00  9 %                   160,00
+------------------------------------------
+Total excl. tax                     310,00
+VAT 9 % Base 160,00                  14,40
+VAT 19 % Base 150,00                 28,50
+Total incl. tax                     352,90
+<bold on>
+Credit note amount                  352,90
+<bold off>
+------------------------------------------
+This credit note is closed at the sum of
+three hundred and fifty-two dinars and
+ninety centimes
+------------------------------------------
+Balance
+Previous balance                    300,00
+This document                      -352,90
+Credit balance                      -52,90
+------------------------------------------
+Seller · Stamp and signature
+<feed 2>
+Customer · Stamp and signature
+<align center>
+<feed 1>
+DZD
+<feed 2>
+<cut>

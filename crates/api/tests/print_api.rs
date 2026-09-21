@@ -668,6 +668,14 @@ async fn a_facture_that_does_not_exist_or_belongs_to_another_shop_is_404() {
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
     assert_eq!(error_code(&body), "not_found");
 
+    // The roll answers the same way, and answers it with an error rather
+    // than with a short spool file: a head handed a truncated stream prints
+    // whatever it makes of the bytes.
+    let (status, _, body) = call_text(&app, "/sales/404/facture/escpos?lang=fr", true).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(error_code(&body), "not_found");
+    assert!(!body.contains('\u{1b}'), "an error body carries no ESC/POS");
+
     // Rule 3: the row is real and readable for the shop that owns it.
     let mut conn = dzpos_core::db::open(&path).unwrap();
     conn.batch_execute(
@@ -695,6 +703,16 @@ async fn a_facture_that_does_not_exist_or_belongs_to_another_shop_is_404() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
     assert_eq!(error_code(&body), "not_found");
+
+    let (status, _, body) = call_text(
+        &app,
+        &format!("/sales/{other}/facture/escpos?lang=fr"),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(error_code(&body), "not_found");
+    assert!(!body.contains('\u{1b}'), "an error body carries no ESC/POS");
 }
 
 #[tokio::test]

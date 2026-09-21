@@ -69,6 +69,19 @@ fn is_ltr_member(ch: char) -> bool {
             ))
 }
 
+/// A character that can sit inside a left-to-right object without being a
+/// reason for one: anything that is neither Arabic nor a space.
+///
+/// This is the punctuation a shop types into a product name or an address —
+/// `<`, `>`, `&`, brackets, an apostrophe, a quote — none of which
+/// `is_ltr_member` names, and none of which should be allowed to cut a name
+/// into pieces. It is the same reading the HTML templates get from `<bdi>`,
+/// which takes its direction from what is inside it and does not care where
+/// the ampersands fall.
+fn is_ltr_joiner(ch: char) -> bool {
+    !is_arabic(ch) && ch != ' ' && !is_isolate(ch)
+}
+
 /// Wrap each left-to-right stretch of an Arabic line in an isolate.
 ///
 /// Without this the bidi algorithm is right and the paper is wrong. The
@@ -81,34 +94,76 @@ fn is_ltr_member(ch: char) -> bool {
 /// one object, which is the same fix the HTML ticket took on 2026-09-12,
 /// and the marks themselves are dropped before anything is drawn.
 ///
+/// A stretch runs from its first left-to-right member to its last, over any
+/// punctuation and any single space between them. It had to grow that far
+/// when the facture came down this wire on 2026-09-21: the facture fixture
+/// carries `Huile <Elio> & Co 5 L`, and with only `is_ltr_member` joining,
+/// the brackets and the ampersand were neutral, so the name became four
+/// objects and the Arabic paragraph laid them out right to left as
+/// `Co 5 L & <Elio> Huile`. The amounts were right and the product was
+/// printed backwards, which no test caught and the first picture did
+/// (`a_product_name_with_punctuation_in_it_stays_one_object`).
+///
 /// One space joins the two sides it sits between; two or more do not. A
 /// padded row's gap has to stay neutral, both because it is where the row
 /// is justified and because the amount column only stays a column while
-/// the amount is a separate object from the label.
+/// the amount is a separate object from the label. That is the rule that
+/// keeps this from swallowing a whole line: `تخفيض  -10,00` is padded with
+/// two spaces, so the label and the figure stay two objects.
+///
+/// A stretch with no member in it at all — the two full stops of `ت.ق.م`,
+/// which are punctuation between Arabic letters — is left neutral. It is
+/// not a left-to-right object; it only looks like one from here.
 pub(super) fn isolate_ltr_runs(text: &str) -> String {
     let chars: Vec<char> = text.chars().collect();
     let member_at = |index: usize| chars.get(index).is_some_and(|ch| is_ltr_member(*ch));
+    let joiner_at = |index: usize| chars.get(index).is_some_and(|ch| is_ltr_joiner(*ch));
+    // A space is part of the object around it only when it has a joinable
+    // character on each side. A second space fails that on both counts,
+    // which is what keeps a padded gap neutral.
     let inside = |index: usize| match chars.get(index) {
-        Some(&ch) if is_ltr_member(ch) => true,
+        Some(&ch) if is_ltr_joiner(ch) => true,
         Some(' ') => {
-            index.checked_sub(1).is_some_and(member_at) && member_at(index.saturating_add(1))
+            index.checked_sub(1).is_some_and(joiner_at) && joiner_at(index.saturating_add(1))
         }
         _ => false,
     };
-    let mut out = String::with_capacity(text.len());
-    let mut open = false;
-    for (index, ch) in chars.iter().enumerate() {
-        let now = inside(index);
-        if now && !open {
-            out.push(LRI);
-        } else if !now && open {
-            out.push(PDI);
+    let push = |out: &mut String, from: usize, to: usize| {
+        for index in from..to {
+            if let Some(ch) = chars.get(index) {
+                out.push(*ch);
+            }
         }
-        open = now;
-        out.push(*ch);
-    }
-    if open {
-        out.push(PDI);
+    };
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0usize;
+    while at < chars.len() {
+        if !inside(at) {
+            push(&mut out, at, at.saturating_add(1));
+            at = at.saturating_add(1);
+            continue;
+        }
+        let mut end = at;
+        while end < chars.len() && inside(end) {
+            end = end.saturating_add(1);
+        }
+        // The isolate opens at the first member and closes after the last:
+        // punctuation hanging off either end of the stretch belongs to the
+        // Arabic around it, the way a full stop ending an Arabic sentence
+        // does.
+        let first = (at..end).find(|index| member_at(*index));
+        let last = (at..end).rfind(|index| member_at(*index));
+        match (first, last) {
+            (Some(first), Some(last)) => {
+                push(&mut out, at, first);
+                out.push(LRI);
+                push(&mut out, first, last.saturating_add(1));
+                out.push(PDI);
+                push(&mut out, last.saturating_add(1), end);
+            }
+            _ => push(&mut out, at, end),
+        }
+        at = end;
     }
     out
 }
@@ -199,5 +254,49 @@ mod tests {
             isolate_ltr_runs("تخفيض  -10,00"),
             format!("تخفيض  {LRI}-10,00{PDI}")
         );
+    }
+
+    /// A product name is typed by the shop and can carry anything. The
+    /// facture fixture's does: `Huile <Elio> & Co 5 L`. With only letters
+    /// and digits holding an object together, the brackets and the
+    /// ampersand were neutral, the name became four objects, and the
+    /// Arabic paragraph printed them right to left as
+    /// `Co 5 L & <Elio> Huile` — every amount on the page correct and the
+    /// article backwards. One object is the whole fix.
+    #[test]
+    fn a_product_name_with_punctuation_in_it_stays_one_object() {
+        assert_eq!(
+            isolate_ltr_runs("Huile <Elio> & Co 5 L"),
+            format!("{LRI}Huile <Elio> & Co 5 L{PDI}")
+        );
+        assert_eq!(
+            isolate_ltr_runs("Erreur <quantité> & prix"),
+            format!("{LRI}Erreur <quantité> & prix{PDI}")
+        );
+    }
+
+    /// The Arabic abbreviation for TVA, `ت.ق.م`, whose two full stops are
+    /// ASCII and therefore left-to-right members in their own right. Each
+    /// becomes an isolate of one character, which is what the raster has
+    /// done since it landed and is harmless: a lone neutral inside an
+    /// isolate has nothing to be reordered against, so the abbreviation
+    /// reads the same on paper either way (`ar.png`).
+    ///
+    /// What this pins is that each full stop gets its own isolate and the
+    /// three Arabic letters stay in Arabic order around them, which is what
+    /// a reader of the recap row sees.
+    #[test]
+    fn the_full_stops_of_the_arabic_tva_label_are_objects_of_their_own() {
+        assert_eq!(
+            isolate_ltr_runs("ت.ق.م 19 %"),
+            format!("ت{LRI}.{PDI}ق{LRI}.{PDI}م {LRI}19 %{PDI}")
+        );
+    }
+
+    /// The end of a stretch is its last member, not its last character: a
+    /// full stop closing an Arabic sentence belongs to the Arabic.
+    #[test]
+    fn punctuation_hanging_off_an_object_stays_outside_it() {
+        assert_eq!(isolate_ltr_runs("Alger،"), format!("{LRI}Alger{PDI}،"));
     }
 }

@@ -45,6 +45,7 @@ describe("settings", () => {
 
     facture_layouts: ["standard", "compact"],
     print_lang: null,
+    thermal_mode: "text",
     discount_threshold_bps: 0,
   };
 

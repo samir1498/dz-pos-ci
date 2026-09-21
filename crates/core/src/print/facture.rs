@@ -23,7 +23,7 @@ use crate::error::CoreError;
 use crate::lang::Lang;
 use crate::models::document::{Document, DocumentKind};
 use crate::print::facture_view::{reference, view};
-use crate::print::layout::{FactureLayout, Page};
+use crate::print::layout::{FactureLayout, Page, Paper};
 use crate::print::refusals::refuse_what_cannot_be_printed;
 
 /// A facture carries the date and not the minute: the day of the sale is
@@ -243,6 +243,21 @@ pub fn render_facture_with(
     lang: Lang,
     page: Page,
 ) -> Result<String, CoreError> {
+    render_in(page.layout, built_view(doc, input, lang, page.paper())?)
+}
+
+/// The document read, refused, or turned into the one view every layout
+/// draws. Split out of `render_facture_with` when the ESC/POS roll landed:
+/// `print::facture_roll` sends the same fields to a thermal head rather
+/// than to a template, and the list of what a facture refuses to print has
+/// to be the same list on paper and on a roll of dots. A page drawn tight
+/// refuses exactly what a page drawn wide refuses (`print::refusals`).
+pub(super) fn built_view(
+    doc: &Document,
+    input: &FactureInput<'_>,
+    lang: Lang,
+    paper: Paper,
+) -> Result<FactureView, CoreError> {
     // This template titles itself by kind, and the three kinds it has a
     // title for are the three it prints. A ticket has its own 80 mm paper;
     // a bon de livraison and a bon de réception are not written yet
@@ -258,15 +273,7 @@ pub fn render_facture_with(
     }
     let buyer = refuse_what_cannot_be_printed(doc, input)?;
     let reference = reference(doc, input.referenced, lang)?;
-    let view = view(
-        doc,
-        buyer,
-        reference,
-        input.cancellation,
-        lang,
-        page.paper(),
-    )?;
-    render_in(page.layout, view)
+    view(doc, buyer, reference, input.cancellation, lang, paper)
 }
 
 /// The page, in the layout that was asked for.

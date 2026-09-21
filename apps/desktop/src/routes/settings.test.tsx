@@ -88,6 +88,7 @@ const seeded: SettingsDto = {
   facture_layout: "standard",
   facture_layouts: ["standard", "compact", "half_sheet", "roll_80mm"],
   print_lang: null,
+  thermal_mode: "text",
   discount_threshold_bps: 0,
 };
 
@@ -240,6 +241,17 @@ beforeEach(() => {
       const asked = "print_lang" in body ? body.print_lang : undefined;
       const chosen = (["fr", "en", "ar"] as const).find((lang) => lang === asked);
       current = { ...current, print_lang: chosen ?? null };
+      return Promise.resolve(json(200, current));
+    }
+    if (init?.method === "PUT" && url.endsWith("/settings/thermal-mode")) {
+      const body: unknown = JSON.parse(String(init.body));
+      if (typeof body !== "object" || body === null) throw new Error("no body");
+      const asked = "thermal_mode" in body ? body.thermal_mode : undefined;
+      // Narrowed rather than trusted, the same shape the layout branch
+      // above uses: the round trip is only worth anything if a value
+      // neither side knows cannot pass through it.
+      const chosen = (["text", "raster"] as const).find((mode) => mode === asked);
+      current = { ...current, thermal_mode: chosen ?? "text" };
       return Promise.resolve(json(200, current));
     }
     if (init?.method === "POST" && url.endsWith("/settings/regime")) {
@@ -693,5 +705,43 @@ describe("the printing room", () => {
     await waitFor(() => expect(sent("PUT").url).toContain("/settings/print-lang"));
     expect(sent("PUT").body).toEqual({ print_lang: null });
     await waitFor(() => expect(picker).toHaveTextContent(fr.print_lang_follow_till));
+  });
+
+  test("shows the wire the shop's thermal head is on and what it means", async () => {
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_thermal_mode });
+    expect(picker).toHaveTextContent(fr.thermal_mode_text);
+    expect(screen.getByText(fr.thermal_mode_text_hint)).toBeInTheDocument();
+  });
+
+  test("sends the thermal wire that was picked and reads the answer back", async () => {
+    const user = userEvent.setup();
+    mount("fr", "/settings/printing");
+    const picker = await screen.findByRole("combobox", { name: fr.settings_thermal_mode });
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: fr.thermal_mode_raster }));
+    await waitFor(() => expect(sent("PUT").url).toContain("/settings/thermal-mode"));
+    expect(sent("PUT").body).toEqual({ thermal_mode: "raster" });
+    // The answer is the whole page, so the screen reads the stored choice
+    // back rather than trusting the click that sent it.
+    await waitFor(() => expect(picker).toHaveTextContent(fr.thermal_mode_raster));
+    expect(screen.getByText(fr.thermal_mode_raster_hint)).toBeInTheDocument();
+  });
+
+  /** The one thing the picker does not decide. An owner who never learns
+   *  this sets the wire to text, hands an Arabic customer a page of boxes
+   *  and has nothing on the screen to tell them why, so the sentence is on
+   *  the panel under either choice rather than only under one. */
+  test("says Arabic is drawn whatever the shop picks", async () => {
+    const user = userEvent.setup();
+    mount("fr", "/settings/printing");
+    expect(
+      await screen.findByText(fr.thermal_mode_arabic_always_drawn),
+    ).toBeInTheDocument();
+    const picker = await screen.findByRole("combobox", { name: fr.settings_thermal_mode });
+    await user.click(picker);
+    await user.click(await screen.findByRole("option", { name: fr.thermal_mode_raster }));
+    await waitFor(() => expect(picker).toHaveTextContent(fr.thermal_mode_raster));
+    expect(screen.getByText(fr.thermal_mode_arabic_always_drawn)).toBeInTheDocument();
   });
 });

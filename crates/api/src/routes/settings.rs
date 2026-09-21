@@ -9,13 +9,14 @@ use chrono::{NaiveDateTime, NaiveTime};
 use dzpos_core::error::CoreError;
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::money::Bps;
-use dzpos_core::print::FactureLayout;
+use dzpos_core::print::{FactureLayout, ThermalMode};
 use dzpos_core::services::clock;
 use dzpos_core::services::{preferences, settings, shops};
 
 use crate::dto::{
     parse_day, DiscountThresholdChangeDto, FactureLayoutChoiceDto, FactureLayoutDto,
     PrintLangChoiceDto, RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto,
+    ThermalModeChoiceDto,
 };
 use crate::error::ApiError;
 use crate::session::CurrentUser;
@@ -41,6 +42,7 @@ fn read_all(
         facture_layout: preferences::facture_layout(conn, shop)?.into(),
         facture_layouts: FactureLayout::ALL.map(FactureLayoutDto::from).to_vec(),
         print_lang: preferences::print_lang(conn, shop)?.map(Into::into),
+        thermal_mode: preferences::thermal_mode(conn, shop)?.into(),
         discount_threshold_bps: settings::discount_threshold_as_of(conn, shop, at)?.as_u32(),
     })
 }
@@ -90,8 +92,8 @@ pub async fn set_theme(
 /// Records the language every fiscal paper prints in, or forgets it when the
 /// body carries `null`, which puts every fiscal paper back on the till's own
 /// language: the `null` arm exists for the same reason the theme's does, a
-/// shop that chose one needs a way back. Nothing reads this yet (T3 wires
-/// the print routes); T2 stops at the setting existing and being settable.
+/// shop that chose one needs a way back. The six fiscal-paper routes read it
+/// back through `preferences::print_lang_for`.
 ///
 /// Answers the whole settings page for the reason `set_theme` does.
 pub async fn set_print_lang(
@@ -113,6 +115,32 @@ pub async fn set_print_lang(
     let all = state
         .blocking(move |c| {
             preferences::set_print_lang(c, shop, chosen, now())?;
+            read_all(c, shop)
+        })
+        .await?;
+    Ok(Json(all))
+}
+
+/// Records which ESC/POS path the shop's thermal head is sent.
+///
+/// Answers the whole settings page for the reason `set_theme` does.
+///
+/// No `null` arm, the same as the facture layout: a head is always on one
+/// of the two paths. What the choice does not reach is Arabic, which is
+/// drawn whatever is stored here because no single-byte table a cheap head
+/// carries has Arabic in it — the rule lives in the core
+/// (`ThermalMode::for_lang`) and the printing panel says so in all three
+/// languages, so an owner is not left to find it on paper.
+pub async fn set_thermal_mode(
+    State(state): State<AppState>,
+    body: Result<Json<ThermalModeChoiceDto>, JsonRejection>,
+) -> Result<Json<SettingsDto>, ApiError> {
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let chosen = ThermalMode::from(dto.thermal_mode);
+    let shop = state.shop_id;
+    let all = state
+        .blocking(move |c| {
+            preferences::set_thermal_mode(c, shop, chosen, now())?;
             read_all(c, shop)
         })
         .await?;

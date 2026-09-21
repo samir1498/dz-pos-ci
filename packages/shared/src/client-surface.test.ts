@@ -93,6 +93,7 @@ const SURFACE: Readonly<Record<string, readonly string[]>> = {
     "setTheme",
     "setFactureLayout",
     "setPrintLang",
+    "setThermalMode",
   ],
   stock: ["lastStockRecount", "recountStock"],
   suppliers: [

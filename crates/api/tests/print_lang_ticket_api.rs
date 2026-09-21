@@ -15,6 +15,7 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use dzpos_core::lang::Lang;
+use dzpos_core::print::ThermalMode;
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
@@ -147,9 +148,12 @@ async fn the_ticket_escpos_follows_the_stored_print_language_over_the_callers_ow
         dzpos_core::services::documents::DocumentKind::Ticket,
     )
     .unwrap();
-    let ar_bytes = dzpos_core::print::render_ticket_escpos(&stored, Lang::Ar).unwrap();
-    let fr_bytes = dzpos_core::print::render_ticket_escpos(&stored, Lang::Fr).unwrap();
-    let en_bytes = dzpos_core::print::render_ticket_escpos(&stored, Lang::En).unwrap();
+    let ar_bytes =
+        dzpos_core::print::render_ticket_escpos_in(&stored, Lang::Ar, ThermalMode::Text).unwrap();
+    let fr_bytes =
+        dzpos_core::print::render_ticket_escpos_in(&stored, Lang::Fr, ThermalMode::Text).unwrap();
+    let en_bytes =
+        dzpos_core::print::render_ticket_escpos_in(&stored, Lang::En, ThermalMode::Text).unwrap();
 
     // The stored Arabic wins over the caller's own French.
     let (status, bytes) =
@@ -208,15 +212,21 @@ async fn the_ticket_print_spools_under_the_stored_print_language_over_the_caller
     assert_eq!(body["lang"], json!("ar"), "{body}");
     let spooled = body["spooled"].as_str().unwrap();
     assert!(
-        spooled.contains(&format!("ticket-{ticket_id}-ar.bin")),
+        spooled.contains(&format!("ticket-{ticket_id}-ar-raster.bin")),
         "{body}"
     );
+    // The name carries the wire as well as the language, and the answer
+    // says the same thing, so a phone inheriting the desktop's spool knows
+    // which of the two kinds of bytes it is holding. Arabic is `raster`
+    // here under a shop that has never opened the printing panel: the
+    // language decides it, not the preference.
+    assert_eq!(body["thermal_mode"], json!("raster"), "{body}");
     // The name is not the claim. What a thermal printer is handed is the
     // bytes in that file, so they are read back and matched against the
     // Arabic render rather than trusted because the filename says `ar`.
     assert_eq!(
         std::fs::read(spooled).unwrap(),
-        dzpos_core::print::render_ticket_escpos(&stored, Lang::Ar).unwrap(),
+        dzpos_core::print::render_ticket_escpos_in(&stored, Lang::Ar, ThermalMode::Text).unwrap(),
         "the spool file under an Arabic name does not hold the Arabic ticket"
     );
 
@@ -231,12 +241,13 @@ async fn the_ticket_print_spools_under_the_stored_print_language_over_the_caller
     assert_eq!(body["lang"], json!("en"), "{body}");
     let spooled = body["spooled"].as_str().unwrap();
     assert!(
-        spooled.contains(&format!("ticket-{ticket_id}-en.bin")),
+        spooled.contains(&format!("ticket-{ticket_id}-en-text.bin")),
         "{body}"
     );
+    assert_eq!(body["thermal_mode"], json!("text"), "{body}");
     assert_eq!(
         std::fs::read(spooled).unwrap(),
-        dzpos_core::print::render_ticket_escpos(&stored, Lang::En).unwrap(),
+        dzpos_core::print::render_ticket_escpos_in(&stored, Lang::En, ThermalMode::Text).unwrap(),
         "the spool file under an English name does not hold the English ticket"
     );
 }
@@ -261,7 +272,8 @@ async fn with_nothing_stored_the_two_byte_routes_follow_the_callers_own_language
         dzpos_core::services::documents::DocumentKind::Ticket,
     )
     .unwrap();
-    let ar_bytes = dzpos_core::print::render_ticket_escpos(&stored, Lang::Ar).unwrap();
+    let ar_bytes =
+        dzpos_core::print::render_ticket_escpos_in(&stored, Lang::Ar, ThermalMode::Text).unwrap();
 
     let (status, bytes) =
         call_bytes(&app, &format!("/sales/{ticket_id}/ticket/escpos?lang=ar")).await;

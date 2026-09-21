@@ -30,11 +30,11 @@ use dzpos_api::dto::{
     SetPinDto, SettingsDto, ShiftDto, ShiftReportDto, StaffDto, StockDriftDto, StockRecountDto,
     StoreDto, SupplierAllocationDto, SupplierDebtKindDto, SupplierDto, SupplierEntryDto,
     SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto, TakingsDto, ThemeChoiceDto,
-    ThemeDto, TillCountDto, TopProductDto, UnitDto, UserDto,
+    ThemeDto, ThermalModeChoiceDto, ThermalModeDto, TillCountDto, TopProductDto, UnitDto, UserDto,
 };
 use ts_rs::{Config, TS};
 
-const FILES: [&str; 120] = [
+const FILES: [&str; 122] = [
     "LoginDto.ts",
     "MeDto.ts",
     "SessionDto.ts",
@@ -54,6 +54,8 @@ const FILES: [&str; 120] = [
     "DatedRegimeDto.ts",
     "ThemeDto.ts",
     "ThemeChoiceDto.ts",
+    "ThermalModeDto.ts",
+    "ThermalModeChoiceDto.ts",
     "SettingsDto.ts",
     "RegimeChangeDto.ts",
     "BackupDto.ts",
@@ -260,6 +262,8 @@ fn export_bindings() {
     SettingsDto::export_all(&cfg).unwrap();
     FactureLayoutDto::export_all(&cfg).unwrap();
     FactureLayoutChoiceDto::export_all(&cfg).unwrap();
+    ThermalModeDto::export_all(&cfg).unwrap();
+    ThermalModeChoiceDto::export_all(&cfg).unwrap();
     PrintLangDto::export_all(&cfg).unwrap();
     PrintLangChoiceDto::export_all(&cfg).unwrap();
     RegimeChangeDto::export_all(&cfg).unwrap();
