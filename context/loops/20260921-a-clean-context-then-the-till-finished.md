@@ -116,6 +116,21 @@ of it is acted on.
 
 Then `dz-standup` for Anouar, in plain words, with no task codes in the body.
 
+## Phase E: the brainstorm on module shape (D7), started 2026-09-21, 20:55
+
+Samir, 20:51: start it now rather than later. It is D7 of
+`context/plans/20260921-whether-dinar-becomes-a-core-and-modules.md`, run
+the way that page says: one subagent per numbered candidate, seven in all,
+two at a time within the four-agent cap, each handed the same constraints
+block and the measurements on that page, each answering pros, cons, the cost
+from today's code, what it does on a Windows 7 machine, and the one thing
+that would kill it. Each writes one page under
+`context/research/module-shape/` and touches nothing else; no code, no
+cargo. The session reads the seven, calls the advisor on the comparison, and
+writes the comparison page `context/research/20260921-module-shape-the-seven-compared.md`
+with a recommendation. D6 itself stays Samir's and still waits on D2, D3 and
+D5. The sharper model runs the candidates, on Samir's ruling of 15:29 today.
+
 ## The gate to the replan
 
 This file closes when Phase D's standup is published. The replan is a
