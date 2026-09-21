@@ -14,8 +14,14 @@ import type { TakingsDto } from "./TakingsDto";
  */
 export type ShiftReportDto = { shift: ShiftDto, takings: TakingsDto, 
 /**
- * `opening_cash` plus the takings while the shift is open, and the
- * stored figure once it is closed.
+ * Cash this person handed back over the window on a reversal, read live
+ * like `takings`. By whoever handed the notes over and never by whoever
+ * rang the sale.
+ */
+refunds_centimes: number, 
+/**
+ * `opening_cash` plus the takings less the refunds while the shift is
+ * open, and the stored figure once it is closed.
  */
 expected_centimes: number, 
 /**

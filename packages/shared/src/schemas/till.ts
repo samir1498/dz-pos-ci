@@ -32,10 +32,15 @@ type _Shift = Assert<Matches<ShiftDto, typeof shiftSchema>>;
  *  against. `expected_centimes` is the stored snapshot once the shift is
  *  closed and a fresh sum while it is open (`ShiftReportDto`'s own doc), and
  *  this schema does not tell the two apart — the screen reads `shift.closed_at`
- *  for that, the way the core's own report does. */
+ *  for that, the way the core's own report does.
+ *
+ *  `refunds_centimes` is the cash this person handed back over the window,
+ *  which the expected figure has already been lowered by. It travels beside
+ *  it so a close screen can say why the drawer is lighter than the takings. */
 export const shiftReportSchema = z.object({
   shift: shiftSchema,
   takings: takingsSchema,
+  refunds_centimes: exactInteger,
   expected_centimes: exactInteger,
   difference_centimes: exactInteger.nullable(),
   until: z.string(),

@@ -85,8 +85,12 @@ impl TryFrom<Shift> for ShiftDto {
 pub struct ShiftReportDto {
     pub shift: ShiftDto,
     pub takings: TakingsDto,
-    /// `opening_cash` plus the takings while the shift is open, and the
-    /// stored figure once it is closed.
+    /// Cash this person handed back over the window on a reversal, read live
+    /// like `takings`. By whoever handed the notes over and never by whoever
+    /// rang the sale.
+    pub refunds_centimes: i64,
+    /// `opening_cash` plus the takings less the refunds while the shift is
+    /// open, and the stored figure once it is closed.
     pub expected_centimes: i64,
     /// None while the shift is open: nothing has been counted yet.
     pub difference_centimes: Option<i64>,
@@ -102,6 +106,7 @@ impl TryFrom<ShiftReport> for ShiftReportDto {
         Ok(ShiftReportDto {
             shift: ShiftDto::try_from(r.shift)?,
             takings: TakingsDto::try_from(r.takings)?,
+            refunds_centimes: r.refunds.as_centimes(),
             expected_centimes: r.expected.as_centimes(),
             difference_centimes: r.difference.map(Money::as_centimes),
             until: r.until.format(DATE_TIME_FORMAT).to_string(),

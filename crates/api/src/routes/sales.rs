@@ -17,7 +17,7 @@ use dzpos_core::services::sales::{NewSale, SaleKind};
 use dzpos_core::services::{avoir, cancellation, documents, preferences, sales};
 use serde::Deserialize;
 
-use crate::dto::{CancelDocumentDto, NewAvoirDto, NewSaleDto, SaleDto, SaleKindDto};
+use crate::dto::{CancelDocumentDto, NewAvoirDto, NewSaleDto, RefundDto, SaleDto, SaleKindDto};
 use crate::error::ApiError;
 use crate::session::CurrentUser;
 use crate::AppState;
@@ -397,11 +397,12 @@ pub async fn avoir(
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
     let Json(dto) = body.map_err(ApiError::from)?;
     let lines = dto.lines();
+    let refund = RefundDto::refund(dto.refund);
     let reason = dto.reason;
     let shop = state.shop_id;
     let user = who.id;
     let made = state
-        .blocking(move |c| avoir::issue(c, shop, user, id, lines, reason, None))
+        .blocking(move |c| avoir::issue_settling(c, shop, user, id, lines, reason, None, refund))
         .await?;
     Ok((StatusCode::CREATED, Json(SaleDto::from(made))))
 }
@@ -434,11 +435,12 @@ pub async fn cancel(
 ) -> Result<Json<SaleDto>, ApiError> {
     let Path(id) =
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
-    let Json(CancelDocumentDto { reason }) = body.map_err(ApiError::from)?;
+    let Json(CancelDocumentDto { reason, refund }) = body.map_err(ApiError::from)?;
+    let refund = RefundDto::refund(refund);
     let shop = state.shop_id;
     let user = who.id;
     let done = state
-        .blocking(move |c| cancellation::cancel(c, shop, user, id, reason, None))
+        .blocking(move |c| cancellation::cancel_settling(c, shop, user, id, reason, None, refund))
         .await?;
     Ok(Json(SaleDto::from(done)))
 }

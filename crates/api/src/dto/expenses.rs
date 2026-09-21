@@ -175,3 +175,32 @@ impl TryFrom<CashPosition> for CashPositionDto {
         })
     }
 }
+
+/// How the money goes back on a reversal (features.md §1, the cash position).
+///
+/// Here and not beside the two bodies that carry it (`NewAvoirDto` and
+/// `CancelDocumentDto` in `sales.rs`), because what it decides is whether a
+/// row lands on the cash position this module is about, and `sales.rs` is
+/// already at the line limit.
+///
+/// One variant, and the field that carries it is optional with a serde
+/// default, so a body that says nothing settles the way it always did: a
+/// credit note goes on the customer's ledger and a cancelled cash sale moves
+/// goods alone. `cash` is the caller's statement that notes came out of the
+/// drawer, which nothing on the server can work out on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[ts(export_to = "RefundDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum RefundDto {
+    Cash,
+}
+
+impl RefundDto {
+    /// `None` when the field was absent, which is the ledger path.
+    pub fn refund(value: Option<Self>) -> Refund {
+        match value {
+            Some(RefundDto::Cash) => Refund::Cash,
+            None => Refund::None,
+        }
+    }
+}
