@@ -28,7 +28,7 @@ tasks:
     desc: 'Lumina versus the law: complete the diff table in fiscal-sources-and-findings.md; every row cites an article or says assumption'
     status: 'done'
   - id: 'R8'
-    desc: 'Comptable review with Anouar: send R1–R6 as one page of questions; record answers with who and when in docs/features.md Source column'
+    desc: 'Comptable review: hand research/legal-fiscal/2026-09-08-questions-comptable.md to an actual accountant, whoever Samir or Anouar can reach (Anouar is not the fiscal source, Samir 2026-09-21); record answers with who and when in the docs/features.md Source column'
     status: 'pending'
   - id: 'R9'
     desc: 'Tooling: read the tooling catalog; try anthropics webapp-testing and frontend-design on the first real screen; install expo plugin when mobile starts; one trial of hypothesi Tauri MCP on the laptop; record verdicts in tooling/'
