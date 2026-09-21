@@ -4,7 +4,7 @@ updated: '2026-09-21'
 ---
 ## Active
 
-**2026-09-21 evening: four merges, one branch left.** Samir's word at
+**2026-09-21 night: six merges, nothing left but the review.** Samir's word at
 13:49 was to finish everything but the clinic decision. The live loop is
 `context/loops/20260921-a-clean-context-then-the-till-finished.md`; the
 previous one, `20260920-closing-the-lumina-gaps-loop.md`, stays the reference
@@ -18,11 +18,12 @@ repair of the 27 specs the open dialog had blocked since the morning
 (`767055a`); the cash refund with the two dialogs, the shared cash panel
 and the "rung before the till opened" field on the close screen
 (`8499cea`); the accountant question page's addendum and the Windows path
-fix in the source-walk test. One branch is left: the thermal-mode
-preference with the 80 mm facture roll (one PR), built, reviewed by the
-three lenses, six test gaps proven and being closed by its builder, then
-gates and merge. After it: the till docs sweep as a docs-only PR (no CI
-run), `just ci` once, the whole-loop review on the three lenses at fable,
+fix in the source-walk test; the till docs sweep (`75fb9a9`); the
+thermal-mode preference with the 80 mm facture roll (`ca584b0`), reviewed
+by the three lenses with six test gaps closed before the merge. Every
+worktree is torn down. The day's `just ci` on `main` is running on the
+mirror; its Restricted job failed a shell test on a broken pipe (a race in
+the test script, fix in its own PR). What is left of the loop: `just ci` once, the whole-loop review on the three lenses at fable,
 the standup with the next steps, the architecture brainstorm first among
 them.
 

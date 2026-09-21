@@ -16,10 +16,10 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'When the raster is used: a thermal_mode preference beside print_lang, Arabic always rasters, the route and the printing panel read it, the phone inherits it through the spool'
-    status: 'pending'
+    status: 'done'
   - id: 'T4'
     desc: 'The 80 mm facture down the ESC/POS path, re-homed from the archived layouts plan, with a line model drawn from facture_view.rs and every field §4 requires'
-    status: 'pending'
+    status: 'done'
 ---
 # Arabic on a cheap thermal head
 
@@ -186,6 +186,18 @@ requires of a facture. Files: `crates/core/src/print/facture_roll.rs`,
 `fixtures/print/facture_roll_80mm_escpos/`. Spec: §4 facture field list and
 the totals table; the same amounts-parsed-back rule the HTML goldens obey,
 applied to the line model before it is drawn. `dz-money-builder`. Size M.
+
+T3 and T4 merged together 2026-09-21 as `ca584b0` (PR 152): the preference,
+the gated route, the panel, the escpos facture route and the roll's line
+model with its goldens under `fixtures/print/facture_roll_80mm_escpos/`.
+What the review added before the merge: an API test that stores each wire
+and matches both escpos routes against the core's own render, a test that
+reads each closing figure off the row its own label opens (the multiset
+check alone let a TTC and net swap through), a unit test on the wrap branch
+of `Items::row`, and the 404 on the facture escpos route for a missing or
+another shop's document. Ruled and left: no audit row on the setter, like
+the layout and language setters beside it. What no machine here can prove
+stands as written below.
 
 ## What no machine here can prove
 
