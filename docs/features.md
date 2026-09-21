@@ -296,19 +296,21 @@ moved into and out of the drawer. Over a day or a month on the shop's
 calendar, cash in is what the tickets and factures still standing and paid
 in cash came to, at `net_to_pay`, which is what the customer handed over
 and so includes the droit de timbre, plus the cash payments on
-`debt_ledger`; cash out is the cash payments on `supplier_ledger` plus the
-expenses of those days. The stamp inside the sales figure is answered again
-on its own, so a screen that wants the shop's own takings can subtract the
-tax it is collecting for the state; it is a part of the sales figure and
-never a second one to add. A cancelled document is
-out of the sales figure rather than subtracted from it, and a refund counts
-nothing: an avoir credits the customer's ledger and brings the goods back
-on `return` movements, and nothing in the file says the drawer opened for
-it. The card figure has the same shape on the way in and none on the way
-out, because money paid to a supplier by card moves the bank account rather
-than the till. The figure is a net movement over the period and not the
-money in any drawer: it carries no opening float and no count at close, so
-it goes below zero on a day that paid out more than it took.
+`debt_ledger`; cash out is the cash payments on `supplier_ledger`, the
+expenses of those days, and the cash handed back over the counter on a
+reversal settled in notes (`repos::cash_refunds`, the paragraph below says
+which reversals write there). The stamp inside the sales figure is answered
+again on its own, so a screen that wants the shop's own takings can subtract
+the tax it is collecting for the state; it is a part of the sales figure and
+never a second one to add. A cancelled document is out of the sales figure
+rather than subtracted from it, unless its cash went back in notes, in which
+case the sale stays in the day it was rung and the refund is its own
+outgoing on the day the notes changed hands. The card figure has the same
+shape on the way in and none on the way out, because money paid to a
+supplier by card moves the bank account rather than the till. The figure is
+a net movement over the period and not the money in any drawer: it carries
+no opening float and no count at close, so it goes below zero on a day that
+paid out more than it took.
 
 **What a shift adds, and what it must not.** A cashier opens the till with
 what is in the drawer and at close types what is in the drawer again, and
@@ -321,15 +323,19 @@ handover to the owner from reading as the shop losing 3 000 on a day it took
 
 What the shop expects a cashier to be holding is their opening float, plus
 their own cash sales at `net_to_pay`, plus the cash they were handed against
-a customer's debt, and nothing else. Every term is integer centimes and every
-addition is checked. A card sale never reaches a drawer. An expense and a
-payment to a supplier are the shop's money going out, written by somebody who
-holds "commit money", which a cashier does not, so neither lowers a cashier's
-expected figure; cash handed to the owner during the day is said in the note
-at close. And another cashier's takings are theirs: two people hold
-overlapping shifts on purpose, because each drawer is physically their own,
-so a shop-wide sum handed to each of them would record both of them short by
-the other's takings for doing nothing wrong.
+a customer's debt, less the cash they themselves handed back over the
+counter on a reversal settled in notes (`services::shifts::close`). Every
+term is integer centimes and every addition and subtraction is checked. A
+card sale never reaches a drawer. An expense and a payment to a supplier are
+the shop's money going out, written by somebody who holds "commit money",
+which a cashier does not, so neither lowers a cashier's expected figure;
+cash handed to the owner during the day is said in the note at close. The refund is counted against
+whoever handed the notes over and never against whoever rang the sale: a
+cashier settling somebody else's ticket in cash is the one whose drawer is
+light. And another cashier's takings are theirs: two people hold overlapping
+shifts on purpose, because each drawer is physically their own, so a
+shop-wide sum handed to each of them would record both of them short by the
+other's takings for doing nothing wrong.
 
 The window is the shift's own, from the moment it opened up to but not
 including the moment it closed, read on `issued_at` and on the debt
@@ -345,8 +351,14 @@ refused; it is tagged as belonging to no shift, derived by holding its
 `issued_at` against that person's own windows rather than stored on a column.
 A phone whose queue reaches the server after its cashier closed lands there
 too, because the moment a sale happened is the server's to say. The close
-screen shows that figure beside the expected one, so a morning rung up before
-the till was opened reads as what it is instead of as a drawer that is over.
+screen shows how many such sales fall in the stretch this shift has to
+explain: from that person's last close before this shift opened, or midnight
+of the day it opened if they have never closed one, up to the shift's own
+window (`services::shifts::rung_outside_a_shift`). It is a count and not an
+amount: the drawer is reconciled against the shift's own window and not
+against this stretch, so the count is what says why it may read over rather
+than a term in the arithmetic, and a morning rung up before the till was
+opened reads as what it is instead of as a drawer that nobody can explain.
 
 The position records cash handed back over the counter. A reversal may be
 settled in notes rather than on an account, and when it is, that cash is an
@@ -1113,10 +1125,9 @@ and purchase corrections, every user operation, and lockouts, plus a refused
 credit sale, a refused discount, a refused typed-under price and a refused
 permission whichever way each was refused, and an export or a restore. A
 till adds three: `till.open`, opening a drawer with a float; `till.close`,
-counting and closing it —
-that row carries the expected figure, the count, the difference, the reason
-given and the opener's name whenever somebody else did the counting — and
-`till.sale_outside_shift`, a
+counting and closing it, whose row carries the expected figure, the count,
+the difference, the reason given and the opener's id whenever somebody else
+did the counting; and `till.sale_outside_shift`, a
 sale that fell inside none of its ringer's own shifts, which is the whole of
 what marks such a sale, since nothing on the document says which shift it
 belongs to. Such a sale is accepted and tagged and never refused: a shop
@@ -1129,6 +1140,20 @@ deleting. One kind reads differently and the filter knows it: a lockout row
 names the person who was locked out in the actor column, because nobody is
 signed in when it is written, so it must not be presented as something that
 person did.
+
+**The shift list.** A second screen, at `/till/shifts`, is a manager's report
+and not a view of the audit log: it is gated on `see_reports` rather than on
+`see_audit_log`, so a manager who cannot read the owner's log can still see
+who is short. `GET /till/shifts` answers a day window and an optional
+`user_id`, both ends of the window optional and defaulting to today alone on
+the shop's clock; each row carries the opener, the opening float and, once
+closed, the closer, the counted figure, the expected one and the difference,
+with the note beside them
+(`crates/api/src/gates/table.rs`, `apps/desktop/src/routes/till_.shifts.tsx`).
+A cashier reads their own open drawer instead through
+`GET /till/shifts/open`, which names nobody, takes no parameter and carries
+no permission row at all, because there is nothing on it a role could be
+refused (`crates/api/src/gates/mod.rs`).
 
 ### The discount threshold
 

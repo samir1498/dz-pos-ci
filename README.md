@@ -43,12 +43,15 @@ and `design`.
 
 ## Screens
 
-`apps/desktop/src/routes`: dashboard, till (the app's launch screen),
-products, customers, documents, suppliers, purchases, expenses, settings,
-audit (the owner's audit log). `/kit` is an eleventh route, every kit
-component in every state on one page, built only in a dev build
-(`routes/kit.tsx` throws `notFound()` otherwise) and the page a reviewer
-compares against the mockups.
+`apps/desktop/src/routes`: dashboard, till (the app's launch screen, opening
+a drawer with a float at sign-in and closing it with a count through a modal
+that shows the expected figure first), products, customers, documents,
+suppliers, purchases, expenses, settings, audit (the owner's audit log),
+till/shifts (a manager's list of shifts opened over a day window, gated on
+`see_reports`). `/kit` is a twelfth route, every kit component in every
+state on one page, built only in a dev build (`routes/kit.tsx` throws
+`notFound()` otherwise) and the page a reviewer compares against the
+mockups.
 
 ## Landing page
 

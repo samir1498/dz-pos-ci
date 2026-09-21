@@ -17,6 +17,7 @@
 //!
 //! ```text
 //! opening_cash + that user's cash sales + that user's cash debt payments
+//!   - the cash that user handed back over the counter
 //! ```
 //!
 //! and nothing else. Every term is checked. Card sales never reach a drawer;

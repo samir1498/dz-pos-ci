@@ -31,6 +31,7 @@
 | Committed landing shots (which files exist) | `apps/landing/src/lib/shots.ts` (manifest, `buildShots()`) | `public/shots/*.webp`, the e2e PNGs they compose |
 | E2E test-id inventory | `data-testid` attributes in `apps/desktop/src` and the specs that click them | e2e README § test ids |
 | Report home status (stamp, holds, featured) | `STATUS` block in `make-index.py` (`Dinar-dz/dinar-reports`) | generated `index.html` |
+| A shift's expected figure (what it is made of, and that it is stored rather than derived) | `crates/core/src/services/shifts.rs`, the arithmetic in `close` and `report` | `docs/features.md` §1 restates it and moves with it, the `shifts` migration's own comment names why it departs from architecture.md rule 4 |
 
 ## Routing
 
