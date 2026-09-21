@@ -30,13 +30,62 @@ fn token() -> dzpos_api::LaunchToken {
 }
 
 fn app() -> (tempfile::TempDir, axum::Router) {
+    let (dir, app, _) = app_with_two_cashiers();
+    (dir, app)
+}
+
+/// Who the ids belong to. A shift is about one person, so a test that cannot
+/// name the people cannot assert whose drawer it is looking at.
+struct Staff {
+    cashier: i32,
+    second_cashier: i32,
+    manager: i32,
+}
+
+/// The same router, plus a second cashier. `sign_in_as` takes the first
+/// active user of a role, so it can never make two of one; ruling 10 is about
+/// one cashier reaching for another cashier's drawer, which needs two.
+fn app_with_two_cashiers() -> (tempfile::TempDir, axum::Router, Staff) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("t.db");
     common::sign_in(&path, SHOP);
     common::sign_in_as(&path, SHOP, "cashier", common::CASHIER_SESSION);
     common::sign_in_as(&path, SHOP, "manager", common::MANAGER_SESSION);
+    let second_cashier = common::sign_in_new(
+        &path,
+        SHOP,
+        "cashier",
+        "Karim",
+        common::SECOND_CASHIER_SESSION,
+    );
     let state = dzpos_api::AppState::open(&path, SHOP).unwrap();
-    (dir, dzpos_api::router(state, &token()))
+    let staff = Staff {
+        cashier: user_of(&path, "cashier"),
+        second_cashier,
+        manager: user_of(&path, "manager"),
+    };
+    (dir, dzpos_api::router(state, &token()), staff)
+}
+
+/// The id behind a role's session, read off the file the harness just made.
+/// `sign_in_as` plants the row and does not say which id it used, and every
+/// assertion about whose drawer a shift is needs that number.
+fn user_of(db: &std::path::Path, role: &str) -> i32 {
+    use diesel::prelude::*;
+    #[derive(diesel::QueryableByName)]
+    struct Id {
+        #[diesel(sql_type = diesel::sql_types::Integer)]
+        id: i32,
+    }
+    let mut conn = dzpos_core::db::open(db).unwrap();
+    let row: Id = diesel::sql_query(
+        "SELECT id FROM users WHERE shop_id = ? AND role = ? AND active = 1 ORDER BY id LIMIT 1",
+    )
+    .bind::<diesel::sql_types::Integer, _>(SHOP)
+    .bind::<diesel::sql_types::Text, _>(role)
+    .get_result(&mut conn)
+    .unwrap();
+    row.id
 }
 
 async fn call(
@@ -116,6 +165,33 @@ async fn sell(app: &axum::Router, p: i64, qty: i64, mode: &str, session: &str) -
     let (status, body) = call_as(app, "POST", "/sales", Some(body), session).await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
     body
+}
+
+/// A customer with room on the account, so a credit sale has somewhere to be
+/// owed from. Through the API, like every other fixture here.
+async fn customer(app: &axum::Router, name: &str) -> i64 {
+    let (status, body) = call(
+        app,
+        "POST",
+        "/customers",
+        Some(json!({
+            "name": name,
+            "party_kind": "company",
+            "phone": null,
+            "address": null,
+            "rc": null,
+            "nif": null,
+            "nis": null,
+            "ai": null,
+            "credit_limit_centimes": 10_000_000,
+            "warn_threshold_centimes": null,
+            "notes": null,
+            "active": true,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body}");
+    body["id"].as_i64().unwrap()
 }
 
 /// Every row of the log with this action, newest first.
@@ -256,6 +332,8 @@ async fn a_drawer_that_does_not_match_and_carries_no_reason_is_refused_on_the_no
     assert_eq!(closed["note"], Value::Null);
 }
 
+/// `services::shifts::open`'s rule: a drawer opens with nothing in it or with
+/// money in it, never with less.
 #[tokio::test]
 async fn a_drawer_cannot_open_with_less_than_nothing_in_it() {
     let (_dir, app) = app();
@@ -268,20 +346,79 @@ async fn a_drawer_cannot_open_with_less_than_nothing_in_it() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+    assert_eq!(code(&refused), "validation", "{refused}");
     assert_eq!(refused["error"]["field"], "opening_cash_centimes");
+    assert!(
+        refused["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("never with less"),
+        "{refused}"
+    );
 
-    // And a float past what a JSON number carries without loss is refused at
-    // this edge rather than rounded on its way through JavaScript.
-    let (status, refused) = call_as(
+    // Zero is not less than nothing: an empty drawer is a real float and the
+    // refusal above must not swallow it.
+    let (status, opened) = call_as(
         &app,
         "POST",
         "/till/shifts",
-        Some(json!({ "opening_cash_centimes": 9_007_199_254_740_992i64 })),
+        Some(json!({ "opening_cash_centimes": 0 })),
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{opened}");
+    assert_eq!(opened["opening_cash_centimes"], 0);
+}
+
+/// A different rule that happens to share a field name: `dto::common`'s
+/// ceiling on what a JSON number carries without loss. It is about size and
+/// not about sign — it takes `-1` happily — so it is its own test and not a
+/// second half of the one above.
+#[tokio::test]
+async fn a_float_beyond_what_a_json_number_carries_is_refused_at_the_edge() {
+    let (_dir, app) = app();
+    for absurd in [9_007_199_254_740_992i64, -9_007_199_254_740_992i64] {
+        let (status, refused) = call_as(
+            &app,
+            "POST",
+            "/till/shifts",
+            Some(json!({ "opening_cash_centimes": absurd })),
+            common::CASHIER_SESSION,
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+        assert_eq!(refused["error"]["field"], "opening_cash_centimes");
+        assert!(
+            refused["error"]["message"]
+                .as_str()
+                .unwrap_or("")
+                .contains("2^53"),
+            "{absurd} was refused by some other rule: {refused}"
+        );
+    }
+
+    // And the same ceiling on the count at close, which is the other figure a
+    // client sends.
+    let (status, opened) = call_as(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 0 })),
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{opened}");
+    let id = opened["id"].as_i64().unwrap();
+    let (status, refused) = call_as(
+        &app,
+        "POST",
+        &format!("/till/shifts/{id}/close"),
+        Some(json!({ "counted_centimes": 9_007_199_254_740_992i64 })),
         common::CASHIER_SESSION,
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
-    assert_eq!(refused["error"]["field"], "opening_cash_centimes");
+    assert_eq!(refused["error"]["field"], "counted_centimes");
 }
 
 // ---------------------------------------------------------------------------
@@ -376,9 +513,15 @@ async fn a_body_naming_a_moment_is_refused_and_the_stored_one_is_the_servers() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn a_cashier_opens_a_till_and_is_refused_somebody_elses_shift_by_name() {
-    let (_dir, app) = app();
-    let (status, opened) = call_as(
+async fn a_cashier_opens_their_own_till_and_is_refused_another_cashiers_shift() {
+    // Two cashiers, and the second one's drawer is a drawer the first has no
+    // business in: not the read, which is `see_reports`, and not the close,
+    // which is `close_another_persons_till` (ruling 10). A fixture with one
+    // cashier cannot show either, because the only shift on the file is the
+    // caller's own.
+    let (_dir, app, staff) = app_with_two_cashiers();
+
+    let (status, mine) = call_as(
         &app,
         "POST",
         "/till/shifts",
@@ -389,17 +532,31 @@ async fn a_cashier_opens_a_till_and_is_refused_somebody_elses_shift_by_name() {
     assert_eq!(
         status,
         StatusCode::CREATED,
-        "a cashier holds open_and_close_till (ruling 10) and was refused: {opened}"
+        "a cashier holds open_and_close_till (ruling 10) and was refused: {mine}"
     );
-    let id = opened["id"].as_i64().unwrap();
+    assert_eq!(mine["opened_by"], staff.cashier, "{mine}");
 
-    // Reading a shift by id is the shift report, which is `see_reports`: a
-    // cashier does not run the floor off it. The refusal names the
-    // permission so a screen never has to guess which one it wanted.
+    // Somebody else's, opened by the second cashier under their own session.
+    let (status, theirs) = call_as(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 700_000 })),
+        common::SECOND_CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{theirs}");
+    assert_eq!(theirs["opened_by"], staff.second_cashier, "{theirs}");
+    let theirs_id = theirs["id"].as_i64().unwrap();
+    assert_ne!(theirs_id, mine["id"].as_i64().unwrap());
+
+    // Reading it is the shift report, which is `see_reports`: whose count was
+    // short is a management figure. The refusal names the permission so a
+    // screen never has to guess which one it wanted.
     let (status, refused) = call_as(
         &app,
         "GET",
-        &format!("/till/shifts/{id}"),
+        &format!("/till/shifts/{theirs_id}"),
         None,
         common::CASHIER_SESSION,
     )
@@ -408,33 +565,108 @@ async fn a_cashier_opens_a_till_and_is_refused_somebody_elses_shift_by_name() {
     assert_eq!(code(&refused), "forbidden", "{refused}");
     assert_eq!(refused["error"]["permission"], "see_reports", "{refused}");
 
-    // The manager, who holds it, reads the same shift.
+    // And counting it is `close_another_persons_till`, which a cashier does
+    // not hold. The route's own gate is `open_and_close_till` and everybody
+    // holds that, so this refusal can only come from inside
+    // `services::shifts::close` — which is the point: one route serves both
+    // cases and whose drawer it is is a fact about the row.
+    let (status, refused) = call_as(
+        &app,
+        "POST",
+        &format!("/till/shifts/{theirs_id}/close"),
+        Some(json!({ "counted_centimes": 1, "note": "pas la mienne" })),
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{refused}");
+    assert_eq!(code(&refused), "forbidden", "{refused}");
+    assert_eq!(
+        refused["error"]["permission"], "close_another_persons_till",
+        "{refused}"
+    );
+
+    // The refusal left the drawer open and stored no figure, so the person it
+    // belongs to still counts it themselves.
+    let (status, still) = call_as(
+        &app,
+        "GET",
+        "/till/shifts/open",
+        None,
+        common::SECOND_CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{still}");
+    assert_eq!(still["shift"]["id"], theirs_id);
+    assert_eq!(still["shift"]["counted_centimes"], Value::Null, "{still}");
+
+    // The manager, who holds both, reads it and counts it. The answer names
+    // the opener and the closer apart: without this pair, a DTO that reported
+    // a closed shift's closer as its opener would go unnoticed.
     let (status, report) = call_as(
         &app,
         "GET",
-        &format!("/till/shifts/{id}"),
+        &format!("/till/shifts/{theirs_id}"),
         None,
         common::MANAGER_SESSION,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{report}");
-    assert_eq!(report["shift"]["id"], id);
-    assert_eq!(report["expected_centimes"], 100);
+    assert_eq!(
+        report["shift"]["opened_by"], staff.second_cashier,
+        "{report}"
+    );
+    assert_eq!(report["expected_centimes"], 700_000);
 
-    // And the cashier still reads their own open drawer, which names nobody
-    // else and carries no gate row at all. This is the pair the split exists
-    // for: without it, `see_reports` on the id route would leave a cashier
-    // unable to see the figure they are about to be counted against.
-    let (status, own) = call_as(
+    let (status, closed) = call_as(
         &app,
-        "GET",
-        "/till/shifts/open",
-        None,
-        common::CASHIER_SESSION,
+        "POST",
+        &format!("/till/shifts/{theirs_id}/close"),
+        Some(json!({
+            "counted_centimes": 690_000,
+            "note": "caissier parti, tiroir compté par la responsable",
+        })),
+        common::MANAGER_SESSION,
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "{own}");
-    assert_eq!(own["shift"]["id"], id);
+    assert_eq!(status, StatusCode::OK, "{closed}");
+    assert_eq!(closed["opened_by"], staff.second_cashier, "{closed}");
+    assert_eq!(closed["closed_by"], staff.manager, "{closed}");
+    assert_ne!(closed["opened_by"], closed["closed_by"], "{closed}");
+    // 700 000 float, nothing sold, 690 000 counted: short by 10 000, and
+    // short reads negative.
+    assert_eq!(closed["expected_at_close_centimes"], 700_000);
+    assert_eq!(closed["difference_centimes"], -10_000);
+}
+
+/// A cashier reads their own open drawer with no permission at all, which is
+/// the other half of the split above: `see_reports` on the id route would
+/// otherwise leave them unable to see the figure they are about to be counted
+/// against (T5's close modal).
+#[tokio::test]
+async fn a_cashier_reads_their_own_open_drawer_and_sees_only_their_own() {
+    let (_dir, app, staff) = app_with_two_cashiers();
+    for session in [common::CASHIER_SESSION, common::SECOND_CASHIER_SESSION] {
+        let (status, opened) = call_as(
+            &app,
+            "POST",
+            "/till/shifts",
+            Some(json!({ "opening_cash_centimes": 100 })),
+            session,
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{opened}");
+    }
+    for (session, who) in [
+        (common::CASHIER_SESSION, staff.cashier),
+        (common::SECOND_CASHIER_SESSION, staff.second_cashier),
+    ] {
+        let (status, own) = call_as(&app, "GET", "/till/shifts/open", None, session).await;
+        assert_eq!(status, StatusCode::OK, "{own}");
+        assert_eq!(
+            own["shift"]["opened_by"], who,
+            "the route answered somebody else's drawer: {own}"
+        );
+    }
 }
 
 /// `/till/shifts/open` is a literal segment sitting beside `/till/shifts/{id}`.
@@ -462,7 +694,7 @@ async fn the_open_read_is_not_swallowed_by_the_route_that_takes_an_id() {
 
 #[tokio::test]
 async fn a_sale_rung_with_no_shift_open_is_accepted_and_tagged() {
-    let (_dir, app) = app();
+    let (_dir, app, staff) = app_with_two_cashiers();
     let p = product(&app, "Sucre", 10_000).await;
 
     // No drawer has ever been opened. Seven desktop e2e specs, `just seed`,
@@ -472,6 +704,7 @@ async fn a_sale_rung_with_no_shift_open_is_accepted_and_tagged() {
     assert_eq!(tagged.len(), 1, "{tagged:?}");
     assert_eq!(tagged[0]["entity"], "document");
     assert_eq!(tagged[0]["entity_id"], sale["id"]);
+    assert_eq!(tagged[0]["user_id"], staff.cashier, "{tagged:?}");
 
     // And now with a drawer open, the same sale carries no row: the tag is
     // about falling outside every window of that person's own, not about
@@ -495,13 +728,55 @@ async fn a_sale_rung_with_no_shift_open_is_accepted_and_tagged() {
 
     // The cashier's drawer says nothing about the manager's. A manager
     // ringing while holding no shift of their own is tagged even though
-    // somebody else's drawer is open.
-    sell(&app, p, 1, "cash", common::MANAGER_SESSION).await;
+    // somebody else's drawer is open. Which row it is, is the point of the
+    // block: a count of two is also what a walk over every open shift in the
+    // shop would give, so the row is read by the person and the document it
+    // names rather than by how many there are.
+    let theirs = sell(&app, p, 1, "cash", common::MANAGER_SESSION).await;
     let tagged = rows_for(&app, "till.sale_outside_shift").await;
     assert_eq!(
         tagged.len(),
         2,
         "another person's open drawer covered this sale: {tagged:?}"
+    );
+    let managers = tagged
+        .iter()
+        .find(|row| row["entity_id"] == theirs["id"])
+        .unwrap_or_else(|| panic!("no row names the manager's sale: {tagged:?}"));
+    assert_eq!(managers["user_id"], staff.manager, "{managers}");
+    assert_eq!(managers["entity"], "document", "{managers}");
+
+    // A credit sale is tagged too, and it is its own case: the hook sits
+    // above `sales::issue_inner`'s cash arm early return, and a hook below
+    // that line tags a credit sale and nothing else. Without this, moving it
+    // down leaves every assertion above green.
+    let owing = customer(&app, "Entreprise Amrani").await;
+    let (status, on_credit) = call_as(
+        &app,
+        "POST",
+        "/sales",
+        Some(json!({
+            "lines": [{ "product_id": p, "qty_milli": 1_000 }],
+            "payment_mode": "credit",
+            "customer_id": owing,
+        })),
+        common::SECOND_CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{on_credit}");
+    let tagged = rows_for(&app, "till.sale_outside_shift").await;
+    assert_eq!(
+        tagged.len(),
+        3,
+        "a credit sale rung with no drawer open was not tagged: {tagged:?}"
+    );
+    let on_the_account = tagged
+        .iter()
+        .find(|row| row["entity_id"] == on_credit["id"])
+        .unwrap_or_else(|| panic!("no row names the credit sale: {tagged:?}"));
+    assert_eq!(
+        on_the_account["user_id"], staff.second_cashier,
+        "{on_the_account}"
     );
 }
 

@@ -359,7 +359,7 @@ pub const ROUTE_GATES: &[Gate] = &[
         method: "POST",
         path: "/till/shifts/{id}/close",
         permission: Some(Permission::OpenAndCloseTill),
-        why: "counting the drawer and closing it, the other half of opening it and the same permission; whether the closer may close this particular shift is services::shifts::close's to decide, because one route serves both a cashier counting their own and somebody counting a drawer that was walked away from",
+        why: "counting the drawer and closing it, the other half of opening it and the same permission. The coarse half of a pair: one route serves both a cashier counting their own and somebody counting a drawer that was walked away from, so whose drawer it is is decided in services::shifts::close, which asks for Permission::CloseAnotherPersonsTill when the closer is not the opener (ruling 10). A row here cannot make that call, because it is a fact about the row and not about the path",
     },
     Gate {
         method: "GET",

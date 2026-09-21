@@ -115,10 +115,29 @@ pub enum Permission {
     /// (features.md line 891: `SeeAuditLog` is the owner's alone, so the
     /// list cannot live behind it).
     OpenAndCloseTill,
+    /// Count and close a drawer that is not your own (ruling 10: "a cashier
+    /// opens and closes their own shift; anyone else's is manager and
+    /// owner"). Owner and manager, so a cashier who walked out at six with
+    /// the drawer still open is counted by whoever is running the floor and
+    /// not by the next person to reach the keyboard.
+    ///
+    /// The fine half of a pair, the shape `DiscountAboveThreshold` and
+    /// `ChangePriceAtTheTill` already take under the `Sell`-gated
+    /// `POST /sales`: one route serves both cases, so `gates/table.rs` gates
+    /// it on `OpenAndCloseTill`, which everybody holds, and
+    /// `services::shifts::close` asks for this one only when the closer is
+    /// not the opener. A route-level gate could not tell the two apart —
+    /// whose drawer it is, is a fact about the row, not about the path.
+    ///
+    /// Closing is the whole of it. Nobody opens a drawer in somebody else's
+    /// name at all: `open` takes the caller as `opened_by` and there is no
+    /// field on the wire to say otherwise, so there is no permission here to
+    /// hold for it.
+    CloseAnotherPersonsTill,
 }
 
 impl Permission {
-    pub const ALL: [Permission; 14] = [
+    pub const ALL: [Permission; 15] = [
         Permission::Sell,
         Permission::DiscountAboveThreshold,
         Permission::OverrideCreditBlock,
@@ -133,6 +152,7 @@ impl Permission {
         Permission::ChangePriceAtTheTill,
         Permission::SeeAuditLog,
         Permission::OpenAndCloseTill,
+        Permission::CloseAnotherPersonsTill,
     ];
 
     /// The stable key the UI translates and the wire carries (T2: 403 with
@@ -153,6 +173,7 @@ impl Permission {
             Permission::ChangePriceAtTheTill => "change_price_at_the_till",
             Permission::SeeAuditLog => "see_audit_log",
             Permission::OpenAndCloseTill => "open_and_close_till",
+            Permission::CloseAnotherPersonsTill => "close_another_persons_till",
         }
     }
 }
@@ -167,7 +188,8 @@ impl std::fmt::Display for Permission {
 /// would otherwise compare a role asks this, or `require` below, instead.
 ///
 /// A cashier rings sales up and opens and counts their own drawer, and
-/// nothing else on this list. A manager runs the
+/// nothing else on this list: somebody else's drawer is
+/// `CloseAnotherPersonsTill`, which they do not hold. A manager runs the
 /// shop and answers like an owner on everything except two: who the staff are,
 /// and the log of what the staff did. A log the people it watches can read,
 /// and a staff list they can add themselves to, are not controls, and the
@@ -178,7 +200,7 @@ impl std::fmt::Display for Permission {
 /// question if Samir wants the fiscal setting owner-only.
 ///
 /// The match is on `permission` first and not on the `(role, permission)`
-/// pair, so a fifteenth `Permission` variant fails to compile here until it is
+/// pair, so a sixteenth `Permission` variant fails to compile here until it is
 /// placed, rather than silently defaulting through a wildcard.
 pub const fn can(role: Role, permission: Permission) -> bool {
     match permission {
@@ -196,7 +218,8 @@ pub const fn can(role: Role, permission: Permission) -> bool {
         | Permission::CommitMoney
         | Permission::CorrectLedger
         | Permission::ExportAndImport
-        | Permission::ChangePriceAtTheTill => matches!(role, Role::Owner | Role::Manager),
+        | Permission::ChangePriceAtTheTill
+        | Permission::CloseAnotherPersonsTill => matches!(role, Role::Owner | Role::Manager),
         Permission::ManageUsers | Permission::SeeAuditLog => matches!(role, Role::Owner),
     }
 }

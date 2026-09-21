@@ -5,7 +5,7 @@
  * Serialised as the same string `Permission::as_str` writes, which is also
  * the name a 403 carries, so a screen matches one spelling everywhere.
  *
- * The `From` below matches on the core enum, so a fifteenth permission
+ * The `From` below matches on the core enum, so a sixteenth permission
  * fails to compile here until it is named on the wire too.
  */
-export type PermissionDto = "sell" | "discount_above_threshold" | "override_credit_block" | "see_cost_and_margin" | "edit_fiches" | "edit_settings" | "see_reports" | "manage_users" | "commit_money" | "correct_ledger" | "export_and_import" | "change_price_at_the_till" | "see_audit_log" | "open_and_close_till";
+export type PermissionDto = "sell" | "discount_above_threshold" | "override_credit_block" | "see_cost_and_margin" | "edit_fiches" | "edit_settings" | "see_reports" | "manage_users" | "commit_money" | "correct_ledger" | "export_and_import" | "change_price_at_the_till" | "see_audit_log" | "open_and_close_till" | "close_another_persons_till";

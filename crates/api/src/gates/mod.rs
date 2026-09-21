@@ -54,6 +54,18 @@
 //! who cannot read their own open drawer cannot be shown the expected figure
 //! before they count it.
 //!
+//! **What a row cannot say.** A gate answers for a whole route before the
+//! handler runs, so it can only ask about the caller and the path, never
+//! about the row the caller named. Where a rule turns on the row, the table
+//! carries the coarse half and the service carries the fine one: `POST
+//! /sales` is `Sell` here and `services::sales` asks for
+//! `DiscountAboveThreshold` and `ChangePriceAtTheTill` on the baskets that
+//! need them, and `POST /till/shifts/{id}/close` is `OpenAndCloseTill` here
+//! while `services::shifts::close` asks for `CloseAnotherPersonsTill` when
+//! the closer is not the opener. A fine permission never has a row of its
+//! own, so reading this table alone does not tell you everything a role may
+//! be refused for; `services::permissions::Permission`'s own docs do.
+//!
 //! **Where it is applied.** T2 shipped the mechanism, the table's shape and
 //! the actor. T3 applied it: `crates/api/src/session.rs::require` looks the
 //! matched route up in this table by `axum::extract::MatchedPath` and calls

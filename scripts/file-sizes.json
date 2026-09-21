@@ -22,7 +22,7 @@
     "crates/core/src/services/debt.rs": 951,
     "crates/core/src/services/import.rs": 837,
     "crates/core/src/services/purchases.rs": 1022,
-    "crates/core/src/services/sales.rs": 1070,
+    "crates/core/src/services/sales.rs": 1061,
     "crates/core/src/services/seed.rs": 1126,
     "crates/core/src/services/supplier_debt.rs": 821,
     "crates/core/src/services/users.rs": 828,

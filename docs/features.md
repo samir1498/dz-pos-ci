@@ -938,7 +938,7 @@ person can hold both.
 
 ### The permission table
 
-Fourteen permissions, one `can(role, permission)` table in
+Fifteen permissions, one `can(role, permission)` table in
 `crates/core/src/services/permissions.rs`, and that table is the only place
 in the codebase where a role is compared to decide anything. Every route,
 screen and service asks it.
@@ -953,7 +953,7 @@ and a log the watched can read are not controls. The milestone's own demo
 line, "the owner sees the audit log of a price change", is where that split
 came from.
 
-The other twelve: `discount_above_threshold` (a discount strictly above the
+The other thirteen: `discount_above_threshold` (a discount strictly above the
 shop's own setting), `override_credit_block`, `see_cost_and_margin` (the
 cost and margin columns on products, redacted rather than hidden; the
 purchase and supplier routes, closed outright since no till flow reads
@@ -967,13 +967,23 @@ stock recount, and undoing a document already handed to a customer),
 `export_and_import` (the four exports, the product template, both imports;
 a label needs nobody, since a name, a price and a barcode are already on the
 shelf), `change_price_at_the_till` (a line sold at a price that is not the
-product's own), `see_audit_log`, and `open_and_close_till` (opening a till
+product's own), `see_audit_log`, `open_and_close_till` (opening a till
 with a float and counting it at close; reading somebody's shift back is not
 this, it is `see_reports`, because the shift list is a report a manager runs
-the floor off and the audit log is the owner's alone).
+the floor off and the audit log is the owner's alone), and
+`close_another_persons_till`.
+
+The last of those is the fine half of a pair, the shape
+`discount_above_threshold` and `change_price_at_the_till` already take under
+the `sell`-gated sale route. One route counts every drawer, so the route is
+gated on `open_and_close_till`, which everybody holds, and the service asks
+for `close_another_persons_till` only when the closer is not the opener: a
+cashier counts their own and a manager counts the one a cashier walked away
+from. A route-level gate could not tell the two apart, because whose drawer
+it is is a fact about the row and not about the path.
 
 The table is matched on the permission first rather than on the pair, so a
-fifteenth permission fails to compile until somebody places it for all
+sixteenth permission fails to compile until somebody places it for all
 three roles. Nothing falls through a wildcard.
 
 A permission is applied in one seam and not in each handler.

@@ -29,6 +29,7 @@ const ALL_PERMISSIONS: readonly PermissionDto[] = [
   "change_price_at_the_till",
   "see_audit_log",
   "open_and_close_till",
+  "close_another_persons_till",
 ];
 
 export const ME_OWNER: MeDto = {

@@ -94,7 +94,7 @@ impl From<RoleDto> for Role {
 /// Serialised as the same string `Permission::as_str` writes, which is also
 /// the name a 403 carries, so a screen matches one spelling everywhere.
 ///
-/// The `From` below matches on the core enum, so a fifteenth permission
+/// The `From` below matches on the core enum, so a sixteenth permission
 /// fails to compile here until it is named on the wire too.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export_to = "PermissionDto.ts")]
@@ -114,6 +114,7 @@ pub enum PermissionDto {
     ChangePriceAtTheTill,
     SeeAuditLog,
     OpenAndCloseTill,
+    CloseAnotherPersonsTill,
 }
 
 impl From<Permission> for PermissionDto {
@@ -133,6 +134,7 @@ impl From<Permission> for PermissionDto {
             Permission::ChangePriceAtTheTill => PermissionDto::ChangePriceAtTheTill,
             Permission::SeeAuditLog => PermissionDto::SeeAuditLog,
             Permission::OpenAndCloseTill => PermissionDto::OpenAndCloseTill,
+            Permission::CloseAnotherPersonsTill => PermissionDto::CloseAnotherPersonsTill,
         }
     }
 }

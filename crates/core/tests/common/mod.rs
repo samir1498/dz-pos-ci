@@ -15,6 +15,7 @@
 
 pub mod facture;
 pub mod migrations;
+pub mod shifts;
 
 use std::path::PathBuf;
 
