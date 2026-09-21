@@ -15,7 +15,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'services::shifts, the cash window it asks for, and the three audit actions'
-    status: 'pending'
+    status: 'done'
   - id: 'T4'
     desc: 'The four routes, the gate rows, the open_and_close_till permission and the tag hook'
     status: 'pending'
@@ -29,7 +29,6 @@ tasks:
     desc: 'The closing sweep: the shift list, the e2e with a real cashier, the docs'
     status: 'pending'
 ---
-
 # Till shifts: a float and a count
 
 A cashier opens the till with what is in the drawer, sells all day, and at
