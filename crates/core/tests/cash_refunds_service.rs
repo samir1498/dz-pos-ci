@@ -19,11 +19,13 @@ use chrono::{NaiveDate, NaiveDateTime};
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
-use dzpos_core::money::{Bps, Money, PaymentMode};
+use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::cash_refunds::Refund;
 use dzpos_core::services::clock::{Month, Period};
-use dzpos_core::services::documents::{Document, DocumentStatus};
+use dzpos_core::services::documents::{
+    Document, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, SellerBlock,
+};
 use dzpos_core::services::sales::{NewSale, NewSaleLine, SaleKind};
 use dzpos_core::services::shifts::{NewShift, TillCount};
 use dzpos_core::services::{cancellation, cash, debt, documents, products, sales, shifts};
@@ -598,4 +600,175 @@ fn the_drawer_that_is_short_is_the_one_the_notes_came_out_of() {
     assert_eq!(his.takings.sales, Money::ZERO);
     assert_eq!(his.refunds, Money::centimes(300_000));
     assert_eq!(his.expected, Money::centimes(700_000));
+}
+
+/// A facture that was part credited already hands back only what is left on
+/// it, never its whole figure again.
+///
+/// `cancellation::effect_of` answers `StockBack` for every document that put
+/// no money on an account, without asking what earlier avoirs already took
+/// off it, so the amount cannot come from the facture's own totals. It comes
+/// from `avoir::what_is_left`, the same subtraction the credit path is
+/// measured by, which is the facture's `total_ttc` when no avoir exists and
+/// so leaves a clean cancellation handing back `net_to_pay - stamp`.
+///
+/// The unique index cannot catch this one: the partial avoir's refund row
+/// names the avoir and the cancellation's names the facture, so two different
+/// papers each hold a row and the drawer is out by more than the sale.
+#[test]
+fn a_facture_already_credited_in_part_hands_back_only_what_is_left_on_it() {
+    let (_dir, mut conn) = open_temp_selling_factures();
+    let p = product(&mut conn, "Ciment", 100_000, 0);
+    let c = an_identified_customer(&mut conn, "Entreprise Benali");
+    // 3 000,00 over the counter, plus the droit de timbre on top.
+    let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Cash, 14);
+    assert_eq!(facture.totals.total_ttc, Money::centimes(300_000));
+    let stamp = facture.totals.stamp;
+    assert!(stamp > Money::ZERO, "no stamp here to keep");
+
+    // One of the three units comes back in cash: 1 000,00.
+    let partial = avoir::issue_settling(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        Some(vec![AvoirLine {
+            document_line_id: facture.lines[0].id,
+            qty_milli: 1_000,
+        }]),
+        Some("une unité".to_string()),
+        Some(at(14, 12)),
+        Refund::Cash,
+    )
+    .unwrap();
+    assert_eq!(partial.totals.net_to_pay, Money::centimes(100_000));
+
+    // Then the whole thing is annulled, in cash again. What is left to hand
+    // back is 2 000,00 and not the facture's own 3 000,00.
+    cancellation::cancel_settling(
+        &mut conn,
+        SHOP,
+        OWNER,
+        facture.id,
+        "retour du reste".to_string(),
+        Some(at(14, 13)),
+        Refund::Cash,
+    )
+    .unwrap();
+
+    let position = cash::position(&mut conn, SHOP, Period::Day(day(14))).unwrap();
+    // 1 000,00 on the credit note and 2 000,00 on the cancellation.
+    assert_eq!(position.cash_out.refunds, Money::centimes(300_000));
+    // The drawer took the sale and the stamp and kept only the stamp.
+    assert_eq!(position.cash_in.sales, facture.totals.net_to_pay);
+    assert_eq!(position.cash, stamp);
+}
+
+/// The case ruling 5 was taken for: a facture with no customer, credited in
+/// cash. There is no ledger to write the credit on, so the refund row is the
+/// only record the money left, and it is written all the same.
+///
+/// `avoir::issue` returns early for a document naming nobody — there is no
+/// account to move — so a refund written after that point would be skipped
+/// on exactly the sale this feature exists for, and every other test here
+/// names a customer and would stay green.
+#[test]
+fn an_avoir_on_a_facture_naming_nobody_still_writes_the_cash_that_left() {
+    let (_dir, mut conn) = open_temp();
+    // Written straight through `services::documents` with its totals stated:
+    // what is under test is the refund, not how a basket adds up. No product
+    // on the line, so there is no sale movement for the credit note to price
+    // the goods back at and the stock half stays out of the way.
+    let facture = an_anonymous_cash_facture(&mut conn, 200_000, 2_000, at(14, 10));
+    assert_eq!(facture.customer_id, None);
+
+    let credit = avoir::issue_settling(
+        &mut conn,
+        SHOP,
+        AMINA,
+        facture.id,
+        None,
+        Some("retour".to_string()),
+        Some(at(14, 12)),
+        Refund::Cash,
+    )
+    .unwrap();
+    assert_eq!(credit.customer_id, None);
+    assert_eq!(credit.totals.stamp, Money::ZERO);
+
+    let position = cash::position(&mut conn, SHOP, Period::Day(day(14))).unwrap();
+    // The drawer took 2 020,00 and gave 2 000,00 back, keeping the stamp.
+    assert_eq!(position.cash_in.sales, Money::centimes(202_000));
+    assert_eq!(position.cash_out.refunds, Money::centimes(200_000));
+    assert_eq!(position.cash, Money::centimes(2_000));
+
+    // And the drawer it came out of is short by it.
+    assert_eq!(
+        cash::refunds_for(&mut conn, SHOP, AMINA, at(14, 0), at(15, 0)).unwrap(),
+        Money::centimes(200_000)
+    );
+}
+
+/// A facture over the counter with no buyer on it, the walk-in who asked for
+/// a facture and paid cash. Stated totals, no product on the line.
+fn an_anonymous_cash_facture(
+    conn: &mut SqliteConnection,
+    total_ttc: i64,
+    stamp: i64,
+    issued_at: NaiveDateTime,
+) -> Document {
+    let ttc = Money::centimes(total_ttc);
+    let stamp = Money::centimes(stamp);
+    documents::issue(
+        conn,
+        SHOP,
+        NewDocument {
+            kind: DocumentKind::Facture,
+            issued_at,
+            user_id: AMINA,
+            regime: Regime::Ifu,
+            payment_mode: PaymentMode::Cash,
+            seller: SellerBlock {
+                name: "Mon magasin".to_string(),
+                rc: None,
+                nif: None,
+                nis: None,
+                ai: None,
+                address: None,
+                phone: None,
+            },
+            customer: None,
+            buyer: None,
+            ref_document_id: None,
+            balance: None,
+            totals: Totals {
+                total_ht: ttc,
+                discount: Money::ZERO,
+                subtotal_ht: ttc,
+                tva_by_rate: vec![TvaLine {
+                    rate: Bps::ZERO,
+                    base: ttc,
+                    amount: Money::ZERO,
+                }],
+                tva: Money::ZERO,
+                total_ttc: ttc,
+                stamp,
+                net_to_pay: ttc.checked_add(stamp).unwrap(),
+            },
+            tendered: None,
+            change: None,
+            lines: vec![NewDocumentLine {
+                product_id: None,
+                name: "Article".to_string(),
+                barcode: None,
+                qty_milli: 1_000,
+                unit_price: ttc,
+                line_discount: Money::ZERO,
+                rate_bps: Bps::ZERO,
+                line_total: ttc,
+                ref_line_id: None,
+            }],
+        },
+    )
+    .unwrap()
 }

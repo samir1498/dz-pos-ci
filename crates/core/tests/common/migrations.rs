@@ -267,6 +267,13 @@ pub fn insert_with_all(table: &str, overrides: &[(&str, &str)]) -> String {
                 "NULL",
             ],
         ),
+        // The document id is 1 because every case that writes a refund
+        // seeds its document first, out of the `documents` template above,
+        // into an empty file.
+        "cash_refunds" => (
+            "shop_id, document_id, user_id, amount_centimes, refunded_at",
+            &["1", "1", "1", "300000", "'2026-09-21 12:00:00'"],
+        ),
         other => panic!("no insert template for {other}"),
     };
     let names: Vec<&str> = columns.split(',').map(str::trim).collect();

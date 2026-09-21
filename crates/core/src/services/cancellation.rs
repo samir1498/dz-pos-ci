@@ -76,13 +76,15 @@ pub fn cancel(
 /// anonymous cash ticket handed back has no customer, so there is no ledger
 /// to credit and no avoir to write against a ticket.
 ///
-/// **The amount is `net_to_pay` less the stamp.** A cash sale's `net_to_pay`
-/// is what the customer handed over, the droit de timbre included, and the
-/// stamp is not given back: it is paid on money that changed hands (Code du
-/// timbre 2026 art. 100-I) and a reversal does not unmake that. The same
-/// reading the avoir path takes by never carrying a stamp at all. It is an
-/// assumption, written out in the fiscal rules table of `docs/features.md`
-/// with the R8 pointer beside the other stamp reading.
+/// **The amount is what the paper still has on it, and never the stamp.** A
+/// cash sale's `net_to_pay` is what the customer handed over, the droit de
+/// timbre included, and the stamp is not given back: it is paid on money that
+/// changed hands (Code du timbre 2026 art. 100-I) and a reversal does not
+/// unmake that. The same reading the avoir path takes by never carrying a
+/// stamp at all. It is an assumption, written out in the fiscal rules table
+/// of `docs/features.md` with the R8 pointer beside the other stamp reading.
+/// `cash_going_back` below is the subtraction, and its doc says why a
+/// facture's cannot be read off its own totals.
 ///
 /// **A credit sale is refused.** The money is on the customer's account and
 /// comes off it there, by the avoir or the ledger reversal below; handing
@@ -188,10 +190,7 @@ pub fn cancel_settling(
         // `hand_over` refuses an amount that is not money, so a document worth
         // nothing but its stamp is a refusal with a field on it.
         if refund.is_cash() {
-            let handed_back = document
-                .totals
-                .net_to_pay
-                .checked_sub(document.totals.stamp)?;
+            let handed_back = cash_going_back(conn, shop_id, &document)?;
             cash_refunds::hand_over(conn, shop_id, user_id, document_id, handed_back, at)?;
         }
 
@@ -310,6 +309,40 @@ fn effect_of(
 /// holding rather than quietly cancel the money too.
 fn carries_money(document: &Document) -> bool {
     document.customer_id.is_some() && document.payment_mode == PaymentMode::Credit
+}
+
+/// What a cancelled cash sale hands back over the counter.
+///
+/// **Not the document's own `net_to_pay` less its stamp**, which is only
+/// right on a paper nothing has come off yet. `effect_of` answers `StockBack`
+/// for every document that put no money on an account without asking what
+/// earlier avoirs already took off it, so a cash facture part credited in
+/// cash and then annulled in cash would hand back its first unit twice. The
+/// unique index cannot see that: the partial avoir's refund row names the
+/// avoir and this one names the facture, so two different papers each hold a
+/// row and the drawer is out by more than the sale ever took.
+///
+/// So a facture is measured by `avoir::what_is_left`, the same subtraction
+/// the credit path is measured by. On a facture with no credit note against
+/// it that is its `total_ttc`, which is `net_to_pay` less the droit de timbre
+/// (features.md §3), so the rule a clean cancellation obeys is unchanged.
+///
+/// A ticket carries no avoirs at all — `avoir::issue` is written against a
+/// facture and refuses anything else — so nothing can have come off it and
+/// the subtraction is done on its own figures. Checked, like every other
+/// subtraction here.
+fn cash_going_back(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document: &Document,
+) -> Result<Money, CoreError> {
+    match document.kind {
+        DocumentKind::Facture => avoir::what_is_left(conn, shop_id, document),
+        _ => Ok(document
+            .totals
+            .net_to_pay
+            .checked_sub(document.totals.stamp)?),
+    }
 }
 
 /// Takes a cancelled credit ticket off the customer's account.
