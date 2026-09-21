@@ -114,7 +114,7 @@ the token from the webview like it reads the PIN.
 crates/core       models → repos (diesel) → services; migrations; errors
 crates/api        HTTP routes over services; launch token; shop scoping
 apps/desktop      React UI + src-tauri (starts the API, owns the window)
-apps/mobile       Expo app, same API client                        (later)
+apps/mobile       Expo app, same API client                        (shipped)
 packages/shared   TS: API client, types generated from Rust, money
 packages/design   TS: design tokens, three tiers
 docs/             this file, features.md, roadmap.md

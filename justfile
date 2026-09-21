@@ -50,7 +50,7 @@ claim:
 default:
     @just --list
 
-# ---- gates (the six in context/processes/quality-gates) ----
+# ---- gates (the seven in context/processes/quality-gates) ----
 
 fmt:
     cargo fmt --all --check

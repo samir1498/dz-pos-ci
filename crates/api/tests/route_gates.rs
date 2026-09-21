@@ -19,7 +19,7 @@
 //! `a_cashier_is_refused_and_a_manager_is_not_on_every_gated_route` below is
 //! T3's pass down the table over real HTTP: it walks `ROUTE_GATES` the same
 //! way the two tests above do, so a row added to the table is a case added
-//! here rather than a thirty-seventh test written out by hand.
+//! here rather than a sixty-sixth test written out by hand.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};

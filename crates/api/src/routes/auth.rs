@@ -187,7 +187,7 @@ pub async fn idle(
 }
 
 /// Every permission this role holds, walked off `Permission::ALL` and
-/// answered by `can`. Walked rather than listed, so a fourteenth permission
+/// answered by `can`. Walked rather than listed, so a sixteenth permission
 /// reaches the screens without anybody editing a second list
 /// (architecture.md rule 2).
 fn held_by(role: dzpos_core::services::permissions::Role) -> Vec<PermissionDto> {

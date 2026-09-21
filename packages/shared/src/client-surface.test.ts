@@ -3,8 +3,8 @@
 //
 // Dropping a `...xClient(transport)` line from `createClient` deletes every
 // method that file owned, and nothing else in this package notices: the
-// suites here call 32 of the 77 domain methods, so most of them can vanish
-// silently. `claimPairing` is the sharpest case, with no caller in the
+// suites here call a minority of the domain methods, so most of them can
+// vanish silently. `claimPairing` is the sharpest case, with no caller in the
 // desktop or the phone either, so no `tsc` run anywhere would go red.
 //
 // A method name used by two domain files is the other one. In one literal a

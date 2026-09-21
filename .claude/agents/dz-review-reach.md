@@ -18,7 +18,7 @@ runs Pass 2 and proves or drops every claim you make.
 - A route any client on the shop LAN can call without a role. `gates/` and
   `crates/api/tests/route_gates.rs` hold the table; an ungated write is meant
   to fail closed, so check the table was actually extended
-- A query missing its `shop_id` filter. 28 of 29 tables carry `shop_id`; the
+- A query missing its `shop_id` filter. Every table but `shops` carries it; the
   exception is `shops`
 - What a deleted row takes with it, and what it orphans
 - What the audit log does not record. `services::audit::record` stamps

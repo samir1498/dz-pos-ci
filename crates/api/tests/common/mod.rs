@@ -111,8 +111,8 @@ pub const MANAGER_SESSION: &str = "dz-pos-test-session-for-a-manager";
 /// Opens a session for one user of `role` ("cashier" or "manager") in
 /// `shop`, under `token`. Same shape as `sign_in`, generalised to the role
 /// the gate walk needs beside the owner every other file in this folder
-/// signs in as; `sign_in` is left alone so the fifteen files already calling
-/// it keep the owner they always got.
+/// signs in as; `sign_in` is left alone so the two dozen files already
+/// calling it keep the owner they always got.
 pub fn sign_in_as(db: &Path, shop: i32, role: &str, token: &str) {
     let mut conn = dzpos_core::db::open(db).expect("the test's shop file will not open");
 

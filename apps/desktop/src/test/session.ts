@@ -13,7 +13,7 @@ import type { MeDto, PermissionDto } from "@dzpos/shared";
 /** `Permission::ALL`, spelled on the TypeScript side (`crates/core/src/
  *  services/permissions.rs`). Kept as a literal array and not inferred from
  *  a union type, because a fixture is data and this file is not the place
- *  a thirteenth permission should fail to compile. */
+ *  a sixteenth permission should fail to compile. */
 const ALL_PERMISSIONS: readonly PermissionDto[] = [
   "sell",
   "discount_above_threshold",

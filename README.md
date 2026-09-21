@@ -6,7 +6,9 @@ identifier is `com.dinar.app`. Changing that identifier after a release
 means a data-path migration, so it does not change twice.
 
 Research (law, tooling, competitor teardown, market) lives in
-`research/` in this repo; the Lumina teardown is under
+`research/` in this repo. The Lumina teardown the current work came out of
+is `research/competitors/2026-09-20-lumina-teardown/`; the first pass at
+them and the market sits under
 `research/competitors/2026-09-07-lumina-and-market/`.
 
 ## Origin

@@ -6,7 +6,7 @@
 |---|---|---|
 | The gate list | `justfile` (`gates` recipe) | prose says `just gates`, never the list |
 | Commands to run | `justfile` | pages name the recipe |
-| Routes and what they need | `crates/api/src/lib.rs`; `docs/architecture.md` § Transport and auth | `apps/desktop/e2e/README.md` |
+| Routes and what they need | `crates/api/src/router.rs`; `docs/architecture.md` § Transport and auth | `apps/desktop/e2e/README.md` |
 | Milestone order | `docs/roadmap.md` | `context/roadmaps/` entry, `context/progress/now.md` |
 | Milestone status and tasks | `context/roadmaps/` entry (status), the milestone plan in `context/plans/` (tasks) | `now.md` Active paragraph |
 | What is in flight | `context/progress/now.md` and the newest page in `context/loops/` | none |
