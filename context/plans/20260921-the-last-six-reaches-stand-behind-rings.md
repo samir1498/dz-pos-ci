@@ -15,7 +15,7 @@ tasks:
     status: 'done'
   - id: 'T3'
     desc: 'The purchases door onto supplier_debt: three repo calls, no ring in front of them'
-    status: 'pending'
+    status: 'done'
   - id: 'T4'
     desc: 'The ownership lift at documents.rs:145, which frees customers -> documents and debt -> documents together'
     status: 'pending'
