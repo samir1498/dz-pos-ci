@@ -45,6 +45,54 @@ pub(crate) fn role_of(
     Ok(users::get(conn, shop_id, user_id)?.role)
 }
 
+/// Every user in the shop by id and name, for a screen that prints a name
+/// beside a row it read somewhere else. `services::audit` is the caller: the
+/// log stores a `user_id` per entry and the page shows who that was, in the
+/// rows and in the filter's dropdown.
+///
+/// Here for `role_of`'s reason and one more. `services::users` writes an audit
+/// row on nearly everything it does, so `audit` asking `users` for a name
+/// directly is the pair importing each other, which
+/// `no_service_imports_a_sibling_that_imports_it_back` refuses and which made
+/// both files unreadable apart. The name is not the audit log's to keep — a
+/// renamed user shows their new name on every past row, which is the point of
+/// storing the id — so the lookup belongs to neither side and sits above both.
+pub(crate) fn user_names(
+    conn: &mut diesel::sqlite::SqliteConnection,
+    shop_id: i32,
+) -> Result<Vec<(i32, String)>, CoreError> {
+    Ok(users::list(conn, shop_id)?
+        .into_iter()
+        .map(|user| (user.id, user.name))
+        .collect())
+}
+
+/// Every live session a user holds, ended, except one the caller names. A
+/// credential that changed and a fiche switched off both mean the tokens
+/// handed out before it are no longer the person they were issued to, and
+/// `services::users` is where both of those are decided.
+///
+/// Here rather than in `users` because `services::sessions` signs a user in
+/// by asking `services::users` to believe a PIN or a password, so a call the
+/// other way is the two importing each other. The direction that stays is the
+/// one the sign-in rule needs; this, the only call `users` had into
+/// `sessions`, is lifted above both instead. `keep_session_id` is the
+/// caller's own session when a person resets their own credential, and `None`
+/// ends every one of them.
+pub(crate) fn end_sessions_of(
+    conn: &mut diesel::sqlite::SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    keep_session_id: Option<i32>,
+    now: chrono::NaiveDateTime,
+) -> Result<(), CoreError> {
+    match keep_session_id {
+        Some(keep) => sessions::end_all_for_user_except(conn, shop_id, user_id, keep, now)?,
+        None => sessions::end_all_for_user(conn, shop_id, user_id, now)?,
+    };
+    Ok(())
+}
+
 pub(crate) fn bounded_field(field: &str, value: &str) -> Result<(), CoreError> {
     if value.chars().count() > MAX_FIELD_CHARS {
         return Err(CoreError::validation(

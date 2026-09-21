@@ -27,7 +27,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::user::{Credentials, UserRowWrite};
 use crate::repos::users as repo;
-use crate::services::{audit, bounded_field, sessions};
+use crate::services::{audit, bounded_field, end_sessions_of};
 
 pub use crate::models::user::{NewUser, Role, User};
 
@@ -335,12 +335,8 @@ fn end_sessions_after_credential_change(
     target_id: i32,
     acting_session_id: Option<i32>,
 ) -> Result<(), CoreError> {
-    let now = stamp();
-    match acting_session_id.filter(|_| actor_id == target_id) {
-        Some(keep) => sessions::end_all_for_user_except(conn, shop_id, target_id, keep, now)?,
-        None => sessions::end_all_for_user(conn, shop_id, target_id, now)?,
-    };
-    Ok(())
+    let keep = acting_session_id.filter(|_| actor_id == target_id);
+    end_sessions_of(conn, shop_id, target_id, keep, stamp())
 }
 
 /// Switches a user off. Nothing is deleted: every document, ledger row and
@@ -374,7 +370,7 @@ pub fn deactivate(
         // back to whoever was still holding it, with no new sign-in: `active`
         // flips back to true before the row that should have ended the
         // session ever gets written.
-        sessions::end_all_for_user(conn, shop_id, id, stamp())?;
+        end_sessions_of(conn, shop_id, id, None, stamp())?;
         record(
             conn,
             shop_id,

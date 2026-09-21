@@ -234,21 +234,30 @@ fn services_named_in(source: &str) -> BTreeSet<String> {
     modules_named_in(source, "services::")
 }
 
-/// The rings still standing, the same burn-down shape as the reach list
-/// above. Each one is written from its alphabetically first service, which
-/// is also the only start the walk below reports it from, so the same ring
-/// always prints the same string.
+/// The rings still standing: none, since 2026-09-21. It stays as an exact
+/// list rather than becoming an `is_empty` so a failure still prints the ring
+/// it found, written from its alphabetically first service, which is also the
+/// only start the walk below reports it from.
 ///
-/// All three are the same corner: a user is written with an audit row, the
-/// audit row names a user, a session belongs to a user, and a preference is
-/// read while writing one. Untangling that is its own task, on a plan that
-/// can say what the shared kernel there is. The two the architecture review
-/// named, `avoir -> documents` and `proforma -> sales`, are gone.
-const RINGS_STILL_OPEN: [&str; 3] = [
-    "audit -> users -> audit",
-    "audit -> users -> sessions -> preferences -> audit",
-    "sessions -> users -> sessions",
-];
+/// The count went five, three, zero. The architecture review named two by
+/// reading four files, `avoir -> documents` and `proforma -> sales`, and both
+/// went in T3. A walk over every service found three more, all in the same
+/// corner: a user is written with an audit row, the audit row names a user, a
+/// session belongs to a user, and a preference is read while writing one.
+/// T11 cut two edges and all three fell.
+///
+/// `audit -> users` was one call, `users::list`, for the names the log page
+/// prints beside a `user_id`; it is `services::user_names` now, beside
+/// `role_of` in `services/mod.rs`, which is above both and draws no edge
+/// between them. `users -> sessions` was the three calls that end a person's
+/// sessions when their credential changes or their fiche is switched off; the
+/// `services::end_sessions_of` beside it holds them. The edge that stays is
+/// the one the sign-in rule needs, `sessions -> users`, because believing a
+/// PIN, counting a wrong try and locking a fiche out are settled in `users`
+/// and a session is opened after that. Both are moves: the same function is
+/// called with the same arguments at the same point in the same transaction,
+/// so no audit row changed when it is written or what it says.
+const RINGS_STILL_OPEN: [&str; 0] = [];
 
 /// Two services that import each other cannot be read, moved or tested
 /// apart: whichever one you open first assumes the other. Rust compiles an
@@ -292,12 +301,14 @@ fn no_service_imports_a_sibling_that_imports_it_back() {
     let pinned: Vec<String> = RINGS_STILL_OPEN.iter().map(|r| (*r).to_string()).collect();
     assert_eq!(
         rings, pinned,
-        "the list of services that import each other has changed. Shorter is \
-         the only direction it goes: put what both need in a module \
+        "the list of services that import each other has changed, and it is \
+         empty: no service in this crate imports a sibling that imports it \
+         back, and nothing joins the list. Put what both need in a module \
          underneath them, or lift the one operation that needs both above \
-         them, then take the row out of RINGS_STILL_OPEN. A longer list \
-         means neither of two services can now be read or moved without the \
-         other."
+         them — `services::role_of`, `services::user_names` and \
+         `services::end_sessions_of` in `services/mod.rs` are what that \
+         looks like. A ring here means neither of two services can now be \
+         read or moved without the other."
     );
 }
 

@@ -25,7 +25,7 @@
     "crates/core/src/services/sales.rs": 1061,
     "crates/core/src/services/seed.rs": 1126,
     "crates/core/src/services/supplier_debt.rs": 821,
-    "crates/core/src/services/users.rs": 828,
+    "crates/core/src/services/users.rs": 824,
     "crates/core/tests/avoir_service.rs": 1702,
     "crates/core/tests/debt_service.rs": 2041,
     "crates/core/tests/migration.rs": 4121,

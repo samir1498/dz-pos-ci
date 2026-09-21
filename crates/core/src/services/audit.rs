@@ -14,7 +14,7 @@ use crate::error::CoreError;
 use crate::models::audit::{AuditEntry, AuditRowWrite};
 use crate::repos::audit as repo;
 use crate::services::clock;
-use crate::services::users;
+use crate::services::user_names;
 
 /// A row that did not exist before, such as a customer fiche.
 pub const ACTION_CREATE: &str = "create";
@@ -386,7 +386,7 @@ fn day_range(day: NaiveDate) -> (NaiveDateTime, NaiveDateTime) {
 /// One page of the log, filtered in SQL (`WHERE` and `LIMIT`/`OFFSET`, not a
 /// `Vec` sliced afterwards), and the two dropdowns' options. The dropdowns
 /// read off the whole log regardless of `filter` (`repo::distinct_actions`,
-/// `users::list`) — a filter narrow enough to empty the page must not also
+/// `user_names`) — a filter narrow enough to empty the page must not also
 /// empty the choices that would widen it back.
 ///
 /// The lockout row is the one filter case worth naming here: `user.locked_out`
@@ -407,10 +407,7 @@ pub fn read(
     filter: &Filter,
     page_number: i64,
 ) -> Result<(Page, Facets), CoreError> {
-    let names: HashMap<i32, String> = users::list(conn, shop_id)?
-        .into_iter()
-        .map(|u| (u.id, u.name))
-        .collect();
+    let names: HashMap<i32, String> = user_names(conn, shop_id)?.into_iter().collect();
     let mut people: Vec<(i32, String)> =
         names.iter().map(|(id, name)| (*id, name.clone())).collect();
     people.sort_by(|a, b| a.1.cmp(&b.1));
