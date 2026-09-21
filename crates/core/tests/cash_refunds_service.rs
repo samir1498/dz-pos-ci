@@ -2,7 +2,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 //! Cash handed back over the counter (features.md §1; ruling 5 of the
-//! 2026-09-20 loop), against a real temp SQLite file.
+//! 2026-09-20 loop), against a real temp SQLite file: what it does to a day,
+//! to a month and to the drawer the notes came out of.
 //!
 //! Every expected figure here is written by hand from the rule and never
 //! computed by the code under test: a test that asked `position` for the
@@ -14,98 +15,27 @@
 //! twice. The rule is that a sale refunded in cash stays in the takings of
 //! the day it was rung — the drawer did take that money — and only a
 //! cancellation that handed nothing back drops out.
+//!
+//! What a refund is refused for, and what it writes into the audit log, is
+//! `cash_refunds_guards`: one subject, split at the line limit.
 
-use chrono::{NaiveDate, NaiveDateTime};
-use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
-use dzpos_core::models::product::{NewProduct, Unit};
-use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
+use dzpos_core::money::{Money, PaymentMode};
 use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::cash_refunds::Refund;
 use dzpos_core::services::clock::{Month, Period};
-use dzpos_core::services::documents::{
-    Document, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, SellerBlock,
-};
-use dzpos_core::services::sales::{NewSale, NewSaleLine, SaleKind};
+use dzpos_core::services::documents::DocumentStatus;
 use dzpos_core::services::shifts::{NewShift, TillCount};
-use dzpos_core::services::{cancellation, cash, debt, documents, products, sales, shifts};
+use dzpos_core::services::debt::PaymentMethod;
+use dzpos_core::services::{cancellation, cash, debt, documents, shifts};
 
 mod common;
+use common::cash_refunds::{a_facture, an_anonymous_cash_facture, at, day, line, product};
 use common::shifts::{a_sale, a_sale_with_stamp, a_second_cashier, AMINA, KARIM};
 use common::{an_identified_customer, open_temp, open_temp_selling_factures};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
-
-fn day(n: u32) -> NaiveDate {
-    NaiveDate::from_ymd_opt(2026, 9, n).unwrap()
-}
-
-fn at(n: u32, hour: u32) -> NaiveDateTime {
-    day(n).and_hms_opt(hour, 0, 0).unwrap()
-}
-
-fn product(conn: &mut SqliteConnection, name: &str, selling: i64, rate_bps: u32) -> i32 {
-    products::create(
-        conn,
-        SHOP,
-        OWNER,
-        NewProduct {
-            name: name.to_string(),
-            barcode: None,
-            category_id: None,
-            unit: Unit::Piece,
-            cost: Money::centimes(selling / 2),
-            selling: Money::centimes(selling),
-            wholesale: None,
-            qty_on_hand_milli: 100_000,
-            low_stock_at_milli: 0,
-            rate_bps: Some(Bps::new(rate_bps).unwrap()),
-            active: true,
-        },
-    )
-    .unwrap()
-    .id
-}
-
-fn line(product_id: i32, qty_milli: i64) -> NewSaleLine {
-    NewSaleLine {
-        product_id,
-        qty_milli,
-        unit_price: None,
-        line_discount: Money::ZERO,
-    }
-}
-
-/// A facture, on whichever payment mode the case is about.
-fn a_facture(
-    conn: &mut SqliteConnection,
-    customer_id: i32,
-    lines: Vec<NewSaleLine>,
-    mode: PaymentMode,
-    on: u32,
-) -> Document {
-    sales::issue(
-        conn,
-        SHOP,
-        OWNER,
-        NewSale {
-            lines,
-            global_discount: Money::ZERO,
-            payment_mode: mode,
-            tendered: match mode {
-                PaymentMode::Cash => Some(Money::centimes(10_000_000)),
-                _ => None,
-            },
-            customer_id: Some(customer_id),
-            override_credit: false,
-            kind: SaleKind::Facture,
-            issued_at: Some(at(on, 10)),
-        },
-    )
-    .unwrap()
-    .document
-}
 
 /// A cash refund lowers the day's cash figure and the open shift's expected
 /// figure by the same centimes, which is ruling 5 in one sentence.
@@ -297,10 +227,13 @@ fn an_avoir_settled_in_cash_hands_back_its_own_figure_which_carries_no_stamp() {
     // A cash facture: it is paid for, so cash may go back against it, and it
     // carries a stamp the credit note must not refund.
     let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Cash, 14);
-    assert!(
-        facture.totals.stamp > Money::ZERO,
-        "no stamp here to not refund"
-    );
+    // Typed from the fixture and not read off the answer: 3 units at 1 000,00
+    // is 3 000,00 HT, 570,00 of TVA at 19% on top is 3 570,00 TTC, and the
+    // droit de timbre on that is 36 tranches of 100 DA at 1 DA each, 36,00.
+    // The customer handed 3 606,00 over.
+    assert_eq!(facture.totals.total_ttc, Money::centimes(357_000));
+    assert_eq!(facture.totals.stamp, Money::centimes(3_600));
+    assert_eq!(facture.totals.net_to_pay, Money::centimes(360_600));
 
     let credit = avoir::issue_settling(
         &mut conn,
@@ -313,15 +246,22 @@ fn an_avoir_settled_in_cash_hands_back_its_own_figure_which_carries_no_stamp() {
         Refund::Cash,
     )
     .unwrap();
+    // The credit note is the facture without its stamp.
     assert_eq!(credit.totals.stamp, Money::ZERO);
-    assert_eq!(credit.totals.net_to_pay, credit.totals.total_ttc);
+    assert_eq!(credit.totals.total_ttc, Money::centimes(357_000));
+    assert_eq!(credit.totals.net_to_pay, Money::centimes(357_000));
+    // And it says the account did not move, because it did not.
+    let triple = credit.balance.expect("an avoir to a named customer");
+    assert_eq!(triple.old_balance, Money::ZERO);
+    assert_eq!(triple.remaining_debt, Money::ZERO);
+    assert_eq!(triple.total_debt, Money::ZERO);
 
     let position = cash::position(&mut conn, SHOP, Period::Day(day(14))).unwrap();
-    assert_eq!(position.cash_out.refunds, credit.totals.total_ttc);
+    assert_eq!(position.cash_out.refunds, Money::centimes(357_000));
     // The facture still stands, so its takings never left the day.
-    assert_eq!(position.cash_in.sales, facture.totals.net_to_pay);
+    assert_eq!(position.cash_in.sales, Money::centimes(360_600));
     // What the shop keeps is the stamp and nothing else.
-    assert_eq!(position.cash, facture.totals.stamp);
+    assert_eq!(position.cash, Money::centimes(3_600));
 
     // And the customer was not credited as well: notes, not credit.
     assert_eq!(debt::balance(&mut conn, SHOP, c).unwrap(), Money::ZERO);
@@ -384,7 +324,7 @@ fn cash_against_a_facture_that_is_still_owed_for_is_refused() {
         OWNER,
         c,
         Money::centimes(500_000),
-        dzpos_core::services::debt::PaymentMethod::Cash,
+        PaymentMethod::Cash,
         None,
         at(14, 11),
     )
@@ -510,9 +450,11 @@ fn a_second_refund_against_one_document_is_refused_on_the_field() {
         "a second refund on one paper is a validation error, was {err:?}"
     );
 
-    // And the drawer is out by the first refund only.
+    // And the drawer is out by the first refund only: 400 thousandths of a
+    // line of 1 000,00 at no TVA, so 400,00, typed from the fixture.
+    assert_eq!(first.totals.net_to_pay, Money::centimes(40_000));
     let position = cash::position(&mut conn, SHOP, Period::Day(day(14))).unwrap();
-    assert_eq!(position.cash_out.refunds, first.totals.net_to_pay);
+    assert_eq!(position.cash_out.refunds, Money::centimes(40_000));
 }
 
 /// A reversal that comes to nothing hands nothing over, and says so on the
@@ -707,68 +649,4 @@ fn an_avoir_on_a_facture_naming_nobody_still_writes_the_cash_that_left() {
         cash::refunds_for(&mut conn, SHOP, AMINA, at(14, 0), at(15, 0)).unwrap(),
         Money::centimes(200_000)
     );
-}
-
-/// A facture over the counter with no buyer on it, the walk-in who asked for
-/// a facture and paid cash. Stated totals, no product on the line.
-fn an_anonymous_cash_facture(
-    conn: &mut SqliteConnection,
-    total_ttc: i64,
-    stamp: i64,
-    issued_at: NaiveDateTime,
-) -> Document {
-    let ttc = Money::centimes(total_ttc);
-    let stamp = Money::centimes(stamp);
-    documents::issue(
-        conn,
-        SHOP,
-        NewDocument {
-            kind: DocumentKind::Facture,
-            issued_at,
-            user_id: AMINA,
-            regime: Regime::Ifu,
-            payment_mode: PaymentMode::Cash,
-            seller: SellerBlock {
-                name: "Mon magasin".to_string(),
-                rc: None,
-                nif: None,
-                nis: None,
-                ai: None,
-                address: None,
-                phone: None,
-            },
-            customer: None,
-            buyer: None,
-            ref_document_id: None,
-            balance: None,
-            totals: Totals {
-                total_ht: ttc,
-                discount: Money::ZERO,
-                subtotal_ht: ttc,
-                tva_by_rate: vec![TvaLine {
-                    rate: Bps::ZERO,
-                    base: ttc,
-                    amount: Money::ZERO,
-                }],
-                tva: Money::ZERO,
-                total_ttc: ttc,
-                stamp,
-                net_to_pay: ttc.checked_add(stamp).unwrap(),
-            },
-            tendered: None,
-            change: None,
-            lines: vec![NewDocumentLine {
-                product_id: None,
-                name: "Article".to_string(),
-                barcode: None,
-                qty_milli: 1_000,
-                unit_price: ttc,
-                line_discount: Money::ZERO,
-                rate_bps: Bps::ZERO,
-                line_total: ttc,
-                ref_line_id: None,
-            }],
-        },
-    )
-    .unwrap()
 }

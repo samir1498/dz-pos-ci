@@ -24,7 +24,7 @@
 use chrono::NaiveDateTime;
 use diesel::dsl::sql;
 use diesel::prelude::*;
-use diesel::sql_types::{BigInt, Nullable};
+use diesel::sql_types::{BigInt, Bool, Integer, Nullable};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
@@ -32,7 +32,7 @@ use crate::models::debt::{DebtKind, PaymentMethod};
 use crate::models::document::payment_mode_stored;
 use crate::models::sql_types::{DocumentKind, DocumentStatus, SupplierDebtKind};
 use crate::money::{Money, PaymentMode};
-use crate::schema::{cash_refunds, debt_ledger, documents, supplier_ledger};
+use crate::schema::{debt_ledger, documents, supplier_ledger};
 
 /// What the shop sold and was paid for on the spot, and how much droit de
 /// timbre came over the counter inside it.
@@ -105,15 +105,30 @@ fn sales_of(
     until: NaiveDateTime,
     mode: PaymentMode,
 ) -> Result<(Money, Money), CoreError> {
-    // Still standing, or handed back in cash. `exists` and not a join: a
-    // document has at most one refund row (a unique index says so), but a
-    // join that anybody later widened would double the sum, and a sum is the
-    // wrong place to find that out.
-    let refunded = diesel::dsl::exists(
-        cash_refunds::table
-            .filter(cash_refunds::shop_id.eq(shop_id))
-            .filter(cash_refunds::document_id.nullable().eq(documents::id.nullable())),
-    );
+    // Still standing, or handed back in cash. `EXISTS` and not a join: a
+    // sum is the wrong place to find out that a join somebody widened later
+    // counts a document twice.
+    //
+    // Two ways a paper can have had cash handed back on it, and both count.
+    // The row names the document itself when a cash sale was cancelled with
+    // the notes going back. It names an **avoir** when the money went back on
+    // a credit note, and that avoir carries `ref_document_id` to the facture.
+    // Reading only the first arm loses the second the moment such a facture
+    // is annulled: it drops out of the day it was sold on and the day reads
+    // `0 - the refund` where the drawer held the sale less the refund. That
+    // state does not need a service to produce it — a file restored from a
+    // backup can already hold it — so the query is where it is answered.
+    //
+    // Scoped by `shop_id` on both arms (rule 3): one shop's refund may not
+    // decide what another shop's day reads.
+    let refunded = sql::<Bool>("EXISTS (SELECT 1 FROM cash_refunds r WHERE r.shop_id = ")
+        .bind::<Integer, _>(shop_id)
+        .sql(
+            " AND (r.document_id = documents.id \
+             OR r.document_id IN (SELECT a.id FROM documents a \
+             WHERE a.shop_id = r.shop_id AND a.kind = 'avoir' \
+             AND a.ref_document_id = documents.id)))",
+        );
     let mut query = documents::table
         .filter(documents::shop_id.eq(shop_id))
         .filter(documents::kind.eq_any([DocumentKind::Ticket, DocumentKind::Facture]))

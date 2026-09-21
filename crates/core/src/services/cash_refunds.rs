@@ -24,7 +24,8 @@ use diesel::sqlite::SqliteConnection;
 
 use crate::error::CoreError;
 use crate::models::cash_refund::{CashRefund, CashRefundRowWrite};
-use crate::money::Money;
+use crate::models::document::Document;
+use crate::money::{Money, PaymentMode};
 use crate::repos::cash_refunds as repo;
 
 /// How the money goes back on a reversal.
@@ -44,6 +45,22 @@ pub enum Refund {
 impl Refund {
     pub const fn is_cash(self) -> bool {
         matches!(self, Refund::Cash)
+    }
+
+    /// How a reader of the audit log is told the money went back. Written
+    /// into the `after` block of both reversal actions, because a credit note
+    /// that opened the drawer and one that credited an account are otherwise
+    /// the same row, and the drawer is the one somebody answers for.
+    ///
+    /// `ledger` and not `none`: on the path that writes it, the account is
+    /// where the money went. A cancelled cash sale settled this way handed
+    /// nothing back at all, and the `remaining_debt_centimes` beside it in
+    /// the same block is what says so.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Refund::None => "ledger",
+            Refund::Cash => "cash",
+        }
     }
 }
 
@@ -108,4 +125,32 @@ pub fn total_for_user(
     until: NaiveDateTime,
 ) -> Result<Money, CoreError> {
     repo::total_for_user(conn, shop_id, user_id, from, until)
+}
+
+/// The most this paper may still hand back over the counter.
+///
+/// Cash handed back may not exceed what was actually paid in against the
+/// paper, less whatever has already gone back on it or on an avoir written
+/// against it. A cash or card document was settled when it was issued, so the
+/// whole `net_to_pay` came in; a credit document put the money on an account,
+/// so what came in is the payments allocated to it and nothing else.
+///
+/// Card and not only cash on the paid-in side, because a shop settling a
+/// returned card sale out of the drawer is ordinary: the card takings keep
+/// the sale and the cash outgoing says where the notes went.
+///
+/// What it deliberately does not read is `remaining_debt`. A downward
+/// adjustment zeroes that column with nothing coming in (features.md §3), so
+/// a written-off facture reads as settled, and a guard standing on it would
+/// hand notes over for goods nobody ever paid for.
+pub fn still_to_hand_back(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document: &Document,
+) -> Result<Money, CoreError> {
+    let paid_on_the_spot = match document.payment_mode {
+        PaymentMode::Credit => None,
+        PaymentMode::Cash | PaymentMode::Card => Some(document.totals.net_to_pay),
+    };
+    repo::still_to_hand_back(conn, shop_id, document.id, paid_on_the_spot)
 }

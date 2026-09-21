@@ -283,8 +283,17 @@ async fn an_avoir_takes_the_refund_field_and_refuses_a_value_it_does_not_know() 
     assert_eq!(status, StatusCode::CREATED, "{sale}");
     let id = sale["id"].as_i64().unwrap();
     let day = day_of(&sale);
-    let stamp = sale["totals"]["stamp_centimes"].as_i64().unwrap();
-    let net = sale["totals"]["net_to_pay_centimes"].as_i64().unwrap();
+    // Typed from the fixture, not read off the answer: one unit at 1 000,00
+    // with no TVA is 1 000,00 TTC, and the droit de timbre on that is 10
+    // tranches of 100 DA at 1 DA each, 10,00. The customer handed 1 010,00
+    // over and the credit note gives 1 000,00 back.
+    assert_eq!(sale["totals"]["total_ttc_centimes"], json!(100_000), "{sale}");
+    assert_eq!(sale["totals"]["stamp_centimes"], json!(1_000), "{sale}");
+    assert_eq!(
+        sale["totals"]["net_to_pay_centimes"],
+        json!(101_000),
+        "{sale}"
+    );
 
     let (status, refused) = call(
         &app,
@@ -306,13 +315,13 @@ async fn an_avoir_takes_the_refund_field_and_refuses_a_value_it_does_not_know() 
     // A credit note never carries the stamp, so what went back is the
     // facture's figure less the droit de timbre it collected.
     assert_eq!(credit["totals"]["stamp_centimes"], json!(0));
-    assert_eq!(credit["totals"]["net_to_pay_centimes"], json!(net - stamp));
+    assert_eq!(credit["totals"]["net_to_pay_centimes"], json!(100_000));
 
     let (_, position) = call(&app, "GET", &format!("/cash?day={day}"), None).await;
-    assert_eq!(position["cash_in"]["sales_centimes"], json!(net));
-    assert_eq!(position["cash_out"]["refunds_centimes"], json!(net - stamp));
-    // The shop keeps the stamp and nothing else.
-    assert_eq!(position["cash_centimes"], json!(stamp));
+    assert_eq!(position["cash_in"]["sales_centimes"], json!(101_000));
+    assert_eq!(position["cash_out"]["refunds_centimes"], json!(100_000));
+    // The shop keeps the 10,00 of stamp and nothing else.
+    assert_eq!(position["cash_centimes"], json!(1_000));
 }
 
 /// A shift's report carries the refunds beside the takings, and the expected

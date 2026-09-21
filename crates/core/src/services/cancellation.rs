@@ -189,10 +189,13 @@ pub fn cancel_settling(
         // The stamp comes off first, and never comes back.
         // `hand_over` refuses an amount that is not money, so a document worth
         // nothing but its stamp is a refusal with a field on it.
-        if refund.is_cash() {
-            let handed_back = cash_going_back(conn, shop_id, &document)?;
-            cash_refunds::hand_over(conn, shop_id, user_id, document_id, handed_back, at)?;
-        }
+        let handed_back = if refund.is_cash() {
+            let amount = cash_going_back(conn, shop_id, &document)?;
+            cash_refunds::hand_over(conn, shop_id, user_id, document_id, amount, at)?;
+            Some(amount)
+        } else {
+            None
+        };
 
         documents::mark_cancelled(
             conn,
@@ -238,6 +241,11 @@ pub fn cancel_settling(
                         // and one that moved none read the same otherwise,
                         // and the difference is the whole of what happened.
                         "remaining_debt_centimes": left_asking,
+                        // How the money went back. Without it a cancellation
+                        // that opened the drawer and one that moved nothing
+                        // but goods read the same in the log.
+                        "settlement": refund.as_str(),
+                        "cash_back_centimes": handed_back.map(Money::as_centimes),
                     })
                     .to_string(),
                 ),
@@ -410,10 +418,24 @@ fn return_the_goods(
     // the fiche, and a reversal that followed it would move the month's
     // margin with every purchase.
     let sold_at = stock::sale_costs(conn, shop_id, document.id)?;
+    // What each line still has on it, not what it was sold with. A cash
+    // facture part credited by an earlier avoir has already had that
+    // quantity put back on the shelf by `avoir::issue`, and returning the
+    // line whole here would count it twice — the shop would read stock it
+    // does not hold. A ticket carries no avoirs at all, so every line of one
+    // comes back in full and this is the same loop it always was.
+    let left = avoir::quantities_left(conn, shop_id, document)?;
     for line in &document.lines {
         let Some(product_id) = line.product_id else {
             continue;
         };
+        let qty_milli = left.get(&line.id).copied().unwrap_or(line.qty_milli);
+        // A line whose goods have all come back moves nothing. `stock::record`
+        // would refuse a movement of nothing anyway; saying so here is what
+        // makes the skip readable.
+        if qty_milli <= 0 {
+            continue;
+        }
         // The fiche's cost is not a fallback, for the reason `avoir::issue`
         // says: a sold line without a movement is a file that disagrees with
         // itself, and today's cost would move a margin already earned.
@@ -430,7 +452,7 @@ fn return_the_goods(
             &Movement {
                 product_id,
                 kind: MovementKind::Return,
-                qty_milli: line.qty_milli,
+                qty_milli,
                 unit_cost,
                 document_id: Some(document.id),
                 user_id,

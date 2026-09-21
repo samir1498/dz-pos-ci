@@ -121,9 +121,15 @@ impl TryFrom<Takings> for TakingsDto {
     }
 }
 
-/// Cash that left over the period. `refunds_centimes` is zero in this
-/// version: an avoir credits the customer's ledger and brings the goods back,
-/// and nothing says the drawer opened for it.
+/// Cash that left over the period.
+///
+/// `refunds_centimes` is money handed back over the counter on a reversal, on
+/// the day the notes changed hands: an avoir against a facture that was paid
+/// for, or a cancelled cash sale. A reversal settled on a customer's ledger
+/// is not in it, because no notes moved. The sale it reverses stays in
+/// `cash_in.sales` on the day it was rung, so a ticket sold and refunded in
+/// one month nets to nothing across the two figures rather than being
+/// subtracted twice.
 #[derive(Debug, Clone, Copy, Serialize, TS)]
 #[ts(export_to = "OutgoingsDto.ts")]
 pub struct OutgoingsDto {

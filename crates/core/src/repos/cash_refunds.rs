@@ -16,7 +16,9 @@ use diesel::sqlite::SqliteConnection;
 use crate::error::CoreError;
 use crate::models::cash_refund::{CashRefund, CashRefundRow, CashRefundRowWrite};
 use crate::money::Money;
-use crate::schema::cash_refunds;
+use crate::models::debt::DebtKind;
+use crate::models::sql_types::DocumentKind;
+use crate::schema::{cash_refunds, debt_allocations, debt_ledger, documents};
 
 /// Writes the row that says the drawer opened. The unique index on
 /// `document_id` refuses a second refund against the same paper, and that
@@ -72,6 +74,81 @@ pub fn total_for_user(
     until: NaiveDateTime,
 ) -> Result<Money, CoreError> {
     total_of(conn, shop_id, Some(user_id), from, until)
+}
+
+/// Every centime handed back over the counter against one paper: on the paper
+/// itself, and on any avoir written against it.
+///
+/// Both arms, because the two write paths name different documents. A
+/// cancelled cash sale's row names the sale; an avoir's row names the avoir,
+/// which carries `ref_document_id` back to the facture. A caller asking "how
+/// much of this facture has already gone back in notes" wants the sum of
+/// both, and reading one arm would let a facture be refunded twice over.
+///
+/// Not windowed: the question is about a paper's whole life, not about a day.
+pub fn total_against_document(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+) -> Result<Money, CoreError> {
+    let avoirs = documents::table
+        .filter(documents::shop_id.eq(shop_id))
+        .filter(documents::kind.eq(DocumentKind::Avoir))
+        .filter(documents::ref_document_id.eq(document_id))
+        .select(documents::id);
+    let total: Option<i64> = cash_refunds::table
+        .filter(cash_refunds::shop_id.eq(shop_id))
+        .filter(
+            cash_refunds::document_id
+                .eq(document_id)
+                .or(cash_refunds::document_id.eq_any(avoirs)),
+        )
+        .select(sql::<Nullable<BigInt>>("SUM(amount_centimes)"))
+        .first(conn)?;
+    Ok(Money::centimes(total.unwrap_or(0)))
+}
+
+/// The most a credit note on this paper may still hand back over the counter:
+/// what was actually paid in against it, less whatever has already gone back.
+///
+/// **Not `remaining_debt`.** That column is what the paper is still asking
+/// for, and a downward adjustment zeroes it with no money coming in at all
+/// (features.md §3), so a written-off facture reads as settled and a guard
+/// that trusted it would open the drawer for goods nobody ever paid for.
+///
+/// What counts as paid in: the whole `net_to_pay` on a cash or card document,
+/// which was settled when it was issued, and on a credit document the sum of
+/// the **payment** allocations against it. The kind filter is the point —
+/// `debt_allocations` also carries what an avoir settled and what a write-off
+/// took off, and neither is money that came in.
+///
+/// Here and not in `repos::debt` because the subtraction beside it is this
+/// module's own, and the two are one answer: a caller reading them apart
+/// could take the refunds off a figure that was never the paid-in one.
+pub fn still_to_hand_back(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+    paid_on_the_spot: Option<Money>,
+) -> Result<Money, CoreError> {
+    let paid_in = match paid_on_the_spot {
+        Some(amount) => amount,
+        None => {
+            let total: Option<i64> = debt_allocations::table
+                .inner_join(debt_ledger::table)
+                .filter(debt_allocations::shop_id.eq(shop_id))
+                .filter(debt_allocations::document_id.eq(document_id))
+                .filter(debt_ledger::kind.eq(DebtKind::Payment))
+                .select(sql::<Nullable<BigInt>>("SUM(debt_allocations.amount_centimes)"))
+                .first(conn)?;
+            Money::centimes(total.unwrap_or(0))
+        }
+    };
+    let already = total_against_document(conn, shop_id, document_id)?;
+    // Floored at zero: a file that disagrees with itself answers "nothing
+    // left" rather than a negative bound that would read as a refusal for the
+    // wrong reason.
+    Ok(paid_in.checked_sub(already)?.max(Money::ZERO))
 }
 
 /// One query, asked about the shop or about one person. `None` is the shop,

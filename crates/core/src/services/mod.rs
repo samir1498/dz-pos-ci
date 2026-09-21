@@ -106,6 +106,7 @@ pub(crate) fn bounded_field(field: &str, value: &str) -> Result<(), CoreError> {
 pub mod audit;
 pub mod avoir;
 pub mod avoir_remaining;
+pub mod avoir_slice;
 pub mod backup;
 pub mod cancellation;
 pub mod cash;
