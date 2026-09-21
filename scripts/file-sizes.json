@@ -6,11 +6,8 @@
   },
   "over_the_limit": {
     "apps/desktop/src/components/ui/sidebar.tsx": 736,
-    "apps/desktop/src/routes/customers_.$id.tsx": 897,
     "apps/desktop/src/routes/dashboard.tsx": 659,
-    "apps/desktop/src/routes/documents.tsx": 724,
     "apps/desktop/src/routes/expenses.tsx": 668,
-    "apps/desktop/src/routes/products.tsx": 929,
     "apps/desktop/src/routes/purchases_.$id.tsx": 610,
     "apps/desktop/src/routes/till.test.tsx": 1405,
     "apps/desktop/src/routes/till.tsx": 905,

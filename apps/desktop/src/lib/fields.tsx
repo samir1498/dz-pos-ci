@@ -134,6 +134,21 @@ export function AmountField({
   );
 }
 
+/** Field validators return translation keys, never sentences. Products'
+ *  fiche and the customers screen each read the same value out of a field's
+ *  `messages`; the customers screen wrote it first as `useFieldError`, wired
+ *  to the translator by the hook, and products carried a second copy of the
+ *  same three lines under a plain function until the products screen was
+ *  split (T10). One function now, called either way. */
+export function fieldErrorMessage(
+  messages: readonly unknown[],
+  t: (key: Key) => string,
+): string | undefined {
+  const key = messages.find((message): message is string => typeof message === "string");
+  if (key === undefined) return undefined;
+  return t(isKey(key) ? key : "error_unknown");
+}
+
 /** Field validators return translation keys, never sentences. */
 export function FieldError({ messages }: { messages: unknown[] }) {
   const { t } = useTranslation();

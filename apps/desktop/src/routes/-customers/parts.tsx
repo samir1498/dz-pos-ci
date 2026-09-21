@@ -10,8 +10,8 @@ import { useId } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { isKey, useTranslation, type Key } from "@/i18n";
-import { shownPositive } from "@/lib/fields";
+import { useTranslation, type Key } from "@/i18n";
+import { fieldErrorMessage, shownPositive } from "@/lib/fields";
 import { cn } from "@/lib/utils";
 
 export const PARTY_KINDS: readonly PartyKindDto[] = ["company", "consumer"];
@@ -154,9 +154,5 @@ export function ChoiceRow<Value extends string>({
  */
 export function useFieldError(): (messages: readonly unknown[]) => string | undefined {
   const { t } = useTranslation();
-  return (messages) => {
-    const key = messages.find((message): message is string => typeof message === "string");
-    if (key === undefined) return undefined;
-    return t(isKey(key) ? key : "error_unknown");
-  };
+  return (messages) => fieldErrorMessage(messages, t);
 }
