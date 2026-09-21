@@ -23,7 +23,7 @@ use crate::repos::documents as repo;
 
 pub use crate::models::document::{
     BalanceTriple, Cancellation, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
-    NewDocumentLine, PartyBlock, PartyKind, SellerBlock,
+    NewDocumentLine, PartyBlock, PartyKind, RungSale, SellerBlock,
 };
 
 pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Document, CoreError> {
@@ -92,6 +92,30 @@ pub(crate) fn list_in_range(
     to: Option<chrono::NaiveDate>,
 ) -> Result<Vec<Document>, CoreError> {
     repo::list_in_range(conn, shop_id, from, to)
+}
+
+/// What one person rang up over one half-open stretch of the clock, oldest
+/// first: which paper, when, how it was paid and what the customer handed
+/// over. `services::shifts` is the caller, and this is the read it asks a
+/// shift's question through: which of a cashier's sales fell inside none of
+/// that cashier's own windows.
+///
+/// Here rather than a query of its own in `services::shifts`, because a
+/// service reaching past a sibling into that sibling's repo skips whatever
+/// the sibling decides on the way past, and a `("shifts", &["documents"])`
+/// row is what `crates/core/tests/services_go_through_services.rs` refuses.
+/// Nothing is decided here today; the point is that the next thing decided
+/// about reading a sale is decided once.
+///
+/// `pub(crate)` for the reason `avoirs_of` above gives.
+pub(crate) fn rung_by(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    from: NaiveDateTime,
+    until: NaiveDateTime,
+) -> Result<Vec<RungSale>, CoreError> {
+    repo::rung_by(conn, shop_id, user_id, from, until)
 }
 
 /// Whether the document is one of this shop's, without reading it whole. A

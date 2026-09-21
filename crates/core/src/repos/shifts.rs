@@ -4,9 +4,9 @@
 //! purpose, so a query that forgot the user would hand each of them the
 //! other one's evening.
 //!
-//! Nothing outside this crate calls any of it yet. `services::shifts` is the
-//! next task on the plan page and is what these are shaped for; the round
-//! trips below are what says they work until it exists.
+//! `services::shifts` is what calls all of it, and the only thing that does.
+//! `list_between` is the exception and still waits for the shift list screen;
+//! the round trip below is what says it works until then.
 
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
@@ -19,7 +19,6 @@ use crate::schema::shifts;
 /// Opens a drawer. The unique index refuses a second open shift for the same
 /// person, and that refusal comes back as a `Conflict` rather than a bare
 /// query error so the caller has a field and a sentence to show.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn insert(conn: &mut SqliteConnection, write: &ShiftRowWrite) -> Result<Shift, CoreError> {
     let row: ShiftRow = match diesel::insert_into(shifts::table)
         .values(write)
@@ -42,7 +41,6 @@ pub fn insert(conn: &mut SqliteConnection, write: &ShiftRowWrite) -> Result<Shif
 }
 
 /// One shift of this shop.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Shift, CoreError> {
     let row: ShiftRow = shifts::table
         .filter(shifts::shop_id.eq(shop_id))
@@ -59,7 +57,6 @@ pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Shift, 
 
 /// The one open shift this person holds, or None. The index makes "the one"
 /// true, so this reads a single row rather than the newest of several.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn open_for(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -78,7 +75,6 @@ pub fn open_for(
 /// Writes the four close columns and the note in one UPDATE, and only onto a
 /// shift of this shop that is still open. A second close finds no row and is
 /// answered `NotFound` rather than overwriting a count somebody signed.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn close(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -126,7 +122,6 @@ pub fn list_between(
 /// held against to see whether it fell inside any of that person's own
 /// windows; a shop-wide list would say a sale belonged to a shift somebody
 /// else was holding.
-#[cfg_attr(not(test), allow(dead_code))]
 pub fn list_for_user(
     conn: &mut SqliteConnection,
     shop_id: i32,
