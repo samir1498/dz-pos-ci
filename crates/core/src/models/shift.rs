@@ -95,8 +95,15 @@ pub(crate) struct ShiftRowWrite {
 /// The four close columns and the note, written in one UPDATE. The note is on
 /// this struct and not on `ShiftClose` because the column is the row's and
 /// not the close's: the file lets an open shift carry one.
+///
+/// `treat_none_as_null` and not diesel's default, which skips a `None` field
+/// and leaves the column as it was. The file lets an open shift carry a note,
+/// so the default would close a short drawer against whatever was written
+/// when it opened and satisfy `shifts_a_difference_carries_a_reason` with a
+/// sentence that is not the reason. A close says what it says, and a clean
+/// one says nothing.
 #[derive(Debug, AsChangeset)]
-#[diesel(table_name = shifts)]
+#[diesel(table_name = shifts, treat_none_as_null = true)]
 pub(crate) struct ShiftCloseWrite {
     pub closed_at: NaiveDateTime,
     pub closed_by: i32,

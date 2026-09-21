@@ -246,6 +246,35 @@ mod tests {
     }
 
     #[test]
+    fn a_clean_close_clears_a_note_the_open_row_was_carrying() {
+        // Diesel skips a `None` field on an UPDATE unless the changeset says
+        // otherwise, which would close a drawer against a sentence written
+        // when it opened. The file would accept that: the note is not null,
+        // so `shifts_a_difference_carries_a_reason` is satisfied by a reason
+        // for something else entirely.
+        let (_dir, mut conn) = open();
+        let made = insert(&mut conn, &opening(OWNER, 21, 9, 500_000)).unwrap();
+        diesel::sql_query("UPDATE shifts SET note = 'ouverte en retard'")
+            .execute(&mut conn)
+            .unwrap();
+        let closed = close(
+            &mut conn,
+            SHOP,
+            made.id,
+            &ShiftCloseWrite {
+                closed_at: moment(21, 19),
+                closed_by: OWNER,
+                counted_centimes: 1_200_000,
+                expected_at_close_centimes: 1_200_000,
+                note: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(closed.note, None);
+        assert_eq!(get(&mut conn, SHOP, made.id).unwrap().note, None);
+    }
+
+    #[test]
     fn the_lists_are_newest_first_and_the_user_list_holds_only_that_person() {
         let (_dir, mut conn) = open();
         let karim = second_cashier(&mut conn);
