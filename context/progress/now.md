@@ -4,7 +4,7 @@ updated: '2026-09-21'
 ---
 ## Active
 
-**2026-09-21 night: the gaps loop is closed; eight merges today.** Samir's word at
+**2026-09-21 night: the gaps loop is closed, ten merges today, and the module-shape brainstorm is written.** Samir's word at
 13:49 was to finish everything but the clinic decision. The live loop is
 `context/loops/20260921-a-clean-context-then-the-till-finished.md`; the
 previous one, `20260920-closing-the-lumina-gaps-loop.md`, stays the reference
@@ -27,7 +27,13 @@ the test script, fixed in `81c6f1e`); the review round of tests merged as
 `f7d0c3d`. The whole-loop review at fable is done and written under Closing
 on the loop page: money and reach clean, one design call for Samir (a cash
 refund is a manager's action and never touches a cashier's drawer), four
-test edges pinned. Nothing of the loop is left; what was listed after it: `just ci` once, the whole-loop review on the three lenses at fable,
+test edges pinned. The module-shape brainstorm (D7) ran after it: seven
+pages under `context/research/module-shape/` and the comparison
+`context/research/20260921-module-shape-the-seven-compared.md`, whose
+recommendation is to change no structure now, do D4, and order the crate
+move before in-process traits once D3 names a tear list; Windows 7 is out
+for every shape that keeps Rust. D6 waits on D2, D3 and D5. What was listed
+after the loop: `just ci` once, the whole-loop review on the three lenses at fable,
 the standup with the next steps, the architecture brainstorm first among
 them.
 

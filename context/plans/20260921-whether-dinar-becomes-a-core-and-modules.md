@@ -27,7 +27,7 @@ tasks:
     status: 'pending'
   - id: 'D7'
     desc: 'The brainstorm on module shape: one subagent per candidate with pros and cons against the same constraints, then the session judges with advisor guidance; Samir listed the candidates on 2026-09-21'
-    status: 'pending'
+    status: 'done'
 ---
 # Whether Dinar becomes a core and modules
 
@@ -183,7 +183,8 @@ back with a number that justifies it.
 
 ## The four things that decide the cost, none of them the code move
 
-1. **The schema.** `crates/core/src/schema.rs` is one generated file and the
+1. **The schema.** `crates/core/src/schema.rs` is one hand-written file (its
+   own header says so; corrected 2026-09-21 by the brainstorm) and the
    migrations are one ordered global sequence. Per-module migrations that
    compose is the largest single piece of work in the idea and has to be
    solved before anything else.
@@ -201,11 +202,11 @@ back with a number that justifies it.
 
 ## The prerequisite nobody has noticed
 
-`crates/core/tests/services_go_through_services.rs` still pins three import
+`crates/core/tests/services_go_through_services.rs` pinned three import
 rings through **users, sessions, audit and preferences**. Those four are
-exactly the kernel Anouar wants to share, and today they import each other
-in circles. T11 of `architecture-fixes-without-a-domain-split` is the task
-that cuts them. **If those rings cannot be cut, there is no kernel to
+exactly the kernel Anouar wants to share. T11 of
+`architecture-fixes-without-a-domain-split` cut them: `RINGS_STILL_OPEN` is
+empty at line 260 of that test (checked 2026-09-21 by the brainstorm). **If those rings cannot be cut, there is no kernel to
 carve**, and that is a cheaper thing to find out than a refactor.
 
 ## The tasks
@@ -343,6 +344,16 @@ kill it. Two agents at a time within the four-agent cap. Then the session
 reads all seven, calls the advisor on the comparison, and writes D6 against
 the criteria already set down. Anything a subagent invents beyond its case is
 noted and not acted on.
+
+**Ran 2026-09-21, 20:55 to 22:10.** Seven pages under
+`context/research/module-shape/`, the comparison and the recommendation in
+`context/research/20260921-module-shape-the-seven-compared.md`: change no
+structure now, do D4, decide between the crate move and in-process traits
+only when D3 has a tear list and in that order; Windows 7 is out for every
+shape that keeps Rust (rustc 1.78 and later need Windows 10), to confirm
+with the first real shop. D6 still waits on D2, D3 and D5. One count on this
+page was wrong by the brainstorm's reading: the generated DTOs number 122
+(`crates/api/tests/export_bindings.rs`), not 111.
 
 ## What this plan does not do
 

@@ -131,6 +131,10 @@ writes the comparison page `context/research/20260921-module-shape-the-seven-com
 with a recommendation. D6 itself stays Samir's and still waits on D2, D3 and
 D5. The sharper model runs the candidates, on Samir's ruling of 15:29 today.
 
+Done 22:15: seven pages and the comparison are on `main`. The recommendation
+is to change no structure now, do D4, and order the crate move before the
+traits when D3 names a tear list; Windows 7 is out for every Rust shape.
+
 ## The gate to the replan
 
 This file closes when Phase D's standup is published. The replan is a
