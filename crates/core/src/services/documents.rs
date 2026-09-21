@@ -20,7 +20,6 @@ use crate::models::document::{
 use crate::money::Money;
 use crate::repos::counters;
 use crate::repos::documents as repo;
-use crate::services::customers;
 
 pub use crate::models::document::{
     BalanceTriple, Cancellation, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
@@ -95,6 +94,67 @@ pub(crate) fn list_in_range(
     repo::list_in_range(conn, shop_id, from, to)
 }
 
+/// Whether the document is one of this shop's, without reading it whole. A
+/// debt allocation names a document by id and nothing else, and this is what
+/// turns that id into the shop's own or a `NotFound`.
+///
+/// `pub(crate)` for the reason `avoirs_of` above gives.
+pub(crate) fn belongs_to_shop(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+) -> Result<bool, CoreError> {
+    repo::belongs_to_shop(conn, shop_id, document_id)
+}
+
+/// The shop's issued documents that one customer still owes something on,
+/// oldest first, each as `(id, remaining unpaid centimes, net to pay
+/// centimes)`. That order is the order a payment is spread in
+/// (features.md §3), so it is the repo's and not a caller's to choose.
+///
+/// `pub(crate)` for the reason `avoirs_of` above gives.
+pub(crate) fn unpaid_of_customer(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+) -> Result<Vec<(i32, i64, i64)>, CoreError> {
+    repo::unpaid_of_customer(conn, shop_id, customer_id)
+}
+
+/// How the documents cited by a ledger line are named on paper:
+/// `(id, kind, series year, number)` for each id this shop has. An id the
+/// shop does not have is simply absent, which is what lets a caller name a
+/// batch without checking them one at a time first.
+///
+/// `pub(crate)` for the reason `avoirs_of` above gives.
+pub(crate) fn kinds_and_numbers(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    ids: &[i32],
+) -> Result<Vec<(i32, DocumentKind, i32, i64)>, CoreError> {
+    repo::kinds_and_numbers(conn, shop_id, ids)
+}
+
+/// Writes back what is left unpaid on one document, in centimes.
+///
+/// `remaining_debt` is a §3 totals field, "from the ledger at issue time",
+/// and the only one of the balance triple that moves after issue: a payment
+/// brings it down, `old_balance` and `total_debt` say what the paper said on
+/// the day. The figure itself is the ledger's, computed in `services::debt`;
+/// what belongs here is the write to a document, so settling goes through
+/// this module rather than round it into its repo, the way `mark_cancelled`
+/// below does for a cancellation.
+///
+/// `pub(crate)` for the reason `avoirs_of` above gives.
+pub(crate) fn set_remaining_debt(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    document_id: i32,
+    remaining_centimes: i64,
+) -> Result<(), CoreError> {
+    repo::set_remaining_debt(conn, shop_id, document_id, remaining_centimes)
+}
+
 /// Stamps the cancellation onto the document itself.
 ///
 /// The decision and the rest of the undo belong to `services::cancellation`,
@@ -138,14 +198,25 @@ pub fn issue(
     conn.transaction(|conn| {
         // Before a number is taken, because a refused document should cost
         // nothing at all: the rollback would give the number back, but the
-        // two ids a caller hands over are known wrong or right without
-        // touching the counter. The foreign keys alone would take the
-        // neighbour's fiche and the neighbour's facture (rule 3).
-        if let Some(customer_id) = new.customer_id {
-            if !customers::customer_belongs_to_shop(conn, shop_id, customer_id)? {
+        // ids a caller hands over are known wrong or right without touching
+        // the counter. The foreign keys alone would take the neighbour's
+        // fiche and the neighbour's facture (rule 3).
+        //
+        // The fiche was proved before it was made into a `ProvedCustomer`,
+        // by the only thing that does: the constructor is `pub(crate)`
+        // rather than narrower, because the type lives in `models` and
+        // `pub(in path)` only narrows to an ancestor, so what holds it to
+        // one caller is `only_the_customers_service_makes_a_proved_customer`
+        // in `services_go_through_services.rs`. What is left to check here is
+        // that it was proved in *this* shop, which costs no query. That is why
+        // this module no longer reads `services::customers`, and why
+        // `customers` and `debt` can now read documents through this module
+        // instead of round it into its repo.
+        if let Some(customer) = &new.customer {
+            if customer.shop_id() != shop_id {
                 return Err(CoreError::NotFound {
                     entity: "customer",
-                    id: customer_id,
+                    id: customer.id(),
                 });
             }
         }
@@ -185,7 +256,7 @@ pub fn issue(
                 seller_ai: new.seller.ai.clone(),
                 seller_address: new.seller.address.clone(),
                 seller_phone: new.seller.phone.clone(),
-                customer_id: new.customer_id,
+                customer_id: new.customer.as_ref().map(|c| c.id()),
                 buyer_name: new.buyer.as_ref().map(|b| b.name.clone()),
                 buyer_party_kind: new.buyer.as_ref().map(|b| b.party_kind),
                 buyer_rc: new.buyer.as_ref().and_then(|b| b.rc.clone()),

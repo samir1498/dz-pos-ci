@@ -13,6 +13,7 @@ use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
+use dzpos_core::services::customers;
 use dzpos_core::services::documents::{
     self, BalanceTriple, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, PartyBlock,
     PartyKind, SellerBlock,
@@ -113,7 +114,7 @@ fn draft(kind: DocumentKind, product_id: Option<i32>, issued_at: NaiveDateTime) 
             address: Some("Rue Didouche Mourad, Alger".to_string()),
             phone: None,
         },
-        customer_id: None,
+        customer: None,
         buyer: None,
         ref_document_id: None,
         balance: None,
@@ -703,7 +704,7 @@ fn a_facture_stores_its_buyer_block_and_its_balance_and_reads_them_back() {
     let p = a_product(&mut conn, "Sucre");
     let customer = a_customer(&mut conn);
     let mut new = draft(DocumentKind::Facture, Some(p), at(9, 10));
-    new.customer_id = Some(customer);
+    new.customer = Some(customers::prove(&mut conn, SHOP, customer).unwrap());
     new.buyer = Some(PartyBlock {
         name: "Entreprise Benali".to_string(),
         party_kind: PartyKind::Company,
@@ -850,12 +851,35 @@ fn seed_second_shop_customer_and_document(conn: &mut SqliteConnection) -> (i32, 
 fn a_document_made_out_to_another_shops_customer_is_refused_and_burns_no_number() {
     // Rule 3: the foreign key would take the neighbour's fiche, and the
     // buyer block printed on the paper would name their customer.
+    //
+    // There are two doors now, and this walks both. `issue` takes a
+    // `ProvedCustomer` rather than an id, so the first refusal is at
+    // `customers::prove`: this shop cannot make a proof about a fiche it
+    // does not have, and a caller with only the id has nothing `issue` will
+    // accept. The second is the one the type cannot state, a proof made in
+    // the neighbour's own shop and carried to a document of this one, which
+    // `issue` refuses by comparing the shop the proof is about with its own.
     let (_dir, mut conn) = open_temp();
     let p = a_product(&mut conn, "Sucre");
     let (elsewhere, _) = seed_second_shop_customer_and_document(&mut conn);
 
+    let refused = customers::prove(&mut conn, SHOP, elsewhere).unwrap_err();
+    assert!(
+        matches!(
+            refused,
+            CoreError::NotFound {
+                entity: "customer",
+                ..
+            }
+        ),
+        "{refused:?}"
+    );
+
+    let theirs = customers::prove(&mut conn, 2, elsewhere).unwrap();
+    assert_eq!(theirs.id(), elsewhere);
+    assert_eq!(theirs.shop_id(), 2);
     let mut stolen = draft(DocumentKind::Facture, Some(p), at(9, 10));
-    stolen.customer_id = Some(elsewhere);
+    stolen.customer = Some(theirs);
     let err = documents::issue(&mut conn, SHOP, stolen).unwrap_err();
     assert!(
         matches!(
@@ -970,4 +994,98 @@ fn an_avoir_line_credits_a_line_of_the_document_its_avoir_is_written_against() {
     proper.lines[0].ref_line_id = Some(b.lines[0].id);
     let avoir = documents::issue(&mut conn, SHOP, proper).unwrap();
     assert_eq!(avoir.lines[0].ref_line_id, Some(b.lines[0].id));
+}
+
+/// Every centime of a credit sale to a named customer, written out by hand
+/// from features.md §1 and §3 rather than read off the code.
+///
+/// It lives here and not in `sales_service.rs` because this is the file that
+/// owns `documents::issue`, and the sale is what carries a customer through
+/// it. The reason it exists at all: `NewDocument::customer` stopped being an
+/// `Option<i32>` and became a `ProvedCustomer`, which is meant to move no
+/// figure whatsoever. A refactor that quietly shifted the TVA or the triple
+/// would still pass every test that reads its expectation off
+/// `doc.totals.net_to_pay`, so this one reads nothing off the document.
+#[test]
+fn a_credit_sale_to_a_named_customer_prints_the_figures_it_always_did() {
+    use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
+
+    let (_dir, mut conn) = open_temp();
+    let p = products::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewProduct {
+            name: "Ciment".to_string(),
+            barcode: None,
+            category_id: Some(1),
+            unit: Unit::Kg,
+            cost: Money::centimes(10_000),
+            selling: Money::centimes(14_670),
+            wholesale: None,
+            qty_on_hand_milli: 10_000,
+            low_stock_at_milli: 0,
+            rate_bps: Some(Bps::new(1900).unwrap()),
+            active: true,
+        },
+    )
+    .unwrap()
+    .id;
+    let customer = a_customer(&mut conn);
+
+    let sale = sales::issue(
+        &mut conn,
+        SHOP,
+        OWNER,
+        NewSale {
+            lines: vec![NewSaleLine {
+                product_id: p,
+                qty_milli: 1_500,
+                unit_price: None,
+                line_discount: Money::ZERO,
+            }],
+            global_discount: Money::ZERO,
+            payment_mode: PaymentMode::Credit,
+            tendered: None,
+            customer_id: Some(customer),
+            override_credit: false,
+            kind: SaleKind::Ticket,
+            issued_at: Some(at(9, 10)),
+        },
+    )
+    .unwrap();
+    let doc = sale.document;
+
+    // 146,70 DA the kilo and a kilo and a half of it: 220,05 DA HT, and the
+    // line is exact, so nothing is rounded before the rate group.
+    assert_eq!(doc.lines[0].line_total, Money::centimes(22_005));
+    assert_eq!(doc.totals.total_ht, Money::centimes(22_005));
+    assert_eq!(doc.totals.discount, Money::ZERO);
+    assert_eq!(doc.totals.subtotal_ht, Money::centimes(22_005));
+    // 19 % of 220,05 is 41,8095 DA, rounded once on the one rate group:
+    // 41,81. The fraction is .95 and not a half, so what this pins is that
+    // the rate group is rounded at all rather than truncated to 41,80; every
+    // rounding mode agrees here. Which way a true half goes is
+    // `Money::pct`'s own rule and the fixture it names,
+    // `tva_rounding_once_per_rate`.
+    assert_eq!(doc.totals.tva, Money::centimes(4_181));
+    assert_eq!(doc.totals.total_ttc, Money::centimes(26_186));
+    // A credit sale hands over no cash, and the droit de timbre is a tax on
+    // cash, so none is due and the net is the TTC unchanged.
+    assert_eq!(doc.totals.stamp, Money::ZERO);
+    assert_eq!(doc.totals.net_to_pay, Money::centimes(26_186));
+    assert_eq!(doc.tendered, None);
+    assert_eq!(doc.change, None);
+
+    // The document names the fiche it was proved against, and the triple is
+    // "from the ledger at issue time" (features.md §3): nothing owed before,
+    // the whole of this paper owed now.
+    assert_eq!(doc.customer_id, Some(customer));
+    let balance = doc.balance.expect("a named customer has a balance triple");
+    assert_eq!(balance.old_balance, Money::ZERO);
+    assert_eq!(balance.remaining_debt, Money::centimes(26_186));
+    assert_eq!(balance.total_debt, Money::centimes(26_186));
+
+    // Read back off the file, never trusted from the return value.
+    assert_eq!(documents::get(&mut conn, SHOP, doc.id).unwrap(), doc);
 }

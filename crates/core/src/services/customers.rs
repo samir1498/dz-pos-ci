@@ -18,10 +18,9 @@ use crate::models::customer::CustomerRowWrite;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::money::Money;
 use crate::repos::customers as repo;
-use crate::repos::documents as documents_repo;
-use crate::services::{audit, bounded_field, debt, optional_field};
+use crate::services::{audit, bounded_field, debt, documents, optional_field};
 
-pub use crate::models::customer::{Customer, NewCustomer, PartyKind};
+pub use crate::models::customer::{Customer, NewCustomer, PartyKind, ProvedCustomer};
 
 /// The shop's customers, the active ones first. `search` is a piece of a name
 /// or of a phone number; blank is no filter at all, so a search box that has
@@ -83,15 +82,44 @@ pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Custome
     repo::get(conn, shop_id, id)
 }
 
-/// Whether the customer is one of this shop's, mirroring the check a document
-/// line makes on its product. A caller that has an id and no fiche asks this
-/// before it writes the id anywhere.
-pub fn customer_belongs_to_shop(
+/// The customer, proved to be one of this shop's, as the value that proof is
+/// carried in. Another shop's fiche is a `NotFound`, the same answer `get`
+/// gives, because the honest answer to "this customer" for a fiche this shop
+/// does not have is that there is no such customer (rule 3).
+///
+/// This is the only constructor of `ProvedCustomer` in the crate, and
+/// `NewDocument::customer` is one, so a document can only ever name a fiche
+/// somebody looked up here. It replaced a `customer_belongs_to_shop` that
+/// `documents::issue` called for itself; calling it was the whole of what
+/// `services::documents` used this module for, and a caller that cannot
+/// forget is why the call moved out rather than away.
+///
+/// It reads the fiche whole rather than asking whether the id exists: every
+/// caller but `avoir` wants the name and the credit limit in the next line
+/// or two, and `ProvedCustomer::fiche` hands those over without a second
+/// read of the same row.
+pub fn prove(
     conn: &mut SqliteConnection,
     shop_id: i32,
     customer_id: i32,
-) -> Result<bool, CoreError> {
-    repo::belongs_to_shop(conn, shop_id, customer_id)
+) -> Result<ProvedCustomer, CoreError> {
+    Ok(ProvedCustomer::proved(repo::get(
+        conn,
+        shop_id,
+        customer_id,
+    )?))
+}
+
+/// The same proof for the customer a document names, which is `None` on a
+/// ticket sold to whoever walked in. `NewDocument::customer` has that shape,
+/// so a caller holding an `Option<i32>` off another document does not have to
+/// take it apart and put it back together.
+pub fn prove_named(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: Option<i32>,
+) -> Result<Option<ProvedCustomer>, CoreError> {
+    customer_id.map(|id| prove(conn, shop_id, id)).transpose()
 }
 
 /// Opens the fiche, and with it the first row of its ledger when the shop is
@@ -250,7 +278,7 @@ fn open_account(
 ) -> Result<OpenAccount, CoreError> {
     Ok(OpenAccount {
         balance: debt::balance(conn, shop_id, customer_id)?,
-        open_documents: documents_repo::unpaid_of_customer(conn, shop_id, customer_id)?.len(),
+        open_documents: documents::unpaid_of_customer(conn, shop_id, customer_id)?.len(),
     })
 }
 

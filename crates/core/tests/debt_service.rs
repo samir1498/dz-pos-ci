@@ -686,56 +686,53 @@ fn a_document_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64,
         .and_then(|d| d.and_hms_opt(10, 0, 0))
         .unwrap();
     let before = debt::balance(conn, SHOP, customer_id).unwrap();
-    let doc = documents::issue(
-        conn,
-        SHOP,
-        NewDocument {
-            kind: DocumentKind::Facture,
-            issued_at,
-            user_id: OWNER,
-            regime: Regime::Reel,
-            payment_mode: PaymentMode::Credit,
-            seller: SellerBlock {
-                name: "Mon magasin".to_string(),
-                rc: None,
-                nif: None,
-                nis: None,
-                ai: None,
-                address: None,
-                phone: None,
-            },
-            customer_id: Some(customer_id),
-            buyer: Some(PartyBlock {
-                name: "Entreprise Benali".to_string(),
-                party_kind: PartyKind::Company,
-                rc: None,
-                nif: None,
-                nis: None,
-                ai: None,
-                address: None,
-            }),
-            ref_document_id: None,
-            balance: Some(BalanceTriple {
-                old_balance: before,
-                remaining_debt: net,
-                total_debt: before.checked_add(net).unwrap(),
-            }),
-            totals: Totals {
-                total_ht: net,
-                discount: Money::ZERO,
-                subtotal_ht: net,
-                tva_by_rate: Vec::new(),
-                tva: Money::ZERO,
-                total_ttc: net,
-                stamp: Money::ZERO,
-                net_to_pay: net,
-            },
-            tendered: None,
-            change: None,
-            lines: Vec::new(),
+    let customer = customers::prove(conn, SHOP, customer_id).unwrap();
+    let new = NewDocument {
+        kind: DocumentKind::Facture,
+        issued_at,
+        user_id: OWNER,
+        regime: Regime::Reel,
+        payment_mode: PaymentMode::Credit,
+        seller: SellerBlock {
+            name: "Mon magasin".to_string(),
+            rc: None,
+            nif: None,
+            nis: None,
+            ai: None,
+            address: None,
+            phone: None,
         },
-    )
-    .unwrap();
+        customer: Some(customer),
+        buyer: Some(PartyBlock {
+            name: "Entreprise Benali".to_string(),
+            party_kind: PartyKind::Company,
+            rc: None,
+            nif: None,
+            nis: None,
+            ai: None,
+            address: None,
+        }),
+        ref_document_id: None,
+        balance: Some(BalanceTriple {
+            old_balance: before,
+            remaining_debt: net,
+            total_debt: before.checked_add(net).unwrap(),
+        }),
+        totals: Totals {
+            total_ht: net,
+            discount: Money::ZERO,
+            subtotal_ht: net,
+            tva_by_rate: Vec::new(),
+            tva: Money::ZERO,
+            total_ttc: net,
+            stamp: Money::ZERO,
+            net_to_pay: net,
+        },
+        tendered: None,
+        change: None,
+        lines: Vec::new(),
+    };
+    let doc = documents::issue(conn, SHOP, new).unwrap();
     // Stamped with the day the document was issued, not the day the test
     // runs: a fixture dated by the wall clock would drift in and out of the
     // ranges the statement tests read, and pass or fail by the calendar.

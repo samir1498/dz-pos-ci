@@ -71,8 +71,8 @@ pub fn issue(
         let seller = SellerBlock::from(shops::get(conn, shop_id)?);
         // Read through the service, so another shop's fiche is a NotFound
         // rather than a buyer block printed on this shop's paper (rule 3).
-        let customer = customers::get(conn, shop_id, customer_id)?;
-        if !customer.active {
+        let customer = customers::prove(conn, shop_id, customer_id)?;
+        if !customer.fiche().active {
             return Err(CoreError::validation(
                 "customer_id",
                 "this customer's fiche is closed",
@@ -113,8 +113,8 @@ pub fn issue(
                 regime,
                 payment_mode: new.payment_mode,
                 seller,
-                customer_id: Some(customer_id),
-                buyer: Some(pricing::buyer_block(&customer)),
+                customer: Some(customer.clone()),
+                buyer: Some(pricing::buyer_block(customer.fiche())),
                 ref_document_id: None,
                 // Three zeros rather than no triple at all. The customer is
                 // named, so the paper has a debt block, and what it has to say

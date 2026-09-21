@@ -24,8 +24,7 @@ use crate::models::document::DocumentKind;
 use crate::money::Money;
 use crate::repos::customers as customers_repo;
 use crate::repos::debt as repo;
-use crate::repos::documents as documents_repo;
-use crate::services::{audit, clock, optional_field};
+use crate::services::{audit, clock, documents, optional_field};
 
 pub use crate::models::debt::{
     DebtAllocation, DebtEntry, DebtKind, NewDebtAllocation, NewDebtEntry, PaymentMethod,
@@ -195,7 +194,7 @@ pub fn statement_between(
         .iter()
         .filter_map(|line| line.entry.document_id)
         .collect();
-    let named = documents_repo::kinds_and_numbers(conn, shop_id, &cited)?;
+    let named = documents::kinds_and_numbers(conn, shop_id, &cited)?;
     let entries = inside
         .into_iter()
         .map(|line| StatementEntry {
@@ -253,7 +252,7 @@ pub fn recent(
         .iter()
         .filter_map(|line| line.entry.document_id)
         .collect();
-    let named = documents_repo::kinds_and_numbers(conn, shop_id, &cited)?;
+    let named = documents::kinds_and_numbers(conn, shop_id, &cited)?;
     let entries = newest
         .into_iter()
         .map(|line| StatementEntry {
@@ -578,7 +577,7 @@ fn settle(
                 amount: take,
             },
         )?);
-        documents_repo::set_remaining_debt(
+        documents::set_remaining_debt(
             conn,
             shop_id,
             target.document_id,
@@ -599,7 +598,7 @@ pub fn settle_oldest_first(
     payment_ledger_id: i32,
     amount: Money,
 ) -> Result<Vec<DebtAllocation>, CoreError> {
-    let targets: Vec<Target> = documents_repo::unpaid_of_customer(conn, shop_id, customer_id)?
+    let targets: Vec<Target> = documents::unpaid_of_customer(conn, shop_id, customer_id)?
         .into_iter()
         .map(
             |(document_id, remaining_centimes, net_to_pay_centimes)| Target {
@@ -633,7 +632,7 @@ pub fn settle_document(
     if amount == Money::ZERO {
         return Ok(None);
     }
-    let document = documents_repo::get(conn, shop_id, document_id)?;
+    let document = documents::get(conn, shop_id, document_id)?;
     let remaining = document.balance.map_or(Money::ZERO, |b| b.remaining_debt);
     // Refused here rather than quietly taking what fits: a caller that names
     // one document is saying the whole amount belongs on it, and the rest
@@ -928,7 +927,7 @@ fn ensure_document(
     shop_id: i32,
     document_id: i32,
 ) -> Result<(), CoreError> {
-    if documents_repo::belongs_to_shop(conn, shop_id, document_id)? {
+    if documents::belongs_to_shop(conn, shop_id, document_id)? {
         return Ok(());
     }
     Err(CoreError::NotFound {

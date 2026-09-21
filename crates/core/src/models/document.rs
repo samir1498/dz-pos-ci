@@ -8,6 +8,7 @@ use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
 use crate::error::CoreError;
+use crate::models::customer::ProvedCustomer;
 use crate::models::shop::Shop;
 use crate::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use crate::schema::{document_lines, document_tva, documents};
@@ -176,7 +177,11 @@ pub struct NewDocument {
     pub regime: Regime,
     pub payment_mode: PaymentMode,
     pub seller: SellerBlock,
-    pub customer_id: Option<i32>,
+    /// The buyer's fiche, proved to be this shop's before it got here. Not an
+    /// id: an id is what a caller can write down without having looked it up,
+    /// and the neighbour's fiche on this shop's paper is rule 3's whole
+    /// subject. `ProvedCustomer` says where the proof comes from.
+    pub customer: Option<ProvedCustomer>,
     pub buyer: Option<PartyBlock>,
     pub ref_document_id: Option<i32>,
     pub balance: Option<BalanceTriple>,

@@ -43,7 +43,7 @@ use crate::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
     NewDocumentLine,
 };
-use crate::services::{audit, clock, debt, documents, optional_field, stock};
+use crate::services::{audit, clock, customers, debt, documents, optional_field, stock};
 
 /// One line of a facture and how much of it is coming back.
 ///
@@ -172,9 +172,9 @@ pub fn issue(
             (totals, document_lines)
         };
 
-        let customer_id = facture.customer_id;
-        let old_balance = match customer_id {
-            Some(customer_id) => debt::balance(conn, shop_id, customer_id)?,
+        let customer = customers::prove_named(conn, shop_id, facture.customer_id)?;
+        let old_balance = match &customer {
+            Some(customer) => debt::balance(conn, shop_id, customer.id())?,
             None => Money::ZERO,
         };
         // The triple on an avoir is its whole effect on the account: what was
@@ -184,7 +184,7 @@ pub fn issue(
         // day it was written, and a payment against some other facture does
         // not change that.
         let effect = Money::ZERO.checked_sub(totals.net_to_pay)?;
-        let balance = match customer_id {
+        let balance = match &customer {
             Some(_) => Some(BalanceTriple {
                 old_balance,
                 remaining_debt: effect,
@@ -207,7 +207,7 @@ pub fn issue(
                 // the two have to name the same seller and the same buyer even
                 // after the shop's settings or the fiche have been edited.
                 seller: facture.seller.clone(),
-                customer_id,
+                customer: customer.clone(),
                 buyer: facture.buyer.clone(),
                 ref_document_id: Some(facture_id),
                 balance,
@@ -259,7 +259,7 @@ pub fn issue(
             )?;
         }
 
-        let Some(customer_id) = customer_id else {
+        let Some(customer_id) = customer.map(|c| c.id()) else {
             return Ok(avoir);
         };
 

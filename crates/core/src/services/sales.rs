@@ -16,7 +16,7 @@ use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::{CoreError, PartySide};
-use crate::models::customer::Customer;
+use crate::models::customer::ProvedCustomer;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::document::{
     payment_mode_stored, BalanceTriple, Document, NewDocument, NewDocumentLine, PartyBlock,
@@ -364,7 +364,7 @@ fn issue_inner(
         // seller is, on a ticket as much as on a facture: the fiche is
         // edited in place, and a reprint months later has to hand back the
         // block the buyer was given.
-        let buyer = credit.as_ref().map(|c| buyer_block(&c.customer));
+        let buyer = credit.as_ref().map(|c| buyer_block(c.customer.fiche()));
         // Still before `documents::issue`, so a facture the identifiers
         // refuse burns no number of either series (features.md, Numbering).
         if new.kind == SaleKind::Facture {
@@ -381,7 +381,7 @@ fn issue_inner(
                 regime,
                 payment_mode: new.payment_mode,
                 seller,
-                customer_id: new.customer_id,
+                customer: credit.as_ref().map(|c| c.customer.clone()),
                 buyer,
                 ref_document_id: None,
                 balance: credit.as_ref().map(|c| c.balance),
@@ -545,7 +545,7 @@ fn issue_inner(
                 conn,
                 shop_id,
                 NewDebtEntry {
-                    customer_id: credit.customer.id,
+                    customer_id: credit.customer.id(),
                     document_id: Some(document.id),
                     kind: DebtKind::Sale,
                     debit: credit.added,
@@ -563,7 +563,7 @@ fn issue_inner(
         debt::settle_from_credit(
             conn,
             shop_id,
-            credit.customer.id,
+            credit.customer.id(),
             document.id,
             credit.consumed,
         )?;
@@ -592,10 +592,10 @@ fn issue_inner(
                     // caused, so it sits in `after` beside the rest of it.
                     before: Some(
                         serde_json::json!({
-                            "customer_id": credit.customer.id,
+                            "customer_id": credit.customer.id(),
                             "balance_centimes": credit.balance.old_balance.as_centimes(),
                             "credit_limit_centimes":
-                                credit.customer.credit_limit.map(Money::as_centimes),
+                                credit.customer.fiche().credit_limit.map(Money::as_centimes),
                         })
                         .to_string(),
                     ),
@@ -634,12 +634,12 @@ fn issue_inner(
                     entity_id: Some(document.id),
                     before: Some(
                         serde_json::json!({
-                            "customer_id": credit.customer.id,
+                            "customer_id": credit.customer.id(),
                             "balance_centimes": credit.balance.old_balance.as_centimes(),
                             "warn_threshold_centimes":
-                                credit.customer.warn_threshold.map(Money::as_centimes),
+                                credit.customer.fiche().warn_threshold.map(Money::as_centimes),
                             "credit_limit_centimes":
-                                credit.customer.credit_limit.map(Money::as_centimes),
+                                credit.customer.fiche().credit_limit.map(Money::as_centimes),
                         })
                         .to_string(),
                     ),
@@ -872,7 +872,7 @@ struct Refused {
 /// stores, whether a limit was passed on purpose, and what the till should
 /// say.
 struct CreditCheck {
-    customer: Customer,
+    customer: ProvedCustomer,
     balance: BalanceTriple,
     /// What this sale puts on the ledger: the whole net on credit, nothing on
     /// cash or card. Not the same figure as `balance.remaining_debt` once the
@@ -907,8 +907,8 @@ fn credit_check(
     } = ask;
     // Reads through the service, so another shop's fiche is a NotFound here
     // rather than a buyer block printed on this shop's paper (rule 3).
-    let customer = customers::get(conn, shop_id, customer_id)?;
-    if !customer.active {
+    let customer = customers::prove(conn, shop_id, customer_id)?;
+    if !customer.fiche().active {
         return Err(CoreError::validation(
             "customer_id",
             "this customer's fiche is closed",
@@ -935,7 +935,7 @@ fn credit_check(
 
     let mut overridden = false;
     if payment_mode == PaymentMode::Credit {
-        if let Some(credit_limit) = customer.credit_limit {
+        if let Some(credit_limit) = customer.fiche().credit_limit {
             if total_debt > credit_limit {
                 // Written down before either refusal below, because both of
                 // them are refusals and the log has to see both. The first
@@ -978,10 +978,9 @@ fn credit_check(
 
     // At the threshold, not past it: a shop that sets one at 4 000,00 wants
     // to hear about the sale that reaches it.
+    let warn_at = customer.fiche().warn_threshold;
     let warning = (payment_mode == PaymentMode::Credit
-        && customer
-            .warn_threshold
-            .is_some_and(|threshold| total_debt >= threshold))
+        && warn_at.is_some_and(|threshold| total_debt >= threshold))
     .then_some(Warning::NearLimit);
 
     Ok(CreditCheck {

@@ -602,6 +602,7 @@ async fn an_amount_past_the_safe_integer_bound_is_422_naming_the_field() {
 /// the payment and the running balance of the statement would read backwards.
 fn a_facture_on_credit(path: &std::path::Path, customer_id: i32, net: i64, day: u32) -> i32 {
     use dzpos_core::money::{Money, PaymentMode, Regime, Totals};
+    use dzpos_core::services::customers;
     use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry};
     use dzpos_core::services::documents::{
         self, BalanceTriple, DocumentKind, NewDocument, PartyBlock, PartyKind, SellerBlock,
@@ -612,6 +613,7 @@ fn a_facture_on_credit(path: &std::path::Path, customer_id: i32, net: i64, day: 
     let issued_at = chrono::NaiveDate::from_ymd_opt(2026, 8, day)
         .and_then(|d| d.and_hms_opt(10, 0, 0))
         .unwrap();
+    let customer = customers::prove(&mut conn, SHOP, customer_id).unwrap();
     let before = debt::balance(&mut conn, SHOP, customer_id).unwrap();
     let doc = documents::issue(
         &mut conn,
@@ -631,7 +633,7 @@ fn a_facture_on_credit(path: &std::path::Path, customer_id: i32, net: i64, day: 
                 address: None,
                 phone: None,
             },
-            customer_id: Some(customer_id),
+            customer: Some(customer),
             buyer: Some(PartyBlock {
                 name: "Entreprise Benali".to_string(),
                 party_kind: PartyKind::Company,

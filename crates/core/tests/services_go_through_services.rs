@@ -39,8 +39,8 @@ use std::path::Path;
 /// joins the one below.
 const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency", "testdb"];
 
-/// What reaches past a sibling today, service by service. Five reaches
-/// across three services; it was seventeen across eleven when the list was
+/// What reaches past a sibling today, service by service. Three reaches
+/// across two services; it was seventeen across eleven when the list was
 /// written. Shrinking, never growing: the fix for a
 /// row is to add the missing function to the sibling's service and call
 /// that, the way `stock.rs` now reads the audit log through
@@ -50,23 +50,28 @@ const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency",
 /// two are not the same number: a service reaching two repos is one row and
 /// two reaches. The assertion compares the rows.
 ///
-/// `customers` stays on the list: `documents` already imports `services::customers`
-/// (`issue` checks `customer_belongs_to_shop`), so routing `unpaid_of_customer`
-/// through `services::documents` would close a ring the walk below refuses,
-/// `customers -> documents -> customers`. `debt` stays for the same reason
-/// one hop further out: `customers.rs` imports `services::debt` and
-/// `documents.rs` imports `services::customers`, so routing `debt`'s reads
-/// through either sibling closes a ring too. Both want the shared piece
-/// moved into a module underneath, which is its own task.
-///
 /// `purchases` left on 2026-09-21 with no ring to untangle first: the three
 /// `repos::supplier_debt` calls saving an order paid at once made were the
 /// ledger row, its settlement and the balance either side of it, and
 /// `supplier_debt::hand_over` is now the one function that writes that row,
 /// for `pay` and for the purchase alike.
-const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 3] = [
-    ("customers", &["documents"]),
-    ("debt", &["customers", "documents"]),
+///
+/// `customers -> documents` and `debt -> documents` left together on
+/// 2026-09-21, because one ring stood in front of both: `documents.rs`
+/// imported `services::customers` for a single ownership check inside
+/// `issue`, and `customers.rs` imports `services::debt`, so either service
+/// routing its documents reads through `services::documents` closed a ring
+/// the walk below refuses. The check did not move up to the callers, which
+/// would have let a fourth caller of `issue` forget it; it became a type.
+/// `NewDocument::customer` is a `ProvedCustomer`, whose only constructor is
+/// `customers::prove`, so `issue` cannot be handed a customer nobody looked
+/// up and no longer needs to look one up itself.
+///
+/// `debt -> customers` stays: four calls from `customers.rs` into
+/// `services::debt`, one of them the ledger write at line 129, so the ring
+/// there is thick rather than an accident.
+const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 2] = [
+    ("debt", &["customers"]),
     ("supplier_debt", &["purchases", "suppliers"]),
 ];
 
@@ -407,6 +412,84 @@ fn the_walk_cannot_be_stepped_around() {
         "{folders:?} is a service split into a folder, and the walk above \
          reads one directory deep. Teach it to descend before landing this."
     );
+}
+
+/// The one hole the compiler cannot close in the shape that took
+/// `customers -> documents` and `debt -> documents` off the list above.
+///
+/// `NewDocument::customer` is a `ProvedCustomer`, so no caller of
+/// `documents::issue` can hand it a customer id nobody looked up: that much
+/// the type says, at the call, in the compiler's own words. What the type
+/// cannot say is which module may make one. `ProvedCustomer` lives in
+/// `models::customer` because `services::documents` has to name it without
+/// importing `services::customers`, and Rust's `pub(in path)` only narrows
+/// to an ancestor, so the constructor is `pub(crate)` and any module in the
+/// crate could call it, a repo or a model as readily as a service.
+///
+/// This is what says only one does, and it reads the whole of
+/// `crates/core/src` for that reason rather than the services beside it.
+/// `customers::prove` reads the fiche under the shop filter first; a second
+/// caller of `proved` would be a second meaning of the word proved, which is
+/// the thing the shape exists to avoid.
+///
+/// It looks for `proved(` and not for `ProvedCustomer::proved`, because
+/// `use crate::models::customer::ProvedCustomer as P;` and then `P::proved`
+/// spells the call without the type's name appearing anywhere in the file.
+/// The two names the assertion allows are the declaration and the one call.
+#[test]
+fn only_the_customers_service_makes_a_proved_customer() {
+    let makers: Vec<String> = core_source_files()
+        .into_iter()
+        .filter(|path| {
+            code_of(&fs::read_to_string(path).expect("a source file is readable"))
+                .contains("proved(")
+        })
+        .map(|path| under_src(&path))
+        .collect();
+    assert_eq!(
+        makers,
+        vec![
+            "models/customer.rs".to_string(),
+            "services/customers.rs".to_string()
+        ],
+        "`proved` is the constructor of the proof `documents::issue` takes \
+         instead of a customer id. `models/customer.rs` declares it and \
+         `services::customers::prove` is the only thing that may call it, \
+         because it is the only thing that reads the fiche under this shop's \
+         filter first. Call `customers::prove`."
+    );
+}
+
+/// Every `.rs` under `crates/core/src`, however deep. The walks above read
+/// one directory each, because the rule they hold is about a service. This
+/// one is about a `pub(crate)` constructor, which every module in the crate
+/// can reach, so it has to see every module.
+fn core_source_files() -> Vec<std::path::PathBuf> {
+    let mut found = Vec::new();
+    let mut folders = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+    while let Some(folder) = folders.pop() {
+        for entry in fs::read_dir(&folder).expect("a folder under crates/core/src is readable") {
+            let path = entry.expect("a directory entry").path();
+            if path.is_dir() {
+                folders.push(path);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// A path as this file names one: `services/customers.rs`, so a failure says
+/// which module it means and not just which file name.
+fn under_src(path: &Path) -> String {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    path.strip_prefix(&src)
+        .unwrap_or(path)
+        .to_str()
+        .unwrap_or("a path")
+        .to_string()
 }
 
 /// Where the services live, and every `.rs` in it. One walk, because two
