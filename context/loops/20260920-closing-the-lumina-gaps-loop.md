@@ -908,6 +908,24 @@ touches the same file.
   `documents.tsx` (724); `crates/api/src/lib.rs` (710), whatever is not the
   crate's front door moves out. `sidebar.tsx` (736) is vendored shadcn and
   stays. The Rust services on the list stay pinned, as the plan says.
+- The support bundle's leak scan reads the clock as a leak, found
+  2026-09-21 on a gates run for the walk-folders branch. `just gates` failed
+  on `crates/api/tests/support_bundle.rs` with `document amount ("54.50")
+  appears inside log.txt`. `log.txt` holds one line, the build header plus
+  `session started <RFC3339 with nanoseconds>`, and the only `.` in it
+  between two digit pairs is the seconds-and-fraction boundary. Four seeded
+  document amounts are under 60 DA (43.60, 49.05, 54.50, 59.50), so a
+  session starting at second 54 with a fraction opening `50` spells one of
+  them. Nothing shop-owned can reach that file: `log::head_session` writes
+  the header and the timestamp, `read_log` copies it verbatim. Roughly one
+  run in 1500, and it costs a full gates cycle each time. One branch,
+  `dz-builder`, done when the needle cannot match a clock. Two shapes to
+  pick between: refuse a match whose preceding character is a digit or a
+  colon, so a real `total 54.50 DA` still bites, or head the session with
+  `SecondsFormat::Secs` so the line carries no `.` at all. Excluding
+  `log.txt` from the scan is the one answer to refuse, because
+  `services/support_bundle.rs`'s own doc names that file as where a leak
+  walks out. Size S.
 
 ## Out of scope, and why each is parked
 
