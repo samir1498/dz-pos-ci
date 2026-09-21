@@ -68,18 +68,31 @@ fn manager_is_a_superset_of_cashier() {
 }
 
 #[test]
-fn the_cashier_list_is_exactly_sell() {
+fn the_cashier_list_is_exactly_selling_and_the_drawer_they_stand_at() {
     // features.md §5 and the T1 brief: a cashier rings sales up. Everything
     // past that (discount above threshold, cost and margin, editing
     // anything, seeing reports, money, users, ledger corrections, export
     // and import) is a manager's or an owner's.
-    let cashier: HashSet<Permission> = [Permission::Sell].into_iter().collect();
+    //
+    // `OpenAndCloseTill` joined `Sell` on 2026-09-21 (plan
+    // `till-shifts-a-float-and-a-count` ruling 10): the person who counts a
+    // drawer is the person standing at it, and a cashier who could not open
+    // their own till could not start a day. Reading a shift back is not on
+    // this list and is not meant to be — that is `SeeReports`, which the
+    // assertion below still refuses a cashier.
+    let cashier: HashSet<Permission> = [Permission::Sell, Permission::OpenAndCloseTill]
+        .into_iter()
+        .collect();
     assert_eq!(granted(Role::Cashier), cashier);
+    assert!(!can(Role::Cashier, Permission::SeeReports));
 }
 
 #[test]
 fn named_cases_a_human_would_check_by_eye() {
     assert!(can(Role::Cashier, Permission::Sell));
+    assert!(can(Role::Cashier, Permission::OpenAndCloseTill));
+    assert!(can(Role::Manager, Permission::OpenAndCloseTill));
+    assert!(can(Role::Owner, Permission::OpenAndCloseTill));
     assert!(!can(Role::Cashier, Permission::SeeCostAndMargin));
     assert!(!can(Role::Cashier, Permission::OverrideCreditBlock));
     assert!(!can(Role::Cashier, Permission::DiscountAboveThreshold));

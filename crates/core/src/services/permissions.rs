@@ -98,10 +98,27 @@ pub enum Permission {
     /// only the owner's, because a log that the people it watches can also
     /// read is not a control (T7 writes the screen "for the owner").
     SeeAuditLog,
+    /// Open the till with what is in the drawer and count it at close
+    /// (`services::shifts`, plan `till-shifts-a-float-and-a-count` ruling
+    /// 10). All three roles hold it: the person who counts a drawer is the
+    /// person standing at it, and a cashier who cannot open their own till
+    /// cannot start a day.
+    ///
+    /// Not folded into `Sell`, even though every role holds both. `Sell` is
+    /// what a sale asks for and this is what a drawer asks for; a shop that
+    /// later wants a floor supervisor to be the only one who opens a till
+    /// takes that decision in `can` below, on one row, rather than by
+    /// splitting a permission other routes already name.
+    ///
+    /// Reading somebody's closed shift is not this. That is `SeeReports`,
+    /// because the shift list is a report a manager runs the floor off
+    /// (features.md line 891: `SeeAuditLog` is the owner's alone, so the
+    /// list cannot live behind it).
+    OpenAndCloseTill,
 }
 
 impl Permission {
-    pub const ALL: [Permission; 13] = [
+    pub const ALL: [Permission; 14] = [
         Permission::Sell,
         Permission::DiscountAboveThreshold,
         Permission::OverrideCreditBlock,
@@ -115,6 +132,7 @@ impl Permission {
         Permission::ExportAndImport,
         Permission::ChangePriceAtTheTill,
         Permission::SeeAuditLog,
+        Permission::OpenAndCloseTill,
     ];
 
     /// The stable key the UI translates and the wire carries (T2: 403 with
@@ -134,6 +152,7 @@ impl Permission {
             Permission::ExportAndImport => "export_and_import",
             Permission::ChangePriceAtTheTill => "change_price_at_the_till",
             Permission::SeeAuditLog => "see_audit_log",
+            Permission::OpenAndCloseTill => "open_and_close_till",
         }
     }
 }
@@ -147,7 +166,8 @@ impl std::fmt::Display for Permission {
 /// The one statement of who may do what. Every place in the codebase that
 /// would otherwise compare a role asks this, or `require` below, instead.
 ///
-/// A cashier rings sales up and nothing else on this list. A manager runs the
+/// A cashier rings sales up and opens and counts their own drawer, and
+/// nothing else on this list. A manager runs the
 /// shop and answers like an owner on everything except two: who the staff are,
 /// and the log of what the staff did. A log the people it watches can read,
 /// and a staff list they can add themselves to, are not controls, and the
@@ -158,11 +178,15 @@ impl std::fmt::Display for Permission {
 /// question if Samir wants the fiscal setting owner-only.
 ///
 /// The match is on `permission` first and not on the `(role, permission)`
-/// pair, so a twelfth `Permission` variant fails to compile here until it is
+/// pair, so a fifteenth `Permission` variant fails to compile here until it is
 /// placed, rather than silently defaulting through a wildcard.
 pub const fn can(role: Role, permission: Permission) -> bool {
     match permission {
-        Permission::Sell => true,
+        // The two every role holds, and they are two rather than one on
+        // purpose: `Sell` is what a basket asks for, `OpenAndCloseTill` is
+        // what the drawer under it asks for. A shop that later wants only a
+        // supervisor to open a till changes this arm and nothing else.
+        Permission::Sell | Permission::OpenAndCloseTill => true,
         Permission::DiscountAboveThreshold
         | Permission::OverrideCreditBlock
         | Permission::SeeCostAndMargin

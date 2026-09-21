@@ -370,6 +370,23 @@ pub fn sales_outside_a_shift(
 /// never refused: seven e2e specs, `just seed`, the demo recordings and the
 /// Maestro flows all ring sales with no shift open, and a shop that forgot to
 /// open the till in the morning has sold real goods either way.
+///
+/// `services::sales::issue_inner` is the caller, and it calls this inside the
+/// transaction that wrote the document. The tag is derived and stored
+/// nowhere, so this row is the whole of what marks such a sale: a sale
+/// committed with the row rolled back off it would be one nothing can tell
+/// apart from a sale rung inside a shift. A refusal here is a file that will
+/// not write, not a rule about drawers, and it takes the sale down with it
+/// the way every other write in that transaction does.
+///
+/// A replay through `issue_idempotent` never reaches it. That path answers
+/// the stored paper and returns before the document is written, so a phone
+/// retrying a lost answer tags once and not twice. Its first arrival does
+/// reach here, with `issued_at` the moment it arrived (ruling 3), so a sale
+/// rung offline at 18:00 and synced at 19:30 after that cashier closed at
+/// 19:00 is tagged rather than counted — its cash was physically in the
+/// drawer at the count, and this row is what explains the close reading
+/// over.
 pub fn tag_if_outside_a_shift(
     conn: &mut SqliteConnection,
     shop_id: i32,

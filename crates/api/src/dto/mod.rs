@@ -44,6 +44,7 @@ use dzpos_core::services::purchases::{
 };
 use dzpos_core::services::sales::{NewSale, NewSaleLine, Sale, SaleKind, Warning};
 use dzpos_core::services::settings::DatedRegime;
+use dzpos_core::services::shifts::{NewShift, Shift, ShiftReport, TillCount};
 use dzpos_core::services::stock::{LastRecount, Report};
 use dzpos_core::services::supplier_debt::{SupplierAllocation, SupplierDebtKind};
 use dzpos_core::services::suppliers::{NewSupplier, SupplierWithBalance};
@@ -68,6 +69,7 @@ mod sales;
 mod settings;
 mod stock;
 mod suppliers;
+mod till;
 mod users;
 
 pub use audit::*;
@@ -87,4 +89,5 @@ pub use sales::*;
 pub use settings::*;
 pub use stock::*;
 pub use suppliers::*;
+pub use till::*;
 pub use users::*;

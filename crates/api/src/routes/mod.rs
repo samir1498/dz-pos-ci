@@ -36,6 +36,7 @@ pub mod settings;
 pub mod stock;
 pub mod suppliers;
 pub mod support;
+pub mod till;
 pub mod users;
 
 use axum::extract::State;

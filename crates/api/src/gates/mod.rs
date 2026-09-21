@@ -7,7 +7,7 @@
 //! mutating route with no row here fails, and a row naming a route that is not
 //! there fails.
 //!
-//! **Eighteen reads are in it.** The table is otherwise about writes, because a
+//! **Nineteen reads are in it.** The table is otherwise about writes, because a
 //! read of a list a cashier is already looking at needs no permission. The
 //! four exports and the import template are the exception the M3 carry-in
 //! named in words: an export is the whole customer list, the whole supplier
@@ -43,6 +43,16 @@
 //! `GET /suppliers/{id}/ledger` sit with `GET /purchases` for the same
 //! reason: the buying side of the shop, gated whole because no till flow
 //! reads either.
+//!
+//! One more joined on the till shifts (2026-09-21): `GET /till/shifts/{id}`
+//! is one person's evening, the cash they took over its window beside what
+//! the shop expected them to be holding, which is a report a manager runs
+//! the floor off — `Permission::SeeReports`, and not `SeeAuditLog`, which is
+//! the owner's alone. Its sibling `GET /till/shifts/open` deliberately has
+//! no row: it answers about the caller and takes no parameter naming anybody
+//! else, so there is nothing on it a role could be refused, and a cashier
+//! who cannot read their own open drawer cannot be shown the expected figure
+//! before they count it.
 //!
 //! **Where it is applied.** T2 shipped the mechanism, the table's shape and
 //! the actor. T3 applied it: `crates/api/src/session.rs::require` looks the

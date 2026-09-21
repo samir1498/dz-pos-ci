@@ -30,7 +30,7 @@ use crate::services::pricing::{
     buyer_block, money_lines, price_lines, sum_line_totals, too_large, STAMP_ENABLED,
 };
 use crate::services::{
-    audit, clock, customers, debt, documents, proforma, settings, shops, stock, users,
+    audit, clock, customers, debt, documents, proforma, settings, shifts, shops, stock, users,
 };
 
 /// The basket a till sends, and the paper it asks for. They live in
@@ -104,11 +104,7 @@ fn fingerprint(new: &NewSale) -> String {
             line.line_discount.as_centimes()
         ));
     }
-    let mode = match new.payment_mode {
-        PaymentMode::Cash => "cash",
-        PaymentMode::Card => "card",
-        PaymentMode::Credit => "credit",
-    };
+    let mode = payment_mode_stored(new.payment_mode);
     let kind = match new.kind {
         SaleKind::Ticket => "ticket",
         SaleKind::Facture => "facture",
@@ -514,6 +510,10 @@ fn issue_inner(
                 },
             )?;
         }
+
+        // Ruling 2, and above the cash arm's early return below or a ticket
+        // never reaches it; `shifts::tag_if_outside_a_shift` says the rest.
+        shifts::tag_if_outside_a_shift(conn, shop_id, user_id, document.id, issued_at)?;
 
         let Some(credit) = credit else {
             return Ok(Sale {

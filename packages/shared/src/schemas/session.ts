@@ -30,6 +30,7 @@ export const permissionSchema = z.enum([
   "export_and_import",
   "change_price_at_the_till",
   "see_audit_log",
+  "open_and_close_till",
 ]) satisfies z.ZodType<PermissionDto>;
 type _Permission = Assert<Matches<PermissionDto, typeof permissionSchema>>;
 
