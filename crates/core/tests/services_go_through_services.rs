@@ -39,8 +39,8 @@ use std::path::Path;
 /// joins the one below.
 const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency", "testdb"];
 
-/// What reaches past a sibling today, service by service. Five reaches
-/// across three services; it was seventeen across eleven when the list was
+/// What reaches past a sibling today, service by service. Three reaches
+/// across two services; it was seventeen across eleven when the list was
 /// written. Shrinking, never growing: the fix for a
 /// row is to add the missing function to the sibling's service and call
 /// that, the way `stock.rs` now reads the audit log through
@@ -50,23 +50,28 @@ const NO_SERVICE_OWNS_THEM: [&str; 4] = ["counters", "jobs", "sale_idempotency",
 /// two are not the same number: a service reaching two repos is one row and
 /// two reaches. The assertion compares the rows.
 ///
-/// `customers` stays on the list: `documents` already imports `services::customers`
-/// (`issue` checks `customer_belongs_to_shop`), so routing `unpaid_of_customer`
-/// through `services::documents` would close a ring the walk below refuses,
-/// `customers -> documents -> customers`. `debt` stays for the same reason
-/// one hop further out: `customers.rs` imports `services::debt` and
-/// `documents.rs` imports `services::customers`, so routing `debt`'s reads
-/// through either sibling closes a ring too. Both want the shared piece
-/// moved into a module underneath, which is its own task.
-///
 /// `purchases` left on 2026-09-21 with no ring to untangle first: the three
 /// `repos::supplier_debt` calls saving an order paid at once made were the
 /// ledger row, its settlement and the balance either side of it, and
 /// `supplier_debt::hand_over` is now the one function that writes that row,
 /// for `pay` and for the purchase alike.
-const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 3] = [
-    ("customers", &["documents"]),
-    ("debt", &["customers", "documents"]),
+///
+/// `customers -> documents` and `debt -> documents` left together on
+/// 2026-09-21, because one ring stood in front of both: `documents.rs`
+/// imported `services::customers` for a single ownership check inside
+/// `issue`, and `customers.rs` imports `services::debt`, so either service
+/// routing its documents reads through `services::documents` closed a ring
+/// the walk below refuses. The check did not move up to the callers, which
+/// would have let a fourth caller of `issue` forget it; it became a type.
+/// `NewDocument::customer` is a `ProvedCustomer`, whose only constructor is
+/// `customers::prove`, so `issue` cannot be handed a customer nobody looked
+/// up and no longer needs to look one up itself.
+///
+/// `debt -> customers` stays: four calls from `customers.rs` into
+/// `services::debt`, one of them the ledger write at line 129, so the ring
+/// there is thick rather than an accident.
+const REACHES_PAST_A_SIBLING: [(&str, &[&str]); 2] = [
+    ("debt", &["customers"]),
     ("supplier_debt", &["purchases", "suppliers"]),
 ];
 
@@ -406,6 +411,35 @@ fn the_walk_cannot_be_stepped_around() {
         folders.is_empty(),
         "{folders:?} is a service split into a folder, and the walk above \
          reads one directory deep. Teach it to descend before landing this."
+    );
+}
+
+/// The one hole the compiler cannot close in the shape that took
+/// `customers -> documents` and `debt -> documents` off the list above.
+///
+/// `NewDocument::customer` is a `ProvedCustomer`, so no caller of
+/// `documents::issue` can hand it a customer id nobody looked up: that much
+/// the type says, at the call, in the compiler's own words. What the type
+/// cannot say is which module may make one. `ProvedCustomer` lives in
+/// `models::customer` because `services::documents` has to name it without
+/// importing `services::customers`, and Rust's `pub(in path)` only narrows
+/// to an ancestor, so the constructor is `pub(crate)` and any service in the
+/// crate could call it.
+///
+/// This is what says only one does. `customers::prove` reads the fiche under
+/// the shop filter first; a second caller of `proved` would be a second
+/// meaning of the word proved, which is the thing the shape exists to avoid.
+#[test]
+fn only_the_customers_service_makes_a_proved_customer() {
+    let makers = services_containing("ProvedCustomer::proved");
+    assert_eq!(
+        makers,
+        vec!["customers.rs".to_string()],
+        "ProvedCustomer::proved is the constructor of the proof \
+         `documents::issue` takes instead of a customer id, and \
+         `services::customers::prove` is the only thing that may call it, \
+         because it is the only thing that reads the fiche under this shop's \
+         filter first. Call `customers::prove`."
     );
 }
 

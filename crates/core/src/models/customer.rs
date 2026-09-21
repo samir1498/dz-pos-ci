@@ -59,6 +59,56 @@ pub struct NewCustomer {
     pub active: bool,
 }
 
+/// A customer that has been looked up in a shop and found there, carried as
+/// a value so the lookup cannot be skipped.
+///
+/// `documents::issue` writes `customer_id` onto a document, and the foreign
+/// key alone would take the neighbour's fiche (features.md §3, rule 3). That
+/// check used to sit inside `issue`, which made `services::documents` import
+/// `services::customers` and closed the ring that kept `customers` and `debt`
+/// reaching past `documents` into its repo. `NewDocument` asks for one of
+/// these instead of an `Option<i32>`, so the check is done by the type: a
+/// caller with only an id has nothing to hand over, and the compiler says so
+/// at the call.
+///
+/// The field is private and this module holds the only constructor, which
+/// `services::customers::prove` calls on the shop-scoped read that proves it.
+/// Rust cannot narrow a constructor to one non-descendant module, so the
+/// constructor is `pub(crate)` and
+/// `crates/core/tests/services_go_through_services.rs` asserts that
+/// `customers.rs` is the only service that names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProvedCustomer {
+    customer: Customer,
+}
+
+impl ProvedCustomer {
+    /// Made only from a fiche read under a `shop_id` filter, so the shop the
+    /// proof is good for is the fiche's own column and the two can never
+    /// disagree.
+    pub(crate) fn proved(customer: Customer) -> Self {
+        Self { customer }
+    }
+
+    pub fn id(&self) -> i32 {
+        self.customer.id
+    }
+
+    /// The shop this is a proof about. `documents::issue` compares it with
+    /// the shop it was called for: a fiche proved in one shop is no proof at
+    /// all on another shop's document.
+    pub fn shop_id(&self) -> i32 {
+        self.customer.shop_id
+    }
+
+    /// The fiche the proof read. A caller that needs the name, the credit
+    /// limit or the identifiers next has them here rather than reading the
+    /// row a second time.
+    pub fn fiche(&self) -> &Customer {
+        &self.customer
+    }
+}
+
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
 #[diesel(table_name = customers)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]

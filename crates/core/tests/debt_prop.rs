@@ -15,7 +15,7 @@ use diesel::sqlite::SqliteConnection;
 use dzpos_core::error::CoreError;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::avoir::{self, AvoirLine};
-use dzpos_core::services::customers::PartyKind;
+use dzpos_core::services::customers::{self, PartyKind};
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
 use dzpos_core::services::documents::{
     self, BalanceTriple, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, PartyBlock,
@@ -277,6 +277,7 @@ fn a_facture_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, 
     let issued_at = chrono::NaiveDate::from_ymd_opt(2026, 9, day)
         .and_then(|d| d.and_hms_opt(10, 0, 0))
         .unwrap();
+    let customer = customers::prove(conn, SHOP, customer_id).unwrap();
     let before = debt::balance(conn, SHOP, customer_id).unwrap();
     // Credit the customer is already holding settles the new document at
     // issue, so what the paper asks for is what is really left on it.
@@ -300,7 +301,7 @@ fn a_facture_on_credit(conn: &mut SqliteConnection, customer_id: i32, net: i64, 
                 address: None,
                 phone: None,
             },
-            customer_id: Some(customer_id),
+            customer: Some(customer),
             buyer: Some(PartyBlock {
                 name: "Entreprise Benali".to_string(),
                 party_kind: PartyKind::Company,

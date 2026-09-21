@@ -22,6 +22,7 @@ use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::cancellation;
 use dzpos_core::services::cash;
 use dzpos_core::services::clock::{Month, Period};
+use dzpos_core::services::customers;
 use dzpos_core::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
 use dzpos_core::services::documents::{
     self, DocumentKind, NewDocument, NewDocumentLine, SellerBlock,
@@ -439,6 +440,7 @@ fn a_document(
 ) -> i32 {
     let ttc = Money::centimes(total_ttc);
     let stamp = Money::centimes(stamp);
+    let customer = customers::prove_named(conn, shop_id, customer_id).unwrap();
     documents::issue(
         conn,
         shop_id,
@@ -457,7 +459,7 @@ fn a_document(
                 address: None,
                 phone: None,
             },
-            customer_id,
+            customer,
             buyer: None,
             ref_document_id: None,
             balance: None,

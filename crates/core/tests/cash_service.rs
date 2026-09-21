@@ -69,7 +69,7 @@ fn a_document(
                 address: None,
                 phone: None,
             },
-            customer_id: None,
+            customer: None,
             buyer: None,
             ref_document_id,
             balance: None,

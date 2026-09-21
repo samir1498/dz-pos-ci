@@ -181,8 +181,19 @@ fn another_shop_gets_not_found_on_a_read_and_on_an_update() {
         "Entreprise Benali",
         "the refused update wrote anyway"
     );
-    assert!(!customers::customer_belongs_to_shop(&mut conn, 2, made.id).unwrap());
-    assert!(customers::customer_belongs_to_shop(&mut conn, SHOP, made.id).unwrap());
+    // The proof `documents::issue` takes is refused for the neighbour and
+    // given for this shop, and it is the proof and not a boolean because a
+    // boolean can be ignored.
+    assert!(customers::prove(&mut conn, 2, made.id).is_err());
+    let proved = customers::prove(&mut conn, SHOP, made.id).unwrap();
+    assert_eq!(proved.id(), made.id);
+    assert_eq!(proved.shop_id(), SHOP);
+    assert_eq!(proved.fiche().name, "Entreprise Benali");
+    // The `Option` shape a document's `customer` has: nothing proved is
+    // nothing to prove, not an error.
+    assert!(customers::prove_named(&mut conn, SHOP, None)
+        .unwrap()
+        .is_none());
 }
 
 #[test]
