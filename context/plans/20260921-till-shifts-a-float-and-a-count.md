@@ -422,6 +422,17 @@ refunds its share and no more; the stamp is still never given back; and the
 cash paragraph of `docs/features.md` loses its "nothing records cash handed
 back" sentence in the same PR.
 
+One wire gap T5 hit and worked around rather than inventing a number for.
+`ShiftReportDto` (`crates/api/src/dto/till.rs:85`) carries the shift, the
+takings, the expected figure, the difference and the window's end, and nothing
+that says what was rung while nobody held a shift. Ruling 2 accepts and tags
+such a sale rather than refusing it, so the figure exists in the audit log and
+has no way to reach a screen. Until it does, the close modal can only show a
+drawer that reconciles against the shift's own window and stays silent about
+the rest of the day, which is the honest shape but not the useful one. T6 adds
+the field beside `takings` and the close screen reads it, because T6 is already
+the task that moves what the cash panel answers.
+
 This is the only task in the loop that changes a money figure the dashboard
 already answers, so it goes to `dz-money-builder` and takes the extra layer
 the quality gates ask for on money. Size M.
