@@ -820,3 +820,79 @@ async fn the_offline_replay_path_rings_and_tags_once_and_is_never_refused() {
     );
     assert_eq!(tagged[0]["entity_id"], first["id"]);
 }
+
+/// The count of those tagged sales reaches the close screen, which is the
+/// wire gap T5 worked around rather than inventing a number for (the plan's
+/// own paragraph on `ShiftReportDto`).
+///
+/// **Why the window is not the shift's own.** A sale is tagged exactly when
+/// it fell inside none of that person's windows, so a count taken over
+/// `opened_at..until` is zero for every shift that ever existed. The figure
+/// worth showing is what this person rang before they opened up, which is
+/// what the assertions below pin: two sales rung with no drawer, then the
+/// drawer opened, then a third sale that is covered and must not be counted.
+#[tokio::test]
+async fn the_open_shift_report_counts_the_sales_rung_before_the_drawer_was_opened() {
+    let (_dir, app, _staff) = app_with_two_cashiers();
+    let p = product(&app, "Sucre", 10_000).await;
+
+    // Two sales this morning with nobody holding a drawer.
+    sell(&app, p, 1, "cash", common::CASHIER_SESSION).await;
+    sell(&app, p, 1, "cash", common::CASHIER_SESSION).await;
+    // And one by somebody else, which is not this cashier's to explain.
+    sell(&app, p, 1, "cash", common::MANAGER_SESSION).await;
+
+    let (status, opened) = call_as(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 0 })),
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{opened}");
+
+    // Rung inside the window, so it is covered and tagged nowhere.
+    sell(&app, p, 1, "cash", common::CASHIER_SESSION).await;
+
+    let (status, report) = call_as(
+        &app,
+        "GET",
+        "/till/shifts/open",
+        None,
+        common::CASHIER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(
+        report["rung_outside_shift"], 2,
+        "the count is not this cashier's two sales before the drawer opened: {report}"
+    );
+
+    // The manager's own drawer, opened after their untagged-by-this-cashier
+    // sale, counts that one and not the cashier's two. The figure is per
+    // person for the same reason the expected figure is: each drawer is
+    // physically somebody's own.
+    let (status, theirs) = call_as(
+        &app,
+        "POST",
+        "/till/shifts",
+        Some(json!({ "opening_cash_centimes": 0 })),
+        common::MANAGER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{theirs}");
+    let (status, report) = call_as(
+        &app,
+        "GET",
+        "/till/shifts/open",
+        None,
+        common::MANAGER_SESSION,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{report}");
+    assert_eq!(
+        report["rung_outside_shift"], 1,
+        "one person's untagged morning reached another person's close screen: {report}"
+    );
+}

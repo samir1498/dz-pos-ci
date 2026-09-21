@@ -97,6 +97,16 @@ pub struct ShiftReportDto {
     /// The moment the takings window ends: the close, or now for an open
     /// shift, so a screen showing a live figure can say as of when.
     pub until: String,
+    /// How many sales this person rang while holding no drawer at all, since
+    /// their last close or midnight, whichever is later. Zero on a shift
+    /// where the drawer was open the whole time, which is why the close
+    /// screen shows it only when it is not.
+    ///
+    /// Not a term in `expected_centimes`: those sales' cash is physically in
+    /// the drawer but fell outside the window the expected figure is summed
+    /// over, so this is the sentence that says why the count may read over,
+    /// not a number that moves it.
+    pub rung_outside_shift: i64,
 }
 
 impl TryFrom<ShiftReport> for ShiftReportDto {
@@ -110,6 +120,7 @@ impl TryFrom<ShiftReport> for ShiftReportDto {
             expected_centimes: r.expected.as_centimes(),
             difference_centimes: r.difference.map(Money::as_centimes),
             until: r.until.format(DATE_TIME_FORMAT).to_string(),
+            rung_outside_shift: r.rung_outside_shift,
         })
     }
 }

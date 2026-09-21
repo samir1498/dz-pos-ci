@@ -44,5 +44,6 @@ export const shiftReportSchema = z.object({
   expected_centimes: exactInteger,
   difference_centimes: exactInteger.nullable(),
   until: z.string(),
+  rung_outside_shift: exactInteger,
 }) satisfies z.ZodType<ShiftReportDto>;
 type _ShiftReport = Assert<Matches<ShiftReportDto, typeof shiftReportSchema>>;

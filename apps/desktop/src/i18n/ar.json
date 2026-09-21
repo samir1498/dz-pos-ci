@@ -791,6 +791,7 @@
   "till_shift_close_title": "إغلاق الصندوق",
   "till_shift_close_question": "عدّ ما يوجد في الدرج.",
   "till_shift_expected": "المبلغ المتوقع في الدرج",
+  "till_shift_rung_outside": "مبيعات سُجّلت قبل فتح هذا الصندوق: {count}. مالها في الدرج، لكنه ليس ضمن المبلغ المنتظر أعلاه.",
   "field_counted_cash": "المبلغ المعدود (دج)",
   "field_shift_note": "ملاحظة",
   "error_shift_note_required": "الملاحظة مطلوبة: العدّ لا يطابق المبلغ المتوقع.",

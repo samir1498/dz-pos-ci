@@ -328,6 +328,39 @@ pub fn by_action(
     repo::by_action(conn, shop_id, action)
 }
 
+/// How many rows one person wrote under one action over a stretch of the
+/// shop's clock. `from` is inclusive and `until` exclusive, the half-open
+/// shape `repo::SearchFilter` already holds and `day_range` already hands it.
+///
+/// Here rather than off `repos::audit` for the reason `by_action` gives: a
+/// service reaching into another domain's repo skips whatever that domain
+/// decides on the way past.
+///
+/// `services::shifts::report` is the caller. A sale rung while nobody held a
+/// drawer is tagged and stored nowhere else — `tag_if_outside_a_shift` writes
+/// one `till.sale_outside_shift` row and no column — so the log is the only
+/// place that count exists, and a screen that wants it has to come through
+/// here.
+pub fn count_for_user_between(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    action: &str,
+    from: NaiveDateTime,
+    until: NaiveDateTime,
+) -> Result<i64, CoreError> {
+    repo::count(
+        conn,
+        shop_id,
+        &repo::SearchFilter {
+            user_id: Some(user_id),
+            action: Some(action.to_owned()),
+            created_from: Some(from),
+            created_to: Some(until),
+        },
+    )
+}
+
 /// Rows a screen reads at a time (M4 T7). One shop's whole day almost never
 /// fills a page; a shop's whole lifetime will, eventually, and this is the
 /// number that keeps a screen open on it from asking for all of it.

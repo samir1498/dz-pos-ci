@@ -791,6 +791,7 @@
   "till_shift_close_title": "Closing the till",
   "till_shift_close_question": "Count what is in the drawer.",
   "till_shift_expected": "Expected in the drawer",
+  "till_shift_rung_outside": "Sales rung before this drawer was opened: {count}. Their money is in the till, but it is not in the expected figure above.",
   "field_counted_cash": "Counted in the drawer (DA)",
   "field_shift_note": "Note",
   "error_shift_note_required": "A note is required: the count does not match what was expected.",

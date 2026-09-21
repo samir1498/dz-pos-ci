@@ -791,6 +791,7 @@
   "till_shift_close_title": "Fermeture de la caisse",
   "till_shift_close_question": "Comptez ce qu'il y a dans le tiroir.",
   "till_shift_expected": "Montant attendu dans le tiroir",
+  "till_shift_rung_outside": "Ventes encaissées avant l'ouverture de cette caisse : {count}. Leur argent est dans le tiroir, mais il n'entre pas dans le montant attendu ci-dessus.",
   "field_counted_cash": "Montant compté (DA)",
   "field_shift_note": "Note",
   "error_shift_note_required": "Une note est requise : le compte ne correspond pas au montant attendu.",
