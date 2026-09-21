@@ -495,14 +495,18 @@ fn core_source_files() -> Vec<std::path::PathBuf> {
 }
 
 /// A path as this file names one: `services/customers.rs`, so a failure says
-/// which module it means and not just which file name.
+/// which module it means and not just which file name. Always with `/`: the
+/// literals this file compares against are written that way, and on Windows
+/// the OS hands back `models\customer.rs`, which is how the mirror's Windows
+/// job failed `only_the_customers_service_makes_a_proved_customer` on
+/// 2026-09-21 while Linux passed it.
 fn under_src(path: &Path) -> String {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     path.strip_prefix(&src)
         .unwrap_or(path)
         .to_str()
         .unwrap_or("a path")
-        .to_string()
+        .replace('\\', "/")
 }
 
 /// Where the services live, and every `.rs` in it. One walk, because two
