@@ -15,6 +15,7 @@ import { ApiError } from "@dzpos/shared";
 import type { CustomerDto, CustomerWriteDto, NewCustomerDto, PartyKindDto } from "@dzpos/shared";
 import { useId, useState } from "react";
 
+import { ChoiceRow } from "@/components/ChoiceRow";
 import { FormField } from "@/components/FormField";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,7 +35,7 @@ import { customersQueryKey, api } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { cleared, errorKey } from "@/lib/fields";
 
-import { ChoiceRow, PARTY_KEY, PARTY_KINDS, balanceLabel, balanceShown, useFieldError } from "./parts";
+import { PARTY_KEY, PARTY_KINDS, balanceLabel, balanceShown, useFieldError } from "./parts";
 
 /** What the form holds while it is being filled. The three amounts are
  *  centimes or nothing at all: `MoneyInput` never makes a float and blank is
