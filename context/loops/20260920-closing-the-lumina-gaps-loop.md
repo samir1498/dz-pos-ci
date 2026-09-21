@@ -1045,6 +1045,47 @@ session proves or drops each finding itself. Then `dz-standup`, plain words,
 no task codes, so Anouar sees a shop's evening close and a ticket in Arabic
 rather than a list of ids.
 
+### The review ran 2026-09-21, 19:47 to 20:00, over `168d200..ca584b0`
+
+Three lenses on the sharper model, 117 commits, read only while the mirror
+compiled the head. Every finding was settled by the session reading the
+line it named. What came back:
+
+- Money: clean across the seams (a partial avoir plus a cancellation cannot
+  exceed what came in; the two refund paths cannot both pay; the credit
+  bound reads only payments; the shift and the day figure share one query).
+  One low finding, left open: a cash refund handed while no shift is open
+  is neither tagged nor counted in the outside-a-shift figure, because only
+  the sale path calls `tag_if_outside_a_shift` (`services/sales.rs:516`).
+  It waits on the design call below, since the answer decides who a refund
+  outside a shift belongs to.
+- Reach: clean on the table, the walk, the shop scoping and the device
+  gate. One design call for Samir: handing cash back is gated on
+  `correct_ledger`, a manager's permission, so a cashier at the counter
+  cannot refund at all; the row is debited to the caller's own shift
+  (`shifts::close` subtracts by the opener against `cash_refunds.user_id`),
+  which is the manager's drawer when they hold one and nobody's when they
+  do not. Either that is the shop practice, or a cashier refunds under a
+  manager override the way the credit limit is overridden. The gate row's
+  reason said "the ringer's shift" and now says the refunder's (`f7d0c3d`).
+  Also written down, not ruled: the print-language and thermal-mode flips
+  are unaudited on purpose (`services/preferences.rs:173`).
+- Tests: four edges a green suite was hiding, all pinned in `f7d0c3d`
+  (PR 154): the refund window's two edges, the floor of the outside-a-shift
+  count and its midnight fallback, the roll's closing figures as hand
+  constants, and the refusal row for a cashier reaching for a colleague's
+  drawer, which the table could not record and the route now does. Not
+  done: a browser case pressing Enter inside a quantity box (the focus
+  claim rests on jsdom at `till.test.tsx:1374`); one Playwright case, next
+  time the suite runs for a screen change.
+
+The day's `just ci` on `main`: the full run on `ca584b0` green on all four
+jobs (rust, windows, coverage, web); the Restricted job failed a shell test
+on a pipe race in the test script itself, fixed in `81c6f1e`; one more run
+on `f7d0c3d` closes the day. The loop is closed; what it leaves for Samir is
+the refund question above, the modular decision plan, the amount in words,
+and the scanner's last row.
+
 ## Filler found while building, not acted on
 
 **The audit log cannot be searched by the person whose drawer was counted.**

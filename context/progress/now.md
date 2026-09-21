@@ -4,7 +4,7 @@ updated: '2026-09-21'
 ---
 ## Active
 
-**2026-09-21 night: six merges, nothing left but the review.** Samir's word at
+**2026-09-21 night: the gaps loop is closed; eight merges today.** Samir's word at
 13:49 was to finish everything but the clinic decision. The live loop is
 `context/loops/20260921-a-clean-context-then-the-till-finished.md`; the
 previous one, `20260920-closing-the-lumina-gaps-loop.md`, stays the reference
@@ -23,7 +23,11 @@ thermal-mode preference with the 80 mm facture roll (`ca584b0`), reviewed
 by the three lenses with six test gaps closed before the merge. Every
 worktree is torn down. The day's `just ci` on `main` is running on the
 mirror; its Restricted job failed a shell test on a broken pipe (a race in
-the test script, fix in its own PR). What is left of the loop: `just ci` once, the whole-loop review on the three lenses at fable,
+the test script, fixed in `81c6f1e`); the review round of tests merged as
+`f7d0c3d`. The whole-loop review at fable is done and written under Closing
+on the loop page: money and reach clean, one design call for Samir (a cash
+refund is a manager's action and never touches a cashier's drawer), four
+test edges pinned. Nothing of the loop is left; what was listed after it: `just ci` once, the whole-loop review on the three lenses at fable,
 the standup with the next steps, the architecture brainstorm first among
 them.
 
