@@ -15,10 +15,13 @@ use dzpos_core::lang::Lang;
 use dzpos_core::money::{compute_totals, Bps, Line, Money, PaymentMode, Regime, TotalsOptions};
 use dzpos_core::print::strings::{text, Key};
 use dzpos_core::print::{
-    dump_ticket_escpos, render_ticket_escpos, send_ticket_escpos_tcp, write_ticket_escpos_to_file,
+    draw_ticket_raster, dump_ticket_escpos, dump_ticket_escpos_png, render_ticket_escpos,
+    render_ticket_escpos_raster, send_ticket_escpos_tcp, write_ticket_escpos_to_file,
+    HEAD_WIDTH_DOTS,
 };
 use dzpos_core::services::documents::{
-    Document, DocumentKind, DocumentLine, DocumentStatus, SellerBlock,
+    BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, PartyBlock, PartyKind,
+    SellerBlock,
 };
 
 const SHOP: i32 = 1;
@@ -32,17 +35,50 @@ const LINES: [(&str, i64, i64, i64, u32); 3] = [
 const GLOBAL_DISCOUNT: i64 = 2_000;
 const TENDERED: i64 = 100_000;
 
+/// What the credit customer owed before this ticket, and what the shop was
+/// holding for the other one. The same two numbers `print_ticket.rs` uses,
+/// because the HTML ticket and the thermal one are the same document: a
+/// customer holding both must not find two spellings of what they owe.
+const OLD_BALANCE: i64 = 250_000;
+const CREDIT_HELD: i64 = -500_000;
+
 #[derive(Clone, Copy)]
 enum Case {
     Reel,
     Ifu,
     Card,
+    /// Réel, credit: the three rows of the debt block, which is the only
+    /// part of the ticket the raster had never been asked to draw. It is
+    /// also the part that states what the customer owes, so it is the last
+    /// place a number should go unshaped and uncounted.
+    Credit,
+    /// The same, to a customer the shop is holding money for: the closing
+    /// row goes below zero and the label changes from debt to credit.
+    CreditHeld,
 }
 
 impl Case {
+    const ALL: [Case; 5] = [
+        Case::Reel,
+        Case::Ifu,
+        Case::Card,
+        Case::Credit,
+        Case::CreditHeld,
+    ];
+
+    /// What the customer's account stood at before this basket, on the
+    /// cases that name a customer at all.
+    const fn old_balance(self) -> Option<i64> {
+        match self {
+            Case::Reel | Case::Ifu | Case::Card => None,
+            Case::Credit => Some(OLD_BALANCE),
+            Case::CreditHeld => Some(CREDIT_HELD),
+        }
+    }
+
     const fn regime(self) -> Regime {
         match self {
-            Case::Reel | Case::Card => Regime::Reel,
+            Case::Reel | Case::Card | Case::Credit | Case::CreditHeld => Regime::Reel,
             Case::Ifu => Regime::Ifu,
         }
     }
@@ -51,6 +87,7 @@ impl Case {
         match self {
             Case::Reel | Case::Ifu => PaymentMode::Cash,
             Case::Card => PaymentMode::Card,
+            Case::Credit | Case::CreditHeld => PaymentMode::Credit,
         }
     }
 
@@ -59,6 +96,8 @@ impl Case {
             Case::Reel => "",
             Case::Ifu => "-ifu",
             Case::Card => "-card",
+            Case::Credit => "-credit",
+            Case::CreditHeld => "-credit-held",
         }
     }
 }
@@ -121,6 +160,24 @@ fn fixed_sale(case: Case) -> Document {
         PaymentMode::Cash => Some(Money::centimes(TENDERED)),
         PaymentMode::Card | PaymentMode::Credit => None,
     };
+    // Only a credit sale names a customer, so only it carries a buyer block
+    // and a balance. The triple is the ledger's answer at issue time: what
+    // was owed, what this document leaves unpaid, what is owed now — read
+    // off the document on the way to paper and never recomputed.
+    let balance = case.old_balance().map(|old| BalanceTriple {
+        old_balance: Money::centimes(old),
+        remaining_debt: totals.net_to_pay,
+        total_debt: Money::centimes(old).checked_add(totals.net_to_pay).unwrap(),
+    });
+    let buyer = case.old_balance().map(|_| PartyBlock {
+        name: "Entreprise Amrani".to_owned(),
+        party_kind: PartyKind::Company,
+        rc: Some("16/00-7654321 B 25".to_owned()),
+        nif: Some("000216007654321".to_owned()),
+        nis: None,
+        ai: None,
+        address: Some("7 rue Larbi Ben M'hidi, Alger".to_owned()),
+    });
     Document {
         id: 1,
         shop_id: SHOP,
@@ -141,10 +198,10 @@ fn fixed_sale(case: Case) -> Document {
             address: Some("12 rue Didouche Mourad, Alger".to_owned()),
             phone: Some("0555 12 34 56".to_owned()),
         },
-        customer_id: None,
-        buyer: None,
+        customer_id: case.old_balance().map(|_| 7),
+        buyer,
         ref_document_id: None,
-        balance: None,
+        balance,
         change: tendered.map(|t| t.checked_sub(totals.net_to_pay).unwrap()),
         tendered,
         totals,
@@ -220,6 +277,51 @@ fn the_ifu_ticket_escpos_is_its_dump_in_every_language() {
 #[test]
 fn the_card_ticket_escpos_is_its_dump_in_every_language() {
     each_language_of(Case::Card);
+}
+
+#[test]
+fn the_credit_ticket_escpos_is_its_dump_in_every_language() {
+    each_language_of(Case::Credit);
+}
+
+#[test]
+fn the_credit_held_ticket_escpos_is_its_dump_in_every_language() {
+    each_language_of(Case::CreditHeld);
+}
+
+/// The debt block is three rows and a title, and the closing row is named
+/// by its sign. A ticket that called money the shop is holding a debt while
+/// the facture called it a credit would give one account two names.
+#[test]
+fn a_credit_escpos_ticket_carries_the_three_rows_of_the_debt() {
+    for (case, key) in [
+        (Case::Credit, Key::TotalDebt),
+        (Case::CreditHeld, Key::TotalCredit),
+    ] {
+        let doc = fixed_sale(case);
+        for lang in Lang::ALL {
+            let dump = dump_ticket_escpos(&render_ticket_escpos(&doc, lang).unwrap());
+            for row in [Key::Balance, Key::OldBalance, Key::ThisDocument, key] {
+                assert!(
+                    dump.contains(text(row, lang)),
+                    "{lang:?} {:?}",
+                    case.suffix()
+                );
+            }
+            let triple = doc.balance.unwrap();
+            for amount in [triple.old_balance, triple.remaining_debt, triple.total_debt] {
+                // "2 500,00" is grouped with a narrow no-break space in the
+                // formatter and with a plain one on the wire, which is what
+                // keeps it eight columns wide on the head.
+                let printed = on_the_wire(&format_amount(amount));
+                assert!(
+                    dump.contains(&printed),
+                    "{lang:?} {:?} lost {printed}",
+                    case.suffix()
+                );
+            }
+        }
+    }
 }
 
 #[test]
@@ -312,6 +414,240 @@ fn an_ifu_document_with_a_tva_recap_is_refused_as_escpos_too() {
         let err = render_ticket_escpos(&doc, lang).unwrap_err();
         assert_eq!(err.code(), "print", "{lang:?}");
     }
+}
+
+/// The lines a golden says the text path put on the paper: everything that
+/// is not a `<command>`. The dump writes a ticket line and its newline, so
+/// splitting is enough; the commands each sit on a line of their own.
+fn text_lines(golden: &str) -> Vec<String> {
+    golden
+        .lines()
+        .filter(|line| !line.is_empty() && !(line.starts_with('<') && line.ends_with('>')))
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The narrow no-break space of "1 000,00" is a plain space on the wire
+/// (`the_french_wire_is_one_byte_per_column_not_utf8` pins that), so the
+/// golden carries a plain space where the line model carries U+202F. Both
+/// paths start from the same character; only the comparison needs telling.
+fn on_the_wire(line: &str) -> String {
+    line.replace('\u{202f}', " ")
+}
+
+/// **The rule this whole task exists for.** The raster's source lines are
+/// the text path's lines, string for string, so a number cannot be one
+/// thing on a French ticket and another on the Arabic one beside it. The
+/// left side is the committed `.txt` golden — a file, not a value this run
+/// computed — and the right side is what `print::raster` says it drew.
+///
+/// If this ever goes red because an amount differs, the bug is that
+/// something inside `raster.rs` formatted a number. Nothing in there is
+/// allowed to.
+#[test]
+fn the_raster_draws_the_lines_the_text_path_prints() {
+    for case in Case::ALL {
+        let doc = fixed_sale(case);
+        for lang in Lang::ALL {
+            let name = golden_name(lang, case);
+            let golden = std::fs::read_to_string(goldens_dir().join(&name))
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
+            let drawn = draw_ticket_raster(&doc, lang, HEAD_WIDTH_DOTS).unwrap();
+            let raster: Vec<String> = drawn
+                .lines
+                .iter()
+                .map(|line| on_the_wire(&line.text))
+                .collect();
+            assert_eq!(raster, text_lines(&golden), "{name}: the two paths differ");
+            assert!(
+                raster
+                    .iter()
+                    .any(|line| line.contains(&on_the_wire(&format_amount(doc.totals.net_to_pay)))),
+                "{name}: the raster does not carry the net to pay"
+            );
+        }
+    }
+}
+
+/// Nothing is trimmed to fit. A line wider than the head is an error from
+/// `raster::draw`, so reaching this assertion at all means every line fit;
+/// the assertion says by how much, and `notdef` says no character was
+/// drawn as the box this task is about.
+#[test]
+fn no_raster_line_is_clipped_at_the_head_width() {
+    for case in Case::ALL {
+        let doc = fixed_sale(case);
+        for lang in Lang::ALL {
+            let drawn = draw_ticket_raster(&doc, lang, HEAD_WIDTH_DOTS).unwrap();
+            let name = golden_name(lang, case);
+            assert!(!drawn.lines.is_empty(), "{name}: nothing was drawn");
+            for line in &drawn.lines {
+                assert!(
+                    line.advance <= HEAD_WIDTH_DOTS,
+                    "{name}: {:?} took {} of {HEAD_WIDTH_DOTS} dots",
+                    line.text,
+                    line.advance
+                );
+                assert_eq!(
+                    line.notdef, 0,
+                    "{name}: {:?} has a character no vendored font carries",
+                    line.text
+                );
+            }
+            assert_eq!(drawn.bitmap.width(), HEAD_WIDTH_DOTS as usize, "{name}");
+            assert!(drawn.bitmap.height() > 0, "{name}");
+        }
+    }
+}
+
+/// A 58 mm head is one argument away, and its narrower column budget is
+/// the case where a line is most likely not to fit.
+#[test]
+fn the_same_ticket_draws_on_a_384_dot_head() {
+    let doc = fixed_sale(Case::Reel);
+    for lang in Lang::ALL {
+        let drawn = draw_ticket_raster(&doc, lang, 384).unwrap();
+        assert_eq!(drawn.bitmap.width(), 384, "{lang:?}");
+        assert_eq!(drawn.cell, 384 / 42, "{lang:?}");
+        for line in &drawn.lines {
+            assert!(
+                line.advance <= 384,
+                "{lang:?}: {:?} took {} of 384 dots",
+                line.text,
+                line.advance
+            );
+            // The same question the 80 mm head is asked. A narrower head
+            // is the same glyphs at a smaller em, so a character no
+            // vendored face carries is a box on both.
+            assert_eq!(
+                line.notdef, 0,
+                "{lang:?}: {:?} has a character no vendored font carries",
+                line.text
+            );
+        }
+    }
+    // A head that is not a whole number of bytes wide, or too narrow to
+    // carry 42 columns, is refused rather than drawn wrong.
+    let refused = |width| {
+        draw_ticket_raster(&doc, Lang::Ar, width)
+            .err()
+            .map(|err| err.code())
+    };
+    assert_eq!(refused(577), Some("print"), "an odd head width was drawn");
+    assert_eq!(refused(8), Some("print"), "an 8-dot head was drawn");
+}
+
+/// The shaper measures in font units and the rasteriser scales by the
+/// face's height rather than its em, so the two agree only if the second
+/// is told the em in the first's terms. When they do not agree the glyphs
+/// are drawn at a different size from the advances that spaced them, and
+/// the 42-dash rule is the line that shows it: it should measure exactly
+/// 42 columns and its ink should reach both ends of that span.
+#[test]
+fn the_rule_line_measures_the_column_budget_it_was_built_from() {
+    let doc = fixed_sale(Case::Reel);
+    let drawn = draw_ticket_raster(&doc, Lang::Fr, HEAD_WIDTH_DOTS).unwrap();
+    let budget = drawn.cell * 42;
+    let rule = drawn
+        .lines
+        .iter()
+        .find(|line| line.text.starts_with("-----"))
+        .unwrap();
+    assert_eq!(rule.advance, budget, "42 columns of the monospaced face");
+    // The row the rule sits on: the first row whose ink reaches past three
+    // quarters of the budget is one of the rules, and a dashed line of 42
+    // dashes covers most of its span.
+    let bitmap = &drawn.bitmap;
+    let mut widest = 0;
+    for y in 0..bitmap.height() {
+        let ink: Vec<usize> = (0..bitmap.width())
+            .filter(|x| bitmap.is_black(*x, y))
+            .collect();
+        if let (Some(first), Some(last)) = (ink.first(), ink.last()) {
+            let span = last.saturating_sub(*first);
+            if span > widest {
+                widest = span;
+            }
+        }
+    }
+    assert!(
+        widest >= (budget as usize) * 9 / 10 && widest <= HEAD_WIDTH_DOTS as usize,
+        "the widest row of ink spans {widest} dots, not the {budget} the rule should"
+    );
+}
+
+/// `GS v 0` and its four header bytes, read back. The dump names a band by
+/// the dots it covers so a reviewer sees the shape of the job without a
+/// printer, and the bands are split small enough for a cheap head's buffer.
+#[test]
+fn the_raster_ticket_is_bands_of_dots_and_nothing_else() {
+    let doc = fixed_sale(Case::Reel);
+    let bytes = render_ticket_escpos_raster(&doc, Lang::Ar, HEAD_WIDTH_DOTS).unwrap();
+    let dump = dump_ticket_escpos(&bytes);
+    assert!(dump.starts_with("<init>\n<align left>\n"), "{dump}");
+    assert!(dump.ends_with("<cut>\n"), "{dump}");
+    let bands: Vec<&str> = dump
+        .lines()
+        .filter(|line| line.starts_with("<raster "))
+        .collect();
+    assert!(!bands.is_empty(), "no raster band in {dump}");
+    for band in &bands {
+        assert!(band.starts_with("<raster 576x"), "{band}");
+    }
+    // No codepage and no text: the whole point is that the head is never
+    // asked to spell anything.
+    assert!(!dump.contains("<codepage"), "{dump}");
+    assert!(!dump.contains('ت'), "Arabic text on a raster wire: {dump}");
+    // Each band under the 64 KB the command addresses.
+    let drawn = draw_ticket_raster(&doc, Lang::Ar, HEAD_WIDTH_DOTS).unwrap();
+    let rows: usize = bands
+        .iter()
+        .filter_map(|band| band.trim_end_matches('>').split('x').next_back())
+        .filter_map(|rows| rows.parse::<usize>().ok())
+        .sum();
+    assert_eq!(rows, drawn.bitmap.height(), "the bands lost rows");
+    for band in &bands {
+        let rows: usize = band
+            .trim_end_matches('>')
+            .split('x')
+            .next_back()
+            .and_then(|rows| rows.parse().ok())
+            .unwrap();
+        assert!(rows * drawn.bitmap.stride() < 65_536, "{band} is too tall");
+    }
+}
+
+/// The three Arabic goldens a reviewer opens. They are the same bytes the
+/// head is sent, decoded back out of the `GS v 0` bands, so a picture that
+/// looks right is evidence about the wire and not about a second renderer.
+#[test]
+fn the_arabic_raster_goldens_are_what_the_head_is_sent() {
+    let mut updated = Vec::new();
+    for case in Case::ALL {
+        let doc = fixed_sale(case);
+        let bytes = render_ticket_escpos_raster(&doc, Lang::Ar, HEAD_WIDTH_DOTS).unwrap();
+        let png = dump_ticket_escpos_png(&bytes).expect("the raster ticket carries no band");
+        let name = format!("ar{}.png", case.suffix());
+        let path = goldens_dir().join(&name);
+        if std::env::var_os("UPDATE_GOLDENS").is_some() {
+            if std::fs::read(&path).ok().as_deref() != Some(png.as_slice()) {
+                std::fs::write(&path, &png).unwrap();
+                updated.push(name);
+            }
+            continue;
+        }
+        let expected = std::fs::read(&path)
+            .unwrap_or_else(|e| panic!("{}: {e}; UPDATE_GOLDENS=1", path.display()));
+        assert_eq!(png, expected, "{name} is not what the encoder draws");
+    }
+    assert!(
+        updated.is_empty(),
+        "rewrote {updated:?}: open them, then run again without UPDATE_GOLDENS"
+    );
+    // The text path carries no band at all, so nothing here can quietly
+    // start writing a picture of a ticket that was sent as text.
+    let text = render_ticket_escpos(&fixed_sale(Case::Reel), Lang::Ar).unwrap();
+    assert!(dump_ticket_escpos_png(&text).is_none());
 }
 
 #[test]

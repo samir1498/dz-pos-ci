@@ -53,23 +53,37 @@ barcoders = "2.0.0"
 # set that dependency already activates (no bzip2, zstd or lzma in the lock,
 # both of which need a C toolchain the bundled sqlite already avoids).
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
+# The Arabic ticket as a raster (plans/arabic-on-a-cheap-thermal-head). A
+# cheap head has no single-byte table for Arabic, so the ticket is drawn and
+# sent as dots; drawing it needs the three jobs the plan's table compares.
+# All three are pure Rust, none looks at a system font, and both of the new
+# ones sit on the same `ttf-parser`, so the Windows release target needs no
+# toolchain change. Versions pinned exact (checked on crates.io 2026-09-21).
+#
+# The shaper: which glyph each Arabic letter takes given its neighbours.
+# HarfBuzz ported to Rust; `cosmic-text` was the alternative and brings a
+# system font database and a second rasteriser we would configure to do
+# nothing (the plan says why).
+rustybuzz = "=0.20.1"
+# The rasteriser: outlines to coverage, at a scale we choose.
+ab_glyph = "=0.2.32"
 # The machine's IANA time zone name for the support bundle (M5 T3). Already
 # in the lock at 0.1.65, pulled in transitively; this makes it a direct
 # dependency of the one caller that reads it rather than compiling a second
 # copy at a different version.
 iana-time-zone = "0.1"
+# The bidi algorithm: which runs of a ticket line go right to left. It was a
+# dev-dependency while only the print goldens ran it; the raster ticket runs
+# it on the way to paper, because an Arabic line carrying Western digits and
+# an amount is exactly the mixed paragraph the algorithm exists for. Same
+# version the tests already pinned, and the implementation `rust-url` uses.
+unicode-bidi = "=0.3.18"
 
 [dev-dependencies]
 tempfile = "3"
 # proptest for the money invariants; the fixtures are read with serde_json,
 # which is a normal dependency above.
 proptest = "1.11"
-# The bidi algorithm, for the print goldens. A test that says an Arabic
-# facture prints its phone number in the order it is dialled has to run the
-# algorithm a browser runs; asserting on the markup only says the rule is
-# written, not that it works. This is the implementation rust-url uses, and
-# it is a dev-dependency: nothing shipped links it.
-unicode-bidi = "0.3"
 
 # build.rs reads today's date in UTC to bake into `build_info` (M5 T1). The
 # workspace already carries chrono for the shipped crate; reusing it here

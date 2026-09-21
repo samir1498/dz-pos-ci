@@ -15,11 +15,20 @@ use crate::error::CoreError;
 use crate::lang::Lang;
 use crate::models::document::Document;
 use crate::money::Regime;
-use crate::print::ticket::{self, TicketView};
+use crate::print::png;
+use crate::print::raster;
+use crate::print::ticket::{self, Align, Item, TicketView};
 
 const ESC: u8 = 0x1b;
 const GS: u8 = 0x1d;
-const WIDTH: usize = 42;
+
+/// `GS v 0` carries the band's height in two bytes, so a band could be
+/// 65 535 rows; the reason to keep it far below that is the head's own
+/// buffer. Cheap heads take a few kilobytes at a time, and a band that
+/// overruns the buffer prints a torn image. 60 000 bytes is under the
+/// 64 KB the command can address and divides into whole rows at every
+/// width we send.
+const MAX_BAND_BYTES: usize = 60_000;
 
 /// ESC/POS bytes for the 80 mm ticket. Same refusal as the HTML renderer
 /// when an IFU document carries a TVA recap.
@@ -33,9 +42,60 @@ pub fn render_ticket_escpos(doc: &Document, lang: Lang) -> Result<Vec<u8>, CoreE
 }
 
 /// The bytes as a reviewer reads them: commands on their own line, text
-/// as it will sit on the paper. Regenerated with `UPDATE_GOLDENS=1`.
+/// as it will sit on the paper, `<raster WxH>` for a band of dots.
+/// Regenerated with `UPDATE_GOLDENS=1`.
 pub fn dump_ticket_escpos(bytes: &[u8]) -> String {
     dump(bytes)
+}
+
+/// The raster bands in `bytes`, decoded back into a bitmap and written as a
+/// PNG. `None` when the bytes carry no raster band, which is every ticket
+/// down the text path.
+///
+/// This is the other half of the dump: `<raster 576x1000>` says a bitmap is
+/// there and nothing about what it says, and the whole point of drawing
+/// Arabic is that a reviewer can look at it. The PNG goes beside the `.txt`
+/// goldens (`fixtures/print/ticket_80mm_escpos/ar.png`) and is opened, not
+/// read as text.
+pub fn dump_ticket_escpos_png(bytes: &[u8]) -> Option<Vec<u8>> {
+    let mut width = 0usize;
+    let mut rows: Vec<u8> = Vec::new();
+    let mut height = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if let Some((band_width, band_height, next, data)) = band_with_data(bytes, i) {
+            if rows.is_empty() {
+                width = band_width;
+            } else if band_width != width {
+                return None;
+            }
+            rows.extend_from_slice(data);
+            height = height.saturating_add(band_height);
+            i = next;
+            continue;
+        }
+        i = i.saturating_add(1);
+    }
+    (!rows.is_empty()).then(|| png::one_bit(width, height, &rows))
+}
+
+/// A `GS v 0` band starting at `at`: its width in dots, its height in rows,
+/// and where the next byte after it sits.
+fn band_at(bytes: &[u8], at: usize) -> Option<(usize, usize, usize)> {
+    band_with_data(bytes, at).map(|(width, height, next, _)| (width, height, next))
+}
+
+fn band_with_data(bytes: &[u8], at: usize) -> Option<(usize, usize, usize, &[u8])> {
+    let header = bytes.get(at..at.checked_add(8)?)?;
+    if header[0] != GS || header[1] != b'v' || header[2] != b'0' {
+        return None;
+    }
+    let stride = usize::from(u16::from_le_bytes([header[4], header[5]]));
+    let height = usize::from(u16::from_le_bytes([header[6], header[7]]));
+    let start = at.checked_add(8)?;
+    let end = start.checked_add(stride.checked_mul(height)?)?;
+    let data = bytes.get(start..end)?;
+    Some((stride.checked_mul(8)?, height, end, data))
 }
 
 /// Write the ticket bytes to a file: a spool file, a USB-serial device
@@ -65,83 +125,64 @@ pub fn send_ticket_escpos_tcp(doc: &Document, lang: Lang, addr: &str) -> Result<
     Ok(())
 }
 
+/// The ticket's own list of things to print, one byte sequence per item.
+/// The list is built in `ticket::items` and this only spells it out, which
+/// is why the nine goldens did not move when the raster path landed.
 fn encode(view: &TicketView) -> Vec<u8> {
     let mut out = Buf::new();
     out.init();
-    out.align(Align::Center);
-    out.bold(true);
-    out.line(view.title);
-    out.bold(false);
-    out.line(&view.seller.name);
-    if let Some(address) = &view.seller.address {
-        out.line(address);
-    }
-    if let Some(phone) = &view.seller.phone {
-        out.line(phone);
-    }
-    for id in &view.seller.ids {
-        out.line(&format!("{} {}", id.label, id.value));
-    }
-    out.line(&view.number);
-    out.line(&view.issued_at);
-    out.rule();
-    out.align(Align::Left);
-    for line in &view.lines {
-        out.line(&line.name);
-        let mut qty = format!("{} × {}", line.qty, line.unit_price);
-        if let Some(rate) = &line.rate {
-            qty = format!("{qty}  {rate}");
-        }
-        out.pair(&qty, &line.total);
-        if let Some(discount) = &line.discount {
-            out.pair(view.discount_label, &format!("-{discount}"));
+    for item in &ticket::items(view) {
+        match item {
+            Item::Align(align) => out.align(*align),
+            Item::Bold(on) => out.bold(*on),
+            Item::Line(text) => out.line(text),
+            Item::Feed(lines) => out.feed(*lines),
+            Item::Cut => out.cut(),
         }
     }
-    out.rule();
-    out.pair(view.total_label, &view.total_amount);
-    if let Some(discount) = &view.discount {
-        out.pair(view.discount_label, &format!("-{discount}"));
-    }
-    for row in &view.tva_rows {
-        out.pair(&format!("{} {}", row.label, row.rate), &row.amount);
-    }
-    if let Some(stamp) = &view.stamp {
-        out.pair(view.stamp_label, stamp);
-    }
-    out.bold(true);
-    out.pair(view.net_to_pay_label, &view.net_to_pay);
-    out.bold(false);
-    out.pair(view.payment_mode_label, view.payment_mode);
-    if let Some(tendered) = &view.tendered {
-        out.pair(view.tendered_label, tendered);
-    }
-    if let Some(change) = &view.change {
-        out.pair(view.change_label, change);
-    }
-    if let Some(balance) = &view.balance {
-        out.rule();
-        out.line(balance.title);
-        out.pair(balance.old_label, &balance.old);
-        out.pair(balance.this_label, &balance.this);
-        out.pair(balance.total_label, &balance.total);
-    }
-    out.align(Align::Center);
-    out.feed(1);
-    out.line(view.thank_you);
-    out.line(view.currency);
-    out.feed(2);
-    out.cut();
     out.into_bytes()
+}
+
+/// The same ticket as dots. A cheap head has no single-byte table for
+/// Arabic and prints a box per byte, so the Arabic ticket is drawn from the
+/// very same items and sent as a raster
+/// (`context/plans/20260921-arabic-on-a-cheap-thermal-head.md`).
+///
+/// `width_dots` is the head's width: 576 on the common 80 mm head, 384 on a
+/// 58 mm one. No codepage is selected because nothing here is text on the
+/// wire.
+pub fn render_ticket_escpos_raster(
+    doc: &Document,
+    lang: Lang,
+    width_dots: u32,
+) -> Result<Vec<u8>, CoreError> {
+    let drawn = draw_ticket_raster(doc, lang, width_dots)?;
+    let mut out = Buf::new();
+    out.init_raster();
+    out.raster(&drawn.bitmap)?;
+    out.cut();
+    Ok(out.into_bytes())
+}
+
+/// The bitmap on its own, beside the lines it was drawn from. The bytes
+/// above are what a head is sent; this is what the tests read, because the
+/// rule they keep is about the strings and the dots they took, not about
+/// the command that carries them.
+pub fn draw_ticket_raster(
+    doc: &Document,
+    lang: Lang,
+    width_dots: u32,
+) -> Result<raster::Drawn, CoreError> {
+    if doc.regime == Regime::Ifu && !doc.totals.tva_by_rate.is_empty() {
+        return Err(CoreError::render(
+            "an IFU document carries a TVA recap and has no printable form",
+        ));
+    }
+    raster::draw(&ticket::items(&ticket::view(doc, lang)), lang, width_dots)
 }
 
 struct Buf {
     bytes: Vec<u8>,
-}
-
-#[derive(Clone, Copy)]
-enum Align {
-    Left,
-    Center,
 }
 
 impl Buf {
@@ -162,6 +203,38 @@ impl Buf {
         // The emulator ignores ESC t but a real head does not, and the dump
         // below skips the two bytes so the golden stays readable either way.
         self.bytes.extend_from_slice(&[ESC, b't', 19]);
+    }
+
+    /// The raster path selects no codepage: every dot it sends is a dot,
+    /// and the one thing it does want is the left margin, so a bitmap the
+    /// width of the head is not shifted by an alignment the last job left
+    /// behind.
+    fn init_raster(&mut self) {
+        self.bytes.extend_from_slice(&[ESC, b'@']);
+        self.align(Align::Left);
+    }
+
+    /// `GS v 0`: raster bit image, mode 0 (normal, no doubling). The four
+    /// header bytes after the mode are the band's width in bytes and its
+    /// height in rows, each little-endian, then the rows themselves, eight
+    /// dots to a byte with the leftmost dot in the high bit and 1 meaning
+    /// black — the same packing `raster::Bitmap` holds, so the bytes are
+    /// copied and not rebuilt.
+    fn raster(&mut self, bitmap: &raster::Bitmap) -> Result<(), CoreError> {
+        let stride = bitmap.stride();
+        let rows_per_band = MAX_BAND_BYTES.checked_div(stride).unwrap_or(0).max(1);
+        let x = u16::try_from(stride)
+            .map_err(|_| CoreError::render("a raster row wider than 65 535 bytes"))?;
+        for band in bitmap.rows().chunks(stride.saturating_mul(rows_per_band)) {
+            let height = band.len().checked_div(stride).unwrap_or(0);
+            let y = u16::try_from(height)
+                .map_err(|_| CoreError::render("a raster band taller than 65 535 rows"))?;
+            self.bytes.extend_from_slice(&[GS, b'v', b'0', 0]);
+            self.bytes.extend_from_slice(&x.to_le_bytes());
+            self.bytes.extend_from_slice(&y.to_le_bytes());
+            self.bytes.extend_from_slice(band);
+        }
+        Ok(())
     }
 
     fn align(&mut self, align: Align) {
@@ -185,7 +258,7 @@ impl Buf {
     }
 
     fn text(&mut self, s: &str) {
-        // The head eats one byte per column (WIDTH = 42), not one UTF-8
+        // The head eats one byte per column (`ticket::WIDTH` = 42), not one UTF-8
         // scalar per column: "Café" is 4 columns, not 5 bytes. For French the
         // wire is ISO 8859-15 (the emulator's `String.fromCharCode(byte)` with
         // the eight 0xA4…0xBE overrides), so every char that fits there is one
@@ -223,24 +296,6 @@ impl Buf {
     fn line(&mut self, s: &str) {
         self.text(s);
         self.lf();
-    }
-
-    fn rule(&mut self) {
-        self.line(&"-".repeat(WIDTH));
-    }
-
-    fn pair(&mut self, label: &str, amount: &str) {
-        let gap = WIDTH
-            .saturating_sub(label.chars().count())
-            .saturating_sub(amount.chars().count());
-        let pad = if gap == 0 { 1 } else { gap };
-        let mut line = String::new();
-        line.push_str(label);
-        for _ in 0..pad {
-            line.push(' ');
-        }
-        line.push_str(amount);
-        self.line(&line);
     }
 }
 
@@ -295,6 +350,15 @@ fn dump(bytes: &[u8]) -> String {
         if bytes[i] == GS && i + 2 < bytes.len() && bytes[i + 1] == b'V' {
             out.push_str("<cut>\n");
             i += 3;
+            continue;
+        }
+        // A raster band, named by the dots it covers and skipped whole.
+        // This has to come before the text fallback below: a band's bytes
+        // are dots, and a dot pattern that happens to be valid UTF-8 would
+        // otherwise be read out as words nobody printed.
+        if let Some((width, height, next)) = band_at(bytes, i) {
+            out.push_str(&format!("<raster {width}x{height}>\n"));
+            i = next;
             continue;
         }
         if bytes[i] == b'\n' {
@@ -352,7 +416,7 @@ fn dump(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{dump, Buf};
+    use super::{dump, raster, Buf};
 
     #[test]
     fn the_dump_names_the_commands_the_buffer_wrote() {
@@ -366,6 +430,41 @@ mod tests {
         assert_eq!(
             dump(&buf.into_bytes()),
             "<init>\n<codepage 19>\n<align center>\n<bold on>\nCafé\n<bold off>\n<cut>\n"
+        );
+    }
+
+    /// The raster header, byte for byte, written from Epson's command
+    /// reference and not from the encoder.
+    ///
+    /// `GS v 0` is `1D 76 30 m xL xH yL yH`: the mode, then the band's
+    /// width **in bytes** and its height **in rows**, each of them two
+    /// bytes, low byte first. Every one of those four numbers can be
+    /// swapped for another and still survive a round trip through the
+    /// decoder beside it, which is why the expectation here is a literal
+    /// and not a re-read: 16 dots wide is 2 bytes a row, so `xL xH` is
+    /// `02 00` and not `10 00`, and 3 rows is `03 00` and not `00 03`.
+    #[test]
+    fn a_raster_band_carries_its_width_in_bytes_and_its_height_in_rows() {
+        let mut bitmap = raster::Bitmap::new(16, 3);
+        // A diagonal: one dot in the left byte, one in the right, one back
+        // in the left, so a row that swapped ends would show.
+        bitmap.set(0, 0);
+        bitmap.set(8, 1);
+        bitmap.set(1, 2);
+        let mut buf = Buf::new();
+        let Ok(()) = buf.raster(&bitmap) else {
+            panic!("a 16 by 3 bitmap is not too big for one band");
+        };
+        assert_eq!(
+            buf.into_bytes(),
+            vec![
+                0x1D, 0x76, 0x30, 0x00, // GS v 0, mode 0
+                0x02, 0x00, // two bytes across
+                0x03, 0x00, // three rows down
+                0x80, 0x00, // row 0: the leftmost dot of the left byte
+                0x00, 0x80, // row 1: the leftmost dot of the right byte
+                0x40, 0x00, // row 2: the second dot of the left byte
+            ]
         );
     }
 }
