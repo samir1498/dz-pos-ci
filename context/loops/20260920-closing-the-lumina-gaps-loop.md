@@ -1041,6 +1041,18 @@ session proves or drops each finding itself. Then `dz-standup`, plain words,
 no task codes, so Anouar sees a shop's evening close and a ticket in Arabic
 rather than a list of ids.
 
+## Filler found while building, not acted on
+
+**The audit log cannot be searched by the person whose drawer was counted.**
+`repos::audit::filtered` filters on the row's own `user_id`, and a close
+writes that row under the closer. When a manager counts a cashier's drawer
+the opener's id lives only inside the `after` JSON, which no filter reads. An
+owner asking "what happened to Amina's till" by picking Amina in the audit
+screen does not see it. Found 2026-09-21 while reviewing the till routes,
+confirmed by reading the repo. Two shapes: a second indexed column for the
+person a row is about, or the audit search learning to read one key out of
+`after`.
+
 ## What waits for Samir, none of it a task here
 
 - The shared lockout, across the PIN and the password. The nine rulings this

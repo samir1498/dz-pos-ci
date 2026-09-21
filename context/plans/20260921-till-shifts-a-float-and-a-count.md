@@ -18,7 +18,7 @@ tasks:
     status: 'done'
   - id: 'T4'
     desc: 'The four routes, the gate rows, the open_and_close_till permission and the tag hook'
-    status: 'pending'
+    status: 'done'
   - id: 'T5'
     desc: 'Opening at sign-in and closing at the till, both in -till/session.tsx'
     status: 'pending'
