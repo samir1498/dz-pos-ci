@@ -22,9 +22,7 @@ use crate::models::document::{Document, DocumentKind, DocumentStatus};
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Money, PaymentMode};
 use crate::services::cash_refunds::Refund;
-use crate::services::{
-    audit, avoir, cash_refunds, clock, debt, documents, optional_field, stock,
-};
+use crate::services::{audit, avoir, cash_refunds, clock, debt, documents, optional_field, stock};
 
 /// Annuls a document (features.md §3). It keeps its number and its row, so the
 /// series never gaps (décret 05-468 art. 10); what it stops doing is asking for
@@ -64,7 +62,15 @@ pub fn cancel(
     reason: String,
     at: Option<NaiveDateTime>,
 ) -> Result<Document, CoreError> {
-    cancel_settling(conn, shop_id, user_id, document_id, reason, at, Refund::None)
+    cancel_settling(
+        conn,
+        shop_id,
+        user_id,
+        document_id,
+        reason,
+        at,
+        Refund::None,
+    )
 }
 
 /// The same cancellation, saying how the money goes back (ruling 5 of the

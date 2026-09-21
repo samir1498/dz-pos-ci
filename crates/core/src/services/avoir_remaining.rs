@@ -260,7 +260,10 @@ impl Remaining {
     /// on it moves to a line of the same rate that has goods: that centime is
     /// the whole reason this exists, and a document line with no quantity is
     /// not a line a paper can print.
-    pub(crate) fn whole(&self, facture: &Document) -> Result<(Totals, Vec<NewDocumentLine>), CoreError> {
+    pub(crate) fn whole(
+        &self,
+        facture: &Document,
+    ) -> Result<(Totals, Vec<NewDocumentLine>), CoreError> {
         if self.foreign_rate {
             return Err(CoreError::validation(
                 "lines",
@@ -374,4 +377,3 @@ pub(crate) fn ht_at(lines: &[DocumentLine], rate: Bps) -> Result<Money, CoreErro
     }
     Ok(sum)
 }
-

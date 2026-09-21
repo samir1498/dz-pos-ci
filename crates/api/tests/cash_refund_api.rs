@@ -287,7 +287,11 @@ async fn an_avoir_takes_the_refund_field_and_refuses_a_value_it_does_not_know() 
     // with no TVA is 1 000,00 TTC, and the droit de timbre on that is 10
     // tranches of 100 DA at 1 DA each, 10,00. The customer handed 1 010,00
     // over and the credit note gives 1 000,00 back.
-    assert_eq!(sale["totals"]["total_ttc_centimes"], json!(100_000), "{sale}");
+    assert_eq!(
+        sale["totals"]["total_ttc_centimes"],
+        json!(100_000),
+        "{sale}"
+    );
     assert_eq!(sale["totals"]["stamp_centimes"], json!(1_000), "{sale}");
     assert_eq!(
         sale["totals"]["net_to_pay_centimes"],

@@ -154,7 +154,10 @@ fn the_row_names_a_real_shop_a_real_document_and_a_real_person() {
         1
     );
     assert_eq!(
-        count(&mut conn, "SELECT COUNT(*) AS n FROM pragma_foreign_key_check"),
+        count(
+            &mut conn,
+            "SELECT COUNT(*) AS n FROM pragma_foreign_key_check"
+        ),
         0
     );
 }
