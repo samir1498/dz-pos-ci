@@ -13,7 +13,7 @@ tasks:
     status: 'done'
   - id: 'T2'
     desc: 'The raster writer and its goldens: print::raster draws the ticket lines into a bitmap, escpos.rs emits GS v 0 bands, and the dump writes PNG goldens a reviewer opens'
-    status: 'pending'
+    status: 'done'
   - id: 'T3'
     desc: 'When the raster is used: a thermal_mode preference beside print_lang, Arabic always rasters, the route and the printing panel read it, the phone inherits it through the spool'
     status: 'pending'
@@ -154,6 +154,15 @@ the width; the three Arabic goldens exist and the French and English bytes
 are unchanged; the build-time line above is filled in. `dz-money-builder`:
 printed totals become pixels here and the line-equality test is what keeps
 them honest. Size L, the one task in the loop that may take a whole night.
+
+Done 2026-09-21, merged as `373c149`. `print::raster` and `print::bidi`
+(every Latin run inside an Arabic line is wrapped in an isolate before
+the bidi algorithm, the same fix the HTML ticket took on 2026-09-12; the
+first goldens printed `10,00-` and `% 19` without it), `print::png`, the
+`GS v 0` band writer, fonts vendored, five Arabic pictures including
+credit and credit-held. The isolate test goes red without the fix; the
+IDAT payload and the band header are pinned by hand. Nothing routes a shop
+to this path yet: that is T3.
 
 **T3: when the raster is used.** A `thermal_mode` preference (`text` or
 `raster`, default `text`) beside `print_lang`; Arabic always rasters,
