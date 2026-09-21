@@ -4,7 +4,7 @@ updated: '2026-09-21'
 ---
 ## Active
 
-**2026-09-21 evening: three merges, two branches left.** Samir's word at
+**2026-09-21 evening: four merges, one branch left.** Samir's word at
 13:49 was to finish everything but the clinic decision. The live loop is
 `context/loops/20260921-a-clean-context-then-the-till-finished.md`; the
 previous one, `20260920-closing-the-lumina-gaps-loop.md`, stays the reference
@@ -15,13 +15,14 @@ the server's expected figure (`f9c54be`); the Arabic ticket drawn as a raster
 with every Latin run isolated before the bidi algorithm (`373c149`); the
 day's shift list for a manager, a real cashier in the browser suite, and the
 repair of the 27 specs the open dialog had blocked since the morning
-(`767055a`); the accountant question page's addendum and the Windows path
-fix in the source-walk test. Two branches are being built and share the one
-build folder: the cash refund (core, schema and API reviewed twice and
-green; the screens, the shared cash panel and the "rung before the till
-opened" field are in progress, one PR for all of it) and the thermal-mode
-preference with the 80 mm facture roll (one PR). After those: the till docs
-sweep, `just ci` once, the whole-loop review on the three lenses at fable,
+(`767055a`); the cash refund with the two dialogs, the shared cash panel
+and the "rung before the till opened" field on the close screen
+(`8499cea`); the accountant question page's addendum and the Windows path
+fix in the source-walk test. One branch is left: the thermal-mode
+preference with the 80 mm facture roll (one PR), built, reviewed by the
+three lenses, six test gaps proven and being closed by its builder, then
+gates and merge. After it: the till docs sweep as a docs-only PR (no CI
+run), `just ci` once, the whole-loop review on the three lenses at fable,
 the standup with the next steps, the architecture brainstorm first among
 them.
 

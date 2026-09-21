@@ -24,7 +24,7 @@ tasks:
     status: 'done'
   - id: 'T6'
     desc: 'A refund that leaves the drawer, and the shift figure on the dashboard and expenses screens'
-    status: 'pending'
+    status: 'done'
   - id: 'T7'
     desc: 'The closing sweep: the shift list, the e2e with a real cashier, the docs'
     status: 'pending'
@@ -447,6 +447,17 @@ a subtraction on a screen.
 This is the only task in the loop that changes a money figure the dashboard
 already answers, so it goes to `dz-money-builder` and takes the extra layer
 the quality gates ask for on money. Size M.
+
+Merged 2026-09-21 as `8499cea` (PR 150, one PR for the core, the schema, the
+routes, the two dialogs, the shared cash panel and the "rung before the
+till opened" field). Cash refunds live in their own table hung off the
+document, so a refund is tied to the paper and never to a shop or a
+customer row; cash is refused on a credit document; a cancellation hands
+back what `avoir::what_is_left` says and no more; the stamp is never given
+back. The outside-a-shift count runs from the person's last close, else
+midnight of the day. Reviewed by the three lenses twice (core, then screens),
+every finding settled with a quoted line; browser suite fr 78, en 77, ar 77;
+gates green on the merged head.
 
 **T7: the closing sweep.** The shift report readable after close (a list
 under `/till/shifts`), the e2e with a real cashier per the M4 rule, and the
