@@ -24,9 +24,9 @@ use dzpos_core::money::{Money, PaymentMode};
 use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::cash_refunds::Refund;
 use dzpos_core::services::clock::{Month, Period};
+use dzpos_core::services::debt::PaymentMethod;
 use dzpos_core::services::documents::DocumentStatus;
 use dzpos_core::services::shifts::{NewShift, TillCount};
-use dzpos_core::services::debt::PaymentMethod;
 use dzpos_core::services::{cancellation, cash, debt, documents, shifts};
 
 mod common;
@@ -143,12 +143,8 @@ fn a_ticket_refunded_on_wednesday_stays_in_mondays_takings_and_the_month_nets_to
     assert_eq!(wednesday.cash, Money::centimes(-300_000));
 
     // The month holds both and comes to nothing.
-    let month = cash::position(
-        &mut conn,
-        SHOP,
-        Period::Month(Month::new(2026, 9).unwrap()),
-    )
-    .unwrap();
+    let month =
+        cash::position(&mut conn, SHOP, Period::Month(Month::new(2026, 9).unwrap())).unwrap();
     assert_eq!(month.cash_in.sales, Money::centimes(300_000));
     assert_eq!(month.cash_out.refunds, Money::centimes(300_000));
     assert_eq!(month.cash, Money::ZERO);
@@ -347,7 +343,10 @@ fn cash_against_a_facture_that_is_still_owed_for_is_refused() {
     );
 
     // The refusal wrote nothing at all. No avoir took a number.
-    assert_eq!(avoir::list_for(&mut conn, SHOP, facture.id).unwrap().len(), 0);
+    assert_eq!(
+        avoir::list_for(&mut conn, SHOP, facture.id).unwrap().len(),
+        0
+    );
     // No cash left the drawer.
     let position = cash::position(&mut conn, SHOP, Period::Day(day(14))).unwrap();
     assert_eq!(position.cash_out.refunds, Money::ZERO);
@@ -463,7 +462,15 @@ fn a_second_refund_against_one_document_is_refused_on_the_field() {
 fn a_refund_of_nothing_is_refused_on_the_field() {
     let (_dir, mut conn) = open_temp();
     // A ticket worth only its stamp: `net_to_pay - stamp` is zero.
-    let ticket = a_sale_with_stamp(&mut conn, SHOP, AMINA, PaymentMode::Cash, 0, 500, at(14, 11));
+    let ticket = a_sale_with_stamp(
+        &mut conn,
+        SHOP,
+        AMINA,
+        PaymentMode::Cash,
+        0,
+        500,
+        at(14, 11),
+    );
     let err = cancellation::cancel_settling(
         &mut conn,
         SHOP,
@@ -562,11 +569,23 @@ fn a_facture_already_credited_in_part_hands_back_only_what_is_left_on_it() {
     let (_dir, mut conn) = open_temp_selling_factures();
     let p = product(&mut conn, "Ciment", 100_000, 0);
     let c = an_identified_customer(&mut conn, "Entreprise Benali");
-    // 3 000,00 over the counter, plus the droit de timbre on top.
+    // 3 units at 1 000,00, no TVA, paid over the counter. Every figure below
+    // is worked out by hand from features.md's droit de timbre row and typed
+    // as a literal; reading `facture.totals.stamp` back off the code under
+    // test, which is what this did until 2026-09-21, proves only that the
+    // code agrees with itself.
+    //
+    //   total_ttc  = 3 x 100 000 c                 = 300 000 c (3 000,00 DA)
+    //   tranches   = ceil(3 000 DA / 100 DA)       =      30
+    //   band       = 3 000 DA is under 30 000 DA   =   1 DA a tranche
+    //   stamp      = 30 x 1 DA = 30,00 DA          =   3 000 c (over the
+    //                                                  5 DA minimum, no cap
+    //                                                  in reach)
+    //   net_to_pay = 300 000 + 3 000               = 303 000 c
     let facture = a_facture(&mut conn, c, vec![line(p, 3_000)], PaymentMode::Cash, 14);
     assert_eq!(facture.totals.total_ttc, Money::centimes(300_000));
-    let stamp = facture.totals.stamp;
-    assert!(stamp > Money::ZERO, "no stamp here to keep");
+    assert_eq!(facture.totals.stamp, Money::centimes(3_000));
+    assert_eq!(facture.totals.net_to_pay, Money::centimes(303_000));
 
     // One of the three units comes back in cash: 1 000,00.
     let partial = avoir::issue_settling(
@@ -601,9 +620,11 @@ fn a_facture_already_credited_in_part_hands_back_only_what_is_left_on_it() {
     let position = cash::position(&mut conn, SHOP, Period::Day(day(14))).unwrap();
     // 1 000,00 on the credit note and 2 000,00 on the cancellation.
     assert_eq!(position.cash_out.refunds, Money::centimes(300_000));
-    // The drawer took the sale and the stamp and kept only the stamp.
-    assert_eq!(position.cash_in.sales, facture.totals.net_to_pay);
-    assert_eq!(position.cash, stamp);
+    // The drawer took the sale and the stamp: 303 000 c in, 300 000 c back
+    // out, and the 3 000 c of stamp is what stays. The stamp is never given
+    // back (features.md §1, "Cash handed back").
+    assert_eq!(position.cash_in.sales, Money::centimes(303_000));
+    assert_eq!(position.cash, Money::centimes(3_000));
 }
 
 /// The case ruling 5 was taken for: a facture with no customer, credited in
