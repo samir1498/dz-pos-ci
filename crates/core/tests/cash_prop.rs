@@ -20,6 +20,7 @@ use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::cancellation;
+use dzpos_core::services::cash_refunds::Refund;
 use dzpos_core::services::cash;
 use dzpos_core::services::clock::{Month, Period};
 use dzpos_core::services::customers;
@@ -51,6 +52,10 @@ enum Event {
     Sell(DocumentKind, PaymentMode, i64, i64),
     /// A sale rung up and then annulled.
     SellThenCancel(PaymentMode, i64),
+    /// A cash sale rung up and then annulled with the notes handed back: the
+    /// total and the stamp inside it. Its own arm and not a flag on the one
+    /// above, because the two answer opposite things about the sales column.
+    SellThenRefund(i64, i64),
     /// A credit facture, then money against the debt.
     Settle(PaymentMethod, i64),
     /// Money to a supplier.
@@ -105,6 +110,7 @@ struct Expected {
     cash_sales: i64,
     cash_stamp: i64,
     cash_customer_payments: i64,
+    refunds: i64,
     supplier_cash: i64,
     expenses: i64,
     card_sales: i64,
@@ -118,6 +124,7 @@ impl Expected {
         self.cash_sales += other.cash_sales;
         self.cash_stamp += other.cash_stamp;
         self.cash_customer_payments += other.cash_customer_payments;
+        self.refunds += other.refunds;
         self.supplier_cash += other.supplier_cash;
         self.expenses += other.expenses;
         self.card_sales += other.card_sales;
@@ -151,7 +158,12 @@ fn agrees(
         "{}: cash customer payments",
         range
     );
-    prop_assert_eq!(position.cash_out.refunds, Money::ZERO, "{}: refunds", range);
+    prop_assert_eq!(
+        position.cash_out.refunds.as_centimes(),
+        expected.refunds,
+        "{}: refunds",
+        range
+    );
     prop_assert_eq!(
         position.cash_out.supplier_payments.as_centimes(),
         expected.supplier_cash,
@@ -185,6 +197,7 @@ fn agrees(
     prop_assert_eq!(
         position.cash.as_centimes(),
         expected.cash_sales + expected.cash_customer_payments
+            - expected.refunds
             - expected.supplier_cash
             - expected.expenses,
         "{}: the net",
@@ -218,6 +231,7 @@ fn events() -> impl Strategy<Value = Vec<(When, Event)>> {
             if matches!(m, PaymentMode::Cash) { s } else { 0 }
         )),
         (mode, amount.clone()).prop_map(|(m, a)| Event::SellThenCancel(m, a)),
+        (amount.clone(), 0i64..=500).prop_map(|(a, s)| Event::SellThenRefund(a, s)),
         (method.clone(), amount.clone()).prop_map(|(m, a)| Event::Settle(m, a)),
         (method, amount.clone()).prop_map(|(m, a)| Event::PaySupplier(m, a)),
         amount.clone().prop_map(Event::Spend),
@@ -288,6 +302,28 @@ proptest! {
                     ).unwrap();
                     // The delta stays empty: an annulled ticket is money that
                     // never stayed in the drawer.
+                }
+                Event::SellThenRefund(total_ttc, stamp) => {
+                    let id = a_document(
+                        &mut conn, SHOP, DocumentKind::Ticket, PaymentMode::Cash, total_ttc,
+                        stamp, moment(day, hour), None,
+                    );
+                    cancellation::cancel_settling(
+                        &mut conn, SHOP, OWNER, id, "rendu".to_string(),
+                        Some(moment(day, hour)), Refund::Cash,
+                    ).unwrap();
+                    // Both halves, and this is the whole point of the arm.
+                    // The sale stays in the takings of the day it was rung,
+                    // because the drawer did take that money, and the notes
+                    // that went back are an outgoing on the day they went.
+                    // Drop either half and the ticket is counted twice
+                    // against the shop.
+                    delta.cash_sales = total_ttc + stamp;
+                    delta.cash_stamp = stamp;
+                    // The stamp is never handed back (Code du timbre 2026
+                    // art. 100-I), so what leaves the drawer is the total
+                    // without it.
+                    delta.refunds = total_ttc;
                 }
                 Event::Settle(method, centimes) => {
                     // The debt first, so the payment has something to land on.

@@ -14,7 +14,7 @@
     "crates/api/src/lib.rs": 710,
     "crates/api/tests/sales_api.rs": 1591,
     "crates/core/src/print/strings.rs": 638,
-    "crates/core/src/services/avoir.rs": 987,
+    "crates/core/src/services/avoir.rs": 718,
     "crates/core/src/services/backup.rs": 629,
     "crates/core/src/services/debt.rs": 951,
     "crates/core/src/services/import.rs": 837,

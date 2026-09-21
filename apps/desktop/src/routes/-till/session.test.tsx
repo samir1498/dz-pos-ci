@@ -57,6 +57,10 @@ function reportOf(
       customer_payments_centimes: 0,
       total_centimes: takingsTotalCentimes,
     },
+    // No reversal was handed back in any of these fixtures, so the expected
+    // figure below is the takings whole. The screen that shows this figure
+    // is the second half of T6 and not here.
+    refunds_centimes: 0,
     expected_centimes: expectedCentimes,
     difference_centimes: null,
     until: "2026-09-21 12:00:00",
