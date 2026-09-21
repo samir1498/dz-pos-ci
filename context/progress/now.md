@@ -586,6 +586,9 @@ here.
   identifier change when the name is final.
 - Anouar worked on a similar product before: the law and the calculations
   are not simple; an accountant may be needed as the project grows (R8).
+  (Samir, 2026-09-21: neither of them said an accountant was needed; that
+  was the session's own suggestion, written here as if it were Anouar's.
+  R8 is optional and Samir's to skip, blocked on nobody.)
 
 ## Decisions from Samir, 2026-09-08 (evening)
 
