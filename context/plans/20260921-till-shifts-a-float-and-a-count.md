@@ -12,7 +12,7 @@ tasks:
     status: 'done'
   - id: 'T2'
     desc: 'The migration, the models, the repos, and the expense clock fix that ships with them'
-    status: 'pending'
+    status: 'done'
   - id: 'T3'
     desc: 'services::shifts, the cash window it asks for, and the three audit actions'
     status: 'pending'
