@@ -948,6 +948,19 @@ touches the same file.
   Worth doing as a pair or not at all, because pinning the narrower one and
   leaving the layering rule unpinned is the wrong way round. One branch,
   `dz-builder`. Size S.
+- The seeder is timed by the wall clock, found 2026-09-21 on a gates run
+  for the shifts schema branch. `crates/core/tests/seed_service.rs:306`
+  asserts `took.as_secs() < 30`; the run took 30.42s and failed, and the
+  same file passed in 68s alone on an idle box minutes later. The bound
+  measures how loaded the box is, not how fast the seeder is, so it fails a
+  branch that did not touch `seed::run` and costs a full gates cycle each
+  time. Its own comment says thirty seconds is generous because the box
+  builds for other worktrees, which is the admission that the number is
+  about the box. Two shapes to pick between: count what the seeder writes
+  (rows, or statements executed) and assert on that, which is what the test
+  claims to be about and holds at any load, or keep a wall-clock bound and
+  raise it to a number no loaded box reaches, which only moves the flake
+  further out. One branch, `dz-builder`. Size S.
 
 ## Out of scope, and why each is parked
 
