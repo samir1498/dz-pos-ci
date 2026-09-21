@@ -22,7 +22,7 @@ tasks:
     desc: 'Gapless numbering: find which text requires it (05-468 numéro d''ordre, code de commerce, procédures fiscales) and what a void/cancel must look like'
     status: 'done'
   - id: 'R6'
-    desc: 'Amount in words: French wording on printed factures, Arabic convention (native review), whether English is ever needed; feed the golden fixtures'
+    desc: 'Parked 2026-09-21 until after the replan, Samir: nothing prints an amount in words today and the wording follows whatever the product turns out to be. Amount in words: French wording on printed factures, Arabic convention (native review), whether English is ever needed; feed the golden fixtures'
     status: 'pending'
   - id: 'R7'
     desc: 'Lumina versus the law: complete the diff table in fiscal-sources-and-findings.md; every row cites an article or says assumption'
