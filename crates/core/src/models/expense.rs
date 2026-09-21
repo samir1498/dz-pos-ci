@@ -98,6 +98,12 @@ pub(crate) struct ExpenseRowWrite {
     pub expense_date: String,
     pub note: Option<String>,
     pub user_id: i32,
+    /// Stamped by the service from `services::clock` and never left to the
+    /// column's `DEFAULT (CURRENT_TIMESTAMP)`, which SQLite answers in UTC
+    /// while the shop runs an hour ahead. Migration 000017 moved the rows
+    /// written before this field existed; with the field here there is no
+    /// insert left that omits it, so the default can no longer fire.
+    pub created_at: NaiveDateTime,
 }
 
 impl From<ExpenseCategoryRow> for ExpenseCategory {

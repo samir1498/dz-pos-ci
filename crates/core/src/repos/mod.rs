@@ -16,6 +16,7 @@ pub mod purchases;
 pub mod sale_idempotency;
 pub mod sessions;
 pub mod settings;
+pub mod shifts;
 pub mod shops;
 pub mod stock;
 pub mod supplier_debt;

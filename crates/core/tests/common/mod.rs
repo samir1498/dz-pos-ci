@@ -14,6 +14,7 @@
 //! needs a limit, a note or an opening balance sets it itself.
 
 pub mod facture;
+pub mod migrations;
 
 use std::path::PathBuf;
 

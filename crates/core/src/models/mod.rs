@@ -11,6 +11,7 @@ pub mod product;
 pub mod purchase;
 pub mod sale_idempotency;
 pub mod session;
+pub mod shift;
 pub mod shop;
 pub mod sql_types;
 pub mod stock;
