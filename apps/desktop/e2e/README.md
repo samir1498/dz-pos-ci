@@ -220,6 +220,17 @@ second language on; use the looped `just e2e` or a single `--project`.
   month. It seeds everything it reads rather than living off what they left,
   because `just screenshot` runs it alone against a database that was just
   deleted.
+- `scanner.spec.ts`, every wedge-scanner behaviour reachable without a
+  scanner on the desk: the burst rule, the suffix key each model sends after
+  the code, the wrong box having focus, and an AZERTY layout driven through
+  CDP. What a real head does is the one row of the matrix that waits for
+  Samir's own hardware.
+- `zzzz-facture-layouts.spec.ts`, the sentence a shop owner would say: pick a
+  layout in settings, open a facture, and the page is the one that was
+  picked. That each layout draws what décret 05-468 art. 3 asks for is
+  covered by the goldens in `crates/core`, and the picker's own wiring beside
+  the component; only the round trip is end to end. Named to run last for the
+  same reason as the dashboard spec: it changes a shop-wide setting.
 - `messages.ts` is the shared loader for `src/i18n/{fr,en,ar}.json`, keyed
   off the running Playwright project, so a reworded message fails the test
   instead of quietly passing. `api.ts` is where a spec that seeds its own
