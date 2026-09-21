@@ -612,7 +612,7 @@ is on T3's file list for that reason.
 
 A sale rung while the ringer has no open shift is accepted and tagged, never
 refused (ruling 2). The tag is derived, not stored: a sale belongs to no shift
-when its `created_at` falls outside every `[opened_at, closed_at)` of that
+when its `issued_at` falls outside every `[opened_at, closed_at)` of that
 `user_id`. The close screen reads that as its own figure beside the expected
 one, so a morning rung before the shift opened does not read as a shortage. A
 replayed offline sale lands the same way, on `issued_at` rather than arrival
@@ -647,7 +647,7 @@ count.
   because one route serves both cases.
 - A sale with no shift open: accepted and tagged, never refused (ruling 2).
   Nothing is stored on the sale: a sale belongs to no shift when its
-  `created_at` falls outside every `[opened_at, closed_at)` of its `user_id`,
+  `issued_at` falls outside every `[opened_at, closed_at)` of its `user_id`,
   and `shifts::sales_outside_a_shift` is that one query. It writes an audit
   row `till.sale_outside_shift`.
 
@@ -742,8 +742,11 @@ takings and each be recorded short by it.
 The window comparison gets its own cases, because a fixture whose rows all
 sit inside one shift passes with the comparison inverted: a sale at exactly
 `opened_at` is in, a sale at exactly `closed_at` is out, and a sale whose
-`created_at` falls after its ringer's last shift closed with none open is
-tagged as belonging to no shift. Size M.
+`issued_at` falls after its ringer's last shift closed with none open is
+tagged as belonging to no shift. The column is named in each of these on
+purpose: `documents.created_at` takes SQLite's UTC default and would tag a
+sale wrong by an hour at every shift boundary, which is the error these
+boundary cases exist to catch and which they would pass against. Size M.
 
 **T4: the routes, the gates, the permission.** `POST /till/shifts`,
 `POST /till/shifts/{id}/close`, `GET /till/shifts/open`,
