@@ -1,7 +1,7 @@
 ---
 title: 'M7 paired phone proven'
 slug: 'm7-paired-phone-proven'
-status: 'active'
+status: 'done'
 category: 'milestone'
 created: 20260915
 tldr: 'Close the three M6 review gaps on the shop floor: atomic QR claim, device auth that is actually checked, sales that ring once'
@@ -23,11 +23,12 @@ tasks:
     status: 'done'
   - id: 'T6'
     desc: 'Maestro proof on a real phone over Tailscale: pair, sign in, sell, kill Wi-Fi, retry rings once, revoke, next call 401s'
-    status: 'pending'
+    status: 'done'
   - id: 'T7'
     desc: 'Closing sweep: docs/features.md §6, docs/architecture.md transport table, docs/roadmap.md M7 demo, dz-review (money+roles) before checkpoint PR'
     status: 'done'
 acceptance: []
+completed_at: '2026-09-21'
 ---
 # M7: the paired phone, proven
 

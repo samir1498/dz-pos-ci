@@ -285,7 +285,7 @@ on 2026-09-20 says:
   English sentences (`apps/mobile/maestro/*.yaml`). Listed under "waits for
   Samir" at the end.
 - Phase 3, architecture: T2, T3, T5, T6, T7 and T8 are done (#109, #118 to
-  #121, #124, #125). Four stay open and are the unfinished work this loop
+  #121, #124, #125). Two stay open and are the unfinished work this loop
   starts with:
   - T4: done on 2026-09-21. `REACHES_PAST_A_SIBLING` in
     `crates/core/tests/services_go_through_services.rs` is down to two rows
@@ -647,17 +647,19 @@ and a manager who cannot read a day's shifts cannot run a floor.
 
 Permissions: opening and closing is a new permission, `open_and_close_till`,
 
-held by all three roles under ruling 10. Adding it moves `permissions.rs` off thirteen and the match
-refuses to compile until all three roles place it, which is the point. §5's
-"Thirteen permissions" and `gates.rs`'s count are rewritten in the same PR;
-`.claude/stale-homes.md` gains the row it does not have for the permission
-count.
+held by all three roles under ruling 10. It shipped with T4 alongside a second
+one, `close_another_persons_till`, which is Owner and Manager only and is
+asked for inside the service when the closer is not the opener. The two took
+`permissions.rs` from thirteen to fifteen, the match refused to compile until
+all three roles placed each, §5 of `docs/features.md` moved with them, and so
+did the `.claude/stale-homes.md` row. The gates module keeps no permission
+count of its own: a fine permission checked in a service gets no gate row.
 
 ### The awkward cases, each with what the schema does about it
 
 - A shift across midnight: a session is a shift, not a day. The dashboard's
-  day and month figures keep their calendar definition; the session report
-  reads the session window. Both are true at once and the page says which
+  day and month figures keep their calendar definition; the shift report
+  reads the shift window. Both are true at once and the page says which
   screen answers which question.
 - Closed by a different user: `closed_by` is its own column and the audit row
   names both. A cashier closes their own and nobody else's (ruling 10), and
@@ -708,7 +710,7 @@ decided. Every ruling is taken and written at
 the top of this file. Bookkeeping, straight to `main`.
 
 **T2: the migration, the models, the repos.** Files:
-`crates/core/migrations/2026-09-2x-000017_shifts/{up,down}.sql`,
+`crates/core/migrations/2026-09-21-000017_shifts/{up,down}.sql`,
 `crates/core/src/schema.rs`, `crates/core/src/models/shift.rs`,
 `crates/core/src/repos/shifts.rs`,
 `crates/core/src/services/expenses.rs` (stamping),
@@ -745,9 +747,11 @@ open_for, sales_outside_a_shift, report}`, the `cash::position` window, and
 the three audit actions. Files: `crates/core/src/services/shifts.rs`,
 `crates/core/src/services/cash.rs`, `crates/core/src/services/audit.rs`,
 `crates/core/src/services/documents.rs`, `crates/core/src/services/mod.rs`,
-`crates/core/tests/shifts_service.rs`.
+`crates/core/tests/shifts_service.rs`, and, once that suite crossed the
+1200-line test limit, `crates/core/tests/shifts_who_may_close.rs` with the
+fixtures both need in `crates/core/tests/common/shifts.rs`.
 Spec: the cash position paragraph of §1, rewritten in this PR to say what a
-session adds; the fiscal rules table gains no row because no document
+shift adds; the fiscal rules table gains no row because no document
 changes what it charges. Done: a fixture with an opening cash figure, two cash sales and one cash debt
 payment by the shift's own user, plus a card sale, a cash expense, a supplier
 payment in cash and a second cashier's cash sale in the same window, none of
@@ -842,7 +846,7 @@ This is the only task in the loop that changes a money figure the dashboard
 already answers, so it goes to `dz-money-builder` and takes the extra layer
 the quality gates ask for on money.
 
-**T7: the closing sweep.** The session report readable after close (a list
+**T7: the closing sweep.** The shift report readable after close (a list
 under `/till/shifts`), the e2e with a real cashier per the M4 rule, the
 docs sweep (`docs/features.md` §1 and §5, `docs/architecture.md`'s error
 table, `.claude/stale-homes.md`, `README.md` screens list). Done: the
@@ -1018,7 +1022,7 @@ The 2026-09-17 list holds in full. Four more, each from something read
 today:
 
 - A pinned file may not grow by one line. `till.tsx`, `dashboard.tsx`,
-  `expenses.tsx`, `lib.rs`, `client.ts`, `purchases_.$id.tsx` are all on
+  `expenses.tsx`, `lib.rs`, `purchases_.$id.tsx` are all on
   `scripts/file-sizes.json`; new till UI goes in `routes/-till/`, new
   dashboard figures in `components/`. `just sizes` is in `just gates`, so a
   builder finds out at the end unless it reads this first.

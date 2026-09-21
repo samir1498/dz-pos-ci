@@ -5,7 +5,7 @@ status: 'active'
 category: 'roadmap'
 created: 20260917
 period: '2026-H2'
-tldr: 'Anouar made Lumina the benchmark on 2026-09-17. Seven real gaps, three of them planned and one weekend loop to build them; the rest need a market decision or a legal one, and are parked with the reason.'
+tldr: 'Anouar made Lumina the benchmark on 2026-09-17. Seven real gaps; a weekend loop and then a second loop built most of them, and a third pass finishes the till and cleans the pages before Dinar is replanned as a modular product. What is left needs a market decision or a legal one, and is parked with the reason.'
 priority: 95
 entries:
   - ref: 'architecture-fixes-without-a-domain-split'
@@ -17,6 +17,15 @@ entries:
   - ref: 'the-phone-in-three-languages'
     status: 'done'
     note: 'Not a Lumina gap, we are ahead of them on languages. It is our own hole, and it is where the i18n refactor shape gets built small'
+  - ref: 'a-print-language-the-shop-keeps'
+    status: 'done'
+    note: 'Gap 3. One stored setting decides what language every fiscal paper prints in, independent of the screen'
+  - ref: 'the-last-six-reaches-stand-behind-rings'
+    status: 'done'
+    note: 'The carried-in architecture work: the cross-domain reach list is two rows and three reaches, each kept with its reason'
+  - ref: 'till-shifts-a-float-and-a-count'
+    status: 'active'
+    note: 'Gap 2. The table, the service and the four routes are merged; the two screens, the cash refund and the closing sweep are what is left'
 ---
 # Catching Lumina
 

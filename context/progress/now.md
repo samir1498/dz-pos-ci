@@ -15,9 +15,18 @@ Phase 0 is done: the gates table is a folder and the shared client is split
 by domain. Phase 1 is done: the shop stores the language its paper prints in
 and the six fiscal papers print in it, and the cross-domain reach list is
 down from nine services to two rows, each kept with its reason. Phase 2, till
-shifts, is in flight: the `shifts` table, its models and repos and the
-expense clock fix are merged, and the service half is building now. Phase 3
-and the whole-loop review have not started.
+shifts, is in flight: the table, its models and repos, the expense clock fix,
+the service that counts one cashier's own cash and the four routes with the
+two permissions are all merged. What is left is the open and close screens,
+a refund that leaves the drawer with the shift figure beside it, and the
+closing sweep. Phase 3 and the whole-loop review have not started.
+
+The loop file changed on 2026-09-21: the live one is
+`context/loops/20260921-a-clean-context-then-the-till-finished.md`, which
+cleans the pages first and then finishes the till, because Samir asked for a
+replan of Dinar as a modular product once this pass closes and a replan reads
+these pages. Nothing about that replan is designed yet and no plan here is
+void.
 
 Open for Samir: the scanner plan's last task, which needs his own phone and
 laptop, and the shared-lockout ruling across the PIN and the password.

@@ -176,12 +176,16 @@ The shift list is its own screen under `see_reports`, not a view of the audit
 log, because `see_audit_log` is the owner's alone (`docs/features.md` line
 891) and a manager who cannot read a day's shifts cannot run a floor.
 
-Opening and closing is a new permission, `open_and_close_till`, held by all
-three roles under ruling 10. Adding it moves `permissions.rs` off thirteen
-and the match refuses to compile until all three roles place it, which is the
-point. §5's "Thirteen permissions" and the count in `gates/mod.rs` are rewritten
-in the same PR, and `.claude/stale-homes.md` gains the row it does not have
-for the permission count.
+Opening and closing took two permissions, not one, and they shipped with T4.
+`open_and_close_till` is held by all three roles under ruling 10 and gates
+the routes; `close_another_persons_till` is Owner and Manager only and is
+asked for inside `services::shifts::close`, and only when the closer is not
+the opener. Together they took `permissions.rs` from thirteen to fifteen, and
+the match refused to compile until all three roles placed each one, which was
+the point. §5 of `docs/features.md` moved with them, and so did the row in
+`.claude/stale-homes.md`. `crates/api/src/gates/mod.rs` keeps no permission
+count of its own by design: its only count is the reads, because a fine
+permission checked in a service gets no gate row.
 
 ## The expense clock, still worth fixing
 
@@ -282,7 +286,9 @@ open_for, sales_outside_a_shift, report}`, `cash::takings_for` and the
 user-filtered repo queries under it, and the three audit actions. Files:
 `crates/core/src/services/shifts.rs`, `cash.rs`, `audit.rs`, `documents.rs`,
 `mod.rs`, `crates/core/src/repos/cash.rs`,
-`crates/core/tests/shifts_service.rs`.
+`crates/core/tests/shifts_service.rs`, and, once that suite crossed the
+1200-line test limit, `crates/core/tests/shifts_who_may_close.rs` with the
+fixtures both suites need in `crates/core/tests/common/shifts.rs`.
 
 Spec: the cash position paragraph of §1, rewritten in this PR to say what a
 shift adds; the fiscal rules table gains no row because no document changes

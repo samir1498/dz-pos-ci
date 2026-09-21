@@ -1,7 +1,7 @@
 ---
 title: 'A print language the shop keeps'
 slug: 'a-print-language-the-shop-keeps'
-status: 'active'
+status: 'done'
 category: 'feature'
 created: 20260920
 tldr: 'One stored setting decides what language every fiscal paper prints in, independent of the screen. A shop that never opens the panel keeps exactly today behaviour, so nothing changes until somebody chooses.'
@@ -14,7 +14,7 @@ tasks:
     desc: 'A print_lang key in preferences, the service pair that reads and writes it, the gated PUT route, the DTO and the settings panel beside the facture layout'
     status: 'done'
   - id: 'T3'
-    desc: 'The six document routes take ?lang= as an override and read the preference when it is absent; docs features.md 4 and 8 rewritten in the same PR'
+    desc: 'The six document routes take ?print_lang= as an override and read the preference when it is absent; docs features.md 4 and 8 rewritten in the same PR'
     status: 'done'
 ---
 # A print language the shop keeps
