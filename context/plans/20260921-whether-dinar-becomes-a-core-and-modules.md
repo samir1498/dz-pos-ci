@@ -12,7 +12,7 @@ tasks:
     status: 'done'
   - id: 'D2'
     desc: 'What a clinic day actually is, one page, from Samir research rather than from imagination'
-    status: 'pending'
+    status: 'in-progress'
   - id: 'D3'
     desc: 'The paper test: express one billed consultation in the document model that exists today, and record where it tears'
     status: 'pending'
@@ -226,6 +226,16 @@ touches it, what is printed, what is owed and by whom. Not a feature list
 and not a comparison with Dinar. The question it has to answer is which
 parts of a shop's day and a clinic's day are the same transaction, because
 the code follows that answer and not the other way round. Size M.
+
+**D2, drafted 2026-09-22.** A desk-research draft is at
+`context/research/20260922-a-doctors-cabinet-day-on-paper.md`: the desk,
+the consultation as an unpriced act, the four debt shapes (paid in full,
+paid then claimed back from CNAS or CASNOS, tiers payant where the fund
+owes the cabinet, a mutuelle topping up), the fiscal rules with the two
+unresolved ones flagged (TVA at 9% or exempt; whether the timbre reaches a
+fee note at all), 21 sources cited inline. Anouar said the same morning the
+trade need not be a doctor. The task stays open until Samir's own research
+confirms or replaces the draft; it is enough for D3 to start on.
 
 **D3: the paper test.** Take one billed consultation from D2 and express it
 in the document model that exists today: `documents`, its lines, a payment
