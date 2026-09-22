@@ -227,6 +227,14 @@ and not a comparison with Dinar. The question it has to answer is which
 parts of a shop's day and a clinic's day are the same transaction, because
 the code follows that answer and not the other way round. Size M.
 
+**Runtime or build time, answered 2026-09-22.** Samir asked Anouar at 08:57
+whether modules are loaded at runtime or built in. Anouar, 09:03: "no not in
+runtime"; 09:49: "we need to add the modules for them, so a doctor wants a
+software, we prepare the package for him and send it." So a customer's
+package is built by us with their modules compiled in, which is what
+Samir's ruling of the 21st (no code loaded into the running program)
+already required. Candidate 5c's plugin files are off the table.
+
 **D2, drafted 2026-09-22.** A desk-research draft is at
 `context/research/20260922-a-doctors-cabinet-day-on-paper.md`: the desk,
 the consultation as an unpriced act, the four debt shapes (paid in full,
