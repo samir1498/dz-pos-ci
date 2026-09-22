@@ -7,6 +7,14 @@ tldr: 'Seven shapes for a core plus trade modules were each argued on its own pa
 
 # Module shape: the seven candidates compared
 
+Written 2026-09-21. On 2026-09-22 D4 landed (`5015e4e`): the word walk
+pins twelve kernel files, not the six places this page counts, because it
+reads identifiers where the pages below read import paths (the audit log's
+action tags, the permission enum's `Sell` and `Till`, the money kernel's
+`discount` and `price`, and `settings`' discount threshold are the extra
+ones). The current state is on the plan page under D4; the body below is
+left as it was written.
+
 Seven pages, one per candidate, each written by its own agent on the sharper
 model against the constraints block of
 `context/plans/20260921-whether-dinar-becomes-a-core-and-modules.md` (D7),
