@@ -73,14 +73,10 @@ draw is the line the tear already found.
 
 ## What is waiting on a person
 
-- Samir, inside S4: are the money kernel's discount and price shop-only or
-  shared. The rows for `money/mod.rs` and `money/totals.rs` stay on the
-  boundary walk's allow list until he answers; the safe default is to leave
-  them as an accepted decision rather than move money code on a guess.
-- Samir, inside S4: confirm the permission enum's ten shop variants stay in
-  the kernel as a decision rather than a leftover. His ruling of the 21st
-  says the list stays one list, so the expected answer is yes and only the
-  written reason changes.
+- Answered, 2026-09-22 14:58, so no longer waiting: the money arithmetic
+  stays shared for every trade, and the permission list stays one list. The
+  three rows those rulings cover keep their place on the boundary walk with
+  their reasons rewritten to name him and the date.
 - Samir: the refund design question (manager only, or a cashier with a
   manager's code), the scanner check that needs his phone, Windows 7 with a
   first real shop, and the disk cleanup.
