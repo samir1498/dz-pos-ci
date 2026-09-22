@@ -168,9 +168,17 @@ accepted and written down here rather than discovered later. Size S.
 - Nothing a shop can see. If a screen, a total, a printed paper or a
   permission behaves differently at the end of S7, something in the move was
   a rewrite and has to come back out.
-- Not the doctor module. What that module would contain is being researched
-  on 2026-09-22 (`what clinic software provides`), and the answer names the
-  target this split is built towards, not its content.
+- Not the doctor module. What that module would contain was researched on
+  2026-09-22 (`context/research/20260922-what-clinic-software-provides.md`),
+  which names the target this split is built towards, not its content. Three
+  questions it leaves for this plan to answer: whether a patient is a row in
+  the module's own table or a differently typed `customers` row (its finding
+  is that Anouar's "same module with different strings" holds for the
+  identity columns and fails at the money ones); how the shared role gate
+  learns a module's own permission names when each package is assembled
+  separately; and how a module's migrations sequence against the kernel's so
+  a package still passes `crates/api/tests/upgrade_from_a_previous_version.rs`.
+  The last one lands on S7 and the second on S5.
 
 ## The gate before S2 starts
 
