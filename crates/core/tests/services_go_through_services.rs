@@ -540,3 +540,486 @@ fn services_containing(marker: &str) -> Vec<String> {
         .map(|path| format!("{}.rs", stem(&path)))
         .collect()
 }
+
+/// The files a shop split would leave behind whole: no shop's own trade
+/// picks a different `users.rs`, `error.rs` or `money/totals.rs`, the way
+/// every trade would still need a facture reader picking a different
+/// `sales.rs`. Eleven services with no shop meaning, the money module
+/// (five files, none of them naming diesel or a table), the crate's one
+/// error enum, the storage-side enums, and the three print files every
+/// template shares.
+///
+/// `schema.rs` is deliberately not here. Its own header says it is
+/// hand-written to match the migrations, one file for the one SQLite file a
+/// shop keeps; 21 of its 31 `table!` blocks are shop tables (`categories`
+/// opens it). That is not the kernel choosing to know about the shop, it is
+/// what a single migration list for both halves requires structurally, so a
+/// walk that failed on it would be asking the schema to be two files before
+/// anything has decided it should be.
+///
+/// The print engine's other thirteen files are not here either.
+/// `barcode_label.rs`, `debt_slip.rs`, `facture.rs`, `facture_roll.rs`,
+/// `facture_view.rs`, `refusals.rs`, `statement.rs` and `ticket.rs` each
+/// `use crate::models::{document, customer, product}` for the paper they
+/// print; `layout.rs`, `png.rs`, `raster.rs`, `thermal.rs` and `bidi.rs`
+/// name no model at all (checked 2026-09-22 by grepping every one of them
+/// for `models::`). `mod.rs`, `escpos.rs` and `strings.rs` are the three
+/// left because they are what the whole engine shares: the module tree, the
+/// escpos byte format and the printed word list, in the three languages,
+/// that any paper draws from.
+const KERNEL_FILES: [&str; 21] = [
+    "services/users.rs",
+    "services/sessions.rs",
+    "services/permissions.rs",
+    "services/audit.rs",
+    "services/settings.rs",
+    "services/preferences.rs",
+    "services/pairing.rs",
+    "services/backup.rs",
+    "services/support_bundle.rs",
+    "services/clock.rs",
+    "services/shops.rs",
+    "money/mod.rs",
+    "money/words.rs",
+    "money/totals.rs",
+    "money/format.rs",
+    "money/stamp.rs",
+    "error.rs",
+    "models/sql_types.rs",
+    "print/mod.rs",
+    "print/escpos.rs",
+    "print/strings.rs",
+];
+
+/// The word the shared kernel is not to name in its own code, chosen from
+/// `docs/features.md`'s domain nouns and given rather than derived: this
+/// walk cannot decide on its own what a shop word is, only whether one from
+/// this list appears.
+///
+/// `product` (singular) is on this list beside `products` (plural), on a
+/// second thought: `money/totals.rs`'s discount proration names its own
+/// local `let product = i128::from(discount.as_centimes()) * …` for the
+/// arithmetic product of two factors, nothing about a shop's stock, and
+/// that hit is a false one. It is kept rather than tuned away by dropping
+/// the word, because the word is what also catches `error.rs`'s
+/// `UnpricedReversal { product_id: i32, … }`, a real hit, and a
+/// `ProductRef` or a `Product` named in any *other* kernel file would be
+/// exactly this kind of real hit too. `money/totals.rs`'s row below
+/// carries `product` with the arithmetic reason spelled out beside it, so
+/// the one false alarm this list knows about is accepted by name rather
+/// than hidden by narrowing the list past the point where it still works.
+///
+/// `cash_refund` is the one two-word entry, matched when `cash` and
+/// `refund` both appear somewhere in one identifier's own split, not only
+/// when they land next to each other (see `shop_words_named_in`):
+/// `cash_partial_refund` is as much a cash refund as `cash_refund` is, and
+/// a pair check that only looked at neighbours would miss it. `cash` alone
+/// is a payment method every kernel row can carry
+/// (`models::sql_types::PaymentMethod::Cash`), and a list that fired on
+/// the bare word would be wrong about a file that never mentions a
+/// refund; the pair still has to be read off the same identifier; `cash`
+/// in one binding and `refund` in an unrelated one three lines down does
+/// not trip it.
+///
+/// `till`, `sell`, `price`, `discount` and `margin` joined the list on a
+/// second pass, once `services/permissions.rs`'s own vocabulary was read
+/// rather than guessed at: `Sell`, `ChangePriceAtTheTill`,
+/// `OpenAndCloseTill`, `CloseAnotherPersonsTill`, `OverrideCreditBlock`,
+/// `DiscountAboveThreshold` and `SeeCostAndMargin` are seven of its fifteen
+/// permissions, and five of those seven split into a word now on this
+/// list. `credit`, `cost` and `fiche` are deliberately still off it, though
+/// `OverrideCreditBlock` and `SeeCostAndMargin` also carry them: a clinic's
+/// permission table would keep a credit account, a cost line and a fiche
+/// too, so none of the three marks a shop the way `till`, `sell`, a line
+/// `price` or a `discount` and the `margin` a sale makes do.
+///
+/// Not on this list, though a shop word by any reading: `facture`,
+/// `ticket`, `party`, `pricing`'s own near-miss `unpriced`. This walk
+/// catches what the list names and nothing past it.
+const SHOP_WORDS: [&str; 29] = [
+    "product",
+    "products",
+    "sale",
+    "sales",
+    "document",
+    "documents",
+    "supplier",
+    "suppliers",
+    "stock",
+    "purchase",
+    "purchases",
+    "customer",
+    "customers",
+    "avoir",
+    "proforma",
+    "pricing",
+    "debt",
+    "expense",
+    "expenses",
+    "category",
+    "categories",
+    "shift",
+    "shifts",
+    "barcode",
+    "till",
+    "sell",
+    "price",
+    "discount",
+    "margin",
+];
+
+/// The shop already lives inside the kernel today, in twelve of its
+/// twenty-one files. Eight carried a word on the first pass, before `till`,
+/// `sell`, `price`, `discount` and `margin` joined `SHOP_WORDS` above; seven
+/// of those eight were already named by the
+/// `whether-dinar-becomes-a-core-and-modules` research
+/// (`context/research/module-shape/06-fork-per-trade.md:84-100`), which
+/// walked `services::`, `repos::` and `models::` import paths into files a
+/// split would delete, and `services/audit.rs` was the eighth: its
+/// `ACTION_*` rows are string-tag constant names, never an import path, so
+/// that survey had nothing to see. The second pass added four more, namely
+/// `services/permissions.rs`, `services/settings.rs`, `money/mod.rs` and
+/// `money/totals.rs`, and grew two of the first eight, `services/audit.rs`
+/// and `print/strings.rs`, a word further. Each row below carries a
+/// one-line reason of its own.
+///
+/// `money/mod.rs` and `money/totals.rs` are not a mistake to fix: a line
+/// discount and a unit price are arithmetic the shared kernel already does
+/// for every trade a shop might run, priced goods being close to universal
+/// among them, so `NegativeUnitPrice`, `LineDiscountAboveLine` and the rest
+/// stay. Their two rows exist so a split has to decide the money kernel is
+/// shop-shaped today, on purpose, rather than the split silently inheriting
+/// it unexamined.
+///
+/// A third pass put `product` back on `SHOP_WORDS`, no file joining or
+/// leaving the twelve: `error.rs`'s row gained `product`, a real hit off
+/// `UnpricedReversal`'s own `product_id` field, and `money/totals.rs`'s
+/// row gained it too, the one false hit this list accepts by name rather
+/// than by narrowing the word away (see `SHOP_WORDS`'s own doc comment).
+///
+/// Each row is the *set* of words that file names today, not a count: a
+/// listed file that stops naming a word its row still carries would leave a
+/// stale reason sitting above with nothing to catch it, so `assert_eq!`
+/// below is exact both ways, the way `no_service_reaches_a_repo_that_is_not_on_the_list`
+/// is for `REACHES_PAST_A_SIBLING`.
+const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 12] = [
+    // DuplicateBarcode, PaymentAboveDebt, and UnpricedReversal's own
+    // document_id and product_id fields.
+    ("error.rs", &["barcode", "debt", "document", "product"]),
+    // 6 of the 10 text_enum! blocks: MovementKind, DocumentKind, DebtKind,
+    // DocumentStatus, SupplierDebtKind, PurchaseStatus.
+    (
+        "models/sql_types.rs",
+        &[
+            "avoir", "debt", "document", "proforma", "purchase", "sale", "supplier",
+        ],
+    ),
+    // The MoneyError variants a line discount or a unit price can raise
+    // (NegativeUnitPrice, NegativeDiscount, LineDiscountAboveLine,
+    // GlobalDiscountAboveTotal): the money kernel is shop-shaped today.
+    ("money/mod.rs", &["discount", "price"]),
+    // discount/price as money/mod.rs above (unit_price, line_discount,
+    // global_discount, spread_discount); product is the one accepted
+    // false hit this list knows about, its own local `let product = …`
+    // for the arithmetic product of two factors in the discount
+    // proration, no shop concept at all (see SHOP_WORDS).
+    ("money/totals.rs", &["discount", "price", "product"]),
+    // `use crate::models::document::Document` for the type every render
+    // function takes.
+    ("print/escpos.rs", &["document"]),
+    // barcode_label and debt_slip as declared submodules, and the Document
+    // type the shared render helpers take.
+    ("print/mod.rs", &["barcode", "debt", "document"]),
+    // The Key enum's own printed-word vocabulary: Avoir, Proforma,
+    // TotalDebt, KindSale, SheetProducts/Sales/Customers/Suppliers,
+    // TemplateBarcodeNote/StockNote and the discount/price rows a receipt
+    // line prints.
+    (
+        "print/strings.rs",
+        &[
+            "avoir",
+            "barcode",
+            "customer",
+            "customers",
+            "debt",
+            "discount",
+            "document",
+            "price",
+            "products",
+            "proforma",
+            "sale",
+            "sales",
+            "stock",
+            "suppliers",
+        ],
+    ),
+    // The ACTION_* log tag constants: purchase, supplier, customer,
+    // expense, stock, avoir, debt, sale/shift, and now the price and
+    // discount overrides and the till open/close pair.
+    (
+        "services/audit.rs",
+        &[
+            "avoir", "customer", "debt", "discount", "expense", "price", "purchase", "sale",
+            "shift", "stock", "supplier", "till",
+        ],
+    ),
+    // Summary's two counted tables, products and documents, that decide a
+    // file is a Dinar shop file.
+    ("services/backup.rs", &["documents", "products"]),
+    // Five of the fifteen Permission variants split into a listed word:
+    // Sell, OpenAndCloseTill/CloseAnotherPersonsTill/ChangePriceAtTheTill
+    // (till, twice over), ChangePriceAtTheTill (price again),
+    // DiscountAboveThreshold, SeeCostAndMargin.
+    (
+        "services/permissions.rs",
+        &["discount", "margin", "price", "sell", "till"],
+    ),
+    // The discount-threshold setting: DISCOUNT_THRESHOLD_BPS and the four
+    // functions and one audit action built on it.
+    ("services/settings.rs", &["discount"]),
+    // Facts::products/documents/customers, the three raw counts the
+    // support bundle's counts.txt carries.
+    (
+        "services/support_bundle.rs",
+        &["customers", "documents", "products"],
+    ),
+];
+
+/// `code_of`'s comment strip, with a kernel file's own `#[cfg(test)]`
+/// module cut first and every string literal's content dropped after. Every
+/// kernel file this walk reads has at most one `#[cfg(test)] mod tests {`,
+/// opened once and running to the file's end (checked 2026-09-22), so
+/// cutting at the first occurrence is exact rather than a guess: a fixture
+/// a test builds for itself, such as a throwaway `let products = 3;`, is
+/// not the kernel naming the shop, it is a test naming what it is testing
+/// against.
+///
+/// A string is walked a byte at a time with its own escape handled
+/// (`\"` does not close it), because `services/backup.rs` names its tables
+/// by a `"products"` string passed to `count`, and counting that string's
+/// content as code would put `backup.rs`'s row here for the wrong reason:
+/// its real reason is the field name beside it, `pub products: i64`, which
+/// survives the strip because it is not inside quotes. No raw string
+/// (`r"…"`, `r#"…"#`) and no block comment (`/*…*/`) appears in any file
+/// this walk reads (checked 2026-09-22 the same way), so neither is
+/// handled; a file that grew one would need this taught to read it before
+/// its row above could be trusted again.
+fn shop_facing_code_of(source: &str) -> String {
+    let before_test_module = match source.find("#[cfg(test)]") {
+        Some(at) => &source[..at],
+        None => source,
+    };
+    let without_comments = code_of(before_test_module);
+    let mut kept = String::new();
+    let mut in_string = false;
+    let mut chars = without_comments.chars();
+    while let Some(c) = chars.next() {
+        if in_string {
+            if c == '\\' {
+                chars.next();
+            } else if c == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        if c == '"' {
+            in_string = true;
+            continue;
+        }
+        kept.push(c);
+    }
+    kept
+}
+
+/// The lowercase words inside one identifier, split at each underscore and
+/// at each lowercase-to-uppercase step: `DuplicateBarcode` gives
+/// `duplicate` and `barcode`; `ACTION_STOCK_DRIFT` gives `action`, `stock`
+/// and `drift`; `product_id` gives `product` and `id`. This reads Rust's
+/// own casing conventions, `SCREAMING_SNAKE_CASE` constants, `PascalCase`
+/// types and variants, `snake_case` everything else, and not a general
+/// English tokenizer, which this crate has no need of anywhere else.
+fn words_of(ident: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut prev_lower = false;
+    for c in ident.chars() {
+        if c == '_' {
+            if !current.is_empty() {
+                words.push(current.to_lowercase());
+                current.clear();
+            }
+            prev_lower = false;
+            continue;
+        }
+        if c.is_uppercase() && prev_lower && !current.is_empty() {
+            words.push(current.to_lowercase());
+            current.clear();
+        }
+        prev_lower = c.is_lowercase();
+        current.push(c);
+    }
+    if !current.is_empty() {
+        words.push(current.to_lowercase());
+    }
+    words
+}
+
+/// Every maximal run of `[A-Za-z0-9_]` in `source`: wide enough to also
+/// walk over a keyword or a type name, which costs nothing here because
+/// neither is ever a `SHOP_WORDS` entry.
+fn identifiers_of(source: &str) -> Vec<String> {
+    let mut idents = Vec::new();
+    let mut current = String::new();
+    for c in source.chars() {
+        if c.is_ascii_alphanumeric() || c == '_' {
+            current.push(c);
+        } else if !current.is_empty() {
+            idents.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        idents.push(current);
+    }
+    idents
+}
+
+/// Every `SHOP_WORDS` entry found as one whole word of an identifier in
+/// `source`'s shipped code, comments, strings and the file's own test
+/// module all cut first by `shop_facing_code_of`. Matched as a whole split
+/// word and never a substring, so `PaymentMethod`'s `Cash` variant, split
+/// to `["cash"]` alone, never trips `cash_refund` by itself: the pair is
+/// checked on the same identifier's whole split, immediately below,
+/// wherever the two land in it, so `cash_partial_refund` counts exactly as
+/// `cash_refund` does. `cash` in one identifier and `refund` in an
+/// unrelated one elsewhere in the same file does not: the check reads one
+/// identifier's own `words` at a time and starts over for the next.
+fn shop_words_named_in(source: &str) -> BTreeSet<String> {
+    let code = shop_facing_code_of(source);
+    let mut found = BTreeSet::new();
+    for ident in identifiers_of(&code) {
+        let words = words_of(&ident);
+        for word in &words {
+            if SHOP_WORDS.contains(&word.as_str()) {
+                found.insert(word.clone());
+            }
+        }
+        if words.iter().any(|w| w == "cash") && words.iter().any(|w| w == "refund") {
+            found.insert("cash_refund".to_string());
+        }
+    }
+    found
+}
+
+/// The rule this task draws as a rule and not a refactor: the shared
+/// kernel does not name the shop. `SHOP_WORDS_ALLOWED` is where it does
+/// today, and the assertion below is exact in both directions, the way the
+/// reach list earlier in this file is: a new file joining the walk with a
+/// shop word in it, or a listed file naming a word beyond its row, fails
+/// the same as a listed file losing a word its row still claims. Only the
+/// last of those three ever makes the file shorter, and shorter is the
+/// only direction this list is meant to go.
+#[test]
+fn the_shared_kernel_does_not_name_the_shop() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut found: Vec<(String, Vec<String>)> = Vec::new();
+    for rel in KERNEL_FILES {
+        let path = src.join(rel);
+        let source = fs::read_to_string(&path).expect("a kernel file is readable");
+        let words: Vec<String> = shop_words_named_in(&source).into_iter().collect();
+        if !words.is_empty() {
+            found.push((rel.to_string(), words));
+        }
+    }
+    found.sort();
+
+    let mut pinned: Vec<(String, Vec<String>)> = SHOP_WORDS_ALLOWED
+        .iter()
+        .map(|(file, words)| {
+            (
+                (*file).to_string(),
+                words.iter().map(|w| (*w).to_string()).collect(),
+            )
+        })
+        .collect();
+    pinned.sort();
+
+    assert_eq!(
+        found, pinned,
+        "the shared kernel names the shop in a file, or with a word, this \
+         list does not carry. A new file means a shop concept moved into a \
+         file every trade would share; a listed file with a word beyond \
+         its row means that file grew a new shop concept. Add the missing \
+         kernel function so the caller stops spelling the concept itself, \
+         and take the word back out; or, if the kernel genuinely needs to \
+         carry it, add the word to the file's row and say why above. A \
+         word dropped from a listed file and not from SHOP_WORDS_ALLOWED \
+         fails too, on purpose: the list only shrinks, and a row nobody \
+         shortens when the code no longer earns it is a reason nobody \
+         re-reads."
+    );
+}
+
+/// The mutation proof `services_containing` and its family lean on
+/// implicitly, made explicit: the scanner sees a planted shop word in each
+/// of Rust's three casings, does not see one hidden in a comment or a
+/// string, and the `cash_refund` pair fires wherever the two land in one
+/// identifier and never across two. Eight claims and one test, because
+/// they are one claim, that the walk works on a string built here rather
+/// than only on the files it happens to be pointed at today, and eight
+/// names would say the same thing eight times.
+#[test]
+fn the_word_walk_sees_a_planted_shop_word() {
+    let planted = "fn f() {\n    let products_total = 1;\n}\n";
+    assert_eq!(
+        shop_words_named_in(planted),
+        BTreeSet::from(["products".to_string()]),
+        "a bare identifier carrying a shop word must be seen"
+    );
+
+    let commented = "// products\nfn f() {}\n";
+    assert!(
+        shop_words_named_in(commented).is_empty(),
+        "a shop word inside a comment must not be seen"
+    );
+
+    let stringed = "fn f() {\n    let s = \"products\";\n}\n";
+    assert!(
+        shop_words_named_in(stringed).is_empty(),
+        "a shop word only inside a string literal must not be seen"
+    );
+
+    let paired = "fn f() {\n    let cash_refund_amount = 1;\n}\n";
+    assert!(
+        shop_words_named_in(paired).contains("cash_refund"),
+        "the cash/refund pair must be seen when the two sit next to each \
+         other in one identifier"
+    );
+
+    let apart_in_one = "fn f() {\n    let cash_partial_refund = 1;\n}\n";
+    assert!(
+        shop_words_named_in(apart_in_one).contains("cash_refund"),
+        "the cash/refund pair must be seen when the two sit in the same \
+         identifier with a word between them, not only when adjacent"
+    );
+
+    let unpaired = "fn f() {\n    let cash = 1;\n    let refund = 2;\n}\n";
+    assert!(
+        !shop_words_named_in(unpaired).contains("cash_refund"),
+        "cash and refund named apart, in two identifiers, must not trip \
+         the pair"
+    );
+
+    let screaming_snake = "const ACTION_PRODUCTS: &str = \"products.count\";\n";
+    assert_eq!(
+        shop_words_named_in(screaming_snake),
+        BTreeSet::from(["products".to_string()]),
+        "a SCREAMING_SNAKE_CASE constant carrying a shop word must be seen"
+    );
+
+    let pascal_case = "struct ProductsTotal {\n    total: i64,\n}\n";
+    assert_eq!(
+        shop_words_named_in(pascal_case),
+        BTreeSet::from(["products".to_string()]),
+        "a PascalCase type name carrying a shop word must be seen"
+    );
+}
