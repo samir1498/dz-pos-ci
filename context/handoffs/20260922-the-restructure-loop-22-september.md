@@ -8,11 +8,18 @@ tldr: 'Where the crate split stands, what was decided today and by whom, what wa
 ---
 # The restructure loop, 22 September
 
-Kept up to date while the loop runs. Last touched 2026-09-22 14:57.
+Kept up to date while the loop runs. Last touched 2026-09-22 15:26.
 
 ## Where the work is right now
 
 Phase A of `context/loops/20260922-the-split-then-the-first-doctor-module.md`.
+S4 is running in the worktree `kernel-smaller`, one commit in (the nine
+column enums moved to retail, `Role` kept). Samir ruled at 14:58 on both
+questions it was told to stop for: the money arithmetic stays shared for
+every trade, and the permission list stays one list. Those two rows become
+written decisions rather than open questions, and are expected to be the
+only rows left on the allow list when S4 lands.
+
 S2 and S3 are merged as `9cc5255` (PR #156): `crates/kernel` and
 `crates/retail` exist, retail depends on the kernel, the kernel depends on
 nothing of retail's, and cargo now enforces the line a reading used to. The
@@ -33,9 +40,15 @@ kernel (`print/mod.rs` and `print/escpos.rs`, which name a document on code
 lines and so cannot live in a crate that depends on nothing). No rule was
 loosened. Checked by the session against the file, not taken on report.
 
-Disk: 22 GB free on `/mnt/c` against a 20 GB floor, down from 38 GB this
-morning. The cleanup of about 40 GB waits on Samir and is now close to
-necessary rather than optional.
+Disk, read correctly on 2026-09-22 at 15:25: `df -h /mnt/c` sits at 20 GB
+and will not move when space is freed, because it measures the Windows drive
+holding the WSL disk image and that image does not shrink. A stray 15 GB
+per-checkout `target/` in the main checkout, which `just disk` says should
+not exist, was removed; inside the filesystem `df -h /` now reports 826 GB
+free, so cargo reuses blocks instead of growing the image and builds carry
+on. The shared `.cargo-target` is 78 GB and its cleanup still waits on
+Samir, because that one costs a rebuild. Giving space back to Windows needs
+a shutdown and a compaction from PowerShell, which is his to run.
 
 ## What was decided today, and by whom
 
