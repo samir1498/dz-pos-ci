@@ -15,7 +15,7 @@ tasks:
     status: 'in-progress'
   - id: 'D3'
     desc: 'The paper test: express one billed consultation in the document model that exists today, and record where it tears'
-    status: 'pending'
+    status: 'in-progress'
   - id: 'D4'
     desc: 'Draw the kernel line as a rule with a test, no code moved, worth doing either way'
     status: 'pending'
@@ -244,6 +244,20 @@ mode, a customer fiche, the stamp and TVA rules of
 field that has no meaning, a rule that does not apply, a thing a clinic
 needs that has no home. That tear list is the real boundary between the
 kernel and a trade, measured rather than argued. Size S.
+
+**D3, drafted 2026-09-22.** The paper test is at
+`context/research/20260922-the-paper-test-a-consultation-in-the-document-model.md`,
+run on the desk-research consultation (1 500 DA cash, three papers) and on
+the tiers payant case. Nineteen tears, each with file and line: eleven "no
+home" (the ordonnance, the feuille de soins, a fund that owes the cabinet,
+the yearly CASNOS debt, a conventioned tariff), six "no meaning" (a document
+kind, a product on every line, a quantity, a stock movement, a party kind, a
+credit limit), two "wrong rule" (the stamp formula and the régime column
+give an answer on a premise nobody has established). Every tear sits in the
+retail tables or in the money kernel's stamp and TVA rules; none touches
+users, sessions, permissions, audit, settings or preferences. Redone if
+Samir's research replaces the D2 draft. Spot-read by the session: the
+document-kind and party-kind enums say what the page says they say.
 
 **D4: draw the line as a rule, not a refactor.** Nothing in users, sessions,
 permissions, audit, settings, preferences or the money kernel may name a
