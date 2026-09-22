@@ -1,7 +1,7 @@
 ---
 title: 'The line drawn, and the clinic day written'
 slug: 'the-line-drawn-and-the-clinic-day-written'
-status: 'active'
+status: 'done'
 category: 'loops'
 created: 20260922
 tldr: 'The loop after the module-shape brainstorm. Anouar confirmed on 2026-09-22 the shape the brainstorm recommended, a module bringing its own screens, permissions and tables without touching the core, and Samir asked him whether that happens at build time or at runtime; that answer is pending and nothing here depends on it. Three things do not: the brainstorm result goes on the status site as its own section, the boundary between the shared core and the shop becomes a rule the tests enforce (D4), and a first written profile of a second trade day (D2) gets drafted from desk research so the paper test (D3) has something to tear. Then a standup.'
@@ -84,6 +84,18 @@ tears, none in the shared quarter. Phase D next.
 ## Phase D: standup
 
 The day's standup on the site, in the usual shape, linking the new section.
+Done 11:12: `reports__2026-09-22-daily-standup.html`, pushed as `b636a9a`,
+preview `https://de174397.dinar-reports.pages.dev/reports/2026-09-22-daily-standup.html`;
+the module page's "six places" corrected to the twelve files the walk pins.
+
+## Closed 11:35
+
+All four phases done. Merged to main: `5015e4e` (the kernel word walk, PR
+#155) and the three context commits (`134a788` D2, `ef7699a` D3,
+`34a0060` bookkeeping). The day's `just ci main` on the mirror at `34a0060`:
+Restricted and Full both green, exit 0. No worktree left. What waits on
+people is unchanged from the top of this file, plus the disk cleanup on
+Samir's go.
 
 ## Left out on purpose
 
