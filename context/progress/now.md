@@ -4,11 +4,27 @@ updated: '2026-09-21'
 ---
 ## Active
 
+**2026-09-22 midday: the boundary is a rule, the cabinet day and the paper test are on paper, the module question has its own section on the site.** The live loop is
+`context/loops/20260922-the-line-drawn-and-the-clinic-day-written.md`.
+Anouar confirmed at 08:52 the shape the brainstorm recommended (a module
+brings its own screens, permissions and tables and never touches the
+core's); Samir asked him at 08:57 whether that is build time or runtime,
+unanswered. Merged: the kernel word-walk test (D4, `5015e4e`, PR #155),
+twelve allow-listed files pinned both ways. On main under
+`context/research/`: the doctor's cabinet day drafted from desk research
+(D2, in progress until Samir's own research confirms or replaces it) and
+the paper test (D3): nineteen tears, all in the retail tables or the stamp
+and TVA rules, none in the shared quarter. The site gained the group "The
+module question" (`/modules/`). Open for people: Anouar's runtime answer,
+the refund design call, the scanner check on Samir's phone, Windows 7 with
+a real shop; the disk cleanup (about 40 GB of build leftovers) waits on
+Samir's go.
+
 **2026-09-21 night: the gaps loop is closed, ten merges today, and the module-shape brainstorm is written.** Samir's word at
-13:49 was to finish everything but the clinic decision. The live loop is
+13:49 was to finish everything but the clinic decision. The loop was
 `context/loops/20260921-a-clean-context-then-the-till-finished.md`; the
 previous one, `20260920-closing-the-lumina-gaps-loop.md`, stays the reference
-for its nine rulings until this one's review closes.
+for its nine rulings.
 
 Merged today: the open popup at the first sign-in and the close modal with
 the server's expected figure (`f9c54be`); the Arabic ticket drawn as a raster

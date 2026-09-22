@@ -18,7 +18,7 @@ tasks:
     status: 'in-progress'
   - id: 'D4'
     desc: 'Draw the kernel line as a rule with a test, no code moved, worth doing either way'
-    status: 'pending'
+    status: 'done'
   - id: 'D5'
     desc: 'Cut to one question on 2026-09-21: only the database is open, because global permissions settled the other two. Waits for a second product to have a name'
     status: 'pending'
@@ -268,6 +268,19 @@ created. This is worth doing whether or not the clinic ever happens, because
 it stops the boundary getting harder to draw while the answer is pending,
 and on the day of a split the line is already proven. Roughly a day.
 Depends on T11 being done first, or it will fail on the rings. Size S.
+
+**D4, done 2026-09-22 (PR #155, `5015e4e`).** The test is
+`the_shared_kernel_does_not_name_the_shop` in
+`crates/core/tests/services_go_through_services.rs`: 21 kernel files, a
+29-word shop vocabulary split out of every identifier, and an allow list of
+twelve files pinned both ways so it only shrinks. The word walk sees more
+than the import-path count of the 21st did: the audit log's action tags, the
+permission enum (its variants say `Sell` and `Till`), the money kernel's
+own `discount` and `price`, and `settings`' discount threshold, on top of
+the error enum, the storage enums, the three shared print files and the two
+raw counts. Each row carries its reason; the money rows are there so a
+split decides them on purpose. Reviewed by the tests lens, three findings
+proven by planted edits and fixed, one dropped by a run.
 
 **D5: the migration spike, cut down from three questions to one.** Samir's
 decision on 2026-09-21 answered two of the three it was written for: the
