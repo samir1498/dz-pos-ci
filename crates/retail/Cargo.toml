@@ -1,0 +1,52 @@
+[package]
+name = "dzpos-retail"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+dzpos-kernel = { path = "../kernel" }
+# The retail repos query the tables `dzpos_kernel::schema` declares, so this
+# crate's diesel needs the same feature set as the kernel's.
+diesel = { workspace = true, features = [
+    "sqlite",
+    "chrono",
+    "returning_clauses_for_sqlite_3_35",
+    "64-column-tables",
+] }
+chrono = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = "2"
+# `services::sales::fingerprint` hashes an idempotency key's request body.
+# Pure Rust, from the same RustCrypto tree the kernel's session hash comes
+# from, and already in the lock through it.
+sha2 = "0.10.9"
+# Printed templates (features.md §4). Compiled into the binary, checked at
+# compile time and HTML-escaped by default, so a shop name with an "&" in it
+# cannot break a ticket and no template file ships beside the app.
+askama = { version = "0.16.1", default-features = false, features = ["std", "derive"] }
+# The Excel half of features.md §1 (export four workbooks, import products
+# from a template). Both are pure Rust and neither pulls a C library in.
+rust_xlsxwriter = { version = "0.99.0", features = ["chrono"] }
+# `dates` so a cell a person typed as a date reads back as one; used by the
+# product import and by the tests that read a written workbook's cells.
+calamine = { version = "0.36.1", features = ["dates"] }
+# EAN-13 bars as SVG for the barcode label. Its only dependency, `image`, is
+# optional and off in the default features (ascii, json, svg, std), so this
+# adds no native code either.
+barcoders = "2.0.0"
+# The Arabic ticket as a raster (plans/arabic-on-a-cheap-thermal-head). A
+# cheap head has no single-byte table for Arabic, so the ticket is drawn and
+# sent as dots; drawing it needs the three jobs the plan's table compares.
+# Versions pinned exact (checked on crates.io 2026-09-21).
+rustybuzz = "=0.20.1"
+ab_glyph = "=0.2.32"
+# The bidi algorithm: which runs of a ticket line go right to left.
+unicode-bidi = "=0.3.18"
+
+[dev-dependencies]
+tempfile = "3"
+proptest = "1.11"
+
+[lints]
+workspace = true

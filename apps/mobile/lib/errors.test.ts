@@ -1,7 +1,9 @@
 // The table in errors.ts is only worth having if it is complete, and it can
 // only be complete against the server's own lists. Both are a Rust `match`
 // returning a string literal per arm, so they can be read: `CoreError::code`
-// in crates/core/src/error.rs and `ApiError::parts` in crates/api/src/error.rs.
+// in crates/kernel/src/error.rs (moved from crates/core/src/error.rs in the
+// kernel crate split, S3 of a-kernel-crate-and-retail-as-the-first-module)
+// and `ApiError::parts` in crates/api/src/error.rs.
 //
 // A walk, not a copy. A copy of the codes here would go green the day the
 // server grows a new one, which is the day a cashier starts being told a
@@ -35,7 +37,7 @@ function codesIn(body: string): string[] {
   return [...new Set([...body.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]))];
 }
 
-const CORE = bodyOf("crates/core/src/error.rs", "pub const fn code(&self)");
+const CORE = bodyOf("crates/kernel/src/error.rs", "pub const fn code(&self)");
 const API = bodyOf("crates/api/src/error.rs", "fn parts(&self)");
 const SERVER_CODES = [...new Set([...codesIn(CORE), ...codesIn(API)])].sort();
 

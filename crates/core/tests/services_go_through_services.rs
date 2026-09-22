@@ -180,20 +180,11 @@ fn first_ident(text: &str) -> Option<String> {
 
 #[test]
 fn no_service_reaches_a_repo_that_is_not_on_the_list() {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/services");
     let allowed: BTreeSet<&str> = NO_SERVICE_OWNS_THEM.into_iter().collect();
 
     let mut found: Vec<(String, Vec<String>)> = Vec::new();
-    for entry in fs::read_dir(&dir).expect("crates/core/src/services is readable") {
-        let path = entry.expect("a directory entry").path();
-        if path.extension().and_then(|e| e.to_str()) != Some("rs") {
-            continue;
-        }
-        let own = path
-            .file_stem()
-            .and_then(|n| n.to_str())
-            .expect("a file name")
-            .to_string();
+    for path in service_files() {
+        let own = stem(&path);
         let source = fs::read_to_string(&path).expect("a service file is readable");
         let reaches: Vec<String> = repos_named_in(&source)
             .into_iter()
@@ -412,14 +403,18 @@ fn the_walk_cannot_be_stepped_around() {
          edge is counted."
     );
 
-    // The walk reads one directory and does not descend.
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/services");
-    let folders: Vec<String> = fs::read_dir(&dir)
-        .expect("crates/core/src/services is readable")
-        .map(|entry| entry.expect("a directory entry").path())
-        .filter(|path| path.is_dir())
-        .map(|path| stem(&path))
-        .collect();
+    // The walk reads each services directory one level deep and does not
+    // descend.
+    let mut folders: Vec<String> = Vec::new();
+    for dir in service_dirs() {
+        folders.extend(
+            fs::read_dir(&dir)
+                .unwrap_or_else(|e| panic!("{} is readable: {e}", dir.display()))
+                .map(|entry| entry.expect("a directory entry").path())
+                .filter(|path| path.is_dir())
+                .map(|path| stem(&path)),
+        );
+    }
     assert!(
         folders.is_empty(),
         "{folders:?} is a service split into a folder, and the walk above \
@@ -478,10 +473,15 @@ fn only_the_customers_service_makes_a_proved_customer() {
 /// one is about a `pub(crate)` constructor, which every module in the crate
 /// can reach, so it has to see every module.
 fn core_source_files() -> Vec<std::path::PathBuf> {
+    // `ProvedCustomer` and its `pub(crate)` constructor are both in
+    // `dzpos-retail` since the kernel crate split (S3 of
+    // `a-kernel-crate-and-retail-as-the-first-module`): `pub(crate)` only
+    // reaches as far as that crate, so this walk reads `crates/retail/src`
+    // rather than `crates/core/src`.
     let mut found = Vec::new();
-    let mut folders = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+    let mut folders = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../retail/src")];
     while let Some(folder) = folders.pop() {
-        for entry in fs::read_dir(&folder).expect("a folder under crates/core/src is readable") {
+        for entry in fs::read_dir(&folder).expect("a folder under crates/retail/src is readable") {
             let path = entry.expect("a directory entry").path();
             if path.is_dir() {
                 folders.push(path);
@@ -501,7 +501,7 @@ fn core_source_files() -> Vec<std::path::PathBuf> {
 /// job failed `only_the_customers_service_makes_a_proved_customer` on
 /// 2026-09-21 while Linux passed it.
 fn under_src(path: &Path) -> String {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../retail/src");
     path.strip_prefix(&src)
         .unwrap_or(path)
         .to_str()
@@ -509,16 +509,33 @@ fn under_src(path: &Path) -> String {
         .replace('\\', "/")
 }
 
-/// Where the services live, and every `.rs` in it. One walk, because two
+/// Where the services live: two crates since the kernel crate split (S3 of
+/// `a-kernel-crate-and-retail-as-the-first-module`). Cargo already refuses a
+/// dependency cycle between crates, so a kernel-to-retail ring cannot exist
+/// any more; what these two directories still let this file check is a ring
+/// *within* one crate's services, which the compiler does not refuse on its
+/// own.
+fn service_dirs() -> Vec<std::path::PathBuf> {
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    vec![
+        base.join("kernel/src/services"),
+        base.join("retail/src/services"),
+    ]
+}
+
+/// Every `.rs` in the two service directories. One walk, because two
 /// hand-copies of "what counts as a service file" drift the day one of them
 /// learns to skip something and the other does not.
 fn service_files() -> Vec<std::path::PathBuf> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/services");
-    let mut files: Vec<std::path::PathBuf> = fs::read_dir(&dir)
-        .expect("crates/core/src/services is readable")
-        .map(|entry| entry.expect("a directory entry").path())
-        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("rs"))
-        .collect();
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    for dir in service_dirs() {
+        files.extend(
+            fs::read_dir(&dir)
+                .unwrap_or_else(|e| panic!("{} is readable: {e}", dir.display()))
+                .map(|entry| entry.expect("a directory entry").path())
+                .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("rs")),
+        );
+    }
     files.sort();
     files
 }
@@ -546,8 +563,7 @@ fn services_containing(marker: &str) -> Vec<String> {
 /// every trade would still need a facture reader picking a different
 /// `sales.rs`. Eleven services with no shop meaning, the money module
 /// (five files, none of them naming diesel or a table), the crate's one
-/// error enum, the storage-side enums, and the three print files every
-/// template shares.
+/// error enum, and the storage-side enums.
 ///
 /// `schema.rs` is deliberately not here. Its own header says it is
 /// hand-written to match the migrations, one file for the one SQLite file a
@@ -557,17 +573,24 @@ fn services_containing(marker: &str) -> Vec<String> {
 /// walk that failed on it would be asking the schema to be two files before
 /// anything has decided it should be.
 ///
-/// The print engine's other thirteen files are not here either.
-/// `barcode_label.rs`, `debt_slip.rs`, `facture.rs`, `facture_roll.rs`,
-/// `facture_view.rs`, `refusals.rs`, `statement.rs` and `ticket.rs` each
-/// `use crate::models::{document, customer, product}` for the paper they
-/// print; `layout.rs`, `png.rs`, `raster.rs`, `thermal.rs` and `bidi.rs`
-/// name no model at all (checked 2026-09-22 by grepping every one of them
-/// for `models::`). `mod.rs`, `escpos.rs` and `strings.rs` are the three
-/// left because they are what the whole engine shares: the module tree, the
-/// escpos byte format and the printed word list, in the three languages,
-/// that any paper draws from.
-const KERNEL_FILES: [&str; 21] = [
+/// The print engine is mostly not here, since the kernel crate split (S3 of
+/// `a-kernel-crate-and-retail-as-the-first-module`): `mod.rs` and
+/// `escpos.rs`, two of the three files this list used to carry, each name
+/// `models::document::Document` on a code line (`mod.rs`'s own
+/// `pub fn number(doc: &Document)`), and `raster.rs` in turn reaches into
+/// `print/ticket.rs` for `Align`, `Item` and `WIDTH`, so neither of the two
+/// can live in a crate that depends on nothing; they moved to
+/// `dzpos-retail` whole rather than only their shop half, which is a
+/// bigger move than this list was written for and is reported as a
+/// deviation in the S3 commit rather than folded in quietly. `layout.rs`
+/// and `thermal.rs` name no model at all and hold `FactureLayout` and
+/// `ThermalMode`, which `services::preferences` (a kernel service) stores,
+/// so they moved to `dzpos_kernel::print` and drop off this list rather
+/// than joining it, since neither ever named the shop. `print/strings.rs`
+/// is the one of the original three that stayed: its only import is
+/// `crate::lang::Lang`, no shop type on a code line, and its row below is
+/// what pins the fourteen shop words S4 splits out.
+const KERNEL_FILES: [&str; 19] = [
     "services/users.rs",
     "services/sessions.rs",
     "services/permissions.rs",
@@ -586,8 +609,6 @@ const KERNEL_FILES: [&str; 21] = [
     "money/stamp.rs",
     "error.rs",
     "models/sql_types.rs",
-    "print/mod.rs",
-    "print/escpos.rs",
     "print/strings.rs",
 ];
 
@@ -668,8 +689,12 @@ const SHOP_WORDS: [&str; 29] = [
     "margin",
 ];
 
-/// The shop already lives inside the kernel today, in twelve of its
-/// twenty-one files. Eight carried a word on the first pass, before `till`,
+/// The shop already lives inside the kernel today, in ten of its nineteen
+/// files (twelve of twenty-one before the kernel crate split of S3 of
+/// `a-kernel-crate-and-retail-as-the-first-module` moved `print/mod.rs` and
+/// `print/escpos.rs` to `dzpos-retail` whole, taking their two rows with
+/// them; `print/strings.rs` stayed, since it names no shop type on a code
+/// line, only `crate::lang::Lang`). Eight carried a word on the first pass, before `till`,
 /// `sell`, `price`, `discount` and `margin` joined `SHOP_WORDS` above; seven
 /// of those eight were already named by the
 /// `whether-dinar-becomes-a-core-and-modules` research
@@ -692,7 +717,7 @@ const SHOP_WORDS: [&str; 29] = [
 /// it unexamined.
 ///
 /// A third pass put `product` back on `SHOP_WORDS`, no file joining or
-/// leaving the twelve: `error.rs`'s row gained `product`, a real hit off
+/// leaving the list at the time: `error.rs`'s row gained `product`, a real hit off
 /// `UnpricedReversal`'s own `product_id` field, and `money/totals.rs`'s
 /// row gained it too, the one false hit this list accepts by name rather
 /// than by narrowing the word away (see `SHOP_WORDS`'s own doc comment).
@@ -702,7 +727,7 @@ const SHOP_WORDS: [&str; 29] = [
 /// stale reason sitting above with nothing to catch it, so `assert_eq!`
 /// below is exact both ways, the way `no_service_reaches_a_repo_that_is_not_on_the_list`
 /// is for `REACHES_PAST_A_SIBLING`.
-const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 12] = [
+const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 10] = [
     // DuplicateBarcode, PaymentAboveDebt, and UnpricedReversal's own
     // document_id and product_id fields.
     ("error.rs", &["barcode", "debt", "document", "product"]),
@@ -724,12 +749,6 @@ const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 12] = [
     // for the arithmetic product of two factors in the discount
     // proration, no shop concept at all (see SHOP_WORDS).
     ("money/totals.rs", &["discount", "price", "product"]),
-    // `use crate::models::document::Document` for the type every render
-    // function takes.
-    ("print/escpos.rs", &["document"]),
-    // barcode_label and debt_slip as declared submodules, and the Document
-    // type the shared render helpers take.
-    ("print/mod.rs", &["barcode", "debt", "document"]),
     // The Key enum's own printed-word vocabulary: Avoir, Proforma,
     // TotalDebt, KindSale, SheetProducts/Sales/Customers/Suppliers,
     // TemplateBarcodeNote/StockNote and the discount/price rows a receipt
@@ -920,7 +939,9 @@ fn shop_words_named_in(source: &str) -> BTreeSet<String> {
 /// only direction this list is meant to go.
 #[test]
 fn the_shared_kernel_does_not_name_the_shop() {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    // `crates/kernel/src` since the kernel crate split (S3 of
+    // `a-kernel-crate-and-retail-as-the-first-module`).
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel/src");
     let mut found: Vec<(String, Vec<String>)> = Vec::new();
     for rel in KERNEL_FILES {
         let path = src.join(rel);

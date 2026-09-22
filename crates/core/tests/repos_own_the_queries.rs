@@ -5,6 +5,14 @@
 //! layers section). Three services talk to SQLite directly anyway, none of
 //! them about a shop's data, and this walk is what keeps the list at three.
 //!
+//! Since the kernel crate split (S3 of
+//! `a-kernel-crate-and-retail-as-the-first-module`), all three
+//! (`backup.rs`, `pairing.rs`, `support_bundle.rs`) are domain-free
+//! services, so this walk reads `crates/kernel/src/services` and does not
+//! also read `crates/retail/src/services`: the rule it holds has nothing
+//! left to say about a retail service until one of them starts talking to
+//! SQLite directly, which is S6's rewrite to notice.
+//!
 //! A source walk, the same shape as `crates/api/tests/route_gates.rs` and
 //! `apps/desktop/src/theme.test.ts`: what is being checked is a rule a
 //! person keeps, and there is nothing at runtime to ask.
@@ -43,9 +51,9 @@ const RUNS_A_STATEMENT: [&str; 2] = ["backup.rs", "pairing.rs"];
 /// same reason, and this one matters more: what escapes here is a statement
 /// that writes outside every repo and every `shop_id` filter.
 fn service_folders() -> Vec<String> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/services");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel/src/services");
     let mut found: Vec<String> = fs::read_dir(&dir)
-        .expect("crates/core/src/services is readable")
+        .expect("crates/kernel/src/services is readable")
         .map(|entry| entry.expect("a directory entry").path())
         .filter(|path| path.is_dir())
         .map(|path| {
@@ -61,9 +69,9 @@ fn service_folders() -> Vec<String> {
 
 /// Every file in `src/services` whose source mentions `marker`.
 fn services_mentioning(marker: &str) -> Vec<String> {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/services");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel/src/services");
     let mut found: Vec<String> = fs::read_dir(&dir)
-        .expect("crates/core/src/services is readable")
+        .expect("crates/kernel/src/services is readable")
         .map(|entry| entry.expect("a directory entry").path())
         .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("rs"))
         .filter(|path| {

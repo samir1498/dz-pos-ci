@@ -1344,6 +1344,8 @@ dependencies = [
  "chrono",
  "diesel",
  "diesel_migrations",
+ "dzpos-kernel",
+ "dzpos-retail",
  "iana-time-zone",
  "libsqlite3-sys",
  "proptest",
@@ -1374,6 +1376,49 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "dzpos-kernel"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "askama",
+ "chrono",
+ "diesel",
+ "diesel_migrations",
+ "iana-time-zone",
+ "libsqlite3-sys",
+ "proptest",
+ "rust_xlsxwriter",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "zip 8.6.0",
+]
+
+[[package]]
+name = "dzpos-retail"
+version = "0.1.0"
+dependencies = [
+ "ab_glyph",
+ "askama",
+ "barcoders",
+ "calamine",
+ "chrono",
+ "diesel",
+ "dzpos-kernel",
+ "proptest",
+ "rust_xlsxwriter",
+ "rustybuzz",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "unicode-bidi",
 ]
 
 [[package]]

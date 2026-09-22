@@ -26,7 +26,7 @@ maestro/             the flow driven against a real phone and a real server
 
 Two rules hold that shape together. Money is priced through `@dzpos/shared`
 (`lib/basket.ts`), the same code the desktop till prices with, so the two
-screens cannot drift from `crates/core/src/money`. And the basket lives above
+screens cannot drift from `crates/kernel/src/money`. And the basket lives above
 the auth gate (`providers/CartProvider.tsx`), so a session that idles out
 mid-sale costs a PIN, not a re-scan in front of the customer.
 

@@ -4,12 +4,12 @@
 // customer handed over. Under the réel régime that sum is HT: it carries
 // neither the TVA nor the droit de timbre, so the server — which owes
 // `total_ttc + stamp` — refused every cash sale a normal shop rings
-// (`crates/core/src/services/sales.rs`, `settle`). Adversarial review of
+// (`crates/retail/src/services/sales.rs`, `settle`). Adversarial review of
 // M6+M7, 2026-09-16.
 //
 // The desktop till never had that bug because it prices its basket through
 // `@dzpos/shared`'s `computeTotals`, the TypeScript mirror of
-// `crates/core/src/money` pinned to the same files under `fixtures/money/`.
+// `crates/kernel/src/money` pinned to the same files under `fixtures/money/`.
 // This module is the phone doing the same thing, so neither screen can
 // drift from the core without a red test. What a screen computes is still
 // only a preview: the amounts a document carries are the API's answer
@@ -47,7 +47,7 @@ export type CartLine = { product: Product; qty: number };
 const MILLI_PER_UNIT = 1_000;
 
 /** Whether the droit de timbre applies at all, mirroring `STAMP_ENABLED`
- * in `crates/core/src/services/sales.rs`. The desktop till keeps the same
+ * in `crates/retail/src/services/sales.rs`. The desktop till keeps the same
  * constant; both follow the core if it ever becomes a setting. */
 const STAMP_ENABLED = true;
 

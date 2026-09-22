@@ -1,0 +1,61 @@
+[package]
+name = "dzpos-kernel"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# `64-column-tables`: `documents` passed 32 columns when the buyer block and
+# the balance triple landed (migration 4), and diesel's default table macro
+# stops there. `schema.rs` stays whole in this crate (Diesel needs every
+# table in one query-scope, and the retail crate's own tables join the
+# kernel's in `allow_tables_to_appear_in_same_query!`), so the feature is
+# pinned here.
+diesel = { workspace = true, features = [
+    "sqlite",
+    "chrono",
+    "returning_clauses_for_sqlite_3_35",
+    "64-column-tables",
+] }
+diesel_migrations = "2.2"
+# bundled: one binary, no system sqlite on the shop's Windows PC
+libsqlite3-sys = { version = "0.37", features = ["bundled"] }
+chrono = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+# The audit log stores the row before and after as JSON text (features.md §5).
+serde_json = { workspace = true }
+thiserror = "2"
+# argon2id for the PIN and the password (features.md §5). Version and
+# features are pinned at the workspace level.
+argon2 = { workspace = true }
+# SHA-256 of a session token (services::sessions says why it is not argon2id:
+# 256 bits of OS randomness needs no slow hash, and a salted string cannot be
+# looked up by). Pure Rust, from the same RustCrypto tree argon2 comes from,
+# and already in the lock through it, so it compiles nothing new.
+sha2 = "0.10.9"
+# The support bundle's zip (M5 T3). `default-features = false` plus
+# `deflate` keeps this from pulling a C toolchain in.
+zip = { version = "8.6", default-features = false, features = ["deflate"] }
+# The machine's IANA time zone name for the support bundle (M5 T3).
+iana-time-zone = "0.1"
+# `error.rs` is not split by variant in this task (S4 does that): its
+# `Render` and `Workbook` variants wrap a retail-only error type each,
+# askama's template error and rust_xlsxwriter's workbook error, so the
+# whole enum staying in this crate for now means these two deps do too.
+askama = { version = "0.16.1", default-features = false, features = ["std", "derive"] }
+rust_xlsxwriter = { version = "0.99.0", features = ["chrono"] }
+
+[dev-dependencies]
+tempfile = "3"
+# proptest for the money invariants; the fixtures are read with serde_json,
+# which is a normal dependency above.
+proptest = "1.11"
+
+# build.rs reads today's date in UTC to bake into `build_info` (M5 T1). The
+# workspace already carries chrono for the shipped crate; reusing it here
+# instead of hand-rolling a calendar calculation avoids a second, unreviewed
+# implementation of leap years for one date string.
+[build-dependencies]
+chrono = { workspace = true }
+
+[lints]
+workspace = true

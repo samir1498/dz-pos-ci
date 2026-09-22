@@ -4,9 +4,20 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+# The kernel crate split (S3 of
+# `a-kernel-crate-and-retail-as-the-first-module`): this crate is now a thin
+# re-export facade over the two so `dzpos_core::services::x`,
+# `dzpos_core::models::x` and the rest keep resolving for `crates/api`, the
+# Tauri app and this crate's own 59 test files without every one of them
+# being rewritten in the same change that moved the source.
+dzpos-kernel = { path = "../kernel" }
+dzpos-retail = { path = "../retail" }
+
 # `64-column-tables`: `documents` passed 32 columns when the buyer block and
 # the balance triple landed (migration 4), and diesel's default table macro
-# stops there.
+# stops there. This crate's tests query the database directly (39 files
+# under `tests/`), so it keeps the same diesel feature set the kernel and
+# retail crates build `schema.rs` against.
 diesel = { workspace = true, features = [
     "sqlite",
     "chrono",
@@ -65,7 +76,6 @@ zip = { version = "8.6", default-features = false, features = ["deflate"] }
 # system font database and a second rasteriser we would configure to do
 # nothing (the plan says why).
 rustybuzz = "=0.20.1"
-# The rasteriser: outlines to coverage, at a scale we choose.
 ab_glyph = "=0.2.32"
 # The machine's IANA time zone name for the support bundle (M5 T3). Already
 # in the lock at 0.1.65, pulled in transitively; this makes it a direct
@@ -84,13 +94,6 @@ tempfile = "3"
 # proptest for the money invariants; the fixtures are read with serde_json,
 # which is a normal dependency above.
 proptest = "1.11"
-
-# build.rs reads today's date in UTC to bake into `build_info` (M5 T1). The
-# workspace already carries chrono for the shipped crate; reusing it here
-# instead of hand-rolling a calendar calculation avoids a second, unreviewed
-# implementation of leap years for one date string.
-[build-dependencies]
-chrono = { workspace = true }
 
 [lints]
 workspace = true
