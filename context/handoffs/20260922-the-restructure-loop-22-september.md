@@ -43,9 +43,13 @@ S4 is half done on the branch, two of its five pieces finished:
   shape for each, including that four thin wrappers are needed because the
   kernel's `repos` module is `pub(crate)`.
 
-The allow list, which is S4's score, stands at five rows and must reach
-three: `money/mod.rs`, `money/totals.rs` and `services/permissions.rs`, the
-three Samir decided to keep.
+The allow list, which is S4's score, stands at seven rows on the branch and
+must reach three. The three that stay are `money/mod.rs`, `money/totals.rs`
+and `services/permissions.rs`, the ones Samir decided to keep. The four to
+remove are `services/audit.rs` (its constants moved but the row was left in
+place, because one discount tag is still in the kernel until the settings
+piece lands), `services/backup.rs` and `services/support_bundle.rs` (the raw
+counts) and `services/settings.rs` (the discount threshold).
 
 ## Two agents froze today, and the cause is known
 
