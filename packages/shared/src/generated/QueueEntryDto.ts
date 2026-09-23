@@ -20,4 +20,17 @@ seen_at: string | null,
 /**
  * Set when the patient left without being seen; never beside `seen_at`.
  */
-left_at: string | null, };
+left_at: string | null, 
+/**
+ * The appointment a booked patient was marked arrived for; null for a
+ * walk-in.
+ */
+appointment_id: string | null, 
+/**
+ * That appointment's start, `YYYY-MM-DD HH:MM:SS`; null for a walk-in.
+ */
+appointment_starts_at: string | null, 
+/**
+ * The entry's place in its day's list as the desk ordered it, 1 first.
+ */
+position: number, };

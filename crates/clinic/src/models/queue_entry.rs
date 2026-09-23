@@ -28,6 +28,12 @@ pub struct QueueEntry {
     pub left_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    /// The appointment the patient came for, when the desk marked a booked
+    /// patient arrived (C6b); `None` for a walk-in.
+    pub appointment_id: Option<String>,
+    /// The entry's place in its day's list, 1 first: the desk's order
+    /// (C6b), which calling the next patient follows.
+    pub position: i32,
 }
 
 impl QueueEntry {
@@ -46,6 +52,9 @@ pub struct QueuedPatient {
     pub entry: QueueEntry,
     pub first_name: String,
     pub last_name: String,
+    /// The start of the appointment the entry came in for, so the desk sees
+    /// who is booked and for when; `None` for a walk-in.
+    pub appointment_starts_at: Option<NaiveDateTime>,
 }
 
 /// An entry as the service writes it the first time: the id, the day and
@@ -60,4 +69,6 @@ pub(crate) struct QueueEntryInsert {
     pub arrived_at: NaiveDateTime,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub appointment_id: Option<String>,
+    pub position: i32,
 }

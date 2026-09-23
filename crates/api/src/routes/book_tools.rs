@@ -159,13 +159,15 @@ pub async fn remove_visit_type(
     Ok(Json(VisitTypeDto::from(gone)))
 }
 
-/// `?from=YYYY-MM-DD&offset_days=15&visit_type_id=...`, each optional.
+/// `?from=YYYY-MM-DD&offset_days=15&visit_type_id=...` or `&minutes=30` in
+/// place of the visit type, each optional.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FreeSlotParams {
     from: Option<String>,
     offset_days: Option<u32>,
     visit_type_id: Option<String>,
+    minutes: Option<i32>,
 }
 
 /// The earliest start a booking would be taken at. Gated like the book it
@@ -176,8 +178,8 @@ pub async fn next_free(
 ) -> Result<Json<FreeSlotDto>, ApiError> {
     let Query(params) = params.map_err(|_| {
         ApiError::BadRequest(
-            "ask with from=YYYY-MM-DD, offset_days as a whole number of days and visit_type_id, \
-             each optional"
+            "ask with from=YYYY-MM-DD, offset_days as a whole number of days, and \
+             visit_type_id or minutes, each optional"
                 .into(),
         )
     })?;
@@ -189,6 +191,7 @@ pub async fn next_free(
             .transpose()?,
         offset_days: params.offset_days.unwrap_or(0),
         visit_type_id: params.visit_type_id,
+        minutes: params.minutes,
     };
     let shop = state.shop_id;
     let found = state

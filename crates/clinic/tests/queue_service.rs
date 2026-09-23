@@ -298,12 +298,14 @@ fn yesterdays_entries_are_not_in_todays_line() {
     );
 }
 
-/// The arrival stamp decides the order, not the id. In every other test
-/// the two agree (a UUID v7 sorts in the order it was made), so here the
-/// second entry's arrival is moved to the start of the same day by hand: a
-/// desk that noted an arrival late, say.
+/// The desk's place decides the order since C6b (`queue_order_service.rs`).
+/// Two entries on the same place, which the service never writes, fall
+/// back to the arrival stamp, not the id. In every other test the two agree
+/// (a UUID v7 sorts in the order it was made), so here the second entry's
+/// arrival is moved to the start of the same day by hand and both are put
+/// on place 1.
 #[test]
-fn the_arrival_stamp_orders_the_line_even_against_the_id() {
+fn a_tie_in_place_falls_back_to_the_arrival_stamp_even_against_the_id() {
     let (_dir, mut conn) = open_temp();
     let p = open(&mut conn, "Amina", "Benali");
     let q = open(&mut conn, "Karim", "Haddad");
@@ -317,6 +319,12 @@ fn the_arrival_stamp_orders_the_line_even_against_the_id() {
         .execute(&mut conn)
         .unwrap(),
         1
+    );
+    assert_eq!(
+        diesel::sql_query("UPDATE queue_entries SET position = 1")
+            .execute(&mut conn)
+            .unwrap(),
+        2
     );
 
     assert_eq!(

@@ -6,6 +6,7 @@ import type { AbsenceBlockDto } from "../generated/AbsenceBlockDto";
 import type { AbsenceBlocksDto } from "../generated/AbsenceBlocksDto";
 import type { AbsenceBlockWriteDto } from "../generated/AbsenceBlockWriteDto";
 import type { AppointmentBookDto } from "../generated/AppointmentBookDto";
+import type { AppointmentCallDto } from "../generated/AppointmentCallDto";
 import type { AppointmentDto } from "../generated/AppointmentDto";
 import type { AppointmentMoveDto } from "../generated/AppointmentMoveDto";
 import type { AppointmentsDto } from "../generated/AppointmentsDto";
@@ -82,6 +83,22 @@ export function bookClient({ send }: Transport) {
 
     async clearAppointmentNoShow(id: string): Promise<AppointmentDto> {
       const body = await send(`/appointments/${id}/no-show/clear`, { method: "POST" });
+      return narrow(body, appointmentSchema, "appointment");
+    },
+
+    /** Records what came of the confirmation call (C6b), stamped now. */
+    async recordAppointmentCall(id: string, input: AppointmentCallDto): Promise<AppointmentDto> {
+      const body = await send(`/appointments/${id}/call-outcome`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(input),
+      });
+      return narrow(body, appointmentSchema, "appointment");
+    },
+
+    /** Clears a recorded call; one with none answers as it stands. */
+    async clearAppointmentCall(id: string): Promise<AppointmentDto> {
+      const body = await send(`/appointments/${id}/call-outcome/clear`, { method: "POST" });
       return narrow(body, appointmentSchema, "appointment");
     },
 
@@ -164,17 +181,20 @@ export function bookClient({ send }: Transport) {
     },
 
     /** The earliest start a booking would be taken at, from a date and an
-     * optional visit type; `offsetDays` is "see again in N days" counted
+     * optional visit type or length in minutes (never both: the server
+     * refuses the pair); `offsetDays` is "see again in N days" counted
      * from `from` (or from today, server side, without one). */
     async nextFreeSlot(query: {
       from?: string;
       offsetDays?: number;
       visitTypeId?: string;
+      minutes?: number;
     }): Promise<FreeSlotDto> {
       const params = new URLSearchParams();
       if (query.from !== undefined) params.set("from", query.from);
       if (query.offsetDays !== undefined) params.set("offset_days", String(query.offsetDays));
       if (query.visitTypeId !== undefined) params.set("visit_type_id", query.visitTypeId);
+      if (query.minutes !== undefined) params.set("minutes", String(query.minutes));
       const qs = params.size === 0 ? "" : `?${params.toString()}`;
       return narrow(await send(`/appointments/next-free${qs}`), freeSlotSchema, "next free slot");
     },

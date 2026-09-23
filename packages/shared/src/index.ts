@@ -124,8 +124,11 @@ export type { SexDto } from "./generated/SexDto";
 // The waiting queue (C4), types only for the same reason.
 export type { QueueAddDto } from "./generated/QueueAddDto";
 export type { QueueEntryDto } from "./generated/QueueEntryDto";
+export type { QueueOrderDto } from "./generated/QueueOrderDto";
 // The appointment book (C5), types only for the same reason.
 export type { AppointmentBookDto } from "./generated/AppointmentBookDto";
+export type { AppointmentCallDto } from "./generated/AppointmentCallDto";
+export type { CallOutcomeDto } from "./generated/CallOutcomeDto";
 export type { AppointmentDto } from "./generated/AppointmentDto";
 export type { AppointmentMoveDto } from "./generated/AppointmentMoveDto";
 export type { AppointmentsDto } from "./generated/AppointmentsDto";

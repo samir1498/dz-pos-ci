@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { QueueAddDto } from "../generated/QueueAddDto";
 import type { QueueEntryDto } from "../generated/QueueEntryDto";
+import type { QueueOrderDto } from "../generated/QueueOrderDto";
 import type { Assert, Matches } from "./drift";
 
 export const queueEntrySchema = z.object({
@@ -17,6 +18,9 @@ export const queueEntrySchema = z.object({
   called_at: z.string().nullable(),
   seen_at: z.string().nullable(),
   left_at: z.string().nullable(),
+  appointment_id: z.string().nullable(),
+  appointment_starts_at: z.string().nullable(),
+  position: z.number(),
 }) satisfies z.ZodType<QueueEntryDto>;
 type _QueueEntry = Assert<Matches<QueueEntryDto, typeof queueEntrySchema>>;
 
@@ -24,3 +28,8 @@ export const queueAddSchema = z.object({
   patient_id: z.string(),
 }) satisfies z.ZodType<QueueAddDto>;
 type _QueueAdd = Assert<Matches<QueueAddDto, typeof queueAddSchema>>;
+
+export const queueOrderSchema = z.object({
+  ids: z.array(z.string()),
+}) satisfies z.ZodType<QueueOrderDto>;
+type _QueueOrder = Assert<Matches<QueueOrderDto, typeof queueOrderSchema>>;

@@ -13,7 +13,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { AppointmentDto } from "@dzpos/shared";
-import type { EventClickArg, EventDropArg } from "@fullcalendar/core";
+import type { EventClickArg, EventContentArg, EventDropArg } from "@fullcalendar/core";
 import arDzLocale from "@fullcalendar/core/locales/ar-dz";
 import frLocale from "@fullcalendar/core/locales/fr";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -22,7 +22,7 @@ import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CalendarOff, CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarOff, CalendarPlus, ChevronLeft, ChevronRight, PhoneCall } from "lucide-react";
 
 import { Icon } from "@/components/Icon";
 import { PageHeader } from "@/components/PageHeader";
@@ -47,13 +47,15 @@ import { errorKey } from "@/lib/fields";
 import { AbsenceBlocksForm } from "./AbsenceBlocksForm";
 import { AppointmentDialog } from "./AppointmentDialog";
 import { BookDialog } from "./BookDialog";
+import { CallMark } from "./CallActions";
+import { CallsDialog } from "./CallsDialog";
 import {
   absenceBackgroundEvents,
   businessHoursOf,
   hiddenWeekdays,
   slotDurationOf,
 } from "./calendarConfig";
-import { addMinutes, formatDay, formatStartsAt, parseStartsAt } from "./dates";
+import { addMinutes, formatDay, formatStartsAt, nextDay, parseStartsAt } from "./dates";
 import { DayListPanel } from "./DayListPanel";
 import { NextFreeDialog } from "./NextFreeDialog";
 
@@ -76,6 +78,7 @@ export function BookScreen() {
   const [nextFreeOpen, setNextFreeOpen] = useState(false);
   const [dayListDay, setDayListDay] = useState<string | null>(null);
   const [absenceOpen, setAbsenceOpen] = useState(false);
+  const [callsOpen, setCallsOpen] = useState(false);
 
   const workingHours = useQuery({
     queryKey: workingHoursQueryKey,
@@ -155,6 +158,19 @@ export function BookScreen() {
   const handleEventClick = (info: EventClickArg) => {
     const appointment = info.event.extendedProps.appointment;
     if (appointment !== undefined) setOpenAppointment(appointment);
+  };
+
+  // The event's own name, and the confirmation call's small mark once one
+  // is recorded (C6b). Background events (absence blocks) keep their own
+  // look: they carry no appointment.
+  const renderEvent = (info: EventContentArg) => {
+    const appointment = info.event.extendedProps.appointment;
+    return (
+      <span className="flex items-center gap-1 overflow-hidden">
+        {appointment === undefined ? null : <CallMark outcome={appointment.call_outcome} />}
+        <span className="truncate">{info.event.title}</span>
+      </span>
+    );
   };
 
   const handleMoveByDrag = (info: EventDropArg) => {
@@ -238,6 +254,16 @@ export function BookScreen() {
         type="button"
         variant="outline"
         size="sm"
+        data-testid="book-calls"
+        onClick={() => setCallsOpen(true)}
+      >
+        <Icon as={PhoneCall} size={18} />
+        {t("book_calls_button")}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
         data-testid="book-absence"
         onClick={() => setAbsenceOpen(true)}
       >
@@ -309,6 +335,7 @@ export function BookScreen() {
             eventDurationEditable={false}
             dateClick={(info) => setBookStartsAt(formatStartsAt(info.date))}
             eventClick={handleEventClick}
+            eventContent={renderEvent}
             eventDrop={handleMoveByDrag}
             datesSet={(info) => setRange({ start: info.start })}
           />
@@ -350,6 +377,12 @@ export function BookScreen() {
           }
           setBookStartsAt(startsAt);
         }}
+      />
+
+      <CallsDialog
+        day={today.today === undefined ? null : nextDay(today.today)}
+        open={callsOpen}
+        onOpenChange={setCallsOpen}
       />
 
       <Dialog open={absenceOpen} onOpenChange={setAbsenceOpen}>

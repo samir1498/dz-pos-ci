@@ -121,6 +121,8 @@ const SURFACE: Readonly<Record<string, readonly string[]>> = {
     "callInQueue",
     "markSeenInQueue",
     "markLeftInQueue",
+    "checkInAppointment",
+    "reorderQueue",
   ],
   book: [
     "listAppointments",
@@ -130,6 +132,8 @@ const SURFACE: Readonly<Record<string, readonly string[]>> = {
     "moveAppointment",
     "markAppointmentNoShow",
     "clearAppointmentNoShow",
+    "recordAppointmentCall",
+    "clearAppointmentCall",
     "getSlotMinutes",
     "setSlotMinutes",
     "getWorkingHours",

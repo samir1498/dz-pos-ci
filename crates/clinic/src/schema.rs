@@ -44,6 +44,12 @@ diesel::table! {
         left_at -> Nullable<Timestamp>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        // migrations/2026-09-23-000026_queue_entry_appointment: the booking
+        // a checked-in patient came for; NULL for a walk-in.
+        appointment_id -> Nullable<Text>,
+        // migrations/2026-09-23-000027_queue_entry_position: the entry's
+        // place in its day's list as the desk ordered it, 1 first.
+        position -> Integer,
     }
 }
 
@@ -67,6 +73,11 @@ diesel::table! {
         // migrations/2026-09-23-000025_appointment_no_show: when the desk
         // marked it missed; NULL while unmarked.
         no_show_at -> Nullable<Timestamp>,
+        // migrations/2026-09-23-000028_appointment_call: what came of the
+        // confirmation call, 'confirmed' or 'no_answer', and when the desk
+        // recorded it; both NULL before a call or once cleared.
+        call_outcome -> Nullable<Text>,
+        call_at -> Nullable<Timestamp>,
     }
 }
 

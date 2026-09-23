@@ -26,6 +26,13 @@ pub struct QueueEntryDto {
     pub seen_at: Option<String>,
     /// Set when the patient left without being seen; never beside `seen_at`.
     pub left_at: Option<String>,
+    /// The appointment a booked patient was marked arrived for; null for a
+    /// walk-in.
+    pub appointment_id: Option<String>,
+    /// That appointment's start, `YYYY-MM-DD HH:MM:SS`; null for a walk-in.
+    pub appointment_starts_at: Option<String>,
+    /// The entry's place in its day's list as the desk ordered it, 1 first.
+    pub position: i32,
 }
 
 impl From<QueuedPatient> for QueueEntryDto {
@@ -42,6 +49,9 @@ impl From<QueuedPatient> for QueueEntryDto {
             called_at: stamp(q.entry.called_at),
             seen_at: stamp(q.entry.seen_at),
             left_at: stamp(q.entry.left_at),
+            appointment_id: q.entry.appointment_id,
+            appointment_starts_at: stamp(q.appointment_starts_at),
+            position: q.entry.position,
         }
     }
 }
@@ -53,4 +63,14 @@ impl From<QueuedPatient> for QueueEntryDto {
 #[serde(deny_unknown_fields)]
 pub struct QueueAddDto {
     pub patient_id: String,
+}
+
+/// Today's queue in the order the desk dragged it into: entry ids, first
+/// place first. An entry of today left out keeps its order after the ones
+/// listed.
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export_to = "QueueOrderDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct QueueOrderDto {
+    pub ids: Vec<String>,
 }

@@ -11,6 +11,7 @@ import {
   addMinutes,
   formatDay,
   formatStartsAt,
+  nextDay,
   parseStartsAt,
 } from "../../../src/routes/-book/dates";
 
@@ -69,5 +70,20 @@ describe("addMinutes: a slot's end from its own start and length", () => {
   test("zero minutes is the same moment", () => {
     const start = new Date(2026, 8, 23, 9, 0, 0);
     expect(formatStartsAt(addMinutes(start, 0))).toBe(formatStartsAt(start));
+  });
+});
+
+describe("nextDay: the day tomorrow's calls are about (C6b)", () => {
+  test("rolls the month and the year over, and a leap day in", () => {
+    expect(nextDay("2026-09-23")).toBe("2026-09-24");
+    expect(nextDay("2026-09-30")).toBe("2026-10-01");
+    expect(nextDay("2026-12-31")).toBe("2027-01-01");
+    expect(nextDay("2028-02-28")).toBe("2028-02-29");
+  });
+
+  test("anything that is not a real day is null, not a guess", () => {
+    expect(nextDay("2026-02-30")).toBeNull();
+    expect(nextDay("2026-9-23")).toBeNull();
+    expect(nextDay("")).toBeNull();
   });
 });

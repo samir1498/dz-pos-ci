@@ -1,8 +1,8 @@
 // An appointment the desk clicked (C6). Every action the plan asks for
-// (move, cancel, mark no-show, clear it, open the patient file) sits here,
-// always offered: Samir's ruling of 2026-09-23 19:34 is that the desk
-// decides which one applies and the software does not, so nothing here is
-// disabled by the row's own state. A refusal (a cancelled row moved again,
+// (arrived, move, cancel, mark no-show, clear it, the confirmation call,
+// open the patient file) sits here, always offered: Samir's ruling of 2026-09-23 19:34 is that the
+// desk decides which one applies and the software does not, so nothing here
+// is disabled by the row's own state. A refusal (a cancelled row moved again,
 // a slot already taken) comes back from the server and is shown as a plain
 // message, never guessed at first.
 
@@ -21,10 +21,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { api, appointmentsQueryKey, dayListQueryKey } from "@/api";
+import { api, appointmentsQueryKey, dayListQueryKey, queueQueryKey } from "@/api";
 import { useTranslation } from "@/i18n";
 import { errorKey } from "@/lib/fields";
 
+import { CallActions } from "./CallActions";
 import { formatDay, parseStartsAt } from "./dates";
 
 /** `starts_at` (`YYYY-MM-DD HH:MM:SS`) to the value a `datetime-local`
@@ -98,6 +99,16 @@ export function AppointmentDialog({
       onChanged();
     },
   });
+  // C6b: the patient came in. Today's queue gets them, linked to this
+  // booking; asked twice, the server answers the same entry.
+  const arrive = useMutation({
+    mutationFn: () => api.checkInAppointment(appointment?.id ?? ""),
+    onSuccess: async () => {
+      await invalidate();
+      await queryClient.invalidateQueries({ queryKey: queueQueryKey });
+      onChanged();
+    },
+  });
 
   // Each appointment gets a clean form: without this, closing A after typing
   // a move date and opening B leaves B's "Move" button enabled with A's own
@@ -109,13 +120,20 @@ export function AppointmentDialog({
     move.reset();
     markNoShow.reset();
     clearNoShow.reset();
+    arrive.reset();
     // Keyed on the appointment's own id only: the four `reset` functions
     // change identity every render, and this codebase carries no
     // `react-hooks/exhaustive-deps` rule to appease over that.
   }, [appointment?.id]);
 
-  const pending = cancel.isPending || move.isPending || markNoShow.isPending || clearNoShow.isPending;
-  const lastError = cancel.error ?? move.error ?? markNoShow.error ?? clearNoShow.error ?? null;
+  const pending =
+    cancel.isPending ||
+    move.isPending ||
+    markNoShow.isPending ||
+    clearNoShow.isPending ||
+    arrive.isPending;
+  const lastError =
+    cancel.error ?? move.error ?? markNoShow.error ?? clearNoShow.error ?? arrive.error ?? null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -162,6 +180,14 @@ export function AppointmentDialog({
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
+                data-testid="appointment-arrive"
+                disabled={pending}
+                onClick={() => arrive.mutate()}
+              >
+                {t("book_mark_arrived")}
+              </Button>
+              <Button
+                type="button"
                 variant="outline"
                 data-testid="appointment-cancel"
                 disabled={pending}
@@ -203,6 +229,11 @@ export function AppointmentDialog({
               <Button type="button" variant="ghost" asChild>
                 <Link to={PATIENTS_PATH}>{t("book_open_patient_file")}</Link>
               </Button>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-foreground">{t("book_call_title")}</span>
+              <CallActions appointment={appointment} onChanged={() => onChanged()} />
             </div>
 
             {lastError === null ? null : (

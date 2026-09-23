@@ -45,10 +45,13 @@ const hit: AppointmentDto = {
   first_name: "Nadia",
   last_name: "Cherif",
   starts_at: "2026-10-05 09:00:00",
-  slot_minutes: 15,
+  slot_minutes: 45,
   note: null,
   cancelled_at: null,
   no_show_at: null,
+  phone: null,
+  call_outcome: null,
+  call_at: null,
 };
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -117,7 +120,7 @@ describe("absence blocks: create sends the two stamps and the label", () => {
   });
 });
 
-describe("absence blocks: a hit with nowhere to move shows the plain message", () => {
+describe("absence blocks: a hit is searched a slot of its own length", () => {
   test("the block's own next-free search coming back empty is shown, not swallowed", async () => {
     hitsOnNextBlock = [hit];
     const user = userEvent.setup();
@@ -131,5 +134,10 @@ describe("absence blocks: a hit with nowhere to move shows the plain message", (
     await user.click(await screen.findByTestId(`hit-move-${hit.id}`));
 
     expect(await screen.findByText(fr.book_no_free_slot)).toBeInTheDocument();
+    // The search asked for the hit's own 45 minutes, not the shop's slot.
+    const searched = fetchMock.mock.calls
+      .map((c) => String(c[0]))
+      .filter((url) => url.includes("/appointments/next-free"));
+    expect(searched).toEqual([expect.stringMatching(/\/appointments\/next-free\?minutes=45$/)]);
   });
 });

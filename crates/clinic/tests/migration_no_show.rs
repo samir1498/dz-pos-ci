@@ -4,8 +4,9 @@
 //! Migration 000025: the `no_show_at` column on `appointments`.
 //!
 //! Raw INSERTs only, never the service, for the reason
-//! `migration_patients.rs` gives: `services::appointments` refuses a mark
-//! on a cancelled row first, and this file holds the column's own CHECK.
+//! `migration_patients.rs` gives: `services::appointments` clears the
+//! cancellation when it marks a row, so only a raw write reaches the
+//! column's own CHECK, which this file holds.
 
 use diesel::prelude::*;
 use diesel_migrations::MigrationHarness;

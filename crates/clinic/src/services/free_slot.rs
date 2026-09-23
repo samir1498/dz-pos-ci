@@ -31,7 +31,7 @@ pub const SEARCH_DAYS: i64 = 60;
 pub const MAX_OFFSET_DAYS: u32 = 366;
 
 /// What the desk asks: from which day, how many days after it, for which
-/// visit type.
+/// visit type or how many minutes.
 #[derive(Debug, Clone, Default)]
 pub struct FreeSlotQuery {
     /// The day to count from; today on the shop's clock when `None`.
@@ -41,6 +41,11 @@ pub struct FreeSlotQuery {
     /// A visit type of this shop whose length the slot must hold; the slot
     /// length when `None`.
     pub visit_type_id: Option<String>,
+    /// A length in minutes the slot must hold, instead of a visit type: a
+    /// booking being moved asks for its own `slot_minutes`, which no type
+    /// may still carry. 1 to 240, the range a stored booking runs; never
+    /// together with `visit_type_id`.
+    pub minutes: Option<i32>,
 }
 
 /// The answer: the days read, first and last, the length searched for, and
@@ -79,9 +84,22 @@ pub fn next_free(
     let grid = i32::try_from(slot_length::slot_minutes(conn, shop_id)?).map_err(|_| {
         CoreError::validation(slot_length::SLOT_MINUTES, "the slot length is out of range")
     })?;
-    let minutes = match query.visit_type_id.as_deref() {
-        Some(id) => visit_types::get(conn, shop_id, id)?.minutes,
-        None => grid,
+    let minutes = match (query.visit_type_id.as_deref(), query.minutes) {
+        (Some(_), Some(_)) => {
+            return Err(CoreError::validation(
+                "minutes",
+                "ask by visit type or by minutes, not both",
+            ))
+        }
+        (Some(id), None) => visit_types::get(conn, shop_id, id)?.minutes,
+        (None, Some(asked)) if (1..=visit_types::MAX_VISIT_MINUTES).contains(&asked) => asked,
+        (None, Some(_)) => {
+            return Err(CoreError::validation(
+                "minutes",
+                "a booking runs 1 to 240 minutes",
+            ))
+        }
+        (None, None) => grid,
     };
     let week = working_hours::week(conn, shop_id)?;
     let from = first_day.and_time(NaiveTime::MIN);

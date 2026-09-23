@@ -1,14 +1,15 @@
 // The clinic's waiting queue (C6 of
 // `the-first-clinic-module-patients-queue-appointments`). Today's arrivals,
-// in the order the desk wrote them down, almost no rules on top: add a
-// patient who walked in, call the next one, mark them seen or gone.
+// almost no rules on top: add a patient who walked in, call the next one,
+// mark them seen or gone. C6b: the list is in the desk's order, which staff
+// set by dragging a row (`SortableQueueList`); a booked patient shows the
+// booking's time, and goes wherever the desk drops them.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PatientDto, QueueEntryDto } from "@dzpos/shared";
 import { PhoneCall, Search, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
-import { DataTable, type Column } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
@@ -27,6 +28,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api, patientsQueryKey, queueQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { errorKey } from "@/lib/fields";
+
+import { inOrder } from "./order";
+import { SortableQueueList } from "./SortableQueueList";
 
 type QueueStatus = "waiting" | "called" | "seen" | "left";
 
@@ -62,6 +66,20 @@ export function QueueScreen() {
   const seen = useMutation({ mutationFn: (id: string) => api.markSeenInQueue(id), onSuccess: invalidateQueue });
   const left = useMutation({ mutationFn: (id: string) => api.markLeftInQueue(id), onSuccess: invalidateQueue });
 
+  // The new order shows at once; the server's answer then replaces it, and
+  // a refusal reads the day back so the screen never keeps an order the
+  // server did not write.
+  const reorder = useMutation({
+    mutationFn: (ids: readonly string[]) => api.reorderQueue({ ids: [...ids] }),
+    onMutate: (ids) => {
+      queryClient.setQueryData<QueueEntryDto[]>(queueQueryKey, (current) =>
+        current === undefined ? current : inOrder(current, ids),
+      );
+    },
+    onSuccess: (list) => queryClient.setQueryData(queueQueryKey, list),
+    onError: invalidateQueue,
+  });
+
   const waiting = queue.data?.some((entry) => queueStatus(entry) === "waiting") ?? false;
 
   const actions = (
@@ -77,38 +95,75 @@ export function QueueScreen() {
     </div>
   );
 
-  const columns: readonly Column<QueueEntryDto>[] = [
-    {
-      id: "name",
-      header: t("field_name"),
-      cell: (entry) => (
-        <span className="font-medium text-foreground">
-          {entry.first_name} {entry.last_name}
+  const rowActions = (entry: QueueEntryDto) => {
+    const status = queueStatus(entry);
+    if (status === "waiting") {
+      return (
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid={`queue-call-${entry.id}`}
+          disabled={call.isPending}
+          onClick={() => call.mutate(entry.id)}
+        >
+          {t("queue_call")}
+        </Button>
+      );
+    }
+    if (status === "called") {
+      return (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid={`queue-seen-${entry.id}`}
+            disabled={seen.isPending}
+            onClick={() => seen.mutate(entry.id)}
+          >
+            {t("queue_mark_seen")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid={`queue-left-${entry.id}`}
+            disabled={left.isPending}
+            onClick={() => left.mutate(entry.id)}
+          >
+            {t("queue_mark_left")}
+          </Button>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const renderRow = (entry: QueueEntryDto) => {
+    const status = queueStatus(entry);
+    return (
+      <>
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="truncate font-medium text-foreground">
+            {entry.first_name} {entry.last_name}
+          </span>
+          {entry.appointment_starts_at === null ? null : (
+            <Badge variant="outline" data-testid={`queue-booked-${entry.id}`}>
+              {t("queue_booked")}{" "}
+              <span dir="ltr" className="font-numeric">
+                {entry.appointment_starts_at.slice(11, 16)}
+              </span>
+            </Badge>
+          )}
         </span>
-      ),
-    },
-    {
-      id: "arrived_at",
-      header: t("col_arrived_at"),
-      cell: (entry) => (
-        <span dir="ltr" className="font-numeric text-muted-foreground">
-          {entry.arrived_at}
+        <span dir="ltr" className="font-numeric text-muted-foreground" title={t("col_arrived_at")}>
+          {entry.arrived_at.slice(11, 16)}
         </span>
-      ),
-    },
-    {
-      id: "status",
-      header: t("col_status"),
-      cell: (entry) => {
-        const status = queueStatus(entry);
-        return (
-          <Badge variant={status === "waiting" ? "outline" : "secondary"}>
-            {t(STATUS_KEY[status])}
-          </Badge>
-        );
-      },
-    },
-  ];
+        <Badge variant={status === "waiting" ? "outline" : "secondary"}>
+          {t(STATUS_KEY[status])}
+        </Badge>
+        <span className="flex min-w-32 justify-end">{rowActions(entry)}</span>
+      </>
+    );
+  };
 
   return (
     <section className="flex flex-col gap-4">
@@ -126,57 +181,22 @@ export function QueueScreen() {
           {t(errorKey(queue.error))}
         </p>
       ) : null}
+      {reorder.isError ? (
+        <p role="alert" className="text-sm text-fg-danger">
+          {t(errorKey(reorder.error))}
+        </p>
+      ) : null}
       {queue.isSuccess ? (
-        <DataTable
-          columns={columns}
-          rows={queue.data}
-          rowKey={(entry) => entry.id}
-          caption={t("queue_title")}
-          empty={
-            <EmptyState icon={Users} title={t("queue_empty")} description={t("queue_empty_hint")} />
-          }
-          actions={(entry) => {
-            const status = queueStatus(entry);
-            if (status === "waiting") {
-              return (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  data-testid={`queue-call-${entry.id}`}
-                  disabled={call.isPending}
-                  onClick={() => call.mutate(entry.id)}
-                >
-                  {t("queue_call")}
-                </Button>
-              );
-            }
-            if (status === "called") {
-              return (
-                <div className="flex items-center justify-end gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    data-testid={`queue-seen-${entry.id}`}
-                    disabled={seen.isPending}
-                    onClick={() => seen.mutate(entry.id)}
-                  >
-                    {t("queue_mark_seen")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    data-testid={`queue-left-${entry.id}`}
-                    disabled={left.isPending}
-                    onClick={() => left.mutate(entry.id)}
-                  >
-                    {t("queue_mark_left")}
-                  </Button>
-                </div>
-              );
-            }
-            return null;
-          }}
-        />
+        queue.data.length === 0 ? (
+          <EmptyState icon={Users} title={t("queue_empty")} description={t("queue_empty_hint")} />
+        ) : (
+          <SortableQueueList
+            entries={queue.data}
+            label={t("queue_title")}
+            onReorder={(ids) => reorder.mutate(ids)}
+            renderRow={renderRow}
+          />
+        )
       ) : null}
 
       <AddToQueueDialog

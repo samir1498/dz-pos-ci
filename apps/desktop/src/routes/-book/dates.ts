@@ -54,3 +54,19 @@ export function parseStartsAt(text: string): Date | null {
   if (formatStartsAt(date) !== text) return null;
   return date;
 }
+
+const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** The day after a `YYYY-MM-DD` day, the same shape back: the day the
+ *  confirmation calls are about (C6b). Through a local `Date` at noon, so
+ *  the month and year roll over and no clock change can land on midnight.
+ *  `null` on anything that is not a real day. */
+export function nextDay(day: string): string | null {
+  const match = DAY_RE.exec(day);
+  if (match === null) return null;
+  const [, y, mo, d] = match;
+  const date = new Date(Number(y), Number(mo) - 1, Number(d), 12, 0, 0);
+  if (formatDay(date) !== day) return null;
+  date.setDate(date.getDate() + 1);
+  return formatDay(date);
+}

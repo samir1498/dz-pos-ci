@@ -25,10 +25,14 @@ const waiting: QueueEntryDto = {
   called_at: null,
   seen_at: null,
   left_at: null,
+  appointment_id: null,
+  appointment_starts_at: null,
+  position: 1,
 };
 
 const called: QueueEntryDto = {
   ...waiting,
+  position: 2,
   id: "q2",
   patient_id: "p2",
   first_name: "Yacine",
@@ -41,6 +45,7 @@ const called: QueueEntryDto = {
  *  other candidate sitting beside it. */
 const waiting2: QueueEntryDto = {
   ...waiting,
+  position: 2,
   id: "q3",
   patient_id: "p4",
   first_name: "Sami",
@@ -137,10 +142,25 @@ function mount(lang: Lang = "fr") {
 let fetchMock: ReturnType<typeof vi.fn>;
 let queue: QueueEntryDto[];
 let patients: PatientDto[];
+let reorderRefused: boolean;
+
+/** jsdom lays nothing out, so every row would sit on one point and the
+ *  keyboard drag would find nowhere to go. Each queue row is given a
+ *  40-pixel band in list order instead, the way a browser stacks them. */
+function layOutRows() {
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+    const row = this.closest('[data-testid^="queue-row-"]');
+    const index = row === null || row.parentElement === null ? 0 : [...row.parentElement.children].indexOf(row);
+    const top = index * 50;
+    return { x: 0, y: top, top, left: 0, width: 400, height: 40, bottom: top + 40, right: 400, toJSON: () => ({}) };
+  });
+  Element.prototype.scrollIntoView = vi.fn();
+}
 
 beforeEach(() => {
   queue = [];
   patients = [];
+  reorderRefused = false;
   fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/auth/me")) return Promise.resolve(json(200, ME_OWNER));
@@ -185,9 +205,20 @@ beforeEach(() => {
         called_at: null,
         seen_at: null,
         left_at: null,
+        appointment_id: null,
+        appointment_starts_at: null,
+        position: queue.length + 1,
       };
       queue = [...queue, added];
       return Promise.resolve(json(201, added));
+    }
+    if (init?.method === "PUT" && url.endsWith("/queue/order")) {
+      if (reorderRefused) return Promise.resolve(json(409, { error: { code: "conflict", message: "refused" } }));
+      const sent: { ids: string[] } = JSON.parse(String(init.body));
+      queue = sent.ids.flatMap((id, index) =>
+        queue.filter((entry) => entry.id === id).map((entry) => ({ ...entry, position: index + 1 })),
+      );
+      return Promise.resolve(json(200, queue));
     }
     if (url.endsWith("/queue")) return Promise.resolve(json(200, queue));
     if (url.includes("/patients")) return Promise.resolve(json(200, patients));
@@ -211,7 +242,7 @@ describe("queueStatus", () => {
 });
 
 describe("the queue screen", () => {
-  test("renders today's queue in arrival order, not sorted by name", async () => {
+  test("renders today's queue in the server's order, not sorted by name", async () => {
     // "Yacine" sorts before "Amina" were this a name sort, so the array
     // order (Amina arrived first) is the only thing that could produce
     // this order.
@@ -219,6 +250,51 @@ describe("the queue screen", () => {
     mount();
     const rows = await screen.findAllByText(/^(Amina Benali|Yacine Meziane)$/);
     expect(rows.map((row) => row.textContent)).toEqual(["Amina Benali", "Yacine Meziane"]);
+  });
+
+  test("a booked patient shows the booking's time, a walk-in shows none (C6b)", async () => {
+    queue = [{ ...waiting, appointment_id: "a1", appointment_starts_at: "2026-09-23 10:30:00" }, waiting2];
+    mount();
+    expect(await screen.findByTestId("queue-booked-q1")).toHaveTextContent("RDV 10:30");
+    expect(screen.queryByTestId("queue-booked-q3")).not.toBeInTheDocument();
+  });
+
+  test("a row dragged from the keyboard sends the day's new order, and the list shows it (C6b)", async () => {
+    queue = [waiting, waiting2, { ...called, position: 3 }];
+    layOutRows();
+    const user = userEvent.setup();
+    mount();
+    const handle = await screen.findByTestId(`queue-drag-${waiting.id}`);
+    handle.focus();
+    await user.keyboard(" ");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard(" ");
+    await waitFor(() => expect(requestsFor("PUT")).toHaveLength(1));
+    const [url, init] = requestsFor("PUT")[0] ?? ["", {}];
+    expect(String(url)).toMatch(/\/queue\/order$/);
+    expect(JSON.parse(String(init.body))).toEqual({ ids: [waiting2.id, waiting.id, called.id] });
+    await waitFor(() => {
+      const rows = screen.getAllByText(/^(Amina Benali|Sami Ait|Yacine Meziane)$/);
+      expect(rows.map((row) => row.textContent)).toEqual(["Sami Ait", "Amina Benali", "Yacine Meziane"]);
+    });
+  });
+
+  test("a refused order reads the day back and shows the refusal (C6b)", async () => {
+    queue = [waiting, waiting2];
+    reorderRefused = true;
+    layOutRows();
+    const user = userEvent.setup();
+    mount();
+    const handle = await screen.findByTestId(`queue-drag-${waiting.id}`);
+    handle.focus();
+    await user.keyboard(" ");
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard(" ");
+    expect(await screen.findByText(fr.error_conflict)).toBeInTheDocument();
+    await waitFor(() => {
+      const rows = screen.getAllByText(/^(Amina Benali|Sami Ait)$/);
+      expect(rows.map((row) => row.textContent)).toEqual(["Amina Benali", "Sami Ait"]);
+    });
   });
 
   test("says so when there is nobody yet", async () => {

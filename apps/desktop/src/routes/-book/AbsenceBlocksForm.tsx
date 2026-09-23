@@ -51,14 +51,13 @@ export function AbsenceBlocksForm() {
     mutationFn: (id: string) => api.cancelAppointment(id),
     onSuccess: (_, id) => setHits((current) => current.filter((hit) => hit.id !== id)),
   });
-  // The hit's own visit type is not on `AppointmentDto` (only the minutes it
-  // was booked for, `slot_minutes`), so this asks for the shop's own default
-  // slot length rather than the hit's exact one; a longer visit could still
-  // be offered a slot too short for it and be refused there too.
+  // A move keeps the booking's own length, so the search asks for the hit's
+  // `slot_minutes` rather than the shop's slot length: a 45-minute visit is
+  // only offered a start 45 minutes fit (C6b item 6).
   const NO_FREE_SLOT = "no-free-slot";
   const moveHit = useMutation({
     mutationFn: async (hit: AppointmentDto) => {
-      const free = await api.nextFreeSlot({});
+      const free = await api.nextFreeSlot({ minutes: hit.slot_minutes });
       if (free.starts_at === null) throw new Error(NO_FREE_SLOT);
       return api.moveAppointment(hit.id, { starts_at: free.starts_at });
     },

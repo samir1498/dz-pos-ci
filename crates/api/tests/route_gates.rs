@@ -548,7 +548,9 @@ fn the_shops_own_gate_rows_and_routes_carry_the_retail_feature() {
 /// (its slot length's read is open, like `GET /settings`, and has no row),
 /// C5b's book tools ten rows and ten calls (the reads of the hours, the
 /// blocks and the visit types carry no name and have no row; the day list
-/// and the next free slot, a read of the book, do).
+/// and the next free slot, a read of the book, do). C6b's check-in added
+/// one row and one call, the queue's order one more of each, and the
+/// confirmation call two of each.
 #[test]
 fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
     // The clinic's rows live in their own file, built only with the feature
@@ -556,12 +558,14 @@ fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
     let clinic_source = include_str!("../src/gates/clinic.rs");
     assert_eq!(
         clinic_source.matches("    Gate {").count(),
-        27,
-        "27 rows are the clinic's: the patient file's list, create, read, \
+        31,
+        "31 rows are the clinic's: the patient file's list, create, read, \
          update and archive, the queue's today, add, next, call, seen and left, the book's \
          list, book, read, cancel, move and slot length, and the book tools' working hours \
          and absence block create and remove, and the visit types' create, update and remove, \
-         the no-show mark and its clearing, the day list and the next free slot"
+         the no-show mark and its clearing, the day list and the next free slot, and the \
+         check-in of a booked patient, the queue's order, and the confirmation call and its \
+         clearing"
     );
     assert!(!include_str!("../src/gates/table.rs").contains("feature = \"clinic\")]\n    Gate {"));
     // The rows are there exactly when the clinic is built in.
@@ -573,8 +577,8 @@ fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
     };
     let built = cfg!(feature = "clinic");
     assert_eq!(clinic_rows("/patients"), if built { 5 } else { 0 });
-    assert_eq!(clinic_rows("/queue"), if built { 6 } else { 0 });
-    assert_eq!(clinic_rows("/appointments"), if built { 8 } else { 0 });
+    assert_eq!(clinic_rows("/queue"), if built { 7 } else { 0 });
+    assert_eq!(clinic_rows("/appointments"), if built { 11 } else { 0 });
     assert_eq!(
         clinic_rows("/settings/slot-minutes"),
         if built { 1 } else { 0 }
@@ -594,9 +598,9 @@ fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
     let block = &ROUTER_SOURCE[start..end];
     assert_eq!(
         block.matches(".route(").count(),
-        23,
-        "23 of router.rs' own .route(...) calls are the clinic's: 3 patient, 5 queue, 5 book, \
-         10 book tools"
+        27,
+        "27 of router.rs' own .route(...) calls are the clinic's: 3 patient, 5 queue, 5 book, \
+         10 book tools, 1 check-in, 1 queue order, 2 confirmation call"
     );
     // No patient, queue or book route outside the block.
     for path in [

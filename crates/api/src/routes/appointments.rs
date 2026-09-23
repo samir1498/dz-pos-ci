@@ -18,8 +18,8 @@ use dzpos_core::services::slot_length;
 use serde::Deserialize;
 
 use crate::dto::{
-    parse_day, parse_starts_at, AppointmentBookDto, AppointmentDto, AppointmentMoveDto,
-    AppointmentsDto, SlotMinutesDto, DATE_FORMAT,
+    parse_day, parse_starts_at, AppointmentBookDto, AppointmentCallDto, AppointmentDto,
+    AppointmentMoveDto, AppointmentsDto, SlotMinutesDto, DATE_FORMAT,
 };
 use crate::error::ApiError;
 use crate::session::CurrentUser;
@@ -153,7 +153,7 @@ pub async fn set_slot_minutes(
     Ok(Json(SlotMinutesDto { slot_minutes }))
 }
 
-/// Marks a past appointment as missed.
+/// Marks an appointment as missed, before its start or after it.
 pub async fn mark_no_show(
     State(state): State<AppState>,
     who: CurrentUser,
@@ -177,6 +177,36 @@ pub async fn clear_no_show(
     let user = who.id;
     let after = state
         .blocking(move |c| service::clear_no_show(c, shop, user, &id))
+        .await?;
+    Ok(Json(AppointmentDto::from(after)))
+}
+
+/// Records what came of the confirmation call, stamped now.
+pub async fn record_call(
+    State(state): State<AppState>,
+    who: CurrentUser,
+    Path(id): Path<String>,
+    body: Result<Json<AppointmentCallDto>, JsonRejection>,
+) -> Result<Json<AppointmentDto>, ApiError> {
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let shop = state.shop_id;
+    let user = who.id;
+    let after = state
+        .blocking(move |c| service::record_call(c, shop, user, &id, dto.outcome.into()))
+        .await?;
+    Ok(Json(AppointmentDto::from(after)))
+}
+
+/// Clears a recorded call; one with none answers as it stands.
+pub async fn clear_call(
+    State(state): State<AppState>,
+    who: CurrentUser,
+    Path(id): Path<String>,
+) -> Result<Json<AppointmentDto>, ApiError> {
+    let shop = state.shop_id;
+    let user = who.id;
+    let after = state
+        .blocking(move |c| service::clear_call(c, shop, user, &id))
         .await?;
     Ok(Json(AppointmentDto::from(after)))
 }

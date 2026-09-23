@@ -21,9 +21,10 @@
 
 #[cfg(feature = "clinic")]
 use dzpos_api::dto::{
-    AbsenceBlockDto, AbsenceBlockWriteDto, AbsenceBlocksDto, AppointmentBookDto, AppointmentDto,
-    AppointmentMoveDto, AppointmentsDto, BlockMadeDto, DayListDto, FreeSlotDto, OpenRangeDto,
-    PatientDto, PatientWriteDto, QueueAddDto, QueueEntryDto, SexDto, SlotMinutesDto, VisitTypeDto,
+    AbsenceBlockDto, AbsenceBlockWriteDto, AbsenceBlocksDto, AppointmentBookDto,
+    AppointmentCallDto, AppointmentDto, AppointmentMoveDto, AppointmentsDto, BlockMadeDto,
+    CallOutcomeDto, DayListDto, FreeSlotDto, OpenRangeDto, PatientDto, PatientWriteDto,
+    QueueAddDto, QueueEntryDto, QueueOrderDto, SexDto, SlotMinutesDto, VisitTypeDto,
     VisitTypeWriteDto, VisitTypesDto, WorkingHoursDto, WorkingHoursWriteDto,
 };
 use dzpos_api::dto::{
@@ -180,16 +181,19 @@ const FILES: [&str; 122] = [
 /// `src/dto/appointments.rs` since C5 and `src/dto/book_tools.rs` since C5b), apart from `FILES` because they only compile with the `clinic`
 /// feature: the list check below reads their names off the source text in
 /// every build, and the export writes them only when the feature is on.
-const CLINIC_FILES: [&str; 22] = [
+const CLINIC_FILES: [&str; 25] = [
     "PatientDto.ts",
     "PatientWriteDto.ts",
     "SexDto.ts",
     "QueueEntryDto.ts",
     "QueueAddDto.ts",
+    "QueueOrderDto.ts",
     "AppointmentDto.ts",
     "AppointmentsDto.ts",
     "AppointmentBookDto.ts",
     "AppointmentMoveDto.ts",
+    "AppointmentCallDto.ts",
+    "CallOutcomeDto.ts",
     "SlotMinutesDto.ts",
     "OpenRangeDto.ts",
     "WorkingHoursDto.ts",
@@ -419,7 +423,10 @@ fn export_bindings() {
         SexDto::export_all(&cfg).unwrap();
         QueueEntryDto::export_all(&cfg).unwrap();
         QueueAddDto::export_all(&cfg).unwrap();
+        QueueOrderDto::export_all(&cfg).unwrap();
         AppointmentDto::export_all(&cfg).unwrap();
+        AppointmentCallDto::export_all(&cfg).unwrap();
+        CallOutcomeDto::export_all(&cfg).unwrap();
         AppointmentsDto::export_all(&cfg).unwrap();
         AppointmentBookDto::export_all(&cfg).unwrap();
         AppointmentMoveDto::export_all(&cfg).unwrap();

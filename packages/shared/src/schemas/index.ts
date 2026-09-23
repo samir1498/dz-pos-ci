@@ -105,12 +105,13 @@ export {
 } from "./supplier";
 export { userSchema } from "./user";
 export { patientSchema, patientWriteSchema, sexSchema } from "./patient";
-export { queueAddSchema, queueEntrySchema } from "./queue";
+export { queueAddSchema, queueEntrySchema, queueOrderSchema } from "./queue";
 export {
   absenceBlockSchema,
   absenceBlocksSchema,
   absenceBlockWriteSchema,
   appointmentBookSchema,
+  appointmentCallSchema,
   appointmentMoveSchema,
   appointmentSchema,
   appointmentsSchema,

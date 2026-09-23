@@ -8,7 +8,7 @@
 
 use super::*;
 use chrono::NaiveDateTime;
-use dzpos_core::services::appointments::BookedPatient;
+use dzpos_core::services::appointments::{BookedPatient, CallOutcome};
 
 /// One slot in the book, with the names the desk reads out. `starts_at` is
 /// the shop clock's local time, `YYYY-MM-DD HH:MM:SS`, the format a booking
@@ -30,9 +30,50 @@ pub struct AppointmentDto {
     /// Null while the slot is held. The day and week lists carry live ones
     /// only; a cancel answers with the row stamped.
     pub cancelled_at: Option<String>,
-    /// When the desk marked the patient as not having come; null while
-    /// unmarked. Only ever on a past, live appointment.
+    /// When the desk marked the patient as not coming; null while unmarked.
+    /// Any start, past or not; never beside `cancelled_at`.
     pub no_show_at: Option<String>,
+    /// The patient's phone as the file holds it, for the confirmation call.
+    pub phone: Option<String>,
+    /// What came of the confirmation call; null before one or once cleared.
+    pub call_outcome: Option<CallOutcomeDto>,
+    /// When that outcome was recorded; set exactly when there is one.
+    pub call_at: Option<String>,
+}
+
+/// What came of a confirmation call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "CallOutcomeDto.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum CallOutcomeDto {
+    Confirmed,
+    NoAnswer,
+}
+
+impl From<CallOutcome> for CallOutcomeDto {
+    fn from(c: CallOutcome) -> Self {
+        match c {
+            CallOutcome::Confirmed => CallOutcomeDto::Confirmed,
+            CallOutcome::NoAnswer => CallOutcomeDto::NoAnswer,
+        }
+    }
+}
+
+impl From<CallOutcomeDto> for CallOutcome {
+    fn from(c: CallOutcomeDto) -> Self {
+        match c {
+            CallOutcomeDto::Confirmed => CallOutcome::Confirmed,
+            CallOutcomeDto::NoAnswer => CallOutcome::NoAnswer,
+        }
+    }
+}
+
+/// What came of the call the desk just made.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "AppointmentCallDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct AppointmentCallDto {
+    pub outcome: CallOutcomeDto,
 }
 
 impl From<BookedPatient> for AppointmentDto {
@@ -52,6 +93,12 @@ impl From<BookedPatient> for AppointmentDto {
             no_show_at: b
                 .appointment
                 .no_show_at
+                .map(|t| t.format(DATE_TIME_FORMAT).to_string()),
+            phone: b.phone,
+            call_outcome: b.appointment.call_outcome.map(CallOutcomeDto::from),
+            call_at: b
+                .appointment
+                .call_at
                 .map(|t| t.format(DATE_TIME_FORMAT).to_string()),
         }
     }

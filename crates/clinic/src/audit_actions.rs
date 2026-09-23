@@ -30,6 +30,15 @@ pub const ACTION_QUEUE_CALL: &str = "queue.call";
 pub const ACTION_QUEUE_SEEN: &str = "queue.seen";
 /// A patient who left the waiting room without being seen.
 pub const ACTION_QUEUE_LEFT: &str = "queue.left";
+/// A booked patient marked arrived (C6b): an entry added to the day's
+/// queue for the appointment, or a walk-in's entry of the same patient
+/// linked to it. `after` is the entry with its `appointment_id`; `before`
+/// is the walk-in's entry when one was linked, none when one was added.
+pub const ACTION_QUEUE_ARRIVE: &str = "queue.arrive";
+/// The desk put the day's queue in a new order (C6b). `before` and `after`
+/// are the day and its entry ids in the order on either side; no entry's
+/// own JSON, since nothing else about them moved.
+pub const ACTION_QUEUE_REORDER: &str = "queue.reorder";
 
 /// A patient given a slot in the book. `after` is the appointment as
 /// written, the patient's id with it and the note left out.
@@ -68,3 +77,8 @@ pub const ACTION_VISIT_TYPE_REMOVE: &str = "visit_type.remove";
 pub const ACTION_APPOINTMENT_NO_SHOW: &str = "appointment.no_show";
 /// A no-show mark taken back, the desk having marked the wrong patient.
 pub const ACTION_APPOINTMENT_NO_SHOW_CLEAR: &str = "appointment.no_show_clear";
+
+/// What came of the desk's confirmation call recorded on an appointment
+/// (C6b), or a recorded one cleared. `before` and `after` are the row on
+/// either side, the outcome and its moment in them.
+pub const ACTION_APPOINTMENT_CALL: &str = "appointment.call";

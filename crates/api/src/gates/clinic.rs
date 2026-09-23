@@ -1,4 +1,4 @@
-//! The clinic's gate rows (the clinic plan's C3 to C5b), built only with
+//! The clinic's gate rows (the clinic plan's C3 to C6b), built only with
 //! the `clinic` feature and joined after the kernel's and the shop's in
 //! `table.rs`. Split from that file when the book tools took it past its
 //! 600-line limit. Grouped by what they serve (the patient file, the queue,
@@ -75,6 +75,12 @@ pub const CLINIC_GATES: &[Gate] = &[
         why: "marking a patient gone unseen closes their entry the other way; the same write permission (clinic plan C4)",
     },
     Gate {
+        method: "PUT",
+        path: "/queue/order",
+        permission: Some(Permission::EditPatients),
+        why: "putting the day's queue in the desk's order decides who goes in next; the same write permission as calling them (clinic plan C6b)",
+    },
+    Gate {
         method: "GET",
         path: "/day-list",
         permission: Some(Permission::ViewPatients),
@@ -139,6 +145,24 @@ pub const CLINIC_GATES: &[Gate] = &[
         path: "/appointments/{id}/no-show/clear",
         permission: Some(Permission::EditPatients),
         why: "taking a no-show mark back is the same write as setting it (clinic plan C5b)",
+    },
+    Gate {
+        method: "POST",
+        path: "/appointments/{id}/arrive",
+        permission: Some(Permission::EditPatients),
+        why: "marking a booked patient arrived adds them to the day's queue, the same write as adding a walk-in (clinic plan C6b)",
+    },
+    Gate {
+        method: "POST",
+        path: "/appointments/{id}/call-outcome",
+        permission: Some(Permission::EditPatients),
+        why: "recording what came of the confirmation call is the desk's note on a booking, a write on the book like the no-show mark (clinic plan C6b)",
+    },
+    Gate {
+        method: "POST",
+        path: "/appointments/{id}/call-outcome/clear",
+        permission: Some(Permission::EditPatients),
+        why: "clearing a recorded call is the same write as recording it (clinic plan C6b)",
     },
     Gate {
         method: "PUT",

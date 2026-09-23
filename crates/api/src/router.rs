@@ -161,13 +161,14 @@ pub fn router_with_origin(
     // C3 of `the-first-clinic-module-patients-queue-appointments`: the
     // clinic's own routes, gated whole on their own feature for the same
     // reason the shop's below are, and before them so each block's span in
-    // `route_gates.rs` is bounded by the next block's start. 23 of the calls
-    // below, thirty-one method routes between them: the patient file's 3
+    // `route_gates.rs` is bounded by the next block's start. 27 of the calls
+    // below, thirty-five method routes between them: the patient file's 3
     // calls (five routes), the waiting queue's 5 (six, C4), the appointment
-    // book's 5 (seven, C5, the slot length's read and write among them) and
-    // the book tools' 10 (thirteen, C5b: the day list, the absence blocks,
-    // the next free slot, the no-show mark, the working hours and the visit
-    // types).
+    // book's 5 (seven, C5, the slot length's read and write among them), the
+    // book tools' 10 (thirteen, C5b: the day list, the absence blocks, the
+    // next free slot, the no-show mark, the working hours and the visit
+    // types) and C6b's 4 (four: marking a booked patient arrived, the desk's
+    // order of the queue, and a confirmation call recorded and cleared).
     #[cfg(feature = "clinic")]
     let guarded = guarded
         .route(
@@ -181,6 +182,7 @@ pub fn router_with_origin(
         .route("/patients/{id}/archive", post(routes::patients::archive))
         .route("/queue", get(routes::queue::today).post(routes::queue::add))
         .route("/queue/next", post(routes::queue::call_next))
+        .route("/queue/order", put(routes::queue::reorder))
         .route("/queue/{id}/call", post(routes::queue::call))
         .route("/queue/{id}/seen", post(routes::queue::seen))
         .route("/queue/{id}/left", post(routes::queue::left))
@@ -217,6 +219,15 @@ pub fn router_with_origin(
         .route(
             "/appointments/{id}/no-show/clear",
             post(routes::appointments::clear_no_show),
+        )
+        .route("/appointments/{id}/arrive", post(routes::queue::check_in))
+        .route(
+            "/appointments/{id}/call-outcome",
+            post(routes::appointments::record_call),
+        )
+        .route(
+            "/appointments/{id}/call-outcome/clear",
+            post(routes::appointments::clear_call),
         )
         .route(
             "/settings/slot-minutes",

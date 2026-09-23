@@ -356,7 +356,7 @@ async fn a_visit_type_is_set_up_and_a_booking_that_names_it_takes_its_length() {
 }
 
 #[tokio::test]
-async fn the_next_free_slot_crosses_the_weekend_and_takes_an_offset() {
+async fn the_next_free_slot_crosses_the_weekend_and_takes_an_offset_or_a_length() {
     let h = harness();
     let (status, body) = call(
         &h.app,
@@ -385,6 +385,19 @@ async fn the_next_free_slot_crosses_the_weekend_and_takes_an_offset() {
             "starts_at": format!("{sunday} 08:00:00"),
         })
     );
+    // Asked by length instead of a visit type: the answer searched 45.
+    let (status, found) = call(
+        &h.app,
+        "GET",
+        &format!("/appointments/next-free?from={friday}&minutes=45"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{found}");
+    assert_eq!(
+        (&found["slot_minutes"], &found["starts_at"]),
+        (&json!(45), &json!(format!("{sunday} 08:00:00")))
+    );
     // Fifteen days after that Friday is a Saturday; the Sunday after it.
     let (_, found) = call(
         &h.app,
@@ -406,6 +419,10 @@ async fn the_next_free_slot_crosses_the_weekend_and_takes_an_offset() {
         "/appointments/next-free?offset_days=-1",
         "/appointments/next-free?offset_days=400",
         "/appointments/next-free?day=2026-09-01",
+        "/appointments/next-free?minutes=half",
+        "/appointments/next-free?minutes=0",
+        "/appointments/next-free?minutes=241",
+        "/appointments/next-free?minutes=30&visit_type_id=any",
     ] {
         let (status, body) = call(&h.app, "GET", bad, None).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}: {body}");
@@ -421,7 +438,8 @@ async fn the_next_free_slot_crosses_the_weekend_and_takes_an_offset() {
 }
 
 #[tokio::test]
-async fn a_past_appointment_is_marked_missed_and_a_future_one_is_refused() {
+async fn an_appointment_is_marked_missed_before_or_after_its_start_twice_changes_nothing_and_a_cancel_clears_the_mark(
+) {
     use diesel::RunQueryDsl;
     let h = harness();
     let benali = patient(&h.app, "Amina", "Benali").await;
@@ -433,8 +451,9 @@ async fn a_past_appointment_is_marked_missed_and_a_future_one_is_refused() {
     .await;
     assert_eq!(future["no_show_at"], Value::Null);
     let id = future["id"].as_str().unwrap();
-    let (status, body) = call(&h.app, "POST", &format!("/appointments/{id}/no-show"), None).await;
-    assert_refused(status, &body, StatusCode::CONFLICT, "starts_at");
+    let (status, marked) = call(&h.app, "POST", &format!("/appointments/{id}/no-show"), None).await;
+    assert_eq!(status, StatusCode::OK, "{marked}");
+    assert!(marked["no_show_at"].is_string(), "{marked}");
 
     // The book refuses the past, so yesterday's row is written past it.
     let yesterday = clock::now().date() - Duration::days(1);
@@ -456,14 +475,16 @@ async fn a_past_appointment_is_marked_missed_and_a_future_one_is_refused() {
     .await;
     assert_eq!(status, StatusCode::OK, "{marked}");
     assert!(marked["no_show_at"].is_string(), "{marked}");
-    let (status, body) = call(
+    // Pressed twice, the mark stands with its first stamp.
+    let (status, again) = call(
         &h.app,
         "POST",
-        &format!("/appointments/{past}/cancel"),
+        &format!("/appointments/{past}/no-show"),
         None,
     )
     .await;
-    assert_refused(status, &body, StatusCode::CONFLICT, "no_show_at");
+    assert_eq!(status, StatusCode::OK, "{again}");
+    assert_eq!(again["no_show_at"], marked["no_show_at"]);
     let (status, cleared) = call(
         &h.app,
         "POST",
@@ -473,14 +494,22 @@ async fn a_past_appointment_is_marked_missed_and_a_future_one_is_refused() {
     .await;
     assert_eq!(status, StatusCode::OK, "{cleared}");
     assert_eq!(cleared["no_show_at"], Value::Null);
-    let (status, body) = call(
+    let (status, again) = call(
         &h.app,
         "POST",
         &format!("/appointments/{past}/no-show/clear"),
         None,
     )
     .await;
-    assert_refused(status, &body, StatusCode::CONFLICT, "no_show_at");
+    assert_eq!(status, StatusCode::OK, "{again}");
+    assert_eq!(again, cleared);
+
+    // The future one, still marked, is cancelled and loses its mark.
+    let (status, cancelled) =
+        call(&h.app, "POST", &format!("/appointments/{id}/cancel"), None).await;
+    assert_eq!(status, StatusCode::OK, "{cancelled}");
+    assert!(cancelled["cancelled_at"].is_string(), "{cancelled}");
+    assert_eq!(cancelled["no_show_at"], Value::Null);
 }
 
 #[tokio::test]

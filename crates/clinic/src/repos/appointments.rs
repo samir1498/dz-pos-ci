@@ -8,19 +8,20 @@ use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use diesel::sqlite::SqliteConnection;
 use dzpos_kernel::error::CoreError;
 
-use crate::models::appointment::{Appointment, AppointmentInsert, BookedPatient};
+use crate::models::appointment::{Appointment, AppointmentInsert, BookedPatient, CallOutcome};
 use crate::schema::{appointments, patients};
 
 /// The one table read the joined answers share: an appointment of this shop
-/// beside the names of its patient, of the same shop.
-type Row = (Appointment, String, String);
+/// beside the names and the phone of its patient, of the same shop.
+type Row = (Appointment, String, String, Option<String>);
 
 fn joined(row: Row) -> BookedPatient {
-    let (appointment, first_name, last_name) = row;
+    let (appointment, first_name, last_name, phone) = row;
     BookedPatient {
         appointment,
         first_name,
         last_name,
+        phone,
     }
 }
 
@@ -65,6 +66,7 @@ pub fn get(
             Appointment::as_select(),
             patients::first_name,
             patients::last_name,
+            patients::phone,
         ))
         .first::<Row>(conn)
         .optional()?
@@ -93,6 +95,7 @@ pub fn live_between(
             Appointment::as_select(),
             patients::first_name,
             patients::last_name,
+            patients::phone,
         ))
         .load::<Row>(conn)?
         .into_iter()
@@ -123,9 +126,10 @@ pub fn live_starting_between(
     Ok(query.load(conn)?)
 }
 
-/// Gives a live slot back. The service has read the row and refused a
-/// cancelled one; the `WHERE` here only keeps a second writer that got in
-/// between from stamping it twice, and that case reads as not found.
+/// Gives a live slot back and clears a no-show mark with it, the row being
+/// one or the other (the table's CHECK). The service has read the row and
+/// refused a cancelled one; the `WHERE` here only keeps a second writer that
+/// got in between from stamping it twice, and that case reads as not found.
 pub fn cancel(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -140,6 +144,7 @@ pub fn cancel(
     )
     .set((
         appointments::cancelled_at.eq(Some(at)),
+        appointments::no_show_at.eq(None::<NaiveDateTime>),
         appointments::updated_at.eq(at),
     ))
     .execute(conn)?;
@@ -173,7 +178,11 @@ pub fn reschedule(
     one_row(changed, id)
 }
 
-/// Sets or clears the no-show mark of a live appointment.
+/// Sets or clears the no-show mark of an appointment. Setting it takes a
+/// cancellation back, the row being one or the other (the table's CHECK);
+/// that puts the start in the live index again, which refuses it when
+/// another appointment took the slot in between the service's own check
+/// and this write.
 pub fn set_no_show(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -181,14 +190,46 @@ pub fn set_no_show(
     mark: Option<NaiveDateTime>,
     at: NaiveDateTime,
 ) -> Result<(), CoreError> {
+    let target = appointments::table
+        .filter(appointments::shop_id.eq(shop_id))
+        .filter(appointments::id.eq(id));
+    let changed = match mark {
+        Some(_) => diesel::update(target)
+            .set((
+                appointments::no_show_at.eq(mark),
+                appointments::cancelled_at.eq(None::<NaiveDateTime>),
+                appointments::updated_at.eq(at),
+            ))
+            .execute(conn)
+            .map_err(taken_by_the_index)?,
+        None => diesel::update(target)
+            .set((
+                appointments::no_show_at.eq(mark),
+                appointments::updated_at.eq(at),
+            ))
+            .execute(conn)?,
+    };
+    one_row(changed, id)
+}
+
+/// Records what came of the confirmation call, with its moment, or clears
+/// both with `None`. Any row of this shop, live or not: a call is a note of
+/// the desk's and changes nothing else.
+pub fn set_call(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    id: &str,
+    call: Option<(CallOutcome, NaiveDateTime)>,
+    at: NaiveDateTime,
+) -> Result<(), CoreError> {
     let changed = diesel::update(
         appointments::table
             .filter(appointments::shop_id.eq(shop_id))
-            .filter(appointments::id.eq(id))
-            .filter(appointments::cancelled_at.is_null()),
+            .filter(appointments::id.eq(id)),
     )
     .set((
-        appointments::no_show_at.eq(mark),
+        appointments::call_outcome.eq(call.map(|(outcome, _)| outcome)),
+        appointments::call_at.eq(call.map(|(_, moment)| moment)),
         appointments::updated_at.eq(at),
     ))
     .execute(conn)?;

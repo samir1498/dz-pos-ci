@@ -7,6 +7,15 @@ use diesel::prelude::*;
 
 use crate::schema::appointments;
 
+dzpos_kernel::text_enum! {
+    /// The `appointments.call_outcome` CHECK's two values: what came of the
+    /// desk's confirmation call (C6b).
+    CallOutcome {
+        Confirmed => "confirmed",
+        NoAnswer => "no_answer",
+    }
+}
+
 /// An appointment as the table holds it. The row and the model are one
 /// struct, as a patient's are.
 #[derive(Debug, Clone, PartialEq, Eq, Queryable, Selectable)]
@@ -28,9 +37,14 @@ pub struct Appointment {
     pub cancelled_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
-    /// `None` unless the desk marked the patient as not having come; only
-    /// ever on a past, live appointment.
+    /// `None` unless the desk marked the patient as not coming, before the
+    /// start or after it; never beside `cancelled_at`.
     pub no_show_at: Option<NaiveDateTime>,
+    /// What came of the desk's confirmation call; `None` before a call or
+    /// once cleared (C6b).
+    pub call_outcome: Option<CallOutcome>,
+    /// When that outcome was recorded; set exactly when there is one.
+    pub call_at: Option<NaiveDateTime>,
 }
 
 impl Appointment {
@@ -56,6 +70,8 @@ pub struct BookedPatient {
     pub appointment: Appointment,
     pub first_name: String,
     pub last_name: String,
+    /// The number the desk rings to confirm (C6b), as the file holds it.
+    pub phone: Option<String>,
 }
 
 /// An appointment as the service writes it the first time: the id, the slot

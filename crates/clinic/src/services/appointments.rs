@@ -19,15 +19,25 @@
 //! copied when it was booked (C5b): a visit type edited since, or a slot
 //! length changed since, does not stretch or shrink a booking by moving it.
 //!
-//! A past, live appointment the patient did not come to is marked with the
-//! moment (`mark_no_show`, C5b), kept on the row, and taken back with
-//! `clear_no_show`. A marked one is not moved or cancelled until then, so
-//! the mark is never left beside a new start or a cancellation.
+//! An appointment the patient will not come to, or did not, is marked with
+//! the moment (`mark_no_show`, C5b), kept on the row, and taken back with
+//! `clear_no_show`. The desk decides when (Samir, 2026-09-23 19:34): a call
+//! can say before the start that the patient won't come, so the mark takes
+//! any start, and a marked row is moved or cancelled like any other. A row
+//! is never cancelled and missed at once (the table's CHECK): cancelling
+//! clears the mark, and marking a cancelled row takes the cancellation
+//! back, which puts the slot in the book again and is refused only when
+//! another appointment has taken it since.
+//!
+//! What came of the desk's confirmation call, confirmed or no answer, is
+//! recorded on the row with its moment (`record_call`, C6b) and cleared
+//! with `clear_call`. It is a note: nothing else about the booking moves
+//! because of it.
 //!
 //! Validation (a 422) is a start the book could never hold: off the grid or
 //! in the past. Conflict (a 409) is a start somebody else holds, a cancelled
-//! row written to again, or an archived file. Every write is one
-//! transaction with its audit row.
+//! row moved, or an archived file. Every write is one transaction with its
+//! audit row.
 
 use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, Timelike};
 use diesel::prelude::*;
@@ -36,15 +46,15 @@ use dzpos_kernel::error::CoreError;
 use dzpos_kernel::services::{audit, clock, optional_field};
 
 use crate::audit_actions::{
-    ACTION_APPOINTMENT_BOOK, ACTION_APPOINTMENT_CANCEL, ACTION_APPOINTMENT_MOVE,
-    ACTION_APPOINTMENT_NO_SHOW, ACTION_APPOINTMENT_NO_SHOW_CLEAR,
+    ACTION_APPOINTMENT_BOOK, ACTION_APPOINTMENT_CALL, ACTION_APPOINTMENT_CANCEL,
+    ACTION_APPOINTMENT_MOVE, ACTION_APPOINTMENT_NO_SHOW, ACTION_APPOINTMENT_NO_SHOW_CLEAR,
 };
 use crate::models::appointment::AppointmentInsert;
 use crate::repos::appointments as repo;
 use crate::repos::patients as patient_repo;
 use crate::services::{absence_blocks, slot_length, visit_types, working_hours};
 
-pub use crate::models::appointment::{Appointment, BookedPatient};
+pub use crate::models::appointment::{Appointment, BookedPatient, CallOutcome};
 
 /// The longest slot the table holds (its CHECK). How far back from a new
 /// start a live appointment can begin and still run into it.
@@ -108,7 +118,8 @@ pub fn book(
 }
 
 /// Gives a live appointment's slot back. The row stays, stamped; its start
-/// can be booked again at once.
+/// can be booked again at once. A no-show mark on it is cleared: the row is
+/// one or the other.
 pub fn cancel(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -119,7 +130,6 @@ pub fn cancel(
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
         refuse_cancelled(&before.appointment)?;
-        refuse_no_show(&before.appointment)?;
         repo::cancel(conn, shop_id, id, now)?;
         written(conn, shop_id, user_id, &before, ACTION_APPOINTMENT_CANCEL)
     })
@@ -139,7 +149,6 @@ pub fn move_to(
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
         refuse_cancelled(&before.appointment)?;
-        refuse_no_show(&before.appointment)?;
         bookable_patient(conn, shop_id, &before.appointment.patient_id)?;
         let slot = current_slot(conn, shop_id)?;
         let length = before.appointment.slot_minutes;
@@ -149,9 +158,13 @@ pub fn move_to(
     })
 }
 
-/// Marks a live appointment whose start has passed as one the patient did
-/// not come to, stamped now (C5b). A future or cancelled one is refused,
-/// and so is one already marked.
+/// Marks an appointment as one the patient did not or will not come to,
+/// stamped now (C5b). Any start, past or not: the desk decides. A cancelled
+/// row is taken back into the book by it, so its slot is checked again for
+/// another appointment that took it since, the one refusal left. A row
+/// already marked is answered as it stands, its first stamp kept and no
+/// audit row written: the desk pressing twice changed nothing (Samir,
+/// 2026-09-23 19:34).
 pub fn mark_no_show(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -161,20 +174,20 @@ pub fn mark_no_show(
     let now = clock::now();
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
-        refuse_cancelled(&before.appointment)?;
-        if before.appointment.starts_at > now {
-            return Err(CoreError::conflict(
-                "starts_at",
-                "this appointment has not started yet",
-            ));
+        if before.appointment.no_show_at.is_some() {
+            return Ok(before);
         }
-        refuse_no_show(&before.appointment)?;
+        if !before.appointment.is_live() {
+            let a = &before.appointment;
+            refuse_overlap(conn, shop_id, a.starts_at, a.slot_minutes, Some(id))?;
+        }
         repo::set_no_show(conn, shop_id, id, Some(now), now)?;
         written(conn, shop_id, user_id, &before, ACTION_APPOINTMENT_NO_SHOW)
     })
 }
 
-/// Takes a no-show mark back. One not marked is refused.
+/// Takes a no-show mark back. One not marked is answered as it stands,
+/// with no audit row, like clearing a call never recorded.
 pub fn clear_no_show(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -185,10 +198,7 @@ pub fn clear_no_show(
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
         if before.appointment.no_show_at.is_none() {
-            return Err(CoreError::conflict(
-                "no_show_at",
-                "this appointment is not marked as missed",
-            ));
+            return Ok(before);
         }
         repo::set_no_show(conn, shop_id, id, None, now)?;
         written(
@@ -198,6 +208,43 @@ pub fn clear_no_show(
             &before,
             ACTION_APPOINTMENT_NO_SHOW_CLEAR,
         )
+    })
+}
+
+/// Records what came of the confirmation call, stamped now, over any
+/// earlier one. Any appointment of this shop: the desk decides when a call
+/// is worth writing down.
+pub fn record_call(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    id: &str,
+    outcome: CallOutcome,
+) -> Result<BookedPatient, CoreError> {
+    let now = clock::now();
+    conn.transaction(|conn| {
+        let before = repo::get(conn, shop_id, id)?;
+        repo::set_call(conn, shop_id, id, Some((outcome, now)), now)?;
+        written(conn, shop_id, user_id, &before, ACTION_APPOINTMENT_CALL)
+    })
+}
+
+/// Clears a recorded call. One with none is answered as it stands, with
+/// nothing written: there is nothing to refuse.
+pub fn clear_call(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    id: &str,
+) -> Result<BookedPatient, CoreError> {
+    let now = clock::now();
+    conn.transaction(|conn| {
+        let before = repo::get(conn, shop_id, id)?;
+        if before.appointment.call_outcome.is_none() {
+            return Ok(before);
+        }
+        repo::set_call(conn, shop_id, id, None, now)?;
+        written(conn, shop_id, user_id, &before, ACTION_APPOINTMENT_CALL)
     })
 }
 
@@ -360,6 +407,21 @@ fn check_slot(
             ),
         ));
     }
+    refuse_overlap(conn, shop_id, starts_at, length, except)
+}
+
+/// A live appointment other than `except` that already holds `starts_at`,
+/// or runs into `[starts_at, starts_at + length)`: the double booking.
+fn refuse_overlap(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    starts_at: NaiveDateTime,
+    length: i32,
+    except: Option<&str>,
+) -> Result<(), CoreError> {
+    let until = starts_at
+        .checked_add_signed(Duration::minutes(i64::from(length)))
+        .ok_or_else(out_of_calendar)?;
     let from = starts_at
         .checked_sub_signed(Duration::minutes(LONGEST_STORED_SLOT_MINUTES))
         .ok_or_else(out_of_calendar)?;
@@ -392,19 +454,6 @@ fn refuse_cancelled(a: &Appointment) -> Result<(), CoreError> {
         Err(CoreError::conflict(
             "cancelled_at",
             "this appointment was cancelled",
-        ))
-    }
-}
-
-/// A missed appointment stays as it was: it is not moved, cancelled or
-/// marked again until the mark is taken back.
-fn refuse_no_show(a: &Appointment) -> Result<(), CoreError> {
-    if a.no_show_at.is_none() {
-        Ok(())
-    } else {
-        Err(CoreError::conflict(
-            "no_show_at",
-            "this appointment is marked as missed; take the mark back first",
         ))
     }
 }
@@ -451,6 +500,10 @@ fn as_json(a: &Appointment) -> String {
             .map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()),
         "no_show_at": a
             .no_show_at
+            .map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()),
+        "call_outcome": a.call_outcome.map(CallOutcome::as_str),
+        "call_at": a
+            .call_at
             .map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()),
     })
     .to_string()

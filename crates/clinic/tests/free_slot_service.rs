@@ -36,6 +36,7 @@ fn search(
             from,
             offset_days,
             visit_type_id: visit.map(|v| v.id.clone()),
+            minutes: None,
         },
     )
 }
@@ -342,4 +343,67 @@ fn another_shops_book_blocks_nothing_and_its_types_are_not_found() {
         Err(CoreError::NotFoundText { entity, .. }) => assert_eq!(entity, "visit_type"),
         other => panic!("expected not found, got {other:?}"),
     }
+}
+
+fn search_minutes(
+    conn: &mut SqliteConnection,
+    from: NaiveDate,
+    minutes: i32,
+    visit: Option<&VisitType>,
+) -> Result<FreeSlot, CoreError> {
+    free_slot::next_free(
+        conn,
+        SHOP,
+        FreeSlotQuery {
+            from: Some(from),
+            offset_days: 0,
+            visit_type_id: visit.map(|v| v.id.clone()),
+            minutes: Some(minutes),
+        },
+    )
+}
+
+/// A booking being moved asks by its own length, which no visit type need
+/// carry (C6b item 6).
+#[test]
+fn a_length_in_minutes_is_searched_for_without_a_visit_type() {
+    let (_dir, mut conn) = open_temp();
+    let benali = open(&mut conn, "Amina", "Benali");
+    algerian_week(&mut conn);
+    let sunday = next(Weekday::Sun);
+    book(&mut conn, &benali, at(sunday, 8, 0)).unwrap();
+    block(&mut conn, at(sunday, 8, 30), at(sunday, 9, 0));
+    // 08:15-08:30 holds a quarter; 45 minutes from 08:15 would run into the
+    // block, so 09:00; 20 minutes, off the 15-minute grid, fits nowhere
+    // before the block either and starts on the grid at 09:00.
+    let found = search_minutes(&mut conn, sunday, 15, None).unwrap();
+    assert_eq!(
+        (found.starts_at, found.minutes),
+        (Some(at(sunday, 8, 15)), 15)
+    );
+    let found = search_minutes(&mut conn, sunday, 45, None).unwrap();
+    assert_eq!(
+        (found.starts_at, found.minutes),
+        (Some(at(sunday, 9, 0)), 45)
+    );
+    let found = search_minutes(&mut conn, sunday, 20, None).unwrap();
+    assert_eq!(found.starts_at, Some(at(sunday, 9, 0)));
+    // Four hours fit no morning with 08:00 taken: the afternoon's 14:00-18:00.
+    let found = search_minutes(&mut conn, sunday, 240, None).unwrap();
+    assert_eq!(found.starts_at, Some(at(sunday, 14, 0)));
+}
+
+#[test]
+fn minutes_run_one_to_two_hundred_forty_and_never_beside_a_visit_type() {
+    let (_dir, mut conn) = open_temp();
+    let half = kind(&mut conn, "Contrôle", 30);
+    let day = day_ahead(1);
+    for bad in [0, -15, 241] {
+        let (field, _) = invalid(search_minutes(&mut conn, day, bad, None));
+        assert_eq!(field, "minutes", "took {bad}");
+    }
+    let (field, _) = invalid(search_minutes(&mut conn, day, 30, Some(&half)));
+    assert_eq!(field, "minutes");
+    let found = search_minutes(&mut conn, day, 1, None).unwrap();
+    assert_eq!((found.starts_at, found.minutes), (Some(at(day, 0, 0)), 1));
 }

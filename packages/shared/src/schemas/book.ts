@@ -9,6 +9,7 @@ import type { AbsenceBlockDto } from "../generated/AbsenceBlockDto";
 import type { AbsenceBlocksDto } from "../generated/AbsenceBlocksDto";
 import type { AbsenceBlockWriteDto } from "../generated/AbsenceBlockWriteDto";
 import type { AppointmentBookDto } from "../generated/AppointmentBookDto";
+import type { AppointmentCallDto } from "../generated/AppointmentCallDto";
 import type { AppointmentDto } from "../generated/AppointmentDto";
 import type { AppointmentMoveDto } from "../generated/AppointmentMoveDto";
 import type { AppointmentsDto } from "../generated/AppointmentsDto";
@@ -35,8 +36,16 @@ export const appointmentSchema = z.object({
   note: z.string().nullable(),
   cancelled_at: z.string().nullable(),
   no_show_at: z.string().nullable(),
+  phone: z.string().nullable(),
+  call_outcome: z.enum(["confirmed", "no_answer"]).nullable(),
+  call_at: z.string().nullable(),
 }) satisfies z.ZodType<AppointmentDto>;
 type _Appointment = Assert<Matches<AppointmentDto, typeof appointmentSchema>>;
+
+export const appointmentCallSchema = z.object({
+  outcome: z.enum(["confirmed", "no_answer"]),
+}) satisfies z.ZodType<AppointmentCallDto>;
+type _AppointmentCall = Assert<Matches<AppointmentCallDto, typeof appointmentCallSchema>>;
 
 export const appointmentsSchema = z.object({
   from: z.string(),

@@ -25,6 +25,8 @@ import type {
   WorkingHoursDto,
 } from "@dzpos/shared";
 
+import type { ReactNode } from "react";
+
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import { SessionProvider } from "@/lib/session";
@@ -49,6 +51,9 @@ interface StubCalendarProps {
     revert: () => void;
   }) => void;
   datesSet?: (info: { start: Date; end: Date }) => void;
+  eventContent?: (info: {
+    event: { title: string; extendedProps: { appointment?: AppointmentDto } };
+  }) => ReactNode;
 }
 
 let lastCalendarProps: StubCalendarProps | null = null;
@@ -141,6 +146,9 @@ const appointment: AppointmentDto = {
   note: null,
   cancelled_at: null,
   no_show_at: null,
+  phone: null,
+  call_outcome: null,
+  call_at: null,
 };
 
 const otherAppointment: AppointmentDto = {
@@ -153,6 +161,9 @@ const otherAppointment: AppointmentDto = {
   note: null,
   cancelled_at: null,
   no_show_at: null,
+  phone: null,
+  call_outcome: null,
+  call_at: null,
 };
 
 const closedFridaySaturday: WorkingHoursDto = {
@@ -217,8 +228,11 @@ let bookResponse: { status: number; body: unknown } | null;
 let patients: PatientDto[];
 let sessionMe: MeDto = ME_OWNER;
 let nextFreeResponse: { first_day: string; last_day: string; slot_minutes: number; starts_at: string | null };
+/** The shop's `/clock` today; a test may move it far from the run date. */
+let shopToday: string;
 
 beforeEach(() => {
+  shopToday = "2026-09-23";
   lastCalendarProps = null;
   appointmentsResponse = [];
   patients = [patient];
@@ -236,7 +250,7 @@ beforeEach(() => {
     const url = String(input);
     if (url.endsWith("/auth/me")) return Promise.resolve(json(200, sessionMe));
     if (url.endsWith("/auth/idle")) return Promise.resolve(json(200, { idle_minutes: 30 }));
-    if (url.endsWith("/clock")) return Promise.resolve(json(200, { today: "2026-09-23" }));
+    if (url.endsWith("/clock")) return Promise.resolve(json(200, { today: shopToday }));
     if (url.endsWith("/settings/working-hours")) return Promise.resolve(json(200, closedFridaySaturday));
     if (url.endsWith("/absence-blocks")) return Promise.resolve(json(200, { blocks: [] }));
     if (url.endsWith("/settings/slot-minutes")) return Promise.resolve(json(200, { slot_minutes: 15 }));
@@ -262,6 +276,9 @@ beforeEach(() => {
         note: (sent.note as string | null | undefined) ?? null,
         cancelled_at: null,
         no_show_at: null,
+        phone: null,
+        call_outcome: null,
+        call_at: null,
       };
       return Promise.resolve(json(201, made));
     }
@@ -473,6 +490,19 @@ describe("the book screen: opening a booked appointment", () => {
     );
   });
 
+  test("arrived calls the appointment's own arrive route (C6b)", async () => {
+    appointmentsResponse = [appointment];
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByTestId(`fc-event-${appointment.id}`));
+    await user.click(await screen.findByTestId("appointment-arrive"));
+    await waitFor(() =>
+      expect(requestsFor("POST").some(([url]) => String(url).endsWith(`/appointments/${appointment.id}/arrive`))).toBe(
+        true,
+      ),
+    );
+  });
+
   test("closing one appointment and opening another starts its move field blank, not the last one typed", async () => {
     appointmentsResponse = [appointment, otherAppointment];
     const user = userEvent.setup();
@@ -488,6 +518,54 @@ describe("the book screen: opening a booked appointment", () => {
     await user.click(await screen.findByTestId(`fc-event-${otherAppointment.id}`));
     const reopened = await screen.findByTestId("appointment-move-input");
     expect(reopened).toHaveValue("2026-09-23T11:00");
+  });
+});
+
+describe("the book screen: the confirmation call (C6b)", () => {
+  test("a booking with a recorded call carries the call's mark on the grid, one without carries none", async () => {
+    appointmentsResponse = [appointment];
+    mount();
+    await screen.findByTestId(`fc-event-${appointment.id}`);
+    const content = lastCalendarProps?.eventContent;
+    expect(content).toBeDefined();
+    const withCall = { ...appointment, call_outcome: "no_answer" as const, call_at: "2026-09-22 18:00:00" };
+    const marked = render(
+      <I18nProvider lang="fr">
+        {content?.({ event: { title: "Amina Benali", extendedProps: { appointment: withCall } } })}
+      </I18nProvider>,
+    );
+    expect(marked.getByRole("img", { name: fr.book_call_no_answer })).toBeInTheDocument();
+    marked.unmount();
+    const plain = render(
+      <I18nProvider lang="fr">
+        {content?.({ event: { title: "Amina Benali", extendedProps: { appointment } } })}
+      </I18nProvider>,
+    );
+    expect(plain.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  test("tomorrow's calls reads the day after the shop's today and records a call on its own row", async () => {
+    // Far from any run date, so tomorrow off the machine's clock shows.
+    shopToday = "2027-03-10";
+    appointmentsResponse = [{ ...appointment, phone: "0555000000" }];
+    const user = userEvent.setup();
+    mount();
+    await user.click(await screen.findByTestId("book-calls"));
+    const dialog = await screen.findByTestId("calls-dialog");
+    expect(dialog).toHaveTextContent("2027-03-11");
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/appointments?day=2027-03-11"))).toBe(true),
+    );
+    const row = await screen.findByTestId(`calls-row-${appointment.id}`);
+    expect(row).toHaveTextContent("0555000000");
+    await user.click(screen.getByTestId(`call-confirmed-${appointment.id}`));
+    await waitFor(() => {
+      const posted = requestsFor("POST").find(([url]) =>
+        String(url).endsWith(`/appointments/${appointment.id}/call-outcome`),
+      );
+      expect(posted).toBeDefined();
+      expect(JSON.parse(String(posted?.[1].body))).toEqual({ outcome: "confirmed" });
+    });
   });
 });
 
