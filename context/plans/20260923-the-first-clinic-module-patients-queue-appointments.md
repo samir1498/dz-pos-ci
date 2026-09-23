@@ -134,6 +134,9 @@ erase them, and a write that sends `notes` is refused with 403. The
 server enforces it, not only the screen. Built as its own change after C5
 (C3b below), before the screens.
 
+Samir, 2026-09-23 15:59: the appointment's short reason for the visit is
+not covered by that ruling; the receptionist books and reads it.
+
 ## Research before the rest (Samir, 2026-09-23 14:56)
 
 The law comes before the book and the screens: a deep search on Algerian
