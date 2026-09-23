@@ -33,7 +33,7 @@ tasks:
     status: 'done'
   - id: 'C6b'
     desc: 'Booked patients check in to the waiting room: one list for the doctor, walk-ins fill an empty slot, end-of-day no-show offer'
-    status: 'pending'
+    status: 'done'
   - id: 'C7'
     desc: 'The shop screens on desktop and phone behind the same build switch'
     status: 'pending'
@@ -315,3 +315,17 @@ beyond the rulings above. Moving an absence hit asks next-free with the
 default slot length, because the server's search takes a visit type and not
 raw minutes, so a long visit can be offered a slot too short for it. The
 fix is a minutes parameter on next-free.
+
+## C6b merged (PR 171)
+
+Booked patients check in to the waiting room, the desk orders the room by
+drag and drop, confirmation calls are recorded with a list of tomorrow's
+calls, the end of day offers the no-show checklist, and next-free takes a
+length in minutes. The no-show lock is gone; a repeated mark or a clear of
+one never set changes nothing.
+
+Still open for Samir: "arrived" on a cancelled booking is refused for now;
+the proposal is that it undoes the cancel, since the patient is there.
+Follow-ups: a real-browser test for the mouse drag (kanban Stjk7bMM), and
+the audit row for a refused notes write (Samir, 19:25), folded into the
+next clinic change.
