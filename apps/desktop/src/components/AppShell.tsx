@@ -42,6 +42,7 @@ import {
 import { Direction } from "radix-ui";
 import type { ComponentType, ReactNode } from "react";
 import type { PermissionDto } from "@dzpos/shared";
+import { CalendarClock, UsersRound } from "lucide-react";
 
 import { Icon } from "@/components/Icon";
 import { Wordmark } from "@/components/Wordmark";
@@ -67,16 +68,22 @@ import { api, settingsQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { useShopToday } from "@/lib/clock";
+import { isModuleBuilt, type Module } from "@/lib/modules";
 import { hasPermission, useSession } from "@/lib/session";
 
-/** The three groups the sidebar is divided into, in the order it shows them. */
-const SECTIONS = ["sales", "purchases", "manage"] as const;
+/** The groups the sidebar is divided into, in the order it shows them.
+ *  "clinic" holds no item unless a build carries the trade (C6): a build
+ *  without it filters both of the section's items out, the way "purchases"
+ *  already can show an empty group under a role with none of its
+ *  permissions, so this is the same shape and not a new one. */
+const SECTIONS = ["sales", "purchases", "manage", "clinic"] as const;
 type Section = (typeof SECTIONS)[number];
 
 const SECTION_LABEL: Readonly<Record<Section, Key>> = {
   sales: "nav_section_sales",
   purchases: "nav_section_purchases",
   manage: "nav_section_manage",
+  clinic: "nav_section_clinic",
 };
 
 interface NavItem {
@@ -99,6 +106,13 @@ interface NavItem {
    *  suppliers and what it spends were both readable by a cashier while
    *  the dashboard that sums them was not. */
   readonly permission?: PermissionDto;
+  /** Absent for an item every build shows (the settings room, the audit
+   *  log): those route files are in `SHARED_ROUTES`
+   *  (`modules.config.mjs`) and compile into every build regardless.
+   *  Present for an item whose route only exists in a build that carries
+   *  that trade, so a build without `clinic` never offers a door into
+   *  "/patients" or "/queue", which its bundle does not even carry (C6). */
+  readonly module?: Module;
 }
 
 /**
@@ -114,23 +128,38 @@ export const NAV: readonly NavItem[] = [
     icon: LayoutDashboard,
     section: "sales",
     permission: "see_reports",
+    module: "retail",
   },
-  { to: "/till", label: "nav_till", icon: ShoppingCart, section: "sales" },
+  { to: "/till", label: "nav_till", icon: ShoppingCart, section: "sales", module: "retail" },
   {
     to: "/till/shifts",
     label: "nav_till_shifts",
     icon: Banknote,
     section: "sales",
     permission: "see_reports",
+    module: "retail",
   },
-  { to: "/customers", label: "nav_customers", icon: Users, section: "sales" },
-  { to: "/documents", label: "nav_documents", icon: FileText, section: "sales" },
+  {
+    to: "/customers",
+    label: "nav_customers",
+    icon: Users,
+    section: "sales",
+    module: "retail",
+  },
+  {
+    to: "/documents",
+    label: "nav_documents",
+    icon: FileText,
+    section: "sales",
+    module: "retail",
+  },
   {
     to: "/suppliers",
     label: "nav_suppliers",
     icon: Truck,
     section: "purchases",
     permission: "see_cost_and_margin",
+    module: "retail",
   },
   {
     to: "/purchases",
@@ -138,6 +167,7 @@ export const NAV: readonly NavItem[] = [
     icon: ClipboardList,
     section: "purchases",
     permission: "see_cost_and_margin",
+    module: "retail",
   },
   {
     to: "/expenses",
@@ -145,14 +175,37 @@ export const NAV: readonly NavItem[] = [
     icon: Receipt,
     section: "purchases",
     permission: "see_reports",
+    module: "retail",
   },
-  { to: "/products", label: "nav_products", icon: Package, section: "manage" },
+  {
+    to: "/products",
+    label: "nav_products",
+    icon: Package,
+    section: "manage",
+    module: "retail",
+  },
   {
     to: "/audit",
     label: "nav_audit_log",
     icon: History,
     section: "manage",
     permission: "see_audit_log",
+  },
+  {
+    to: "/patients",
+    label: "nav_patients",
+    icon: UsersRound,
+    section: "clinic",
+    permission: "view_patients",
+    module: "clinic",
+  },
+  {
+    to: "/queue",
+    label: "nav_queue",
+    icon: CalendarClock,
+    section: "clinic",
+    permission: "view_patients",
+    module: "clinic",
   },
   // Pairing a phone is why this entry exists. It is a room inside
   // `/settings`, but it was unreachable in practice: a shop looking for it
@@ -189,28 +242,42 @@ function SidebarNav() {
   // already the one copy of it the window holds (`lib/session.tsx`).
   // `hasPermission` is the plain function built for exactly this.
   const { me } = useSession();
-  const visible = (item: NavItem) => item.permission === undefined || hasPermission(me, item.permission);
+  const builtIn = (item: NavItem) => item.module === undefined || isModuleBuilt(item.module);
+  const visible = (item: NavItem) =>
+    builtIn(item) && (item.permission === undefined || hasPermission(me, item.permission));
   return (
     <>
-      {SECTIONS.map((section) => (
-        <SidebarGroup key={section}>
-          <SidebarGroupLabel>{t(SECTION_LABEL[section])}</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV.filter((item) => item.section === section && visible(item)).map((item) => (
-                <SidebarMenuItem key={item.to}>
-                  <SidebarMenuButton asChild isActive={active?.to === item.to}>
-                    <Link to={item.to} data-testid={`nav-${item.to.slice(1)}`}>
-                      <Icon as={item.icon} size={18} />
-                      <span>{t(item.label)}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      ))}
+      {SECTIONS.map((section) => {
+        // A section a build carries nothing for at all (every one of its
+        // items is another trade's) is skipped outright: "clinic" in a
+        // retail build, not a heading over a blank space. A section that
+        // does belong to this build still renders its heading even while
+        // nobody signed in leaves every item inside it hidden by
+        // permission -- "purchases" before a session resolves is the
+        // existing case this must not change, so only `builtIn` decides
+        // whether the section exists at all (C6).
+        if (!NAV.some((item) => item.section === section && builtIn(item))) return null;
+        const items = NAV.filter((item) => item.section === section && visible(item));
+        return (
+          <SidebarGroup key={section}>
+            <SidebarGroupLabel>{t(SECTION_LABEL[section])}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {items.map((item) => (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton asChild isActive={active?.to === item.to}>
+                      <Link to={item.to} data-testid={`nav-${item.to.slice(1)}`}>
+                        <Icon as={item.icon} size={18} />
+                        <span>{t(item.label)}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        );
+      })}
     </>
   );
 }

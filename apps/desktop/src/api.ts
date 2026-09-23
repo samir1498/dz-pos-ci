@@ -135,6 +135,14 @@ export const customersQueryKey: readonly string[] = ["customers"];
  * invalidation of this key refreshes every search that is in the cache. */
 export const suppliersQueryKey: readonly string[] = ["suppliers"];
 
+/** The clinic's patient list (C6). The search text and the archive flag are
+ * appended by the screen, the way the customer list's search is. */
+export const patientsQueryKey: readonly string[] = ["patients"];
+
+/** Today's waiting queue (C6). One key: the screen always reads the shop's
+ * clock's today, never a day it picked itself. */
+export const queueQueryKey: readonly string[] = ["queue"];
+
 /** The shop's staff (M4 T8). The owner's own read: `crate::gates` names
  * `ManageUsers` on `GET /users`, so a cashier or a manager reading this key
  * gets the translated 403 rather than a list. */

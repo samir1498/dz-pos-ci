@@ -134,6 +134,56 @@ check-clinic-only: claim
     flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-clinic
     flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --features clinic
 
+# The other half of check-clinic-only's proof, on the desktop (C6 of
+# `the-first-clinic-module-patients-queue-appointments`): a build with
+# VITE_DINAR_MODULES=clinic carries no shop code, proved by grepping the
+# built assets for a string that lives only in a shop screen's own body
+# (`data-testid="till-totals"`, `-till/cart.tsx`, reachable only through
+# `till.tsx`, which this build excludes) rather than in shared code (the
+# sidebar's nav data, which names every route whatever the build, or the
+# locale files, which bundle every key whatever the build). The same grep
+# must find that string in an ordinary build, or the check would pass by
+# finding nothing at all whatever the flag did. No cargo: this is
+# `vite build` alone, not the full `pnpm build` (which also runs a tsc
+# pass scoped to the same build's own routes -- see `scripts/build.mjs` --
+# and a clinic-only tsc run is not this check's claim). `vite build`
+# regenerates `src/routeTree.gen.ts` from whatever route files this run
+# carries, so the trap restores the committed (default) one whatever
+# happens.
+check-clinic-bundle:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd apps/desktop
+    out="$(mktemp -d)"
+    trap 'git checkout -- src/routeTree.gen.ts; rm -rf "$out"' EXIT
+    VITE_DINAR_MODULES=clinic pnpm exec vite build --outDir "$out" --emptyOutDir >/dev/null
+    # A glob that matches nothing (an empty $out) leaves the negative greps
+    # below unable to find their string either, and their `if` reads that
+    # as a pass: this positive check runs first, so an empty or broken
+    # build fails here instead of quietly clearing every check after it.
+    if ! grep -rl "patient-fiche" "$out"/assets/*.js >/dev/null 2>&1; then
+        echo "check-clinic-bundle: a clinic-only build carries no clinic screen; the checks below prove nothing" >&2
+        exit 1
+    fi
+    if grep -rl "till-totals" "$out"/assets/*.js >/dev/null 2>&1; then
+        echo "check-clinic-bundle: a clinic-only build still carries the till's screen" >&2
+        exit 1
+    fi
+    if grep -rl "stock-drift-table" "$out"/assets/*.js >/dev/null 2>&1; then
+        echo "check-clinic-bundle: a clinic-only build still carries the shop's stock recount room" >&2
+        exit 1
+    fi
+    pnpm exec vite build >/dev/null
+    if ! grep -rl "till-totals" dist/assets/*.js >/dev/null 2>&1; then
+        echo "check-clinic-bundle: the default build lost the till's marker string; the check proves nothing" >&2
+        exit 1
+    fi
+    if ! grep -rl "stock-drift-table" dist/assets/*.js >/dev/null 2>&1; then
+        echo "check-clinic-bundle: the default build lost the stock recount marker string; the check proves nothing" >&2
+        exit 1
+    fi
+    echo "check-clinic-bundle: clinic-only carries only its own screens, the default build is unaffected"
+
 # the desktop's one eslint rule: no bare input, button, select, textarea or
 # table outside components/ui and the kit. The screens written before the kit
 # are exempted by name in apps/desktop/src/lint/allowlist.json, and the
@@ -211,7 +261,7 @@ theme:
     pnpm --filter @dzpos/design gen:theme
 
 # everything a PR needs, in order; stops at the first failure
-gates: fmt lint sizes no-inline-tests clippy check-no-retail check-clinic-only types-check test build
+gates: fmt lint sizes no-inline-tests clippy check-no-retail check-clinic-only types-check test build check-clinic-bundle
 
 # ---- dev ----
 

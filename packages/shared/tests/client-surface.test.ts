@@ -29,8 +29,10 @@ import { expensesClient } from "../src/client/expenses";
 import { exportClient } from "../src/client/export";
 import { importClient } from "../src/client/import";
 import { pairingClient } from "../src/client/pairing";
+import { patientsClient } from "../src/client/patients";
 import { productsClient } from "../src/client/products";
 import { purchasesClient } from "../src/client/purchases";
+import { queueClient } from "../src/client/queue";
 import { salesClient } from "../src/client/sales";
 import { settingsClient } from "../src/client/settings";
 import { stockClient } from "../src/client/stock";
@@ -110,6 +112,15 @@ const SURFACE: Readonly<Record<string, readonly string[]>> = {
   support: ["supportBundle"],
   till: ["openShift", "closeShift", "getOpenShift", "getShift", "listShifts"],
   users: ["listUsers", "createUser", "setUserPin", "deactivateUser", "reactivateUser"],
+  patients: ["listPatients", "getPatient", "createPatient", "updatePatient", "archivePatient"],
+  queue: [
+    "listQueue",
+    "addToQueue",
+    "callNextInQueue",
+    "callInQueue",
+    "markSeenInQueue",
+    "markLeftInQueue",
+  ],
 };
 
 /** A transport that would fail loudly if a factory called it while being
@@ -146,6 +157,8 @@ const FACTORIES: Readonly<Record<string, () => object>> = {
   support: () => supportClient(unused),
   till: () => tillClient(unused),
   users: () => usersClient(unused),
+  patients: () => patientsClient(unused),
+  queue: () => queueClient(unused),
 };
 
 function methodsOf(client: object): Record<string, unknown> {

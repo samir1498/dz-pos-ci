@@ -5,6 +5,11 @@
 interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   readonly VITE_API_TOKEN?: string;
+  // C6 of `the-first-clinic-module-patients-queue-appointments`: which
+  // trades this build carries, e.g. "retail,clinic". Read by
+  // `src/lib/modules.ts`; `vite.config.ts` reads the same env var itself to
+  // decide which route files exist at all.
+  readonly VITE_DINAR_MODULES?: string;
 }
 
 interface ImportMeta {

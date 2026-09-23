@@ -23,3 +23,8 @@ opencode.json
 
 # Stryker's scratch copy of the workspace, written per mutation run.
 apps/desktop/.stryker-tmp/
+
+# scripts/build.mjs's scratch tsconfig, generated per module set so tsc
+# excludes exactly the route files that build's vite build step did
+# (C6 of the-first-clinic-module-patients-queue-appointments).
+apps/desktop/.tsconfig.build.json

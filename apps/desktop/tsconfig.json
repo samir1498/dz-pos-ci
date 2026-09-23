@@ -9,6 +9,11 @@
     // read the source tree off disk (tokens.test.ts).
     "types": ["node", "vite/client"],
     "moduleResolution": "bundler",
+    // Only `modules.config.mjs` needs this (C6): its exports carry JSDoc
+    // types rather than a hand-kept `.d.ts` twin, since vite.config.ts and
+    // scripts/build.mjs both load it as plain Node ESM (see that file's own
+    // header for why it is not `.ts`).
+    "allowJs": true,
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",

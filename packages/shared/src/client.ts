@@ -38,8 +38,10 @@ import { expensesClient } from "./client/expenses";
 import { exportClient } from "./client/export";
 import { importClient } from "./client/import";
 import { pairingClient } from "./client/pairing";
+import { patientsClient } from "./client/patients";
 import { productsClient } from "./client/products";
 import { purchasesClient } from "./client/purchases";
+import { queueClient } from "./client/queue";
 import { salesClient } from "./client/sales";
 import { settingsClient } from "./client/settings";
 import { stockClient } from "./client/stock";
@@ -207,5 +209,7 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     ...stockClient(transport),
     ...supportClient(transport),
     ...tillClient(transport),
+    ...patientsClient(transport),
+    ...queueClient(transport),
   };
 }

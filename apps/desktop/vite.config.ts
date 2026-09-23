@@ -4,7 +4,19 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
+import { resolveModules, routeIgnorePatternSource } from "./modules.config.mjs";
+
 const host = process.env.TAURI_DEV_HOST || "127.0.0.1";
+
+// Which trades this build carries (C6 of
+// `the-first-clinic-module-patients-queue-appointments`), `VITE_DINAR_MODULES`
+// being a comma list such as "retail,clinic"; unset or unknown falls back to
+// "retail" alone, so a build nobody configured is the shop everyone already
+// has. `modules.config.mjs` holds the one list of which route file belongs
+// to which trade; `scripts/build.mjs`'s tsc pass reads the same list so the
+// two agree on what this specific build actually compiles.
+const builtModules = resolveModules(process.env.VITE_DINAR_MODULES);
+const routeFileIgnorePattern = routeIgnorePatternSource(builtModules) ?? undefined;
 
 export default defineConfig({
   plugins: [
@@ -17,7 +29,13 @@ export default defineConfig({
     // beside it); the choice was between exporting the screens and keeping a
     // warning nobody was going to act on, and the exports are what the tests
     // need.
-    tanstackRouter({ target: "react", autoCodeSplitting: false }),
+    //
+    // `routeFileIgnorePattern`: a module not in this build's list never
+    // reaches the generated route tree, so its screen and everything it
+    // imports (its `-folder`) never reach the bundle either -- excluded at
+    // compile time, not hidden behind a runtime check
+    // (`just check-clinic-bundle` proves it by grepping the built assets).
+    tanstackRouter({ target: "react", autoCodeSplitting: false, routeFileIgnorePattern }),
     tailwindcss(),
     react(),
   ],

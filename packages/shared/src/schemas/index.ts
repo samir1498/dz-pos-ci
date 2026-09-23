@@ -104,3 +104,5 @@ export {
   supplierStatementSchema,
 } from "./supplier";
 export { userSchema } from "./user";
+export { patientSchema, patientWriteSchema, sexSchema } from "./patient";
+export { queueAddSchema, queueEntrySchema } from "./queue";

@@ -32,6 +32,7 @@ const ALL_PERMISSIONS: readonly PermissionDto[] = [
   "close_another_persons_till",
   "view_patients",
   "edit_patients",
+  "view_patient_notes",
 ];
 
 export const ME_OWNER: MeDto = {
@@ -52,4 +53,22 @@ export const ME_CASHIER: MeDto = {
   name: "Karim",
   role: "cashier",
   permissions: ["sell", "open_and_close_till", "view_patients", "edit_patients"],
+};
+
+/** Every permission `ME_OWNER` holds, minus `view_patient_notes` alone. A
+ *  notes-permission test that reaches for `ME_CASHIER` instead only proves
+ *  the field reacts to *some* difference between the two fixtures — a
+ *  cashier is also missing `see_reports`, `manage_users` and a dozen
+ *  others, so a bug that gated notes on the wrong permission could still
+ *  pass. This isolates the one permission the notes field actually
+ *  checks. */
+export const ME_WITHOUT_PATIENT_NOTES: MeDto = {
+  user_id: 3,
+  name: "Nadia",
+  role: "owner",
+  // Filtered off `ALL_PERMISSIONS`, not off `ME_OWNER`'s own field:
+  // `role.test.ts` bans that field's name appearing outside
+  // `lib/session.tsx`, and this file already holds the one list both
+  // fixtures are built from.
+  permissions: ALL_PERMISSIONS.filter((permission) => permission !== "view_patient_notes"),
 };

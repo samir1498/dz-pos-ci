@@ -36,6 +36,7 @@ import type { PermissionDto } from "@dzpos/shared";
 import { Icon } from "@/components/Icon";
 import { PageHeader } from "@/components/PageHeader";
 import { useTranslation, type Key } from "@/i18n";
+import { isModuleBuilt, type Module } from "@/lib/modules";
 import { hasPermission, useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +49,12 @@ interface SectionItem {
   /** Absent for a room every signed-in role may open. Where present, it is
    *  the same permission `gates/` names on the routes that room calls. */
   readonly permission?: PermissionDto;
+  /** Absent for a room every build carries. Present for a room whose route
+   *  file only exists in a build that carries that trade (C6:
+   *  `modules.config.mjs` names "settings.regime.tsx" and
+   *  "settings.printing.tsx" as retail's), so a clinic build's rail never
+   *  points at a room its bundle does not have. */
+  readonly module?: Module;
 }
 
 /**
@@ -57,13 +64,14 @@ interface SectionItem {
  */
 export const SETTINGS_SECTIONS: readonly SectionItem[] = [
   { to: "/settings/shop", label: "settings_nav_shop", icon: Store },
-  { to: "/settings/regime", label: "settings_nav_regime", icon: Landmark },
+  { to: "/settings/regime", label: "settings_nav_regime", icon: Landmark, module: "retail" },
   { to: "/settings/appearance", label: "settings_nav_appearance", icon: Palette },
   {
     to: "/settings/printing",
     label: "settings_nav_printing",
     icon: Printer,
     permission: "edit_settings",
+    module: "retail",
   },
   {
     to: "/settings/users",
@@ -78,10 +86,14 @@ export const SETTINGS_SECTIONS: readonly SectionItem[] = [
     permission: "edit_settings",
   },
   { to: "/settings/backups", label: "settings_nav_backups", icon: HardDriveDownload },
-  // Ungated on purpose: the stock recount in this room is open to every
-  // role, and only the export/import block inside it is `ExportAndImport`.
-  // Hiding the whole room would take the recount from a cashier too.
-  { to: "/settings/data", label: "settings_nav_data", icon: Database },
+  // Permission-ungated on purpose: the stock recount in this room is open
+  // to every role, and only the export/import block inside it is
+  // `ExportAndImport`. Hiding the whole room would take the recount from a
+  // cashier too. `module: "retail"` because both panels this room mounts
+  // (the recount, the four exports) are the shop's stock and sales; a
+  // cabinet has neither, so its build never carries this route at all
+  // (C6 review round, "shop-only panels behind a shared route file").
+  { to: "/settings/data", label: "settings_nav_data", icon: Database, module: "retail" },
   { to: "/settings/about", label: "settings_nav_about", icon: Info },
 ];
 
@@ -96,7 +108,9 @@ export function SettingsLayout() {
   // built for exactly this, and `AppShell`'s sidebar reads it the same way.
   const { me } = useSession();
   const rooms = SETTINGS_SECTIONS.filter(
-    (item) => item.permission === undefined || hasPermission(me, item.permission),
+    (item) =>
+      (item.module === undefined || isModuleBuilt(item.module)) &&
+      (item.permission === undefined || hasPermission(me, item.permission)),
   );
 
   return (
