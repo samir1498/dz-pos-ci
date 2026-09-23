@@ -266,10 +266,24 @@ below is the session's proposal, built as C6b after the book screen:
 - At the end of the day, Dinar lists the bookings that never arrived and
   offers to mark them no-show in one click.
 
-Open for Samir:
+Samir, 19:32: the desk decides the order. Staff can drag and drop patients
+in the waiting room, including placing a booked patient who arrived early.
+The queue needs its own order that the desk can edit, not arrival time
+alone.
 
-- Does a booked patient who arrives early wait for their time (the
-  session's recommendation), or go to the front of the queue?
-- The no-show lock from C5b (a marked row can't be moved or cancelled
-  until the mark is cleared) stays as built until he answers. The session
-  recommends keeping it.
+### The no-show and the confirmation call, being thought through
+
+Samir, 19:32: a no-show only becomes clear at the end of the day, or when a
+call to the patient confirms they won't come. The desk also calls to confirm
+ahead of time, and that call needs a place in the book. The proposal below
+is the session's, waiting for Samir:
+
+- The day before, a call list shows tomorrow's bookings. The desk records
+  the outcome of each call: confirmed, cancelled by the patient, or no
+  answer.
+- A patient who says they won't come is a cancellation by the patient, not
+  a no-show, and the slot frees at once.
+- A no-show is only a booking whose day has ended without an arrival. The
+  end-of-day offer marks them.
+- A no-show is never moved. Rebooking creates a new appointment, and the
+  missed one stays on the record. That removes the need for a lock.
