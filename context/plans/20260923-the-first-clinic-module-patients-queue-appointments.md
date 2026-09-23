@@ -254,17 +254,22 @@ Defaults taken while building, each one Samir can overturn:
 
 Samir's point: a booked patient rarely turns up early, so while the doctor
 waits for them, someone already in the waiting room should take the chair.
-Agreed at 19:29 ("okay") to this shape, built as C6b after the book screen:
+Samir agreed at 19:29 to linking the book and the waiting room. The shape
+below is the session's proposal, built as C6b after the book screen:
 
 - When a booked patient arrives, the desk marks the appointment arrived,
   which adds them to today's queue linked to their booking. Walk-ins join
   the queue as they do now.
 - When the doctor calls the next patient, a booked patient who is present
-  goes first once their time comes. An early arrival waits for their time.
-  Otherwise the next person waiting goes in, so the chair is never empty.
+  goes first once their time comes. Otherwise the next person waiting goes in, so the chair is never empty.
 - A late patient joins the queue on arrival, and the desk places them.
 - At the end of the day, Dinar lists the bookings that never arrived and
   offers to mark them no-show in one click.
 
-The no-show lock from C5b (a marked row can't be moved or cancelled until
-the mark is cleared) stays as built. It was put to Samir and not overturned.
+Open for Samir:
+
+- Does a booked patient who arrives early wait for their time (the
+  session's recommendation), or go to the front of the queue?
+- The no-show lock from C5b (a marked row can't be moved or cancelled
+  until the mark is cleared) stays as built until he answers. The session
+  recommends keeping it.
