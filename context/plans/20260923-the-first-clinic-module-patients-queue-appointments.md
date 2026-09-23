@@ -287,3 +287,22 @@ What this removes from the C5b build, done as part of C6b:
 
 A row still can't be both cancelled and a no-show at once. Setting one
 clears the other instead of refusing.
+
+## Which doctors may read the notes: what the law says (2026-09-23 19:36)
+
+`context/research/20260923-which-doctors-may-read-a-colleagues-notes.md`
+found the following:
+
+- Loi 18-11 art. 169 (primary text) shares the medical secret only between
+  professionals caring for the patient as a team.
+- Décret 92-276 art. 80 (secondary source) keeps an associate's practice in
+  a cabinet de groupe personal, even on shared premises.
+- A remplaçant works under his own identity.
+- A non-doctor manager has no ground to read the notes.
+
+Consequence for now: owner-only stands, and the manager role never reads
+notes.
+
+Later, when a second doctor seat becomes a real feature, notes would follow
+a per-user doctor role scoped to the patient's care, with a time-boxed
+grant for a remplaçant. That needs its own plan.
