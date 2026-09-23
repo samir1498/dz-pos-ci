@@ -91,15 +91,31 @@ spot-reads the diff itself.
 
 ## Where to pick up
 
-Updated 2026-09-23 15:20. Phase B: the clinic crate (PR #163), the patient
-file (PR #164) and the waiting queue (PR #165) are merged, each after the
-dz-review lenses. The three legal research pages are in
-`context/research/20260923-*` and their consequences are on the clinic
-plan. Open for Samir: notes doctor-only (recommended) via a third
-permission, before the screens.
+Updated 2026-09-23 18:35. The clinic's server side is merged, each part
+after the dz-review lenses:
 
-1. C5, the appointment book, in worktree `clinic-book`.
-2. Then C6 (screens, calendar build-vs-buy first) and C7.
+- the crate (PR #163)
+- the patient file (#164)
+- the waiting queue (#165)
+- the appointment book (#166)
+- notes that only the doctor can see (#167)
+- the book tools: hours, blocks, visit types, next free slot, no-show and
+  the day list (#168)
+
+Four research pages in `context/research/20260923-*` cover the law and how
+a cabinet runs its book. Samir's rulings and the defaults taken are on the
+clinic plan. Today's report for Anouar is published, with two real API
+screenshots.
+
+Open for Samir: whether a refused notes write should leave an audit row,
+and the C5b defaults listed at the end of the clinic plan.
+
+1. C6, the desktop screens behind a Vite build flag. Before the book
+   screen, write the calendar build-versus-buy into the plan (Schedule-X,
+   FullCalendar core, react-big-calendar), keeping it basic.
+2. Then C7, the shop screens behind the same flag on desktop and phone.
+3. At the end of the loop, one review over everything merged, run on the
+   Fable model.
 
 ## The one thing that proves Phase A finished honestly
 
