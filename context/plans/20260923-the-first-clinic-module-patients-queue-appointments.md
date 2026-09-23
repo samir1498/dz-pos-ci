@@ -169,3 +169,12 @@ Pages: `context/research/20260923-who-sees-the-medical-notes-in-a-cabinet.md`,
   required (CIDTA art. 31 bis). Both belong to the fee slice, not this plan.
 - Several article numbers come from secondary sources because the official
   PDFs were scans; each page marks which.
+
+## Samir, 2026-09-23 16:00: no patient app, the doctor runs the book
+
+No patient app. Appointments are managed by the doctor's desk, with basic
+tools that plan ahead, catch problems and edge cases, and do the simple
+calculations for the doctor. What those tools are comes from
+`context/research/20260923-how-a-cabinet-runs-its-appointment-book.md`
+(cabinet software and any Algerian rule on appointments), written before
+the book grows past C5; the calendar screen stays a basic one.
