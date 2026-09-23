@@ -186,3 +186,16 @@ The shared Claude plan was at 95 percent on 2026-09-22 and Anouar needs
 headroom for his own work, so this plan is written and waits. S3 is a
 builder-heavy day and S4 is the careful one. Samir says when the budget has
 room.
+
+## Samir, 2026-09-23 09:20: no full ports and adapters
+
+Asked whether the restructure should move to ports and adapters with
+dependency injection, plus DDD-lite. Ruled: ports only at the plug points,
+where a module tells the shared part what it brings (permissions, routes,
+migrations, audit actions, what backup counts), drawn after the doctor
+module exists so each trait comes from two real modules. The crates are
+the DDD-lite bounded contexts; regrouping each crate's files by domain
+(the DTO file first) is a follow-up after the split merges. No trait in
+front of every repo and no DI through every service: the app is offline
+SQLite with no second database to swap in, and the tests already run
+against a real file.
