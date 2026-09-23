@@ -15,6 +15,13 @@
 //! `may_see_notes` is where `create` and `update` ask, and the API's DTO
 //! layer asks the same function to decide what a read gets back, so the
 //! rule is answered once rather than in the handler.
+//!
+//! A refused write to `notes` leaves its own audit row too (C8, Samir's
+//! ruling 2026-09-23 19:25), through `record_notes_refusal`. It is written
+//! before `create` or `update` opens its own transaction — the refusal is
+//! decided that early — so it is never inside one that is about to roll
+//! back, and it never carries the text that was sent, only that an attempt
+//! was made and, once a file exists to name, its id.
 
 use chrono::NaiveDate;
 use diesel::prelude::*;
@@ -23,7 +30,10 @@ use dzpos_kernel::error::CoreError;
 use dzpos_kernel::services::permissions::{can, Permission, Role};
 use dzpos_kernel::services::{audit, bounded_field, clock};
 
-use crate::audit_actions::{ACTION_PATIENT_ARCHIVE, ACTION_PATIENT_CREATE, ACTION_PATIENT_UPDATE};
+use crate::audit_actions::{
+    ACTION_PATIENT_ARCHIVE, ACTION_PATIENT_CREATE, ACTION_PATIENT_NOTES_REFUSED,
+    ACTION_PATIENT_UPDATE,
+};
 use crate::models::patient::{PatientChanges, PatientInsert};
 use crate::repos::patients as repo;
 
@@ -64,12 +74,45 @@ fn asks_to_write_notes(fields: &NewPatient) -> bool {
         .is_some_and(|v| !v.trim().is_empty())
 }
 
+/// The one row `create` and `update` write when they refuse a `notes`
+/// write (C8, Samir's ruling 2026-09-23 19:25). Called before either
+/// function opens its own `conn.transaction`, so the row is never inside
+/// one that is about to roll back and commits on its own, the way
+/// `permissions::record_refusal` writes the gate's own refusal outside the
+/// handler's transaction for the same reason.
+///
+/// `patient_id` is `None` on a `create`'s refusal — the file the caller
+/// tried to open never gets an id — and the id of the file on an
+/// `update`'s. The value that was sent never appears here, on a create or
+/// an update alike: the row says an attempt happened, not what it said.
+fn record_notes_refusal(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    patient_id: Option<&str>,
+) -> Result<(), CoreError> {
+    audit::record(
+        conn,
+        shop_id,
+        user_id,
+        audit::Change {
+            action: ACTION_PATIENT_NOTES_REFUSED,
+            entity: "patient",
+            entity_id: None,
+            before: None,
+            after: Some(serde_json::json!({ "patient_id": patient_id }).to_string()),
+        },
+    )
+}
+
 /// Opens a file. The id is a fresh UUID v7 made here, never by the file,
 /// and both stamps are the shop's clock.
 ///
 /// A caller without `ViewPatientNotes` who sends a real `notes` value is
 /// refused before anything is validated or written; one who leaves it out,
-/// or sends a blank, opens a file with none, same as today.
+/// or sends a blank, opens a file with none, same as today. The refusal
+/// itself leaves one audit row (C8), naming no patient since none was ever
+/// made.
 pub fn create(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -78,6 +121,7 @@ pub fn create(
     role: Role,
 ) -> Result<Patient, CoreError> {
     if asks_to_write_notes(&fields) && !may_see_notes(role) {
+        record_notes_refusal(conn, shop_id, user_id, None)?;
         return Err(CoreError::forbidden(Permission::ViewPatientNotes));
     }
     let clean = validate(fields)?;
@@ -122,7 +166,8 @@ pub fn create(
 /// the whole-file rewrite clearing them the way an omitted phone number
 /// would. A receptionist correcting a phone number can never erase what
 /// the doctor wrote, whether their own form sent no `notes` field at all
-/// or an empty one.
+/// or an empty one. The refusal itself leaves one audit row (C8), naming
+/// this file's id.
 pub fn update(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -132,6 +177,7 @@ pub fn update(
     role: Role,
 ) -> Result<Patient, CoreError> {
     if asks_to_write_notes(&fields) && !may_see_notes(role) {
+        record_notes_refusal(conn, shop_id, user_id, Some(id))?;
         return Err(CoreError::forbidden(Permission::ViewPatientNotes));
     }
     let sees_notes = may_see_notes(role);

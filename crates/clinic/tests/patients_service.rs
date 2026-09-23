@@ -10,7 +10,8 @@
 use chrono::NaiveDate;
 use diesel::RunQueryDsl;
 use dzpos_clinic::audit_actions::{
-    ACTION_PATIENT_ARCHIVE, ACTION_PATIENT_CREATE, ACTION_PATIENT_UPDATE,
+    ACTION_PATIENT_ARCHIVE, ACTION_PATIENT_CREATE, ACTION_PATIENT_NOTES_REFUSED,
+    ACTION_PATIENT_UPDATE,
 };
 use dzpos_clinic::services::patients::{self, NewPatient, Sex};
 use dzpos_kernel::error::CoreError;
@@ -368,6 +369,14 @@ fn every_write_leaves_an_audit_row_naming_the_patient_without_the_notes() {
         patients::search(&mut conn, SHOP, None, true).unwrap().len(),
         1
     );
+    // C8: every one of those writes carried real notes and every one of
+    // them was the owner's, so nothing was ever refused for lacking
+    // `ViewPatientNotes`.
+    assert!(
+        audit::by_action(&mut conn, SHOP, ACTION_PATIENT_NOTES_REFUSED)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -513,14 +522,97 @@ fn a_role_without_view_patient_notes_may_not_write_notes() {
     assert_eq!(still.last_name, "Benali");
     assert_eq!(still.notes.as_deref(), Some("real notes"));
     assert_eq!(still.updated_at, made.updated_at);
-    // Refused before the transaction opens, so no attempt left a row: the
-    // one audit row for this file is still the create.
+    // Refused before the write's own transaction opens, so no attempt
+    // changed the file: the one audit row under `patient.update` is still
+    // the create's own (`ACTION_PATIENT_CREATE`, not this action). What each
+    // refused attempt did leave is checked in
+    // `a_refused_notes_write_leaves_an_audit_row_naming_who_tried_and_the_patient`.
     assert_eq!(
         audit::by_action(&mut conn, SHOP, ACTION_PATIENT_UPDATE)
             .unwrap()
             .len(),
         0
     );
+}
+
+/// C8: a `notes` write refused for lacking `ViewPatientNotes` leaves one
+/// row of its own, naming who tried and, once a file exists to name, which
+/// one — and never the value that was sent, on a create's refusal or an
+/// update's alike.
+#[test]
+fn a_refused_notes_write_leaves_an_audit_row_naming_who_tried_and_the_patient() {
+    let (_dir, mut conn) = open_temp();
+    const MANAGER_USER: i32 = 2;
+    const CASHIER_USER: i32 = 3;
+    diesel::sql_query(
+        "INSERT INTO users (id, shop_id, name, role) VALUES (2, 1, 'Gérant', 'manager')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+    diesel::sql_query(
+        "INSERT INTO users (id, shop_id, name, role) VALUES (3, 1, 'Secrétaire', 'cashier')",
+    )
+    .execute(&mut conn)
+    .unwrap();
+
+    let opened = {
+        let mut p = named("Amina", "Benali");
+        p.notes = Some("real notes".to_string());
+        patients::create(&mut conn, SHOP, OWNER, p, Role::Owner).unwrap()
+    };
+
+    let mut fresh = named("Karim", "Haddad");
+    fresh.notes = Some("diabète, ne pas répéter".to_string());
+    permission_of(
+        patients::create(&mut conn, SHOP, MANAGER_USER, fresh, Role::Manager).unwrap_err(),
+    );
+
+    let mut edit = named("Amina", "Benali");
+    edit.notes = Some("hypertension, confidentiel".to_string());
+    permission_of(
+        patients::update(
+            &mut conn,
+            SHOP,
+            CASHIER_USER,
+            &opened.id,
+            edit,
+            Role::Cashier,
+        )
+        .unwrap_err(),
+    );
+
+    let rows = audit::by_action(&mut conn, SHOP, ACTION_PATIENT_NOTES_REFUSED).unwrap();
+    assert_eq!(rows.len(), 2);
+    for row in &rows {
+        assert_eq!(row.entity, "patient");
+        assert_eq!(row.entity_id, None);
+        let text = row.after.as_deref().unwrap_or_default();
+        assert!(!text.contains("diabète"), "{text}");
+        assert!(!text.contains("hypertension"), "{text}");
+    }
+
+    // Newest first (`audit::by_action`'s own order): the update's refusal
+    // was written second.
+    let update_row = &rows[0];
+    assert_eq!(update_row.user_id, CASHIER_USER);
+    let update_after: serde_json::Value =
+        serde_json::from_str(update_row.after.as_deref().unwrap()).unwrap();
+    assert_eq!(update_after["patient_id"], opened.id.as_str());
+
+    let create_row = &rows[1];
+    assert_eq!(create_row.user_id, MANAGER_USER);
+    let create_after: serde_json::Value =
+        serde_json::from_str(create_row.after.as_deref().unwrap()).unwrap();
+    assert_eq!(create_after["patient_id"], serde_json::Value::Null);
+
+    // Nothing landed: the manager's file was never made, the cashier's edit
+    // never touched Amina's.
+    assert_eq!(
+        patients::search(&mut conn, SHOP, None, true).unwrap().len(),
+        1
+    );
+    let still = patients::get(&mut conn, SHOP, &opened.id).unwrap();
+    assert_eq!(still.notes.as_deref(), Some("real notes"));
 }
 
 /// The whole-file rewrite clears a phone or an address left out; notes do
@@ -545,6 +637,13 @@ fn an_update_without_notes_from_a_role_without_view_patient_notes_keeps_them() {
 
     let reread = patients::get(&mut conn, SHOP, &made.id).unwrap();
     assert_eq!(reread.notes.as_deref(), Some("allergique à la pénicilline"));
+    // C8: an absent `notes` field is not a write to it, so nothing was
+    // refused and no row was left.
+    assert!(
+        audit::by_action(&mut conn, SHOP, ACTION_PATIENT_NOTES_REFUSED)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 /// A form that never showed a notes box still sends the field as an empty
@@ -566,4 +665,10 @@ fn a_blank_notes_value_from_a_role_without_view_patient_notes_is_not_a_refusal()
 
     let reread = patients::get(&mut conn, SHOP, &made.id).unwrap();
     assert_eq!(reread.notes.as_deref(), Some("allergique à la pénicilline"));
+    // C8: a blank is not a write to `notes` either, so nothing was refused.
+    assert!(
+        audit::by_action(&mut conn, SHOP, ACTION_PATIENT_NOTES_REFUSED)
+            .unwrap()
+            .is_empty()
+    );
 }

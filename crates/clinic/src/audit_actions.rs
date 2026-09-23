@@ -19,6 +19,13 @@ pub const ACTION_PATIENT_UPDATE: &str = "patient.update";
 /// A patient file taken out of the search. Never a delete: the queue and
 /// the book will point at it.
 pub const ACTION_PATIENT_ARCHIVE: &str = "patient.archive";
+/// A write to `notes` refused because the caller does not hold
+/// `ViewPatientNotes` (C8, Samir's ruling 2026-09-23 19:25): a manager or a
+/// cashier sending a real value in that field, on a create or on an update.
+/// `after` names the patient (`null` on a create's refusal, since the file
+/// the caller tried to open never gets an id) and never the value that was
+/// sent — this row says an attempt happened, not what it said.
+pub const ACTION_PATIENT_NOTES_REFUSED: &str = "patient.notes_write_refused";
 
 /// A patient added to the day's queue. `after` is the entry as written,
 /// the patient's id with it.
