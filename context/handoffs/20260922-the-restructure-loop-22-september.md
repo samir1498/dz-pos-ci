@@ -8,14 +8,18 @@ tldr: 'Where the crate split stands, what was decided today and by whom, what wa
 ---
 # The restructure loop, 22 September
 
-Updated 2026-09-23 12:50. S2 to S6 are merged: the crate split (PR
-#156), the kernel no longer naming the shop (PR #158), the api's shop
-routes behind the `retail` feature (PR #160, `just check-no-retail` in
-gates), and every test out of `src/` with each crate owning its tests
-(PR #161; `scripts/inline-tests.json` is empty, `crates/core/tests` is
-gone). Coverage reaches Sonar (PR #159): 91.2% on the dashboard after the
-first scan from main. Next is S7, a build with no shop that opens a
-database, runs the migrations and signs a user in.
+Updated 2026-09-23 13:35. Phase A, the split, is done: S2 to S7 merged
+(PRs #156, #158, #160, #161, #162). The kernel is a program without a
+shop: `just check-no-retail` in gates builds and tests `dzpos-api` with
+retail off (132 tests), and a fresh file migrates and signs a user in.
+Every test lives outside `src/`; coverage reaches Sonar (PR #159, 91.2%).
+
+Phase B has its plan:
+`context/plans/20260923-the-first-clinic-module-patients-queue-appointments.md`
+(C2 the crate behind a `clinic` feature, C3 patients, C4 the queue, C5 the
+book, C6 desktop screens, C7 the shop screens behind the same switch). Its
+defaults (UUID v7 ids, one migration list, two patient permissions in the
+one list, `shops` stays the tenant) are Samir's to overturn.
 
 Samir's rulings on 2026-09-23: no full ports and adapters, only ports at
 the plug points after the doctor module (recorded on the split plan); no
@@ -87,9 +91,9 @@ spot-reads the diff itself.
 
 ## Where to pick up
 
-1. S7 in worktree `no-shop`, branch `feat/a-build-with-no-shop-signs-in`.
-2. Then Phase B, the patients and appointments module, whose plan page
-   is not written yet.
+1. C2 of the clinic plan in worktree `clinic-crate`, branch
+   `feat/a-clinic-crate-behind-a-switch`.
+2. Then C3 to C7 in order, one PR each.
 
 ## The one thing that proves Phase A finished honestly
 

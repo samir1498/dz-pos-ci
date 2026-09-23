@@ -1,7 +1,7 @@
 ---
 title: 'A kernel crate, and retail as the first module'
 slug: 'a-kernel-crate-and-retail-as-the-first-module'
-status: 'active'
+status: 'done'
 category: 'feature'
 created: 20260922
 tldr: 'The split the seven-way comparison recommended, written as tasks. crates/core becomes a kernel crate and a retail crate; the shop half of the twelve files the boundary test pins moves out with it; the api and desktop stay one crate each with the retail rows behind a feature. Nothing a shop can see changes, and the same binary is built with retail switched on. The plug points are not in this plan: they get drawn from two real modules, not one, so they wait for the doctor package. Anouar settled the last open question on 2026-09-22, build time and a package we prepare per customer, so nothing here loads code at runtime.'
@@ -27,7 +27,7 @@ tasks:
     status: 'done'
   - id: 'S7'
     desc: 'A build with retail off compiles, runs its migrations and signs a user in'
-    status: 'pending'
+    status: 'done'
 ---
 # A kernel crate, and retail as the first module
 
