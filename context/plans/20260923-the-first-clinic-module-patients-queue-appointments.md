@@ -233,3 +233,16 @@ Defaults taken while building, each one Samir can overturn:
 - Deleting a block or a visit type removes the row, and the audit log keeps
   the trace. Appointments copy a type's length rather than pointing at it.
 - The day list returns data. Printing it belongs to C6.
+
+## Samir, 2026-09-23 19:25: the calendar, and logging a refused notes write
+
+- The book screen uses FullCalendar's free MIT plugins (core, dayGrid,
+  timeGrid, interaction), from
+  `context/research/20260923-a-calendar-for-the-clinics-book.md`. It is
+  restyled to Dinar's tokens and kept basic.
+- A refused write of a patient's notes leaves an audit row, as a refused
+  till close does, so the owner can see who tried.
+- Whether the manager role, or a second doctor, may read the notes is being
+  checked against Algerian law
+  (`context/research/20260923-which-doctors-may-read-a-colleagues-notes.md`,
+  in progress). Owner-only stands until then.
