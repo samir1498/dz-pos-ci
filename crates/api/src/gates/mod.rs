@@ -54,6 +54,15 @@
 //! who cannot read their own open drawer cannot be shown the expected figure
 //! before they count it.
 //!
+//! Two more with the `clinic` feature (C3 of
+//! `the-first-clinic-module-patients-queue-appointments`, 2026-09-23):
+//! `GET /patients` and `GET /patients/{id}` carry `Permission::ViewPatients`.
+//! A patient's name, date of birth, phone and notes are medical identity,
+//! not a list a cashier is already looking at at a till, so the read is
+//! gated even though every role holds the permission today: the decision
+//! of who reads a file then sits on one row of `can` and not on every
+//! route.
+//!
 //! **What a row cannot say.** A gate answers for a whole route before the
 //! handler runs, so it can only ask about the caller and the path, never
 //! about the row the caller named. Where a rule turns on the row, the table

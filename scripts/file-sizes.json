@@ -22,7 +22,7 @@
     "crates/retail/src/services/supplier_debt.rs": 821,
     "crates/retail/tests/avoir_service.rs": 1703,
     "crates/retail/tests/debt_service.rs": 2041,
-    "crates/retail/tests/migration.rs": 4141,
+    "crates/retail/tests/migration.rs": 4138,
     "crates/retail/tests/purchases_service.rs": 1413,
     "crates/retail/tests/sales_service.rs": 2892
   }

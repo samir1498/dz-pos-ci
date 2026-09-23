@@ -134,10 +134,29 @@ pub enum Permission {
     /// field on the wire to say otherwise, so there is no permission here to
     /// hold for it.
     CloseAnotherPersonsTill,
+    /// Open and read the clinic's patient file: the list, the search by name
+    /// or number, one patient's file (C3 of
+    /// `context/plans/20260923-the-first-clinic-module-patients-queue-appointments.md`).
+    /// Here and not in a clinic crate because the enum stays one list
+    /// (Samir's ruling, 2026-09-21); a shop build carries the variant and no
+    /// route that asks for it. The queue and the book reuse it rather than
+    /// adding their own in the first version.
+    ///
+    /// All three roles, the way `Sell` is: the person at a cabinet's desk is
+    /// the one who finds the patient who just walked in, and a receptionist
+    /// who cannot read the file cannot start a day either.
+    ViewPatients,
+    /// Open a patient's file, correct it, and archive it. All three roles,
+    /// for the same reason as `ViewPatients`: the desk is where a file is
+    /// opened. Its own variant rather than folded into `ViewPatients`, so a
+    /// cabinet that later wants only the doctor to change a file takes that
+    /// decision in `can` below, on one row, without splitting a permission
+    /// the routes already name.
+    EditPatients,
 }
 
 impl Permission {
-    pub const ALL: [Permission; 15] = [
+    pub const ALL: [Permission; 17] = [
         Permission::Sell,
         Permission::DiscountAboveThreshold,
         Permission::OverrideCreditBlock,
@@ -153,6 +172,8 @@ impl Permission {
         Permission::SeeAuditLog,
         Permission::OpenAndCloseTill,
         Permission::CloseAnotherPersonsTill,
+        Permission::ViewPatients,
+        Permission::EditPatients,
     ];
 
     /// The stable key the UI translates and the wire carries (T2: 403 with
@@ -174,6 +195,8 @@ impl Permission {
             Permission::SeeAuditLog => "see_audit_log",
             Permission::OpenAndCloseTill => "open_and_close_till",
             Permission::CloseAnotherPersonsTill => "close_another_persons_till",
+            Permission::ViewPatients => "view_patients",
+            Permission::EditPatients => "edit_patients",
         }
     }
 }
@@ -187,8 +210,9 @@ impl std::fmt::Display for Permission {
 /// The one statement of who may do what. Every place in the codebase that
 /// would otherwise compare a role asks this, or `require` below, instead.
 ///
-/// A cashier rings sales up and opens and counts their own drawer, and
-/// nothing else on this list: somebody else's drawer is
+/// A cashier rings sales up, opens and counts their own drawer, and opens
+/// and reads the clinic's patient file, and nothing else on this list:
+/// somebody else's drawer is
 /// `CloseAnotherPersonsTill`, which they do not hold. A manager runs the
 /// shop and answers like an owner on everything except two: who the staff are,
 /// and the log of what the staff did. A log the people it watches can read,
@@ -200,7 +224,7 @@ impl std::fmt::Display for Permission {
 /// question if Samir wants the fiscal setting owner-only.
 ///
 /// The match is on `permission` first and not on the `(role, permission)`
-/// pair, so a sixteenth `Permission` variant fails to compile here until it is
+/// pair, so an eighteenth `Permission` variant fails to compile here until it is
 /// placed, rather than silently defaulting through a wildcard.
 pub const fn can(role: Role, permission: Permission) -> bool {
     match permission {
@@ -209,6 +233,10 @@ pub const fn can(role: Role, permission: Permission) -> bool {
         // what the drawer under it asks for. A shop that later wants only a
         // supervisor to open a till changes this arm and nothing else.
         Permission::Sell | Permission::OpenAndCloseTill => true,
+        // The clinic's two, held by every role for the reason each variant's
+        // own doc gives: the desk opens and reads the file. A cabinet's
+        // cashier-level user is its receptionist.
+        Permission::ViewPatients | Permission::EditPatients => true,
         Permission::DiscountAboveThreshold
         | Permission::OverrideCreditBlock
         | Permission::SeeCostAndMargin

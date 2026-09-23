@@ -350,7 +350,7 @@ fn figures_of_retail(e: &RetailError) -> Figures {
 const fn status_for(e: &CoreError) -> StatusCode {
     match e {
         CoreError::Validation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
-        CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
+        CoreError::NotFound { .. } | CoreError::NotFoundText { .. } => StatusCode::NOT_FOUND,
         // A credential that did not match. 401 and not 422: nothing in the
         // request is malformed, and what is missing is an identity the caller
         // has to establish before the route will answer at all.

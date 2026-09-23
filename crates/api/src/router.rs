@@ -158,6 +158,23 @@ pub fn router_with_origin(
         .route("/users/{id}/deactivate", post(routes::users::deactivate))
         .route("/users/{id}/reactivate", post(routes::users::reactivate));
 
+    // C3 of `the-first-clinic-module-patients-queue-appointments`: the
+    // clinic's own routes, gated whole on their own feature for the same
+    // reason the shop's below are, and before them so each block's span in
+    // `route_gates.rs` is bounded by the next block's start. 3 of the calls
+    // below, five method routes between them.
+    #[cfg(feature = "clinic")]
+    let guarded = guarded
+        .route(
+            "/patients",
+            get(routes::patients::list).post(routes::patients::create),
+        )
+        .route(
+            "/patients/{id}",
+            get(routes::patients::get_one).put(routes::patients::update),
+        )
+        .route("/patients/{id}/archive", post(routes::patients::archive));
+
     // S5 of `a-kernel-crate-and-retail-as-the-first-module`: the shop's own
     // routes, gated whole rather than split across a second router, because
     // `route_gates.rs`'s source walk reads this file and would never see

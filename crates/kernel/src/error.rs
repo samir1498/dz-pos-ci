@@ -23,6 +23,16 @@ pub enum CoreError {
     Validation { field: String, message: String },
     #[error("{entity} {id} does not exist in this shop")]
     NotFound { entity: &'static str, id: i32 },
+    /// `NotFound` for a row whose id is text rather than an integer: the
+    /// clinic's tables key on a UUID v7 (C3 of
+    /// `context/plans/20260923-the-first-clinic-module-patients-queue-appointments.md`),
+    /// which `NotFound`'s `i32` cannot carry. Same code, same status, same
+    /// sentence; a second variant rather than a wider `id`, because widening
+    /// the one every integer-keyed read already raises would touch each of
+    /// them for no change a caller can see. Domain-free, so it lives here and
+    /// not in a clinic error enum the API would have to map a third time.
+    #[error("{entity} {id} does not exist in this shop")]
+    NotFoundText { entity: &'static str, id: String },
     /// A value another row of this shop already holds, where the file says
     /// only one may. Not a `Validation`: what the caller sent is well formed
     /// and what refuses it is a row that is already there, so the screen has
@@ -97,7 +107,7 @@ impl CoreError {
     pub const fn code(&self) -> &'static str {
         match self {
             CoreError::Validation { .. } => "validation",
-            CoreError::NotFound { .. } => "not_found",
+            CoreError::NotFound { .. } | CoreError::NotFoundText { .. } => "not_found",
             CoreError::Conflict { .. } => "conflict",
             CoreError::Exhausted { .. } => "exhausted",
             CoreError::AuthRefused => "auth_refused",

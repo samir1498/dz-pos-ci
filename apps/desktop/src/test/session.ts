@@ -13,7 +13,7 @@ import type { MeDto, PermissionDto } from "@dzpos/shared";
 /** `Permission::ALL`, spelled on the TypeScript side (`crates/core/src/
  *  services/permissions.rs`). Kept as a literal array and not inferred from
  *  a union type, because a fixture is data and this file is not the place
- *  a sixteenth permission should fail to compile. */
+ *  a new permission should fail to compile. */
 const ALL_PERMISSIONS: readonly PermissionDto[] = [
   "sell",
   "discount_above_threshold",
@@ -30,6 +30,8 @@ const ALL_PERMISSIONS: readonly PermissionDto[] = [
   "see_audit_log",
   "open_and_close_till",
   "close_another_persons_till",
+  "view_patients",
+  "edit_patients",
 ];
 
 export const ME_OWNER: MeDto = {
@@ -42,11 +44,12 @@ export const ME_OWNER: MeDto = {
   permissions: [...ALL_PERMISSIONS],
 };
 
-/** `services::permissions::can`'s own table: a cashier holds `sell` and
- *  `open_and_close_till`, and nothing else. */
+/** `services::permissions::can`'s own table: a cashier holds `sell`,
+ *  `open_and_close_till` and the clinic's two patient permissions, and
+ *  nothing else. */
 export const ME_CASHIER: MeDto = {
   user_id: 2,
   name: "Karim",
   role: "cashier",
-  permissions: ["sell", "open_and_close_till"],
+  permissions: ["sell", "open_and_close_till", "view_patients", "edit_patients"],
 };

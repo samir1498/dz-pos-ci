@@ -40,7 +40,9 @@ fn every_row_is_filled_in_and_no_route_is_named_twice() {
                     || gate.path == "/support-bundle"
                     || gate.path == "/pairing/devices"
                     || gate.path == "/till/shifts/{id}"
-                    || gate.path == "/till/shifts",
+                    || gate.path == "/till/shifts"
+                    || gate.path == "/patients"
+                    || gate.path == "/patients/{id}",
                 "{} is a read this table was not opened for; widen this allow-list deliberately \
                  and say why in ROUTE_GATES's own `why` (M4 T5 review, 2026-09-11: /dashboard, \
                  /dashboard/series, /purchases and /purchases/{{id}} joined the exports, the \
@@ -53,7 +55,9 @@ fn every_row_is_filled_in_and_no_route_is_named_twice() {
                  Till shifts, 2026-09-21: /till/shifts/{{id}} joined them, one person's evening being a \
                  report a manager runs the floor off; its sibling /till/shifts/open stayed off the table \
                  because it answers about the caller and names nobody else. Closing sweep, same day: \
-                 /till/shifts joined them too, the same report widened from a row to a day's list.",
+                 /till/shifts joined them too, the same report widened from a row to a day's list. \
+                 Clinic C3, 2026-09-23: /patients and /patients/{{id}} joined them behind \
+                 ViewPatients, a patient's medical identity and notes being no ordinary list.",
                 gate.path
             );
         } else {

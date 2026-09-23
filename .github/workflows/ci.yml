@@ -63,7 +63,7 @@ jobs:
       - name: Generated TS types are current
         run: |
           tmp="$(mktemp -d)"
-          DZPOS_TS_OUT_DIR="$tmp" cargo test -p dzpos-api --test export_bindings
+          DZPOS_TS_OUT_DIR="$tmp" cargo test -p dzpos-api --features clinic --test export_bindings
           diff -r "$tmp" packages/shared/src/generated
 
   web:

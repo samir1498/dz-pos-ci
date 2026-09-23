@@ -58,6 +58,11 @@ pub mod models {
     pub use dzpos_kernel::models::*;
     #[cfg(feature = "retail")]
     pub use dzpos_retail::models::*;
+    // The clinic's own (C3 of the clinic plan: `patient`). It re-exports
+    // none of the kernel's, so it merges beside either line above without
+    // doubling a name.
+    #[cfg(feature = "clinic")]
+    pub use dzpos_clinic::models::*;
 }
 
 pub mod services {
@@ -67,6 +72,10 @@ pub mod services {
     pub use dzpos_kernel::services::*;
     #[cfg(feature = "retail")]
     pub use dzpos_retail::services::*;
+    // And the clinic's (C3 of the clinic plan: `patients`), owned by that
+    // crate alone, so no name collides here either.
+    #[cfg(feature = "clinic")]
+    pub use dzpos_clinic::services::*;
 }
 
 pub mod print {
@@ -96,12 +105,11 @@ pub mod shop_counts {
 pub mod clinic {
     //! The second module (C2 of
     //! `context/plans/20260923-the-first-clinic-module-patients-queue-appointments.md`),
-    //! a plain re-export the same shape as `shop_counts` above. C2 gives
-    //! `dzpos-clinic` nothing beyond its crate doc and one constant, so
-    //! there is nothing yet to merge into `models`, `services` or `error`
-    //! the way `retail` is merged into those above; C3 moves the patient
-    //! file's models and service in there instead of adding to this module,
-    //! the way `dzpos_retail::models` re-exports the kernel's own so a
-    //! caller never imports two modules for one domain.
+    //! a plain re-export the same shape as `shop_counts` above. Since C3
+    //! the clinic's models and services are merged into `models` and
+    //! `services` above, the way retail's are, so a route reads
+    //! `dzpos_core::services::patients` like any other; this module is
+    //! what reaches the rest (`audit_actions`, `schema`, `CRATE_NAME`).
+    //! Errors need no merge: the clinic raises the kernel's `CoreError`.
     pub use dzpos_clinic::*;
 }

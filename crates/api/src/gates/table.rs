@@ -192,6 +192,41 @@ pub const ROUTE_GATES: &[Gate] = &[
         permission: None,
         why: "a label prints a name, a price and a barcode a customer can already read off the shelf, and a cashier relabelling a shelf is who needs it (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "GET",
+        path: "/patients",
+        permission: Some(Permission::ViewPatients),
+        why: "the whole patient list, and a search over names and phone numbers: medical identity, not an ordinary shop list, so it is gated like the lists that carry a shop's data out (clinic plan C3)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/patients",
+        permission: Some(Permission::EditPatients),
+        why: "opening a patient's file is the desk's work; EditPatients is the clinic plan's one permission for writing a file (C3)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "GET",
+        path: "/patients/{id}",
+        permission: Some(Permission::ViewPatients),
+        why: "one patient's file, notes included; the same gate as the list it is opened from (clinic plan C3)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "PUT",
+        path: "/patients/{id}",
+        permission: Some(Permission::EditPatients),
+        why: "correcting a patient's file; the same permission that opened it (clinic plan C3)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/patients/{id}/archive",
+        permission: Some(Permission::EditPatients),
+        why: "archiving takes a file out of the search and deletes nothing, so it is a correction to the file and asks what an edit asks (clinic plan C3)",
+    },
     #[cfg(feature = "retail")]
     Gate {
         method: "POST",

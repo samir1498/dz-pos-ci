@@ -4,7 +4,11 @@
 // DTOs this file checks include every retail one and do not move (S5's own
 // note), so `just types`/`types-check` runs this against the default,
 // retail-on build; this whole file has nothing to compile with the feature
-// off.
+// off. C3 of `the-first-clinic-module-patients-queue-appointments` adds the
+// clinic's three (`CLINIC_FILES`), and both recipes build with
+// `--features clinic` on top so the one generated folder holds every DTO;
+// a plain `cargo test --workspace` without the feature still runs this file
+// and checks the shop's alone.
 #![cfg(feature = "retail")]
 
 //! Writes `packages/shared/src/generated`. Types cross the Rust/TypeScript
@@ -38,6 +42,8 @@ use dzpos_api::dto::{
     SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto, TakingsDto, ThemeChoiceDto,
     ThemeDto, ThermalModeChoiceDto, ThermalModeDto, TillCountDto, TopProductDto, UnitDto, UserDto,
 };
+#[cfg(feature = "clinic")]
+use dzpos_api::dto::{PatientDto, PatientWriteDto, SexDto};
 use ts_rs::{Config, TS};
 
 const FILES: [&str; 122] = [
@@ -165,6 +171,12 @@ const FILES: [&str; 122] = [
     "TillCountDto.ts",
 ];
 
+/// The clinic's DTOs (`src/dto/patients.rs`), apart from `FILES` because they
+/// only compile with the `clinic` feature: the list check below reads their
+/// names off the source text in every build, and the export writes them
+/// only when the feature is on.
+const CLINIC_FILES: [&str; 3] = ["PatientDto.ts", "PatientWriteDto.ts", "SexDto.ts"];
+
 /// Where the bindings are written. Never the committed directory by
 /// default: a plain `cargo test --workspace` used to regenerate
 /// `packages/shared/src/generated` in place, so the CI diff that ran after
@@ -208,7 +220,8 @@ const DTO_SOURCE: &str = concat!(
     include_str!("../src/dto/audit.rs"),
     include_str!("../src/dto/users.rs"),
     include_str!("../src/dto/pairing.rs"),
-    include_str!("../src/dto/till.rs")
+    include_str!("../src/dto/till.rs"),
+    include_str!("../src/dto/patients.rs")
 );
 
 #[test]
@@ -223,6 +236,7 @@ fn every_exported_dto_is_in_the_list_and_none_uses_the_bare_export() {
         .collect();
     named.sort_unstable();
     let mut listed = FILES.to_vec();
+    listed.extend(CLINIC_FILES);
     listed.sort_unstable();
     assert_eq!(
         named, listed,
@@ -367,6 +381,15 @@ fn export_bindings() {
     ShiftReportDto::export_all(&cfg).unwrap();
     NewShiftDto::export_all(&cfg).unwrap();
     TillCountDto::export_all(&cfg).unwrap();
+    #[cfg(feature = "clinic")]
+    {
+        PatientDto::export_all(&cfg).unwrap();
+        PatientWriteDto::export_all(&cfg).unwrap();
+        SexDto::export_all(&cfg).unwrap();
+        for name in CLINIC_FILES {
+            assert!(dir.join(name).exists(), "{name} was not written");
+        }
+    }
 
     for name in FILES {
         assert!(dir.join(name).exists(), "{name} was not written");

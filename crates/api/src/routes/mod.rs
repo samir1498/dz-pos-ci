@@ -41,6 +41,9 @@ pub mod export;
 #[cfg(feature = "retail")]
 pub mod import;
 pub mod pairing;
+// The clinic's patient file (C3 of the clinic plan), on its own feature.
+#[cfg(feature = "clinic")]
+pub mod patients;
 #[cfg(feature = "retail")]
 pub mod products;
 #[cfg(feature = "retail")]

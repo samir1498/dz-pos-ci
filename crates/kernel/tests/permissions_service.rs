@@ -80,9 +80,18 @@ fn the_cashier_list_is_exactly_selling_and_the_drawer_they_stand_at() {
     // their own till could not start a day. Reading a shift back is not on
     // this list and is not meant to be — that is `SeeReports`, which the
     // assertion below still refuses a cashier.
-    let cashier: HashSet<Permission> = [Permission::Sell, Permission::OpenAndCloseTill]
-        .into_iter()
-        .collect();
+    //
+    // `ViewPatients` and `EditPatients` joined on 2026-09-23 (C3 of the
+    // clinic plan): a cabinet's cashier-level user is its receptionist, the
+    // one who finds the patient who just walked in and opens their file.
+    let cashier: HashSet<Permission> = [
+        Permission::Sell,
+        Permission::OpenAndCloseTill,
+        Permission::ViewPatients,
+        Permission::EditPatients,
+    ]
+    .into_iter()
+    .collect();
     assert_eq!(granted(Role::Cashier), cashier);
     assert!(!can(Role::Cashier, Permission::SeeReports));
 }
@@ -112,6 +121,12 @@ fn named_cases_a_human_would_check_by_eye() {
     assert!(can(Role::Owner, Permission::EditSettings));
     assert!(can(Role::Owner, Permission::ManageUsers));
     assert!(can(Role::Owner, Permission::SeeAuditLog));
+
+    // The clinic's two, held at the desk and above.
+    for role in [Role::Cashier, Role::Manager, Role::Owner] {
+        assert!(can(role, Permission::ViewPatients), "{role:?}");
+        assert!(can(role, Permission::EditPatients), "{role:?}");
+    }
 }
 
 #[test]

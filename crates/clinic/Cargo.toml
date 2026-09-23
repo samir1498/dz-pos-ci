@@ -6,12 +6,38 @@ edition.workspace = true
 [dependencies]
 # The second module
 # (`context/plans/20260923-the-first-clinic-module-patients-queue-appointments.md`):
-# the patient file, the waiting queue and the appointment book. C2 gives it
-# nothing clinic-specific yet, so the kernel is its only dependency; a
-# `ClinicError` shaped like `dzpos-retail`'s own (wrapping the kernel's
-# `CoreError`) waits for C3, the first slice that has something of its own
-# to raise.
+# the patient file, the waiting queue and the appointment book. The kernel
+# is its only workspace dependency: the tenant, the users, the permission
+# table, the audit service, the clock and the error enum all come from
+# there, and nothing here reaches `dzpos-retail`.
 dzpos-kernel = { path = "../kernel" }
+# The clinic repos query `patients`, declared in this crate's own
+# `schema.rs`, over the same connection type the kernel opens, so this
+# crate's diesel carries the kernel's feature set.
+diesel = { workspace = true, features = [
+    "sqlite",
+    "chrono",
+    "returning_clauses_for_sqlite_3_35",
+    "64-column-tables",
+] }
+chrono = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+# The audit rows store the file before and after as JSON text, the way the
+# kernel's own and the shop's do.
+serde_json = { workspace = true }
+# Clinic ids are a UUID v7 as text (the plan's "Defaults taken": unique
+# across machines, and sorting by creation time). `v7` only: no v4, no
+# serde, nothing else. 1.26.1 is the current release on crates.io
+# (checked 2026-09-23); 1.26.0 was already in the lock through tauri.
+uuid = { version = "1.26.1", features = ["v7"] }
+
+[dev-dependencies]
+tempfile = "3"
+# `tests/migration_patients.rs` reverts the patients migration and runs it
+# again, which reads `MigrationHarness` off `dzpos_kernel::db::MIGRATIONS`;
+# the same dev-dependency `dzpos-retail` carries for its migration tests,
+# already in the lock through the kernel.
+diesel_migrations = "2.2"
 
 [lints]
 workspace = true

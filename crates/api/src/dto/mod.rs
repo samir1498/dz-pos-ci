@@ -94,6 +94,10 @@ mod expenses;
 mod import;
 mod meta;
 mod pairing;
+// The clinic's patient file (C3 of the clinic plan), gated on its own
+// feature the way the wholly-retail files above are on theirs.
+#[cfg(feature = "clinic")]
+mod patients;
 #[cfg(feature = "retail")]
 mod products;
 #[cfg(feature = "retail")]
@@ -125,6 +129,8 @@ pub use expenses::*;
 pub use import::*;
 pub use meta::*;
 pub use pairing::*;
+#[cfg(feature = "clinic")]
+pub use patients::*;
 #[cfg(feature = "retail")]
 pub use products::*;
 #[cfg(feature = "retail")]

@@ -54,6 +54,20 @@ fn every_core_error_variant_keeps_its_pre_split_status_code_and_figures() {
         .figures(),
         Figures::NONE
     );
+    // Not pre-split: C3 of the clinic plan added it for a text id. It owes
+    // the same answer as its integer twin above, written out rather than
+    // read off that one.
+    let text_id = CoreError::NotFoundText {
+        entity: "patient",
+        id: "0199a0c1-0000-7000-8000-000000000000".to_string(),
+    };
+    assert_eq!(
+        text_id.to_string(),
+        "patient 0199a0c1-0000-7000-8000-000000000000 does not exist in this shop"
+    );
+    let text_id = ApiError::Core(text_id);
+    assert_eq!(text_id.parts(), (StatusCode::NOT_FOUND, "not_found"));
+    assert_eq!(text_id.figures(), Figures::NONE);
 
     assert_eq!(
         ApiError::Core(CoreError::conflict("barcode", "already used")).parts(),

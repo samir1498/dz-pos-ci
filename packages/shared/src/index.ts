@@ -116,6 +116,11 @@ export type { NewShiftDto } from "./generated/NewShiftDto";
 export type { ShiftDto } from "./generated/ShiftDto";
 export type { ShiftReportDto } from "./generated/ShiftReportDto";
 export type { TillCountDto } from "./generated/TillCountDto";
+// The clinic's patient file (C3). Types only: the client calls and their
+// zod schemas come with the screens that use them (C6).
+export type { PatientDto } from "./generated/PatientDto";
+export type { PatientWriteDto } from "./generated/PatientWriteDto";
+export type { SexDto } from "./generated/SexDto";
 
 export { ApiError, createClient } from "./client";
 // One zod schema per DTO, the check the client runs on every answer. They

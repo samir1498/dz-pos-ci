@@ -121,11 +121,17 @@ check-no-retail: claim
 # `--features clinic` on top of the default (both modules at once) only
 # needs to compile, since a shop build with the clinic switched on as well
 # is not this plan's claim. Never `--workspace`, for the reason
-# `check-no-retail` gives.
+# `check-no-retail` gives. C3 adds the clinic crate's own tests
+# (`crates/clinic/tests`): `-p dzpos-api` alone runs only the api's, and
+# `dzpos-clinic` has no retail to unify in, so running it on its own here
+# is the same proof with the service underneath the routes. Its clippy
+# takes `--all-targets` so the clinic's api tests are linted too: the
+# workspace clippy builds `dzpos-api` without the clinic and never sees them.
 check-clinic-only: claim
     flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --no-default-features --features clinic
-    flock "$CARGO_TARGET_DIR/.lock" cargo clippy -p dzpos-api --no-default-features --features clinic -- -D warnings
+    flock "$CARGO_TARGET_DIR/.lock" cargo clippy -p dzpos-api --no-default-features --features clinic --all-targets -- -D warnings
     flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --no-default-features --features clinic
+    flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-clinic
     flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --features clinic
 
 # the desktop's one eslint rule: no bare input, button, select, textarea or
@@ -180,7 +186,7 @@ types-check: claim
     fi
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' EXIT
-    DZPOS_TS_OUT_DIR="$tmp" flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --test export_bindings
+    DZPOS_TS_OUT_DIR="$tmp" flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --features clinic --test export_bindings
     diff -r "$tmp" packages/shared/src/generated
 
 # regenerate the committed TS types after a DTO change (the test never
@@ -188,8 +194,15 @@ types-check: claim
 # Absolute: cargo runs a test from the crate's own directory, and a relative
 # path here wrote crates/api/packages/shared/src/generated the first time a
 # DTO was added after the recipe was written.
+#
+# `--features clinic`, here and in `types-check` above (C3 of
+# `the-first-clinic-module-patients-queue-appointments`): the generated
+# folder is one for every build, so it is written from the build that
+# compiles every DTO, the shop's (the default) and the clinic's together. A
+# shop-only build would leave the patient types out and `types-check` would
+# call the committed ones orphans.
 types: claim
-    DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --test export_bindings
+    DZPOS_TS_OUT_DIR="{{justfile_directory()}}/packages/shared/src/generated" flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --features clinic --test export_bindings
 
 # regenerate apps/desktop/src/theme.css from the token source. The check
 # that a stale file fails the gates is a vitest in packages/design, so it
