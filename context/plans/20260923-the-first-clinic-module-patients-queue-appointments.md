@@ -24,7 +24,7 @@ tasks:
     status: 'pending'
   - id: 'C5'
     desc: 'The appointment book: one doctor, a fixed slot length, a refusal when two patients take the same slot'
-    status: 'pending'
+    status: 'done'
   - id: 'C5b'
     desc: 'Book tools for the desk: working hours, absence blocks that move what they hit, visit types with durations, next free slot, no-show mark, a printed day list with walk-ins'
     status: 'pending'
