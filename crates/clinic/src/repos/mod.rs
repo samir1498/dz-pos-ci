@@ -1,5 +1,6 @@
 //! The only modules that run diesel queries. Every query takes a `shop_id`
 //! (rule 3), the same as the kernel's and the shop's.
+pub mod appointments;
 pub mod patients;
 pub mod queue;
 

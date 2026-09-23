@@ -131,8 +131,8 @@ fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
 }
 
 /// Its down drops the table and both indexes and nothing else, and the up
-/// makes them again. The queue (000020) sits on top and points at
-/// `patients`, so it goes down first; `migration_queue.rs` holds its own.
+/// makes them again. The book (000021) and the queue (000020) sit on top and
+/// point at `patients`, so they go down first; each file holds its own.
 #[test]
 fn the_migration_reverts_and_reapplies() {
     let (_dir, mut conn) = open_temp();
@@ -140,11 +140,13 @@ fn the_migration_reverts_and_reapplies() {
                    ('patients', 'idx_patients_shop_name', 'idx_patients_shop_phone')";
     assert_eq!(count(&mut conn, objects), 3);
 
-    let above = conn
-        .revert_last_migration(dzpos_kernel::db::MIGRATIONS)
-        .unwrap();
-    assert_eq!(above.to_string(), "20260923000020");
-    assert_eq!(count(&mut conn, objects), 3);
+    for above in ["20260923000021", "20260923000020"] {
+        let reverted = conn
+            .revert_last_migration(dzpos_kernel::db::MIGRATIONS)
+            .unwrap();
+        assert_eq!(reverted.to_string(), above);
+        assert_eq!(count(&mut conn, objects), 3);
+    }
     let reverted = conn
         .revert_last_migration(dzpos_kernel::db::MIGRATIONS)
         .unwrap();

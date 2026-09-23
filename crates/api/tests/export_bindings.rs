@@ -43,7 +43,10 @@ use dzpos_api::dto::{
     ThemeDto, ThermalModeChoiceDto, ThermalModeDto, TillCountDto, TopProductDto, UnitDto, UserDto,
 };
 #[cfg(feature = "clinic")]
-use dzpos_api::dto::{PatientDto, PatientWriteDto, QueueAddDto, QueueEntryDto, SexDto};
+use dzpos_api::dto::{
+    AppointmentBookDto, AppointmentDto, AppointmentMoveDto, AppointmentsDto, PatientDto,
+    PatientWriteDto, QueueAddDto, QueueEntryDto, SexDto, SlotMinutesDto,
+};
 use ts_rs::{Config, TS};
 
 const FILES: [&str; 122] = [
@@ -171,16 +174,21 @@ const FILES: [&str; 122] = [
     "TillCountDto.ts",
 ];
 
-/// The clinic's DTOs (`src/dto/patients.rs`, and `src/dto/queue.rs` since
-/// C4), apart from `FILES` because they only compile with the `clinic`
+/// The clinic's DTOs (`src/dto/patients.rs`, `src/dto/queue.rs` since C4
+/// and `src/dto/appointments.rs` since C5), apart from `FILES` because they only compile with the `clinic`
 /// feature: the list check below reads their names off the source text in
 /// every build, and the export writes them only when the feature is on.
-const CLINIC_FILES: [&str; 5] = [
+const CLINIC_FILES: [&str; 10] = [
     "PatientDto.ts",
     "PatientWriteDto.ts",
     "SexDto.ts",
     "QueueEntryDto.ts",
     "QueueAddDto.ts",
+    "AppointmentDto.ts",
+    "AppointmentsDto.ts",
+    "AppointmentBookDto.ts",
+    "AppointmentMoveDto.ts",
+    "SlotMinutesDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -228,7 +236,8 @@ const DTO_SOURCE: &str = concat!(
     include_str!("../src/dto/pairing.rs"),
     include_str!("../src/dto/till.rs"),
     include_str!("../src/dto/patients.rs"),
-    include_str!("../src/dto/queue.rs")
+    include_str!("../src/dto/queue.rs"),
+    include_str!("../src/dto/appointments.rs")
 );
 
 #[test]
@@ -395,6 +404,11 @@ fn export_bindings() {
         SexDto::export_all(&cfg).unwrap();
         QueueEntryDto::export_all(&cfg).unwrap();
         QueueAddDto::export_all(&cfg).unwrap();
+        AppointmentDto::export_all(&cfg).unwrap();
+        AppointmentsDto::export_all(&cfg).unwrap();
+        AppointmentBookDto::export_all(&cfg).unwrap();
+        AppointmentMoveDto::export_all(&cfg).unwrap();
+        SlotMinutesDto::export_all(&cfg).unwrap();
         for name in CLINIC_FILES {
             assert!(dir.join(name).exists(), "{name} was not written");
         }

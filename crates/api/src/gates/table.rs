@@ -269,6 +269,48 @@ pub const ROUTE_GATES: &[Gate] = &[
         permission: Some(Permission::EditPatients),
         why: "marking a patient gone unseen closes their entry the other way; the same write permission (clinic plan C4)",
     },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "GET",
+        path: "/appointments",
+        permission: Some(Permission::ViewPatients),
+        why: "a day or a week of the book: who is coming, when, by name; it reads patients, so it asks what reading a patient's file asks (clinic plan C5, no permission of its own)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/appointments",
+        permission: Some(Permission::EditPatients),
+        why: "booking a patient into a slot is the desk's write on a patient; the file's write permission, reused (clinic plan C5)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "GET",
+        path: "/appointments/{id}",
+        permission: Some(Permission::ViewPatients),
+        why: "one appointment with its patient's names, read the way the day's list is (clinic plan C5)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/appointments/{id}/cancel",
+        permission: Some(Permission::EditPatients),
+        why: "giving a slot back frees it for another patient; the same write as booking it (clinic plan C5)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/appointments/{id}/move",
+        permission: Some(Permission::EditPatients),
+        why: "moving an appointment takes a new slot on a booking's terms; the same write as booking (clinic plan C5)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "PUT",
+        path: "/settings/slot-minutes",
+        permission: Some(Permission::EditSettings),
+        why: "the slot length sets the grid every later booking sits on, a setting of the cabinet like the store block, so it asks what every other /settings write asks; its read stays open like GET /settings (clinic plan C5)",
+    },
     #[cfg(feature = "retail")]
     Gate {
         method: "POST",

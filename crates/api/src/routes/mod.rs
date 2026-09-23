@@ -19,6 +19,9 @@
 //! a screen can grey a button out. It refuses nothing and blanks nothing,
 //! and the answer it builds is the same one the gates would give.
 
+// The clinic's appointment book (C5 of the clinic plan), on the same feature.
+#[cfg(feature = "clinic")]
+pub mod appointments;
 pub mod audit;
 pub mod auth;
 pub mod backups;

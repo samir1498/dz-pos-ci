@@ -3,7 +3,8 @@
 //! shared list), rather than added to `dzpos_kernel::schema`: the kernel
 //! declares the tables every trade shares and the shop's, and a clinic table
 //! there would put a clinic word in the domain-free crate. Nothing here joins
-//! a kernel table; the one join is the queue's to the patient it names.
+//! a kernel table; the two joins are the queue's and the book's, each to the
+//! patient its row names.
 
 // ---- migrations/2026-09-23-000019_patients ----
 
@@ -46,6 +47,27 @@ diesel::table! {
     }
 }
 
-// The day's list reads each entry's patient names beside it.
+// ---- migrations/2026-09-23-000021_appointments ----
+
+diesel::table! {
+    appointments (id) {
+        // A UUID v7 as text, made by `services::appointments`, never by SQLite.
+        id -> Text,
+        shop_id -> Integer,
+        patient_id -> Text,
+        // The shop clock's local start, on a whole minute.
+        starts_at -> Timestamp,
+        // The slot length in force when it was booked or last moved.
+        slot_minutes -> Integer,
+        note -> Nullable<Text>,
+        // NULL while the appointment is live.
+        cancelled_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+// The day's list and the book both read each row's patient names beside it.
 diesel::joinable!(queue_entries -> patients (patient_id));
-diesel::allow_tables_to_appear_in_same_query!(patients, queue_entries);
+diesel::joinable!(appointments -> patients (patient_id));
+diesel::allow_tables_to_appear_in_same_query!(patients, queue_entries, appointments);

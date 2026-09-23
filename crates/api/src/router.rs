@@ -161,9 +161,10 @@ pub fn router_with_origin(
     // C3 of `the-first-clinic-module-patients-queue-appointments`: the
     // clinic's own routes, gated whole on their own feature for the same
     // reason the shop's below are, and before them so each block's span in
-    // `route_gates.rs` is bounded by the next block's start. 8 of the calls
-    // below, eleven method routes between them: the patient file's 3 calls
-    // (five routes) and the waiting queue's 5 (six, C4).
+    // `route_gates.rs` is bounded by the next block's start. 13 of the calls
+    // below, eighteen method routes between them: the patient file's 3 calls
+    // (five routes), the waiting queue's 5 (six, C4) and the appointment
+    // book's 5 (seven, C5, the slot length's read and write among them).
     #[cfg(feature = "clinic")]
     let guarded = guarded
         .route(
@@ -179,7 +180,24 @@ pub fn router_with_origin(
         .route("/queue/next", post(routes::queue::call_next))
         .route("/queue/{id}/call", post(routes::queue::call))
         .route("/queue/{id}/seen", post(routes::queue::seen))
-        .route("/queue/{id}/left", post(routes::queue::left));
+        .route("/queue/{id}/left", post(routes::queue::left))
+        .route(
+            "/appointments",
+            get(routes::appointments::list).post(routes::appointments::book),
+        )
+        .route("/appointments/{id}", get(routes::appointments::get_one))
+        .route(
+            "/appointments/{id}/cancel",
+            post(routes::appointments::cancel),
+        )
+        .route(
+            "/appointments/{id}/move",
+            post(routes::appointments::move_to),
+        )
+        .route(
+            "/settings/slot-minutes",
+            get(routes::appointments::slot_minutes).put(routes::appointments::set_slot_minutes),
+        );
 
     // S5 of `a-kernel-crate-and-retail-as-the-first-module`: the shop's own
     // routes, gated whole rather than split across a second router, because

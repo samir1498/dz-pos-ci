@@ -7,8 +7,9 @@
 //! one explicitly (`crate::audit_actions::ACTION_X`), never through a glob.
 //!
 //! The audit row's `entity_id` column is an integer and a patient's id (and
-//! a queue entry's) is a UUID, so every row below carries `entity_id: None`
-//! and the id inside its `before`/`after` JSON instead.
+//! a queue entry's, and an appointment's) is a UUID, so every row about one
+//! of them carries `entity_id: None` and the id inside its `before`/`after`
+//! JSON instead. The slot length is the shop's, so its row names the shop.
 
 /// A patient file opened. `after` is the file as written.
 pub const ACTION_PATIENT_CREATE: &str = "patient.create";
@@ -29,3 +30,15 @@ pub const ACTION_QUEUE_CALL: &str = "queue.call";
 pub const ACTION_QUEUE_SEEN: &str = "queue.seen";
 /// A patient who left the waiting room without being seen.
 pub const ACTION_QUEUE_LEFT: &str = "queue.left";
+
+/// A patient given a slot in the book. `after` is the appointment as
+/// written, the patient's id with it and the note left out.
+pub const ACTION_APPOINTMENT_BOOK: &str = "appointment.book";
+/// A slot given back. `before` and `after` are the row on either side.
+pub const ACTION_APPOINTMENT_CANCEL: &str = "appointment.cancel";
+/// An appointment moved to another start, the same row kept. `before` and
+/// `after` carry both starts.
+pub const ACTION_APPOINTMENT_MOVE: &str = "appointment.move";
+/// The book's slot length changed. `entity_id` is the shop, the way the
+/// shop's own dated settings record theirs.
+pub const ACTION_SLOT_MINUTES_SET: &str = "slot_minutes.set";

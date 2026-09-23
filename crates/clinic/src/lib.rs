@@ -17,6 +17,10 @@
 //! repo and service. It reuses the patient file's two permissions rather
 //! than adding its own.
 //!
+//! C5 is the appointment book: `appointments`, one row per slot given, its
+//! model, repo and service, and the slot length as a dated setting
+//! (`services::slot_length`). The same two permissions again.
+//!
 //! Errors are the kernel's `CoreError`: nothing here has a failure of its
 //! own to name. A missing patient is `CoreError::NotFoundText`, the text-id
 //! twin of `NotFound`, so the API maps it with no third enum.

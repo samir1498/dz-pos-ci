@@ -35,6 +35,7 @@ fn migration_creates_every_table() {
     assert_eq!(
         names,
         vec![
+            "appointments",
             "audit_log",
             "cash_refunds",
             "categories",
@@ -78,6 +79,7 @@ fn every_table_carries_shop_id() {
     // `shops` carries it as its own primary key.
     let (_dir, mut conn) = open_temp();
     for table in [
+        "appointments",
         "audit_log",
         "categories",
         "counters",
@@ -197,6 +199,7 @@ fn every_table_is_strict() {
         "shifts",
         "patients",
         "queue_entries",
+        "appointments",
     ] {
         let strict = count(
             &mut conn,
@@ -2070,10 +2073,8 @@ fn the_migration_reverts_and_reapplies() {
     // down.sql undoes its own up.sql and nothing else.
     use diesel_migrations::MigrationHarness;
     let (_dir, mut conn) = open_temp();
-    // A revert on an empty file proves the tables move and says nothing about
-    // the rows: the down.sql copies documents back the way the up.sql copied
-    // them across, and a facture with a buyer, a balance and a debt behind it
-    // is what that copy has to carry.
+    // An empty file proves the tables move, not the rows: the down.sql copies
+    // documents back, and a facture with a buyer and a debt is what it carries.
     seed_a_facture_naming_a_customer(&mut conn);
 
     // The seeder writes the row the way the file below the ninth migration
@@ -2090,10 +2091,9 @@ fn the_migration_reverts_and_reapplies() {
         1
     );
 
-    // Seven migrations (20 down to 14) sit on the audit clock (13), which moves
-    // data and adds no table: its down undoes an arithmetic, not a shape (the
-    // seventeenth's expense half is in `migration_shifts.rs`). Revert them and
-    // it, eight turns, and read both directions off one audit row written here.
+    // Eight migrations (21 down to 14) sit on the audit clock (13), which moves
+    // data and adds no table (the seventeenth's expense half is in
+    // `migration_shifts.rs`): nine turns, both directions read off one row.
     assert_eq!(
         diesel::sql_query(
             "INSERT INTO audit_log (shop_id, user_id, action, entity, created_at) \
@@ -2103,7 +2103,7 @@ fn the_migration_reverts_and_reapplies() {
         .unwrap(),
         1
     );
-    for _ in 0..8 {
+    for _ in 0..9 {
         conn.revert_last_migration(dzpos_retail::db::MIGRATIONS)
             .unwrap();
     }
@@ -2127,8 +2127,8 @@ fn the_migration_reverts_and_reapplies() {
         1,
         "the audit clock up.sql did not take the hour back"
     );
-    // Those seven (20 down to 14) and the audit clock (13) itself: all eight.
-    for _ in 0..8 {
+    // Those eight (21 down to 14) and the audit clock (13) itself: all nine.
+    for _ in 0..9 {
         conn.revert_last_migration(dzpos_retail::db::MIGRATIONS)
             .unwrap();
     }

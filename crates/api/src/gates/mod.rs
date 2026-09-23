@@ -65,6 +65,8 @@
 //! `GET /queue` (C4, the same day) joins them on the same permission: the
 //! day's waiting room is a list of patients by name, read the way the file
 //! is.
+//! `GET /appointments` and `GET /appointments/{id}` (C5) join them on the
+//! same permission too: the book is patients by name and hour.
 //!
 //! **What a row cannot say.** A gate answers for a whole route before the
 //! handler runs, so it can only ask about the caller and the path, never

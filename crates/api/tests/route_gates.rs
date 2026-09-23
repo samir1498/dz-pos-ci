@@ -544,7 +544,8 @@ fn the_shops_own_gate_rows_and_routes_carry_the_retail_feature() {
 /// rows and routes carry the clinic feature, the way the shop's carry
 /// theirs, and neither module's count moved the other's (the retail test
 /// above still reads 43 and 60). C4's waiting queue added six rows and five
-/// calls to the same block.
+/// calls to the same block, C5's appointment book six rows and five calls
+/// (its slot length's read is open, like `GET /settings`, and has no row).
 #[test]
 fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
     let gates_source = include_str!("../src/gates/table.rs");
@@ -552,9 +553,10 @@ fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
         .matches("    #[cfg(feature = \"clinic\")]\n    Gate {")
         .count();
     assert_eq!(
-        tagged_gates, 11,
-        "11 of ROUTE_GATES' own rows are the clinic's: the patient file's list, create, read, \
-         update and archive, and the queue's today, add, next, call, seen and left"
+        tagged_gates, 17,
+        "17 of ROUTE_GATES' own rows are the clinic's: the patient file's list, create, read, \
+         update and archive, the queue's today, add, next, call, seen and left, and the book's \
+         list, book, read, cancel, move and slot length"
     );
     // The rows are there exactly when the clinic is built in.
     let clinic_rows = |prefix: &str| {
@@ -566,16 +568,26 @@ fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
     let built = cfg!(feature = "clinic");
     assert_eq!(clinic_rows("/patients"), if built { 5 } else { 0 });
     assert_eq!(clinic_rows("/queue"), if built { 6 } else { 0 });
+    assert_eq!(clinic_rows("/appointments"), if built { 5 } else { 0 });
+    assert_eq!(
+        clinic_rows("/settings/slot-minutes"),
+        if built { 1 } else { 0 }
+    );
 
     let (start, end) = clinic_block_span();
     let block = &ROUTER_SOURCE[start..end];
     assert_eq!(
         block.matches(".route(").count(),
-        8,
-        "8 of router.rs' own .route(...) calls are the clinic's: 3 patient, 5 queue"
+        13,
+        "13 of router.rs' own .route(...) calls are the clinic's: 3 patient, 5 queue, 5 book"
     );
-    // No patient or queue route outside the block.
-    for path in ["\"/patients", "\"/queue"] {
+    // No patient, queue or book route outside the block.
+    for path in [
+        "\"/patients",
+        "\"/queue",
+        "\"/appointments",
+        "\"/settings/slot-minutes",
+    ] {
         assert!(
             !ROUTER_SOURCE[..start].contains(path),
             "{path} before the block"

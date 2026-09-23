@@ -188,9 +188,9 @@ fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
     diesel::sql_query(sql).get_result::<Count>(conn).unwrap().n
 }
 
-/// The top of the stack goes down and comes back up: the down drops the
-/// table and both indexes and nothing else (the patients it pointed at stay),
-/// and the up makes them again.
+/// Its down drops the table and both indexes and nothing else (the patients
+/// it pointed at stay), and the up makes them again. The book (000021) sits
+/// on top, so it goes down first; `migration_appointments.rs` holds its own.
 #[test]
 fn the_migration_reverts_and_reapplies() {
     let (_dir, mut conn) = open_temp();
@@ -199,6 +199,11 @@ fn the_migration_reverts_and_reapplies() {
                    ('queue_entries', 'idx_queue_entries_live', 'idx_queue_entries_shop_day')";
     assert_eq!(count(&mut conn, objects), 3);
 
+    let above = conn
+        .revert_last_migration(dzpos_kernel::db::MIGRATIONS)
+        .unwrap();
+    assert_eq!(above.to_string(), "20260923000021");
+    assert_eq!(count(&mut conn, objects), 3);
     let reverted = conn
         .revert_last_migration(dzpos_kernel::db::MIGRATIONS)
         .unwrap();

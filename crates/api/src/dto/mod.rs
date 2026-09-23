@@ -74,6 +74,9 @@ use dzpos_core::services::users::User;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+// The clinic's appointment book (C5 of the clinic plan).
+#[cfg(feature = "clinic")]
+mod appointments;
 mod audit;
 mod auth;
 mod backups;
@@ -116,6 +119,8 @@ mod suppliers;
 mod till;
 mod users;
 
+#[cfg(feature = "clinic")]
+pub use appointments::*;
 pub use audit::*;
 pub use auth::*;
 pub use backups::*;

@@ -124,6 +124,12 @@ export type { SexDto } from "./generated/SexDto";
 // The waiting queue (C4), types only for the same reason.
 export type { QueueAddDto } from "./generated/QueueAddDto";
 export type { QueueEntryDto } from "./generated/QueueEntryDto";
+// The appointment book (C5), types only for the same reason.
+export type { AppointmentBookDto } from "./generated/AppointmentBookDto";
+export type { AppointmentDto } from "./generated/AppointmentDto";
+export type { AppointmentMoveDto } from "./generated/AppointmentMoveDto";
+export type { AppointmentsDto } from "./generated/AppointmentsDto";
+export type { SlotMinutesDto } from "./generated/SlotMinutesDto";
 
 export { ApiError, createClient } from "./client";
 // One zod schema per DTO, the check the client runs on every answer. They
