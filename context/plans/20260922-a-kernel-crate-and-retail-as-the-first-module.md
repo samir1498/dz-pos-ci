@@ -24,7 +24,7 @@ tasks:
     status: 'done'
   - id: 'S6'
     desc: 'The tests move with their services, and the boundary walk is rewritten against two crates'
-    status: 'pending'
+    status: 'done'
   - id: 'S7'
     desc: 'A build with retail off compiles, runs its migrations and signs a user in'
     status: 'pending'

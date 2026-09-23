@@ -8,21 +8,14 @@ tldr: 'Where the crate split stands, what was decided today and by whom, what wa
 ---
 # The restructure loop, 22 September
 
-Updated 2026-09-23 11:25. S2 to S5 are merged: the crate split
-(`9cc5255`, PR #156), the kernel no longer naming the shop (`5135814`,
-PR #158) and the api's 60 shop routes and 43 gate rows behind the
-`retail` feature (`229deaf`, PR #160), with `just check-no-retail` in
-`just gates`. The boundary walk's allow list is at its target of three
-rows, each naming Samir's 2026-09-22 ruling. Next is S6 (tests move, and
-the Rust inline tests leave `src/` under Samir's 2026-09-23 rule), then
-S7 (a build with no shop signs a user in).
-
-In parallel, PR #159 on `chore/coverage-reaches-sonar`: TypeScript tests
-moved out of `src/` into each package's `tests/`, `no-inline-tests` in
-`just gates` with a shrinking list of the Rust files still carrying one
-(51), and `just coverage` feeding Sonar, which read 0% because nothing
-generated the reports. Rebased on S5; its gates and first coverage run
-log to `~/.dz-night/logs/gates-coverage-a8ef0f7.log`.
+Updated 2026-09-23 12:50. S2 to S6 are merged: the crate split (PR
+#156), the kernel no longer naming the shop (PR #158), the api's shop
+routes behind the `retail` feature (PR #160, `just check-no-retail` in
+gates), and every test out of `src/` with each crate owning its tests
+(PR #161; `scripts/inline-tests.json` is empty, `crates/core/tests` is
+gone). Coverage reaches Sonar (PR #159): 91.2% on the dashboard after the
+first scan from main. Next is S7, a build with no shop that opens a
+database, runs the migrations and signs a user in.
 
 Samir's rulings on 2026-09-23: no full ports and adapters, only ports at
 the plug points after the doctor module (recorded on the split plan); no
@@ -94,12 +87,9 @@ spot-reads the diff itself.
 
 ## Where to pick up
 
-1. Read the exit and `coverage-exit` lines of
-   `~/.dz-night/logs/gates-coverage-a8ef0f7.log`; green means merge PR #159
-   and run `just sonar` from the main checkout if a token is set.
-2. S6 in a fresh worktree, built on top of that merge.
-3. Then S7, then Phase B, the patients and appointments
-   module, whose plan page is not written yet.
+1. S7 in worktree `no-shop`, branch `feat/a-build-with-no-shop-signs-in`.
+2. Then Phase B, the patients and appointments module, whose plan page
+   is not written yet.
 
 ## The one thing that proves Phase A finished honestly
 
