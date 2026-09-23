@@ -19,6 +19,9 @@ tasks:
   - id: 'C4'
     desc: 'The waiting queue: add a patient, call the next, mark seen, one day at a time'
     status: 'done'
+  - id: 'C3b'
+    desc: 'Patient notes are doctor-only: a ViewPatientNotes permission for the owner, notes hidden and preserved for everyone else'
+    status: 'pending'
   - id: 'C5'
     desc: 'The appointment book: one doctor, a fixed slot length, a refusal when two patients take the same slot'
     status: 'pending'
@@ -121,12 +124,15 @@ A build with `--features clinic` and no retail installs, creates a patient,
 queues and books them, and shows no shop screen or route; the default shop
 build is unchanged, proved by `just gates`.
 
-## Open for Samir
+## Samir, 2026-09-23 15:20: notes are doctor-only
 
-Every role holds `ViewPatients` and `EditPatients`, so a receptionist reads
-the whole file including the free-text notes, which may carry medical
-history. A doctor-only notes tier is a third permission; say so before the
-queue and book screens are built on this one (PR #164).
+"Of course doctor only, no one else needs that info." A third permission,
+`ViewPatientNotes`, held by the owner (the doctor) only. Without it, the
+patient DTO carries no `notes` field, and a write of the file keeps the
+stored notes as they are, so a receptionist editing a phone number cannot
+erase them, and a write that sends `notes` is refused with 403. The
+server enforces it, not only the screen. Built as its own change after C5
+(C3b below), before the screens.
 
 ## Research before the rest (Samir, 2026-09-23 14:56)
 
