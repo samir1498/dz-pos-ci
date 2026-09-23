@@ -21,7 +21,7 @@ tasks:
     status: 'done'
   - id: 'S5'
     desc: 'The api crate: 42 gate rows and 59 routes behind the retail feature, the nightly recount with them'
-    status: 'pending'
+    status: 'done'
   - id: 'S6'
     desc: 'The tests move with their services, and the boundary walk is rewritten against two crates'
     status: 'pending'

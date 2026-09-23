@@ -8,20 +8,21 @@ tldr: 'Where the crate split stands, what was decided today and by whom, what wa
 ---
 # The restructure loop, 22 September
 
-Updated 2026-09-23 10:25. S2, S3 and S4 are merged: the crate split
-(`9cc5255`, PR #156) and the kernel no longer naming the shop (`5135814`,
-PR #158). The boundary walk's allow list is at its target of three rows,
-the money arithmetic and the permission list, each naming Samir's
-2026-09-22 ruling. Next is S5, the api's shop routes behind the retail
-feature, then S6 (tests move, and the Rust inline tests leave `src/`
-under Samir's 2026-09-23 no-inline-tests rule), then S7 (a build with no
-shop signs a user in).
+Updated 2026-09-23 11:25. S2 to S5 are merged: the crate split
+(`9cc5255`, PR #156), the kernel no longer naming the shop (`5135814`,
+PR #158) and the api's 60 shop routes and 43 gate rows behind the
+`retail` feature (`229deaf`, PR #160), with `just check-no-retail` in
+`just gates`. The boundary walk's allow list is at its target of three
+rows, each naming Samir's 2026-09-22 ruling. Next is S6 (tests move, and
+the Rust inline tests leave `src/` under Samir's 2026-09-23 rule), then
+S7 (a build with no shop signs a user in).
 
-In parallel, on its own branch `chore/coverage-reaches-sonar`: TypeScript
-tests move out of `src/` into each package's `tests/`, a gate bans inline
-tests with a shrinking list for the Rust files still carrying one, and
-`just coverage` feeds Sonar, which read 0% because nothing generated the
-reports.
+In parallel, PR #159 on `chore/coverage-reaches-sonar`: TypeScript tests
+moved out of `src/` into each package's `tests/`, `no-inline-tests` in
+`just gates` with a shrinking list of the Rust files still carrying one
+(51), and `just coverage` feeding Sonar, which read 0% because nothing
+generated the reports. Rebased on S5; its gates and first coverage run
+log to `~/.dz-night/logs/gates-coverage-a8ef0f7.log`.
 
 Samir's rulings on 2026-09-23: no full ports and adapters, only ports at
 the plug points after the doctor module (recorded on the split plan); no
@@ -93,10 +94,11 @@ spot-reads the diff itself.
 
 ## Where to pick up
 
-1. `cd` to the worktree `kernel-smaller`, `just claim`, run `just gates` and
-   read its exit line. The audit-tag move is ungated.
-2. Finish S4's three remaining pieces from the `01410d8` commit body.
-3. Then S5, S6, S7 of the plan, then Phase B, the patients and appointments
+1. Read the exit and `coverage-exit` lines of
+   `~/.dz-night/logs/gates-coverage-a8ef0f7.log`; green means merge PR #159
+   and run `just sonar` from the main checkout if a token is set.
+2. S6 in a fresh worktree, built on top of that merge.
+3. Then S7, then Phase B, the patients and appointments
    module, whose plan page is not written yet.
 
 ## The one thing that proves Phase A finished honestly
