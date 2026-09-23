@@ -31,6 +31,9 @@ tasks:
   - id: 'C6'
     desc: 'Desktop screens for C3 to C5 behind a build switch, with the calendar component chosen before the book screen'
     status: 'pending'
+  - id: 'C6b'
+    desc: 'Booked patients check in to the waiting room: one list for the doctor, walk-ins fill an empty slot, end-of-day no-show offer'
+    status: 'pending'
   - id: 'C7'
     desc: 'The shop screens on desktop and phone behind the same build switch'
     status: 'pending'
@@ -246,3 +249,22 @@ Defaults taken while building, each one Samir can overturn:
   checked against Algerian law
   (`context/research/20260923-which-doctors-may-read-a-colleagues-notes.md`,
   in progress). Owner-only stands until then.
+
+## Samir, 2026-09-23 19:27: the book and the waiting room are one list
+
+Samir's point: a booked patient rarely turns up early, so while the doctor
+waits for them, someone already in the waiting room should take the chair.
+Agreed at 19:29 ("okay") to this shape, built as C6b after the book screen:
+
+- When a booked patient arrives, the desk marks the appointment arrived,
+  which adds them to today's queue linked to their booking. Walk-ins join
+  the queue as they do now.
+- When the doctor calls the next patient, a booked patient who is present
+  goes first once their time comes. An early arrival waits for their time.
+  Otherwise the next person waiting goes in, so the chair is never empty.
+- A late patient joins the queue on arrival, and the desk places them.
+- At the end of the day, Dinar lists the bookings that never arrived and
+  offers to mark them no-show in one click.
+
+The no-show lock from C5b (a marked row can't be moved or cancelled until
+the mark is cleared) stays as built. It was put to Samir and not overturned.
