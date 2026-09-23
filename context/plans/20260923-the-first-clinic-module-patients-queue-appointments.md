@@ -209,3 +209,7 @@ private sector (loi 90-11 art. 33); Saturday is a working-hours choice.
 Left out of the first version: fill-rate caps, waiting list for a freed
 slot, per-patient no-show counts, SMS, recurring series, urgent slots (the
 walk-in queue covers those).
+
+Samir, 2026-09-23 16:11: the Algerian week. Sunday to Thursday are working
+days, Friday and Saturday the weekend; the week view runs Sunday to
+Saturday.
