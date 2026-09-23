@@ -127,3 +127,12 @@ Every role holds `ViewPatients` and `EditPatients`, so a receptionist reads
 the whole file including the free-text notes, which may carry medical
 history. A doctor-only notes tier is a third permission; say so before the
 queue and book screens are built on this one (PR #164).
+
+## Research before the rest (Samir, 2026-09-23 14:56)
+
+The law comes before the book and the screens: a deep search on Algerian
+law for a cabinet, logged in `context/research/` first, as was done for the
+shop's tax rules. Three pages are being written: who may see the notes,
+medical-practice law (dossier, ordonnance, certificat, software approval),
+and health data plus fees (loi 18-07, hosting, timbre, CNAS). C4 finishes;
+C5 onward waits for them.
