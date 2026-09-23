@@ -1,18 +1,9 @@
-// Where the app opens: whichever of the three states this phone is in.
-// It renders nothing of its own — the credentials decide, and until they
-// have been read off disk it shows nothing rather than a screen the phone
-// is about to be redirected away from.
+// The retail router root's index: opens on the till, the screen a retail
+// build's counter spends its day on. See `screens/Index.tsx` for the shared
+// three-state logic and `app-clinic/index.tsx` for the other root's home.
 
-import { Redirect } from "expo-router";
+import Index from "../screens/Index";
 
-import { Screen } from "../components/ui";
-import { useSession } from "../providers/SessionProvider";
-
-export default function Index() {
-  const { device, session, ready } = useSession();
-
-  if (!ready) return <Screen />;
-  if (device === null) return <Redirect href="/pair" />;
-  if (session === null) return <Redirect href="/sign-in" />;
-  return <Redirect href="/till" />;
+export default function RetailIndex() {
+  return <Index home="/till" />;
 }

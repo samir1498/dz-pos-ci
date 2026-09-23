@@ -12,7 +12,7 @@ import { outcomeOf, type ApiError, type Outcome, type Refusal, type Say } from "
 
 /** Where the shop's core is, and the operator's secret for reaching it.
  *
- *  `extra` is whatever `app.json` happens to hold, so it arrives as
+ *  `extra` is whatever `app.config.js` happens to hold, so it arrives as
  *  `unknown` and is checked rather than asserted. A build whose config
  *  carried a number there would otherwise have put a number where every
  *  URL in this file is built from a string. */

@@ -1,5 +1,5 @@
 // Expo's preset is the whole build: it carries the JSX runtime, expo-router's
-// transform and the React Compiler (switched on in app.json under
+// transform and the React Compiler (switched on in app.config.js under
 // `experiments.reactCompiler`, not here).
 //
 // No Reanimated worklet plugin, because there is no Reanimated: expo-router's

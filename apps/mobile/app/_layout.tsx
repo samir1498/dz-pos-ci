@@ -1,41 +1,8 @@
-// The root layout: everything that must outlive a route change lives here.
-//
-// Order matters. The theme wraps everything so a screen never renders
-// untokened, and the language sits with it for the same reason: the pairing
-// and sign-in screens have words on them and render before anything signed
-// in does. The session sits above the router because `(signed-in)/_layout`
-// is the auth gate and has to read it. The cart sits above the gate too, so
-// a session that idles out mid-sale sends the cashier to a PIN box without
-// emptying the basket in front of the customer.
+// The retail router root's own copy of the root layout: a thin re-export so
+// `expo-router`'s file discovery (which only ever looks inside whichever
+// directory `app.config.js` names as the router root, C7 of
+// `the-first-clinic-module-patients-queue-appointments`) finds a `_layout`
+// here. The layout itself, providers and all, lives in `screens/RootLayout`
+// so both roots share one copy.
 
-import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-
-import { ThemeProvider } from "../design/theme";
-import { CartProvider } from "../providers/CartProvider";
-import { LanguageProvider } from "../providers/LanguageProvider";
-import { QueryProvider } from "../providers/QueryProvider";
-import { SessionProvider } from "../providers/SessionProvider";
-import { SplashGate } from "../providers/SplashGate";
-
-export default function RootLayout() {
-  return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <LanguageProvider>
-          <QueryProvider>
-            <SessionProvider>
-              <CartProvider>
-                <StatusBar style="auto" />
-                <SplashGate>
-                  <Stack screenOptions={{ headerShown: false }} />
-                </SplashGate>
-              </CartProvider>
-            </SessionProvider>
-          </QueryProvider>
-        </LanguageProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
-  );
-}
+export { default } from "../screens/RootLayout";

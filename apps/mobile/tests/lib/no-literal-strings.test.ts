@@ -147,9 +147,21 @@ function drawn(node: ts.Node, source: ts.SourceFile): boolean {
   return false;
 }
 
-const SCREENS = globSync(["app/**/*.tsx", "features/**/*.tsx", "components/**/*.tsx"], {
-  cwd: APP,
-}).map((relative) => join(APP, relative));
+// `screens/**` joined C7 (`the-first-clinic-module-patients-queue-
+// appointments`): the words a person reads moved there when `app/` and
+// `app-clinic/` became two router roots sharing one set of screens through
+// thin re-exports (`app/pair.tsx` -> `screens/Pair.tsx`), and a route file
+// carrying no text of its own would otherwise let this glob "pass" a screen
+// it no longer reads at all. `app-clinic/**` stays in the list for the same
+// reason `app/**` was: its own thin files carry no text either, but a
+// clinic-only wrapper that started passing a literal instead of a key
+// (`<SignIn afterSignIn="..."/>`'s prop is a route string, not shown text,
+// so this would not fire on it today, but the day one does say something
+// the glob has to be watching that folder to catch it).
+const SCREENS = globSync(
+  ["app/**/*.tsx", "app-clinic/**/*.tsx", "screens/**/*.tsx", "features/**/*.tsx", "components/**/*.tsx"],
+  { cwd: APP },
+).map((relative) => join(APP, relative));
 
 describe("no screen says anything in its own words", () => {
   /** The file list is asserted before the files are, because a glob that
@@ -163,6 +175,7 @@ describe("no screen says anything in its own words", () => {
     // theatre on 2026-09-20 and it was right.
     const under = (folder: string) => SCREENS.filter((file) => file.includes(`/${folder}/`));
     expect(under("app").map((file) => file.endsWith("pair.tsx"))).toContain(true);
+    expect(under("screens").map((file) => file.endsWith("SignIn.tsx"))).toContain(true);
     expect(under("features").map((file) => file.endsWith("PayPanel.tsx"))).toContain(true);
     expect(under("components").map((file) => file.endsWith("Field.tsx"))).toContain(true);
   });
