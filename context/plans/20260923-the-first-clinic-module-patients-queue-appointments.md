@@ -136,3 +136,27 @@ shop's tax rules. Three pages are being written: who may see the notes,
 medical-practice law (dossier, ordonnance, certificat, software approval),
 and health data plus fees (loi 18-07, hosting, timbre, CNAS). C4 finishes;
 C5 onward waits for them.
+
+### What the three pages found, and what it changes here
+
+Pages: `context/research/20260923-who-sees-the-medical-notes-in-a-cabinet.md`,
+`context/research/20260923-algerian-law-for-a-doctors-cabinet.md`,
+`context/research/20260923-health-data-and-fees-for-a-doctors-cabinet.md`.
+
+- Notes access: WinMed, Doctolib and the CNIL all keep clinical notes from
+  the secretary. Recommended: a doctor-only permission for the notes field,
+  before the screens (C6). Waits on Samir.
+- A dossier médical per patient is a legal duty (loi 18-11 art. 26, 178),
+  so the patient file is required, not optional.
+- No clinical logic (dose calculators, diagnostic hints): loi 18-11 art. 212
+  counts such software as a medical device needing ANPP registration.
+- A remplaçant signs under his own name (art. 171): printed papers, when
+  they come, need more than one practitioner identity per cabinet.
+- Health data is sensitive (loi 18-07 art. 18); a relay hosted abroad needs
+  prior ANPDP authorisation (loi 25-11 art. 45 bis 13). Local-first stays
+  the default; the relay is a decision for later, with the lawyer.
+- The droit de timbre applies to a médecin's fee note (Code du timbre art.
+  100 as reformed in 2025), and a daily livre des recettes et dépenses is
+  required (CIDTA art. 31 bis). Both belong to the fee slice, not this plan.
+- Several article numbers come from secondary sources because the official
+  PDFs were scans; each page marks which.
