@@ -30,7 +30,7 @@ tasks:
     status: 'done'
   - id: 'C6'
     desc: 'Desktop screens for C3 to C5 behind a build switch, with the calendar component chosen before the book screen'
-    status: 'pending'
+    status: 'done'
   - id: 'C6b'
     desc: 'Booked patients check in to the waiting room: one list for the doctor, walk-ins fill an empty slot, end-of-day no-show offer'
     status: 'pending'
@@ -306,3 +306,12 @@ notes.
 Later, when a second doctor seat becomes a real feature, notes would follow
 a per-user doctor role scoped to the patient's care, with a time-boxed
 grant for a remplaçant. That needs its own plan.
+
+## C6 merged (PRs 169 and 170), and what C6b inherits
+
+The desktop screens are merged: the build switch, patients, the waiting
+room and the book on FullCalendar's free core. C6b picks up one known limit
+beyond the rulings above. Moving an absence hit asks next-free with the
+default slot length, because the server's search takes a visit type and not
+raw minutes, so a long visit can be offered a slot too short for it. The
+fix is a minutes parameter on next-free.
