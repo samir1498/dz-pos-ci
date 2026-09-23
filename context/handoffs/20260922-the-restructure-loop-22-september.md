@@ -91,7 +91,7 @@ spot-reads the diff itself.
 
 ## Where to pick up
 
-Updated 2026-09-23 23:15. The clinic module is merged through the
+Updated 2026-09-23 23:15, amended 2026-09-24 00:35. The clinic module is merged through the
 check-in, each part after the dz-review lenses:
 
 - the crate (PR #163), the patient file (#164), the waiting queue (#165),
@@ -108,14 +108,19 @@ check-in, each part after the dz-review lenses:
 Samir's rulings of the evening are on the clinic plan; the standing one is
 that the desk decides and the software does not enforce workflow.
 
+The shop's screens are behind the same switch on both apps (#172): a
+clinic build ships no till. Updated 2026-09-24 00:35.
+
 Open for Samir: whether "arrived" on a cancelled booking undoes the
 cancel (refused for now).
 
-1. C7, in flight in worktree `shop-screens-switch`, branch
-   `feat/shop-screens-behind-the-switch`: the desktop leftovers and the
-   phone's till behind the same build switch. Then the lenses, PR, merge.
-2. The audit row for a refused notes write (Samir, 19:25), folded into the
-   next clinic change.
+1. C8, in flight in worktree `notes-refusal-audit`, branch
+   `feat/refused-notes-write-audit`: a refused write to a patient's notes
+   leaves an audit row (never the text). Then the lenses, PR, merge.
+2. The phone does not build for release on main (Babel 7/8 in
+   `@expo/ui`'s Worklets plugin, since PR #104; kanban SxChTM4z). Pin the
+   pair, then add an `expo export` step to gates so the clinic phone
+   bundle can be proved like the desktop's.
 3. At the end of the loop, one review over everything merged, run on the
    Fable model.
 
