@@ -1,5 +1,9 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: every route here is
+// `/products` or `/categories`, both retail-only (`routes::mod.rs`), so this
+// whole file has nothing to compile with the feature off.
+#![cfg(feature = "retail")]
 
 //! The API crate is the product's only entry point, so these are the
 //! product's tests (architecture.md, consequence of rule 2). In-process

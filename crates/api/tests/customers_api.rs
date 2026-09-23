@@ -1,5 +1,9 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: customers, their
+// ledger and `/customers/*` are all retail (`routes::mod.rs`), so this whole
+// file has nothing to compile with the feature off.
+#![cfg(feature = "retail")]
 
 //! The customer fiche and its ledger over HTTP. The API is the product's only
 //! entry point (architecture.md, consequence of rule 2), so what these assert

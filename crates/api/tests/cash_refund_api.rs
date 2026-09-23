@@ -1,5 +1,9 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: a refund is a sale
+// cancellation, so this whole file has nothing to compile with the feature
+// off.
+#![cfg(feature = "retail")]
 
 //! Cash handed back, over HTTP (features.md §1; ruling 5 of the 2026-09-20
 //! loop). The API crate is the product's only entry point (architecture.md,

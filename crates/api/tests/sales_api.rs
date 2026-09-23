@@ -1,6 +1,6 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
-
+#![cfg(feature = "retail")] // S7: sales/facture/avoir are retail-only routes.
 //! The till's routes against an in-process router and a real temp SQLite
 //! file. The API crate is the product's only entry point, so these are the
 //! product's tests (architecture.md, consequence of rule 2).

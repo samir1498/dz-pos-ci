@@ -1,5 +1,10 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: every route and
+// document this file exercises is a sale (`routes::mod.rs`,
+// `services::documents`), so this whole file has nothing to compile with
+// the feature off.
+#![cfg(feature = "retail")]
 
 //! Which wire the shop's thermal head is sent down, over HTTP.
 //!

@@ -1,5 +1,9 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: shelf labels are a
+// retail concept end to end (`routes::products`, `dzpos_core::print::render_label`),
+// so this whole file has nothing to compile with the feature off.
+#![cfg(feature = "retail")]
 
 //! The shelf label over HTTP. The core renders it, so these tests compare
 //! the answer to `render_label` of the stored fiche rather than to a fixture

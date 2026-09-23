@@ -1,5 +1,10 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: the ticket and
+// facture this file prints are both sale documents (`routes::sales`,
+// `services::documents`), so this whole file has nothing to compile with
+// the feature off.
+#![cfg(feature = "retail")]
 
 //! The printed ticket over HTTP. The core renders it; this route hands the
 //! bytes over and decides nothing about them, so the test compares the

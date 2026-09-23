@@ -1,5 +1,10 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: `/audit-log` is a
+// kernel route, but every fixture row this file reads back is written
+// through `/products` or `/customers`, both retail-only, so this whole file
+// has nothing to compile with the feature off.
+#![cfg(feature = "retail")]
 
 //! The owner's audit log screen (M4 T7, features.md §5). What the route
 //! answers is checked against a row a real service wrote — `services::

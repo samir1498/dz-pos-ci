@@ -100,19 +100,49 @@ fn every_row_is_filled_in_and_no_route_is_named_twice() {
     }
 }
 
+// A kernel route stands with the feature off (`table.rs`'s own header), so
+// this proves the lookup mechanics with one rather than `/sales`, which S7
+// (`a-kernel-crate-and-retail-as-the-first-module`) leaves with no row at
+// all in a `--no-default-features` build.
 #[test]
 fn a_route_can_be_looked_up_and_an_unknown_one_is_not_there() {
-    let sale = gate_for("POST", "/sales").expect("POST /sales has no row");
-    assert_eq!(sale.permission, Some(Permission::Sell));
-    assert!(gate_for("GET", "/sales").is_none());
+    let qr = gate_for("POST", "/pairing/qr").expect("POST /pairing/qr has no row");
+    assert_eq!(qr.permission, Some(Permission::EditSettings));
+    assert!(gate_for("GET", "/pairing/qr").is_none());
     assert!(gate_for("POST", "/nowhere").is_none());
 }
 
-/// The carry-in rulings, as the plan wrote them, read back off the table
-/// rather than restated in prose. If one of these ever changes it changes
-/// in the plan first and here second, and this is what notices.
+/// The carry-in rulings for the kernel's own routes, as the plan wrote
+/// them, read back off the table rather than restated in prose. Split from
+/// the retail half below (S7) because these hold with the feature off.
 #[test]
-fn the_carry_in_rulings_are_what_the_table_says() {
+fn the_kernel_carry_in_rulings_are_what_the_table_says() {
+    let wants = |method, path| gate_for(method, path).and_then(|g| g.permission);
+    // The theme stays open.
+    assert_eq!(wants("PUT", "/settings/theme"), None);
+    // The facture layout does not: it changes the paper, not a screen.
+    assert_eq!(
+        wants("PUT", "/settings/facture-layout"),
+        Some(Permission::EditSettings)
+    );
+    // The language every fiscal paper prints in is the paper too.
+    assert_eq!(
+        wants("PUT", "/settings/print-lang"),
+        Some(Permission::EditSettings)
+    );
+    // So is which wire the thermal head is sent down.
+    assert_eq!(
+        wants("PUT", "/settings/thermal-mode"),
+        Some(Permission::EditSettings)
+    );
+}
+
+/// The carry-in rulings for the shop's own routes: every path named below
+/// has no row at all with the feature off (S7), so this half stays behind
+/// it rather than reading `None` back for the wrong reason.
+#[cfg(feature = "retail")]
+#[test]
+fn the_retail_carry_in_rulings_are_what_the_table_says() {
     let wants = |method, path| gate_for(method, path).and_then(|g| g.permission);
     // The exports and imports, and the labels that are deliberately not
     // with them.
@@ -158,22 +188,5 @@ fn the_carry_in_rulings_are_what_the_table_says() {
     assert_eq!(
         wants("PUT", "/suppliers/{id}"),
         Some(Permission::EditFiches)
-    );
-    // The theme stays open.
-    assert_eq!(wants("PUT", "/settings/theme"), None);
-    // The facture layout does not: it changes the paper, not a screen.
-    assert_eq!(
-        wants("PUT", "/settings/facture-layout"),
-        Some(Permission::EditSettings)
-    );
-    // The language every fiscal paper prints in is the paper too.
-    assert_eq!(
-        wants("PUT", "/settings/print-lang"),
-        Some(Permission::EditSettings)
-    );
-    // So is which wire the thermal head is sent down.
-    assert_eq!(
-        wants("PUT", "/settings/thermal-mode"),
-        Some(Permission::EditSettings)
     );
 }

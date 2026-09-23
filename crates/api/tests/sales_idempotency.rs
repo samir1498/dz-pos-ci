@@ -1,5 +1,9 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: the retry key this
+// file walks lives on `POST /sales`, retail-only (`routes::mod.rs`), so
+// this whole file has nothing to compile with the feature off.
+#![cfg(feature = "retail")]
 
 //! One sale per retry key (M7 T4) at the routes: the wire answers 201 for a
 //! fresh ring and 200 with the stored paper for a replay, and 409/422 where

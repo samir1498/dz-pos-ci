@@ -1,5 +1,11 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: the 122 generated
+// DTOs this file checks include every retail one and do not move (S5's own
+// note), so `just types`/`types-check` runs this against the default,
+// retail-on build; this whole file has nothing to compile with the feature
+// off.
+#![cfg(feature = "retail")]
 
 //! Writes `packages/shared/src/generated`. Types cross the Rust/TypeScript
 //! boundary once, generated, never hand-written twice (architecture.md).

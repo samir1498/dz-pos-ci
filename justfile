@@ -101,12 +101,17 @@ clippy: claim desktop-dist
 # still compiles and is clippy-clean with no shop in it. Never
 # `--workspace`: another member asking for this crate's defaults would
 # reunify retail back into the graph and this would pass while proving
-# nothing (a full build that opens a database and signs a user in without
-# a shop is S7, not this check). No `desktop-dist`: this touches
-# `dzpos-api` only, never the desktop crate that needs it.
+# nothing. S7 adds the full proof the header above used to defer: the
+# no-shop test binary (`crates/api/tests/a_build_with_no_shop.rs`) opens a
+# fresh SQLite file, runs every migration, completes first setup and signs
+# a user in over HTTP with no shop compiled in, and every other test file
+# that named a shop route is gated behind the feature so this still
+# compiles and passes. No `desktop-dist`: this touches `dzpos-api` only,
+# never the desktop crate that needs it.
 check-no-retail: claim
     flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --no-default-features
     flock "$CARGO_TARGET_DIR/.lock" cargo clippy -p dzpos-api --no-default-features -- -D warnings
+    flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --no-default-features
 
 # the desktop's one eslint rule: no bare input, button, select, textarea or
 # table outside components/ui and the kit. The screens written before the kit

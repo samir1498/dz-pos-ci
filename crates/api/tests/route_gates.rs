@@ -28,7 +28,9 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 use dzpos_api::gates::{gate_for, Gate, ROUTE_GATES};
-use dzpos_core::services::permissions::{can, Permission, Role};
+#[cfg(feature = "retail")]
+use dzpos_core::services::permissions::Permission;
+use dzpos_core::services::permissions::{can, Role};
 
 mod common;
 
@@ -173,17 +175,44 @@ async fn a_cashier_is_refused_and_a_manager_is_not_on_every_gated_route() {
 /// against a file that is not the one that shipped.
 const ROUTER_SOURCE: &str = include_str!("../src/router.rs");
 
-/// Every route the router declares, as (method, path).
+/// The span of router.rs's one `#[cfg(feature = "retail")]` block, the same
+/// one `the_shops_own_gate_rows_and_routes_carry_the_retail_feature` counts.
+/// `declared_routes` needs it too (S7 of
+/// `a-kernel-crate-and-retail-as-the-first-module`): a text walk knows
+/// nothing about `#[cfg]`, so a `--no-default-features` build has to be told
+/// by hand which span of the file its router does not actually have.
+fn retail_block_span() -> (usize, usize) {
+    let start_marker = "#[cfg(feature = \"retail\")]\n    let guarded = guarded";
+    let start = ROUTER_SOURCE
+        .find(start_marker)
+        .expect("router.rs no longer gates a block of routes on the retail feature");
+    let end_marker =
+        "\n    let guarded = guarded\n        // Every route above takes its actor from the session";
+    let end = ROUTER_SOURCE[start..]
+        .find(end_marker)
+        .map(|i| start + i)
+        .expect("the shop's own routes no longer end where the session layer begins");
+    (start, end)
+}
+
+/// Every route the router declares, as (method, path). With the feature off,
+/// the shop's own block is skipped: the router this test drives really does
+/// not have those routes.
 ///
 /// `router.rs` writes them as `.route("/path", get(..).post(..))` or
 /// `.route("/path", post(..))`, sometimes over several lines, so the path is
 /// taken off the `.route(` line and the methods off everything up to the
 /// closing of that call.
 fn declared_routes() -> Vec<(String, String)> {
+    let (retail_start, retail_end) = retail_block_span();
     let mut found = Vec::new();
     let mut from = 0;
     while let Some(at) = ROUTER_SOURCE[from..].find(".route(") {
         let open = from + at + ".route(".len();
+        if !cfg!(feature = "retail") && open >= retail_start && open < retail_end {
+            from = open;
+            continue;
+        }
         // The whole `.route(..)` call, found by counting parentheses from the
         // one that opened it. A span taken up to the next `.route(` instead
         // would swallow the call after it whenever a path is written on its
@@ -241,19 +270,29 @@ fn closing_paren(source: &str, open: usize) -> Option<usize> {
 #[test]
 fn the_router_source_is_readable_and_declares_the_routes_it_has() {
     let routes = declared_routes();
+    // S7 of `a-kernel-crate-and-retail-as-the-first-module`: with the
+    // feature off, `declared_routes` also drops the sixty shop routes off
+    // this count, so the floor a no-shop build clears is the kernel's own
+    // rather than the two together.
+    let floor = if cfg!(feature = "retail") { 40 } else { 20 };
     assert!(
-        routes.len() > 40,
+        routes.len() > floor,
         "only {} routes were read out of router.rs; the parser has stopped working",
         routes.len()
     );
-    for wanted in [
+    let mut wanted = vec![
         ("GET", "/health"),
         ("POST", "/auth/login"),
         ("GET", "/auth/me"),
-        ("POST", "/sales"),
-        ("PUT", "/products/{id}"),
-        ("GET", "/products"),
-    ] {
+    ];
+    if cfg!(feature = "retail") {
+        wanted.extend([
+            ("POST", "/sales"),
+            ("PUT", "/products/{id}"),
+            ("GET", "/products"),
+        ]);
+    }
+    for wanted in wanted {
         assert!(
             routes.contains(&(wanted.0.to_owned(), wanted.1.to_owned())),
             "{wanted:?} was not read out of router.rs"
@@ -312,6 +351,12 @@ fn every_row_of_the_table_names_a_route_that_is_there() {
 /// drawer, `/suppliers` and one supplier's ledger hand back what it owes for
 /// goods, and `/backups` lists copies of the whole file. Each was open while
 /// the screen that sums it was refused, which is the wrong way round.
+///
+/// Retail-only (S7 of `a-kernel-crate-and-retail-as-the-first-module`):
+/// every whole-list-out read this walks but `/audit-log` and `/backups` is
+/// a shop route, and neither of those two loses its row with the feature
+/// off.
+#[cfg(feature = "retail")]
 #[test]
 fn the_table_is_about_writes_and_the_reads_that_carry_lists_or_reports_out() {
     for gate in ROUTE_GATES {
@@ -465,16 +510,7 @@ fn the_shops_own_gate_rows_and_routes_carry_the_retail_feature() {
     // `let guarded = guarded` continuing the chain, not the one on the
     // `DefaultBodyLimit` import beside it; it ends where the session layer
     // that closes every guarded route, kernel or shop, begins.
-    let start_marker = "#[cfg(feature = \"retail\")]\n    let guarded = guarded";
-    let start = ROUTER_SOURCE
-        .find(start_marker)
-        .expect("router.rs no longer gates a block of routes on the retail feature");
-    let end_marker =
-        "\n    let guarded = guarded\n        // Every route above takes its actor from the session";
-    let end = ROUTER_SOURCE[start..]
-        .find(end_marker)
-        .map(|i| start + i)
-        .expect("the shop's own routes no longer end where the session layer begins");
+    let (start, end) = retail_block_span();
     let retail_routes = ROUTER_SOURCE[start..end].matches(".route(").count();
     assert_eq!(
         retail_routes, 60,

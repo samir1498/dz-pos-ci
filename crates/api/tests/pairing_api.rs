@@ -255,7 +255,7 @@ async fn a_phone_off_loopback_without_a_device_is_session_required() {
     let (_dir, app) = app();
     // No credential shown at all: the same 401 a missing session gets, not
     // a device-shaped refusal about a token nobody sent.
-    let (status, body) = call_lan(&app, "GET", "/products", None, None, None).await;
+    let (status, body) = call_lan(&app, "GET", "/clock", None, None, None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
     assert_eq!(body["error"]["code"], "session_required");
 }
@@ -268,7 +268,7 @@ async fn a_signed_in_caller_without_a_device_is_refused_off_loopback() {
     let (status, body) = call_lan(
         &app,
         "GET",
-        "/products",
+        "/clock",
         None,
         Some(common::OWNER_SESSION),
         None,
@@ -284,7 +284,7 @@ async fn an_unknown_device_off_loopback_is_refused() {
     let (status, body) = call_lan(
         &app,
         "GET",
-        "/products",
+        "/clock",
         None,
         Some(common::OWNER_SESSION),
         Some(&"0".repeat(64)),
@@ -317,7 +317,7 @@ async fn a_live_device_without_a_session_is_still_session_required() {
     // before which person, and a paired phone is not a signed-in person.
     let (_dir, app) = app();
     let (device_token, _) = pair_phone(&app).await;
-    let (status, body) = call_lan(&app, "GET", "/products", None, None, Some(&device_token)).await;
+    let (status, body) = call_lan(&app, "GET", "/clock", None, None, Some(&device_token)).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
     assert_eq!(body["error"]["code"], "session_required");
 }
@@ -337,7 +337,7 @@ async fn a_revoked_device_is_refused_before_any_session() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    let (status, body) = call_lan(&app, "GET", "/products", None, None, Some(&device_token)).await;
+    let (status, body) = call_lan(&app, "GET", "/clock", None, None, Some(&device_token)).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
     assert_eq!(body["error"]["code"], "device_refused");
 }
@@ -350,7 +350,7 @@ async fn loopback_ignores_a_bogus_device_header() {
     let (_dir, app) = app();
     let req = Request::builder()
         .method("GET")
-        .uri("/products")
+        .uri("/clock")
         .header("authorization", format!("Bearer {TOKEN}"))
         .header(common::SESSION_HEADER, common::OWNER_SESSION)
         .header("x-dzpos-device", "bogus")
@@ -368,7 +368,7 @@ async fn loopback_with_an_address_is_still_the_desktop() {
     let (_dir, app) = app();
     let mut req = Request::builder()
         .method("GET")
-        .uri("/products")
+        .uri("/clock")
         .header("authorization", format!("Bearer {TOKEN}"))
         .header(common::SESSION_HEADER, common::OWNER_SESSION)
         .header("x-dzpos-device", "bogus")
@@ -410,7 +410,7 @@ async fn a_device_from_another_shop_is_refused() {
     let (status, body) = call_lan(
         &other,
         "GET",
-        "/products",
+        "/clock",
         None,
         Some(common::OWNER_SESSION),
         Some(&device_token),
@@ -470,12 +470,12 @@ async fn a_phone_signs_a_person_in_with_pin_and_device() {
     assert_eq!(status, StatusCode::OK, "{body}");
     let session = body["token"].as_str().unwrap().to_string();
     assert_eq!(body["me"]["role"], "cashier");
-    // And that session acts, with the device alongside: the phone sells
-    // through the same gates as the desktop.
+    // And that session acts, with the device alongside: the phone reaches an
+    // ordinary route through the same gates as the desktop.
     let (status, body) = call_lan(
         &app,
         "GET",
-        "/products",
+        "/clock",
         None,
         Some(&session),
         Some(&device_token),

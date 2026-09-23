@@ -203,7 +203,7 @@ async fn the_three_401s_are_told_apart_by_their_code() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/products")
+                .uri("/clock")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -219,7 +219,7 @@ async fn the_three_401s_are_told_apart_by_their_code() {
     assert_eq!(body["error"]["code"], "unauthorized");
 
     // Launch token, no session.
-    let (status, body, _) = call(&h.app, "GET", "/products", None, &[]).await;
+    let (status, body, _) = call(&h.app, "GET", "/clock", None, &[]).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
     assert_eq!(body["error"]["code"], "session_required");
 
@@ -227,7 +227,7 @@ async fn the_three_401s_are_told_apart_by_their_code() {
     let (status, body, _) = call(
         &h.app,
         "GET",
-        "/products",
+        "/clock",
         None,
         &[("x-dzpos-session", &"0".repeat(64))],
     )
@@ -251,7 +251,7 @@ async fn the_desktops_header_and_the_browsers_cookie_both_carry_the_session() {
     let (status, listed, _) = call(
         &h.app,
         "GET",
-        "/products",
+        "/clock",
         None,
         &[("x-dzpos-session", &session)],
     )
@@ -264,7 +264,7 @@ async fn the_desktops_header_and_the_browsers_cookie_both_carry_the_session() {
         .and_then(|c| c.split(';').next())
         .expect("no cookie to send back")
         .to_owned();
-    let (status, listed, _) = call(&h.app, "GET", "/products", None, &[("cookie", &jar)]).await;
+    let (status, listed, _) = call(&h.app, "GET", "/clock", None, &[("cookie", &jar)]).await;
     assert_eq!(status, StatusCode::OK, "{listed}");
 }
 
@@ -315,7 +315,7 @@ async fn signing_out_ends_the_session_and_clears_the_cookie() {
     let (status, body, _) = call(
         &h.app,
         "GET",
-        "/products",
+        "/clock",
         None,
         &[("x-dzpos-session", &session)],
     )
@@ -349,6 +349,12 @@ async fn signing_out_ends_the_session_and_clears_the_cookie() {
 /// it, a cashier does not), and this test is about who a write is recorded
 /// under, not about the gate. `tests/route_gates.rs` is where a cashier being
 /// refused this same route is asserted.
+///
+/// Retail-only (S7 of `a-kernel-crate-and-retail-as-the-first-module`):
+/// `/products` and `stock_movements` are both retail, and every other test
+/// in this file proves the same session mechanics against `/clock`, a
+/// kernel route with no gate at all.
+#[cfg(feature = "retail")]
 #[tokio::test]
 async fn a_write_names_the_user_the_session_says_is_acting() {
     let dir = tempfile::tempdir().unwrap();
@@ -431,18 +437,10 @@ async fn a_session_of_one_shop_does_not_open_another() {
 
     // It opens the shop it was made for. Without this the refusal below could
     // be a token that never worked anywhere.
-    let (status, body, _) =
-        call(&mine.app, "GET", "/products", None, &header_pairs(&session)).await;
+    let (status, body, _) = call(&mine.app, "GET", "/clock", None, &header_pairs(&session)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
 
-    let (status, body, _) = call(
-        &theirs.app,
-        "GET",
-        "/products",
-        None,
-        &header_pairs(&session),
-    )
-    .await;
+    let (status, body, _) = call(&theirs.app, "GET", "/clock", None, &header_pairs(&session)).await;
     assert_eq!(
         status,
         StatusCode::UNAUTHORIZED,
@@ -454,7 +452,7 @@ async fn a_session_of_one_shop_does_not_open_another() {
     let (status, body, _) = call(
         &theirs.app,
         "GET",
-        "/products",
+        "/clock",
         None,
         &[("cookie", cookie.as_str())],
     )
@@ -581,7 +579,7 @@ async fn switching_a_user_off_ends_the_session_they_were_holding() {
     let (status, _, _) = call(
         &app,
         "GET",
-        "/products",
+        "/clock",
         None,
         &[("x-dzpos-session", &session)],
     )
@@ -595,7 +593,7 @@ async fn switching_a_user_off_ends_the_session_they_were_holding() {
     let (status, body, _) = call(
         &app,
         "GET",
-        "/products",
+        "/clock",
         None,
         &[("x-dzpos-session", &session)],
     )

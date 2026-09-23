@@ -93,40 +93,45 @@ async fn the_seeded_shop_reads_as_its_name_reel_and_nothing_planned() {
     let h = harness();
     let (status, body) = call(&h.app, "GET", "/settings", None).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(
-        body,
-        json!({
-            "store": {
-                "name": "Mon magasin",
-                "rc": null, "nif": null, "nis": null, "ai": null,
-                "address": null, "phone": null
-            },
-            "regime": { "regime": "reel", "valid_from": "2026-01-01" },
-            "regime_planned": null,
-            "theme": null,
-            "facture_layout": "standard",
-            // Read off the enum rather than typed here. A layout added in
-            // crates/core has to reach this route, and a hand-typed list
-            // would make that a failing assertion to edit rather than a
-            // thing that just works.
-            "facture_layouts": FactureLayout::ALL
-                .iter()
-                .map(|layout| layout.as_str())
-                .collect::<Vec<_>>(),
-            // `null` is not French by default: a shop that has never chosen
-            // prints in whatever language the till is being used in.
-            "print_lang": null,
-            // Never null, unlike the two above: a head is always on one of
-            // the two ESC/POS wires, and a shop that has never chosen is on
-            // text. Arabic is drawn whatever this says, which is the core's
-            // rule and not this route's.
-            "thermal_mode": "text",
-            // A shop that has never set one refuses a cashier every
-            // discount, which is the safe reading of "nobody has decided"
-            // and the reason the settings screen has to offer the field.
-            "discount_threshold_bps": 0
-        })
-    );
+    let mut expected = json!({
+        "store": {
+            "name": "Mon magasin",
+            "rc": null, "nif": null, "nis": null, "ai": null,
+            "address": null, "phone": null
+        },
+        "regime": { "regime": "reel", "valid_from": "2026-01-01" },
+        "regime_planned": null,
+        "theme": null,
+        "facture_layout": "standard",
+        // Read off the enum rather than typed here. A layout added in
+        // crates/core has to reach this route, and a hand-typed list
+        // would make that a failing assertion to edit rather than a
+        // thing that just works.
+        "facture_layouts": FactureLayout::ALL
+            .iter()
+            .map(|layout| layout.as_str())
+            .collect::<Vec<_>>(),
+        // `null` is not French by default: a shop that has never chosen
+        // prints in whatever language the till is being used in.
+        "print_lang": null,
+        // Never null, unlike the two above: a head is always on one of
+        // the two ESC/POS wires, and a shop that has never chosen is on
+        // text. Arabic is drawn whatever this says, which is the core's
+        // rule and not this route's.
+        "thermal_mode": "text",
+    });
+    // Retail-only (S5 of `a-kernel-crate-and-retail-as-the-first-module`):
+    // `SettingsDto::discount_threshold_bps` does not exist with the feature
+    // off, a discount being given on a sale. `cfg!()` rather than
+    // `#[cfg(...)]` so `expected` is mutated in every build this file
+    // compiles for, never only one of them.
+    if cfg!(feature = "retail") {
+        // A shop that has never set one refuses a cashier every discount,
+        // which is the safe reading of "nobody has decided" and the reason
+        // the settings screen has to offer the field.
+        expected["discount_threshold_bps"] = json!(0);
+    }
+    assert_eq!(body, expected);
 }
 
 /// `null` is the shop following the machine, and it is what a shop that has
@@ -725,6 +730,11 @@ async fn the_clock_is_behind_the_launch_token_like_every_other_route() {
 /// The threshold an owner sets and a cashier is then judged against. Dated
 /// like the régime, so a sale refused in March is read against March's
 /// threshold rather than the one the shop moved to in April.
+///
+/// Retail-only (S7 of `a-kernel-crate-and-retail-as-the-first-module`):
+/// `/settings/discount-threshold` is a sale-discount route
+/// (`routes::mod.rs`).
+#[cfg(feature = "retail")]
 #[tokio::test]
 async fn the_owner_sets_the_discount_threshold_and_the_page_reads_it_back() {
     let h = harness();
@@ -744,6 +754,10 @@ async fn the_owner_sets_the_discount_threshold_and_the_page_reads_it_back() {
 }
 
 /// A share of a basket cannot be more than the basket.
+///
+/// Retail-only (S7): `/settings/discount-threshold` is a sale-discount route
+/// (`routes::mod.rs`).
+#[cfg(feature = "retail")]
 #[tokio::test]
 async fn a_threshold_past_a_whole_basket_is_refused() {
     let h = harness();

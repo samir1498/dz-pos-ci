@@ -1,5 +1,9 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: both ticket routes
+// this file walks are sales routes (`routes::mod.rs`), so this whole file
+// has nothing to compile with the feature off.
+#![cfg(feature = "retail")]
 
 //! The two ticket routes that answer bytes rather than an HTML string, both
 //! resolving the shop's print language the same way the HTML ticket does

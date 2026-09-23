@@ -1,5 +1,11 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: every test in this
+// file proves a backup or a restore kept a shop's data intact by writing a
+// product through `/products` and reading it back, so it has nothing to
+// compile with the feature off. The backup routes themselves are kernel
+// routes and stay exercised under the default build.
+#![cfg(feature = "retail")]
 
 //! The backup routes and the restore that swaps the live file underneath a
 //! running server. In-process router, real temp SQLite file, real copies on

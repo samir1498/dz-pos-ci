@@ -23,6 +23,9 @@ struct Count {
     n: i64,
 }
 
+// S7: only `restoring_a_copy_that_is_behind_leaves_a_copy_of_it_before_it_is_migrated`
+// reads this, and that test is retail-only (`Restored::summary`).
+#[cfg(feature = "retail")]
 #[derive(QueryableByName)]
 struct Text {
     #[diesel(sql_type = diesel::sql_types::Text)]
@@ -30,6 +33,7 @@ struct Text {
 }
 
 /// What the restore wrote into its own audit row, as the row holds it.
+#[cfg(feature = "retail")]
 fn what_the_restore_recorded(db: &std::path::Path) -> serde_json::Value {
     let mut conn = dzpos_core::db::open_unmigrated(db).unwrap();
     let row: Text = diesel::sql_query(
@@ -124,6 +128,11 @@ fn opening_a_file_the_previous_version_wrote_leaves_one_copy_of_it_first() {
     assert_eq!(products_in(&path), 1);
 }
 
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: `shop_counts` is
+// retail-only, so a no-shop build has nothing to call `verify` with here.
+// The rest of this file's tests hold with the feature off, because the
+// migration folder they walk is the same one either way.
+#[cfg(feature = "retail")]
 #[test]
 fn the_copy_is_good_enough_to_restore_from() {
     let dir = tempfile::tempdir().unwrap();
@@ -252,6 +261,10 @@ fn a_copy_that_cannot_be_written_stops_the_app_from_starting() {
 /// later the prune takes it and nothing holds that shape at all. A restore
 /// that migrates now leaves a pre-upgrade copy behind like a start does, and
 /// a pre-upgrade copy is never pruned.
+// S7: `Restored::summary` is retail-only (`crates/api/src/lib.rs`), so a
+// no-shop build has nothing this test's assertion on `restored.summary.products`
+// can read.
+#[cfg(feature = "retail")]
 #[test]
 fn restoring_a_copy_that_is_behind_leaves_a_copy_of_it_before_it_is_migrated() {
     let dir = tempfile::tempdir().unwrap();

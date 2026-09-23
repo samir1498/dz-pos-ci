@@ -289,7 +289,7 @@ async fn resetting_a_cashier_pin_ends_the_session_they_were_using() {
     common::sign_in_as(&path, SHOP, "cashier", common::CASHIER_SESSION);
 
     // The till is live before the reset.
-    let (status, _) = call(&app, "GET", "/products", None, common::CASHIER_SESSION).await;
+    let (status, _) = call(&app, "GET", "/clock", None, common::CASHIER_SESSION).await;
     assert_eq!(status, StatusCode::OK);
 
     let (status, after) = owner(
@@ -301,7 +301,7 @@ async fn resetting_a_cashier_pin_ends_the_session_they_were_using() {
     .await;
     assert_eq!(status, StatusCode::OK, "{after}");
 
-    let (status, refused) = call(&app, "GET", "/products", None, common::CASHIER_SESSION).await;
+    let (status, refused) = call(&app, "GET", "/clock", None, common::CASHIER_SESSION).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{refused}");
     assert_eq!(refused["error"]["code"], "session_required");
 }

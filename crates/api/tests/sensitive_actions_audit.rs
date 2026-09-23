@@ -10,7 +10,9 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use serde_json::{json, Value};
+#[cfg(feature = "retail")]
+use serde_json::json;
+use serde_json::Value;
 use tower::ServiceExt;
 
 mod common;
@@ -23,6 +25,10 @@ fn token() -> dzpos_api::LaunchToken {
 }
 
 struct Harness {
+    // Held for its `Drop`, not read: the temp file it names has to outlive
+    // `app`. Only the retail-gated tests below read `h.dir.path()` itself, so
+    // a no-shop build never reads the field by name.
+    #[cfg_attr(not(feature = "retail"), allow(dead_code))]
     dir: tempfile::TempDir,
     app: axum::Router,
 }
@@ -88,6 +94,8 @@ async fn audit_rows(app: &axum::Router) -> Vec<Value> {
     page["rows"].as_array().cloned().unwrap_or_default()
 }
 
+// S7: only the two retail-gated tests below call this.
+#[cfg(feature = "retail")]
 fn product(name: &str) -> Value {
     json!({
         "name": name,
@@ -104,6 +112,9 @@ fn product(name: &str) -> Value {
 /// still names `ExportAndImport` for it, so the refusal is exactly as
 /// deliberate as one on a write, which is the whole reason a read is not
 /// excluded here.
+// S7 of `a-kernel-crate-and-retail-as-the-first-module`: `/export/products`
+// is retail-only (`routes::mod.rs`).
+#[cfg(feature = "retail")]
 #[tokio::test]
 async fn a_permission_refusal_writes_a_row_naming_who_the_permission_and_the_route() {
     let h = harness();
@@ -139,6 +150,8 @@ async fn a_permission_refusal_writes_a_row_naming_who_the_permission_and_the_rou
 /// and there is nobody to write a row about. `crates/api/src/session.rs`'s
 /// own doc is the decision; this is the negative half of the test above,
 /// proving the log is not filled with rows about nobody.
+// S7: `/export/products` is retail-only (`routes::mod.rs`).
+#[cfg(feature = "retail")]
 #[tokio::test]
 async fn a_request_with_no_session_writes_no_row() {
     let h = harness();
@@ -172,6 +185,9 @@ async fn a_support_bundle_writes_a_row_naming_who_asked_for_it() {
 /// An export writes a row naming which one and how many rows walked out with
 /// it, so an owner reading the log afterwards sees what left the shop even
 /// when nothing was ever refused.
+// S7: `/products` and `/export/products` are both retail-only
+// (`routes::mod.rs`).
+#[cfg(feature = "retail")]
 #[tokio::test]
 async fn an_export_writes_a_row_naming_which_one_and_how_many_rows() {
     let h = harness();
@@ -197,6 +213,11 @@ async fn an_export_writes_a_row_naming_which_one_and_how_many_rows() {
 /// (`services::backup::create`'s own doc says why): this test pins both
 /// halves of that decision in one place so neither drifts without the other
 /// being noticed.
+// S7: the restore's own audit row carries `BackupCounts` (`after["products"]`
+// below), retail-only (`Restored::summary` is `()` with the feature off,
+// `crates/api/src/lib.rs`), and the fixture data is written through
+// `/products`.
+#[cfg(feature = "retail")]
 #[tokio::test]
 async fn a_backup_writes_nothing_but_a_restore_writes_a_row() {
     let h = harness();
