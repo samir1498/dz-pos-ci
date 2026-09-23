@@ -16,7 +16,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use dzpos_core::db::Conn;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::services::suppliers::NewSupplier;
 use dzpos_core::services::{clock, supplier_debt as debt, suppliers as service};
 use serde::Deserialize;
@@ -78,9 +78,9 @@ pub async fn create(
     let shop = state.shop_id;
     let user = who.id;
     let made = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<_, RetailError> {
             let created = service::create(c, shop, user, new, opening)?;
-            service::get_with_balance(c, shop, created.id)
+            service::get_with_balance(c, shop, created.id).map_err(RetailError::from)
         })
         .await?;
     Ok((StatusCode::CREATED, Json(SupplierDto::from(made))))
@@ -172,9 +172,9 @@ pub async fn pay(
     // falls on.
     let at = clock::now();
     let written = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<_, RetailError> {
             debt::pay(c, shop, user, id, amount, mode, note, at)?;
-            envelope(c, shop, id)
+            envelope(c, shop, id).map_err(RetailError::from)
         })
         .await?;
     Ok((StatusCode::CREATED, Json(written)))
@@ -196,9 +196,9 @@ pub async fn adjust(
     let shop = state.shop_id;
     let user = who.id;
     let written = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<_, RetailError> {
             debt::adjust(c, shop, user, id, amount, note)?;
-            envelope(c, shop, id)
+            envelope(c, shop, id).map_err(RetailError::from)
         })
         .await?;
     Ok((StatusCode::CREATED, Json(written)))

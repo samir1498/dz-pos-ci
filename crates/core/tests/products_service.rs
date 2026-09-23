@@ -5,7 +5,7 @@
 //! only door: nothing here touches diesel.
 
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::money::{Bps, Money};
 use dzpos_core::services::products;
@@ -242,7 +242,7 @@ fn a_duplicate_barcode_in_the_same_shop_is_rejected() {
     let mut e = draft("B");
     e.barcode = Some("6130001000018".to_string());
     match products::create(&mut conn, SHOP, OWNER, e) {
-        Err(CoreError::DuplicateBarcode(code)) => assert_eq!(code, "6130001000018"),
+        Err(RetailError::DuplicateBarcode(code)) => assert_eq!(code, "6130001000018"),
         other => panic!("expected DuplicateBarcode, got {other:?}"),
     }
 }
@@ -278,7 +278,7 @@ fn an_empty_name_is_rejected() {
     let mut d = draft("  ");
     d.barcode = None;
     match products::create(&mut conn, SHOP, OWNER, d) {
-        Err(CoreError::Validation { field, .. }) => assert_eq!(field, "name"),
+        Err(RetailError::Kernel(CoreError::Validation { field, .. })) => assert_eq!(field, "name"),
         other => panic!("expected a name validation error, got {other:?}"),
     }
 }
@@ -289,7 +289,9 @@ fn a_negative_selling_price_is_rejected() {
     let mut d = draft("A");
     d.selling = Money::centimes(-1);
     match products::create(&mut conn, SHOP, OWNER, d) {
-        Err(CoreError::Validation { field, .. }) => assert_eq!(field, "selling_centimes"),
+        Err(RetailError::Kernel(CoreError::Validation { field, .. })) => {
+            assert_eq!(field, "selling_centimes")
+        }
         other => panic!("expected a selling validation error, got {other:?}"),
     }
 }
@@ -300,7 +302,9 @@ fn a_negative_cost_is_rejected() {
     let mut d = draft("A");
     d.cost = Money::centimes(-1);
     match products::create(&mut conn, SHOP, OWNER, d) {
-        Err(CoreError::Validation { field, .. }) => assert_eq!(field, "cost_centimes"),
+        Err(RetailError::Kernel(CoreError::Validation { field, .. })) => {
+            assert_eq!(field, "cost_centimes")
+        }
         other => panic!("expected a cost validation error, got {other:?}"),
     }
 }
@@ -343,7 +347,9 @@ fn without_a_category_the_rate_must_be_given() {
     let mut d = draft("A");
     d.category_id = None;
     match products::create(&mut conn, SHOP, OWNER, d) {
-        Err(CoreError::Validation { field, .. }) => assert_eq!(field, "rate_bps"),
+        Err(RetailError::Kernel(CoreError::Validation { field, .. })) => {
+            assert_eq!(field, "rate_bps")
+        }
         other => panic!("expected a rate validation error, got {other:?}"),
     }
 
@@ -365,7 +371,9 @@ fn a_category_from_another_shop_is_rejected() {
     let mut d = draft("A");
     d.category_id = Some(4242);
     match products::create(&mut conn, SHOP, OWNER, d) {
-        Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "category"),
+        Err(RetailError::Kernel(CoreError::NotFound { entity, .. })) => {
+            assert_eq!(entity, "category")
+        }
         other => panic!("expected a category NotFound, got {other:?}"),
     }
 }
@@ -380,7 +388,7 @@ fn another_shops_category_is_rejected_even_when_the_rate_is_explicit() {
     d.category_id = Some(theirs);
     d.rate_bps = Some(Bps::new(1900).unwrap());
     match products::create(&mut conn, SHOP, OWNER, d) {
-        Err(CoreError::NotFound { entity, id }) => {
+        Err(RetailError::Kernel(CoreError::NotFound { entity, id })) => {
             assert_eq!(entity, "category");
             assert_eq!(id, theirs);
         }
@@ -416,7 +424,9 @@ fn an_update_onto_another_shops_category_is_rejected_too() {
     d.category_id = Some(theirs);
     d.rate_bps = Some(Bps::new(1900).unwrap());
     match products::update(&mut conn, SHOP, OWNER, made.id, d) {
-        Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "category"),
+        Err(RetailError::Kernel(CoreError::NotFound { entity, .. })) => {
+            assert_eq!(entity, "category")
+        }
         other => panic!("expected a category NotFound, got {other:?}"),
     }
 }
@@ -478,7 +488,7 @@ fn update_onto_another_products_barcode_is_rejected() {
     let mut d = draft("B");
     d.barcode = a.barcode.clone();
     match products::update(&mut conn, SHOP, OWNER, b.id, d) {
-        Err(CoreError::DuplicateBarcode(_)) => {}
+        Err(RetailError::DuplicateBarcode(_)) => {}
         other => panic!("expected DuplicateBarcode, got {other:?}"),
     }
 }
@@ -488,7 +498,9 @@ fn update_is_scoped_by_shop() {
     let (_dir, mut conn) = open_temp();
     let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
     match products::update(&mut conn, 2, OWNER, made.id, draft("stolen")) {
-        Err(CoreError::NotFound { entity, .. }) => assert_eq!(entity, "product"),
+        Err(RetailError::Kernel(CoreError::NotFound { entity, .. })) => {
+            assert_eq!(entity, "product")
+        }
         other => panic!("expected NotFound, got {other:?}"),
     }
     assert_eq!(products::get(&mut conn, SHOP, made.id).unwrap().name, "A");
@@ -633,7 +645,7 @@ fn an_update_of_a_missing_product_is_not_found_with_its_id() {
     let (_dir, mut conn) = open_temp();
     let made = products::create(&mut conn, SHOP, OWNER, draft("A")).unwrap();
     match products::update(&mut conn, SHOP, OWNER, made.id + 100, draft("X")) {
-        Err(CoreError::NotFound { entity, id }) => {
+        Err(RetailError::Kernel(CoreError::NotFound { entity, id })) => {
             assert_eq!(entity, "product");
             assert_eq!(id, made.id + 100);
         }

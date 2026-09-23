@@ -43,7 +43,7 @@ mod common;
 use common::facture::*;
 use dzpos_core::lang::Lang;
 use dzpos_core::money::{Money, Regime};
-use dzpos_core::print::strings::{text, Key};
+use dzpos_core::print::strings::{shop_text, text, Key, ShopKey};
 use dzpos_core::print::{
     draw_facture_raster, dump_ticket_escpos, dump_ticket_escpos_png, facture_roll_lines, number,
     render_facture_escpos, render_facture_escpos_raster, render_facture_escpos_text, Paper,
@@ -609,14 +609,14 @@ fn the_escpos_roll_carries_the_sentence_each_face_owes() {
             "{lang:?}: the avoir does not carry the referenced facture's day"
         );
         assert!(
-            paper.contains(text(Key::AvoirOnFacture, lang)),
+            paper.contains(shop_text(ShopKey::AvoirOnFacture, lang)),
             "{lang:?}: the avoir does not say it is one"
         );
 
         let proforma = Fixture::of(Case::Proforma);
         let paper = flat(&proforma, lang);
         assert!(
-            paper.contains(&on_the_wire(text(Key::ProformaNotice, lang))),
+            paper.contains(&on_the_wire(shop_text(ShopKey::ProformaNotice, lang))),
             "{lang:?}: the proforma does not say it settles nothing"
         );
 

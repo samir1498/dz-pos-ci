@@ -6,7 +6,8 @@
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::audit_actions;
+use crate::error::{CoreError, RetailError};
 use crate::models::stock::{Drift, Movement, StockMovement, StockMovementRowWrite};
 use crate::money::Money;
 use crate::repos::{jobs, stock as repo};
@@ -95,7 +96,7 @@ pub fn sale_costs(
     conn: &mut SqliteConnection,
     shop_id: i32,
     document_id: i32,
-) -> Result<std::collections::HashMap<i32, Money>, CoreError> {
+) -> Result<std::collections::HashMap<i32, Money>, RetailError> {
     repo::sale_costs_of_document(conn, shop_id, document_id)
 }
 
@@ -163,10 +164,11 @@ pub fn last_recount(conn: &mut SqliteConnection, shop_id: i32) -> Result<LastRec
     // this day: the rows of one day sit together at the end of the log, and
     // a row whose JSON cannot be read says no day, which ends the run the
     // same way rather than refusing the whole screen.
-    let mut drifts: Vec<Drift> = audit::by_action(conn, shop_id, audit::ACTION_STOCK_DRIFT)?
-        .into_iter()
-        .map_while(|entry| drift_of(&entry, &day))
-        .collect();
+    let mut drifts: Vec<Drift> =
+        audit::by_action(conn, shop_id, audit_actions::ACTION_STOCK_DRIFT)?
+            .into_iter()
+            .map_while(|entry| drift_of(&entry, &day))
+            .collect();
     drifts.reverse();
     Ok(LastRecount {
         last_run_day: Some(day),
@@ -201,7 +203,7 @@ fn run(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_STOCK_DRIFT,
+                action: audit_actions::ACTION_STOCK_DRIFT,
                 entity: "product",
                 entity_id: Some(drift.product_id),
                 before: Some(

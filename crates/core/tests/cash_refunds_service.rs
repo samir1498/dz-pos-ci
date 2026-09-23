@@ -19,7 +19,7 @@
 //! What a refund is refused for, and what it writes into the audit log, is
 //! `cash_refunds_guards`: one subject, split at the line limit.
 
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::money::{Money, PaymentMode};
 use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::cash_refunds::Refund;
@@ -338,7 +338,7 @@ fn cash_against_a_facture_that_is_still_owed_for_is_refused() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "refund"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "refund"),
         "{err:?}"
     );
 
@@ -394,7 +394,7 @@ fn cash_back_on_a_cancelled_credit_sale_is_refused() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "refund"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "refund"),
         "{err:?}"
     );
     // Nothing moved: the facture still stands.
@@ -482,7 +482,7 @@ fn a_refund_of_nothing_is_refused_on_the_field() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "refund"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "refund"),
         "{err:?}"
     );
 }

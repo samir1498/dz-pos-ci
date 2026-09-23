@@ -104,9 +104,12 @@ pub struct Facts {
     pub applied_migrations: Vec<String>,
     pub shipped_migrations: Vec<String>,
     pub schema: Vec<TableShape>,
-    pub products: i64,
-    pub documents: i64,
-    pub customers: i64,
+    /// Whatever a caller asked to be counted, name and figure together, in
+    /// the order `counts.txt` prints them. This module reads none of these
+    /// tables itself: which ones are worth counting is not something a
+    /// domain-free file can decide, so the caller reads them (with this
+    /// module's own [`count_rows`]) and hands the answer over.
+    pub retail_counts: Vec<(&'static str, i64)>,
     pub shop_file_bytes: u64,
     pub backups: usize,
     pub backups_newest: Option<NaiveDateTime>,
@@ -118,15 +121,17 @@ pub struct Facts {
 /// Reads every fact the bundle carries. `conn` is the shop's live
 /// connection (already migrated, the way `AppState` always holds it);
 /// `db_path` is the shop file itself, read only for its size; `backup_dir`
-/// is where the daily copies live.
-pub fn gather(conn: &mut Conn, db_path: &Path, backup_dir: &Path) -> Result<Facts, CoreError> {
+/// is where the daily copies live; `retail_counts` is whatever the caller
+/// has already read with [`count_rows`], in the order it should print.
+pub fn gather(
+    conn: &mut Conn,
+    db_path: &Path,
+    backup_dir: &Path,
+    retail_counts: &[(&'static str, i64)],
+) -> Result<Facts, CoreError> {
     let applied_migrations = db::applied_versions(conn)?;
     let shipped_migrations = db::embedded_versions()?;
     let schema = table_shapes(conn)?;
-
-    let products = count_rows(conn, "products")?;
-    let documents = count_rows(conn, "documents")?;
-    let customers = count_rows(conn, "customers")?;
     let shop_file_bytes = std::fs::metadata(db_path)?.len();
 
     let copies = backup::list(backup_dir)?;
@@ -137,9 +142,7 @@ pub fn gather(conn: &mut Conn, db_path: &Path, backup_dir: &Path) -> Result<Fact
         applied_migrations,
         shipped_migrations,
         schema,
-        products,
-        documents,
-        customers,
+        retail_counts: retail_counts.to_vec(),
         shop_file_bytes,
         backups,
         backups_newest,
@@ -189,9 +192,10 @@ fn table_shapes(conn: &mut Conn) -> Result<Vec<TableShape>, CoreError> {
     Ok(shapes)
 }
 
-/// `SELECT COUNT(*) FROM <table>`. `table` is always one of this module's own
-/// literals, never a caller's.
-fn count_rows(conn: &mut Conn, table: &str) -> Result<i64, CoreError> {
+/// `SELECT COUNT(*) FROM <table>`. Generic on purpose, the same reason
+/// `services::backup::count` is: a table name is not a shop concept, only
+/// the name a caller hands it is.
+pub fn count_rows(conn: &mut Conn, table: &str) -> Result<i64, CoreError> {
     #[derive(QueryableByName)]
     struct Count {
         #[diesel(sql_type = BigInt)]
@@ -266,10 +270,15 @@ fn counts_txt(facts: &Facts) -> String {
         || "none".to_string(),
         |at| at.format("%Y-%m-%dT%H:%M:%S").to_string(),
     );
-    format!(
-        "products: {}\ndocuments: {}\ncustomers: {}\nshop_file_bytes: {}\nbackups: {}\nbackups_newest: {newest}\n",
-        facts.products, facts.documents, facts.customers, facts.shop_file_bytes, facts.backups,
-    )
+    let mut out = String::new();
+    for (name, n) in &facts.retail_counts {
+        out.push_str(&format!("{name}: {n}\n"));
+    }
+    out.push_str(&format!(
+        "shop_file_bytes: {}\nbackups: {}\nbackups_newest: {newest}\n",
+        facts.shop_file_bytes, facts.backups,
+    ));
+    out
 }
 
 fn system_txt(facts: &Facts) -> String {

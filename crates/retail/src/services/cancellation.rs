@@ -16,7 +16,8 @@ use chrono::NaiveDateTime;
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::audit_actions;
+use crate::error::{CoreError, RetailError};
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::document::{Document, DocumentKind, DocumentStatus};
 use crate::models::stock::{Movement, MovementKind};
@@ -62,7 +63,7 @@ pub fn cancel(
     document_id: i32,
     reason: String,
     at: Option<NaiveDateTime>,
-) -> Result<Document, CoreError> {
+) -> Result<Document, RetailError> {
     cancel_settling(
         conn,
         shop_id,
@@ -111,9 +112,9 @@ pub fn cancel_settling(
     reason: String,
     at: Option<NaiveDateTime>,
     refund: Refund,
-) -> Result<Document, CoreError> {
+) -> Result<Document, RetailError> {
     let Some(reason) = optional_field("reason", Some(&reason))? else {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "reason",
             "a document is annulled for a stated reason",
         ));
@@ -121,7 +122,7 @@ pub fn cancel_settling(
     conn.transaction(|conn| {
         let document = documents::get(conn, shop_id, document_id)?;
         if document.status == DocumentStatus::Cancelled {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "document_id",
                 "this document is already annulée",
             ));
@@ -135,7 +136,7 @@ pub fn cancel_settling(
         match document.kind {
             DocumentKind::Ticket | DocumentKind::Facture => {}
             _ => {
-                return Err(CoreError::validation(
+                return Err(RetailError::validation(
                     "document_id",
                     "only a ticket and a facture are annulled",
                 ))
@@ -147,7 +148,7 @@ pub fn cancel_settling(
         // sale's money is on the account and comes off it there; notes on top
         // of that would hand it back twice.
         if refund.is_cash() && document.payment_mode == PaymentMode::Credit {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "refund",
                 "this sale was not paid over the counter; its money comes off the account",
             ));
@@ -224,7 +225,7 @@ pub fn cancel_settling(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_CANCEL,
+                action: audit_actions::ACTION_CANCEL,
                 entity: "document",
                 entity_id: Some(document_id),
                 before: Some(
@@ -259,7 +260,7 @@ pub fn cancel_settling(
             },
         )?;
 
-        documents::get(conn, shop_id, document_id)
+        documents::get(conn, shop_id, document_id).map_err(RetailError::from)
     })
 }
 
@@ -377,7 +378,7 @@ fn reverse_on_the_ledger(
     amount: Money,
     at: NaiveDateTime,
     reason: &str,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     let Some(customer_id) = document.customer_id else {
         return Ok(());
     };
@@ -418,7 +419,7 @@ fn return_the_goods(
     shop_id: i32,
     user_id: i32,
     document: &Document,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     // What the goods cost when they left on this document. They go back at
     // that cost and never at the fiche's cost today, for the same reason the
     // avoir does it: a delivery between the sale and the cancellation moves
@@ -447,7 +448,7 @@ fn return_the_goods(
         // says: a sold line without a movement is a file that disagrees with
         // itself, and today's cost would move a margin already earned.
         let Some(unit_cost) = sold_at.get(&product_id).copied() else {
-            return Err(CoreError::UnpricedReversal {
+            return Err(RetailError::UnpricedReversal {
                 document_id: document.id,
                 product_id,
                 reason: "the line it puts back has no sale movement",

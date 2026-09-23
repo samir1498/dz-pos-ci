@@ -163,7 +163,7 @@ fn a_discount_past_the_threshold_needs_the_permission() {
 #[test]
 fn a_zero_threshold_needs_the_permission_for_any_discount_at_all() {
     // The default a shop reads before it has ever set one
-    // (`services::settings::discount_threshold_as_of`).
+    // (`services::discount_threshold::discount_threshold_as_of`).
     let base = Money::centimes(10_000);
     assert!(!discount_needs_permission(base, Money::ZERO, Bps::ZERO).unwrap());
     assert!(discount_needs_permission(base, Money::centimes(1), Bps::ZERO).unwrap());

@@ -5,6 +5,7 @@
 //! ledger is append-only and the quantity on the product is a cache of it.
 
 use diesel::prelude::*;
+use dzpos_core::audit_actions;
 use dzpos_core::error::CoreError;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::stock::{Movement, MovementKind};
@@ -152,7 +153,7 @@ fn drift_rows(conn: &mut SqliteConnection) -> Vec<dzpos_core::models::audit::Aud
     audit::list(conn, SHOP)
         .unwrap()
         .into_iter()
-        .filter(|e| e.action == audit::ACTION_STOCK_DRIFT)
+        .filter(|e| e.action == audit_actions::ACTION_STOCK_DRIFT)
         .collect()
 }
 

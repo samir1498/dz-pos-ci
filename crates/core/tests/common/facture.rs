@@ -1018,7 +1018,7 @@ pub(crate) fn words_of(html: &str) -> std::collections::BTreeSet<String> {
 /// letting those through, is the difference between a claim and a hole. A
 /// caption and a row label can be the same word: `rate_label` and the TVA
 /// recap row are both `Key::Tva`, and `line_discount_label` and the global
-/// discount row are both `Key::Discount`. An allowance by word therefore
+/// discount row are both `ShopKey::Discount`. An allowance by word therefore
 /// exempts those two rows on every page under the réel, and a roll that
 /// dropped either label would pass. Found by the test lens, 2026-09-20,
 /// which named the mutation: delete `{{ tva.label }}` from the roll.

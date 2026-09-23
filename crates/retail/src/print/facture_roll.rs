@@ -28,7 +28,7 @@
 //! label too long to share a row with its amount is wrapped above it. What
 //! never happens is a figure being shortened.
 
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::lang::Lang;
 use crate::models::document::Document;
 use crate::print::escpos;
@@ -52,7 +52,7 @@ pub fn render_facture_escpos(
     input: &FactureInput<'_>,
     lang: Lang,
     mode: ThermalMode,
-) -> Result<Vec<u8>, CoreError> {
+) -> Result<Vec<u8>, RetailError> {
     match mode.for_lang(lang) {
         ThermalMode::Text => render_facture_escpos_text(doc, input, lang),
         ThermalMode::Raster => {
@@ -78,7 +78,7 @@ pub fn render_facture_escpos_text(
     doc: &Document,
     input: &FactureInput<'_>,
     lang: Lang,
-) -> Result<Vec<u8>, CoreError> {
+) -> Result<Vec<u8>, RetailError> {
     Ok(escpos::encode(&items(&view_of(doc, input, lang)?)))
 }
 
@@ -89,7 +89,7 @@ pub fn render_facture_escpos_raster(
     input: &FactureInput<'_>,
     lang: Lang,
     width_dots: u32,
-) -> Result<Vec<u8>, CoreError> {
+) -> Result<Vec<u8>, RetailError> {
     escpos::encode_raster(&draw_facture_raster(doc, input, lang, width_dots)?.bitmap)
 }
 
@@ -101,7 +101,7 @@ pub fn draw_facture_raster(
     input: &FactureInput<'_>,
     lang: Lang,
     width_dots: u32,
-) -> Result<raster::Drawn, CoreError> {
+) -> Result<raster::Drawn, RetailError> {
     raster::draw(&items(&view_of(doc, input, lang)?), lang, width_dots)
 }
 
@@ -112,7 +112,7 @@ pub fn facture_roll_lines(
     doc: &Document,
     input: &FactureInput<'_>,
     lang: Lang,
-) -> Result<Vec<String>, CoreError> {
+) -> Result<Vec<String>, RetailError> {
     Ok(items(&view_of(doc, input, lang)?)
         .into_iter()
         .filter_map(|item| match item {
@@ -129,7 +129,11 @@ pub fn facture_roll_lines(
 /// the `@page` size line, which no ESC/POS byte carries, so it changes
 /// nothing on this wire — it is passed for the same reason the HTML roll
 /// passes it, that one view has one answer for every field.
-fn view_of(doc: &Document, input: &FactureInput<'_>, lang: Lang) -> Result<FactureView, CoreError> {
+fn view_of(
+    doc: &Document,
+    input: &FactureInput<'_>,
+    lang: Lang,
+) -> Result<FactureView, RetailError> {
     built_view(doc, input, lang, Paper::Roll80)
 }
 

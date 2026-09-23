@@ -18,13 +18,13 @@ use chrono::{NaiveDate, NaiveDateTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::debt::{DebtAllocationRowWrite, DebtRowWrite};
 use crate::models::document::DocumentKind;
-use crate::money::Money;
 use crate::repos::customers as customers_repo;
 use crate::repos::debt as repo;
 use crate::services::documents;
+use crate::{audit_actions, money::Money};
 use dzpos_kernel::services::{audit, clock, optional_field};
 
 pub use crate::models::debt::{
@@ -314,10 +314,10 @@ pub fn adjust(
     customer_id: i32,
     amount: Money,
     note: Option<String>,
-) -> Result<Adjusted, CoreError> {
+) -> Result<Adjusted, RetailError> {
     ensure_customer(conn, shop_id, customer_id)?;
     if amount == Money::ZERO {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "amount",
             "a correction of nothing corrects nothing",
         ));
@@ -360,7 +360,7 @@ pub fn adjust(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_ADJUST_DEBT,
+                action: audit_actions::ACTION_ADJUST_DEBT,
                 entity: "customer_debt",
                 entity_id: Some(customer_id),
                 before: Some(
@@ -430,10 +430,10 @@ pub fn pay(
     mode: PaymentMethod,
     note: Option<String>,
     at: NaiveDateTime,
-) -> Result<Payment, CoreError> {
+) -> Result<Payment, RetailError> {
     ensure_customer(conn, shop_id, customer_id)?;
     if amount.as_centimes() <= 0 {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "amount_centimes",
             "a payment of nothing pays nothing",
         ));
@@ -445,7 +445,7 @@ pub fn pay(
         // the write would otherwise take the customer into credit.
         let outstanding = repo::balance(conn, shop_id, customer_id)?;
         if amount > outstanding {
-            return Err(CoreError::PaymentAboveDebt {
+            return Err(RetailError::PaymentAboveDebt {
                 // Nothing owed, or the shop owing the customer, is nothing
                 // that can be paid; the payload says zero rather than a
                 // negative a screen would have to explain.
@@ -477,7 +477,7 @@ pub fn pay(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_PAY_DEBT,
+                action: audit_actions::ACTION_PAY_DEBT,
                 entity: "customer_debt",
                 entity_id: Some(customer_id),
                 before: Some(
@@ -803,7 +803,7 @@ pub fn append(
     conn: &mut SqliteConnection,
     shop_id: i32,
     entry: NewDebtEntry,
-) -> Result<DebtEntry, CoreError> {
+) -> Result<DebtEntry, RetailError> {
     append_at(conn, shop_id, entry, None)
 }
 
@@ -821,7 +821,7 @@ pub fn append_at(
     shop_id: i32,
     entry: NewDebtEntry,
     at: Option<NaiveDateTime>,
-) -> Result<DebtEntry, CoreError> {
+) -> Result<DebtEntry, RetailError> {
     ensure_customer(conn, shop_id, entry.customer_id)?;
     // The document a movement cites is checked the same way the allocation's
     // is: a statement that names a document this shop never issued is worse
@@ -830,25 +830,25 @@ pub fn append_at(
         ensure_document(conn, shop_id, document_id)?;
     }
     if entry.debit.is_negative() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "debit",
             "a movement is written in the direction its column names, never as a negative",
         ));
     }
     if entry.credit.is_negative() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "credit",
             "a movement is written in the direction its column names, never as a negative",
         ));
     }
     if entry.debit != Money::ZERO && entry.credit != Money::ZERO {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "debit",
             "a movement raises the debt or lowers it, not both",
         ));
     }
     if entry.debit == Money::ZERO && entry.credit == Money::ZERO {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "debit",
             "a movement of nothing moves no debt",
         ));

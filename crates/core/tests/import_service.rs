@@ -532,7 +532,9 @@ fn apply_writes_nothing_at_all_when_one_row_is_refused() {
 
     let refused = import::apply(&mut conn, SHOP, OWNER, &bytes).unwrap_err();
     match refused {
-        CoreError::Validation { field, .. } => assert_eq!(field, "rows"),
+        dzpos_core::error::RetailError::Kernel(CoreError::Validation { field, .. }) => {
+            assert_eq!(field, "rows")
+        }
         other => panic!("{other:?}"),
     }
     // Not the good row, and not the category the good row named either.
@@ -592,7 +594,9 @@ fn a_file_that_is_not_a_workbook_is_refused_as_input_and_never_as_a_server_fault
     // The code the UI translates, not a 500: a file a shop picked is input.
     assert_eq!(refused.code(), "validation");
     match refused {
-        CoreError::Validation { field, .. } => assert_eq!(field, "file"),
+        dzpos_core::error::RetailError::Kernel(CoreError::Validation { field, .. }) => {
+            assert_eq!(field, "file")
+        }
         other => panic!("{other:?}"),
     }
 }
@@ -608,7 +612,9 @@ fn a_file_whose_header_row_is_not_the_templates_is_refused_whole() {
 
     let refused = import::dry_run(&mut conn, SHOP, &bytes).unwrap_err();
     match refused {
-        CoreError::Validation { field, .. } => assert_eq!(field, "header"),
+        dzpos_core::error::RetailError::Kernel(CoreError::Validation { field, .. }) => {
+            assert_eq!(field, "header")
+        }
         other => panic!("{other:?}"),
     }
 }
@@ -629,7 +635,9 @@ fn a_file_one_row_over_the_cap_is_refused_and_the_cap_itself_passes() {
     let over = workbook(&rows_of(import::IMPORT_MAX_ROWS + 1));
     let refused = import::dry_run(&mut conn, SHOP, &over).unwrap_err();
     match refused {
-        CoreError::Validation { field, .. } => assert_eq!(field, "rows"),
+        dzpos_core::error::RetailError::Kernel(CoreError::Validation { field, .. }) => {
+            assert_eq!(field, "rows")
+        }
         other => panic!("{other:?}"),
     }
 

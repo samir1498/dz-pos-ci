@@ -12,7 +12,7 @@
 
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::customers::{self, PartyKind};
@@ -92,7 +92,7 @@ proptest! {
                         Ok(_) => {}
                         // More than the customer owes is refused, and a
                         // refusal leaves the file exactly as it was.
-                        Err(CoreError::PaymentAboveDebt { .. }) => {
+                        Err(RetailError::PaymentAboveDebt { .. }) => {
                             let after = debt::balance(&mut conn, SHOP, customer).unwrap();
                             prop_assert_eq!(before, after, "a refused payment moved the balance");
                         }
@@ -113,7 +113,7 @@ proptest! {
                             n,
                             e
                         ),
-                        Some((false, Err(CoreError::Validation { .. }))) => {
+                        Some((false, Err(RetailError::Kernel(CoreError::Validation { .. })))) => {
                             let after = debt::balance(&mut conn, SHOP, customer).unwrap();
                             prop_assert_eq!(before, after, "a refused avoir moved the balance");
                         }
@@ -386,7 +386,7 @@ fn an_avoir(
     customer_id: i32,
     whole: bool,
     day: u32,
-) -> Option<(bool, Result<i32, CoreError>)> {
+) -> Option<(bool, Result<i32, RetailError>)> {
     let issued_at = chrono::NaiveDate::from_ymd_opt(2026, 9, day)
         .and_then(|d| d.and_hms_opt(11, 0, 0))
         .unwrap();

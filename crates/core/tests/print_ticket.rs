@@ -22,7 +22,7 @@ use dzpos_core::money::{
     compute_totals, Bps, Line, Money, PaymentMode, Regime, TotalsOptions, TvaLine,
 };
 use dzpos_core::print::render_ticket;
-use dzpos_core::print::strings::{text, Key};
+use dzpos_core::print::strings::{shop_text, text, Key, ShopKey};
 use dzpos_core::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, PartyBlock, PartyKind,
     SellerBlock,
@@ -556,7 +556,7 @@ fn a_ticket_that_closes_below_zero_names_the_customer_a_creditor() {
             "the {lang:?} ticket does not name the credit"
         );
         assert!(
-            !html.contains(text(Key::TotalDebt, lang)),
+            !html.contains(shop_text(ShopKey::TotalDebt, lang)),
             "the {lang:?} ticket still calls the credit a debt"
         );
         assert_eq!(
@@ -567,7 +567,7 @@ fn a_ticket_that_closes_below_zero_names_the_customer_a_creditor() {
 
         let debtor = render_ticket(&owed, lang).unwrap();
         assert!(
-            debtor.contains(text(Key::TotalDebt, lang)),
+            debtor.contains(shop_text(ShopKey::TotalDebt, lang)),
             "the {lang:?} ticket stopped naming a debt a debt"
         );
         assert!(
@@ -599,12 +599,12 @@ fn a_credit_ticket_says_credit_carries_no_cash_row_and_closes_on_the_debt() {
             );
         }
         for label in [
-            Key::Balance,
-            Key::OldBalance,
-            Key::ThisDocument,
-            Key::TotalDebt,
+            text(Key::Balance, lang),
+            text(Key::OldBalance, lang),
+            shop_text(ShopKey::ThisDocument, lang),
+            shop_text(ShopKey::TotalDebt, lang),
         ] {
-            assert!(html.contains(text(label, lang)), "{lang:?} {label:?}");
+            assert!(html.contains(label), "{lang:?} {label:?}");
         }
         let old = centimes(&one_amount(&html, "old-balance"));
         let this = centimes(&one_amount(&html, "this-document"));
@@ -623,7 +623,7 @@ fn a_credit_ticket_says_credit_carries_no_cash_row_and_closes_on_the_debt() {
             "an anonymous ticket carries a {absent} row"
         );
     }
-    assert!(!anonymous.contains(text(Key::TotalDebt, Lang::Fr)));
+    assert!(!anonymous.contains(shop_text(ShopKey::TotalDebt, Lang::Fr)));
 }
 
 #[test]

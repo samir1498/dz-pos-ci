@@ -1,9 +1,14 @@
 // The table in errors.ts is only worth having if it is complete, and it can
-// only be complete against the server's own lists. Both are a Rust `match`
-// returning a string literal per arm, so they can be read: `CoreError::code`
-// in crates/kernel/src/error.rs (moved from crates/core/src/error.rs in the
-// kernel crate split, S3 of a-kernel-crate-and-retail-as-the-first-module)
-// and `ApiError::parts` in crates/api/src/error.rs.
+// only be complete against the server's own lists. All three are a Rust
+// `match` returning a string literal per arm, so they can be read:
+// `CoreError::code` in crates/kernel/src/error.rs (moved from
+// crates/core/src/error.rs in the kernel crate split, S3 of
+// a-kernel-crate-and-retail-as-the-first-module), `RetailError::code` in
+// crates/retail/src/error.rs (S4 of the same plan moved eight variants
+// there, `duplicate_barcode`, `credit_limit`, `party_ids`, `print` and
+// `workbook` among their codes, so a walk of `CoreError::code` alone would
+// go quietly blind to them), and `ApiError::parts` in
+// crates/api/src/error.rs.
 //
 // A walk, not a copy. A copy of the codes here would go green the day the
 // server grows a new one, which is the day a cashier starts being told a
@@ -38,8 +43,11 @@ function codesIn(body: string): string[] {
 }
 
 const CORE = bodyOf("crates/kernel/src/error.rs", "pub const fn code(&self)");
+const RETAIL = bodyOf("crates/retail/src/error.rs", "pub const fn code(&self)");
 const API = bodyOf("crates/api/src/error.rs", "fn parts(&self)");
-const SERVER_CODES = [...new Set([...codesIn(CORE), ...codesIn(API)])].sort();
+const SERVER_CODES = [
+  ...new Set([...codesIn(CORE), ...codesIn(RETAIL), ...codesIn(API)]),
+].sort();
 
 /** The refusals a cashier can do something about. Each one earns a sentence
  *  of its own; the rest share `error_till_problem`, because a workbook that

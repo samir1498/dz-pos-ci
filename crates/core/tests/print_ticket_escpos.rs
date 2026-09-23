@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use chrono::{Datelike, NaiveDate};
 use dzpos_core::lang::Lang;
 use dzpos_core::money::{compute_totals, Bps, Line, Money, PaymentMode, Regime, TotalsOptions};
-use dzpos_core::print::strings::{text, Key};
+use dzpos_core::print::strings::{shop_text, text, Key, ShopKey};
 use dzpos_core::print::{
     draw_ticket_raster, dump_ticket_escpos, dump_ticket_escpos_png, render_ticket_escpos,
     render_ticket_escpos_in, render_ticket_escpos_raster, send_ticket_escpos_tcp,
@@ -294,19 +294,26 @@ fn the_credit_held_ticket_escpos_is_its_dump_in_every_language() {
 /// the facture called it a credit would give one account two names.
 #[test]
 fn a_credit_escpos_ticket_carries_the_three_rows_of_the_debt() {
-    for (case, key) in [
-        (Case::Credit, Key::TotalDebt),
-        (Case::CreditHeld, Key::TotalCredit),
+    for (case, total_label_of) in [
+        (
+            Case::Credit,
+            (|lang| shop_text(ShopKey::TotalDebt, lang)) as fn(Lang) -> &'static str,
+        ),
+        (
+            Case::CreditHeld,
+            (|lang| text(Key::TotalCredit, lang)) as fn(Lang) -> &'static str,
+        ),
     ] {
         let doc = fixed_sale(case);
         for lang in Lang::ALL {
             let dump = dump_ticket_escpos(&render_ticket_escpos(&doc, lang).unwrap());
-            for row in [Key::Balance, Key::OldBalance, Key::ThisDocument, key] {
-                assert!(
-                    dump.contains(text(row, lang)),
-                    "{lang:?} {:?}",
-                    case.suffix()
-                );
+            for row in [
+                text(Key::Balance, lang),
+                text(Key::OldBalance, lang),
+                shop_text(ShopKey::ThisDocument, lang),
+                total_label_of(lang),
+            ] {
+                assert!(dump.contains(row), "{lang:?} {:?}", case.suffix());
             }
             let triple = doc.balance.unwrap();
             for amount in [triple.old_balance, triple.remaining_debt, triple.total_debt] {

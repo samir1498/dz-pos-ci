@@ -20,11 +20,11 @@ use askama::Template;
 use barcoders::generators::svg::SVG;
 use barcoders::sym::ean13::EAN13;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::lang::Lang;
 use crate::models::product::Product;
 use crate::money::format::format_centimes;
-use crate::print::strings::{text, Key};
+use crate::print::strings::{shop_text, text, Key, ShopKey};
 
 /// The bars in SVG user units: one unit per module, so the 95 modules of an
 /// EAN-13 are 95 wide and the stylesheet scales the whole picture to the
@@ -79,14 +79,14 @@ struct LabelSheet {
 
 /// One 58 × 40 mm label for `product`, in `lang`, as one standalone HTML
 /// page. Pinned by `fixtures/print/barcode_label/{fr,en,ar}.html`.
-pub fn render_label(product: &Product, lang: Lang) -> Result<String, CoreError> {
+pub fn render_label(product: &Product, lang: Lang) -> Result<String, RetailError> {
     let page = OneLabel {
         lang_tag: lang.tag(),
         dir: lang.dir(),
         arabic_unreviewed: lang == Lang::Ar,
         label: label(product, lang)?,
     };
-    page.render().map_err(CoreError::from)
+    page.render().map_err(RetailError::from)
 }
 
 /// A sheet of labels on A4, laid out as a grid of the same 58 × 40 label.
@@ -95,9 +95,9 @@ pub fn render_label(product: &Product, lang: Lang) -> Result<String, CoreError> 
 /// One product the encoder refuses refuses the sheet. Printing the rest and
 /// silently dropping it would hand back a page that looks complete, and the
 /// product with no label on it is exactly the one somebody was looking for.
-pub fn render_label_sheet(products: &[Product], lang: Lang) -> Result<String, CoreError> {
+pub fn render_label_sheet(products: &[Product], lang: Lang) -> Result<String, RetailError> {
     if products.is_empty() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "products",
             "a sheet of labels needs at least one product",
         ));
@@ -110,16 +110,16 @@ pub fn render_label_sheet(products: &[Product], lang: Lang) -> Result<String, Co
         lang_tag: lang.tag(),
         dir: lang.dir(),
         arabic_unreviewed: lang == Lang::Ar,
-        title: text(Key::SheetProducts, lang).to_owned(),
+        title: shop_text(ShopKey::SheetProducts, lang).to_owned(),
         labels,
     };
-    page.render().map_err(CoreError::from)
+    page.render().map_err(RetailError::from)
 }
 
-fn label(product: &Product, lang: Lang) -> Result<LabelView, CoreError> {
+fn label(product: &Product, lang: Lang) -> Result<LabelView, RetailError> {
     let code = product.barcode.as_deref().unwrap_or("").trim();
     if code.is_empty() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "barcode",
             "this product has no barcode to print",
         ));
@@ -143,7 +143,7 @@ fn label(product: &Product, lang: Lang) -> Result<LabelView, CoreError> {
     // label whatever anybody types, and telling that shop it has "no
     // barcode" sends it looking at a field that is visibly filled.
     if !is_ean13(code) {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "barcode_digits",
             "this barcode is not a valid EAN-13 and has no bars",
         ));

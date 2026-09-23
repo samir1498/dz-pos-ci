@@ -6,6 +6,7 @@
 //! asserted too: a log that records everything hides the one that matters.
 
 use chrono::NaiveDate;
+use dzpos_core::audit_actions;
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::models::sql_types::Role;
@@ -275,7 +276,7 @@ mod read {
         products::update(&mut conn, SHOP, OWNER, p, draft(1_500, true)).unwrap();
 
         let filter = Filter {
-            action: Some(audit::ACTION_PAY_DEBT.to_string()),
+            action: Some(audit_actions::ACTION_PAY_DEBT.to_string()),
             ..Filter::default()
         };
         let (page, _) = audit::read(&mut conn, SHOP, &filter, 1).unwrap();

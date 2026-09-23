@@ -28,7 +28,6 @@ pub enum Key {
     TotalHt,
     /// The same row under the IFU, with no "hors taxe" in it.
     Total,
-    Discount,
     Tva,
     Stamp,
     NetToPay,
@@ -60,34 +59,12 @@ pub enum Key {
     /// document, in `cancelled_at` and `cancel_reason`.
     CancelledOn,
     CancelReason,
-    Avoir,
-    Proforma,
-    /// What a proforma says about itself, in a line of its own: it is a
-    /// quote and not a facture, it books nothing and it owes nothing.
-    /// A customer handed one must not file it as a facture.
-    ProformaNotice,
-    /// The opening of the line naming the facture an avoir is written
-    /// against, one of the mentions décret 05-468 art. 3 asks an avoir to
-    /// carry. It is the start of a sentence and not a column label:
-    /// "Avoir sur facture FA-2026-000042 du 09/09/2026".
-    AvoirOnFacture,
     /// What joins a document to its date in that sentence.
     IssuedOn,
-    /// The last row of an avoir's totals. A facture closes on the net to
-    /// pay, the figure the buyer owes; an avoir asks for nothing, so the
-    /// same row names the amount of the avoir. The figure is the same one,
-    /// under the words that fit the paper it is on.
-    AvoirAmount,
     Seller,
     Buyer,
     Designation,
     Qty,
-    /// The unit price column of a réel facture: "hors taxes" is one of the
-    /// mentions décret 05-468 art. 3 asks for by name.
-    UnitPriceHt,
-    /// The same column under the IFU, where naming the tax is forbidden
-    /// (CTCA 2026 art. 64).
-    UnitPrice,
     LineTotalHt,
     LineTotal,
     SubtotalHt,
@@ -100,12 +77,8 @@ pub enum Key {
     /// and a proforma close themselves in their own words below rather than
     /// call themselves a facture on their last line.
     InWords,
-    AvoirInWords,
-    ProformaInWords,
     Balance,
     OldBalance,
-    ThisDocument,
-    TotalDebt,
     /// The same row when the customer's balance closes below zero: the shop
     /// is holding money for them, and "solde total" over a negative reads as
     /// a debt with a typo in it.
@@ -127,40 +100,30 @@ pub enum Key {
     Date,
     /// The column naming why the debt moved.
     Movement,
-    /// The column carrying the number of the document a movement cites.
-    Document,
     Debit,
     /// The credit column of a statement. Not `Key::Credit`, which is the word
     /// for a sale that was not paid for on the day: one is a column and the
     /// other is a payment mode, and a translator reading one list must not
     /// have to work out which of the two a shared key meant.
     CreditColumn,
-    /// Why the debt moved, one per kind of ledger row (features.md §2). Read
-    /// in a table cell, so they are the sentence case a column takes and not
-    /// the heading case `Avoir` above is.
+    /// Why the balance moved, one per kind of ledger row a trade may write
+    /// (features.md §2). Read in a table cell, so they are the sentence case
+    /// a column takes and not a heading's own capitals. The kinds a shop's
+    /// own trade adds sit in `dzpos_retail::print::strings::ShopKey`
+    /// (`KindSale`, `KindAvoir`) beside this one, since S4 of
+    /// `a-kernel-crate-and-retail-as-the-first-module` took the shop words
+    /// out of this file; a trade with no such kind simply carries fewer
+    /// rows in the column.
     KindOpening,
-    KindSale,
     KindPayment,
-    KindAvoir,
     KindAdjustment,
     /// The words line of a statement. Not the facture's, which says "la
     /// présente facture" in words a comptable reads as being about one
     /// document.
     StatementInWords,
-    /// Added to the words line when the closing balance is below zero: the
-    /// shop is holding money for the customer, and the words themselves carry
-    /// no sign.
-    InFavourOfCustomer,
     /// A range with nothing in it. An empty table is a page that looks broken;
     /// a sentence saying nothing moved is an answer.
     NoMovement,
-
-    // The 80 mm debt slip (features.md §2 and §4). What a credit customer is
-    // handed at the counter when they ask what they owe: the balance, the
-    // movements behind it, and nothing a comptable would file.
-    /// The heading. Sentence case like the ticket's and not the facture's
-    /// capitals: it is a counter paper, not a document with a series.
-    DebtSlip,
     /// The heading of the movement block. The slip carries the newest ten and
     /// says so in the word it uses, because a customer counting four rows
     /// against a year of buying has to know the page is not the whole ledger.
@@ -169,21 +132,16 @@ pub enum Key {
     /// number, no stamp and no TVA, so it says on its face that it proves
     /// nothing. The statement and the facture are the papers that do.
     NoFiscalValue,
-    /// The words line of a debt slip. Not the statement's, which says "le
-    /// présent relevé" about a page covering a period this one has none of.
-    DebtInWords,
-
-    // The Excel workbooks (features.md §1, Backup). Only the sheet name is
-    // translated: a workbook's header row and its unit and status cells are
-    // the stable key names, so a products export edited in a spreadsheet
-    // reads straight back through the import and no column has to be found
-    // again in three languages. The tab is what a person sees first, and it
-    // is the one place a word costs nothing to translate.
-    /// The tab of the products workbook, and of the import template.
-    SheetProducts,
-    SheetSales,
-    SheetCustomers,
-    SheetSuppliers,
+    // The three of the Excel workbooks' own words this file still carries:
+    // no shop noun sits in any of the three, unlike the sheet tabs
+    // `ShopKey::SheetProducts`, `ShopKey::SheetSales`, `ShopKey::
+    // SheetCustomers` and `ShopKey::SheetSuppliers` moved to
+    // `dzpos_retail::print::strings` in S4 of
+    // `a-kernel-crate-and-retail-as-the-first-module`, and both are read
+    // only from `dzpos_retail::services::import`, the one caller either
+    // kind has. They stay here rather than following the sheet tabs across:
+    // moving three words nothing on this list catches would be tidying past
+    // the rule this walk actually enforces.
     /// The second tab of the import template: the units and the TVA rates a
     /// row may name, and nothing else. It is read, never written back.
     SheetAllowedValues,
@@ -191,23 +149,14 @@ pub enum Key {
     TemplateUnits,
     /// The heading over the list of TVA rates a `rate_percent` cell may hold.
     TemplateRates,
-    /// What the example row is there to say: a code the shop already sells
-    /// under updates that product rather than opening a second one, and a
-    /// blank code is numbered by the till.
-    TemplateBarcodeNote,
-    /// What the `stock` column does, which is nothing on a product the shop
-    /// already has: quantities belong to the stock ledger and an import is
-    /// not a movement.
-    TemplateStockNote,
 }
 
 impl Key {
     /// Every key, in the order the dictionary test walks them.
-    pub const ALL: [Key; 77] = [
+    pub const ALL: [Key; 53] = [
         Key::Ticket,
         Key::TotalHt,
         Key::Total,
-        Key::Discount,
         Key::Tva,
         Key::Stamp,
         Key::NetToPay,
@@ -224,18 +173,11 @@ impl Key {
         Key::CancelledMark,
         Key::CancelledOn,
         Key::CancelReason,
-        Key::Avoir,
-        Key::Proforma,
-        Key::ProformaNotice,
-        Key::AvoirOnFacture,
         Key::IssuedOn,
-        Key::AvoirAmount,
         Key::Seller,
         Key::Buyer,
         Key::Designation,
         Key::Qty,
-        Key::UnitPriceHt,
-        Key::UnitPrice,
         Key::LineTotalHt,
         Key::LineTotal,
         Key::SubtotalHt,
@@ -243,12 +185,8 @@ impl Key {
         Key::TvaBase,
         Key::TotalTtc,
         Key::InWords,
-        Key::AvoirInWords,
-        Key::ProformaInWords,
         Key::Balance,
         Key::OldBalance,
-        Key::ThisDocument,
-        Key::TotalDebt,
         Key::TotalCredit,
         Key::Cachet,
         Key::Statement,
@@ -257,30 +195,18 @@ impl Key {
         Key::ClosingBalance,
         Key::Date,
         Key::Movement,
-        Key::Document,
         Key::Debit,
         Key::CreditColumn,
         Key::KindOpening,
-        Key::KindSale,
         Key::KindPayment,
-        Key::KindAvoir,
         Key::KindAdjustment,
         Key::StatementInWords,
-        Key::InFavourOfCustomer,
         Key::NoMovement,
-        Key::DebtSlip,
         Key::LastMovements,
         Key::NoFiscalValue,
-        Key::DebtInWords,
-        Key::SheetProducts,
-        Key::SheetSales,
-        Key::SheetCustomers,
-        Key::SheetSuppliers,
         Key::SheetAllowedValues,
         Key::TemplateUnits,
         Key::TemplateRates,
-        Key::TemplateBarcodeNote,
-        Key::TemplateStockNote,
     ];
 }
 
@@ -299,10 +225,6 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::Total, Lang::Fr) => "Total",
         (Key::Total, Lang::En) => "Total",
         (Key::Total, Lang::Ar) => "المجموع",
-
-        (Key::Discount, Lang::Fr) => "Remise",
-        (Key::Discount, Lang::En) => "Discount",
-        (Key::Discount, Lang::Ar) => "تخفيض",
 
         // The abbreviation, not the four words behind it: a ticket is 80 mm
         // wide. The Arabic is the abbreviation of الرسم على القيمة المضافة
@@ -374,40 +296,9 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::CancelReason, Lang::En) => "Reason:",
         (Key::CancelReason, Lang::Ar) => "السبب:",
 
-        (Key::Avoir, Lang::Fr) => "AVOIR",
-        (Key::Avoir, Lang::En) => "CREDIT NOTE",
-        (Key::Avoir, Lang::Ar) => "إشعار دائن",
-
-        (Key::Proforma, Lang::Fr) => "PROFORMA",
-        (Key::Proforma, Lang::En) => "PRO FORMA INVOICE",
-        (Key::Proforma, Lang::Ar) => "فاتورة أولية",
-
-        (Key::ProformaNotice, Lang::Fr) => {
-            "Proforma, sans valeur comptable\u{202f}: ce document n\u{2019}est pas une facture et ne crée aucune dette."
-        }
-        (Key::ProformaNotice, Lang::En) => {
-            "Pro forma, of no accounting value: this document is not an invoice and creates no debt."
-        }
-        (Key::ProformaNotice, Lang::Ar) => {
-            "فاتورة أولية، بدون قيمة محاسبية: هذه الوثيقة ليست فاتورة ولا تنشئ أي دين."
-        }
-
-        (Key::AvoirOnFacture, Lang::Fr) => "Avoir sur facture",
-        (Key::AvoirOnFacture, Lang::En) => "Credit note against invoice",
-        (Key::AvoirOnFacture, Lang::Ar) => "إشعار دائن على الفاتورة",
-
         (Key::IssuedOn, Lang::Fr) => "du",
         (Key::IssuedOn, Lang::En) => "dated",
         (Key::IssuedOn, Lang::Ar) => "بتاريخ",
-
-        // Unreviewed wording, like this dictionary's Arabic: no comptable
-        // has read the French of it yet. The apostrophe is the typographic
-        // one, which is the French a printed document uses and also the one
-        // that reaches the page as itself: a typewriter apostrophe would
-        // sit in the golden as `&#39;`.
-        (Key::AvoirAmount, Lang::Fr) => "Montant de l\u{2019}avoir",
-        (Key::AvoirAmount, Lang::En) => "Credit note amount",
-        (Key::AvoirAmount, Lang::Ar) => "مبلغ الإشعار الدائن",
 
         (Key::Seller, Lang::Fr) => "Vendeur",
         (Key::Seller, Lang::En) => "Seller",
@@ -424,14 +315,6 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::Qty, Lang::Fr) => "Qté",
         (Key::Qty, Lang::En) => "Qty",
         (Key::Qty, Lang::Ar) => "الكمية",
-
-        (Key::UnitPriceHt, Lang::Fr) => "Prix unitaire HT",
-        (Key::UnitPriceHt, Lang::En) => "Unit price excl. tax",
-        (Key::UnitPriceHt, Lang::Ar) => "سعر الوحدة خارج الرسم",
-
-        (Key::UnitPrice, Lang::Fr) => "Prix unitaire",
-        (Key::UnitPrice, Lang::En) => "Unit price",
-        (Key::UnitPrice, Lang::Ar) => "سعر الوحدة",
 
         (Key::LineTotalHt, Lang::Fr) => "Montant HT",
         (Key::LineTotalHt, Lang::En) => "Amount excl. tax",
@@ -466,17 +349,6 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::InWords, Lang::En) => "This invoice is closed at the sum of",
         (Key::InWords, Lang::Ar) => "أوقفت هذه الفاتورة بمبلغ",
 
-        // The same sentence about the paper it is actually written on. An
-        // avoir that said "la présente facture" would name another
-        // document on the line a comptable reads first.
-        (Key::AvoirInWords, Lang::Fr) => "Arrêté le présent avoir à la somme de",
-        (Key::AvoirInWords, Lang::En) => "This credit note is closed at the sum of",
-        (Key::AvoirInWords, Lang::Ar) => "أوقف هذا الإشعار الدائن بمبلغ",
-
-        (Key::ProformaInWords, Lang::Fr) => "Arrêtée la présente proforma à la somme de",
-        (Key::ProformaInWords, Lang::En) => "This pro forma invoice is closed at the sum of",
-        (Key::ProformaInWords, Lang::Ar) => "أوقفت هذه الفاتورة الأولية بمبلغ",
-
         (Key::Balance, Lang::Fr) => "Solde",
         (Key::Balance, Lang::En) => "Balance",
         (Key::Balance, Lang::Ar) => "الرصيد",
@@ -484,14 +356,6 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::OldBalance, Lang::Fr) => "Ancien solde",
         (Key::OldBalance, Lang::En) => "Previous balance",
         (Key::OldBalance, Lang::Ar) => "الرصيد السابق",
-
-        (Key::ThisDocument, Lang::Fr) => "Ce document",
-        (Key::ThisDocument, Lang::En) => "This document",
-        (Key::ThisDocument, Lang::Ar) => "هذه الوثيقة",
-
-        (Key::TotalDebt, Lang::Fr) => "Solde total",
-        (Key::TotalDebt, Lang::En) => "Total owed",
-        (Key::TotalDebt, Lang::Ar) => "الرصيد الإجمالي",
 
         (Key::TotalCredit, Lang::Fr) => "Solde créditeur",
         (Key::TotalCredit, Lang::En) => "Credit balance",
@@ -525,10 +389,6 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::Movement, Lang::En) => "Movement",
         (Key::Movement, Lang::Ar) => "الحركة",
 
-        (Key::Document, Lang::Fr) => "Document",
-        (Key::Document, Lang::En) => "Document",
-        (Key::Document, Lang::Ar) => "الوثيقة",
-
         (Key::Debit, Lang::Fr) => "Débit",
         (Key::Debit, Lang::En) => "Debit",
         (Key::Debit, Lang::Ar) => "مدين",
@@ -541,17 +401,9 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::KindOpening, Lang::En) => "Balance carried over",
         (Key::KindOpening, Lang::Ar) => "رصيد مُرحَّل",
 
-        (Key::KindSale, Lang::Fr) => "Vente",
-        (Key::KindSale, Lang::En) => "Sale",
-        (Key::KindSale, Lang::Ar) => "بيع",
-
         (Key::KindPayment, Lang::Fr) => "Paiement",
         (Key::KindPayment, Lang::En) => "Payment",
         (Key::KindPayment, Lang::Ar) => "دفع",
-
-        (Key::KindAvoir, Lang::Fr) => "Avoir",
-        (Key::KindAvoir, Lang::En) => "Credit note",
-        (Key::KindAvoir, Lang::Ar) => "إشعار دائن",
 
         (Key::KindAdjustment, Lang::Fr) => "Ajustement",
         (Key::KindAdjustment, Lang::En) => "Adjustment",
@@ -561,17 +413,9 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::StatementInWords, Lang::En) => "This statement is closed at the sum of",
         (Key::StatementInWords, Lang::Ar) => "أوقف هذا الكشف بمبلغ",
 
-        (Key::InFavourOfCustomer, Lang::Fr) => "en faveur du client",
-        (Key::InFavourOfCustomer, Lang::En) => "in the customer\u{2019}s favour",
-        (Key::InFavourOfCustomer, Lang::Ar) => "لصالح الزبون",
-
         (Key::NoMovement, Lang::Fr) => "Aucun mouvement sur la période",
         (Key::NoMovement, Lang::En) => "No movement in this period",
         (Key::NoMovement, Lang::Ar) => "لا توجد حركة في هذه الفترة",
-
-        (Key::DebtSlip, Lang::Fr) => "Situation de compte",
-        (Key::DebtSlip, Lang::En) => "Account balance slip",
-        (Key::DebtSlip, Lang::Ar) => "وضعية الحساب",
 
         (Key::LastMovements, Lang::Fr) => "Derniers mouvements",
         (Key::LastMovements, Lang::En) => "Latest movements",
@@ -580,26 +424,6 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::NoFiscalValue, Lang::Fr) => "Document sans valeur fiscale",
         (Key::NoFiscalValue, Lang::En) => "This slip has no fiscal value",
         (Key::NoFiscalValue, Lang::Ar) => "وثيقة بدون قيمة جبائية",
-
-        (Key::DebtInWords, Lang::Fr) => "Arrêtée la présente situation à la somme de",
-        (Key::DebtInWords, Lang::En) => "This slip is closed at the sum of",
-        (Key::DebtInWords, Lang::Ar) => "أوقفت هذه الوضعية بمبلغ",
-
-        (Key::SheetProducts, Lang::Fr) => "Produits",
-        (Key::SheetProducts, Lang::En) => "Products",
-        (Key::SheetProducts, Lang::Ar) => "المنتجات",
-
-        (Key::SheetSales, Lang::Fr) => "Ventes",
-        (Key::SheetSales, Lang::En) => "Sales",
-        (Key::SheetSales, Lang::Ar) => "المبيعات",
-
-        (Key::SheetCustomers, Lang::Fr) => "Clients",
-        (Key::SheetCustomers, Lang::En) => "Customers",
-        (Key::SheetCustomers, Lang::Ar) => "الزبائن",
-
-        (Key::SheetSuppliers, Lang::Fr) => "Fournisseurs",
-        (Key::SheetSuppliers, Lang::En) => "Suppliers",
-        (Key::SheetSuppliers, Lang::Ar) => "الموردون",
 
         (Key::SheetAllowedValues, Lang::Fr) => "Valeurs autorisées",
         (Key::SheetAllowedValues, Lang::En) => "Allowed values",
@@ -612,27 +436,5 @@ pub const fn text(key: Key, lang: Lang) -> &'static str {
         (Key::TemplateRates, Lang::Fr) => "Taux de TVA",
         (Key::TemplateRates, Lang::En) => "VAT rates",
         (Key::TemplateRates, Lang::Ar) => "نسب الرسم على القيمة المضافة",
-
-        (Key::TemplateStockNote, Lang::Fr) => "La colonne stock ne sert qu\u{2019}\u{e0} l\u{2019}ouverture d\u{2019}un nouveau produit. Sur un produit que la boutique a d\u{e9}j\u{e0}, elle est ignor\u{e9}e : un import ne fait jamais bouger le stock, seuls un achat, une vente et un recomptage le font.",
-        (Key::TemplateStockNote, Lang::En) => "The stock column opens a new product with that quantity. On a product the shop already has it is ignored: an import never moves stock, only a purchase, a sale and a recount do.",
-        (Key::TemplateStockNote, Lang::Ar) => "\u{639}\u{645}\u{648}\u{62f} \u{627}\u{644}\u{645}\u{62e}\u{632}\u{648}\u{646} \u{64a}\u{641}\u{62a}\u{62d} \u{645}\u{646}\u{62a}\u{648}\u{62c}\u{64b}\u{627} \u{62c}\u{62f}\u{64a}\u{62f}\u{64b}\u{627} \u{628}\u{647}\u{630}\u{647} \u{627}\u{644}\u{643}\u{645}\u{64a}\u{629}\u{60c} \u{648}\u{64a}\u{64f}\u{647}\u{645}\u{644} \u{639}\u{644}\u{649} \u{645}\u{646}\u{62a}\u{648}\u{62c} \u{645}\u{648}\u{62c}\u{648}\u{62f} \u{623}\u{635}\u{644}\u{64b}\u{627}: \u{627}\u{644}\u{627}\u{633}\u{62a}\u{64a}\u{631}\u{627}\u{62f} \u{644}\u{627} \u{64a}\u{62d}\u{631}\u{651}\u{643} \u{627}\u{644}\u{645}\u{62e}\u{632}\u{648}\u{646} \u{623}\u{628}\u{62f}\u{64b}\u{627}.",
-        (Key::TemplateBarcodeNote, Lang::Fr) => concat!(
-            "Un code-barres que la boutique utilise déjà met à jour ce produit ",
-            "(nom, prix d\u{2019}achat, prix de vente) au lieu d\u{2019}en créer un second. ",
-            "Laissez la colonne vide et la caisse attribue un code."
-        ),
-        (Key::TemplateBarcodeNote, Lang::En) => concat!(
-            "A barcode the shop already sells under updates that product ",
-            "(name, cost, price) instead of opening a second one. ",
-            "Leave the column empty and the till assigns a code."
-        ),
-        (Key::TemplateBarcodeNote, Lang::Ar) => concat!(
-            "\u{0627}\u{0644}\u{0631}\u{0645}\u{0632} \u{0627}\u{0644}\u{0634}\u{0631}\u{064a}\u{0637}\u{064a} ",
-            "\u{0627}\u{0644}\u{0645}\u{0633}\u{062a}\u{0639}\u{0645}\u{0644} \u{0645}\u{0646} \u{0642}\u{0628}\u{0644} ",
-            "\u{064a}\u{062d}\u{062f}\u{0651}\u{062b} \u{0627}\u{0644}\u{0645}\u{0646}\u{062a}\u{0648}\u{062c} ",
-            "\u{0628}\u{062f}\u{0644} \u{0625}\u{0646}\u{0634}\u{0627}\u{0621} \u{0645}\u{0646}\u{062a}\u{0648}\u{062c} \u{062b}\u{0627}\u{0646}\u{064d}. ",
-            "\u{0627}\u{062a}\u{0631}\u{0643} \u{0627}\u{0644}\u{062e}\u{0627}\u{0646}\u{0629} \u{0641}\u{0627}\u{0631}\u{063a}\u{0629} ",
-            "\u{0644}\u{062a}\u{0639}\u{064a}\u{0651}\u{0646} \u{0627}\u{0644}\u{0635}\u{0646}\u{062f}\u{0648}\u{0642} \u{0631}\u{0645}\u{0632}\u{064b}\u{0627}."
-        ),
     }
 }

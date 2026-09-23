@@ -19,7 +19,9 @@ use std::sync::{Arc, Mutex};
 use chrono::NaiveDateTime;
 use dzpos_core::db::Conn;
 use dzpos_core::error::CoreError;
-use dzpos_core::services::backup::{self, Backup, Summary};
+use dzpos_core::services::backup::{self, Backup};
+use dzpos_core::services::support_bundle;
+use dzpos_core::shop_counts::{for_bundle, for_verify, BackupCounts};
 
 use crate::error::ApiError;
 pub use crate::router::{origin_from_flag, router, router_with_origin};
@@ -45,7 +47,7 @@ pub struct Copies {
 /// because it is the only record of what was replaced, and nothing deletes
 /// it.
 pub struct Restored {
-    pub summary: Summary,
+    pub summary: BackupCounts,
     pub safety_copy: String,
 }
 
@@ -135,32 +137,28 @@ impl AppState {
         self.with_conn(|conn| backup::create(conn, &dir, at))
     }
 
-    /// The support bundle (M5 T3): the log file beside the shop file, the
-    /// build's own version and migration history, the shape of the schema,
-    /// a handful of counts and sizes, and the machine's OS, language and
-    /// time zone, zipped into one file a shop can send. Every rule about
-    /// what goes in lives in `dzpos_core::services::support_bundle`; this
-    /// reads the three paths its `gather` wants off `self` and hands the
-    /// connection over the same way every other write here does.
+    /// The support bundle (M5 T3): the log file beside the shop file, the build's own version and
+    /// migration history, the shape of the schema, a handful of counts and sizes, and the machine's
+    /// OS, language and time zone, zipped into one file a shop can send. Every rule about what goes
+    /// in lives in `support_bundle`; this reads the three paths its `gather` wants off `self`, the
+    /// retail counts through `shop_counts::for_bundle`, and hands the connection over the same way
+    /// every other write here does. The log is read before the connection is taken, not after: it
+    /// is a plain file with its own lock story, and reading it holds the connection's mutex for no
+    /// longer than building the zip needs to.
     ///
-    /// The log is read before the connection is taken, not after: it is a
-    /// plain file with its own lock story, and reading it holds the
-    /// connection's mutex for no longer than building the zip needs to.
-    ///
-    /// `actor_id` is who asked, for the audit row
-    /// `dzpos_core::services::support_bundle::record` writes once the zip is
-    /// built and before it is handed back, the same order an export's own
-    /// row is written in.
+    /// `actor_id` is who asked, for the audit row `support_bundle::record` writes once the zip is
+    /// built and before it is handed back, the same order an export's row is written in.
     pub fn support_bundle(&self, actor_id: i32) -> Result<Vec<u8>, ApiError> {
-        let log = dzpos_core::services::support_bundle::read_log(&default_log_path(&self.db_path))
-            .map_err(ApiError::from)?;
+        let log =
+            support_bundle::read_log(&default_log_path(&self.db_path)).map_err(ApiError::from)?;
         let db_path = Arc::clone(&self.db_path);
         let backup_dir = Arc::clone(&self.backup_dir);
         let shop_id = self.shop_id;
-        self.with_conn(|conn| {
-            let facts = dzpos_core::services::support_bundle::gather(conn, &db_path, &backup_dir)?;
-            let bytes = dzpos_core::services::support_bundle::build_zip(&facts, &log)?;
-            dzpos_core::services::support_bundle::record(conn, shop_id, actor_id)?;
+        self.with_conn(|conn| -> Result<Vec<u8>, CoreError> {
+            let retail_counts = for_bundle(conn)?;
+            let facts = support_bundle::gather(conn, &db_path, &backup_dir, &retail_counts)?;
+            let bytes = support_bundle::build_zip(&facts, &log)?;
+            support_bundle::record(conn, shop_id, actor_id)?;
             Ok(bytes)
         })
     }
@@ -222,7 +220,7 @@ impl AppState {
     ///   shop's books with nothing to go back to. The restore itself stands;
     ///   the file on disk is the copy the owner asked for, unmigrated.
     pub fn restore(&self, backup_path: &Path, actor_id: i32) -> Result<Restored, ApiError> {
-        let summary = backup::verify(backup_path).map_err(ApiError::Request)?;
+        let summary = backup::verify(backup_path, for_verify).map_err(ApiError::Request)?;
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
         let db = self.db_path.as_path();
 
@@ -377,12 +375,12 @@ impl AppState {
         }
     }
 
-    /// Runs one closure against the connection. A poisoned lock means an
-    /// earlier handler panicked; the answer is a 500, never another panic.
-    pub fn with_conn<T>(
-        &self,
-        f: impl FnOnce(&mut Conn) -> Result<T, CoreError>,
-    ) -> Result<T, ApiError> {
+    /// Runs one closure against the connection; a `CoreError` or a shop's
+    /// `RetailError` maps to `ApiError`, and a poisoned lock to a 500.
+    pub fn with_conn<T, E>(&self, f: impl FnOnce(&mut Conn) -> Result<T, E>) -> Result<T, ApiError>
+    where
+        ApiError: From<E>,
+    {
         let mut guard = self.conn.lock().map_err(|_| ApiError::Unavailable)?;
         // Empty means a restore closed the file and could not reopen it.
         // Every caller is refused from here on, which is what keeps a backup
@@ -392,12 +390,12 @@ impl AppState {
         f(conn).map_err(ApiError::from)
     }
 
-    /// Same, off the async executor. diesel is synchronous, so a query that
-    /// waits on the file must not hold a runtime thread.
-    pub async fn blocking<T, F>(&self, f: F) -> Result<T, ApiError>
+    /// Same, off the async executor: a synchronous diesel query must not hold a runtime thread.
+    pub async fn blocking<T, E, F>(&self, f: F) -> Result<T, ApiError>
     where
         T: Send + 'static,
-        F: FnOnce(&mut Conn) -> Result<T, CoreError> + Send + 'static,
+        ApiError: From<E>,
+        F: FnOnce(&mut Conn) -> Result<T, E> + Send + 'static,
     {
         let me = self.clone();
         tokio::task::spawn_blocking(move || me.with_conn(f))

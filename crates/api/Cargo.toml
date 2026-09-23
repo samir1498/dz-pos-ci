@@ -41,6 +41,14 @@ tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros"] }
 # with to walk its entries. Already in the lock through dzpos-core's own
 # `zip` dependency (M5 T3), so this compiles nothing new.
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
+# Test-only: the error-mapping regression test constructs a real
+# `CoreError::Hash` to pin its status and code. Already in the lock through
+# dzpos-kernel's own dependency, so this compiles nothing new.
+argon2 = { workspace = true }
+# Test-only: the same regression test constructs a real
+# `RetailError::Workbook` to pin its status and code. Already in the lock
+# through dzpos-retail's own dependency, so this compiles nothing new.
+rust_xlsxwriter = "0.99.0"
 
 [lints]
 workspace = true

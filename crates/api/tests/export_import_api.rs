@@ -10,6 +10,9 @@
 //! is the core's rule and the core's test; what is checked here is that the
 //! refusal crosses as the envelope every other one does.
 
+use std::collections::BTreeMap;
+use std::io::Read;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
@@ -17,6 +20,28 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 mod common;
+
+/// Every entry of an `.xlsx` but the one rust_xlsxwriter stamps with the
+/// second it ran (`docProps/core.xml`'s `dcterms:created`/`dcterms:modified`,
+/// `datetime.rs::utc_now`): two workbooks built a second apart, both correct,
+/// differ there and nowhere else. Comparing this instead of the raw bytes is
+/// still a byte-for-byte check on every column, every sheet name and every
+/// row the two calls wrote.
+fn xlsx_entries_but_the_stamped_second(bytes: &[u8]) -> BTreeMap<String, Vec<u8>> {
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec())).unwrap();
+    let mut out = BTreeMap::new();
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).unwrap();
+        let name = file.name().to_string();
+        if name == "docProps/core.xml" {
+            continue;
+        }
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents).unwrap();
+        out.insert(name, contents);
+    }
+    out
+}
 
 const SHOP: i32 = 1;
 const TOKEN: &str = "test-launch-token";
@@ -261,9 +286,10 @@ async fn the_template_keeps_following_the_callers_lang_with_arabic_stored() {
 
     let template = call(&app, "GET", "/import/products/template?lang=fr", None).await;
     assert_eq!(template.status, StatusCode::OK);
+    let wanted = dzpos_core::services::import::template(dzpos_core::lang::Lang::Fr).unwrap();
     assert_eq!(
-        template.body,
-        dzpos_core::services::import::template(dzpos_core::lang::Lang::Fr).unwrap(),
+        xlsx_entries_but_the_stamped_second(&template.body),
+        xlsx_entries_but_the_stamped_second(&wanted),
         "the template followed the stored Arabic instead of ?lang=fr"
     );
 }

@@ -11,7 +11,7 @@
 //! port 9100 or to `escpos-emulator` for a look without hardware. USB is
 //! still not wired.
 
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::lang::Lang;
 use crate::models::document::Document;
 use crate::money::Regime;
@@ -33,9 +33,9 @@ const MAX_BAND_BYTES: usize = 60_000;
 
 /// ESC/POS bytes for the 80 mm ticket. Same refusal as the HTML renderer
 /// when an IFU document carries a TVA recap.
-pub fn render_ticket_escpos(doc: &Document, lang: Lang) -> Result<Vec<u8>, CoreError> {
+pub fn render_ticket_escpos(doc: &Document, lang: Lang) -> Result<Vec<u8>, RetailError> {
     if doc.regime == Regime::Ifu && !doc.totals.tva_by_rate.is_empty() {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "an IFU document carries a TVA recap and has no printable form",
         ));
     }
@@ -55,7 +55,7 @@ pub fn render_ticket_escpos_in(
     doc: &Document,
     lang: Lang,
     mode: ThermalMode,
-) -> Result<Vec<u8>, CoreError> {
+) -> Result<Vec<u8>, RetailError> {
     match mode.for_lang(lang) {
         ThermalMode::Text => render_ticket_escpos(doc, lang),
         ThermalMode::Raster => render_ticket_escpos_raster(doc, lang, raster::HEAD_WIDTH_DOTS),
@@ -133,7 +133,7 @@ pub fn write_ticket_escpos_to_file(
     lang: Lang,
     mode: ThermalMode,
     path: &std::path::Path,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     let bytes = render_ticket_escpos_in(doc, lang, mode)?;
     std::fs::write(path, bytes)?;
     Ok(())
@@ -152,7 +152,7 @@ pub fn send_ticket_escpos_tcp(
     lang: Lang,
     mode: ThermalMode,
     addr: &str,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     use std::io::Write as _;
     let bytes = render_ticket_escpos_in(doc, lang, mode)?;
     let mut stream = std::net::TcpStream::connect(addr)?;
@@ -194,7 +194,7 @@ pub fn render_ticket_escpos_raster(
     doc: &Document,
     lang: Lang,
     width_dots: u32,
-) -> Result<Vec<u8>, CoreError> {
+) -> Result<Vec<u8>, RetailError> {
     encode_raster(&draw_ticket_raster(doc, lang, width_dots)?.bitmap)
 }
 
@@ -202,7 +202,7 @@ pub fn render_ticket_escpos_raster(
 /// bands, cut. Takes the bitmap and not the document for the reason
 /// `encode` takes the item list — the facture draws its own and sends it
 /// down this same wire.
-pub(crate) fn encode_raster(bitmap: &raster::Bitmap) -> Result<Vec<u8>, CoreError> {
+pub(crate) fn encode_raster(bitmap: &raster::Bitmap) -> Result<Vec<u8>, RetailError> {
     let mut out = Buf::new();
     out.init_raster();
     out.raster(bitmap)?;
@@ -218,9 +218,9 @@ pub fn draw_ticket_raster(
     doc: &Document,
     lang: Lang,
     width_dots: u32,
-) -> Result<raster::Drawn, CoreError> {
+) -> Result<raster::Drawn, RetailError> {
     if doc.regime == Regime::Ifu && !doc.totals.tva_by_rate.is_empty() {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "an IFU document carries a TVA recap and has no printable form",
         ));
     }
@@ -266,15 +266,15 @@ impl Buf {
     /// dots to a byte with the leftmost dot in the high bit and 1 meaning
     /// black — the same packing `raster::Bitmap` holds, so the bytes are
     /// copied and not rebuilt.
-    fn raster(&mut self, bitmap: &raster::Bitmap) -> Result<(), CoreError> {
+    fn raster(&mut self, bitmap: &raster::Bitmap) -> Result<(), RetailError> {
         let stride = bitmap.stride();
         let rows_per_band = MAX_BAND_BYTES.checked_div(stride).unwrap_or(0).max(1);
         let x = u16::try_from(stride)
-            .map_err(|_| CoreError::render("a raster row wider than 65 535 bytes"))?;
+            .map_err(|_| RetailError::render("a raster row wider than 65 535 bytes"))?;
         for band in bitmap.rows().chunks(stride.saturating_mul(rows_per_band)) {
             let height = band.len().checked_div(stride).unwrap_or(0);
             let y = u16::try_from(height)
-                .map_err(|_| CoreError::render("a raster band taller than 65 535 rows"))?;
+                .map_err(|_| RetailError::render("a raster band taller than 65 535 rows"))?;
             self.bytes.extend_from_slice(&[GS, b'v', b'0', 0]);
             self.bytes.extend_from_slice(&x.to_le_bytes());
             self.bytes.extend_from_slice(&y.to_le_bytes());

@@ -13,7 +13,8 @@
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::audit_actions;
+use crate::error::{CoreError, RetailError};
 use crate::models::customer::CustomerRowWrite;
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::money::Money;
@@ -136,11 +137,11 @@ pub fn create(
     user_id: i32,
     fields: NewCustomer,
     opening_debt: Option<Money>,
-) -> Result<Customer, CoreError> {
+) -> Result<Customer, RetailError> {
     let write = validate(shop_id, &fields)?;
     if let Some(debt) = opening_debt {
         if debt.is_negative() {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "opening_debt",
                 "an opening balance the shop owes the customer is not a debt to carry over",
             ));
@@ -231,7 +232,7 @@ pub fn update(
         // it by the action rather than by diffing two fiches.
         let (action, extra) = match (&account, &reason) {
             (Some(account), Some(reason)) => (
-                audit::ACTION_CLOSE_CUSTOMER,
+                audit_actions::ACTION_CLOSE_CUSTOMER,
                 Some(serde_json::json!({
                     "close_reason": reason,
                     "balance_centimes": account.balance.as_centimes(),

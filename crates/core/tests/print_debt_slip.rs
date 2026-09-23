@@ -28,7 +28,7 @@ use dzpos_core::money::words::amount_in_words;
 use dzpos_core::money::Money;
 use dzpos_core::print::debt_slip::MOVEMENTS;
 use dzpos_core::print::render_debt_slip;
-use dzpos_core::print::strings::{text, Key};
+use dzpos_core::print::strings::{shop_text, text, Key, ShopKey};
 use dzpos_core::services::customers::{Customer, PartyKind};
 use dzpos_core::services::debt::{
     DebtEntry, DebtKind, DocumentRef, PaymentMethod, RecentStatement, StatementEntry,
@@ -448,7 +448,7 @@ fn the_golden_says_what_the_slip_holds(html: &str, slip: &RecentStatement, lang:
             );
         }
     }
-    assert!(html.contains(text(Key::DebtSlip, lang)));
+    assert!(html.contains(shop_text(ShopKey::DebtSlip, lang)));
     assert!(html.contains(text(Key::LastMovements, lang)));
 }
 
@@ -582,7 +582,7 @@ fn a_balance_the_shop_owes_prints_the_amount_and_says_whose_way_it_goes() {
         "the words of a negative balance are the words of the amount"
     );
     assert!(
-        page.contains(text(Key::InFavourOfCustomer, Lang::Fr)),
+        page.contains(shop_text(ShopKey::InFavourOfCustomer, Lang::Fr)),
         "the page says the amount is owed and not which way"
     );
 }

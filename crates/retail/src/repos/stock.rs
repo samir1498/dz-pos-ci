@@ -8,7 +8,7 @@ use diesel::sqlite::SqliteConnection;
 
 use std::collections::HashMap;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::stock::{
     Counted, MovementKind, StockMovement, StockMovementRow, StockMovementRowWrite,
 };
@@ -108,7 +108,7 @@ pub fn sale_costs_of_document(
     conn: &mut SqliteConnection,
     shop_id: i32,
     document_id: i32,
-) -> Result<HashMap<i32, Money>, CoreError> {
+) -> Result<HashMap<i32, Money>, RetailError> {
     let rows: Vec<(i32, Option<i64>, Option<i64>)> = stock_movements::table
         .filter(stock_movements::shop_id.eq(shop_id))
         .filter(stock_movements::document_id.eq(document_id))
@@ -126,14 +126,14 @@ pub fn sale_costs_of_document(
         // bound is null; a file that answers otherwise is one this cannot
         // price either, and it takes the same refusal.
         let (Some(low), Some(high)) = (low, high) else {
-            return Err(CoreError::UnpricedReversal {
+            return Err(RetailError::UnpricedReversal {
                 document_id,
                 product_id,
                 reason: "its sale movements carry no cost",
             });
         };
         if low != high {
-            return Err(CoreError::UnpricedReversal {
+            return Err(RetailError::UnpricedReversal {
                 document_id,
                 product_id,
                 reason: "its sale movements carry two different costs",

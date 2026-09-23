@@ -17,7 +17,7 @@
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::money::{compute_totals, Money, TotalsOptions};
 use crate::services::documents::{
     BalanceTriple, Document, DocumentKind, NewDocument, NewDocumentLine, SellerBlock,
@@ -40,18 +40,18 @@ pub fn issue(
     shop_id: i32,
     user_id: i32,
     new: NewSale,
-) -> Result<Document, CoreError> {
+) -> Result<Document, RetailError> {
     if new.lines.is_empty() {
-        return Err(CoreError::validation("lines", "a quotation needs a line"));
+        return Err(RetailError::validation("lines", "a quotation needs a line"));
     }
     let Some(customer_id) = new.customer_id else {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "customer_id",
             "a proforma is made out to a customer, so one has to be named",
         ));
     };
     if new.global_discount.is_negative() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "global_discount",
             "a discount cannot be negative",
         ));
@@ -60,7 +60,7 @@ pub fn issue(
     // is refused rather than dropped: money the caller sent and the document
     // does not hold is money nobody can account for later.
     if new.tendered.is_some() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "tendered",
             "a proforma quotes an amount, it does not take one",
         ));
@@ -74,7 +74,7 @@ pub fn issue(
         // rather than a buyer block printed on this shop's paper (rule 3).
         let customer = customers::prove(conn, shop_id, customer_id)?;
         if !customer.fiche().active {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "customer_id",
                 "this customer's fiche is closed",
             ));
@@ -84,7 +84,7 @@ pub fn issue(
         let money_lines = pricing::money_lines(&priced);
         let total_ht = pricing::sum_line_totals(&money_lines)?;
         if new.global_discount > total_ht {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "global_discount",
                 "a discount above the basket would make the quotation negative",
             ));
@@ -104,7 +104,7 @@ pub fn issue(
         )
         .map_err(pricing::too_large("lines"))?;
 
-        documents::issue(
+        Ok(documents::issue(
             conn,
             shop_id,
             NewDocument {
@@ -146,6 +146,6 @@ pub fn issue(
                     })
                     .collect(),
             },
-        )
+        )?)
     })
 }

@@ -15,7 +15,7 @@
 //! written-off facture would otherwise read as paid for and open the drawer.
 
 use chrono::NaiveDate;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::money::{Money, PaymentMode};
 use dzpos_core::services::avoir::{self, AvoirLine};
 use dzpos_core::services::cash_refunds::Refund;
@@ -158,7 +158,7 @@ fn a_facture_written_off_by_an_adjustment_is_not_refunded_in_cash() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "refund"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "refund"),
         "{err:?}"
     );
     assert_eq!(
@@ -268,7 +268,7 @@ fn a_credit_facture_part_paid_is_refunded_in_cash_up_to_what_came_in() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "refund"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "refund"),
         "{err:?}"
     );
 
@@ -308,7 +308,7 @@ fn a_credit_facture_part_paid_is_refunded_in_cash_up_to_what_came_in() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "refund"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "refund"),
         "{err:?}"
     );
 }
@@ -793,7 +793,7 @@ fn a_second_shops_payments_do_not_widen_what_this_shop_hands_back() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "refund"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "refund"),
         "the other shop's payments widened this one's bound: {err:?}"
     );
 

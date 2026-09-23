@@ -15,8 +15,7 @@
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::{CoreError, PartySide};
-use crate::models::customer::ProvedCustomer;
+use crate::error::{CoreError, PartySide, RetailError};
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::document::{
     payment_mode_stored, BalanceTriple, Document, NewDocument, NewDocumentLine, PartyBlock,
@@ -28,7 +27,8 @@ use crate::repos::sale_idempotency as idempotency;
 use crate::services::pricing::{
     buyer_block, money_lines, price_lines, sum_line_totals, too_large, STAMP_ENABLED,
 };
-use crate::services::{customers, debt, documents, proforma, shifts, stock};
+use crate::services::{customers, debt, discount_threshold, documents, proforma, shifts, stock};
+use crate::{audit_actions, models::customer::ProvedCustomer};
 use dzpos_kernel::services::permissions::{self, Permission};
 use dzpos_kernel::services::{audit, clock, role_of, settings, shops};
 
@@ -138,7 +138,7 @@ pub fn issue(
     shop_id: i32,
     user_id: i32,
     new: NewSale,
-) -> Result<Sale, CoreError> {
+) -> Result<Sale, RetailError> {
     issue_inner(conn, shop_id, user_id, new, None)
 }
 
@@ -153,7 +153,7 @@ pub fn issue_idempotent(
     user_id: i32,
     new: NewSale,
     idempotency_key: String,
-) -> Result<Sale, CoreError> {
+) -> Result<Sale, RetailError> {
     validate_idempotency_key(&idempotency_key)?;
     issue_inner(conn, shop_id, user_id, new, Some(idempotency_key))
 }
@@ -164,13 +164,13 @@ fn issue_inner(
     user_id: i32,
     new: NewSale,
     idempotency_key: Option<String>,
-) -> Result<Sale, CoreError> {
+) -> Result<Sale, RetailError> {
     // A quotation is not a sale: it writes the document and stops. Handed
     // over before any of the rules below, because none of them is about it,
     // and it never warns about a credit limit it does not move.
     if new.kind == SaleKind::Proforma {
         if idempotency_key.is_some() {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "idempotency_key",
                 "a quotation takes no retry key; only ticket and facture rings do",
             ));
@@ -182,12 +182,12 @@ fn issue_inner(
         });
     }
     if new.lines.is_empty() {
-        return Err(CoreError::validation("lines", "a sale needs a line"));
+        return Err(RetailError::validation("lines", "a sale needs a line"));
     }
     if new.payment_mode == PaymentMode::Credit && new.customer_id.is_none() {
         // Money owed by nobody. The ledger is per customer (features.md §2),
         // so a credit sale with no fiche has nowhere to be owed from.
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "customer_id",
             "a credit sale is owed by a customer, so one has to be named",
         ));
@@ -197,13 +197,13 @@ fn issue_inner(
         // where the buyer block comes from. Refused on the field the caller
         // sent rather than as `party_ids`: nothing is missing from a block
         // here, there is no block at all.
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "customer_id",
             "a facture is made out to a customer, so one has to be named",
         ));
     }
     if new.global_discount.is_negative() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "global_discount",
             "a discount cannot be negative",
         ));
@@ -236,7 +236,7 @@ fn issue_inner(
             let hash = fingerprint(&new);
             if let Some(hit) = idempotency::find(conn, shop_id, key)? {
                 if hit.request_hash != hash {
-                    return Err(CoreError::conflict(
+                    return Err(RetailError::conflict(
                         "idempotency_key",
                         "this retry key already rang a different sale",
                     ));
@@ -256,7 +256,7 @@ fn issue_inner(
         let money_lines = money_lines(&priced);
         let total_ht = sum_line_totals(&money_lines)?;
         if new.global_discount > total_ht {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "global_discount",
                 "a discount above the basket would make the sale negative",
             ));
@@ -303,7 +303,7 @@ fn issue_inner(
 
         let basket = sum_line_gross(&money_lines)?;
         let discount = sum_discounts(&money_lines, new.global_discount)?;
-        let threshold = settings::discount_threshold_as_of(conn, shop_id, issued_at)?;
+        let threshold = discount_threshold::discount_threshold_as_of(conn, shop_id, issued_at)?;
         let discounted_past_threshold =
             permissions::discount_needs_permission(basket, discount, threshold)?;
         if discounted_past_threshold {
@@ -410,7 +410,7 @@ fn issue_inner(
         if let Some(key) = &idempotency_key {
             let hash = fingerprint(&new);
             if !idempotency::record(conn, shop_id, key, document.id, &hash, issued_at)? {
-                return Err(CoreError::conflict(
+                return Err(RetailError::conflict(
                     "idempotency_key",
                     "this key just rang on another call; send it again to read that sale",
                 ));
@@ -456,7 +456,7 @@ fn issue_inner(
                 shop_id,
                 user_id,
                 audit::Change {
-                    action: audit::ACTION_PRICE_OVERRIDE,
+                    action: audit_actions::ACTION_PRICE_OVERRIDE,
                     entity: "document",
                     entity_id: Some(document.id),
                     before: Some(serde_json::json!({ "lines": negotiated.len() }).to_string()),
@@ -477,7 +477,7 @@ fn issue_inner(
                 shop_id,
                 user_id,
                 audit::Change {
-                    action: audit::ACTION_DISCOUNT_OVERRIDE,
+                    action: audit_actions::ACTION_DISCOUNT_OVERRIDE,
                     entity: "document",
                     entity_id: Some(document.id),
                     // The threshold in force on the day travels beside the
@@ -577,7 +577,7 @@ fn issue_inner(
                 shop_id,
                 user_id,
                 audit::Change {
-                    action: audit::ACTION_CREDIT_OVERRIDE,
+                    action: audit_actions::ACTION_CREDIT_OVERRIDE,
                     // The row is about the document the decision produced,
                     // which is what `entity_id` names, so it says `document`
                     // like every other row about one. A reader after the
@@ -628,7 +628,7 @@ fn issue_inner(
                 shop_id,
                 user_id,
                 audit::Change {
-                    action: audit::ACTION_CREDIT_WARNED,
+                    action: audit_actions::ACTION_CREDIT_WARNED,
                     entity: "document",
                     entity_id: Some(document.id),
                     before: Some(
@@ -676,7 +676,7 @@ fn issue_inner(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_CREDIT_BLOCKED,
+                action: audit_actions::ACTION_CREDIT_BLOCKED,
                 // The customer, not a document: the refusal produced none.
                 entity: "customer",
                 entity_id: customer_id,
@@ -715,7 +715,7 @@ fn issue_inner(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_PRICE_CUT_BLOCKED,
+                action: audit_actions::ACTION_PRICE_CUT_BLOCKED,
                 // The customer if the sale named one, and the shop itself if
                 // it did not: a cash sale at the counter has no fiche behind
                 // it, and the refusal is about the person at the till rather
@@ -754,7 +754,7 @@ fn issue_inner(
 /// The seller is checked first: a shop whose own settings are short has no
 /// fiche the cashier could edit that would make the facture printable, so
 /// hearing about the buyer first would send them to the wrong screen.
-fn check_party_ids(seller: &SellerBlock, buyer: Option<&PartyBlock>) -> Result<(), CoreError> {
+fn check_party_ids(seller: &SellerBlock, buyer: Option<&PartyBlock>) -> Result<(), RetailError> {
     let mut missing = Vec::new();
     if unset(seller.rc.as_deref()) {
         missing.push("rc");
@@ -763,7 +763,7 @@ fn check_party_ids(seller: &SellerBlock, buyer: Option<&PartyBlock>) -> Result<(
         missing.push("nis");
     }
     if !missing.is_empty() {
-        return Err(CoreError::PartyIds {
+        return Err(RetailError::PartyIds {
             side: PartySide::Seller,
             missing,
         });
@@ -773,7 +773,7 @@ fn check_party_ids(seller: &SellerBlock, buyer: Option<&PartyBlock>) -> Result<(
     // block missing here is a fiche the document service could not read;
     // the same refusal is the honest answer either way.
     let Some(buyer) = buyer else {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "customer_id",
             "a facture is made out to a customer, so one has to be named",
         ));
@@ -797,7 +797,7 @@ fn check_party_ids(seller: &SellerBlock, buyer: Option<&PartyBlock>) -> Result<(
         }
     }
     if !missing.is_empty() {
-        return Err(CoreError::PartyIds {
+        return Err(RetailError::PartyIds {
             side: PartySide::Buyer,
             missing,
         });
@@ -898,7 +898,7 @@ fn credit_check(
     customer_id: i32,
     ask: CreditAsk,
     refused: &mut Option<Refused>,
-) -> Result<CreditCheck, CoreError> {
+) -> Result<CreditCheck, RetailError> {
     let CreditAsk {
         payment_mode,
         net_to_pay,
@@ -908,7 +908,7 @@ fn credit_check(
     // rather than a buyer block printed on this shop's paper (rule 3).
     let customer = customers::prove(conn, shop_id, customer_id)?;
     if !customer.fiche().active {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "customer_id",
             "this customer's fiche is closed",
         ));
@@ -952,7 +952,7 @@ fn credit_check(
                     asked_to_override: override_credit,
                 });
                 if !override_credit {
-                    return Err(CoreError::CreditLimit {
+                    return Err(RetailError::CreditLimit {
                         balance_after: total_debt,
                         credit_limit,
                     });

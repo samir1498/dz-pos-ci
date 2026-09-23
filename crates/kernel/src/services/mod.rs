@@ -110,9 +110,13 @@ pub fn bounded_field(field: &str, value: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
-// The domain-free eleven; the twenty-four retail services moved to
+// The domain-free eleven. The twenty-four retail services moved to
 // `dzpos-retail` in the kernel crate split (S3 of
-// `a-kernel-crate-and-retail-as-the-first-module`).
+// `a-kernel-crate-and-retail-as-the-first-module`); S4 added a
+// twenty-fifth, `discount_threshold`, built on the four generic wrappers
+// `services::settings` above still exposes over its own repo, which keeps
+// only the régime fiscal itself: every trade would need that the same way,
+// unlike a shop's own discount rule.
 pub mod audit;
 pub mod backup;
 pub mod clock;

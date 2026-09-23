@@ -16,6 +16,7 @@ use axum::extract::{Request, State};
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use dzpos_core::error::CoreError;
 use dzpos_core::services::permissions::{self, Permission};
 use dzpos_core::services::sessions::SignedIn;
 use dzpos_core::services::{preferences, sessions, users};
@@ -44,7 +45,7 @@ pub async fn login(
     let shop = state.shop_id;
     let at = session::now();
     let (signed_in, idle) = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<(SignedIn, i64), CoreError> {
             let signed_in = match dto {
                 LoginDto::Pin { user_id, pin } => {
                     sessions::sign_in_with_pin(c, shop, user_id, &pin, at)?
@@ -96,7 +97,7 @@ pub async fn claim_first_owner(
     let shop = state.shop_id;
     let at = session::now();
     let (signed_in, idle) = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<(SignedIn, i64), CoreError> {
             let owner = users::claim_first_owner(c, shop, &name, &password)?;
             let signed_in = sessions::sign_in_with_password(c, shop, &owner.name, &password, at)?;
             let idle = preferences::session_idle(c, shop)?.num_minutes();

@@ -8,7 +8,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::stock::MovementKind;
 use dzpos_core::money::{Bps, Money, PaymentMode};
@@ -315,7 +315,7 @@ fn a_document_is_cancelled_once_and_an_avoir_or_a_proforma_never() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "document_id"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "document_id"),
         "{err:?}"
     );
 
@@ -340,7 +340,7 @@ fn a_document_is_cancelled_once_and_an_avoir_or_a_proforma_never() {
     )
     .unwrap_err();
     assert!(
-        matches!(again, CoreError::Validation { ref field, .. } if field == "document_id"),
+        matches!(again, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "document_id"),
         "{again:?}"
     );
     // The first cancellation is untouched.
@@ -420,7 +420,7 @@ fn a_cancellation_is_audited_and_another_shops_document_is_not_found() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::NotFound { entity, .. } if entity == "document"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::NotFound { entity, .. }) if entity == "document"),
         "{err:?}"
     );
 
@@ -474,7 +474,7 @@ fn a_cancellation_needs_a_reason() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "reason"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "reason"),
         "{err:?}"
     );
     assert_eq!(
@@ -636,7 +636,7 @@ fn only_a_ticket_and_a_facture_are_cancelled() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "document_id"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "document_id"),
         "{err:?}"
     );
 
@@ -1045,7 +1045,7 @@ fn a_cancelled_ticket_whose_movement_is_gone_is_refused_rather_than_priced_off_t
     assert!(
         matches!(
             refused,
-            Err(CoreError::UnpricedReversal { product_id, .. }) if product_id == p
+            Err(RetailError::UnpricedReversal { product_id, .. }) if product_id == p
         ),
         "a missing movement was priced off the fiche: {refused:?}"
     );

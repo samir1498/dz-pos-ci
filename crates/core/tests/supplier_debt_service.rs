@@ -15,7 +15,7 @@
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::money::Money;
 use dzpos_core::services::supplier_debt::{self, PaymentMethod, SupplierDebtKind};
 use dzpos_core::services::{audit, clock, suppliers};
@@ -199,7 +199,7 @@ fn a_payment_above_what_is_owed_is_refused_and_says_what_is_owed() {
     assert!(
         matches!(
             err,
-            CoreError::PaymentAboveDebt {
+            RetailError::PaymentAboveDebt {
                 outstanding_centimes: 160_000
             }
         ),
@@ -233,7 +233,7 @@ fn a_payment_to_a_supplier_owed_nothing_says_nothing_is_owed() {
     assert!(
         matches!(
             err,
-            CoreError::PaymentAboveDebt {
+            RetailError::PaymentAboveDebt {
                 outstanding_centimes: 0
             }
         ),
@@ -258,7 +258,7 @@ fn a_payment_of_nothing_pays_nothing() {
         )
         .unwrap_err();
         assert!(
-            matches!(&err, CoreError::Validation { field, .. } if field == "amount_centimes"),
+            matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "amount_centimes"),
             "{err}"
         );
     }
@@ -296,7 +296,7 @@ fn a_payment_of_nothing_says_so_even_to_a_supplier_holding_the_shop_s_money() {
         )
         .unwrap_err();
         assert!(
-            matches!(&err, CoreError::Validation { field, .. } if field == "amount_centimes"),
+            matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "amount_centimes"),
             "{err}"
         );
     }
@@ -417,7 +417,7 @@ fn a_correction_of_nothing_corrects_nothing() {
     let err =
         supplier_debt::adjust(&mut conn, SHOP, OWNER, supplier, Money::ZERO, None).unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "amount"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "amount"),
         "{err}"
     );
 }

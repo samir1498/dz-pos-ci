@@ -26,12 +26,12 @@ use chrono::{NaiveDate, NaiveDateTime};
 use diesel::sqlite::SqliteConnection;
 use rust_xlsxwriter::{Format, Workbook, Worksheet};
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::lang::Lang;
 use crate::models::product::Product;
 use crate::money::Money;
 use crate::print::number;
-use crate::print::strings::{text, Key};
+use crate::print::strings::{shop_text, ShopKey};
 use crate::services::{categories, customers, documents, products, suppliers};
 use dzpos_kernel::services::audit;
 
@@ -88,29 +88,29 @@ impl Formats {
 /// The parse cannot fail on a string this function built, and it is still
 /// reported rather than defaulted: a silent zero in a money column is the
 /// one failure a workbook must not have.
-fn amount(money: Money) -> Result<f64, CoreError> {
+fn amount(money: Money) -> Result<f64, RetailError> {
     let centimes = money.as_centimes();
     let sign = if centimes < 0 { "-" } else { "" };
     let abs = centimes.unsigned_abs();
     format!("{sign}{}.{:02}", abs / 100, abs % 100)
         .parse::<f64>()
-        .map_err(|_| CoreError::validation("amount", "an amount has no decimal form"))
+        .map_err(|_| RetailError::validation("amount", "an amount has no decimal form"))
 }
 
 /// A quantity the same way: thousandths of the unit, spelled out and parsed.
-fn quantity(qty_milli: i64) -> Result<f64, CoreError> {
+fn quantity(qty_milli: i64) -> Result<f64, RetailError> {
     let sign = if qty_milli < 0 { "-" } else { "" };
     let abs = qty_milli.unsigned_abs();
     format!("{sign}{}.{:03}", abs / 1000, abs % 1000)
         .parse::<f64>()
-        .map_err(|_| CoreError::validation("qty_milli", "a quantity has no decimal form"))
+        .map_err(|_| RetailError::validation("qty_milli", "a quantity has no decimal form"))
 }
 
 /// A rate in basis points as the percentage a person reads: 1900 is 19.
-fn rate_percent(bps: u32) -> Result<f64, CoreError> {
+fn rate_percent(bps: u32) -> Result<f64, RetailError> {
     format!("{}.{:02}", bps / 100, bps % 100)
         .parse::<f64>()
-        .map_err(|_| CoreError::validation("rate_bps", "a rate has no decimal form"))
+        .map_err(|_| RetailError::validation("rate_bps", "a rate has no decimal form"))
 }
 
 /// One sheet with its header row already written and its columns widened.
@@ -121,7 +121,7 @@ fn open_sheet<'a>(
     tab: &str,
     columns: &[&str],
     formats: &Formats,
-) -> Result<&'a mut Worksheet, CoreError> {
+) -> Result<&'a mut Worksheet, RetailError> {
     let sheet = workbook.add_worksheet();
     sheet.set_name(tab)?;
     for (index, name) in columns.iter().enumerate() {
@@ -201,13 +201,13 @@ const SUPPLIER_COLUMNS: [&str; 10] = [
 /// Where a column sits, by the name it carries. The writers below say
 /// `at(&COLUMNS, "selling_da")` rather than `5`, so inserting a column in the
 /// list moves every cell with it.
-fn at(columns: &[&str], name: &str) -> Result<u16, CoreError> {
+fn at(columns: &[&str], name: &str) -> Result<u16, RetailError> {
     let index = columns
         .iter()
         .position(|c| *c == name)
         .ok_or_else(|| CoreError::validation("column", "a sheet writes a column it never named"))?;
     u16::try_from(index)
-        .map_err(|_| CoreError::validation("column", "a sheet has more columns than Excel"))
+        .map_err(|_| RetailError::validation("column", "a sheet has more columns than Excel"))
 }
 
 /// A `None` text field is an empty cell, not the word "None": a shop reading
@@ -233,8 +233,8 @@ fn record_export(
     actor_id: i32,
     which: &'static str,
     rows: usize,
-) -> Result<(), CoreError> {
-    audit::record(
+) -> Result<(), RetailError> {
+    Ok(audit::record(
         conn,
         shop_id,
         actor_id,
@@ -245,7 +245,7 @@ fn record_export(
             before: None,
             after: Some(serde_json::json!({ "which": which, "rows": rows }).to_string()),
         },
-    )
+    )?)
 }
 
 /// The shop's products, one row each, active and inactive alike: a workbook
@@ -256,7 +256,7 @@ pub fn products(
     shop_id: i32,
     actor_id: i32,
     lang: Lang,
-) -> Result<Vec<u8>, CoreError> {
+) -> Result<Vec<u8>, RetailError> {
     let rows = products::list(conn, shop_id)?;
     // The category is named rather than numbered: an id means nothing in a
     // spreadsheet and the import matches a category by its name.
@@ -270,7 +270,7 @@ pub fn products(
     let mut workbook = Workbook::new();
     let sheet = open_sheet(
         &mut workbook,
-        text(Key::SheetProducts, lang),
+        shop_text(ShopKey::SheetProducts, lang),
         &PRODUCT_COLUMNS,
         &formats,
     )?;
@@ -289,7 +289,7 @@ fn write_product_row(
     product: &Product,
     category: &str,
     formats: &Formats,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     let column = |name: &str| at(&PRODUCT_COLUMNS, name);
     sheet.write_string(row, column("name")?, &product.name)?;
     sheet.write_string(
@@ -362,14 +362,14 @@ pub fn sales(
     actor_id: i32,
     lang: Lang,
     range: DayRange,
-) -> Result<Vec<u8>, CoreError> {
+) -> Result<Vec<u8>, RetailError> {
     let documents = documents::list_in_range(conn, shop_id, range.from, range.to)?;
 
     let formats = Formats::new();
     let mut workbook = Workbook::new();
     let sheet = open_sheet(
         &mut workbook,
-        text(Key::SheetSales, lang),
+        shop_text(ShopKey::SheetSales, lang),
         &SALE_COLUMNS,
         &formats,
     )?;
@@ -438,7 +438,7 @@ fn write_day(
     column: u16,
     at: NaiveDateTime,
     format: &Format,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     sheet.write_datetime_with_format(row, column, at, format)?;
     Ok(())
 }
@@ -451,14 +451,14 @@ pub fn customers(
     shop_id: i32,
     actor_id: i32,
     lang: Lang,
-) -> Result<Vec<u8>, CoreError> {
+) -> Result<Vec<u8>, RetailError> {
     let rows = customers::list_with_balance(conn, shop_id, None)?;
 
     let formats = Formats::new();
     let mut workbook = Workbook::new();
     let sheet = open_sheet(
         &mut workbook,
-        text(Key::SheetCustomers, lang),
+        shop_text(ShopKey::SheetCustomers, lang),
         &CUSTOMER_COLUMNS,
         &formats,
     )?;
@@ -510,7 +510,7 @@ fn write_optional_amount(
     column: u16,
     value: Option<Money>,
     formats: &Formats,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     match value {
         Some(money) => {
             sheet.write_number_with_format(row, column, amount(money)?, &formats.money)?;
@@ -531,14 +531,14 @@ pub fn suppliers(
     shop_id: i32,
     actor_id: i32,
     lang: Lang,
-) -> Result<Vec<u8>, CoreError> {
+) -> Result<Vec<u8>, RetailError> {
     let rows = suppliers::list_with_balance(conn, shop_id, None)?;
 
     let formats = Formats::new();
     let mut workbook = Workbook::new();
     let sheet = open_sheet(
         &mut workbook,
-        text(Key::SheetSuppliers, lang),
+        shop_text(ShopKey::SheetSuppliers, lang),
         &SUPPLIER_COLUMNS,
         &formats,
     )?;

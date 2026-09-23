@@ -13,7 +13,7 @@
 
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::money::Money;
 use dzpos_core::services::suppliers::{self, NewSupplier};
 use dzpos_core::services::{audit, supplier_debt};
@@ -74,7 +74,7 @@ fn a_second_fiche_under_the_same_name_is_refused_on_the_name() {
     // to come back as a validation on `name`.
     assert_eq!(err.code(), "conflict", "{err}");
     assert!(
-        matches!(&err, CoreError::Conflict { field, .. } if field == "name"),
+        matches!(&err, RetailError::Kernel(CoreError::Conflict { field, .. }) if field == "name"),
         "{err}"
     );
     // Another shop is free to buy from a supplier of the same name.
@@ -158,7 +158,7 @@ fn an_opening_balance_the_supplier_owes_the_shop_is_refused() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "opening_debt"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "opening_debt"),
         "{err}"
     );
 }
@@ -503,7 +503,7 @@ fn a_name_is_required_and_bounded() {
     blank.name = "   ".to_string();
     let err = suppliers::create(&mut conn, SHOP, OWNER, blank, None).unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "name"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "name"),
         "{err}"
     );
 
@@ -514,7 +514,7 @@ fn a_name_is_required_and_bounded() {
     let err = suppliers::create(&mut conn, SHOP, OWNER, long, None).unwrap_err();
     assert_eq!(err.code(), "validation", "{err}");
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "name"),
+        matches!(&err, RetailError::Kernel(CoreError::Validation { field, .. }) if field == "name"),
         "{err}"
     );
 }

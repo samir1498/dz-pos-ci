@@ -46,6 +46,7 @@ use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
+use crate::audit_actions;
 use crate::error::CoreError;
 use crate::models::shift::{ShiftCloseWrite, ShiftRowWrite};
 use crate::money::{Money, PaymentMode};
@@ -200,7 +201,7 @@ pub fn open(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_OPEN_TILL,
+                action: audit_actions::ACTION_OPEN_TILL,
                 entity: "shift",
                 entity_id: Some(made.id),
                 before: None,
@@ -335,7 +336,7 @@ pub fn close(
             shop_id,
             closed_by,
             audit::Change {
-                action: audit::ACTION_CLOSE_TILL,
+                action: audit_actions::ACTION_CLOSE_TILL,
                 entity: "shift",
                 entity_id: Some(closed.id),
                 before: None,
@@ -475,7 +476,7 @@ fn rung_outside_a_shift(
         conn,
         shop_id,
         shift.opened_by,
-        audit::ACTION_SALE_OUTSIDE_SHIFT,
+        audit_actions::ACTION_SALE_OUTSIDE_SHIFT,
         from,
         until,
     )
@@ -550,7 +551,7 @@ pub fn tag_if_outside_a_shift(
         shop_id,
         user_id,
         audit::Change {
-            action: audit::ACTION_SALE_OUTSIDE_SHIFT,
+            action: audit_actions::ACTION_SALE_OUTSIDE_SHIFT,
             entity: "document",
             entity_id: Some(document_id),
             before: None,

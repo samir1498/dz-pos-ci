@@ -12,7 +12,7 @@ use axum::http::StatusCode;
 use axum::response::Html;
 use axum::Json;
 use dzpos_core::db::Conn;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::lang::Lang;
 use dzpos_core::models::document::SellerBlock;
 use dzpos_core::print::debt_slip::MOVEMENTS;
@@ -77,9 +77,9 @@ pub async fn create(
     let shop = state.shop_id;
     let user = who.id;
     let made = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<_, RetailError> {
             let created = service::create(c, shop, user, new, opening)?;
-            service::get_with_balance(c, shop, created.id)
+            service::get_with_balance(c, shop, created.id).map_err(RetailError::from)
         })
         .await?;
     Ok((StatusCode::CREATED, Json(CustomerDto::from(made))))
@@ -177,9 +177,9 @@ pub async fn pay(
     // document's `issued_at` are both on.
     let at = clock::now();
     let written = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<_, RetailError> {
             debt::pay(c, shop, user, id, amount, mode, note, at)?;
-            payments_envelope(c, shop, id)
+            payments_envelope(c, shop, id).map_err(RetailError::from)
         })
         .await?;
     Ok((StatusCode::CREATED, Json(written)))

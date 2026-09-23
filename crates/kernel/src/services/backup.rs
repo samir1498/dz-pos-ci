@@ -72,17 +72,6 @@ pub struct Backup {
     pub bytes: u64,
 }
 
-/// What a copy holds, read while checking it. The counts are what the
-/// settings screen shows after a restore, so the owner sees the file
-/// answered for itself rather than a bare "done".
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Summary {
-    pub products: i64,
-    /// `None` only for a copy taken before the documents table existed
-    /// (migration 2); every copy since carries the count.
-    pub documents: Option<i64>,
-}
-
 #[derive(QueryableByName)]
 struct Count {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
@@ -471,17 +460,23 @@ fn collect(
     Ok(found)
 }
 
-/// Opens the copy, checks it, and reports what it holds. Every failure is a
-/// validation error: the caller picked this file, and the answer it needs is
-/// "this copy will not do", not "the server broke".
+/// Opens the copy, checks it, and calls `read_counts` with a read-only
+/// connection on it to report what it holds: this module has no opinion on
+/// what is worth reporting from a copy, only [`count`] below, which
+/// `read_counts` is built on. Every failure up to that call is a validation
+/// error: the caller picked this file, and the answer it needs is "this
+/// copy will not do", not "the server broke".
 ///
-/// Three things are checked, in order: the file is there and opens as a
-/// database, `PRAGMA integrity_check` passes, and every migration the copy
-/// has applied is one this build knows. That last one is what stops a copy
-/// taken by a newer version from being restored into an older app, where the
-/// schema would be ahead of the code reading it and no forward-only
-/// migration could put it back.
-pub fn verify(path: &Path) -> Result<Summary, CoreError> {
+/// Three things are checked, in order, before `read_counts` ever runs: the
+/// file is there and opens as a database, `PRAGMA integrity_check` passes,
+/// and every migration the copy has applied is one this build knows. That
+/// last one is what stops a copy taken by a newer version from being
+/// restored into an older app, where the schema would be ahead of the code
+/// reading it and no forward-only migration could put it back.
+pub fn verify<T>(
+    path: &Path,
+    read_counts: impl FnOnce(&mut SqliteConnection) -> Result<T, CoreError>,
+) -> Result<T, CoreError> {
     if !std::fs::metadata(path).is_ok_and(|m| m.is_file()) {
         return Err(refused("is not a file this shop can read"));
     }
@@ -523,14 +518,12 @@ pub fn verify(path: &Path) -> Result<Summary, CoreError> {
         ));
     }
 
-    Ok(Summary {
-        products: count(&mut conn, "products")?.unwrap_or(0),
-        documents: count(&mut conn, "documents")?,
-    })
+    read_counts(&mut conn)
 }
 
-/// `None` when the table is not in this copy's schema yet.
-fn count(conn: &mut SqliteConnection, table: &str) -> Result<Option<i64>, CoreError> {
+/// `SELECT COUNT(*) FROM <table>`, `None` when the table is not in this
+/// copy's schema yet. Generic: a table name is a caller's, not a shop concept.
+pub fn count(conn: &mut SqliteConnection, table: &str) -> Result<Option<i64>, CoreError> {
     let present: Vec<Count> = diesel::sql_query(
         "SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name = ?",
     )
@@ -584,6 +577,10 @@ fn refused(why: &str) -> CoreError {
 /// happened: the data is already replaced, and answering the caller with an
 /// error would claim a restore that succeeded had not. `crate::AppState::
 /// restore` logs that failure to the server's own log instead.
+///
+/// `counts` is whatever `verify`'s own `read_counts` answered with,
+/// serialized and merged into `after` field by field: this module never
+/// names any of those fields itself.
 pub fn record_restore(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -591,14 +588,17 @@ pub fn record_restore(
     restored_from: &str,
     safety_copy: &str,
     upgrade_copy: Option<&str>,
-    summary: &Summary,
+    counts: &impl serde::Serialize,
 ) -> Result<(), CoreError> {
     let mut after = serde_json::json!({
         "restored_from": restored_from,
         "safety_copy": safety_copy,
-        "products": summary.products,
-        "documents": summary.documents,
     });
+    if let Ok(serde_json::Value::Object(fields)) = serde_json::to_value(counts) {
+        if let Some(map) = after.as_object_mut() {
+            map.extend(fields);
+        }
+    }
     // The copy the reopen took of the restored file, when that file was
     // behind and had to be migrated. The backups screen lists these under
     // their own heading since 2026-09-12; this row is what says which

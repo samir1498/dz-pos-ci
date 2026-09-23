@@ -11,8 +11,8 @@
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
+use dzpos_core::audit_actions;
 use dzpos_core::money::{Money, PaymentMode};
-use dzpos_core::services::audit;
 use dzpos_core::services::shifts::{self, NewShift, TillCount};
 
 mod common;
@@ -51,7 +51,7 @@ fn a_sale_rung_with_no_drawer(
         "the fixture rang a sale inside a drawer it meant to be outside"
     );
     let stamped = issued_at.format("%Y-%m-%d %H:%M:%S");
-    let action = audit::ACTION_SALE_OUTSIDE_SHIFT;
+    let action = audit_actions::ACTION_SALE_OUTSIDE_SHIFT;
     diesel::sql_query(format!(
         "UPDATE audit_log SET created_at = '{stamped}' \
          WHERE action = '{action}' AND entity_id = {document_id}"

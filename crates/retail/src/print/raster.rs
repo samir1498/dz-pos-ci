@@ -28,7 +28,7 @@ use ab_glyph::{point, Font as _, FontRef, GlyphId, PxScale};
 use rustybuzz::{script, Direction, Face, UnicodeBuffer};
 use unicode_bidi::{Level, ParagraphBidiInfo};
 
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::lang::Lang;
 use crate::print::bidi::{gap_mark, isolate_ltr_runs, script_runs, Piece};
 use crate::print::ticket::{Align, Item, WIDTH};
@@ -137,16 +137,16 @@ pub struct Drawn {
 /// a total cut off at the edge of the paper is worse than no ticket, and
 /// the caller can see the failure while a customer cannot see the missing
 /// digits.
-pub(crate) fn draw(items: &[Item], lang: Lang, width_dots: u32) -> Result<Drawn, CoreError> {
+pub(crate) fn draw(items: &[Item], lang: Lang, width_dots: u32) -> Result<Drawn, RetailError> {
     let width = usize::try_from(width_dots).unwrap_or(0);
     if width == 0 || width % 8 != 0 {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "a head's width is a whole number of bytes of dots (576 for 80 mm, 384 for 58 mm)",
         ));
     }
     let cell = width / WIDTH;
     if cell == 0 {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "a head narrower than 42 dots cannot carry the ticket's columns",
         ));
     }
@@ -260,7 +260,7 @@ fn place(
     fonts: &Fonts,
     metrics: &Metrics,
     width: usize,
-) -> Result<Line, CoreError> {
+) -> Result<Line, RetailError> {
     // The narrow no-break space the money formatter groups thousands with
     // is sent to the head as a plain space (`escpos::Buf::text`), and the
     // first draft substituted it here too. It printed "1 000,00" as
@@ -289,9 +289,9 @@ fn place(
         // Named, not trimmed. A ticket whose total is cut off at the edge
         // of the roll is worse than no ticket, and the line has to be in
         // the message or the shop is told only that printing failed.
-        // `CoreError::render` takes a `&'static str`; this one line needs
+        // `RetailError::render` takes a `&'static str`; this one line needs
         // the offending text, which is why it builds the variant directly.
-        return Err(CoreError::Render(askama::Error::custom(format!(
+        return Err(RetailError::Render(askama::Error::custom(format!(
             "a ticket line needs {advance:.0} dots of a {width}-dot head: {text}"
         ))));
     }
@@ -415,7 +415,7 @@ struct Fonts {
 }
 
 impl Fonts {
-    fn load() -> Result<Self, CoreError> {
+    fn load() -> Result<Self, RetailError> {
         // Both faces are `include_bytes!` of files in this repository, so
         // a failure here is a corrupted checkout and not a runtime
         // condition; it is still an error rather than a panic, because the
@@ -423,10 +423,11 @@ impl Fonts {
         // down while a sale is on the screen.
         const UNREADABLE: &str = "a vendored ticket font is not a font this build can read";
         Ok(Self {
-            arabic: Face::from_slice(NASKH, 0).ok_or_else(|| CoreError::render(UNREADABLE))?,
-            latin: Face::from_slice(PLEX, 0).ok_or_else(|| CoreError::render(UNREADABLE))?,
-            arabic_px: FontRef::try_from_slice(NASKH).map_err(|_| CoreError::render(UNREADABLE))?,
-            latin_px: FontRef::try_from_slice(PLEX).map_err(|_| CoreError::render(UNREADABLE))?,
+            arabic: Face::from_slice(NASKH, 0).ok_or_else(|| RetailError::render(UNREADABLE))?,
+            latin: Face::from_slice(PLEX, 0).ok_or_else(|| RetailError::render(UNREADABLE))?,
+            arabic_px: FontRef::try_from_slice(NASKH)
+                .map_err(|_| RetailError::render(UNREADABLE))?,
+            latin_px: FontRef::try_from_slice(PLEX).map_err(|_| RetailError::render(UNREADABLE))?,
         })
     }
 }

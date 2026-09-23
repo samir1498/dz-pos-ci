@@ -1,35 +1,21 @@
 //! The core's error enum. It wraps `DbError` and `MoneyError` from the
 //! layers below; the API maps it to a status and the UI translates
 //! `code()`, so no Rust or SQL text ever reaches a screen.
+//!
+//! Domain-free since S4 of `a-kernel-crate-and-retail-as-the-first-module`:
+//! the six variants that named a shop concept (`DuplicateBarcode`,
+//! `PaymentAboveDebt`, `CreditLimit`, `Unstamped`, `UnpricedReversal`,
+//! `PartyIds`, and `PartySide` beside it) and the two that wrapped a
+//! retail-only dependency for no shop reason at all (`Render`, wrapping
+//! `askama::Error`; `Workbook`, wrapping `rust_xlsxwriter::XlsxError`, both
+//! raised only by the print and export code S3 already moved to
+//! `dzpos-retail` whole) moved to `dzpos_retail::error::RetailError`, which
+//! wraps this enum rather than repeating it. `crates/api/src/error.rs` maps
+//! both.
 
 use crate::db::DbError;
-use crate::money::{Money, MoneyError};
+use crate::money::MoneyError;
 use crate::services::permissions::Permission;
-
-/// Which half of a facture a `PartyIds` refusal is about. The two blocks are
-/// filled in from two different screens, so the side is what tells the till
-/// whether to send the cashier to the settings or to the customer's fiche.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PartySide {
-    Seller,
-    Buyer,
-}
-
-impl PartySide {
-    /// The stable key the UI translates, the way an error code is.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            PartySide::Seller => "seller",
-            PartySide::Buyer => "buyer",
-        }
-    }
-}
-
-impl std::fmt::Display for PartySide {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoreError {
@@ -37,8 +23,6 @@ pub enum CoreError {
     Validation { field: String, message: String },
     #[error("{entity} {id} does not exist in this shop")]
     NotFound { entity: &'static str, id: i32 },
-    #[error("barcode {0} is already used in this shop")]
-    DuplicateBarcode(String),
     /// A value another row of this shop already holds, where the file says
     /// only one may. Not a `Validation`: what the caller sent is well formed
     /// and what refuses it is a row that is already there, so the screen has
@@ -50,18 +34,6 @@ pub enum CoreError {
     /// clash offers.
     #[error("{field} is already used in this shop: {message}")]
     Conflict { field: String, message: String },
-    /// A payment for more than is owed, on either ledger. Its own variant
-    /// rather than a `Validation`, because the only useful thing to say back
-    /// is a figure the caller never sent: what is outstanding right now. The
-    /// code stays `validation`, so a screen that already translates it says
-    /// the same sentence and reads the amount out of the payload.
-    ///
-    /// The party is not named, because both sides raise it: money over what a
-    /// customer owes is an avoir's business and never a credit balance a
-    /// payment quietly opened, and money over what the shop owes a supplier
-    /// is an advance somebody writes on purpose.
-    #[error("a payment is never more than what is owed")]
-    PaymentAboveDebt { outstanding_centimes: i64 },
     /// A number series the shop hands out (in-store barcodes, the document
     /// numbers) has no next value. Not a validation failure: the user did
     /// nothing wrong, and the API answers 409 so the UI can say the series is
@@ -72,66 +44,6 @@ pub enum CoreError {
     /// read at run time.
     #[error("the {series} series is exhausted")]
     Exhausted { series: String },
-    /// A credit sale the customer's limit will not carry (features.md §1).
-    /// Not a validation failure: every field the caller sent is well formed,
-    /// and what refuses the sale is what the customer already owes. The two
-    /// amounts travel with the code because the till has to say by how much
-    /// and against what, and a screen may not re-derive either.
-    #[error(
-        "this sale would leave {} centimes owed against a credit limit of {} centimes",
-        balance_after.as_centimes(),
-        credit_limit.as_centimes()
-    )]
-    CreditLimit {
-        balance_after: Money,
-        credit_limit: Money,
-    },
-    /// A facture whose party blocks do not carry what décret 05-468 art. 3
-    /// asks of them (`a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number`). Not a validation failure
-    /// on a field the caller sent: the basket is well formed and what
-    /// refuses the paper sits on the settings page or on the customer's
-    /// fiche. The side and the identifiers travel with the code because the
-    /// till has to say where to go and what is missing, and a screen may not
-    /// work either out from the rule (architecture.md rule 2).
-    #[error("the {side} block of a facture is missing {}", missing.join(", "))]
-    PartyIds {
-        side: PartySide,
-        missing: Vec<&'static str>,
-    },
-    /// A ledger row handed to a repo with no moment on it. The column's
-    /// default is SQLite's CURRENT_TIMESTAMP, which is UTC, while every
-    /// period this app answers for is a stretch of days on the shop's
-    /// calendar (UTC+1): a payment taken at 00:30 in Algiers would be stored
-    /// on the day before and fall out of the day the shop counted its
-    /// drawer. The caller stamps it from `services::clock`.
-    ///
-    /// Its own variant and not a `Validation`: no field a caller sent is
-    /// wrong, and nobody using the app can correct it. It is a mistake in
-    /// this crate, so the API answers 500 and the code is the storage one.
-    #[error("a row of {entity} is stamped from the shop clock, never left to the file's default")]
-    Unstamped { entity: &'static str },
-    /// A reversal has no cost to write back, because the stock ledger cannot
-    /// say what the goods cost when they left. Two shapes, both of them a
-    /// file that disagrees with itself: a sold line with no movement at all,
-    /// and one product's sale movements on one document carrying two
-    /// different costs.
-    ///
-    /// Neither can arise from anything a caller sent: `unit_cost_centimes`
-    /// is NOT NULL from the first documents migration, a sale is the only
-    /// writer of a `sale` movement, and it reads the fiche once for the whole
-    /// basket. So it is this crate's bug or a row somebody wrote by hand, and
-    /// it is refused rather than papered over with the fiche's cost today:
-    /// guessing here is how a month's margin moves with a purchase, which is
-    /// the whole thing the ledger cost exists to prevent.
-    ///
-    /// Its own variant and not a `Validation`, for the reason `Unstamped` is:
-    /// the API answers 500 and the code is the storage one.
-    #[error("the stock ledger cannot price the reversal of product {product_id} on document {document_id}: {reason}")]
-    UnpricedReversal {
-        document_id: i32,
-        product_id: i32,
-        reason: &'static str,
-    },
     /// A credential that did not match: a wrong PIN, a wrong password, a name
     /// nobody in the shop answers to, or a user who has been deactivated.
     ///
@@ -149,12 +61,11 @@ pub enum CoreError {
     #[error("too many wrong attempts; this user may try again in {retry_after_seconds} seconds")]
     LockedOut { retry_after_seconds: i64 },
     /// A credential could not be hashed, or a stored hash could not be read
-    /// back as one. Its own variant and not a `Validation`, for the reason
-    /// `Render` and `Workbook` have theirs: the input is bytes this crate
-    /// chose the shape of and the parameters are its own, so a failure here is
-    /// a bug in the app and never something a caller can correct. The API
-    /// answers 500 and the message is fixed; the cause stays on the source
-    /// chain for the server's log.
+    /// back as one. Its own variant and not a `Validation`: the input is
+    /// bytes this crate chose the shape of and the parameters are its own,
+    /// so a failure here is a bug in the app and never something a caller
+    /// can correct. The API answers 500 and the message is fixed; the cause
+    /// stays on the source chain for the server's log.
     ///
     /// Never raised by a credential that simply did not match, and never by
     /// the `'!unset'` sentinel: an unparseable stored hash on a sign-in is a
@@ -179,55 +90,24 @@ pub enum CoreError {
     /// wire. The cause stays on the `source` for the server's own log.
     #[error("the shop's files could not complete the operation")]
     Io(#[from] std::io::Error),
-    /// A printed template failed to render. The template and the data it is
-    /// given are both the app's own, so this is a bug in the app and never
-    /// something a caller can correct; the API answers 500 and the message
-    /// stays fixed, like the file one.
-    #[error("the document could not be rendered for printing")]
-    Render(#[from] askama::Error),
-    /// A workbook this app was writing could not be finished. Like `Render`,
-    /// the data and the layout are both the app's own, so this is a bug here
-    /// and never something a caller can correct; the message is fixed and the
-    /// writer's own text stays on the source chain for the server's log.
-    ///
-    /// Reading a workbook is not this: a file a shop uploaded is input, and a
-    /// file that is not a workbook at all comes back as a `Validation` the
-    /// import screen can put under the file picker.
-    #[error("the workbook could not be written")]
-    Workbook(#[from] rust_xlsxwriter::XlsxError),
 }
 
 impl CoreError {
     /// Stable key the UI translates. Never the message.
     pub const fn code(&self) -> &'static str {
         match self {
-            CoreError::Validation { .. } | CoreError::PaymentAboveDebt { .. } => "validation",
+            CoreError::Validation { .. } => "validation",
             CoreError::NotFound { .. } => "not_found",
-            CoreError::DuplicateBarcode(_) => "duplicate_barcode",
             CoreError::Conflict { .. } => "conflict",
             CoreError::Exhausted { .. } => "exhausted",
-            CoreError::CreditLimit { .. } => "credit_limit",
-            CoreError::PartyIds { .. } => "party_ids",
             CoreError::AuthRefused => "auth_refused",
             CoreError::LockedOut { .. } => "locked_out",
             CoreError::Forbidden { .. } => "forbidden",
             CoreError::Money(_) => "money",
-            CoreError::Db(_)
-            | CoreError::Query(_)
-            | CoreError::Io(_)
-            | CoreError::Hash(_)
-            | CoreError::Unstamped { .. }
-            | CoreError::UnpricedReversal { .. } => "storage",
-            CoreError::Render(_) => "print",
-            CoreError::Workbook(_) => "workbook",
+            CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_) | CoreError::Hash(_) => {
+                "storage"
+            }
         }
-    }
-
-    /// A document the printer refuses. `reason` says which rule the stored
-    /// row breaks; it stays on the server, on the error's source chain,
-    /// because the wire message for a render failure is fixed.
-    pub fn render(reason: &'static str) -> Self {
-        CoreError::Render(askama::Error::custom(reason))
     }
 
     pub fn validation(field: &str, message: &str) -> Self {

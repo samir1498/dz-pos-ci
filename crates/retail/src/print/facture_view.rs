@@ -7,7 +7,7 @@
 //! a facture says.
 
 use super::facture::*;
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::lang::Lang;
 use crate::models::document::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, PartyBlock, PartyKind,
@@ -17,7 +17,7 @@ use crate::money::format::{format_centimes, format_qty};
 use crate::money::words::amount_in_words;
 use crate::money::{Money, Regime};
 use crate::print::layout::Paper;
-use crate::print::strings::{text, Key};
+use crate::print::strings::{shop_text, text, Key, ShopKey};
 use crate::print::{number, payment_mode_key, percent, some_amount};
 
 /// The printed number of the facture an avoir is written against, when the
@@ -29,7 +29,7 @@ pub(super) fn reference(
     doc: &Document,
     referenced: Option<&Document>,
     lang: Lang,
-) -> Result<Option<ReferenceView>, CoreError> {
+) -> Result<Option<ReferenceView>, RetailError> {
     match (doc.ref_document_id, referenced) {
         (None, _) => Ok(None),
         (Some(id), Some(referenced))
@@ -39,12 +39,12 @@ pub(super) fn reference(
             // has to be one. An avoir written against a ticket is not a
             // document this template can describe.
             if referenced.kind != DocumentKind::Facture {
-                return Err(CoreError::render(
+                return Err(RetailError::render(
                     "an avoir is written against a facture and this reference is another kind",
                 ));
             }
             Ok(Some(ReferenceView {
-                label: text(Key::AvoirOnFacture, lang),
+                label: shop_text(ShopKey::AvoirOnFacture, lang),
                 number: number(referenced),
                 on_label: text(Key::IssuedOn, lang),
                 // The referenced facture's own day, which is not the
@@ -52,10 +52,10 @@ pub(super) fn reference(
                 issued_at: referenced.issued_at.format(DATE_FORMAT).to_string(),
             }))
         }
-        (Some(_), Some(_)) => Err(CoreError::render(
+        (Some(_), Some(_)) => Err(RetailError::render(
             "the document handed over as the reference is not the one this document names",
         )),
-        (Some(_), None) => Err(CoreError::render(
+        (Some(_), None) => Err(RetailError::render(
             "the document names a facture whose number was not read with it",
         )),
     }
@@ -68,7 +68,7 @@ pub(super) fn view(
     cancellation: Option<Cancellation<'_>>,
     lang: Lang,
     paper: Paper,
-) -> Result<FactureView, CoreError> {
+) -> Result<FactureView, RetailError> {
     let reel = doc.regime == Regime::Reel;
     let totals = &doc.totals;
     // The words line prints the net to pay, the amount this document asks
@@ -78,7 +78,7 @@ pub(super) fn view(
     // document with no stamp, which is why the cash golden is the one that
     // proves it.
     let in_words = amount_in_words(totals.net_to_pay, lang).map_err(|_| {
-        CoreError::render("the net to pay has no written form in the print language")
+        RetailError::render("the net to pay has no written form in the print language")
     })?;
     // A row that repeats the row above it is noise: with no global
     // discount the subtotal HT is the total HT, printed twice.
@@ -101,7 +101,8 @@ pub(super) fn view(
             reason_label: text(Key::CancelReason, lang),
             reason: c.reason.to_owned(),
         }),
-        notice: (doc.kind == DocumentKind::Proforma).then(|| text(Key::ProformaNotice, lang)),
+        notice: (doc.kind == DocumentKind::Proforma)
+            .then(|| shop_text(ShopKey::ProformaNotice, lang)),
         seller: seller_view(&doc.seller, lang),
         buyer: buyer_view(buyer, lang),
         designation_label: text(Key::Designation, lang),
@@ -109,16 +110,13 @@ pub(super) fn view(
         // Under the IFU a price is one price: "HT" would name a tax the
         // document must not mention (CTCA 2026 art. 64), so the column
         // keeps the amounts and changes the word.
-        unit_price_label: text(
-            if reel {
-                Key::UnitPriceHt
-            } else {
-                Key::UnitPrice
-            },
-            lang,
-        ),
+        unit_price_label: if reel {
+            shop_text(ShopKey::UnitPriceHt, lang)
+        } else {
+            shop_text(ShopKey::UnitPrice, lang)
+        },
         rate_label: text(Key::Tva, lang),
-        line_discount_label: text(Key::Discount, lang),
+        line_discount_label: shop_text(ShopKey::Discount, lang),
         line_total_label: text(
             if reel {
                 Key::LineTotalHt
@@ -134,7 +132,7 @@ pub(super) fn view(
         lines: doc.lines.iter().map(|l| line_view(l, reel)).collect(),
         total_label: text(if reel { Key::TotalHt } else { Key::Total }, lang),
         total_amount: format_centimes(totals.total_ht),
-        discount_label: text(Key::Discount, lang),
+        discount_label: shop_text(ShopKey::Discount, lang),
         discount: some_amount(totals.discount),
         subtotal_label: text(if reel { Key::SubtotalHt } else { Key::Subtotal }, lang),
         subtotal: discounted.then(|| format_centimes(totals.subtotal_ht)),
@@ -161,15 +159,12 @@ pub(super) fn view(
         // The row a facture closes on is the net to pay. An avoir asks for
         // nothing, so the same row names the amount it hands back: the
         // figure is untouched and only the words change.
-        net_to_pay_label: text(
-            match doc.kind {
-                DocumentKind::Avoir => Key::AvoirAmount,
-                _ => Key::NetToPay,
-            },
-            lang,
-        ),
+        net_to_pay_label: match doc.kind {
+            DocumentKind::Avoir => shop_text(ShopKey::AvoirAmount, lang),
+            _ => text(Key::NetToPay, lang),
+        },
         net_to_pay: format_centimes(totals.net_to_pay),
-        in_words_label: text(in_words_key(doc.kind), lang),
+        in_words_label: in_words_label(doc.kind, lang),
         in_words,
         // A proforma settles nothing and shows no ledger: it stores a triple
         // of zeroes and printing it would be a debt of nothing said
@@ -203,13 +198,12 @@ pub(super) fn view(
 /// that it was cancelled (features.md, Numbering row), so the reprint of a
 /// cancelled document can never be mistaken for the live one.
 pub(super) const fn title(doc: &Document, lang: Lang) -> &'static str {
-    let key = match (doc.kind, doc.status) {
-        (DocumentKind::Facture, DocumentStatus::Cancelled) => Key::FactureCancelled,
-        (DocumentKind::Avoir, _) => Key::Avoir,
-        (DocumentKind::Proforma, _) => Key::Proforma,
-        _ => Key::Facture,
-    };
-    text(key, lang)
+    match (doc.kind, doc.status) {
+        (DocumentKind::Facture, DocumentStatus::Cancelled) => text(Key::FactureCancelled, lang),
+        (DocumentKind::Avoir, _) => shop_text(ShopKey::Avoir, lang),
+        (DocumentKind::Proforma, _) => shop_text(ShopKey::Proforma, lang),
+        _ => text(Key::Facture, lang),
+    }
 }
 
 /// Whether a stored triple says anything at all. Three zeroes is what a
@@ -226,11 +220,11 @@ pub(crate) const fn carries_a_debt(balance: BalanceTriple) -> bool {
 /// says which document was closed at that sum, and an avoir saying "la
 /// présente facture" would name the wrong one. The statement already has
 /// its own for the same reason.
-pub(super) const fn in_words_key(kind: DocumentKind) -> Key {
+pub(super) const fn in_words_label(kind: DocumentKind, lang: Lang) -> &'static str {
     match kind {
-        DocumentKind::Avoir => Key::AvoirInWords,
-        DocumentKind::Proforma => Key::ProformaInWords,
-        _ => Key::InWords,
+        DocumentKind::Avoir => shop_text(ShopKey::AvoirInWords, lang),
+        DocumentKind::Proforma => shop_text(ShopKey::ProformaInWords, lang),
+        _ => text(Key::InWords, lang),
     }
 }
 
@@ -327,16 +321,13 @@ pub(super) fn balance_view(balance: BalanceTriple, lang: Lang) -> BalanceView {
         title: text(Key::Balance, lang),
         old_label: text(Key::OldBalance, lang),
         old: format_centimes(balance.old_balance),
-        this_label: text(Key::ThisDocument, lang),
+        this_label: shop_text(ShopKey::ThisDocument, lang),
         this: format_centimes(balance.remaining_debt),
-        total_label: text(
-            if in_credit {
-                Key::TotalCredit
-            } else {
-                Key::TotalDebt
-            },
-            lang,
-        ),
+        total_label: if in_credit {
+            text(Key::TotalCredit, lang)
+        } else {
+            shop_text(ShopKey::TotalDebt, lang)
+        },
         total: format_centimes(balance.total_debt),
     }
 }

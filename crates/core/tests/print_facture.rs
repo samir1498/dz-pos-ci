@@ -31,7 +31,7 @@ use dzpos_core::money::words::amount_in_words;
 use dzpos_core::money::{
     compute_totals, Bps, Line, Money, PaymentMode, Regime, TotalsOptions, TvaLine,
 };
-use dzpos_core::print::strings::{text, Key};
+use dzpos_core::print::strings::{shop_text, text, Key, ShopKey};
 use dzpos_core::print::{
     render_facture, render_facture_with, render_facture_with_reference, Cancellation, FactureInput,
     FactureLayout, Page, Paper,
@@ -114,7 +114,10 @@ fn an_ifu_facture_names_no_tax_in_any_language() {
         let html = render_facture(&ifu, lang, Page::A4).unwrap();
         names_no_tax(&html, lang);
         assert!(html.contains(text(Key::Total, lang)), "{lang:?}");
-        assert!(html.contains(text(Key::UnitPrice, lang)), "{lang:?}");
+        assert!(
+            html.contains(shop_text(ShopKey::UnitPrice, lang)),
+            "{lang:?}"
+        );
 
         // The same basket under the réel says all of it.
         let reel_html = render_facture(&reel, lang, Page::A4).unwrap();
@@ -124,7 +127,10 @@ fn an_ifu_facture_names_no_tax_in_any_language() {
         assert_eq!(rates(&reel_html, "tva").len(), 3, "{lang:?}");
         assert_eq!(rates(&reel_html, "line").len(), 3, "{lang:?}");
         assert!(reel_html.contains(text(Key::TotalHt, lang)), "{lang:?}");
-        assert!(reel_html.contains(text(Key::UnitPriceHt, lang)), "{lang:?}");
+        assert!(
+            reel_html.contains(shop_text(ShopKey::UnitPriceHt, lang)),
+            "{lang:?}"
+        );
         assert!(reel_html.contains(text(Key::Tva, lang)), "{lang:?}");
     }
     assert!(
@@ -216,7 +222,7 @@ fn a_facture_without_a_discount_prints_neither_the_discount_nor_the_subtotal() {
     let html = render_facture(&doc, Lang::Fr, Page::A4).unwrap();
     assert!(amounts(&html, "line-discount").is_empty());
     assert_eq!(
-        html.matches(text(Key::Discount, Lang::Fr)).count(),
+        html.matches(shop_text(ShopKey::Discount, Lang::Fr)).count(),
         0,
         "the discount column header is still there"
     );
@@ -270,11 +276,11 @@ fn a_kind_this_template_has_no_title_for_is_refused() {
         }
         let html = render_facture(&doc, Lang::Fr, Page::A4).unwrap();
         let title = match kind {
-            DocumentKind::Avoir => Key::Avoir,
-            DocumentKind::Proforma => Key::Proforma,
-            _ => Key::Facture,
+            DocumentKind::Avoir => shop_text(ShopKey::Avoir, Lang::Fr),
+            DocumentKind::Proforma => shop_text(ShopKey::Proforma, Lang::Fr),
+            _ => text(Key::Facture, Lang::Fr),
         };
-        assert!(html.contains(text(title, Lang::Fr)), "{kind:?}");
+        assert!(html.contains(title), "{kind:?}");
         assert!(
             html.contains(&format!("{}-2026-000042", kind.number_prefix())),
             "{kind:?} lost its printed number"
@@ -356,7 +362,10 @@ fn an_avoir_prints_the_number_of_the_facture_it_references() {
         let html = render_facture_with_reference(&avoir, Some(&facture), lang, Page::A4).unwrap();
         assert!(html.contains("AV-2026-000003"), "{lang:?}");
         assert!(html.contains("FA-2026-000042"), "{lang:?}");
-        assert!(html.contains(text(Key::AvoirOnFacture, lang)), "{lang:?}");
+        assert!(
+            html.contains(shop_text(ShopKey::AvoirOnFacture, lang)),
+            "{lang:?}"
+        );
     }
 
     // No reference handed over, a reference that is another document, and a
@@ -406,7 +415,7 @@ fn an_avoir_prints_the_number_of_the_facture_it_references() {
 
     // A facture that references nothing prints with no reference row.
     let plain = render_facture(&facture, Lang::Fr, Page::A4).unwrap();
-    assert!(!plain.contains(text(Key::AvoirOnFacture, Lang::Fr)));
+    assert!(!plain.contains(shop_text(ShopKey::AvoirOnFacture, Lang::Fr)));
 }
 
 /// A name the shop typed is printed and never run: the ampersand and the
@@ -519,7 +528,7 @@ fn the_avoir_names_the_facture_it_is_written_against_and_the_day_of_it() {
         let html = fixture.render(lang, Paper::A4);
         let line = reference_line(&html);
         assert!(
-            line.contains(text(Key::AvoirOnFacture, lang)),
+            line.contains(shop_text(ShopKey::AvoirOnFacture, lang)),
             "{lang:?}: {line}"
         );
         assert!(line.contains("FA-2026-000042"), "{lang:?}: {line}");
@@ -626,7 +635,10 @@ fn the_balance_block_says_credit_when_the_avoir_closes_below_zero() {
     for lang in Lang::ALL {
         let html = fixture.render(lang, Paper::A4);
         assert!(html.contains(text(Key::TotalCredit, lang)), "{lang:?}");
-        assert!(!html.contains(text(Key::TotalDebt, lang)), "{lang:?}");
+        assert!(
+            !html.contains(shop_text(ShopKey::TotalDebt, lang)),
+            "{lang:?}"
+        );
         // The amount keeps the sign the document stores, the way the
         // statement's closing balance does: the label says which way it
         // points and the figure is read back against the row.
@@ -650,7 +662,10 @@ fn the_balance_block_says_credit_when_the_avoir_closes_below_zero() {
     let facture = fixed_facture(Case::Credit);
     for lang in Lang::ALL {
         let html = render_facture_with_reference(&smaller, Some(&facture), lang, Page::A4).unwrap();
-        assert!(html.contains(text(Key::TotalDebt, lang)), "{lang:?}");
+        assert!(
+            html.contains(shop_text(ShopKey::TotalDebt, lang)),
+            "{lang:?}"
+        );
         assert!(!html.contains(text(Key::TotalCredit, lang)), "{lang:?}");
     }
 }
@@ -663,7 +678,10 @@ fn each_kind_closes_itself_in_its_own_words() {
     let avoir = Fixture::of(Case::Avoir);
     for lang in Lang::ALL {
         let html = avoir.render(lang, Paper::A4);
-        assert!(html.contains(text(Key::AvoirInWords, lang)), "{lang:?}");
+        assert!(
+            html.contains(shop_text(ShopKey::AvoirInWords, lang)),
+            "{lang:?}"
+        );
         assert!(!html.contains(text(Key::InWords, lang)), "{lang:?}");
         assert_eq!(
             in_words(&html),
@@ -675,7 +693,10 @@ fn each_kind_closes_itself_in_its_own_words() {
     for lang in Lang::ALL {
         let html = facture.render(lang, Paper::A4);
         assert!(html.contains(text(Key::InWords, lang)), "{lang:?}");
-        assert!(!html.contains(text(Key::AvoirInWords, lang)), "{lang:?}");
+        assert!(
+            !html.contains(shop_text(ShopKey::AvoirInWords, lang)),
+            "{lang:?}"
+        );
     }
 }
 
@@ -748,8 +769,15 @@ fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
 
     for lang in Lang::ALL {
         let html = fixture.render(lang, Paper::A4);
-        assert!(html.contains(text(Key::ProformaNotice, lang)), "{lang:?}");
-        assert_eq!(heading(&html), text(Key::Proforma, lang), "{lang:?}");
+        assert!(
+            html.contains(shop_text(ShopKey::ProformaNotice, lang)),
+            "{lang:?}"
+        );
+        assert_eq!(
+            heading(&html),
+            shop_text(ShopKey::Proforma, lang),
+            "{lang:?}"
+        );
         assert!(html.contains("PF-2026-000005"), "{lang:?}");
         for absent in ["old-balance", "this-document", "total-debt"] {
             assert!(
@@ -758,14 +786,17 @@ fn a_proforma_says_it_is_not_a_facture_and_carries_no_balance_block() {
             );
         }
         assert!(!html.contains(text(Key::Balance, lang)), "{lang:?}");
-        assert!(!html.contains(text(Key::TotalDebt, lang)), "{lang:?}");
+        assert!(
+            !html.contains(shop_text(ShopKey::TotalDebt, lang)),
+            "{lang:?}"
+        );
 
         // The credit facture, the same basket, prints all three: the block
         // is gone for the proforma and not gone for everyone.
         let facture = Fixture::of(Case::Credit).render(lang, Paper::A4);
         assert_eq!(amounts(&facture, "total-debt").len(), 1, "{lang:?}");
         assert!(
-            !facture.contains(text(Key::ProformaNotice, lang)),
+            !facture.contains(shop_text(ShopKey::ProformaNotice, lang)),
             "{lang:?}"
         );
     }
@@ -818,7 +849,10 @@ fn the_avoir_names_its_last_row_as_its_own_amount_and_not_as_a_net_to_pay() {
     let proforma = Fixture::of(Case::Proforma);
     for lang in Lang::ALL {
         let html = avoir.render(lang, Paper::A4);
-        assert!(html.contains(text(Key::AvoirAmount, lang)), "{lang:?}");
+        assert!(
+            html.contains(shop_text(ShopKey::AvoirAmount, lang)),
+            "{lang:?}"
+        );
         assert!(
             !html.contains(text(Key::NetToPay, lang)),
             "{lang:?}: the avoir asks the buyer for a net to pay"
@@ -835,7 +869,10 @@ fn the_avoir_names_its_last_row_as_its_own_amount_and_not_as_a_net_to_pay() {
         for other in [&facture, &proforma] {
             let html = other.render(lang, Paper::A4);
             assert!(html.contains(text(Key::NetToPay, lang)), "{lang:?}");
-            assert!(!html.contains(text(Key::AvoirAmount, lang)), "{lang:?}");
+            assert!(
+                !html.contains(shop_text(ShopKey::AvoirAmount, lang)),
+                "{lang:?}"
+            );
         }
     }
 }
@@ -895,9 +932,15 @@ fn a_proforma_closes_itself_in_its_own_words() {
     let fixture = Fixture::of(Case::Proforma);
     for lang in Lang::ALL {
         let html = fixture.render(lang, Paper::A4);
-        assert!(html.contains(text(Key::ProformaInWords, lang)), "{lang:?}");
+        assert!(
+            html.contains(shop_text(ShopKey::ProformaInWords, lang)),
+            "{lang:?}"
+        );
         assert!(!html.contains(text(Key::InWords, lang)), "{lang:?}");
-        assert!(!html.contains(text(Key::AvoirInWords, lang)), "{lang:?}");
+        assert!(
+            !html.contains(shop_text(ShopKey::AvoirInWords, lang)),
+            "{lang:?}"
+        );
         assert_eq!(
             in_words(&html),
             amount_in_words(fixture.doc.totals.net_to_pay, lang).unwrap(),

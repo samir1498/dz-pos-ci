@@ -19,7 +19,7 @@
 use askama::Template;
 use chrono::NaiveDateTime;
 
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::lang::Lang;
 use crate::models::document::{Document, DocumentKind};
 use crate::print::facture_view::{reference, view};
@@ -206,7 +206,7 @@ pub(super) struct FactureView {
 /// page. An avoir that names the facture it is written against needs that
 /// facture's number, which is not on the avoir's own row, so it goes
 /// through `render_facture_with_reference`.
-pub fn render_facture(doc: &Document, lang: Lang, page: Page) -> Result<String, CoreError> {
+pub fn render_facture(doc: &Document, lang: Lang, page: Page) -> Result<String, RetailError> {
     render_facture_with(doc, &FactureInput::default(), lang, page)
 }
 
@@ -222,7 +222,7 @@ pub fn render_facture_with_reference(
     referenced: Option<&Document>,
     lang: Lang,
     page: Page,
-) -> Result<String, CoreError> {
+) -> Result<String, RetailError> {
     render_facture_with(
         doc,
         &FactureInput {
@@ -242,7 +242,7 @@ pub fn render_facture_with(
     input: &FactureInput<'_>,
     lang: Lang,
     page: Page,
-) -> Result<String, CoreError> {
+) -> Result<String, RetailError> {
     render_in(page.layout, built_view(doc, input, lang, page.paper())?)
 }
 
@@ -257,7 +257,7 @@ pub(super) fn built_view(
     input: &FactureInput<'_>,
     lang: Lang,
     paper: Paper,
-) -> Result<FactureView, CoreError> {
+) -> Result<FactureView, RetailError> {
     // This template titles itself by kind, and the three kinds it has a
     // title for are the three it prints. A ticket has its own 80 mm paper;
     // a bon de livraison and a bon de réception are not written yet
@@ -267,7 +267,7 @@ pub(super) fn built_view(
         doc.kind,
         DocumentKind::Facture | DocumentKind::Avoir | DocumentKind::Proforma
     ) {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "this template prints a facture, an avoir or a proforma and nothing else",
         ));
     }
@@ -283,18 +283,18 @@ pub(super) fn built_view(
 /// layout chooses how to draw them, never what they are. A new layout is one
 /// file under `templates/`, one wrapper struct beside `FactureView`, and one
 /// arm here.
-fn render_in(layout: FactureLayout, view: FactureView) -> Result<String, CoreError> {
+fn render_in(layout: FactureLayout, view: FactureView) -> Result<String, RetailError> {
     match layout {
-        FactureLayout::Standard => view.render().map_err(CoreError::from),
+        FactureLayout::Standard => view.render().map_err(RetailError::from),
         FactureLayout::Compact => CompactFactureView { facture: view }
             .render()
-            .map_err(CoreError::from),
+            .map_err(RetailError::from),
         FactureLayout::HalfSheet => HalfSheetFactureView { facture: view }
             .render()
-            .map_err(CoreError::from),
+            .map_err(RetailError::from),
         FactureLayout::Roll80 => Roll80FactureView { facture: view }
             .render()
-            .map_err(CoreError::from),
+            .map_err(RetailError::from),
     }
 }
 

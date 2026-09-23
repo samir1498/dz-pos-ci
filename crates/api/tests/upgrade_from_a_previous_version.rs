@@ -135,7 +135,9 @@ fn the_copy_is_good_enough_to_restore_from() {
     // `verify` is what the restore screen runs before it will touch the
     // shop file: the copy opens, passes an integrity check, and carries no
     // migration this build does not know. It also reports what is in there.
-    let summary = dzpos_core::services::backup::verify(&copies[0].path).unwrap();
+    let summary =
+        dzpos_core::services::backup::verify(&copies[0].path, dzpos_core::shop_counts::for_verify)
+            .unwrap();
     assert_eq!(summary.products, 1);
 
     // And it is the file from before the upgrade rather than a second copy

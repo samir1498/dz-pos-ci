@@ -23,7 +23,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use dzpos_core::lang::Lang;
 use dzpos_core::money::words::amount_in_words;
 use dzpos_core::money::Money;
-use dzpos_core::print::strings::{text, Key};
+use dzpos_core::print::strings::{shop_text, text, Key, ShopKey};
 use dzpos_core::print::{render_statement, Paper};
 use dzpos_core::services::customers::{Customer, PartyKind};
 use dzpos_core::services::debt::{
@@ -419,7 +419,7 @@ fn a_closing_balance_the_shop_owes_prints_the_amount_and_says_whose_way_it_goes(
         "the words of a negative balance are the words of the amount"
     );
     assert!(
-        page.contains(text(Key::InFavourOfCustomer, Lang::Fr)),
+        page.contains(shop_text(ShopKey::InFavourOfCustomer, Lang::Fr)),
         "the page says the amount is owed and not which way"
     );
 }

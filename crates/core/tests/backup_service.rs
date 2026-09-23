@@ -65,7 +65,7 @@ fn the_copy_opens_and_holds_the_same_rows() {
         .collect();
     assert_eq!(names, vec!["Huile Elio 5L", "Semoule 10kg"]);
 
-    let summary = backup::verify(&made.path).unwrap();
+    let summary = backup::verify(&made.path, dzpos_core::shop_counts::for_verify).unwrap();
     assert_eq!(summary.products, 2);
     // The documents table exists since migration 2 and holds nothing here.
     assert_eq!(summary.documents, Some(0));
@@ -120,7 +120,7 @@ fn a_file_that_is_not_a_database_or_is_torn_fails_verify() {
         *byte = 0x5a;
     }
     std::fs::write(&made.path, &bytes).unwrap();
-    let torn = backup::verify(&made.path).unwrap_err();
+    let torn = backup::verify(&made.path, dzpos_core::shop_counts::for_verify).unwrap_err();
     assert_eq!(torn.code(), "validation", "{torn}");
     // Named, not just refused: a torn page and a file that was never a
     // database are both "validation", so only the message says which check
@@ -133,7 +133,7 @@ fn a_file_that_is_not_a_database_or_is_torn_fails_verify() {
 
     let junk = dir.path().join("dzpos-20260107-093000.sqlite");
     std::fs::write(&junk, b"not a database at all, just text").unwrap();
-    let not_a_db = backup::verify(&junk).unwrap_err();
+    let not_a_db = backup::verify(&junk, dzpos_core::shop_counts::for_verify).unwrap_err();
     assert_eq!(not_a_db.code(), "validation");
     assert!(
         !not_a_db.to_string().contains("integrity check"),
@@ -141,7 +141,12 @@ fn a_file_that_is_not_a_database_or_is_torn_fails_verify() {
     );
 
     let missing = dir.path().join("dzpos-20260106-093000.sqlite");
-    assert_eq!(backup::verify(&missing).unwrap_err().code(), "validation");
+    assert_eq!(
+        backup::verify(&missing, dzpos_core::shop_counts::for_verify)
+            .unwrap_err()
+            .code(),
+        "validation"
+    );
     assert!(!missing.exists(), "verify created the file it was handed");
 }
 
@@ -159,7 +164,7 @@ fn a_copy_from_a_newer_app_version_is_refused() {
         .unwrap();
     drop(copy);
 
-    let refused = backup::verify(&made.path).unwrap_err();
+    let refused = backup::verify(&made.path, dzpos_core::shop_counts::for_verify).unwrap_err();
     assert_eq!(refused.code(), "validation", "{refused}");
     assert!(
         refused.to_string().contains("29990101000000"),

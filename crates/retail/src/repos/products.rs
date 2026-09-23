@@ -6,18 +6,18 @@ use diesel::prelude::*;
 use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::product::{Product, ProductRow, ProductRowWrite};
 use crate::schema::products;
 
 /// A unique-index violation on `(shop_id, barcode)` is the only constraint
 /// a caller can trip, so it becomes the domain error rather than a SQL one.
-fn map_write(err: DieselError, barcode: Option<&str>) -> CoreError {
+fn map_write(err: DieselError, barcode: Option<&str>) -> RetailError {
     match (&err, barcode) {
         (DieselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _), Some(code)) => {
-            CoreError::DuplicateBarcode(code.to_string())
+            RetailError::DuplicateBarcode(code.to_string())
         }
-        _ => CoreError::Query(err),
+        _ => CoreError::Query(err).into(),
     }
 }
 
@@ -46,13 +46,16 @@ pub fn get(conn: &mut SqliteConnection, shop_id: i32, id: i32) -> Result<Product
     Product::try_from(row)
 }
 
-pub fn insert(conn: &mut SqliteConnection, write: &ProductRowWrite) -> Result<Product, CoreError> {
+pub fn insert(
+    conn: &mut SqliteConnection,
+    write: &ProductRowWrite,
+) -> Result<Product, RetailError> {
     let row: ProductRow = diesel::insert_into(products::table)
         .values(write)
         .returning(ProductRow::as_returning())
         .get_result(conn)
         .map_err(|e| map_write(e, write.barcode.as_deref()))?;
-    Product::try_from(row)
+    Ok(Product::try_from(row)?)
 }
 
 pub fn update(
@@ -60,7 +63,7 @@ pub fn update(
     shop_id: i32,
     id: i32,
     write: &ProductRowWrite,
-) -> Result<Product, CoreError> {
+) -> Result<Product, RetailError> {
     let changed = diesel::update(
         products::table
             .filter(products::shop_id.eq(shop_id))
@@ -73,9 +76,10 @@ pub fn update(
         return Err(CoreError::NotFound {
             entity: "product",
             id,
-        });
+        }
+        .into());
     }
-    get(conn, shop_id, id)
+    get(conn, shop_id, id).map_err(RetailError::from)
 }
 
 /// Moves the cost the shop carries the product at, and nothing else. A

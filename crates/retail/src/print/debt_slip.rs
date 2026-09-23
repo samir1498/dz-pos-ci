@@ -16,7 +16,7 @@
 use askama::Template;
 use chrono::NaiveDateTime;
 
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::lang::Lang;
 use crate::models::customer::{Customer, PartyKind};
 use crate::models::document::SellerBlock;
@@ -24,7 +24,7 @@ use crate::money::format::format_centimes;
 use crate::money::words::amount_in_words;
 use crate::money::Money;
 use crate::print::number_of;
-use crate::print::strings::{text, Key};
+use crate::print::strings::{shop_text, text, Key, ShopKey};
 use crate::services::debt::{DebtKind, RecentStatement, StatementEntry};
 
 /// The day and the minute the slip was printed. A balance is a figure as of a
@@ -120,10 +120,10 @@ pub fn render_debt_slip(
     slip: &RecentStatement,
     at: NaiveDateTime,
     lang: Lang,
-) -> Result<String, CoreError> {
+) -> Result<String, RetailError> {
     view(seller, customer, slip, at, lang)?
         .render()
-        .map_err(CoreError::from)
+        .map_err(RetailError::from)
 }
 
 fn view(
@@ -132,7 +132,7 @@ fn view(
     slip: &RecentStatement,
     at: NaiveDateTime,
     lang: Lang,
-) -> Result<DebtSlipView, CoreError> {
+) -> Result<DebtSlipView, RetailError> {
     // A balance below zero is the shop holding money for the customer.
     // `amount_in_words` refuses a negative, and rightly: a written amount has
     // no sign in it. So the words are the amount itself and the direction is a
@@ -143,22 +143,23 @@ fn view(
     } else {
         slip.balance
     };
-    let in_words = amount_in_words(absolute, lang)
-        .map_err(|_| CoreError::render("the balance has no written form in the print language"))?;
+    let in_words = amount_in_words(absolute, lang).map_err(|_| {
+        RetailError::render("the balance has no written form in the print language")
+    })?;
 
     Ok(DebtSlipView {
         lang_tag: lang.tag(),
         dir: lang.dir(),
         arabic_unreviewed: lang == Lang::Ar,
-        title: text(Key::DebtSlip, lang),
+        title: shop_text(ShopKey::DebtSlip, lang),
         printed_at: at.format(STAMP_FORMAT).to_string(),
         seller: seller_view(seller),
         customer: customer_view(customer, lang),
         balance_label: text(Key::Balance, lang),
         balance: format_centimes(slip.balance),
-        in_words_label: text(Key::DebtInWords, lang),
+        in_words_label: shop_text(ShopKey::DebtInWords, lang),
         in_words,
-        in_favour: held.then(|| text(Key::InFavourOfCustomer, lang)),
+        in_favour: held.then(|| shop_text(ShopKey::InFavourOfCustomer, lang)),
         movements_label: text(Key::LastMovements, lang),
         debit_label: text(Key::Debit, lang),
         credit_label: text(Key::CreditColumn, lang),
@@ -233,7 +234,7 @@ fn id_rows(ids: [(&'static str, Option<&String>); 4]) -> Vec<IdRow> {
 fn movement_view(line: &StatementEntry, lang: Lang) -> MovementView {
     MovementView {
         date: line.entry.created_at.format(DATE_FORMAT).to_string(),
-        kind: text(kind_key(line.entry.kind), lang),
+        kind: kind_label(line.entry.kind, lang),
         document: line
             .document
             .map(|doc| number_of(doc.kind, doc.year, doc.number)),
@@ -246,12 +247,12 @@ fn movement_view(line: &StatementEntry, lang: Lang) -> MovementView {
 /// The word for why the debt moved, the statement's words rather than a second
 /// set: a customer holding both papers must not find two spellings of the same
 /// movement.
-const fn kind_key(kind: DebtKind) -> Key {
+const fn kind_label(kind: DebtKind, lang: Lang) -> &'static str {
     match kind {
-        DebtKind::Opening => Key::KindOpening,
-        DebtKind::Sale => Key::KindSale,
-        DebtKind::Payment => Key::KindPayment,
-        DebtKind::Avoir => Key::KindAvoir,
-        DebtKind::Adjustment => Key::KindAdjustment,
+        DebtKind::Opening => text(Key::KindOpening, lang),
+        DebtKind::Sale => shop_text(ShopKey::KindSale, lang),
+        DebtKind::Payment => text(Key::KindPayment, lang),
+        DebtKind::Avoir => shop_text(ShopKey::KindAvoir, lang),
+        DebtKind::Adjustment => text(Key::KindAdjustment, lang),
     }
 }

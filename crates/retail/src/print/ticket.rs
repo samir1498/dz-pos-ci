@@ -11,12 +11,12 @@
 
 use askama::Template;
 
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::lang::Lang;
 use crate::models::document::{BalanceTriple, Document, DocumentLine, SellerBlock};
 use crate::money::format::{format_centimes, format_qty};
 use crate::money::{PaymentMode, Regime};
-use crate::print::strings::{text, Key};
+use crate::print::strings::{shop_text, text, Key, ShopKey};
 use crate::print::{number, payment_mode_key, percent, some_amount};
 
 /// The date and time as the shop reads them. `issued_at` is already on the
@@ -143,7 +143,7 @@ pub(crate) struct TicketView {
 /// Pinned byte for byte by `fixtures/print/ticket_80mm/`, nine files: three
 /// languages under the réel paid in cash, the same three under the IFU, and
 /// the same three under the réel paid by card.
-pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, CoreError> {
+pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, RetailError> {
     // `an_ifu_ticket_names_no_tax_in_any_language` is a rule about the document, not a layout
     // the template applies on the way past. A stored IFU document that
     // carries a TVA recap contradicts the régime it was issued under (a
@@ -156,11 +156,11 @@ pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, CoreError> {
     // writes can reach here, so only a file that came from somewhere else
     // can, and that is exactly when a wrong ticket would be believed.
     if doc.regime == Regime::Ifu && !doc.totals.tva_by_rate.is_empty() {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "an IFU document carries a TVA recap and has no printable form",
         ));
     }
-    view(doc, lang).render().map_err(CoreError::from)
+    view(doc, lang).render().map_err(RetailError::from)
 }
 
 pub(crate) fn view(doc: &Document, lang: Lang) -> TicketView {
@@ -185,7 +185,7 @@ pub(crate) fn view(doc: &Document, lang: Lang) -> TicketView {
         // the amount and changes the word.
         total_label: text(if reel { Key::TotalHt } else { Key::Total }, lang),
         total_amount: format_centimes(totals.total_ht),
-        discount_label: text(Key::Discount, lang),
+        discount_label: shop_text(ShopKey::Discount, lang),
         discount: some_amount(totals.discount),
         // Empty under the IFU because the document stores no recap there,
         // not because the template hides one.
@@ -232,16 +232,13 @@ fn balance(balance: BalanceTriple, lang: Lang) -> BalanceView {
         title: text(Key::Balance, lang),
         old_label: text(Key::OldBalance, lang),
         old: format_centimes(balance.old_balance),
-        this_label: text(Key::ThisDocument, lang),
+        this_label: shop_text(ShopKey::ThisDocument, lang),
         this: format_centimes(balance.remaining_debt),
-        total_label: text(
-            if in_credit {
-                Key::TotalCredit
-            } else {
-                Key::TotalDebt
-            },
-            lang,
-        ),
+        total_label: if in_credit {
+            text(Key::TotalCredit, lang)
+        } else {
+            shop_text(ShopKey::TotalDebt, lang)
+        },
         total: format_centimes(balance.total_debt),
     }
 }

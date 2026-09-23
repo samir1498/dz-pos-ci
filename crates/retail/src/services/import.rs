@@ -42,12 +42,12 @@ use diesel::sqlite::SqliteConnection;
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::lang::Lang;
 use crate::models::product::{NewProduct, Unit};
 use crate::money::{Bps, Money};
 use crate::print::barcode_label::is_ean13;
-use crate::print::strings::{text as word, Key};
+use crate::print::strings::{shop_text as shop_word, text as word, Key, ShopKey};
 use crate::services::{categories, products};
 use dzpos_kernel::services::audit;
 
@@ -128,12 +128,12 @@ pub const ACTION_IMPORT_PRODUCTS: &str = "product.import";
 /// The template a shop downloads: the columns the import matches on, one
 /// example row under them, and a second sheet naming the units and the rates
 /// a row may hold and saying what a barcode the shop already uses will do.
-pub fn template(lang: Lang) -> Result<Vec<u8>, CoreError> {
+pub fn template(lang: Lang) -> Result<Vec<u8>, RetailError> {
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let bold = rust_xlsxwriter::Format::new().set_bold();
 
     let sheet = workbook.add_worksheet();
-    sheet.set_name(word(Key::SheetProducts, lang))?;
+    sheet.set_name(shop_word(ShopKey::SheetProducts, lang))?;
     for (index, column) in PRODUCT_COLUMNS.iter().enumerate() {
         let at = u16::try_from(index)
             .map_err(|_| CoreError::validation("column", "more columns than Excel holds"))?;
@@ -186,14 +186,14 @@ pub fn template(lang: Lang) -> Result<Vec<u8>, CoreError> {
     let note_row = rates_row
         .checked_add(u32::try_from(ALLOWED_RATES_BPS.len() + 2).unwrap_or(u32::MAX))
         .ok_or_else(|| CoreError::validation("row", "more rates than a sheet holds"))?;
-    allowed.write_string(note_row, 0, word(Key::TemplateBarcodeNote, lang))?;
+    allowed.write_string(note_row, 0, shop_word(ShopKey::TemplateBarcodeNote, lang))?;
     // Two rows down, its own line: what the stock column does is a separate
     // surprise from what a known barcode does, and a shop that reads only
     // one of the two notes should not be reading them joined.
     let stock_row = note_row
         .checked_add(2)
         .ok_or_else(|| CoreError::validation("row", "more rows than a sheet holds"))?;
-    allowed.write_string(stock_row, 0, word(Key::TemplateStockNote, lang))?;
+    allowed.write_string(stock_row, 0, shop_word(ShopKey::TemplateStockNote, lang))?;
 
     Ok(workbook.save_to_buffer()?)
 }
@@ -206,7 +206,7 @@ pub fn dry_run(
     conn: &mut SqliteConnection,
     shop_id: i32,
     bytes: &[u8],
-) -> Result<DryRun, CoreError> {
+) -> Result<DryRun, RetailError> {
     let drafts = parse(bytes)?;
     assess(conn, shop_id, &drafts)
 }
@@ -222,12 +222,12 @@ pub fn apply(
     shop_id: i32,
     user_id: i32,
     bytes: &[u8],
-) -> Result<Applied, CoreError> {
+) -> Result<Applied, RetailError> {
     let drafts = parse(bytes)?;
     conn.transaction(|conn| {
         let report = assess(conn, shop_id, &drafts)?;
         if report.refused > 0 {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "rows",
                 "the file has rows this shop cannot take; nothing was written",
             ));
@@ -323,7 +323,7 @@ fn category_id(
     name: &str,
     fields: &Fields,
     done: &mut Applied,
-) -> Result<i32, CoreError> {
+) -> Result<i32, RetailError> {
     if let Some(found) = categories::by_name(conn, shop_id, name)? {
         return Ok(found.id);
     }
@@ -343,7 +343,7 @@ fn resolve_rate(
     shop_id: i32,
     category: Option<i32>,
     fields: &Fields,
-) -> Result<Bps, CoreError> {
+) -> Result<Bps, RetailError> {
     if let Some(rate) = fields.rate_bps {
         return Ok(rate);
     }
@@ -363,7 +363,7 @@ fn existing(
     conn: &mut SqliteConnection,
     shop_id: i32,
     barcode: Option<&str>,
-) -> Result<Option<i32>, CoreError> {
+) -> Result<Option<i32>, RetailError> {
     let Some(barcode) = barcode else {
         return Ok(None);
     };
@@ -403,7 +403,7 @@ struct Draft {
 /// and the rest of the file. No connection: this half is the same answer on
 /// any database, which is what makes the duplicate-in-file rule a property
 /// of the file.
-fn parse(bytes: &[u8]) -> Result<Vec<Draft>, CoreError> {
+fn parse(bytes: &[u8]) -> Result<Vec<Draft>, RetailError> {
     let mut book: Xlsx<_> = calamine::open_workbook_from_rs(Cursor::new(bytes.to_vec()))
         .map_err(|_| CoreError::validation("file", "this file is not an Excel workbook"))?;
     // The first sheet, not one found by name: the template names its tab in
@@ -418,13 +418,13 @@ fn parse(bytes: &[u8]) -> Result<Vec<Draft>, CoreError> {
     // is refused on the shape of the file alone, before a single cell is
     // read for what it says.
     if rows.len().saturating_sub(1) > IMPORT_MAX_ROWS {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "rows",
             "more rows than one import takes at a time",
         ));
     }
     let Some(header) = rows.first() else {
-        return Err(CoreError::validation("file", "the sheet is empty"));
+        return Err(RetailError::validation("file", "the sheet is empty"));
     };
     let header: Vec<String> = header.iter().map(cell_text).collect();
     // Matched by name and not by position, so a shop that moved a column is
@@ -711,7 +711,7 @@ fn assess(
     conn: &mut SqliteConnection,
     shop_id: i32,
     drafts: &[Draft],
-) -> Result<DryRun, CoreError> {
+) -> Result<DryRun, RetailError> {
     let mut rows = Vec::with_capacity(drafts.len());
     let mut accepted = 0_usize;
     let mut refused = 0_usize;
@@ -762,7 +762,7 @@ fn assess_row(
     conn: &mut SqliteConnection,
     shop_id: i32,
     fields: &Fields,
-) -> Result<Verdict, CoreError> {
+) -> Result<Verdict, RetailError> {
     // A row with no rate of its own is only writable when the category it
     // names already carries one, and a category the file is about to open
     // takes its rate from the row: with neither there is nothing to guess

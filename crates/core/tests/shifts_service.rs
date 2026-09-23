@@ -25,6 +25,7 @@ use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::sql_types::Timestamp;
 use diesel::sqlite::SqliteConnection;
+use dzpos_core::audit_actions;
 use dzpos_core::error::CoreError;
 use dzpos_core::money::{Money, PaymentMode};
 use dzpos_core::services::audit;
@@ -556,7 +557,7 @@ fn a_sale_rung_with_no_shift_open_belongs_to_no_shift() {
     let mut tagged: Vec<i32> = audit::list(&mut conn, SHOP)
         .unwrap()
         .into_iter()
-        .filter(|e| e.action == audit::ACTION_SALE_OUTSIDE_SHIFT)
+        .filter(|e| e.action == audit_actions::ACTION_SALE_OUTSIDE_SHIFT)
         .filter_map(|e| e.entity_id)
         .collect();
     tagged.sort_unstable();
@@ -747,7 +748,7 @@ fn the_log_holds_the_float_the_count_and_the_opener_when_somebody_else_closed() 
     let rows = audit::list(&mut conn, SHOP).unwrap();
     let opened = rows
         .iter()
-        .find(|e| e.action == audit::ACTION_OPEN_TILL)
+        .find(|e| e.action == audit_actions::ACTION_OPEN_TILL)
         .unwrap();
     assert_eq!(opened.entity, "shift");
     assert_eq!(opened.entity_id, Some(shift.id));
@@ -759,7 +760,7 @@ fn the_log_holds_the_float_the_count_and_the_opener_when_somebody_else_closed() 
 
     let closed = rows
         .iter()
-        .find(|e| e.action == audit::ACTION_CLOSE_TILL)
+        .find(|e| e.action == audit_actions::ACTION_CLOSE_TILL)
         .unwrap();
     // The row is the closer's, and it names the opener because the two differ.
     assert_eq!(closed.user_id, LEILA);
@@ -792,7 +793,7 @@ fn a_clean_close_by_the_opener_names_nobody_else() {
     let after = audit::list(&mut conn, SHOP)
         .unwrap()
         .into_iter()
-        .find(|e| e.action == audit::ACTION_CLOSE_TILL)
+        .find(|e| e.action == audit_actions::ACTION_CLOSE_TILL)
         .and_then(|e| e.after)
         .unwrap();
     // Null rather than the closer's own id: the row's `user_id` already says
@@ -904,7 +905,7 @@ fn a_sale_rung_while_the_drawer_is_still_open_is_not_tagged() {
     let tagged = audit::list(&mut conn, SHOP)
         .unwrap()
         .into_iter()
-        .filter(|e| e.action == audit::ACTION_SALE_OUTSIDE_SHIFT)
+        .filter(|e| e.action == audit_actions::ACTION_SALE_OUTSIDE_SHIFT)
         .count();
     assert_eq!(tagged, 1);
 }

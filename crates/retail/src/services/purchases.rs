@@ -26,14 +26,14 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::purchase::{
     PurchaseLineRowWrite, PurchaseReceiptLineRowWrite, PurchaseReceiptRowWrite, PurchaseRowWrite,
 };
-use crate::models::stock::Movement;
 use crate::money::Money;
 use crate::repos::{counters, purchases as repo};
 use crate::services::{products, stock, supplier_debt};
+use crate::{audit_actions, models::stock::Movement};
 use dzpos_kernel::services::{audit, bounded_field, clock, optional_field};
 
 pub use crate::models::purchase::{
@@ -157,31 +157,31 @@ pub fn save(
     shop_id: i32,
     user_id: i32,
     new: NewPurchase,
-) -> Result<PurchaseView, CoreError> {
+) -> Result<PurchaseView, RetailError> {
     let day = parse_day("purchase_date", &new.purchase_date)?;
     if let Some(due) = new.due_date.as_deref() {
         let due = parse_day("due_date", due)?;
         if due < day {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "due_date",
                 "an order is not due before the day it was placed",
             ));
         }
     }
     if new.lines.is_empty() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "lines",
             "an order with no line orders nothing",
         ));
     }
     if new.transport.is_negative() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "transport_centimes",
             "a cost cannot be negative",
         ));
     }
     if new.extra_costs.is_negative() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "extra_costs_centimes",
             "a cost cannot be negative",
         ));
@@ -202,7 +202,7 @@ pub fn save(
 
         if let Some(paid) = new.paid_now {
             if paid.amount.as_centimes() <= 0 {
-                return Err(CoreError::validation(
+                return Err(RetailError::validation(
                     "paid_now_centimes",
                     "money handed over is more than nothing",
                 ));
@@ -212,7 +212,7 @@ pub fn save(
             // balance instead, which would refuse the ordinary case of paying
             // for goods that have not arrived yet.
             if paid.amount > landed.total {
-                return Err(CoreError::validation(
+                return Err(RetailError::validation(
                     "paid_now_centimes",
                     "more was handed over than the order is worth",
                 ));
@@ -256,7 +256,7 @@ pub fn save(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_CREATE_PURCHASE,
+                action: audit_actions::ACTION_CREATE_PURCHASE,
                 entity: "purchase",
                 entity_id: Some(purchase.id),
                 before: None,
@@ -290,7 +290,7 @@ pub fn save(
             hand_over(conn, shop_id, user_id, new.supplier_id, purchase.id, paid)?;
         }
 
-        get(conn, shop_id, purchase.id)
+        get(conn, shop_id, purchase.id).map_err(RetailError::from)
     })
 }
 
@@ -304,7 +304,7 @@ pub fn receive(
     purchase_id: i32,
     lines: Vec<ReceiveLine>,
     note: Option<String>,
-) -> Result<PurchaseView, CoreError> {
+) -> Result<PurchaseView, RetailError> {
     receive_at(conn, shop_id, user_id, purchase_id, lines, note, None)
 }
 
@@ -324,11 +324,11 @@ pub fn receive_at(
     lines: Vec<ReceiveLine>,
     note: Option<String>,
     at: Option<NaiveDateTime>,
-) -> Result<PurchaseView, CoreError> {
+) -> Result<PurchaseView, RetailError> {
     let note = optional_field("note", note.as_deref())?;
     conn.transaction(|conn| {
         receive_inside(conn, shop_id, user_id, purchase_id, &lines, note, at)?;
-        get(conn, shop_id, purchase_id)
+        get(conn, shop_id, purchase_id).map_err(RetailError::from)
     })
 }
 
@@ -346,7 +346,7 @@ pub fn return_to_supplier(
     purchase_id: i32,
     lines: Vec<ReceiveLine>,
     note: Option<String>,
-) -> Result<PurchaseView, CoreError> {
+) -> Result<PurchaseView, RetailError> {
     return_to_supplier_at(conn, shop_id, user_id, purchase_id, lines, note, None)
 }
 
@@ -361,10 +361,10 @@ pub fn return_to_supplier_at(
     lines: Vec<ReceiveLine>,
     note: Option<String>,
     at: Option<NaiveDateTime>,
-) -> Result<PurchaseView, CoreError> {
+) -> Result<PurchaseView, RetailError> {
     let note = optional_field("note", note.as_deref())?;
     if lines.is_empty() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "lines",
             "a return with no line sends nothing back",
         ));
@@ -382,13 +382,13 @@ pub fn return_to_supplier_at(
                 .checked_sub(line.qty_returned_milli)
                 .ok_or(crate::money::MoneyError::Overflow)?;
             if back.qty_milli <= 0 {
-                return Err(CoreError::validation(
+                return Err(RetailError::validation(
                     "qty_milli",
                     "a return sends back more than nothing",
                 ));
             }
             if back.qty_milli > outstanding {
-                return Err(CoreError::validation(
+                return Err(RetailError::validation(
                     "qty_milli",
                     "goods the shop never took in are goods it cannot send back",
                 ));
@@ -438,7 +438,7 @@ pub fn return_to_supplier_at(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_RETURN_PURCHASE,
+                action: audit_actions::ACTION_RETURN_PURCHASE,
                 entity: "purchase",
                 entity_id: Some(purchase_id),
                 before: None,
@@ -453,7 +453,7 @@ pub fn return_to_supplier_at(
                 ),
             },
         )?;
-        get(conn, shop_id, purchase_id)
+        get(conn, shop_id, purchase_id).map_err(RetailError::from)
     })
 }
 
@@ -488,7 +488,7 @@ pub fn cancel(
             user_id,
             purchase_id,
             PurchaseStatus::Cancelled,
-            audit::ACTION_CANCEL_PURCHASE,
+            audit_actions::ACTION_CANCEL_PURCHASE,
             reason,
         )
     })
@@ -519,7 +519,7 @@ pub fn close_short(
             user_id,
             purchase_id,
             PurchaseStatus::ClosedShort,
-            audit::ACTION_CLOSE_SHORT_PURCHASE,
+            audit_actions::ACTION_CLOSE_SHORT_PURCHASE,
             reason,
         )
     })
@@ -565,9 +565,9 @@ fn receive_inside(
     lines: &[ReceiveLine],
     note: Option<String>,
     received_at: Option<NaiveDateTime>,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     if lines.is_empty() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "lines",
             "a delivery with no line brought nothing",
         ));
@@ -577,13 +577,13 @@ fn receive_inside(
     match purchase.status {
         PurchaseStatus::Ordered | PurchaseStatus::PartiallyReceived => {}
         PurchaseStatus::Received => {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "status",
                 "the whole of this order has already arrived",
             ))
         }
         PurchaseStatus::Cancelled | PurchaseStatus::ClosedShort => {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "status",
                 "this order is closed and takes no more deliveries",
             ))
@@ -620,13 +620,13 @@ fn receive_inside(
             .checked_sub(line.qty_received_milli)
             .ok_or(crate::money::MoneyError::Overflow)?;
         if arriving.qty_milli <= 0 {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "qty_milli",
                 "a delivery takes in more than nothing",
             ));
         }
         if arriving.qty_milli > outstanding {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "qty_milli",
                 "more arrived on this line than the order still asks for",
             ));
@@ -708,7 +708,7 @@ fn receive_inside(
         shop_id,
         user_id,
         audit::Change {
-            action: audit::ACTION_RECEIVE_PURCHASE,
+            action: audit_actions::ACTION_RECEIVE_PURCHASE,
             entity: "purchase",
             entity_id: Some(purchase_id),
             before: Some(serde_json::json!({ "status": purchase.status.as_str() }).to_string()),
@@ -748,7 +748,7 @@ fn hand_over(
     supplier_id: i32,
     purchase_id: i32,
     paid: Paid,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     // Through the sibling's own door rather than into its repo: the balance
     // read here is the one `services::supplier_debt` answers, which checks the
     // supplier belongs to this shop on the way. `save` has already refused an
@@ -775,7 +775,7 @@ fn hand_over(
         shop_id,
         user_id,
         audit::Change {
-            action: audit::ACTION_PAY_SUPPLIER,
+            action: audit_actions::ACTION_PAY_SUPPLIER,
             entity: "supplier_debt",
             entity_id: Some(supplier_id),
             before: Some(

@@ -7,7 +7,7 @@
 
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::money::{Bps, Money, PaymentMode};
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
@@ -134,7 +134,7 @@ fn same_key_on_a_different_basket_is_a_conflict() {
             basket(product_id, 2000),
             "k1".into()
         ),
-        Err(CoreError::Conflict { .. })
+        Err(RetailError::Kernel(CoreError::Conflict { .. }))
     ));
     assert_eq!(documents_of_kind(&mut conn), 1);
 }
@@ -162,7 +162,7 @@ fn keys_are_present_short_and_never_on_a_quotation() {
             basket(product_id, 1000),
             String::new()
         ),
-        Err(CoreError::Validation { .. })
+        Err(RetailError::Kernel(CoreError::Validation { .. }))
     ));
     assert!(matches!(
         sales::issue_idempotent(
@@ -172,13 +172,13 @@ fn keys_are_present_short_and_never_on_a_quotation() {
             basket(product_id, 1000),
             "k".repeat(129)
         ),
-        Err(CoreError::Validation { .. })
+        Err(RetailError::Kernel(CoreError::Validation { .. }))
     ));
     let mut quote = basket(product_id, 1000);
     quote.kind = SaleKind::Proforma;
     assert!(matches!(
         sales::issue_idempotent(&mut conn, SHOP, OWNER, quote, "kq".into()),
-        Err(CoreError::Validation { .. })
+        Err(RetailError::Kernel(CoreError::Validation { .. }))
     ));
     assert_eq!(documents_of_kind(&mut conn), 0);
 }

@@ -1312,6 +1312,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 name = "dzpos-api"
 version = "0.1.0"
 dependencies = [
+ "argon2",
  "axum",
  "chrono",
  "clap",
@@ -1321,6 +1322,7 @@ dependencies = [
  "getrandom 0.3.4",
  "http-body-util",
  "mdns-sd",
+ "rust_xlsxwriter",
  "serde",
  "serde_json",
  "tempfile",
@@ -1383,14 +1385,12 @@ name = "dzpos-kernel"
 version = "0.1.0"
 dependencies = [
  "argon2",
- "askama",
  "chrono",
  "diesel",
  "diesel_migrations",
  "iana-time-zone",
  "libsqlite3-sys",
  "proptest",
- "rust_xlsxwriter",
  "serde",
  "serde_json",
  "sha2",

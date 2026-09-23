@@ -8,7 +8,7 @@ use diesel::prelude::*;
 use diesel::sql_types::{BigInt, Nullable};
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::debt::{
     DebtAllocation, DebtAllocationRow, DebtAllocationRowWrite, DebtEntry, DebtRow, DebtRowWrite,
 };
@@ -24,9 +24,9 @@ use crate::schema::{debt_allocations, debt_ledger};
 /// and fall out of the day the shop counted its drawer, and out of the cash
 /// position with it (`repos::cash::customer_payments` filters this very
 /// column). The caller stamps it from `services::clock`.
-pub fn append(conn: &mut SqliteConnection, write: &DebtRowWrite) -> Result<DebtEntry, CoreError> {
+pub fn append(conn: &mut SqliteConnection, write: &DebtRowWrite) -> Result<DebtEntry, RetailError> {
     if write.created_at.is_none() {
-        return Err(CoreError::Unstamped {
+        return Err(RetailError::Unstamped {
             entity: "debt_ledger",
         });
     }
@@ -263,7 +263,7 @@ mod tests {
         unstamped.payment_mode = Some(PaymentMethod::Cash);
         unstamped.created_at = None;
         match append(&mut conn, &unstamped) {
-            Err(CoreError::Unstamped { entity }) => assert_eq!(entity, "debt_ledger"),
+            Err(RetailError::Unstamped { entity }) => assert_eq!(entity, "debt_ledger"),
             other => panic!("expected an unstamped row to be refused, got {other:?}"),
         }
         // And nothing was written: a refusal leaves the ledger as it was.

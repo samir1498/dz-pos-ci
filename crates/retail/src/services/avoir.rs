@@ -35,18 +35,18 @@ use chrono::NaiveDateTime;
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Money, MoneyError};
 use crate::services::avoir_remaining::{below_zero, Coming, Remaining, SliceLine};
-use crate::services::avoir_slice::slice_totals;
 use crate::services::cash_refunds::Refund;
 use crate::services::documents::{
     BalanceTriple, Document, DocumentKind, DocumentLine, DocumentStatus, NewDocument,
     NewDocumentLine,
 };
 use crate::services::{cash_refunds, customers, debt, documents, stock};
+use crate::{audit_actions, services::avoir_slice::slice_totals};
 use dzpos_kernel::services::{audit, clock, optional_field};
 
 /// One line of a facture and how much of it is coming back.
@@ -81,7 +81,7 @@ pub fn issue(
     lines: Option<Vec<AvoirLine>>,
     reason: Option<String>,
     at: Option<NaiveDateTime>,
-) -> Result<Document, CoreError> {
+) -> Result<Document, RetailError> {
     issue_settling(
         conn,
         shop_id,
@@ -129,7 +129,7 @@ pub fn issue_settling(
     reason: Option<String>,
     at: Option<NaiveDateTime>,
     refund: Refund,
-) -> Result<Document, CoreError> {
+) -> Result<Document, RetailError> {
     let reason = optional_field("reason", reason.as_deref())?;
     conn.transaction(|conn| {
         // Only a facture, and only one that still stands. `get_of_kind`
@@ -137,7 +137,7 @@ pub fn issue_settling(
         // document alike (rule 3), which is the honest answer in all three.
         let facture = documents::get_of_kind(conn, shop_id, facture_id, DocumentKind::Facture)?;
         if facture.status == DocumentStatus::Cancelled {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "document_id",
                 "this facture is annulée, and a document that asks for nothing is credited by nothing",
             ));
@@ -172,7 +172,7 @@ pub fn issue_settling(
                 .try_fold(Money::ZERO, |acc, l| acc.checked_add(l.line_total))?;
             let a_line_below_zero = lines.iter().any(|l| l.line_total.is_negative());
             if below_zero(&totals) || a_line_below_zero || summed != totals.total_ht {
-                return Err(CoreError::validation(
+                return Err(RetailError::validation(
                     "lines",
                     "the avoirs on this facture would come to more than it asked for",
                 ));
@@ -217,7 +217,7 @@ pub fn issue_settling(
             // says why. A forged avoir carrying no line at all moves no
             // quantity and would slip past everything else.
             if totals.net_to_pay > remaining.totals.total_ttc {
-                return Err(CoreError::validation(
+                return Err(RetailError::validation(
                     "lines",
                     "the avoirs on this facture would come to more than it asked for",
                 ));
@@ -231,7 +231,7 @@ pub fn issue_settling(
         if refund.is_cash() {
             let left = cash_refunds::still_to_hand_back(conn, shop_id, &facture)?;
             if totals.net_to_pay > left {
-                return Err(CoreError::validation(
+                return Err(RetailError::validation(
                     "refund",
                     "more cash than was ever paid in on this facture; \
                      what the credit note is worth comes off the account",
@@ -316,7 +316,7 @@ pub fn issue_settling(
             // instead would move a margin already earned with the next
             // delivery, which is the whole thing the ledger cost prevents.
             let Some(unit_cost) = sold_at.get(&product_id).copied() else {
-                return Err(CoreError::UnpricedReversal {
+                return Err(RetailError::UnpricedReversal {
                     document_id: facture_id,
                     product_id,
                     reason: "the line it credits has no sale movement",
@@ -427,7 +427,7 @@ pub fn issue_settling(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_AVOIR,
+                action: audit_actions::ACTION_AVOIR,
                 // The facture is the entity that changed: it is the paper a
                 // reader is holding when they ask why it stopped asking for
                 // its amount. The avoir is named in `after` as what the

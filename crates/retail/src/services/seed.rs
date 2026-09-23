@@ -33,7 +33,7 @@ use chrono::{Datelike, NaiveDate, NaiveDateTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::customer::NewCustomer;
 use crate::models::product::{NewProduct, Unit};
 use crate::models::shop::StoreBlock;
@@ -171,10 +171,10 @@ pub fn run(
     shop_id: i32,
     user_id: i32,
     today: NaiveDate,
-) -> Result<Counts, CoreError> {
+) -> Result<Counts, RetailError> {
     conn.transaction(|conn| {
         if !is_empty(conn, shop_id)? {
-            return Err(CoreError::validation(
+            return Err(RetailError::validation(
                 "shop",
                 "this shop already holds rows, and a second seeding would sit beside them",
             ));
@@ -209,10 +209,10 @@ pub fn run(
             let day = first_day
                 .checked_add_days(chrono::Days::new(u64::from(step)))
                 .ok_or_else(|| {
-                    CoreError::validation(
+                    RetailError::from(CoreError::validation(
                         "today",
                         "that day is outside the calendar the shop keeps",
-                    )
+                    ))
                 })?;
             one_day(
                 conn,
@@ -409,7 +409,7 @@ fn the_catalogue(
     user_id: i32,
     categories: &[i32],
     counts: &mut Counts,
-) -> Result<Vec<Fiche>, CoreError> {
+) -> Result<Vec<Fiche>, RetailError> {
     let mut fiches = Vec::with_capacity(PRODUCTS);
     for (nth, (name, category, unit, cost_da, selling_da, pace)) in
         CATALOGUE.into_iter().enumerate()
@@ -487,7 +487,7 @@ fn the_customers(
     shop_id: i32,
     user_id: i32,
     counts: &mut Counts,
-) -> Result<Vec<i32>, CoreError> {
+) -> Result<Vec<i32>, RetailError> {
     const COMPANIES: [(&str, &str); 8] = [
         ("Café Essalem", "1048"),
         ("Restaurant Le Palmier", "2371"),
@@ -562,7 +562,7 @@ fn the_suppliers(
     shop_id: i32,
     user_id: i32,
     counts: &mut Counts,
-) -> Result<Vec<i32>, CoreError> {
+) -> Result<Vec<i32>, RetailError> {
     const ROWS: [(&str, &str); 5] = [
         ("Grossiste El Mouna", "1204"),
         ("Distribution Sidi Moussa", "2318"),
@@ -610,7 +610,7 @@ fn one_day(
     shop: &mut Shop,
     rng: &mut Rng,
     counts: &mut Counts,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     the_deliveries(conn, shop_id, user_id, day, step, shop, rng, counts)?;
     the_counter(conn, shop_id, user_id, day, step, shop, rng, counts)?;
     the_money_out(conn, shop_id, user_id, day, step, shop, rng, counts)?;
@@ -633,7 +633,7 @@ fn the_deliveries(
     shop: &mut Shop,
     rng: &mut Rng,
     counts: &mut Counts,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     // What arrived against an order placed earlier and only half taken in.
     // Done first, so a second delivery lands on a later day than its first.
     if step % 5 == 4 {
@@ -778,7 +778,7 @@ fn the_counter(
     shop: &mut Shop,
     rng: &mut Rng,
     counts: &mut Counts,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     let how_many = 25 + rng.upto(36);
     for nth in 0..how_many {
         // Roughly two thirds cash, one in six on card, the rest on account.
@@ -991,7 +991,7 @@ fn the_money_out(
     shop: &mut Shop,
     rng: &mut Rng,
     counts: &mut Counts,
-) -> Result<(), CoreError> {
+) -> Result<(), RetailError> {
     // Two customers settle something every other day. Never the whole
     // balance: a screen with nothing outstanding on it shows nothing.
     if step.is_multiple_of(2) {

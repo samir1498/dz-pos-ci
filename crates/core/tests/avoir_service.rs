@@ -9,7 +9,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::stock::MovementKind;
 use dzpos_core::money::{Bps, Money, PaymentMode, Regime};
@@ -356,7 +356,7 @@ fn a_line_cannot_be_credited_past_what_earlier_avoirs_left_on_it() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "qty_milli"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "qty_milli"),
         "{err:?}"
     );
 
@@ -408,7 +408,7 @@ fn the_running_total_of_avoirs_never_passes_what_the_facture_asked_for() {
     let err =
         avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(12))).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "lines"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "lines"),
         "{err:?}"
     );
     assert_eq!(
@@ -447,7 +447,7 @@ fn only_a_facture_that_still_stands_is_credited() {
     let err =
         avoir::issue(&mut conn, SHOP, OWNER, ticket.id, None, None, Some(at(11))).unwrap_err();
     assert!(
-        matches!(err, CoreError::NotFound { entity, .. } if entity == "facture"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::NotFound { entity, .. }) if entity == "facture"),
         "{err:?}"
     );
 
@@ -456,7 +456,7 @@ fn only_a_facture_that_still_stands_is_credited() {
     let avoir = avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(12))).unwrap();
     let err = avoir::issue(&mut conn, SHOP, OWNER, avoir.id, None, None, Some(at(13))).unwrap_err();
     assert!(
-        matches!(err, CoreError::NotFound { entity, .. } if entity == "facture"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::NotFound { entity, .. }) if entity == "facture"),
         "{err:?}"
     );
 
@@ -466,7 +466,7 @@ fn only_a_facture_that_still_stands_is_credited() {
     // somewhere.
     let err = avoir::issue(&mut conn, 2, OWNER, facture.id, None, None, Some(at(13))).unwrap_err();
     assert!(
-        matches!(err, CoreError::NotFound { entity, .. } if entity == "document"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::NotFound { entity, .. }) if entity == "document"),
         "{err:?}"
     );
 }
@@ -484,7 +484,7 @@ fn an_avoir_that_credits_nothing_is_refused() {
     let err =
         avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(12))).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "lines"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "lines"),
         "{err:?}"
     );
     let zero = avoir::issue(
@@ -501,7 +501,7 @@ fn an_avoir_that_credits_nothing_is_refused() {
     )
     .unwrap_err();
     assert!(
-        matches!(zero, CoreError::Validation { ref field, .. } if field == "qty_milli"),
+        matches!(zero, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "qty_milli"),
         "{zero:?}"
     );
 }
@@ -528,7 +528,7 @@ fn a_line_of_another_facture_cannot_be_credited_on_this_one() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::NotFound { entity, .. } if entity == "document_line"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::NotFound { entity, .. }) if entity == "document_line"),
         "{err:?}"
     );
 }
@@ -646,7 +646,7 @@ fn a_cancelled_facture_is_credited_by_nothing_more() {
     let err =
         avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(12))).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "document_id"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "document_id"),
         "{err:?}"
     );
 }
@@ -1370,7 +1370,7 @@ fn an_avoir_crediting_more_of_a_line_than_it_holds_is_refused() {
     let err =
         avoir::issue(&mut conn, SHOP, OWNER, facture.id, None, None, Some(at(12))).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "lines"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "lines"),
         "{err:?}"
     );
 }
@@ -1661,7 +1661,7 @@ fn a_facture_whose_sale_movements_disagree_about_the_cost_credits_nothing() {
     assert!(
         matches!(
             refused,
-            Err(CoreError::UnpricedReversal { product_id, .. }) if product_id == p
+            Err(RetailError::UnpricedReversal { product_id, .. }) if product_id == p
         ),
         "two costs were read as one: {refused:?}"
     );
@@ -1695,7 +1695,7 @@ fn a_sold_line_with_no_movement_left_is_refused_rather_than_priced_off_the_fiche
     assert!(
         matches!(
             refused,
-            Err(CoreError::UnpricedReversal { product_id, .. }) if product_id == p
+            Err(RetailError::UnpricedReversal { product_id, .. }) if product_id == p
         ),
         "a missing movement was priced off the fiche: {refused:?}"
     );

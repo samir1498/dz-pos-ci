@@ -11,7 +11,7 @@ use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::money::Bps;
 use dzpos_core::print::{FactureLayout, ThermalMode};
 use dzpos_core::services::clock;
-use dzpos_core::services::{preferences, settings, shops};
+use dzpos_core::services::{discount_threshold, preferences, settings, shops};
 
 use crate::dto::{
     parse_day, DiscountThresholdChangeDto, FactureLayoutChoiceDto, FactureLayoutDto,
@@ -43,7 +43,8 @@ fn read_all(
         facture_layouts: FactureLayout::ALL.map(FactureLayoutDto::from).to_vec(),
         print_lang: preferences::print_lang(conn, shop)?.map(Into::into),
         thermal_mode: preferences::thermal_mode(conn, shop)?.into(),
-        discount_threshold_bps: settings::discount_threshold_as_of(conn, shop, at)?.as_u32(),
+        discount_threshold_bps: discount_threshold::discount_threshold_as_of(conn, shop, at)?
+            .as_u32(),
     })
 }
 
@@ -213,7 +214,7 @@ pub async fn set_discount_threshold(
     let user = who.id;
     let all = state
         .blocking(move |c| {
-            settings::set_discount_threshold(c, shop, user, threshold, from)?;
+            discount_threshold::set_discount_threshold(c, shop, user, threshold, from)?;
             read_all(c, shop)
         })
         .await?;

@@ -11,14 +11,14 @@
 
 use askama::Template;
 
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::lang::Lang;
 use crate::models::customer::Customer;
 use crate::models::customer::PartyKind;
 use crate::money::format::format_centimes;
 use crate::money::words::amount_in_words;
 use crate::money::Money;
-use crate::print::strings::{text, Key};
+use crate::print::strings::{shop_text, text, Key, ShopKey};
 use crate::print::{number_of, Paper};
 use crate::services::debt::{DebtKind, RangedStatement, StatementEntry};
 
@@ -104,10 +104,10 @@ pub fn render_statement(
     statement: &RangedStatement,
     lang: Lang,
     paper: Paper,
-) -> Result<String, CoreError> {
+) -> Result<String, RetailError> {
     view(customer, statement, lang, paper)?
         .render()
-        .map_err(CoreError::from)
+        .map_err(RetailError::from)
 }
 
 fn view(
@@ -115,7 +115,7 @@ fn view(
     statement: &RangedStatement,
     lang: Lang,
     paper: Paper,
-) -> Result<StatementView, CoreError> {
+) -> Result<StatementView, RetailError> {
     // A closing balance below zero is the shop holding money for the
     // customer. `amount_in_words` refuses a negative, and rightly: a written
     // amount has no sign in it. So the words are the amount itself and the
@@ -127,7 +127,7 @@ fn view(
         statement.closing
     };
     let in_words = amount_in_words(absolute, lang).map_err(|_| {
-        CoreError::render("the closing balance has no written form in the print language")
+        RetailError::render("the closing balance has no written form in the print language")
     })?;
 
     Ok(StatementView {
@@ -147,7 +147,7 @@ fn view(
         customer: customer_view(customer, lang),
         date_label: text(Key::Date, lang),
         movement_label: text(Key::Movement, lang),
-        document_label: text(Key::Document, lang),
+        document_label: shop_text(ShopKey::Document, lang),
         debit_label: text(Key::Debit, lang),
         credit_label: text(Key::CreditColumn, lang),
         balance_label: text(Key::Balance, lang),
@@ -163,7 +163,7 @@ fn view(
         closing: format_centimes(statement.closing),
         in_words_label: text(Key::StatementInWords, lang),
         in_words,
-        in_favour: owed.then(|| text(Key::InFavourOfCustomer, lang)),
+        in_favour: owed.then(|| shop_text(ShopKey::InFavourOfCustomer, lang)),
         currency: text(Key::Currency, lang),
     })
 }
@@ -206,7 +206,7 @@ fn customer_view(customer: &Customer, lang: Lang) -> CustomerView {
 fn movement_view(line: &StatementEntry, lang: Lang) -> MovementView {
     MovementView {
         date: line.entry.created_at.format(DATE_FORMAT).to_string(),
-        kind: text(kind_key(line.entry.kind), lang),
+        kind: kind_label(line.entry.kind, lang),
         document: line
             .document
             .map(|doc| number_of(doc.kind, doc.year, doc.number)),
@@ -217,13 +217,14 @@ fn movement_view(line: &StatementEntry, lang: Lang) -> MovementView {
 }
 
 /// The word for why the debt moved. Sentence case, because it is read in a
-/// table cell; `Key::Avoir` is the heading of a document and would shout.
-const fn kind_key(kind: DebtKind) -> Key {
+/// table cell; `ShopKey::Avoir` is the heading of a document and would
+/// shout.
+const fn kind_label(kind: DebtKind, lang: Lang) -> &'static str {
     match kind {
-        DebtKind::Opening => Key::KindOpening,
-        DebtKind::Sale => Key::KindSale,
-        DebtKind::Payment => Key::KindPayment,
-        DebtKind::Avoir => Key::KindAvoir,
-        DebtKind::Adjustment => Key::KindAdjustment,
+        DebtKind::Opening => text(Key::KindOpening, lang),
+        DebtKind::Sale => shop_text(ShopKey::KindSale, lang),
+        DebtKind::Payment => text(Key::KindPayment, lang),
+        DebtKind::Avoir => shop_text(ShopKey::KindAvoir, lang),
+        DebtKind::Adjustment => text(Key::KindAdjustment, lang),
     }
 }

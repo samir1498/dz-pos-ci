@@ -40,10 +40,10 @@ pub enum Permission {
     /// Ring a sale up. The one thing every role may do.
     Sell,
     /// Give a discount above the settings threshold
-    /// (`services::settings::discount_threshold_as_of`). At or under the
-    /// threshold needs nothing: features.md §5's "give discount above X %"
-    /// is the shape of the rule, and a caller checks `discount_needs_permission`
-    /// before it asks for this one.
+    /// (`dzpos_retail::services::discount_threshold::discount_threshold_as_of`).
+    /// At or under the threshold needs nothing: features.md §5's "give
+    /// discount above X %" is the shape of the rule, and a caller checks
+    /// `discount_needs_permission` before it asks for this one.
     DiscountAboveThreshold,
     /// Pass a credit sale that the customer's credit limit would otherwise
     /// block. Owner-only until this milestone (M2 carry-in, 2026-09-09); T6

@@ -118,7 +118,7 @@ fn a_negative_opening_debt_is_refused_and_no_fiche_is_left_behind() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "opening_debt"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "opening_debt"),
         "{err}"
     );
     assert!(customers::list(&mut conn, SHOP, None).unwrap().is_empty());
@@ -207,7 +207,7 @@ fn a_field_longer_than_a_facture_prints_is_refused() {
     too_long.address = Some("é".repeat(201));
     let err = customers::create(&mut conn, SHOP, OWNER, too_long, None).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "address"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "address"),
         "{err}"
     );
 
@@ -223,7 +223,7 @@ fn a_fiche_with_no_name_is_refused_and_a_blank_identifier_is_stored_as_nothing()
     nameless.nis = Some("   ".to_string());
     let err = customers::create(&mut conn, SHOP, OWNER, nameless, None).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "name"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "name"),
         "{err}"
     );
 

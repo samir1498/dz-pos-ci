@@ -62,7 +62,7 @@ pub async fn get_one(
     // the screen showing the document is the screen that asks, and the two
     // reads have to be answers about the same file.
     let (found, effect) = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<_, CoreError> {
             let found = documents::get(c, shop, id)?;
             let effect = cancellation::cancel_effect(c, shop, id)?;
             Ok((found, effect))
@@ -111,7 +111,7 @@ pub async fn ticket(
     }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
     let (found, lang) = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<_, CoreError> {
             let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
             let lang = preferences::print_lang_for(c, shop, named, caller)?;
             Ok((found, lang))
@@ -151,7 +151,7 @@ pub async fn ticket_escpos(
     }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
     let (found, lang, mode) = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<_, CoreError> {
             let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
             let lang = preferences::print_lang_for(c, shop, named, caller)?;
             let mode = preferences::thermal_mode_for(c, shop, lang)?;
@@ -198,7 +198,7 @@ pub async fn print_ticket(
     }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
     let (found, lang, mode) = state
-        .blocking(move |c| {
+        .blocking(move |c| -> Result<_, CoreError> {
             let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
             let lang = preferences::print_lang_for(c, shop, named, caller)?;
             let mode = preferences::thermal_mode_for(c, shop, lang)?;

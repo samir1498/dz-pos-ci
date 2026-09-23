@@ -24,12 +24,12 @@ use chrono::{NaiveDate, NaiveDateTime};
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::supplier_debt::{SupplierAllocationRowWrite, SupplierDebtRowWrite};
-use crate::money::Money;
 use crate::repos::purchases as purchases_repo;
 use crate::repos::supplier_debt as repo;
 use crate::repos::suppliers as suppliers_repo;
+use crate::{audit_actions, money::Money};
 use dzpos_kernel::services::{audit, clock, optional_field};
 
 pub use crate::models::supplier_debt::{
@@ -248,13 +248,13 @@ pub fn pay(
     mode: PaymentMethod,
     note: Option<String>,
     at: NaiveDateTime,
-) -> Result<Payment, CoreError> {
+) -> Result<Payment, RetailError> {
     ensure_supplier(conn, shop_id, supplier_id)?;
     // Before the balance below, and repeated inside the door: a zero read
     // second comes back as money above the debt of a supplier holding credit,
     // pointing a screen at the account rather than at the amount box.
     if amount.as_centimes() <= 0 {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "amount_centimes",
             "a payment of nothing pays nothing",
         ));
@@ -266,7 +266,7 @@ pub fn pay(
         // the write would otherwise take the supplier into advance.
         let outstanding = repo::balance(conn, shop_id, supplier_id)?;
         if amount > outstanding {
-            return Err(CoreError::PaymentAboveDebt {
+            return Err(RetailError::PaymentAboveDebt {
                 // Nothing owed, or the supplier owing the shop, is nothing
                 // that can be paid; the payload says zero rather than a
                 // negative a screen would have to explain.
@@ -279,7 +279,7 @@ pub fn pay(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_PAY_SUPPLIER,
+                action: audit_actions::ACTION_PAY_SUPPLIER,
                 entity: "supplier_debt",
                 entity_id: Some(supplier_id),
                 before: Some(
@@ -323,9 +323,9 @@ pub(crate) fn hand_over(
     mode: PaymentMethod,
     note: Option<String>,
     at: NaiveDateTime,
-) -> Result<Payment, CoreError> {
+) -> Result<Payment, RetailError> {
     if amount.as_centimes() <= 0 {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "amount_centimes",
             "a payment of nothing pays nothing",
         ));
@@ -388,10 +388,10 @@ pub fn adjust(
     supplier_id: i32,
     amount: Money,
     note: Option<String>,
-) -> Result<Adjusted, CoreError> {
+) -> Result<Adjusted, RetailError> {
     ensure_supplier(conn, shop_id, supplier_id)?;
     if amount == Money::ZERO {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "amount",
             "a correction of nothing corrects nothing",
         ));
@@ -431,7 +431,7 @@ pub fn adjust(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_ADJUST_SUPPLIER,
+                action: audit_actions::ACTION_ADJUST_SUPPLIER,
                 entity: "supplier_debt",
                 entity_id: Some(supplier_id),
                 before: Some(
@@ -653,7 +653,7 @@ pub fn append(
     conn: &mut SqliteConnection,
     shop_id: i32,
     entry: NewSupplierEntry,
-) -> Result<SupplierEntry, CoreError> {
+) -> Result<SupplierEntry, RetailError> {
     append_at(conn, shop_id, entry, None)
 }
 
@@ -668,7 +668,7 @@ pub fn append_at(
     shop_id: i32,
     entry: NewSupplierEntry,
     at: Option<NaiveDateTime>,
-) -> Result<SupplierEntry, CoreError> {
+) -> Result<SupplierEntry, RetailError> {
     ensure_supplier(conn, shop_id, entry.supplier_id)?;
     // The order a movement cites is checked the same way the allocation's is:
     // a statement that names an order this shop never placed is worse than
@@ -677,19 +677,19 @@ pub fn append_at(
         ensure_purchase(conn, shop_id, purchase_id)?;
     }
     if entry.debit.is_negative() || entry.credit.is_negative() {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "debit",
             "a movement is written in the direction its column names, never as a negative",
         ));
     }
     if entry.debit != Money::ZERO && entry.credit != Money::ZERO {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "debit",
             "a movement raises the debt or lowers it, not both",
         ));
     }
     if entry.debit == Money::ZERO && entry.credit == Money::ZERO {
-        return Err(CoreError::validation(
+        return Err(RetailError::validation(
             "debit",
             "a movement of nothing moves no debt",
         ));

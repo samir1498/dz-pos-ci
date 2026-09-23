@@ -18,6 +18,7 @@
 //! — including the expected figure and the difference in the answer, the two
 //! figures `GET /till/shifts/{id}` refuses a cashier under `SeeReports`.
 
+use dzpos_core::audit_actions;
 use dzpos_core::error::CoreError;
 use dzpos_core::money::Money;
 use dzpos_core::services::audit;
@@ -128,7 +129,7 @@ fn a_manager_counts_a_drawer_its_cashier_walked_away_from() {
     let row = audit::list(&mut conn, SHOP)
         .unwrap()
         .into_iter()
-        .find(|e| e.action == audit::ACTION_CLOSE_TILL)
+        .find(|e| e.action == audit_actions::ACTION_CLOSE_TILL)
         .unwrap();
     assert_eq!(row.user_id, LEILA);
     let after: serde_json::Value = serde_json::from_str(&row.after.unwrap()).unwrap();

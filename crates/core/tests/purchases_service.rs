@@ -10,6 +10,8 @@
 
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
+use dzpos_core::audit_actions;
+use dzpos_core::error::{CoreError, RetailError::Kernel};
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::money::{Bps, Money};
 use dzpos_core::services::purchases::{
@@ -249,9 +251,7 @@ fn extra_costs_with_no_value_to_sit_on_are_refused() {
     )
     .unwrap_err();
     match err {
-        dzpos_core::error::CoreError::Validation { ref field, .. } => {
-            assert_eq!(field, "transport_centimes");
-        }
+        Kernel(CoreError::Validation { ref field, .. }) => assert_eq!(field, "transport_centimes"),
         other => panic!("{other:?}"),
     }
 }
@@ -480,9 +480,7 @@ fn paying_more_than_the_order_is_worth_is_refused_when_it_is_saved() {
     )
     .unwrap_err();
     match err {
-        dzpos_core::error::CoreError::Validation { ref field, .. } => {
-            assert_eq!(field, "paid_now_centimes");
-        }
+        Kernel(CoreError::Validation { ref field, .. }) => assert_eq!(field, "paid_now_centimes"),
         other => panic!("{other:?}"),
     }
     // Nothing was written on the way past.
@@ -527,7 +525,7 @@ fn a_purchase_is_cancelled_only_while_nothing_has_arrived() {
     )
     .unwrap_err();
     match err {
-        dzpos_core::error::CoreError::Validation { ref field, .. } => assert_eq!(field, "status"),
+        CoreError::Validation { ref field, .. } => assert_eq!(field, "status"),
         other => panic!("{other:?}"),
     }
     // Closed short instead: what arrived stays, what never came is written off.
@@ -743,9 +741,7 @@ fn a_closed_supplier_takes_no_order_and_no_receipt() {
     )
     .unwrap_err();
     match err {
-        dzpos_core::error::CoreError::Validation { ref field, .. } => {
-            assert_eq!(field, "supplier_id");
-        }
+        Kernel(CoreError::Validation { ref field, .. }) => assert_eq!(field, "supplier_id"),
         other => panic!("{other:?}"),
     }
     assert!(purchases::receive(
@@ -797,9 +793,7 @@ fn an_order_takes_a_product_of_its_own_shop_only_and_names_it_once() {
     )
     .unwrap_err();
     match err {
-        dzpos_core::error::CoreError::Validation { ref field, .. } => {
-            assert_eq!(field, "product_id");
-        }
+        Kernel(CoreError::Validation { ref field, .. }) => assert_eq!(field, "product_id"),
         other => panic!("{other:?}"),
     }
 }
@@ -929,16 +923,16 @@ fn every_change_to_an_order_writes_the_audit_entry_of_its_own_name() {
         .filter(|e| e.entity == "purchase")
         .map(|e| e.action)
         .collect();
-    assert!(actions.contains(&audit::ACTION_CREATE_PURCHASE.to_string()));
-    assert!(actions.contains(&audit::ACTION_RECEIVE_PURCHASE.to_string()));
-    assert!(actions.contains(&audit::ACTION_RETURN_PURCHASE.to_string()));
-    assert!(actions.contains(&audit::ACTION_CLOSE_SHORT_PURCHASE.to_string()));
+    assert!(actions.contains(&audit_actions::ACTION_CREATE_PURCHASE.to_string()));
+    assert!(actions.contains(&audit_actions::ACTION_RECEIVE_PURCHASE.to_string()));
+    assert!(actions.contains(&audit_actions::ACTION_RETURN_PURCHASE.to_string()));
+    assert!(actions.contains(&audit_actions::ACTION_CLOSE_SHORT_PURCHASE.to_string()));
     // The reason a close short was given is in the log, because writing off
     // goods that never came is a decision.
     let short = audit::list(&mut conn, SHOP)
         .unwrap()
         .into_iter()
-        .find(|e| e.action == audit::ACTION_CLOSE_SHORT_PURCHASE)
+        .find(|e| e.action == audit_actions::ACTION_CLOSE_SHORT_PURCHASE)
         .unwrap();
     assert!(short.after.unwrap_or_default().contains("fin"));
 }
@@ -1030,7 +1024,7 @@ fn money_handed_over_with_the_order_is_logged_the_way_any_other_payment_is() {
     let logged = audit::list(&mut conn, SHOP)
         .unwrap()
         .into_iter()
-        .find(|e| e.action == audit::ACTION_PAY_SUPPLIER)
+        .find(|e| e.action == audit_actions::ACTION_PAY_SUPPLIER)
         .unwrap();
     assert_eq!(logged.entity, "supplier_debt");
     assert_eq!(logged.entity_id, Some(supplier));
@@ -1088,9 +1082,7 @@ fn an_order_of_free_samples_is_saved_and_one_with_costs_on_it_is_not() {
     )
     .unwrap_err();
     match err {
-        dzpos_core::error::CoreError::Validation { ref field, .. } => {
-            assert_eq!(field, "transport_centimes");
-        }
+        Kernel(CoreError::Validation { ref field, .. }) => assert_eq!(field, "transport_centimes"),
         other => panic!("{other:?}"),
     }
 }
@@ -1347,7 +1339,7 @@ fn an_order_whose_every_line_has_arrived_takes_no_further_delivery() {
     )
     .unwrap_err();
     match err {
-        dzpos_core::error::CoreError::Validation { ref field, .. } => assert_eq!(field, "status"),
+        Kernel(CoreError::Validation { ref field, .. }) => assert_eq!(field, "status"),
         other => panic!("{other:?}"),
     }
     // And no number of the year's series was burnt on the way past.

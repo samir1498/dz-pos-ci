@@ -8,7 +8,7 @@ use diesel::prelude::*;
 use diesel::sql_types::{BigInt, Nullable};
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::supplier_debt::{
     SupplierAllocation, SupplierAllocationRow, SupplierAllocationRowWrite, SupplierDebtRow,
     SupplierDebtRowWrite, SupplierEntry,
@@ -26,9 +26,9 @@ use crate::schema::{supplier_allocations, supplier_ledger};
 pub fn append(
     conn: &mut SqliteConnection,
     write: &SupplierDebtRowWrite,
-) -> Result<SupplierEntry, CoreError> {
+) -> Result<SupplierEntry, RetailError> {
     if write.created_at.is_none() {
-        return Err(CoreError::Unstamped {
+        return Err(RetailError::Unstamped {
             entity: "supplier_ledger",
         });
     }
@@ -294,7 +294,7 @@ mod tests {
         unstamped.payment_mode = Some(PaymentMethod::Cash);
         unstamped.created_at = None;
         match append(&mut conn, &unstamped) {
-            Err(CoreError::Unstamped { entity }) => assert_eq!(entity, "supplier_ledger"),
+            Err(RetailError::Unstamped { entity }) => assert_eq!(entity, "supplier_ledger"),
             other => panic!("expected an unstamped row to be refused, got {other:?}"),
         }
         // And nothing was written: a refusal leaves the ledger as it was.

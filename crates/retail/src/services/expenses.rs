@@ -16,6 +16,7 @@
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
+use crate::audit_actions;
 use crate::error::CoreError;
 use crate::models::expense::ExpenseRowWrite;
 use crate::money::Money;
@@ -143,7 +144,7 @@ pub fn create(
             shop_id,
             user_id,
             audit::Change {
-                action: audit::ACTION_CREATE_EXPENSE,
+                action: audit_actions::ACTION_CREATE_EXPENSE,
                 entity: "expense",
                 entity_id: Some(made.id),
                 before: None,

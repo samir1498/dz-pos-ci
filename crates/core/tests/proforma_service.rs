@@ -9,7 +9,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::money::{Bps, Money, PaymentMode};
 use dzpos_core::services::customers::PartyKind;
@@ -72,7 +72,7 @@ fn quotation(customer_id: Option<i32>, product_id: i32, mode: PaymentMode) -> Ne
     }
 }
 
-fn issue(conn: &mut SqliteConnection, new: NewSale) -> Result<Document, CoreError> {
+fn issue(conn: &mut SqliteConnection, new: NewSale) -> Result<Document, RetailError> {
     sales::issue(conn, SHOP, OWNER, new).map(|s| s.document)
 }
 
@@ -139,7 +139,7 @@ fn a_proforma_needs_a_customer() {
     let p = product(&mut conn, "Ciment", 100_000, 1900);
     let err = issue(&mut conn, quotation(None, p, PaymentMode::Cash)).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "customer_id"),
+        matches!(err, RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "customer_id"),
         "{err:?}"
     );
     // And the refusal burned no number: the counter is untouched.
@@ -185,7 +185,7 @@ fn a_proforma_takes_no_amount_tendered_and_no_closed_fiche() {
     with_cash.tendered = Some(Money::centimes(500_000));
     let err = issue(&mut conn, with_cash).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "tendered"),
+        matches!(err, RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "tendered"),
         "{err:?}"
     );
 
@@ -194,7 +194,7 @@ fn a_proforma_takes_no_amount_tendered_and_no_closed_fiche() {
     customers::update(&mut conn, SHOP, OWNER, c, closed_fiche, None).unwrap();
     let closed = issue(&mut conn, quotation(Some(c), p, PaymentMode::Cash)).unwrap_err();
     assert!(
-        matches!(closed, CoreError::Validation { ref field, .. } if field == "customer_id"),
+        matches!(closed, RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "customer_id"),
         "{closed:?}"
     );
 }

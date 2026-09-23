@@ -22,17 +22,21 @@ mod png;
 pub mod raster;
 mod refusals;
 pub mod statement;
+pub mod strings;
 pub mod ticket;
 
-// `layout`, `strings` and `thermal` are in the kernel: `services::preferences`
-// (a domain-free service) stores a shop's chosen `FactureLayout` and
-// `ThermalMode`, and `strings` names no shop type on a code line (only
-// `crate::lang::Lang`), unlike `mod.rs`, `escpos.rs` and `raster.rs`. All
-// three moved to `dzpos_kernel::print` in the kernel crate split (S3 of
+// `layout` and `thermal` are in the kernel: `services::preferences` (a
+// domain-free service) stores a shop's chosen `FactureLayout` and
+// `ThermalMode`, unlike `mod.rs`, `escpos.rs` and `raster.rs`. Both moved to
+// `dzpos_kernel::print` in the kernel crate split (S3 of
 // `a-kernel-crate-and-retail-as-the-first-module`) and are re-exported here
-// as modules so `crate::print::layout::Paper` and
-// `crate::print::strings::{text, Key}` keep resolving unchanged.
-pub use dzpos_kernel::print::{layout, strings, thermal};
+// as modules so `crate::print::layout::Paper` keeps resolving unchanged.
+// `strings` is this crate's own module now, not a re-export: S4 of the same
+// plan moved the fourteen shop words `Key` used to carry out of the
+// kernel's copy into `strings::ShopKey` here, and `strings::{text, Key}`
+// re-export the kernel's own so `crate::print::strings::{text, Key}` keeps
+// resolving unchanged for every call site that only ever needed those.
+pub use dzpos_kernel::print::{layout, thermal};
 
 pub use barcode_label::{render_label, render_label_sheet};
 pub use debt_slip::render_debt_slip;

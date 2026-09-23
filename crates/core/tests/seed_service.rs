@@ -288,7 +288,10 @@ fn the_seeder_refuses_a_shop_that_already_holds_something() {
     // Refused, and refused as a rule rather than as a crash: the binary turns
     // this into the sentence that tells the operator to pass --force.
     assert!(
-        matches!(err, dzpos_core::error::CoreError::Validation { .. }),
+        matches!(
+            err,
+            dzpos_core::error::RetailError::Kernel(dzpos_core::error::CoreError::Validation { .. })
+        ),
         "{err:?}"
     );
 }

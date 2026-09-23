@@ -8,7 +8,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::{CoreError, PartySide};
+use dzpos_core::error::{CoreError, PartySide, RetailError, RetailError::Kernel};
 use dzpos_core::models::product::{NewProduct, Unit};
 use dzpos_core::models::shop::StoreBlock;
 use dzpos_core::models::stock::MovementKind;
@@ -20,7 +20,7 @@ use dzpos_core::services::permissions::Permission;
 use dzpos_core::services::sales::{self, NewSale, NewSaleLine, SaleKind};
 use dzpos_core::services::users::{NewUser, Role};
 use dzpos_core::services::{
-    audit, customers, debt, documents, products, settings, shops, stock, users,
+    audit, customers, debt, discount_threshold, documents, products, settings, shops, stock, users,
 };
 
 const SHOP: i32 = 1;
@@ -75,7 +75,7 @@ fn issue_sale(
     shop_id: i32,
     user_id: i32,
     new: NewSale,
-) -> Result<Document, CoreError> {
+) -> Result<Document, RetailError> {
     sales::issue(conn, shop_id, user_id, new).map(|s| s.document)
 }
 
@@ -194,10 +194,10 @@ fn an_unknown_product_is_not_found_and_leaves_nothing_behind() {
     assert!(
         matches!(
             err,
-            CoreError::NotFound {
+            Kernel(CoreError::NotFound {
                 entity: "product",
                 ..
-            }
+            })
         ),
         "{err:?}"
     );
@@ -223,10 +223,10 @@ fn a_product_of_another_shop_is_not_found() {
     assert!(
         matches!(
             err,
-            CoreError::NotFound {
+            Kernel(CoreError::NotFound {
                 entity: "product",
                 ..
-            }
+            })
         ),
         "{err:?}"
     );
@@ -491,7 +491,7 @@ fn a_price_times_a_quantity_that_does_not_fit_names_the_field_it_came_from() {
         issued_at: Some(at(9)),
     };
     match issue_sale(&mut conn, SHOP, OWNER, huge).unwrap_err() {
-        CoreError::Validation { field, .. } => assert_eq!(field, "qty_milli"),
+        Kernel(CoreError::Validation { field, .. }) => assert_eq!(field, "qty_milli"),
         other => panic!("expected a validation error, got {other:?}"),
     }
     assert_eq!(documents::list(&mut conn, SHOP, None).unwrap().len(), 0);
@@ -782,7 +782,7 @@ fn a_credit_sale_with_no_customer_is_refused_and_writes_nothing() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "customer_id"),
+        matches!(&err, Kernel(CoreError::Validation { field, .. }) if field == "customer_id"),
         "{err:?}"
     );
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
@@ -906,7 +906,7 @@ fn a_credit_sale_past_the_limit_is_refused_whole_and_burns_no_number() {
     .unwrap_err();
 
     assert_eq!(err.code(), "credit_limit", "{err:?}");
-    let CoreError::CreditLimit {
+    let RetailError::CreditLimit {
         balance_after,
         credit_limit,
     } = err
@@ -1058,7 +1058,7 @@ fn a_closed_fiche_is_named_on_no_document_whatever_the_payment_is() {
         };
         let err = issue_sale(&mut conn, SHOP, OWNER, sale).unwrap_err();
         assert!(
-            matches!(&err, CoreError::Validation { field, .. } if field == "customer_id"),
+            matches!(&err, Kernel(CoreError::Validation { field, .. }) if field == "customer_id"),
             "{mode:?}: {err:?}"
         );
     }
@@ -1125,7 +1125,7 @@ fn a_customer_in_credit_may_buy_on_credit_up_to_their_deposit() {
     assert!(
         matches!(
             err,
-            CoreError::CreditLimit {
+            RetailError::CreditLimit {
                 balance_after,
                 credit_limit,
             } if balance_after == Money::centimes(30_000)
@@ -1561,10 +1561,10 @@ fn user(conn: &mut SqliteConnection, name: &str, role: Role) -> i32 {
     .id
 }
 
-/// The threshold a discount is judged against, in force since before any sale
-/// this file rings up.
+/// The threshold a discount is judged against, in force since before any sale this file rings up.
 fn discount_threshold(conn: &mut SqliteConnection, bps: u32) {
-    settings::set_discount_threshold(conn, SHOP, OWNER, Bps::new(bps).unwrap(), at(1)).unwrap();
+    discount_threshold::set_discount_threshold(conn, SHOP, OWNER, Bps::new(bps).unwrap(), at(1))
+        .unwrap();
 }
 
 /// A basket of `qty` at 1 000,00, discounted by `global_discount`, paid cash.
@@ -1596,7 +1596,7 @@ fn a_cashier_cannot_pass_a_credit_block_and_the_sale_is_written_nowhere() {
     )
     .unwrap_err();
     assert_eq!(err.code(), "forbidden", "{err:?}");
-    let CoreError::Forbidden { permission } = err else {
+    let Kernel(CoreError::Forbidden { permission }) = err else {
         panic!("a refusal for a permission carries the one it wanted");
     };
     assert_eq!(permission, Permission::OverrideCreditBlock);
@@ -1674,7 +1674,7 @@ fn a_cashier_cannot_discount_past_the_threshold_and_the_sale_is_written_nowhere(
     // 100,00 of basket, 5,01 off: one centime past what 5 % allows.
     let err = issue_sale(&mut conn, SHOP, cashier, discounted(p, 1_000, 501, 20_000)).unwrap_err();
     assert_eq!(err.code(), "forbidden", "{err:?}");
-    let CoreError::Forbidden { permission } = err else {
+    let Kernel(CoreError::Forbidden { permission }) = err else {
         panic!("a refusal for a permission carries the one it wanted");
     };
     assert_eq!(permission, Permission::DiscountAboveThreshold);
@@ -1795,8 +1795,8 @@ fn a_manager_discounts_past_the_threshold_and_the_log_says_what_the_rule_allowed
 #[test]
 fn a_shop_that_has_never_set_a_threshold_asks_the_permission_for_any_discount_at_all() {
     // `Bps::ZERO` is what a shop reads before an owner sets one
-    // (`settings::discount_threshold_as_of`), so until they do, a cashier
-    // cannot take a centime off a price and an owner can.
+    // (`discount_threshold::discount_threshold_as_of`), so until they do, a
+    // cashier cannot take a centime off a price and an owner can.
     let (_dir, mut conn) = open_temp();
     let p = product(&mut conn, "Sucre", 10_000, 0, Unit::Piece);
     let cashier = user(&mut conn, "Nadia", Role::Cashier);
@@ -1858,7 +1858,7 @@ fn a_closed_fiche_and_another_shops_fiche_cannot_be_sold_to() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "customer_id"),
+        matches!(&err, Kernel(CoreError::Validation { field, .. }) if field == "customer_id"),
         "{err:?}"
     );
 
@@ -1884,10 +1884,10 @@ fn a_closed_fiche_and_another_shops_fiche_cannot_be_sold_to() {
     assert!(
         matches!(
             err,
-            CoreError::NotFound {
+            Kernel(CoreError::NotFound {
                 entity: "customer",
                 ..
-            }
+            })
         ),
         "{err:?}"
     );
@@ -2050,7 +2050,7 @@ fn a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number() {
     )
     .unwrap_err();
     match err {
-        CoreError::PartyIds { side, ref missing } => {
+        RetailError::PartyIds { side, ref missing } => {
             assert_eq!(side, PartySide::Buyer);
             assert_eq!(missing, &["nis"]);
         }
@@ -2140,7 +2140,7 @@ fn a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else() {
     )
     .unwrap_err();
     match err {
-        CoreError::PartyIds { side, ref missing } => {
+        RetailError::PartyIds { side, ref missing } => {
             assert_eq!(side, PartySide::Buyer);
             assert_eq!(missing, &["address"]);
         }
@@ -2179,7 +2179,7 @@ fn a_shop_whose_settings_carry_no_nis_cannot_issue_a_facture_at_all() {
     )
     .unwrap_err();
     match err {
-        CoreError::PartyIds { side, ref missing } => {
+        RetailError::PartyIds { side, ref missing } => {
             assert_eq!(side, PartySide::Seller);
             assert_eq!(missing, &["nis"]);
         }
@@ -2221,7 +2221,7 @@ fn a_facture_with_no_customer_is_refused_on_the_customer_field() {
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CoreError::Validation { field, .. } if field == "customer_id"),
+        matches!(&err, Kernel(CoreError::Validation { field, .. }) if field == "customer_id"),
         "{err:?}"
     );
     assert!(documents::list(&mut conn, SHOP, None).unwrap().is_empty());
@@ -2323,7 +2323,7 @@ fn a_blank_identifier_is_as_missing_as_no_identifier_at_all() {
     )
     .unwrap_err();
     match err {
-        CoreError::PartyIds { side, ref missing } => {
+        RetailError::PartyIds { side, ref missing } => {
             assert_eq!(side, PartySide::Buyer);
             assert_eq!(missing, &["rc", "nis"]);
         }
@@ -2350,7 +2350,7 @@ fn a_blank_identifier_is_as_missing_as_no_identifier_at_all() {
     )
     .unwrap_err();
     match err {
-        CoreError::PartyIds { side, ref missing } => {
+        RetailError::PartyIds { side, ref missing } => {
             assert_eq!(side, PartySide::Buyer);
             assert_eq!(missing, &["name", "address"]);
         }
@@ -2378,7 +2378,7 @@ fn a_blank_identifier_is_as_missing_as_no_identifier_at_all() {
     )
     .unwrap_err();
     match err {
-        CoreError::PartyIds { side, ref missing } => {
+        RetailError::PartyIds { side, ref missing } => {
             assert_eq!(side, PartySide::Seller);
             assert_eq!(missing, &["rc"]);
         }
@@ -2479,7 +2479,7 @@ fn an_override_the_party_ids_then_refuse_leaves_no_log_row_and_no_number() {
     )
     .unwrap_err();
     match err {
-        CoreError::PartyIds { side, ref missing } => {
+        RetailError::PartyIds { side, ref missing } => {
             assert_eq!(side, PartySide::Buyer);
             assert_eq!(missing, &["nis"]);
         }
@@ -2595,7 +2595,7 @@ fn a_cashier_cannot_type_a_price_the_product_card_does_not_say() {
     )
     .unwrap_err();
     assert_eq!(err.code(), "forbidden", "{err:?}");
-    let CoreError::Forbidden { permission } = err else {
+    let Kernel(CoreError::Forbidden { permission }) = err else {
         panic!("a refusal for a permission carries the one it wanted");
     };
     assert_eq!(permission, Permission::ChangePriceAtTheTill);
@@ -2709,7 +2709,7 @@ fn a_discount_split_so_neither_half_trips_the_threshold_is_still_caught() {
     };
 
     let err = issue_sale(&mut conn, SHOP, cashier, sale).unwrap_err();
-    let CoreError::Forbidden { permission } = err else {
+    let Kernel(CoreError::Forbidden { permission }) = err else {
         panic!("a refusal for a permission carries the one it wanted: {err:?}");
     };
     assert_eq!(permission, Permission::DiscountAboveThreshold);

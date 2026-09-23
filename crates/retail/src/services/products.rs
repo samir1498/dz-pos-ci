@@ -4,7 +4,7 @@
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::CoreError;
+use crate::error::{CoreError, RetailError};
 use crate::models::product::{NewProduct, Product, ProductRowWrite};
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Bps, Money};
@@ -104,7 +104,7 @@ pub fn create(
     shop_id: i32,
     user_id: i32,
     new: NewProduct,
-) -> Result<Product, CoreError> {
+) -> Result<Product, RetailError> {
     // The category is checked inside the same transaction as the insert:
     // checked outside, a category deleted in between surfaced as the FK
     // failure, a 500, instead of the 404 the check is there to give.
@@ -135,7 +135,7 @@ pub fn create(
                 user_id,
             },
         )?;
-        repo::get(conn, shop_id, made.id)
+        repo::get(conn, shop_id, made.id).map_err(RetailError::from)
     })
 }
 
@@ -145,7 +145,7 @@ pub fn update(
     user_id: i32,
     id: i32,
     new: NewProduct,
-) -> Result<Product, CoreError> {
+) -> Result<Product, RetailError> {
     conn.transaction(|conn| {
         // The product is looked up before the draft is validated, so editing
         // another shop's row reports the product, not whatever its category

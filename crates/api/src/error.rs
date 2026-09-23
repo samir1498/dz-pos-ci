@@ -6,7 +6,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
@@ -15,6 +15,16 @@ pub enum ApiError {
     /// or the file decided.
     #[error(transparent)]
     Core(#[from] CoreError),
+    /// A retail error a shop service raised: one of the eight variants S4 of
+    /// `a-kernel-crate-and-retail-as-the-first-module` moved out of
+    /// `CoreError` (`DuplicateBarcode`, `PaymentAboveDebt`, `CreditLimit`,
+    /// `PartyIds`, `Unstamped`, `UnpricedReversal`, `Render`, `Workbook`), or
+    /// any `CoreError` the shop service raised unchanged, arriving wrapped in
+    /// `RetailError::Kernel`. Mapped beside `Core` so a client sees the same
+    /// status, code and body it always has for every one of these failures;
+    /// this crate is the only one that has to know two enums exist.
+    #[error(transparent)]
+    Retail(#[from] RetailError),
     /// A core error raised while reading the request itself, before any
     /// service ran. The caller wrote the value, so it is a 422 whatever the
     /// same error would mean coming out of a read.
@@ -132,6 +142,7 @@ struct Payload {
 /// optional field of the payload, filled by the one error that knows it and
 /// left empty by every other, so the body of an ordinary refusal is the two
 /// keys it always was.
+#[cfg_attr(test, derive(Debug, PartialEq))]
 struct Figures {
     balance_after_centimes: Option<i64>,
     credit_limit_centimes: Option<i64>,
@@ -164,7 +175,8 @@ impl ApiError {
     fn message(&self) -> String {
         match self {
             ApiError::Core(CoreError::Query(_) | CoreError::Db(_))
-            | ApiError::Request(CoreError::Query(_) | CoreError::Db(_)) => {
+            | ApiError::Request(CoreError::Query(_) | CoreError::Db(_))
+            | ApiError::Retail(RetailError::Kernel(CoreError::Query(_) | CoreError::Db(_))) => {
                 "the shop file could not complete the operation".to_owned()
             }
             other => other.to_string(),
@@ -176,6 +188,12 @@ impl ApiError {
             // The code is the core's own (architecture.md: map, never
             // re-derive). Only the status is the API's to choose.
             ApiError::Core(e) => (status_for(e), e.code()),
+            // Same rule, for the enum that carries the shop's own variants:
+            // the code is `RetailError::code`'s own, and `Kernel` delegates
+            // to `CoreError::code` beneath it, so a code on the wire never
+            // depends on which of the two enums the service happened to
+            // return it through.
+            ApiError::Retail(e) => (status_for_retail(e), e.code()),
             ApiError::Request(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.code()),
             ApiError::BadRequest(_) => (StatusCode::UNPROCESSABLE_ENTITY, "bad_request"),
             ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
@@ -204,68 +222,80 @@ impl ApiError {
     /// them, and the fields are then absent from the body.
     fn figures(&self) -> Figures {
         match self {
-            ApiError::Core(CoreError::CreditLimit {
-                balance_after,
-                credit_limit,
-            })
-            | ApiError::Request(CoreError::CreditLimit {
-                balance_after,
-                credit_limit,
-            }) => Figures {
-                balance_after_centimes: Some(balance_after.as_centimes()),
-                credit_limit_centimes: Some(credit_limit.as_centimes()),
-                ..Figures::NONE
-            },
-            ApiError::Core(CoreError::PaymentAboveDebt {
-                outstanding_centimes,
-            })
-            | ApiError::Request(CoreError::PaymentAboveDebt {
-                outstanding_centimes,
-            }) => Figures {
-                field: Some("amount_centimes".to_owned()),
-                outstanding_centimes: Some(*outstanding_centimes),
-                ..Figures::NONE
-            },
-            // Every validation error already names the field it is about;
-            // only the payment one used to say so on the wire, and a screen
-            // that wanted to put the message under the input had to read it
-            // out of the sentence. The name travels beside the code now, for
-            // all of them.
-            ApiError::Core(CoreError::Validation { field, .. })
-            | ApiError::Request(CoreError::Validation { field, .. })
-            // A conflict names its field too: the screen puts the message
-            // under the input the way it does for a validation, and only the
-            // code and the status say the two apart.
-            | ApiError::Core(CoreError::Conflict { field, .. })
-            | ApiError::Request(CoreError::Conflict { field, .. }) => Figures {
-                field: Some(field.clone()),
-                ..Figures::NONE
-            },
-            ApiError::Core(CoreError::LockedOut {
-                retry_after_seconds,
-            })
-            | ApiError::Request(CoreError::LockedOut {
-                retry_after_seconds,
-            }) => Figures {
-                retry_after_seconds: Some(*retry_after_seconds),
-                ..Figures::NONE
-            },
-            // The permission the route wanted, travelling back out of the
-            // very check that asked for it (M4 T1's `require`), so neither a
-            // route nor a screen restates which one it was.
-            ApiError::Core(CoreError::Forbidden { permission })
-            | ApiError::Request(CoreError::Forbidden { permission }) => Figures {
-                permission: Some(permission.as_str()),
-                ..Figures::NONE
-            },
-            ApiError::Core(CoreError::PartyIds { side, missing })
-            | ApiError::Request(CoreError::PartyIds { side, missing }) => Figures {
-                party_side: Some(side.as_str()),
-                missing_ids: Some(missing.clone()),
-                ..Figures::NONE
-            },
+            ApiError::Core(e) | ApiError::Request(e) => figures_of_core(e),
+            ApiError::Retail(e) => figures_of_retail(e),
             _ => Figures::NONE,
         }
+    }
+}
+
+/// The figures a plain `CoreError` carries, shared by `ApiError::Core`,
+/// `ApiError::Request` (both wrap `CoreError` directly) and
+/// `ApiError::Retail`'s own `Kernel` arm (a `CoreError` a shop service raised
+/// unchanged), so which of the two enums a service happened to return it
+/// through never changes what reaches the wire.
+///
+/// Every validation error already names the field it is about; only the
+/// payment one used to say so on the wire, and a screen that wanted to put
+/// the message under the input had to read it out of the sentence. The name
+/// travels beside the code now, for all of them. A conflict names its field
+/// too, for the same reason.
+fn figures_of_core(e: &CoreError) -> Figures {
+    match e {
+        CoreError::Validation { field, .. } | CoreError::Conflict { field, .. } => Figures {
+            field: Some(field.clone()),
+            ..Figures::NONE
+        },
+        CoreError::LockedOut {
+            retry_after_seconds,
+        } => Figures {
+            retry_after_seconds: Some(*retry_after_seconds),
+            ..Figures::NONE
+        },
+        // The permission the route wanted, travelling back out of the very
+        // check that asked for it (M4 T1's `require`), so neither a route
+        // nor a screen restates which one it was.
+        CoreError::Forbidden { permission } => Figures {
+            permission: Some(permission.as_str()),
+            ..Figures::NONE
+        },
+        _ => Figures::NONE,
+    }
+}
+
+/// The figures a `RetailError` carries. A credit refusal names what the sale
+/// would have taken the customer to and the limit it passed; a payment above
+/// the debt names what is actually owed, and the field it is about, so the
+/// form can say "you can take at most this much" without asking the balance
+/// again; a facture the party blocks refuse names the side that is short and
+/// the identifiers it is short of, because working that out on the screen
+/// would be a second reading of décret 05-468 art. 3. `Kernel` delegates to
+/// `figures_of_core`, unchanged; every other variant carries none of these
+/// and the fields are absent from the body.
+fn figures_of_retail(e: &RetailError) -> Figures {
+    match e {
+        RetailError::Kernel(inner) => figures_of_core(inner),
+        RetailError::CreditLimit {
+            balance_after,
+            credit_limit,
+        } => Figures {
+            balance_after_centimes: Some(balance_after.as_centimes()),
+            credit_limit_centimes: Some(credit_limit.as_centimes()),
+            ..Figures::NONE
+        },
+        RetailError::PaymentAboveDebt {
+            outstanding_centimes,
+        } => Figures {
+            field: Some("amount_centimes".to_owned()),
+            outstanding_centimes: Some(*outstanding_centimes),
+            ..Figures::NONE
+        },
+        RetailError::PartyIds { side, missing } => Figures {
+            party_side: Some(side.as_str()),
+            missing_ids: Some(missing.clone()),
+            ..Figures::NONE
+        },
+        _ => Figures::NONE,
     }
 }
 
@@ -274,20 +304,7 @@ impl ApiError {
 /// and the caller has nothing to correct: 500, not 422.
 const fn status_for(e: &CoreError) -> StatusCode {
     match e {
-        // A credit refusal is the request itself the server will not carry
-        // out: the basket is well formed and the caller can act on it, by
-        // paying another way or by resending with `override`. The two
-        // amounts in the payload are what the till renders, so it sits with
-        // the 422s and not with the conflicts.
-        // A payment above the debt sits with them for the same reason: the
-        // caller can act on it, by taking what is owed instead. So does a
-        // facture the party blocks refuse: the request is well formed and
-        // the caller can act on it, by filling the fiche or the settings in,
-        // or by ringing the same basket up as a ticket.
-        CoreError::Validation { .. }
-        | CoreError::CreditLimit { .. }
-        | CoreError::PaymentAboveDebt { .. }
-        | CoreError::PartyIds { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+        CoreError::Validation { .. } => StatusCode::UNPROCESSABLE_ENTITY,
         CoreError::NotFound { .. } => StatusCode::NOT_FOUND,
         // A credential that did not match. 401 and not 422: nothing in the
         // request is malformed, and what is missing is an identity the caller
@@ -303,28 +320,53 @@ const fn status_for(e: &CoreError) -> StatusCode {
         // out. T2 is what actually asks a session for a role; this arm only
         // keeps `status_for` exhaustive now that `CoreError` has the variant.
         CoreError::Forbidden { .. } => StatusCode::FORBIDDEN,
-        CoreError::DuplicateBarcode(_)
-        | CoreError::Exhausted { .. }
-        | CoreError::Conflict { .. } => StatusCode::CONFLICT,
+        CoreError::Exhausted { .. } | CoreError::Conflict { .. } => StatusCode::CONFLICT,
+        // A row handed over without a moment on it is the same kind of
+        // thing: the caller sent nothing wrong and cannot correct it, so it
+        // is this crate's bug and never the shop's.
+        CoreError::Money(_) | CoreError::Db(_) | CoreError::Query(_) | CoreError::Io(_)
+        // A credential this app could not hash, with parameters and input
+        // shapes it chose itself: its own bug, like the one above.
+        | CoreError::Hash(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+/// What a retail error means once a shop service has run. `Kernel` delegates
+/// to `status_for`, unchanged, so a `CoreError` a shop service raised
+/// unmodified answers with the same status it always has. The other eight
+/// arms are exactly the statuses `status_for` gave their variants before S4
+/// of `a-kernel-crate-and-retail-as-the-first-module` moved them out of
+/// `CoreError`: nothing a client can see changed, only which enum carries it
+/// on the way here.
+const fn status_for_retail(e: &RetailError) -> StatusCode {
+    match e {
+        RetailError::Kernel(inner) => status_for(inner),
+        // A credit refusal is the request itself the server will not carry
+        // out: the basket is well formed and the caller can act on it, by
+        // paying another way or by resending with `override`. The two
+        // amounts in the payload are what the till renders, so it sits with
+        // the 422s and not with the conflicts.
+        // A payment above the debt sits with them for the same reason: the
+        // caller can act on it, by taking what is owed instead. So does a
+        // facture the party blocks refuse: the request is well formed and
+        // the caller can act on it, by filling the fiche or the settings in,
+        // or by ringing the same basket up as a ticket.
+        RetailError::CreditLimit { .. }
+        | RetailError::PaymentAboveDebt { .. }
+        | RetailError::PartyIds { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+        RetailError::DuplicateBarcode(_) => StatusCode::CONFLICT,
         // A template that will not render is the app's own bug: the
         // template ships in the binary and the data comes from a row the
         // core just read, so the caller has nothing to correct.
         // A row handed over without a moment on it is the same kind of
         // thing: the caller sent nothing wrong and cannot correct it, so it
         // is this crate's bug and never the shop's.
-        CoreError::Money(_)
-        | CoreError::Db(_)
-        | CoreError::Query(_)
-        | CoreError::Io(_)
-        | CoreError::Unstamped { .. }
-        | CoreError::UnpricedReversal { .. }
-        // A credential this app could not hash, with parameters and input
-        // shapes it chose itself: its own bug, like the two above.
-        | CoreError::Hash(_)
         // A workbook that will not write is the same: the columns and the
         // rows are both the app's own.
-        | CoreError::Render(_)
-        | CoreError::Workbook(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        RetailError::Unstamped { .. }
+        | RetailError::UnpricedReversal { .. }
+        | RetailError::Render(_)
+        | RetailError::Workbook(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
@@ -404,6 +446,7 @@ impl IntoResponse for ApiError {
                 | ApiError::SessionRequired
                 | ApiError::DeviceRefused
                 | ApiError::Core(CoreError::AuthRefused)
+                | ApiError::Retail(RetailError::Kernel(CoreError::AuthRefused))
         ) {
             res.headers_mut()
                 .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
@@ -485,3 +528,7 @@ mod restart_code_tests {
         assert!(says.contains("start it again"), "{says}");
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/unit/error_mapping.rs"]
+mod pre_split_mapping_regression_tests;

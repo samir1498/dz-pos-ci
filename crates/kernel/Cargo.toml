@@ -37,12 +37,6 @@ sha2 = "0.10.9"
 zip = { version = "8.6", default-features = false, features = ["deflate"] }
 # The machine's IANA time zone name for the support bundle (M5 T3).
 iana-time-zone = "0.1"
-# `error.rs` is not split by variant in this task (S4 does that): its
-# `Render` and `Workbook` variants wrap a retail-only error type each,
-# askama's template error and rust_xlsxwriter's workbook error, so the
-# whole enum staying in this crate for now means these two deps do too.
-askama = { version = "0.16.1", default-features = false, features = ["std", "derive"] }
-rust_xlsxwriter = { version = "0.99.0", features = ["chrono"] }
 
 [dev-dependencies]
 tempfile = "3"

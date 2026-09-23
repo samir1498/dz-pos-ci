@@ -9,6 +9,7 @@
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
+use dzpos_core::error::CoreError;
 use dzpos_core::lang::Lang;
 use dzpos_core::print::{render_label, render_label_sheet};
 use dzpos_core::services::products;
@@ -171,7 +172,7 @@ async fn the_sheet_is_the_selection_in_the_order_it_was_named() {
 
     let stored = h
         .state
-        .with_conn(|c| {
+        .with_conn(|c| -> Result<_, CoreError> {
             Ok(vec![
                 products::get(c, SHOP, second)?,
                 products::get(c, SHOP, first)?,

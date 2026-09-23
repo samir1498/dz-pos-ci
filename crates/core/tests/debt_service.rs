@@ -9,7 +9,7 @@
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-use dzpos_core::error::CoreError;
+use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::money::{Money, PaymentMode, Regime, Totals};
 use dzpos_core::services::audit;
 use dzpos_core::services::customers::{self, NewCustomer, PartyKind};
@@ -105,7 +105,7 @@ fn a_row_carrying_a_debit_and_a_credit_at_once_is_refused_by_the_check() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "debit"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "debit"),
         "{err}"
     );
     assert_eq!(
@@ -125,7 +125,7 @@ fn a_movement_of_nothing_is_refused() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "debit"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "debit"),
         "{err}"
     );
     assert!(debt::ledger(&mut conn, SHOP, customer).unwrap().is_empty());
@@ -144,7 +144,7 @@ fn a_negative_movement_is_refused_rather_than_flipped() {
     )
     .unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "debit"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "debit"),
         "{err}"
     );
 }
@@ -189,17 +189,17 @@ fn another_shops_customer_is_not_found() {
         .unwrap();
 
     for err in [
-        debt::balance(&mut conn, 2, customer).unwrap_err(),
-        debt::ledger(&mut conn, 2, customer).unwrap_err(),
+        RetailError::from(debt::balance(&mut conn, 2, customer).unwrap_err()),
+        RetailError::from(debt::ledger(&mut conn, 2, customer).unwrap_err()),
         debt::append(&mut conn, 2, movement(customer, DebtKind::Sale, 1000, 0)).unwrap_err(),
     ] {
         assert!(
             matches!(
                 err,
-                CoreError::NotFound {
+                RetailError::Kernel(CoreError::NotFound {
                     entity: "customer",
                     ..
-                }
+                })
             ),
             "{err}"
         );
@@ -219,7 +219,7 @@ fn a_note_longer_than_a_statement_prints_is_refused() {
     entry.note = Some("é".repeat(201));
     let err = debt::append(&mut conn, SHOP, entry).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "note"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "note"),
         "{err}"
     );
 }
@@ -379,10 +379,10 @@ fn a_movement_pointing_at_another_shops_document_is_refused() {
     assert!(
         matches!(
             err,
-            CoreError::NotFound {
+            dzpos_core::error::RetailError::Kernel(CoreError::NotFound {
                 entity: "document",
                 ..
-            }
+            })
         ),
         "{err}"
     );
@@ -502,7 +502,7 @@ fn an_adjustment_of_nothing_is_refused_and_writes_no_row() {
     let id = a_customer(&mut conn, "Brahim");
     let err = debt::adjust(&mut conn, SHOP, OWNER, id, Money::ZERO, None).unwrap_err();
     assert!(
-        matches!(err, CoreError::Validation { ref field, .. } if field == "amount"),
+        matches!(err, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "amount"),
         "{err}"
     );
     assert!(debt::ledger(&mut conn, SHOP, id).unwrap().is_empty());
@@ -559,10 +559,10 @@ fn an_adjustment_for_another_shops_customer_is_not_found_and_writes_nothing() {
     assert!(
         matches!(
             err,
-            CoreError::NotFound {
+            dzpos_core::error::RetailError::Kernel(CoreError::NotFound {
                 entity: "customer",
                 ..
-            }
+            })
         ),
         "{err}"
     );
@@ -887,7 +887,7 @@ fn a_payment_above_what_the_customer_owes_is_refused_with_the_outstanding_amount
     .unwrap_err();
 
     match refused {
-        CoreError::PaymentAboveDebt {
+        RetailError::PaymentAboveDebt {
             outstanding_centimes,
         } => assert_eq!(outstanding_centimes, 100_000),
         other => panic!("a payment over the debt was refused as {other:?}"),
@@ -919,7 +919,7 @@ fn a_customer_who_owes_nothing_takes_no_payment() {
     .unwrap_err();
 
     match refused {
-        CoreError::PaymentAboveDebt {
+        RetailError::PaymentAboveDebt {
             outstanding_centimes,
         } => assert_eq!(outstanding_centimes, 0),
         other => panic!("a payment against no debt was refused as {other:?}"),
@@ -945,7 +945,7 @@ fn a_payment_of_nothing_or_of_a_negative_is_refused() {
         )
         .unwrap_err();
         assert!(
-            matches!(refused, CoreError::Validation { ref field, .. } if field == "amount_centimes"),
+            matches!(refused, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "amount_centimes"),
             "{centimes} centimes was refused as {refused:?}"
         );
     }
@@ -1035,7 +1035,7 @@ fn a_document_already_settled_by_an_allocation_nobody_wrote_a_payment_for_refuse
     .unwrap_err();
 
     assert!(
-        matches!(refused, CoreError::Validation { ref field, .. } if field == "amount_centimes"),
+        matches!(refused, dzpos_core::error::RetailError::Kernel(CoreError::Validation { ref field, .. }) if field == "amount_centimes"),
         "a document settled twice over was refused as {refused:?}"
     );
     // The refusal rolled the whole thing back: no payment row, and the
@@ -1805,7 +1805,7 @@ fn credit_taken_before_the_facture_existed_stays_on_the_ledger_and_not_on_the_pa
     )
     .unwrap_err();
     assert!(
-        matches!(refused, CoreError::PaymentAboveDebt { outstanding_centimes } if outstanding_centimes == 0),
+        matches!(refused, RetailError::PaymentAboveDebt { outstanding_centimes } if outstanding_centimes == 0),
         "{refused:?}"
     );
 }

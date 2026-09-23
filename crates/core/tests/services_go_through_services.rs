@@ -689,14 +689,13 @@ const SHOP_WORDS: [&str; 29] = [
     "margin",
 ];
 
-/// The shop already lives inside the kernel today, in ten of its nineteen
-/// files (twelve of twenty-one before the kernel crate split of S3 of
-/// `a-kernel-crate-and-retail-as-the-first-module` moved `print/mod.rs` and
-/// `print/escpos.rs` to `dzpos-retail` whole, taking their two rows with
-/// them; `print/strings.rs` stayed, since it names no shop type on a code
-/// line, only `crate::lang::Lang`). Eight carried a word on the first pass, before `till`,
-/// `sell`, `price`, `discount` and `margin` joined `SHOP_WORDS` above; seven
-/// of those eight were already named by the
+/// The shop already lived inside the kernel, in as many as eight of its
+/// nineteen files (twelve of twenty-one before the kernel crate split of S3
+/// of `a-kernel-crate-and-retail-as-the-first-module` moved `print/mod.rs`
+/// and `print/escpos.rs` to `dzpos-retail` whole, taking their two rows with
+/// them). Eight carried a word on the first pass, before `till`, `sell`,
+/// `price`, `discount` and `margin` joined `SHOP_WORDS` above; seven of
+/// those eight were already named by the
 /// `whether-dinar-becomes-a-core-and-modules` research
 /// (`context/research/module-shape/06-fork-per-trade.md:84-100`), which
 /// walked `services::`, `repos::` and `models::` import paths into files a
@@ -708,99 +707,86 @@ const SHOP_WORDS: [&str; 29] = [
 /// and `print/strings.rs`, a word further. Each row below carries a
 /// one-line reason of its own.
 ///
-/// `money/mod.rs` and `money/totals.rs` are not a mistake to fix: a line
-/// discount and a unit price are arithmetic the shared kernel already does
-/// for every trade a shop might run, priced goods being close to universal
-/// among them, so `NegativeUnitPrice`, `LineDiscountAboveLine` and the rest
-/// stay. Their two rows exist so a split has to decide the money kernel is
-/// shop-shaped today, on purpose, rather than the split silently inheriting
-/// it unexamined.
+/// `money/mod.rs` and `money/totals.rs` stay by decision, not by default:
+/// Samir, 2026-09-22, ruled the arithmetic is shared for every trade, so
+/// their two rows exist to keep that decision visible rather than silent,
+/// and each row's own comment carries the ruling.
 ///
 /// A third pass put `product` back on `SHOP_WORDS`, no file joining or
-/// leaving the list at the time: `error.rs`'s row gained `product`, a real hit off
-/// `UnpricedReversal`'s own `product_id` field, and `money/totals.rs`'s
-/// row gained it too, the one false hit this list accepts by name rather
-/// than by narrowing the word away (see `SHOP_WORDS`'s own doc comment).
+/// leaving the list at the time: `error.rs`'s row (since removed, see
+/// below) gained `product`, a real hit off `UnpricedReversal`'s own
+/// `product_id` field, and `money/totals.rs`'s row gained it too, the one
+/// false hit this list accepts by name rather than by narrowing the word
+/// away (see `SHOP_WORDS`'s own doc comment).
+///
+/// S4 of `a-kernel-crate-and-retail-as-the-first-module` took two files off
+/// this list entirely, the same milestone and for the same shape of reason
+/// each time: the shop-named half of what the file carried moved to
+/// `dzpos-retail`, and the row that pinned it here has nothing left to
+/// catch.
+///
+/// `error.rs` left first: the eight variants that carried `barcode`, `debt`,
+/// `document` and `product` (`DuplicateBarcode`, `PaymentAboveDebt`,
+/// `CreditLimit`, `PartyIds`, `Unstamped`, `UnpricedReversal`, plus `Render`
+/// and `Workbook`, which named no shop word but pinned `askama` and
+/// `rust_xlsxwriter` on the kernel's own `Cargo.toml` for two variants only
+/// retail's print and export code ever raised) left for
+/// `dzpos_retail::error::RetailError`, which wraps `CoreError` rather than
+/// repeating it. `crates/api/src/error.rs` maps both enums now, to the same
+/// status, code and body every one of the eight always had.
+///
+/// `print/strings.rs` left second, in the same task: the twenty-four `Key`
+/// variants that carried `avoir`, `barcode`, `customer`, `customers`,
+/// `debt`, `discount`, `document`, `price`, `products`, `proforma`, `sale`,
+/// `sales`, `stock` and `suppliers` (`Avoir`, `Proforma`, `ProformaNotice`,
+/// `AvoirOnFacture`, `AvoirAmount`, `UnitPriceHt`, `UnitPrice`,
+/// `AvoirInWords`, `ProformaInWords`, `ThisDocument`, `TotalDebt`,
+/// `Document`, `KindSale`, `KindAvoir`, `InFavourOfCustomer`, `DebtSlip`,
+/// `DebtInWords`, `SheetProducts`, `SheetSales`, `SheetCustomers`,
+/// `SheetSuppliers`, `TemplateBarcodeNote`, `TemplateStockNote`, and
+/// `Discount`) left for `dzpos_retail::print::strings::ShopKey`, which sits
+/// beside a re-export of the kernel's own `Key` and `text` rather than
+/// wrapping them, so every call site this crate already had for a shared
+/// word (`Key::Total`, `Key::Tva`, and the rest) kept reading exactly as it
+/// did; only the twenty-four call sites for a shop word were touched, to
+/// `ShopKey::X` and `shop_text`. `SheetAllowedValues`, `TemplateUnits` and
+/// `TemplateRates` stayed: no word on `SHOP_WORDS` sits in any of the three,
+/// even though all three are read only from `dzpos_retail::services::
+/// import`, and moving them anyway would have been tidying past the rule
+/// this walk actually enforces.
 ///
 /// Each row is the *set* of words that file names today, not a count: a
 /// listed file that stops naming a word its row still carries would leave a
 /// stale reason sitting above with nothing to catch it, so `assert_eq!`
 /// below is exact both ways, the way `no_service_reaches_a_repo_that_is_not_on_the_list`
 /// is for `REACHES_PAST_A_SIBLING`.
-const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 10] = [
-    // DuplicateBarcode, PaymentAboveDebt, and UnpricedReversal's own
-    // document_id and product_id fields.
-    ("error.rs", &["barcode", "debt", "document", "product"]),
-    // 6 of the 10 text_enum! blocks: MovementKind, DocumentKind, DebtKind,
-    // DocumentStatus, SupplierDebtKind, PurchaseStatus.
-    (
-        "models/sql_types.rs",
-        &[
-            "avoir", "debt", "document", "proforma", "purchase", "sale", "supplier",
-        ],
-    ),
+const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 3] = [
     // The MoneyError variants a line discount or a unit price can raise
     // (NegativeUnitPrice, NegativeDiscount, LineDiscountAboveLine,
-    // GlobalDiscountAboveTotal): the money kernel is shop-shaped today.
+    // GlobalDiscountAboveTotal). Samir, 2026-09-22: the money arithmetic is
+    // shared for every trade a shop rings up; a trade that never discounts
+    // simply does not call this part of it, the same reason every trade
+    // still shares the code that adds two prices together.
     ("money/mod.rs", &["discount", "price"]),
     // discount/price as money/mod.rs above (unit_price, line_discount,
     // global_discount, spread_discount); product is the one accepted
     // false hit this list knows about, its own local `let product = …`
     // for the arithmetic product of two factors in the discount
-    // proration, no shop concept at all (see SHOP_WORDS).
+    // proration, no shop concept at all (see SHOP_WORDS). Samir,
+    // 2026-09-22: the money arithmetic is shared for every trade a shop
+    // rings up; a trade that never discounts simply does not call this
+    // part of it.
     ("money/totals.rs", &["discount", "price", "product"]),
-    // The Key enum's own printed-word vocabulary: Avoir, Proforma,
-    // TotalDebt, KindSale, SheetProducts/Sales/Customers/Suppliers,
-    // TemplateBarcodeNote/StockNote and the discount/price rows a receipt
-    // line prints.
-    (
-        "print/strings.rs",
-        &[
-            "avoir",
-            "barcode",
-            "customer",
-            "customers",
-            "debt",
-            "discount",
-            "document",
-            "price",
-            "products",
-            "proforma",
-            "sale",
-            "sales",
-            "stock",
-            "suppliers",
-        ],
-    ),
-    // The ACTION_* log tag constants: purchase, supplier, customer,
-    // expense, stock, avoir, debt, sale/shift, and now the price and
-    // discount overrides and the till open/close pair.
-    (
-        "services/audit.rs",
-        &[
-            "avoir", "customer", "debt", "discount", "expense", "price", "purchase", "sale",
-            "shift", "stock", "supplier", "till",
-        ],
-    ),
-    // Summary's two counted tables, products and documents, that decide a
-    // file is a Dinar shop file.
-    ("services/backup.rs", &["documents", "products"]),
     // Five of the fifteen Permission variants split into a listed word:
     // Sell, OpenAndCloseTill/CloseAnotherPersonsTill/ChangePriceAtTheTill
     // (till, twice over), ChangePriceAtTheTill (price again),
-    // DiscountAboveThreshold, SeeCostAndMargin.
+    // DiscountAboveThreshold, SeeCostAndMargin. Samir ruled twice, on
+    // 2026-09-21 and again on 2026-09-22 confirming it: the permission list
+    // stays one list for the whole product, so the ten shop variants stay in
+    // the kernel by that decision, not because nobody looked.
     (
         "services/permissions.rs",
         &["discount", "margin", "price", "sell", "till"],
-    ),
-    // The discount-threshold setting: DISCOUNT_THRESHOLD_BPS and the four
-    // functions and one audit action built on it.
-    ("services/settings.rs", &["discount"]),
-    // Facts::products/documents/customers, the three raw counts the
-    // support bundle's counts.txt carries.
-    (
-        "services/support_bundle.rs",
-        &["customers", "documents", "products"],
     ),
 ];
 
@@ -814,13 +800,14 @@ const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 10] = [
 /// against.
 ///
 /// A string is walked a byte at a time with its own escape handled
-/// (`\"` does not close it), because `services/backup.rs` names its tables
-/// by a `"products"` string passed to `count`, and counting that string's
-/// content as code would put `backup.rs`'s row here for the wrong reason:
-/// its real reason is the field name beside it, `pub products: i64`, which
+/// (`\"` does not close it), because `services/permissions.rs`'s
+/// `Permission::Sell => "sell",` line pairs a variant name that already
+/// spells the word with a string literal spelling it again, and counting
+/// the string's content as code would put that file's row here for the
+/// wrong reason: its real reason is the variant name beside it, which
 /// survives the strip because it is not inside quotes. No raw string
 /// (`r"…"`, `r#"…"#`) and no block comment (`/*…*/`) appears in any file
-/// this walk reads (checked 2026-09-22 the same way), so neither is
+/// this walk reads (checked 2026-09-23 the same way), so neither is
 /// handled; a file that grew one would need this taught to read it before
 /// its row above could be trusted again.
 fn shop_facing_code_of(source: &str) -> String {

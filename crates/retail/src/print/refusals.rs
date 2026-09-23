@@ -11,7 +11,7 @@
 //! golden files cannot catch, because a golden only says the file has not
 //! changed since somebody looked at it.
 
-use crate::error::CoreError;
+use crate::error::RetailError;
 use crate::models::document::{Document, DocumentKind, DocumentStatus, PartyBlock};
 use crate::money::{Money, Regime};
 use crate::print::facture::FactureInput;
@@ -25,14 +25,14 @@ use crate::print::facture_view::carries_a_debt;
 pub(crate) fn refuse_what_cannot_be_printed<'a>(
     doc: &'a Document,
     input: &FactureInput<'_>,
-) -> Result<&'a PartyBlock, CoreError> {
+) -> Result<&'a PartyBlock, RetailError> {
     // The same refusal the ticket makes, for the same reason: a stored IFU
     // document carrying a TVA recap contradicts the régime it was issued
     // under, printing the recap names a tax the document must not name
     // (CTCA 2026 art. 64), and dropping it quietly hands the buyer a total
     // whose parts do not add up.
     if doc.regime == Regime::Ifu && !doc.totals.tva_by_rate.is_empty() {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "an IFU document carries a TVA recap and has no printable form",
         ));
     }
@@ -41,7 +41,7 @@ pub(crate) fn refuse_what_cannot_be_printed<'a>(
     // buyer block is not a facture, and the honest answer is to refuse it
     // rather than print a document with an empty half.
     let Some(buyer) = doc.buyer.as_ref() else {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "the document has no buyer block and no facture can be printed without one",
         ));
     };
@@ -50,7 +50,7 @@ pub(crate) fn refuse_what_cannot_be_printed<'a>(
     // and inventing the French for it here would be a fiscal wording nobody
     // reviewed.
     if doc.status == DocumentStatus::Cancelled && doc.kind != DocumentKind::Facture {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "only a facture has a printed cancelled wording",
         ));
     }
@@ -61,7 +61,7 @@ pub(crate) fn refuse_what_cannot_be_printed<'a>(
     // here too, because dropping the row hands the buyer a total whose parts
     // do not add up.
     if doc.kind == DocumentKind::Avoir && doc.totals.stamp != Money::ZERO {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "an avoir carries a droit de timbre and has no printable form",
         ));
     }
@@ -70,7 +70,7 @@ pub(crate) fn refuse_what_cannot_be_printed<'a>(
     // that wrote it: printing the block would say a quote moved a ledger and
     // dropping it would hide that the stored row says otherwise.
     if doc.kind == DocumentKind::Proforma && doc.balance.is_some_and(carries_a_debt) {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "a proforma carries a debt and has no printable form",
         ));
     }
@@ -78,7 +78,7 @@ pub(crate) fn refuse_what_cannot_be_printed<'a>(
     // Printing them over a live facture would hand a customer a page saying
     // it is void while the ledger still counts it.
     if input.cancellation.is_some() && doc.status != DocumentStatus::Cancelled {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "a document that was not cancelled has no cancellation to print",
         ));
     }
@@ -86,7 +86,7 @@ pub(crate) fn refuse_what_cannot_be_printed<'a>(
     // facture" over a facture or a proforma would label the page as
     // something it is not, and there is no other wording for a reference.
     if doc.ref_document_id.is_some() && doc.kind != DocumentKind::Avoir {
-        return Err(CoreError::render(
+        return Err(RetailError::render(
             "only an avoir names the facture it is written against",
         ));
     }
