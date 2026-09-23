@@ -27,7 +27,7 @@ tasks:
     status: 'done'
   - id: 'C5b'
     desc: 'Book tools for the desk: working hours, absence blocks that move what they hit, visit types with durations, next free slot, no-show mark, a printed day list with walk-ins'
-    status: 'pending'
+    status: 'done'
   - id: 'C6'
     desc: 'Desktop screens for C3 to C5 behind a build switch, with the calendar component chosen before the book screen'
     status: 'pending'
@@ -216,3 +216,20 @@ walk-in queue covers those).
 Samir, 2026-09-23 16:11: the Algerian week. Sunday to Thursday are working
 days, Friday and Saturday the weekend; the week view runs Sunday to
 Saturday.
+
+### What C5b settled when it was built (PR 168)
+
+Defaults taken while building, each one Samir can overturn:
+
+- A shop with no working hours set refuses nothing. A saved week needs at
+  least one open range.
+- Moving an appointment keeps its own length rather than taking the
+  current slot setting.
+- A no-show mark blocks moving or cancelling until it is cleared.
+- Hours and visit types are written with EditSettings. Blocks, moves and
+  no-shows are written with EditPatients. The day list and the next-free
+  search need ViewPatients. Reading the hours, blocks and visit types needs
+  nothing.
+- Deleting a block or a visit type removes the row, and the audit log keeps
+  the trace. Appointments copy a type's length rather than pointing at it.
+- The day list returns data. Printing it belongs to C6.
