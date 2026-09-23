@@ -72,6 +72,22 @@ sites would both create patient 42 and collide on sync. New clinic tables
 from their first migration. Retail's tables would need the same change
 before branch sync, which is a migration of its own.
 
+### The doctor's own PC as the server: a tunnel
+
+Samir, 2026-09-23 10:34: could the doctor host it himself on a connection
+with no stable address? Yes, with a tunnel rather than DHCP or port
+forwarding. `cloudflared` (Cloudflare Tunnel, free) opens an outbound
+connection, so a changing IP and carrier NAT on 4G do not matter, and the
+cabinet gets a fixed name such as `cabinet-x.dinar.app`; Dinar could ship
+it beside the app and set it up at install. Tailscale Funnel does the same
+tied to a Tailscale account; frp is open source but needs a relay server of
+our own; dynamic DNS (DuckDNS, No-IP) is cheapest but fails behind carrier
+NAT and needs a forwarded port. The catch: bookings only work while that PC
+is on and online, so power cuts and a PC off at night close the booking
+page. A small cloud-held booking inbox the PC syncs from avoids that, which
+is the relay above at the cost of one small server. The tunnel is the cheap
+first version; the relay is the robust one.
+
 ## The first clinic module, kept small
 
 A full clinic is a large product: recurring appointments, overlap rules,
