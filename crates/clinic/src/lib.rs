@@ -13,6 +13,10 @@
 //! asks for (`ViewPatients`, `EditPatients`) sit in the kernel's one
 //! `Permission` enum.
 //!
+//! C4 is the waiting queue: `queue_entries`, one row per arrival, its model,
+//! repo and service. It reuses the patient file's two permissions rather
+//! than adding its own.
+//!
 //! Errors are the kernel's `CoreError`: nothing here has a failure of its
 //! own to name. A missing patient is `CoreError::NotFoundText`, the text-id
 //! twin of `NotFound`, so the API maps it with no third enum.

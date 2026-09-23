@@ -57,6 +57,7 @@ fn migration_creates_every_table() {
             "purchase_receipt_lines",
             "purchase_receipts",
             "purchases",
+            "queue_entries",
             "sale_idempotency_keys",
             "sessions",
             "settings",
@@ -98,6 +99,7 @@ fn every_table_carries_shop_id() {
         "purchase_receipt_lines",
         "purchase_receipts",
         "purchases",
+        "queue_entries",
         "sale_idempotency_keys",
         "sessions",
         "settings",
@@ -194,6 +196,7 @@ fn every_table_is_strict() {
         "sessions",
         "shifts",
         "patients",
+        "queue_entries",
     ] {
         let strict = count(
             &mut conn,
@@ -2087,11 +2090,10 @@ fn the_migration_reverts_and_reapplies() {
         1
     );
 
-    // Six migrations sit on the thirteenth (audit clock). Most add a table and
-    // move no data; the audit clock moves data and adds none, so its down
-    // undoes an arithmetic, not a shape (the seventeenth does both; its
-    // expense half is tested in `migration_shifts.rs`). One audit row, written
-    // at a moment this test picks, is what both directions are read off here.
+    // Seven migrations (20 down to 14) sit on the audit clock (13), which moves
+    // data and adds no table: its down undoes an arithmetic, not a shape (the
+    // seventeenth's expense half is in `migration_shifts.rs`). Revert them and
+    // it, eight turns, and read both directions off one audit row written here.
     assert_eq!(
         diesel::sql_query(
             "INSERT INTO audit_log (shop_id, user_id, action, entity, created_at) \
@@ -2101,9 +2103,7 @@ fn the_migration_reverts_and_reapplies() {
         .unwrap(),
         1
     );
-    // Patients (19), cash refunds, shifts, barcodes, idempotency keys and
-    // pairing (14): revert down to the audit clock, one turn per migration.
-    for _ in 0..7 {
+    for _ in 0..8 {
         conn.revert_last_migration(dzpos_retail::db::MIGRATIONS)
             .unwrap();
     }
@@ -2127,8 +2127,8 @@ fn the_migration_reverts_and_reapplies() {
         1,
         "the audit clock up.sql did not take the hour back"
     );
-    // Those six (19 down to 14) and the audit clock (13) itself: all seven.
-    for _ in 0..7 {
+    // Those seven (20 down to 14) and the audit clock (13) itself: all eight.
+    for _ in 0..8 {
         conn.revert_last_migration(dzpos_retail::db::MIGRATIONS)
             .unwrap();
     }

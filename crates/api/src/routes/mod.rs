@@ -48,6 +48,9 @@ pub mod patients;
 pub mod products;
 #[cfg(feature = "retail")]
 pub mod purchases;
+// The clinic's waiting queue (C4 of the clinic plan), on the same feature.
+#[cfg(feature = "clinic")]
+pub mod queue;
 #[cfg(feature = "retail")]
 pub mod sales;
 pub mod settings;

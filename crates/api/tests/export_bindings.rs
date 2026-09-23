@@ -43,7 +43,7 @@ use dzpos_api::dto::{
     ThemeDto, ThermalModeChoiceDto, ThermalModeDto, TillCountDto, TopProductDto, UnitDto, UserDto,
 };
 #[cfg(feature = "clinic")]
-use dzpos_api::dto::{PatientDto, PatientWriteDto, SexDto};
+use dzpos_api::dto::{PatientDto, PatientWriteDto, QueueAddDto, QueueEntryDto, SexDto};
 use ts_rs::{Config, TS};
 
 const FILES: [&str; 122] = [
@@ -171,11 +171,17 @@ const FILES: [&str; 122] = [
     "TillCountDto.ts",
 ];
 
-/// The clinic's DTOs (`src/dto/patients.rs`), apart from `FILES` because they
-/// only compile with the `clinic` feature: the list check below reads their
-/// names off the source text in every build, and the export writes them
-/// only when the feature is on.
-const CLINIC_FILES: [&str; 3] = ["PatientDto.ts", "PatientWriteDto.ts", "SexDto.ts"];
+/// The clinic's DTOs (`src/dto/patients.rs`, and `src/dto/queue.rs` since
+/// C4), apart from `FILES` because they only compile with the `clinic`
+/// feature: the list check below reads their names off the source text in
+/// every build, and the export writes them only when the feature is on.
+const CLINIC_FILES: [&str; 5] = [
+    "PatientDto.ts",
+    "PatientWriteDto.ts",
+    "SexDto.ts",
+    "QueueEntryDto.ts",
+    "QueueAddDto.ts",
+];
 
 /// Where the bindings are written. Never the committed directory by
 /// default: a plain `cargo test --workspace` used to regenerate
@@ -221,7 +227,8 @@ const DTO_SOURCE: &str = concat!(
     include_str!("../src/dto/users.rs"),
     include_str!("../src/dto/pairing.rs"),
     include_str!("../src/dto/till.rs"),
-    include_str!("../src/dto/patients.rs")
+    include_str!("../src/dto/patients.rs"),
+    include_str!("../src/dto/queue.rs")
 );
 
 #[test]
@@ -386,6 +393,8 @@ fn export_bindings() {
         PatientDto::export_all(&cfg).unwrap();
         PatientWriteDto::export_all(&cfg).unwrap();
         SexDto::export_all(&cfg).unwrap();
+        QueueEntryDto::export_all(&cfg).unwrap();
+        QueueAddDto::export_all(&cfg).unwrap();
         for name in CLINIC_FILES {
             assert!(dir.join(name).exists(), "{name} was not written");
         }

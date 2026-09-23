@@ -102,6 +102,9 @@ mod patients;
 mod products;
 #[cfg(feature = "retail")]
 mod purchases;
+// The clinic's waiting queue (C4 of the clinic plan), beside the patient file.
+#[cfg(feature = "clinic")]
+mod queue;
 #[cfg(feature = "retail")]
 mod sales;
 mod settings;
@@ -135,6 +138,8 @@ pub use patients::*;
 pub use products::*;
 #[cfg(feature = "retail")]
 pub use purchases::*;
+#[cfg(feature = "clinic")]
+pub use queue::*;
 #[cfg(feature = "retail")]
 pub use sales::*;
 pub use settings::*;

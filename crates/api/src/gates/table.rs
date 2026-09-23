@@ -227,6 +227,48 @@ pub const ROUTE_GATES: &[Gate] = &[
         permission: Some(Permission::EditPatients),
         why: "archiving takes a file out of the search and deletes nothing, so it is a correction to the file and asks what an edit asks (clinic plan C3)",
     },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "GET",
+        path: "/queue",
+        permission: Some(Permission::ViewPatients),
+        why: "today's waiting room: who came in, when, and whether they have been seen, by name; it reads patients, so it asks what reading a patient's file asks (clinic plan C4, no permission of its own)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/queue",
+        permission: Some(Permission::EditPatients),
+        why: "adding an arrival to the day's queue is the desk's write on a patient; the file's write permission, reused rather than a queue one (clinic plan C4)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/queue/next",
+        permission: Some(Permission::EditPatients),
+        why: "calling in the next patient writes the entry's called_at; the same write permission as adding them (clinic plan C4)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/queue/{id}/call",
+        permission: Some(Permission::EditPatients),
+        why: "calling one patient in out of order; the same write as calling the next (clinic plan C4)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/queue/{id}/seen",
+        permission: Some(Permission::EditPatients),
+        why: "marking a called patient seen closes their entry; the same write permission (clinic plan C4)",
+    },
+    #[cfg(feature = "clinic")]
+    Gate {
+        method: "POST",
+        path: "/queue/{id}/left",
+        permission: Some(Permission::EditPatients),
+        why: "marking a patient gone unseen closes their entry the other way; the same write permission (clinic plan C4)",
+    },
     #[cfg(feature = "retail")]
     Gate {
         method: "POST",

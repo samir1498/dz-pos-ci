@@ -2,3 +2,4 @@
 //! here; the shared helpers (`optional_field`, `bounded_field`, the clock,
 //! the audit service) are the kernel's.
 pub mod patients;
+pub mod queue;

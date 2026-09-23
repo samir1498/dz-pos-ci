@@ -543,7 +543,8 @@ fn the_shops_own_gate_rows_and_routes_carry_the_retail_feature() {
 /// C3 of `the-first-clinic-module-patients-queue-appointments`: the clinic's
 /// rows and routes carry the clinic feature, the way the shop's carry
 /// theirs, and neither module's count moved the other's (the retail test
-/// above still reads 43 and 60).
+/// above still reads 43 and 60). C4's waiting queue added six rows and five
+/// calls to the same block.
 #[test]
 fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
     let gates_source = include_str!("../src/gates/table.rs");
@@ -551,26 +552,39 @@ fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
         .matches("    #[cfg(feature = \"clinic\")]\n    Gate {")
         .count();
     assert_eq!(
-        tagged_gates, 5,
-        "5 of ROUTE_GATES' own rows are the clinic's: list, create, read, update, archive"
+        tagged_gates, 11,
+        "11 of ROUTE_GATES' own rows are the clinic's: the patient file's list, create, read, \
+         update and archive, and the queue's today, add, next, call, seen and left"
     );
     // The rows are there exactly when the clinic is built in.
-    let clinic_rows = ROUTE_GATES
-        .iter()
-        .filter(|g| g.path.starts_with("/patients"))
-        .count();
-    assert_eq!(clinic_rows, if cfg!(feature = "clinic") { 5 } else { 0 });
+    let clinic_rows = |prefix: &str| {
+        ROUTE_GATES
+            .iter()
+            .filter(|g| g.path == prefix || g.path.starts_with(&format!("{prefix}/")))
+            .count()
+    };
+    let built = cfg!(feature = "clinic");
+    assert_eq!(clinic_rows("/patients"), if built { 5 } else { 0 });
+    assert_eq!(clinic_rows("/queue"), if built { 6 } else { 0 });
 
     let (start, end) = clinic_block_span();
     let block = &ROUTER_SOURCE[start..end];
     assert_eq!(
         block.matches(".route(").count(),
-        3,
-        "3 of router.rs' own .route(...) calls are the clinic's"
+        8,
+        "8 of router.rs' own .route(...) calls are the clinic's: 3 patient, 5 queue"
     );
-    // Nothing but the patient file in the block, and no patient route outside it.
-    assert!(!ROUTER_SOURCE[..start].contains("\"/patients"));
-    assert!(!ROUTER_SOURCE[end..].contains("\"/patients"));
+    // No patient or queue route outside the block.
+    for path in ["\"/patients", "\"/queue"] {
+        assert!(
+            !ROUTER_SOURCE[..start].contains(path),
+            "{path} before the block"
+        );
+        assert!(
+            !ROUTER_SOURCE[end..].contains(path),
+            "{path} after the block"
+        );
+    }
     // And the two blocks do not overlap.
     let (retail_start, _) = retail_block_span();
     assert!(end < retail_start, "the clinic block runs into the shop's");

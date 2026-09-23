@@ -62,6 +62,9 @@
 //! gated even though every role holds the permission today: the decision
 //! of who reads a file then sits on one row of `can` and not on every
 //! route.
+//! `GET /queue` (C4, the same day) joins them on the same permission: the
+//! day's waiting room is a list of patients by name, read the way the file
+//! is.
 //!
 //! **What a row cannot say.** A gate answers for a whole route before the
 //! handler runs, so it can only ask about the caller and the path, never
