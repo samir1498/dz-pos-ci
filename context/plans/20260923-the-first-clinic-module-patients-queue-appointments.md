@@ -21,7 +21,7 @@ tasks:
     status: 'done'
   - id: 'C3b'
     desc: 'Patient notes are doctor-only: a ViewPatientNotes permission for the owner, notes hidden and preserved for everyone else'
-    status: 'pending'
+    status: 'done'
   - id: 'C5'
     desc: 'The appointment book: one doctor, a fixed slot length, a refusal when two patients take the same slot'
     status: 'done'
@@ -136,6 +136,9 @@ stored notes as they are, so a receptionist editing a phone number cannot
 erase them, and a write that sends `notes` is refused with 403. The
 server enforces it, not only the screen. Built as its own change after C5
 (C3b below), before the screens.
+
+Built and merged as C3b (PR 167). Open for Samir: a refused notes write
+leaves no audit row; a receptionist probing the field leaves no trace.
 
 Samir, 2026-09-23 15:59: the appointment's short reason for the visit is
 not covered by that ruling; the receptionist books and reads it.
