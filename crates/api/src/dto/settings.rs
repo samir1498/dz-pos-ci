@@ -334,7 +334,9 @@ pub struct SettingsDto {
     /// basket before any discount (250 is 2,5 %). Zero on a shop that has
     /// never set one, which refuses a cashier every discount: the screen
     /// should say so rather than leave an owner wondering why the till
-    /// refuses a round number off.
+    /// refuses a round number off. Retail-only (S5): a discount is given on
+    /// a sale, which does not exist without the feature.
+    #[cfg(feature = "retail")]
     pub discount_threshold_bps: u32,
 }
 
@@ -351,7 +353,9 @@ pub struct RegimeChangeDto {
 /// A change to the discount a cashier may give without asking anyone: the
 /// threshold in basis points and the day it applies from. Dated and appended
 /// like the régime, never written over, so a sale refused last month can
-/// still be read against the threshold that refused it.
+/// still be read against the threshold that refused it. Retail-only (S5):
+/// no sale exists to refuse without the feature.
+#[cfg(feature = "retail")]
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(export_to = "DiscountThresholdChangeDto.ts")]
 #[serde(deny_unknown_fields)]

@@ -73,180 +73,210 @@ pub const ROUTE_GATES: &[Gate] = &[
         permission: Some(Permission::EditSettings),
         why: "a restore replaces every row the shop has; it belongs with the settings it is reached from",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/customers",
         permission: Some(Permission::EditFiches),
         why: "a customer fiche is a card the shop keeps on somebody it deals with",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "PUT",
         path: "/customers/{id}",
         permission: Some(Permission::EditFiches),
         why: "the same fiche, and a body carrying a credit limit is the fiche too",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/customers/{id}/payments",
         permission: None,
         why: "taking money a customer owes over the counter is a till job; it is the debt side of ringing a sale up",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/customers/{id}/adjustments",
         permission: Some(Permission::CorrectLedger),
         why: "correcting what a customer owes is a ledger the ordinary flow does not write (M2 carry-in)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/dashboard",
         permission: Some(Permission::SeeReports),
         why: "the figures, the top-ten cards and the margin line are the reports SeeReports's own doc names; a cashier has no business on this screen at all (M4 T5 review, 2026-09-11)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/dashboard/series",
         permission: Some(Permission::SeeReports),
         why: "the chart behind the same dashboard, read separately by the same screen; same permission as the page it draws on (M4 T5 review, 2026-09-11)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/expenses",
         permission: Some(Permission::SeeReports),
         why: "every expense the shop has booked in a month, with its total: what the shop spends is the shop's standing, and a cashier who may not read the dashboard may not read the ledger the dashboard sums (M4 closing review, 2026-09-11)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/cash",
         permission: Some(Permission::SeeReports),
         why: "cash in, cash out and card in over a day or a month, which is the dashboard's cash figure asked for directly; same reasoning and same permission as the page (M4 closing review, 2026-09-11)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/expenses",
         permission: Some(Permission::CommitMoney),
         why: "money out of the drawer, the same way a supplier payment is (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/import/products/dry-run",
         permission: Some(Permission::ExportAndImport),
         why: "an import rewrites prices in bulk from a USB stick (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/import/products",
         permission: Some(Permission::ExportAndImport),
         why: "the same workbook as the dry run, and this is the call that actually rewrites the prices",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/import/products/template",
         permission: Some(Permission::ExportAndImport),
         why: "the blank workbook the import screen hands out: column headings and one made-up example row, carrying none of the shop's own data. It is gated because it is the import screen's own file and a cashier has no business on that screen, not because it walks anything out; /export/products is the route that does that (reason corrected in the M4 closing review, 2026-09-11)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/export/customers",
         permission: Some(Permission::ExportAndImport),
         why: "the whole customer list on a USB stick, names and debts included (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/export/products",
         permission: Some(Permission::ExportAndImport),
         why: "the whole catalogue with its cost prices (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/export/sales",
         permission: Some(Permission::ExportAndImport),
         why: "every sale the shop ever rang up (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/export/suppliers",
         permission: Some(Permission::ExportAndImport),
         why: "the whole supplier list and what is owed to each (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/labels/sheet",
         permission: None,
         why: "a label prints a name, a price and a barcode a customer can already read off the shelf, and a cashier relabelling a shelf is who needs it (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/products",
         permission: Some(Permission::EditFiches),
         why: "a product's fiche: price, name, barcode, category",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "PUT",
         path: "/products/{id}",
         permission: Some(Permission::EditFiches),
         why: "the same fiche: a price, a name, a barcode or a category changed on a product the shop already stocks",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/purchases",
         permission: Some(Permission::SeeCostAndMargin),
         why: "the order list carries nothing but what the shop pays its suppliers (col_extra_costs, col_unit_cost, col_landed_cost); unlike products, no till flow reads it, so the whole route is gated rather than a field redacted (M4 T5 review, 2026-09-11)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/purchases/{id}",
         permission: Some(Permission::SeeCostAndMargin),
         why: "the same order, one row at a time; same reasoning and same permission as the list (M4 T5 review, 2026-09-11)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/purchases",
         permission: Some(Permission::CommitMoney),
         why: "an order commits the shop's money (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/purchases/{id}/receipts",
         permission: Some(Permission::CommitMoney),
         why: "a receipt is what turns the order into what the shop owes (M3 carry-in)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/purchases/{id}/returns",
         permission: Some(Permission::CorrectLedger),
         why: "a return lowers what the shop owes (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/purchases/{id}/cancel",
         permission: Some(Permission::CorrectLedger),
         why: "undoing an order is the purchase side of undoing a document",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/purchases/{id}/close-short",
         permission: Some(Permission::CorrectLedger),
         why: "a write-off lowers what the shop owes (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/sales",
         permission: Some(Permission::Sell),
         why: "ringing a sale up, the one thing every role may do; named rather than left blank because it is a permission and not an absence of one",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/sales/{id}/print",
         permission: Some(Permission::Sell),
         why: "print through desktop (M6 T6): the same ticket bytes the till just rang up, spooled beside the shop file and optionally pushed to TCP 9100; every role that may sell may print",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/sales/{id}/avoir",
         permission: Some(Permission::CorrectLedger),
         why: "an avoir undoes a document already handed to a customer (M2 carry-in, 2026-09-09), and since ruling 5 of the 2026-09-20 loop it also opens the drawer: a body carrying refund: cash hands notes back over the counter and writes the cash_refunds row that lowers the day's cash and the shift of whoever handed the notes over, who is the caller here and not the person who rang the sale up (services::shifts::close subtracts by the shift's opener against cash_refunds.user_id)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/sales/{id}/cancel",
@@ -259,6 +289,7 @@ pub const ROUTE_GATES: &[Gate] = &[
         permission: Some(Permission::EditSettings),
         why: "the seller block every ticket and every facture prints, and the identifiers a facture is refused without",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/settings/discount-threshold",
@@ -295,48 +326,56 @@ pub const ROUTE_GATES: &[Gate] = &[
         permission: Some(Permission::EditSettings),
         why: "which wire the shop's thermal head is sent is the same class of decision as the facture layout and the print language beside it: it decides whether a customer is handed a printed ticket or a roll of boxes, and a cashier who flipped it would break every paper the shop prints until somebody found the setting (plan arabic-on-a-cheap-thermal-head, 2026-09-21)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/stock/recount",
         permission: Some(Permission::CorrectLedger),
         why: "a recount rewrites a cached quantity on hand from the ledger (M3 carry-in, 2026-09-10; routes/stock.rs carried the TODO)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/suppliers",
         permission: Some(Permission::SeeCostAndMargin),
         why: "the list carries each supplier's balance, which is what the shop owes for goods it has not paid for yet; the buying side is the same side the purchase list sits on and it is gated whole for the same reason, no till flow reads it (M4 closing review, 2026-09-11)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/suppliers/{id}/ledger",
         permission: Some(Permission::SeeCostAndMargin),
         why: "one supplier's account in full, every invoice and payment behind the balance; same reasoning and same permission as the list (M4 closing review, 2026-09-11)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/suppliers",
         permission: Some(Permission::EditFiches),
         why: "a supplier's fiche is a card the shop keeps, kept by the same hand as a product's",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "PUT",
         path: "/suppliers/{id}",
         permission: Some(Permission::EditFiches),
         why: "the same fiche, and the closing branch of it: a body carrying `active: false` closes a fiche through the same rule the close route uses (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/suppliers/{id}/close",
         permission: Some(Permission::EditFiches),
         why: "closing a fiche, named beside the PUT that does it the other way (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/suppliers/{id}/payments",
         permission: Some(Permission::CommitMoney),
         why: "money out to a supplier (M3 carry-in, 2026-09-10)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/suppliers/{id}/adjustments",
@@ -349,24 +388,28 @@ pub const ROUTE_GATES: &[Gate] = &[
         permission: Some(Permission::EditSettings),
         why: "a zip the shop sends to whoever is fixing something, reached from the settings screen and gated the same way the backups block beside it is (M5 T3); its own doc names why it carries no customer, product, price or document and an audit row still travels with it, the same as an export's, because the file is on its way out of the shop even though what is in it never is",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/till/shifts",
         permission: Some(Permission::OpenAndCloseTill),
         why: "opening a drawer with what is in it; all three roles hold the permission (plan till-shifts-a-float-and-a-count ruling 10, 2026-09-20), because the person who counts a drawer is the person standing at it and a cashier who cannot open their own till cannot start a day. Named rather than left blank for the reason POST /sales is: it is a permission and not an absence of one",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/till/shifts",
         permission: Some(Permission::SeeReports),
         why: "the shop's shifts over a day window, newest first: the same report a manager runs the floor off as one shift by id below, widened to a list rather than narrowed to a row, and not the audit log, which is the owner's alone (docs/features.md §5). A cashier reads their own open drawer through GET /till/shifts/open, which names nobody and carries no row (plan till-shifts-a-float-and-a-count T7, 2026-09-21)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "GET",
         path: "/till/shifts/{id}",
         permission: Some(Permission::SeeReports),
         why: "one shift with what that person took over its window and what the shop expects them to be holding: a report a manager runs the floor off, and not the audit log, which is the owner's alone (docs/features.md §5). A cashier reads their own open drawer through GET /till/shifts/open, which names nobody and carries no row (plan till-shifts-a-float-and-a-count T4, 2026-09-21)",
     },
+    #[cfg(feature = "retail")]
     Gate {
         method: "POST",
         path: "/till/shifts/{id}/close",

@@ -6,7 +6,9 @@ use axum::extract::rejection::JsonRejection;
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use dzpos_core::error::{CoreError, RetailError};
+use dzpos_core::error::CoreError;
+#[cfg(feature = "retail")]
+use dzpos_core::error::RetailError;
 use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
@@ -23,6 +25,7 @@ pub enum ApiError {
     /// `RetailError::Kernel`. Mapped beside `Core` so a client sees the same
     /// status, code and body it always has for every one of these failures;
     /// this crate is the only one that has to know two enums exist.
+    #[cfg(feature = "retail")]
     #[error(transparent)]
     Retail(#[from] RetailError),
     /// A core error raised while reading the request itself, before any
@@ -174,15 +177,32 @@ impl ApiError {
     /// screen.
     fn message(&self) -> String {
         match self {
+            #[cfg(feature = "retail")]
             ApiError::Core(CoreError::Query(_) | CoreError::Db(_))
             | ApiError::Request(CoreError::Query(_) | CoreError::Db(_))
             | ApiError::Retail(RetailError::Kernel(CoreError::Query(_) | CoreError::Db(_))) => {
+                "the shop file could not complete the operation".to_owned()
+            }
+            #[cfg(not(feature = "retail"))]
+            ApiError::Core(CoreError::Query(_) | CoreError::Db(_))
+            | ApiError::Request(CoreError::Query(_) | CoreError::Db(_)) => {
                 "the shop file could not complete the operation".to_owned()
             }
             other => other.to_string(),
         }
     }
 
+    // Two whole functions rather than one cfg'd match arm (S5 of
+    // `a-kernel-crate-and-retail-as-the-first-module`): `apps/mobile`'s
+    // `lib/errors.test.ts` reads this function's own body as text between
+    // its braces and pulls every quoted lowercase word out of it as a code
+    // the server can send. A `#[cfg(feature = "retail")]` inside that span
+    // reads as a code too (there is no server error named "retail"), and
+    // that test went red proving it. The attribute sits above the function
+    // instead, outside the span the walk reads, the same way the two
+    // versions of `once` in `daily.rs` are two functions and not one cfg'd
+    // return type.
+    #[cfg(feature = "retail")]
     fn parts(&self) -> (StatusCode, &'static str) {
         match self {
             // The code is the core's own (architecture.md: map, never
@@ -194,6 +214,29 @@ impl ApiError {
             // depends on which of the two enums the service happened to
             // return it through.
             ApiError::Retail(e) => (status_for_retail(e), e.code()),
+            ApiError::Request(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.code()),
+            ApiError::BadRequest(_) => (StatusCode::UNPROCESSABLE_ENTITY, "bad_request"),
+            ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
+            ApiError::SessionRequired => (StatusCode::UNAUTHORIZED, "session_required"),
+            ApiError::DeviceRefused => (StatusCode::UNAUTHORIZED, "device_refused"),
+            ApiError::UngatedWrite => (StatusCode::INTERNAL_SERVER_ERROR, "ungated_write"),
+            ApiError::NoRoute => (StatusCode::NOT_FOUND, "not_found"),
+            ApiError::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed"),
+            ApiError::Unavailable => (StatusCode::INTERNAL_SERVER_ERROR, "storage"),
+            ApiError::RestartNeeded => (StatusCode::INTERNAL_SERVER_ERROR, "restart_needed"),
+            ApiError::NotRestoredRestartNeeded => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "restore_failed_restart_needed",
+            ),
+        }
+    }
+
+    /// Retail-only build (S5): the same match, minus the one variant this
+    /// crate does not have without the feature.
+    #[cfg(not(feature = "retail"))]
+    fn parts(&self) -> (StatusCode, &'static str) {
+        match self {
+            ApiError::Core(e) => (status_for(e), e.code()),
             ApiError::Request(e) => (StatusCode::UNPROCESSABLE_ENTITY, e.code()),
             ApiError::BadRequest(_) => (StatusCode::UNPROCESSABLE_ENTITY, "bad_request"),
             ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
@@ -223,6 +266,7 @@ impl ApiError {
     fn figures(&self) -> Figures {
         match self {
             ApiError::Core(e) | ApiError::Request(e) => figures_of_core(e),
+            #[cfg(feature = "retail")]
             ApiError::Retail(e) => figures_of_retail(e),
             _ => Figures::NONE,
         }
@@ -272,6 +316,7 @@ fn figures_of_core(e: &CoreError) -> Figures {
 /// would be a second reading of décret 05-468 art. 3. `Kernel` delegates to
 /// `figures_of_core`, unchanged; every other variant carries none of these
 /// and the fields are absent from the body.
+#[cfg(feature = "retail")]
 fn figures_of_retail(e: &RetailError) -> Figures {
     match e {
         RetailError::Kernel(inner) => figures_of_core(inner),
@@ -338,6 +383,7 @@ const fn status_for(e: &CoreError) -> StatusCode {
 /// of `a-kernel-crate-and-retail-as-the-first-module` moved them out of
 /// `CoreError`: nothing a client can see changed, only which enum carries it
 /// on the way here.
+#[cfg(feature = "retail")]
 const fn status_for_retail(e: &RetailError) -> StatusCode {
     match e {
         RetailError::Kernel(inner) => status_for(inner),
@@ -446,8 +492,8 @@ impl IntoResponse for ApiError {
                 | ApiError::SessionRequired
                 | ApiError::DeviceRefused
                 | ApiError::Core(CoreError::AuthRefused)
-                | ApiError::Retail(RetailError::Kernel(CoreError::AuthRefused))
-        ) {
+        ) || retail_auth_refused(&self)
+        {
             res.headers_mut()
                 .insert(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
         }
@@ -455,79 +501,27 @@ impl IntoResponse for ApiError {
     }
 }
 
-#[cfg(test)]
-mod unknown_field_tests {
-    use super::unknown_field;
+/// The fifth of the five ways this API answers 401, split out of the
+/// `matches!` above because `matches!`'s pattern list is not somewhere a
+/// `#[cfg]` can sit (S5 of `a-kernel-crate-and-retail-as-the-first-module`):
+/// a shop's own `AuthRefused`, carried in `RetailError::Kernel`. Always
+/// `false` without the feature, since the variant it names does not exist.
+#[cfg(feature = "retail")]
+fn retail_auth_refused(e: &ApiError) -> bool {
+    matches!(
+        e,
+        ApiError::Retail(RetailError::Kernel(CoreError::AuthRefused))
+    )
+}
 
-    #[test]
-    fn the_whole_name_is_kept_even_with_a_backtick_inside() {
-        let text = "Failed to deserialize the JSON body into the target type: \
-                    unknown field `bo`gus`, expected one of `name`, `barcode` at line 1 column 12";
-        assert_eq!(unknown_field(text).as_deref(), Some("bo`gus"));
-    }
-
-    #[test]
-    fn a_plain_name_and_a_missing_marker_still_parse() {
-        assert_eq!(
-            unknown_field("unknown field `bogus`, expected `name`").as_deref(),
-            Some("bogus")
-        );
-        assert_eq!(
-            unknown_field("unknown field `bogus` at line 1").as_deref(),
-            Some("bogus")
-        );
-        assert_eq!(unknown_field("something else"), None);
-    }
-
-    #[test]
-    fn a_storage_fault_keeps_the_drivers_text_off_the_wire() {
-        use super::{ApiError, CoreError};
-        use diesel::result::{DatabaseErrorKind, Error};
-        let raw = Error::DatabaseError(
-            DatabaseErrorKind::UniqueViolation,
-            Box::new("UNIQUE constraint failed: products.barcode".to_owned()),
-        );
-        let err = ApiError::Core(CoreError::Query(raw));
-        let message = err.message();
-        assert!(!message.contains("constraint"), "{message}");
-        assert!(!message.contains("products"), "{message}");
-        assert_eq!(err.parts().1, "storage");
-        assert_eq!(
-            ApiError::Core(CoreError::validation("name", "is empty")).message(),
-            CoreError::validation("name", "is empty").to_string(),
-            "a rule's own message still goes through"
-        );
-    }
+#[cfg(not(feature = "retail"))]
+fn retail_auth_refused(_e: &ApiError) -> bool {
+    false
 }
 
 #[cfg(test)]
-mod restart_code_tests {
-    use super::{ApiError, StatusCode};
-
-    /// The two answers a closed shop file can get, and they are not the same
-    /// answer. Both are 500 and both mean relaunch, but one of them also says
-    /// the restore did not happen, and that is what decides which data the
-    /// owner will be looking at afterwards. A screen can only tell them apart
-    /// by the code.
-    #[test]
-    fn a_closed_shop_file_says_relaunch_and_says_whether_it_was_restored() {
-        assert_eq!(
-            ApiError::RestartNeeded.parts(),
-            (StatusCode::INTERNAL_SERVER_ERROR, "restart_needed")
-        );
-        assert_eq!(
-            ApiError::NotRestoredRestartNeeded.parts(),
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "restore_failed_restart_needed"
-            )
-        );
-
-        let says = ApiError::NotRestoredRestartNeeded.message();
-        assert!(says.contains("did not happen"), "{says}");
-        assert!(says.contains("start it again"), "{says}");
-    }
-}
+#[path = "../tests/unit/error_messages.rs"]
+mod message_and_restart_code_tests;
 
 #[cfg(test)]
 #[path = "../tests/unit/error_mapping.rs"]

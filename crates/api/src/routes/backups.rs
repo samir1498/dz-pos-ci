@@ -79,7 +79,9 @@ pub async fn restore(
     Ok(Json(RestoreDto {
         restored_from,
         safety_copy: done.safety_copy,
+        #[cfg(feature = "retail")]
         products: done.summary.products,
+        #[cfg(feature = "retail")]
         documents: done.summary.documents,
     }))
 }

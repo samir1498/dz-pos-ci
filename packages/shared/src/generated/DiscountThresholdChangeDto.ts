@@ -4,6 +4,7 @@
  * A change to the discount a cashier may give without asking anyone: the
  * threshold in basis points and the day it applies from. Dated and appended
  * like the régime, never written over, so a sale refused last month can
- * still be read against the threshold that refused it.
+ * still be read against the threshold that refused it. Retail-only (S5):
+ * no sale exists to refuse without the feature.
  */
 export type DiscountThresholdChangeDto = { threshold_bps: number, valid_from: string, };

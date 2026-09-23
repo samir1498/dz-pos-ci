@@ -11,7 +11,12 @@ export type RestoreDto = { restored_from: string,
  * in and kept beside the shop file. Named on the wire because nothing
  * deletes it and the owner is the only one who can decide to.
  */
-safety_copy: string, products: number, 
+safety_copy: string, 
+/**
+ * Retail-only (S5): the counts a kernel-only restore has none of,
+ * `AppState::restore`'s own doc says why.
+ */
+products: number, 
 /**
  * Null only for a copy taken before the documents table existed
  * (migration 2, the sale); every copy since carries the count.

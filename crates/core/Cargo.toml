@@ -11,7 +11,12 @@ edition.workspace = true
 # Tauri app and this crate's own 59 test files without every one of them
 # being rewritten in the same change that moved the source.
 dzpos-kernel = { path = "../kernel" }
-dzpos-retail = { path = "../retail" }
+# Optional since S5: `crates/api` builds without a shop behind
+# `--no-default-features`, which forwards through this crate's own `retail`
+# feature rather than a direct dependency of its own, so this facade is the
+# one place that decides whether the shop half of the workspace compiles at
+# all.
+dzpos-retail = { path = "../retail", optional = true }
 
 # `64-column-tables`: `documents` passed 32 columns when the buyer block and
 # the balance triple landed (migration 4), and diesel's default table macro
@@ -88,6 +93,10 @@ iana-time-zone = "0.1"
 # an amount is exactly the mixed paragraph the algorithm exists for. Same
 # version the tests already pinned, and the implementation `rust-url` uses.
 unicode-bidi = "=0.3.18"
+
+[features]
+default = ["retail"]
+retail = ["dep:dzpos-retail"]
 
 [dev-dependencies]
 tempfile = "3"

@@ -54,8 +54,12 @@ pub struct RestoreDto {
     /// in and kept beside the shop file. Named on the wire because nothing
     /// deletes it and the owner is the only one who can decide to.
     pub safety_copy: String,
+    /// Retail-only (S5): the counts a kernel-only restore has none of,
+    /// `AppState::restore`'s own doc says why.
+    #[cfg(feature = "retail")]
     pub products: i64,
     /// Null only for a copy taken before the documents table existed
     /// (migration 2, the sale); every copy since carries the count.
+    #[cfg(feature = "retail")]
     pub documents: Option<i64>,
 }

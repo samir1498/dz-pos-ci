@@ -4,7 +4,16 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-dzpos-core = { path = "../core" }
+# `default-features = false`: this crate's own `retail` feature is what
+# turns `dzpos-core`'s back on (S5 of
+# `a-kernel-crate-and-retail-as-the-first-module`). A plain path dependency
+# here would let any other workspace member that still asks for
+# `dzpos-core`'s default features re-unify retail back in even for a
+# `--no-default-features` build of this crate alone (cargo unifies a
+# dependency's features across every crate that asks for it in the same
+# build), so `check-no-retail` builds this crate on its own, never
+# `--workspace`.
+dzpos-core = { path = "../core", default-features = false }
 # Versions checked on crates.io 2026-09-08; these are the current stable
 # releases and the candidates docs/architecture.md already named.
 axum = "0.8.9"
@@ -24,6 +33,16 @@ chrono = { workspace = true }
 # M6 T1: mDNS for LAN discovery (phone finds desktop on same Wi-Fi).
 # mdns-sd is the maintained Bonjour/mDNS crate (Avahi compatible).
 mdns-sd = "0.11"
+
+# S5 of `a-kernel-crate-and-retail-as-the-first-module`: the shop behind a
+# switch. On (the default), a build is today's product unchanged: every
+# retail route, gate row and DTO in this crate compiles and `just gates`
+# proves nothing moved. Off, `check-no-retail` (justfile) proves this crate
+# alone still compiles and clippy-clean with no shop in it; the full build
+# that opens a database and signs a user in without one is S7.
+[features]
+default = ["retail"]
+retail = ["dzpos-core/retail"]
 
 [dev-dependencies]
 # Test-only: one test plants a row the migration's CHECK refuses, which no

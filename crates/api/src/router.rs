@@ -8,6 +8,7 @@
 //! against each other in both directions, so a route added here without a
 //! gate fails closed rather than quietly open.
 
+#[cfg(feature = "retail")]
 use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderValue, Method};
 use axum::middleware::from_fn_with_state;
@@ -113,6 +114,10 @@ pub fn router_with_origin(
         .route("/auth/logout", post(routes::auth::logout))
         .route("/auth/me", get(routes::auth::me))
         .layer(from_fn_with_state(state.clone(), device::require));
+    // The kernel routes: every one of them stands with the feature off, and
+    // `just gates`'s `route_gates.rs` reads this whole file as text
+    // (`include_str!`), cfg lines included, so a row's own gate never moves
+    // out of step with which half of this chain wrote its route.
     let guarded = Router::new()
         .route("/audit-log", get(routes::audit::list))
         .route("/auth/idle", get(routes::auth::idle))
@@ -120,9 +125,47 @@ pub fn router_with_origin(
         .route("/backups", post(routes::backups::create))
         .route("/backups/{name}/restore", post(routes::backups::restore))
         .route("/build-info", get(routes::build_info))
+        .route("/clock", get(routes::clock))
+        .route("/settings", get(routes::settings::read))
+        .route("/settings/store", put(routes::settings::update_store))
+        .route("/settings/regime", post(routes::settings::change_regime))
+        .route("/settings/theme", put(routes::settings::set_theme))
+        .route(
+            "/settings/facture-layout",
+            put(routes::settings::set_facture_layout),
+        )
+        .route(
+            "/settings/print-lang",
+            put(routes::settings::set_print_lang),
+        )
+        .route(
+            "/settings/thermal-mode",
+            put(routes::settings::set_thermal_mode),
+        )
+        .route("/support-bundle", get(routes::support::bundle))
+        .route(
+            "/users",
+            get(routes::users::list).post(routes::users::create),
+        )
+        .route("/pairing/qr", post(routes::pairing::create_qr))
+        .route("/pairing/devices", get(routes::pairing::list_devices))
+        .route(
+            "/pairing/devices/{id}/revoke",
+            post(routes::pairing::revoke_device),
+        )
+        .route("/users/{id}/pin", post(routes::users::set_pin))
+        .route("/users/{id}/password", post(routes::users::set_password))
+        .route("/users/{id}/deactivate", post(routes::users::deactivate))
+        .route("/users/{id}/reactivate", post(routes::users::reactivate));
+
+    // S5 of `a-kernel-crate-and-retail-as-the-first-module`: the shop's own
+    // routes, gated whole rather than split across a second router, because
+    // `route_gates.rs`'s source walk reads this file and would never see
+    // one added anywhere else. 59 of the calls below.
+    #[cfg(feature = "retail")]
+    let guarded = guarded
         .route("/cash", get(routes::expenses::cash))
         .route("/categories", get(routes::categories::list))
-        .route("/clock", get(routes::clock))
         .route("/customers", get(routes::customers::list))
         .route("/customers", post(routes::customers::create))
         .route(
@@ -199,25 +242,9 @@ pub fn router_with_origin(
             "/sales/{id}/facture/escpos",
             get(routes::sales::facture_escpos),
         )
-        .route("/settings", get(routes::settings::read))
-        .route("/settings/store", put(routes::settings::update_store))
-        .route("/settings/regime", post(routes::settings::change_regime))
         .route(
             "/settings/discount-threshold",
             post(routes::settings::set_discount_threshold),
-        )
-        .route("/settings/theme", put(routes::settings::set_theme))
-        .route(
-            "/settings/facture-layout",
-            put(routes::settings::set_facture_layout),
-        )
-        .route(
-            "/settings/print-lang",
-            put(routes::settings::set_print_lang),
-        )
-        .route(
-            "/settings/thermal-mode",
-            put(routes::settings::set_thermal_mode),
         )
         .route(
             "/stock/recount",
@@ -240,7 +267,6 @@ pub fn router_with_origin(
             "/suppliers/{id}/statement",
             get(routes::suppliers::statement),
         )
-        .route("/support-bundle", get(routes::support::bundle))
         // The static segment before the `{id}` one: matchit prefers a
         // literal to a parameter, so `/till/shifts/open` never reaches
         // `get_one` with "open" where an id should be.
@@ -250,21 +276,9 @@ pub fn router_with_origin(
         )
         .route("/till/shifts/open", get(routes::till::open_shift))
         .route("/till/shifts/{id}", get(routes::till::get_one))
-        .route("/till/shifts/{id}/close", post(routes::till::close))
-        .route(
-            "/users",
-            get(routes::users::list).post(routes::users::create),
-        )
-        .route("/pairing/qr", post(routes::pairing::create_qr))
-        .route("/pairing/devices", get(routes::pairing::list_devices))
-        .route(
-            "/pairing/devices/{id}/revoke",
-            post(routes::pairing::revoke_device),
-        )
-        .route("/users/{id}/pin", post(routes::users::set_pin))
-        .route("/users/{id}/password", post(routes::users::set_password))
-        .route("/users/{id}/deactivate", post(routes::users::deactivate))
-        .route("/users/{id}/reactivate", post(routes::users::reactivate))
+        .route("/till/shifts/{id}/close", post(routes::till::close));
+
+    let guarded = guarded
         // Every route above takes its actor from the session; nothing reads a
         // seeded owner id any more.
         .layer(from_fn_with_state(state.clone(), session::require))

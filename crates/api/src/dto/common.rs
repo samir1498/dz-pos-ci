@@ -5,6 +5,9 @@
 
 use super::*;
 
+// Retail-only (S5): the three `#[serde(default = "yes")]` fields that reach
+// for this are all on wholly-retail DTOs (products, customers, suppliers).
+#[cfg(feature = "retail")]
 pub(crate) const fn yes() -> bool {
     true
 }

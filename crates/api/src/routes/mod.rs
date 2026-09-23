@@ -22,20 +22,38 @@
 pub mod audit;
 pub mod auth;
 pub mod backups;
+// The eleven wholly-retail route files (S5 of
+// `a-kernel-crate-and-retail-as-the-first-module`): every handler in each
+// goes through a `dzpos_core::services` module `crates/retail` owns, so the
+// whole file has nothing to compile once the feature is off. `settings`
+// stays unconditional beside them: it is mostly kernel settings, with one
+// retail-only route gated inside it instead.
+#[cfg(feature = "retail")]
 pub mod categories;
+#[cfg(feature = "retail")]
 pub mod customers;
+#[cfg(feature = "retail")]
 pub mod dashboard;
+#[cfg(feature = "retail")]
 pub mod expenses;
+#[cfg(feature = "retail")]
 pub mod export;
+#[cfg(feature = "retail")]
 pub mod import;
 pub mod pairing;
+#[cfg(feature = "retail")]
 pub mod products;
+#[cfg(feature = "retail")]
 pub mod purchases;
+#[cfg(feature = "retail")]
 pub mod sales;
 pub mod settings;
+#[cfg(feature = "retail")]
 pub mod stock;
+#[cfg(feature = "retail")]
 pub mod suppliers;
 pub mod support;
+#[cfg(feature = "retail")]
 pub mod till;
 pub mod users;
 

@@ -13,10 +13,15 @@
 //! there: `scripts/file-sizes.mjs` caps that file at 600 lines, and this
 //! module is still a child of it (`super::` below resolves `error.rs`'s
 //! own private items) so nothing about what it can reach changes.
-use super::{ApiError, CoreError, Figures, RetailError, StatusCode};
+#[cfg(feature = "retail")]
+use super::RetailError;
+use super::{ApiError, CoreError, Figures, StatusCode};
 use dzpos_core::db::DbError;
+#[cfg(feature = "retail")]
 use dzpos_core::error::PartySide;
-use dzpos_core::money::{Money, MoneyError};
+#[cfg(feature = "retail")]
+use dzpos_core::money::Money;
+use dzpos_core::money::MoneyError;
 use dzpos_core::services::permissions::Permission;
 
 #[test]
@@ -131,6 +136,7 @@ fn every_core_error_variant_keeps_its_pre_split_status_code_and_figures() {
     );
 }
 
+#[cfg(feature = "retail")]
 #[test]
 fn every_retail_error_variant_keeps_its_pre_split_status_code_and_figures() {
     // `Kernel` delegates; `NotFound` here proves the delegation lands on

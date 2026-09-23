@@ -94,6 +94,20 @@ desktop-dist:
 clippy: claim desktop-dist
     flock "$CARGO_TARGET_DIR/.lock" cargo clippy --workspace --all-targets -- -D warnings
 
+# S5 of `a-kernel-crate-and-retail-as-the-first-module`: the api crate's
+# `retail` feature (default on) is what puts the shop's 59 routes and 43
+# gate rows, and dzpos-retail itself, behind a switch. This proves the
+# switch has not rotted: `dzpos-api` alone, `--no-default-features`,
+# still compiles and is clippy-clean with no shop in it. Never
+# `--workspace`: another member asking for this crate's defaults would
+# reunify retail back into the graph and this would pass while proving
+# nothing (a full build that opens a database and signs a user in without
+# a shop is S7, not this check). No `desktop-dist`: this touches
+# `dzpos-api` only, never the desktop crate that needs it.
+check-no-retail: claim
+    flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --no-default-features
+    flock "$CARGO_TARGET_DIR/.lock" cargo clippy -p dzpos-api --no-default-features -- -D warnings
+
 # the desktop's one eslint rule: no bare input, button, select, textarea or
 # table outside components/ui and the kit. The screens written before the kit
 # are exempted by name in apps/desktop/src/lint/allowlist.json, and the
@@ -151,7 +165,7 @@ theme:
     pnpm --filter @dzpos/design gen:theme
 
 # everything a PR needs, in order; stops at the first failure
-gates: fmt lint sizes clippy types-check test build
+gates: fmt lint sizes clippy check-no-retail types-check test build
 
 # ---- dev ----
 

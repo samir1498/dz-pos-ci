@@ -45,6 +45,7 @@ thermal_mode: ThermalModeDto,
  * basket before any discount (250 is 2,5 %). Zero on a shop that has
  * never set one, which refuses a cashier every discount: the screen
  * should say so rather than leave an owner wondering why the till
- * refuses a round number off.
+ * refuses a round number off. Retail-only (S5): a discount is given on
+ * a sale, which does not exist without the feature.
  */
 discount_threshold_bps: number, };

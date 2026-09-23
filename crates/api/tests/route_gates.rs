@@ -443,3 +443,41 @@ async fn a_write_on_a_route_the_table_does_not_name_is_refused() {
     let (status, body) = call(&app, "GET", UNKNOWN, common::OWNER_SESSION).await;
     assert_eq!(status, StatusCode::OK, "{body}");
 }
+
+/// S5 of `a-kernel-crate-and-retail-as-the-first-module`: the shop's own
+/// rows and routes sit behind `#[cfg(feature = "retail")]` in these same
+/// two files (this file's own header says why: a table assembled at
+/// startup, or a second router, is the runtime registry Samir ruled out).
+/// Red against the file this plan found: no row and no route carried the
+/// attribute at all, so both counts below were zero and this failed.
+#[test]
+fn the_shops_own_gate_rows_and_routes_carry_the_retail_feature() {
+    let gates_source = include_str!("../src/gates/table.rs");
+    let tagged_gates = gates_source
+        .matches("    #[cfg(feature = \"retail\")]\n    Gate {")
+        .count();
+    assert_eq!(
+        tagged_gates, 43,
+        "43 of ROUTE_GATES' own rows are the shop's; the rest stand with the feature off"
+    );
+
+    // The retail block is the one `#[cfg(feature = "retail")]` that guards a
+    // `let guarded = guarded` continuing the chain, not the one on the
+    // `DefaultBodyLimit` import beside it; it ends where the session layer
+    // that closes every guarded route, kernel or shop, begins.
+    let start_marker = "#[cfg(feature = \"retail\")]\n    let guarded = guarded";
+    let start = ROUTER_SOURCE
+        .find(start_marker)
+        .expect("router.rs no longer gates a block of routes on the retail feature");
+    let end_marker =
+        "\n    let guarded = guarded\n        // Every route above takes its actor from the session";
+    let end = ROUTER_SOURCE[start..]
+        .find(end_marker)
+        .map(|i| start + i)
+        .expect("the shop's own routes no longer end where the session layer begins");
+    let retail_routes = ROUTER_SOURCE[start..end].matches(".route(").count();
+    assert_eq!(
+        retail_routes, 60,
+        "60 of router.rs' own .route(...) calls are the shop's; the rest stand with the feature off"
+    );
+}

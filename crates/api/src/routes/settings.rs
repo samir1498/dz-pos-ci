@@ -8,15 +8,19 @@ use axum::Json;
 use chrono::{NaiveDateTime, NaiveTime};
 use dzpos_core::error::CoreError;
 use dzpos_core::models::shop::StoreBlock;
+#[cfg(feature = "retail")]
 use dzpos_core::money::Bps;
 use dzpos_core::print::{FactureLayout, ThermalMode};
 use dzpos_core::services::clock;
-use dzpos_core::services::{discount_threshold, preferences, settings, shops};
+#[cfg(feature = "retail")]
+use dzpos_core::services::discount_threshold;
+use dzpos_core::services::{preferences, settings, shops};
 
+#[cfg(feature = "retail")]
+use crate::dto::DiscountThresholdChangeDto;
 use crate::dto::{
-    parse_day, DiscountThresholdChangeDto, FactureLayoutChoiceDto, FactureLayoutDto,
-    PrintLangChoiceDto, RegimeChangeDto, SettingsDto, StoreDto, ThemeChoiceDto,
-    ThermalModeChoiceDto,
+    parse_day, FactureLayoutChoiceDto, FactureLayoutDto, PrintLangChoiceDto, RegimeChangeDto,
+    SettingsDto, StoreDto, ThemeChoiceDto, ThermalModeChoiceDto,
 };
 use crate::error::ApiError;
 use crate::session::CurrentUser;
@@ -43,6 +47,7 @@ fn read_all(
         facture_layouts: FactureLayout::ALL.map(FactureLayoutDto::from).to_vec(),
         print_lang: preferences::print_lang(conn, shop)?.map(Into::into),
         thermal_mode: preferences::thermal_mode(conn, shop)?.into(),
+        #[cfg(feature = "retail")]
         discount_threshold_bps: discount_threshold::discount_threshold_as_of(conn, shop, at)?
             .as_u32(),
     })
@@ -196,7 +201,10 @@ pub async fn change_regime(
 /// The discount a cashier may give without asking anyone. Answers the whole
 /// settings page for the reason `change_regime` does, and is dated for the
 /// same reason: a sale refused in March is read against March's threshold,
-/// not against the one the shop moved to in April.
+/// not against the one the shop moved to in April. Retail-only (S5): the
+/// discount a cashier may give is a shop concept, and the kernel's own
+/// `POST /settings/discount-threshold` gate row is gated the same way.
+#[cfg(feature = "retail")]
 pub async fn set_discount_threshold(
     State(state): State<AppState>,
     who: CurrentUser,
