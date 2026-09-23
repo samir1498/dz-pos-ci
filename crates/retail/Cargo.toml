@@ -47,6 +47,14 @@ unicode-bidi = "=0.3.18"
 [dev-dependencies]
 tempfile = "3"
 proptest = "1.11"
+# The migration tests moved here from `crates/core/tests` in S6 of
+# `a-kernel-crate-and-retail-as-the-first-module` open a database stopped at
+# a chosen migration (`common::migrations::open_at_migration`), which reads
+# `MigrationHarness` off `dzpos_kernel::db::MIGRATIONS`. The kernel crate
+# carries this as a normal dependency for `embed_migrations!` itself; this
+# crate only ever runs migrations from a test, so it is a dev-dependency
+# here.
+diesel_migrations = "2.2"
 
 [lints]
 workspace = true

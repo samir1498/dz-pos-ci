@@ -1409,6 +1409,7 @@ dependencies = [
  "calamine",
  "chrono",
  "diesel",
+ "diesel_migrations",
  "dzpos-kernel",
  "proptest",
  "rust_xlsxwriter",
