@@ -7,7 +7,7 @@ export default defineConfig({
     // TypeScript — money, the retry queue, what a status code means. The
     // screens are driven by Maestro against a real server instead, because
     // a mocked till proves nothing about a till.
-    include: ["lib/**/*.test.ts"],
+    include: ["tests/lib/**/*.test.ts"],
     globals: true,
   },
 });

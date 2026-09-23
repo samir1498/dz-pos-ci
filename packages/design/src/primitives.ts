@@ -46,7 +46,7 @@ export const primitives: Readonly<Record<PrimitiveFamily, Ramp>> = {
   // The 300 step of red, amber and blue exists for Registre: the 500s are
   // mixed for white paper and fall under 4.5:1 on an ink surface. The 900
   // step is the soft background those three get on the dark theme, where
-  // the 50 would be a white card. src/css.test.ts asserts both.
+  // the 50 would be a white card. tests/css.test.ts asserts both.
   red: {
     50: "#fdeeed",
     100: "#f9d6d3",

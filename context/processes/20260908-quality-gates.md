@@ -12,9 +12,10 @@ Before "done" and before a PR, run from the repo root and show the output:
 
 ```
 just gates   # cargo fmt --check, the desktop eslint rule, the file-size
-             # ratchet (sizes), clippy --all-targets -D warnings,
-             # generated TS types diffed against the DTOs (types-check),
-             # cargo test, pnpm -r test, pnpm -r build
+             # ratchet (sizes), the inline-test ban (no-inline-tests),
+             # clippy --all-targets -D warnings, generated TS types
+             # diffed against the DTOs (types-check), cargo test,
+             # pnpm -r test, pnpm -r build
 just e2e     # Playwright against a fresh API and database
 ```
 
@@ -26,8 +27,11 @@ runner.
 
 Sonar is local, same as ObserveOne: `just sonar` against
 sonar.observeone.com (project `dz-pos`, gate "ObserveOne way") on the
-branch before merge and again on main after. Not in CI. Coverage reports
-are ingested if they already exist; the recipe does not rebuild them.
+branch before merge and again on main after. Not in CI. `just sonar`
+depends on `just coverage`, which runs `cargo llvm-cov --workspace
+--lcov` for the Rust half and `vitest run --coverage` in each of the
+five TypeScript packages, so a scan always reads a fresh lcov report
+rather than whatever an earlier run left behind.
 
 A DTO change without `just types` fails `types-check`; the committed
 `packages/shared/src/generated` is diffed both ways.

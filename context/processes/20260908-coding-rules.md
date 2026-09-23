@@ -36,11 +36,27 @@ simple architecture. These rules are how a change meets it.
   templates get golden-file tests; a wrong field on a printed facture is a
   legal problem no UI test catches.
 - Types shared with TypeScript are generated with ts-rs.
+- No inline `#[cfg(test)] mod name { ... }` body in a shipped `src/` file.
+  The hook is `#[cfg(test)]` and `mod name;` with no body, an ordinary
+  module declaration naming a sibling file (`mod tests;` next to
+  `tests.rs`), or `#[path = "../../tests/unit/name.rs"] mod name;` for a
+  suite that needs private items and so cannot be an ordinary integration
+  test under `crates/*/tests/`. `scripts/inline-tests.json` pins the Rust
+  files that still carry an inline body; the list only shrinks
+  (`just no-inline-tests`, part of `just gates`).
 
 ## TypeScript and CSS
 - No `as` type assertions (`x as T`, `as unknown as T`). A cast in a
   fixture makes a green test prove nothing. `as const` and `satisfies`
   narrow without lying and are allowed (ruling 2026-09-08).
+- A `*.test.ts(x)` or `*.spec.ts(x)` never sits beside its source. It
+  lives in the package's `tests/` folder, mirroring the `src` path
+  (`src/lib/money.ts`'s test is `tests/lib/money.test.ts`), so Sonar's
+  line count reads as tests and not as source (`just no-inline-tests`
+  bans a straggler, no allow list on this side). Fold same-shaped cases
+  into `it.each`/`test.each` when a file is touched anyway, and drop an
+  exact duplicate; never drop a distinct assertion to make a number
+  smaller.
 - Every visible string goes through i18n and exists in `ar`, `fr`, `en`.
 - Logical CSS properties only (`inline-start`, `margin-inline`). Arabic
   mirrors the layout; `left` / `right` is a bug that shows only in `ar`.

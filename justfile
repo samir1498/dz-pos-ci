@@ -126,6 +126,19 @@ lint:
 sizes:
     node scripts/file-sizes.mjs
 
+# No inline tests. TypeScript: every *.test.ts(x)/*.spec.ts(x) lives in a
+# package's tests/ folder rather than beside its source, so Sonar's line
+# count reads as tests, not source; no allow list on this side, the count is
+# zero. Rust: no #[cfg(test)] mod name { ... } body under crates/*/src or
+# apps/desktop/src-tauri/src — the hook shape is #[cfg(test)] mod name;
+# (optionally with a #[path = "..."] above it) naming a file elsewhere, the
+# way crates/api/src/gates/mod.rs already does. Same ratchet shape as
+# scripts/file-sizes.json: scripts/inline-tests.json pins the Rust files
+# that still carry one, and that list only shrinks. No cargo, so it runs
+# early and cheap.
+no-inline-tests:
+    node scripts/no-inline-tests.mjs
+
 test: claim desktop-dist
     flock "$CARGO_TARGET_DIR/.lock" cargo test --workspace
     pnpm -r test
@@ -165,7 +178,7 @@ theme:
     pnpm --filter @dzpos/design gen:theme
 
 # everything a PR needs, in order; stops at the first failure
-gates: fmt lint sizes clippy check-no-retail types-check test build
+gates: fmt lint sizes no-inline-tests clippy check-no-retail types-check test build
 
 # ---- dev ----
 
@@ -483,14 +496,33 @@ release tag:
     [ -n "$id" ] || { echo "no Release run appeared for $sha; look at https://github.com/samir1498/dz-pos-ci/actions" >&2; exit 1; }
     gh run watch "$id" --repo samir1498/dz-pos-ci --exit-status
 
+# lcov reports for Sonar: one for the Rust workspace (cargo-llvm-cov, which
+# needs `desktop-dist` first the same reason `clippy` does — dzpos-desktop's
+# `generate_context!()` embeds apps/desktop/dist/index.html at compile time,
+# and `cargo llvm-cov --workspace` compiles that crate's tests too), and one
+# per TypeScript package, run directly through vitest rather than each
+# package's own `test` script so a chained `tsc --noEmit` (packages/shared)
+# never blocks a coverage run. Under the same build-folder lock every other
+# cargo recipe takes.
+coverage: claim desktop-dist
+    #!/usr/bin/env bash
+    set -euo pipefail
+    flock "$CARGO_TARGET_DIR/.lock" cargo llvm-cov --workspace --lcov --output-path lcov.info
+    for pkg in dzpos-desktop dzpos-landing @dzpos/design @dzpos/shared dinar-mobile; do
+        pnpm --filter "$pkg" exec vitest run \
+            --coverage --coverage.provider=v8 --coverage.reporter=lcov \
+            --coverage.reportsDirectory=coverage
+    done
+
 # Scan this checkout against sonar.observeone.com. Not CI and not a PR
 # check: same as ObserveOne, run on the machine before merge and again on
 # main after. The Rust plugin shells out to `cargo clippy`, so this has to
 # run on the host (the scanner-cli image is Amazon Linux 2023 and cannot
-# exec our glibc-2.39 cargo). Coverage reports are used if they already
-# exist; this does not regenerate them. Token from SONARQUBE_TOKEN or
-# SONAR_ANALYSIS_TOKEN. Scanner: ~/.local/share/sonar-scanner (8.0.1.6346).
-sonar: claim desktop-dist
+# exec our glibc-2.39 cargo). `coverage` runs first, so a scan always reads
+# fresh reports rather than whatever an earlier run happened to leave behind.
+# Token from SONARQUBE_TOKEN or SONAR_ANALYSIS_TOKEN. Scanner:
+# ~/.local/share/sonar-scanner (8.0.1.6346).
+sonar: coverage desktop-dist
     #!/usr/bin/env bash
     set -euo pipefail
     token="${SONARQUBE_TOKEN:-${SONAR_ANALYSIS_TOKEN:-}}"

@@ -1,5 +1,5 @@
 // The CSS custom properties, emitted from the same semantic entries theme.ts
-// resolves. src/css.test.ts asserts this output carries exactly the variable
+// resolves. tests/css.test.ts asserts this output carries exactly the variable
 // names and values in design/shared/tokens.css, so the mockups and the apps
 // cannot drift while both read tokens.
 //

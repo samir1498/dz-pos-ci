@@ -4,7 +4,7 @@
 // Every theme is a block of CSS variables in the generated theme.css, so a
 // component never learns which one is on. There is no `theme === "registre"
 // ? a : b` anywhere in the app, no per-theme component and no conditional
-// class list; `src/theme.test.ts` greps for exactly that and fails the gates
+// class list; `tests/theme.test.ts` greps for exactly that and fails the gates
 // on it. The attribute goes on the document element and not on a wrapper,
 // because the shadcn names (`--background` and the rest) are declared once in
 // `:root` pointing at our roles, and they only follow a theme when the block

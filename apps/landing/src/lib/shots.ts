@@ -3,7 +3,7 @@
 // shows. Every pixel a visitor sees is one of those PNGs, cropped and
 // framed; nothing here draws UI (context/plans/20260911-landing-page.md, L1).
 //
-// Pure planning and composition. `src/shots.test.ts` is the only thing that
+// Pure planning and composition. `tests/shots.test.ts` is the only thing that
 // touches disk: it writes when DZPOS_SHOTS_WRITE=1 (`pnpm run shots`, the
 // same shape as @dzpos/design's `gen:theme`), and otherwise asserts the
 // committed files under public/shots/ and src/lib/shots.json still match

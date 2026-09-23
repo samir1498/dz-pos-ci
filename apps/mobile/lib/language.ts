@@ -7,7 +7,7 @@
  * string one.
  *
  * Plain TypeScript on purpose. `vitest.config.ts` only collects
- * `lib/**\/*.test.ts`, because the screens are driven by Maestro against a
+ * `tests/lib/**\/*.test.ts`, because the screens are driven by Maestro against a
  * real server; anything in this feature that a test should hold had to land
  * here rather than inside the provider.
  */

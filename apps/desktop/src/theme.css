@@ -1,5 +1,5 @@
 /* Generated from packages/design/src by `just theme`. Do not edit:
-   packages/design/src/themeCss.test.ts fails the gates when this file and the
+   packages/design/tests/themeCss.test.ts fails the gates when this file and the
    token source disagree, the way just types-check does for the DTOs.
 
    Four parts: our tokens for Comptoir and Registre, the shadcn/ui variable

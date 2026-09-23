@@ -25,7 +25,7 @@ import { useTheme } from "@/lib/theme";
  * package fails to compile here until it has a label. It used to be a
  * `Record<string, Key>` with a `?? "theme_label"` at the point of use, which
  * compiled fine and shipped a select whose new entry read "Theme". The type
- * is the check now, and `src/theme.test.ts` proves the keys the three
+ * is the check now, and `tests/theme.test.ts` proves the keys the three
  * dictionaries carry.
  */
 export const THEME_LABEL: Readonly<Record<ThemeName, Key>> = {

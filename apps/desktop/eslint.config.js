@@ -15,7 +15,7 @@
 // kit is named in src/lint/allowlist.json with the screen it is, so the list
 // reads as a to-do rather than as a permission, and the wave that rewrites
 // the screens deletes one line per screen. When the file's `screens` array is
-// empty the migration is done, and `src/lint/allowlist.test.ts` refuses an
+// empty the migration is done, and `tests/lint/allowlist.test.ts` refuses an
 // entry whose file no longer has anything to fix, so the list cannot outlive
 // the work.
 //

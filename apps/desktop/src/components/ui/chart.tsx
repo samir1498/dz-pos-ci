@@ -6,7 +6,7 @@
 // - A `THEMES = { light: "", dark: ".dark" }` map, and a `<style>` tag written
 //   through `dangerouslySetInnerHTML` with one block per theme. A theme here
 //   is a block of CSS variables and the switch is one attribute on `<html>`
-//   (`src/theme.test.ts` refuses the branch); a chart that carried its own
+//   (`tests/theme.test.ts` refuses the branch); a chart that carried its own
 //   light and dark colours would be a second theme system, and on the two
 //   themes nobody had open it would be wrong. So a series names a role
 //   (`var(--color-primary)`), every theme redefines that role, and the
@@ -15,7 +15,7 @@
 // - Six selectors that match on the literal grey and the literal white
 //   recharts paints by default, spelled as hexes inside an attribute selector
 //   (`line[stroke='...']`, `dot[stroke='...']`). A hex anywhere under `src`
-//   fails `src/tokens.test.ts`, and rightly: the ones that were doing work
+//   fails `tests/tokens.test.ts`, and rightly: the ones that were doing work
 //   are rewritten without the attribute match, the ones for charts we do not
 //   draw (polar, radial, sector, reference line) are gone.
 // - Four `as` casts. `as React.CSSProperties` is unnecessary because

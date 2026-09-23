@@ -2,7 +2,7 @@
 // Comptoir's own surface, generated from the design package the way the
 // product shots are (see src/lib/shots.ts and its own comment). Committed as
 // public/og/card.png; `pnpm run card` (DZPOS_CARD_WRITE=1 vitest run
-// src/card.test.ts) reruns it, and running this file plainly, the way
+// tests/card.test.ts) reruns it, and running this file plainly, the way
 // `pnpm test` and the gates do, instead asserts the committed file still
 // matches what buildCard() produces right now, so a branding or copy change
 // nobody reran the script for fails the gates instead of shipping a stale

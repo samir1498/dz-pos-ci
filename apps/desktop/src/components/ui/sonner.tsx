@@ -4,7 +4,7 @@
 // sonner a `theme` prop. Two reasons it does not here. The app has no
 // next-themes: the theme is one attribute on the document element and a block
 // of CSS variables per theme, and a component that asked which theme was on
-// would be the theme-conditional code `src/theme.test.ts` fails the gates for.
+// would be the theme-conditional code `tests/theme.test.ts` fails the gates for.
 // And sonner's own `theme` prop only picks between its two built-in palettes,
 // neither of which is ours.
 //

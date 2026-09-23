@@ -8,7 +8,7 @@
     "apps/desktop/src/components/ui/sidebar.tsx": 736,
     "apps/desktop/src/routes/dashboard.tsx": 658,
     "apps/desktop/src/routes/purchases_.$id.tsx": 610,
-    "apps/desktop/src/routes/till.test.tsx": 1405,
+    "apps/desktop/tests/routes/till.test.tsx": 1385,
     "apps/desktop/src/routes/till.tsx": 904,
     "crates/api/tests/sales_api.rs": 1591,
     "crates/kernel/src/services/backup.rs": 629,
