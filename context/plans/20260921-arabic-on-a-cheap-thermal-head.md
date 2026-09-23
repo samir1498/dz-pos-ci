@@ -1,7 +1,7 @@
 ---
 title: 'Arabic on a cheap thermal head'
 slug: 'arabic-on-a-cheap-thermal-head'
-status: 'active'
+status: 'done'
 category: 'feature'
 created: 20260921
 tldr: 'A cheap 80 mm head has no single-byte table for Arabic, so the ticket in Arabic prints boxes today. The fix is to stop sending text: draw the same ticket lines into a 1-bit bitmap and send it as a raster, which every head with a raster command prints with no codepage at all. This page is the build-or-buy call for the three commodity jobs (bidi, shaping, glyph rasterising), the font that gets vendored, and the four tasks carried from the closing-gaps loop.'

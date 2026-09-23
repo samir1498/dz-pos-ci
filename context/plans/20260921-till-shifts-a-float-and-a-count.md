@@ -1,7 +1,7 @@
 ---
 title: 'Till shifts: a float and a count'
 slug: 'till-shifts-a-float-and-a-count'
-status: 'active'
+status: 'done'
 category: 'feature'
 created: 20260921
 tldr: 'One shifts table, one drawer per person, and an expected figure made only of that person own cash takings. The dashboard does not read shifts at all, so no handover can move the shop cash figure.'
@@ -27,7 +27,7 @@ tasks:
     status: 'done'
   - id: 'T7'
     desc: 'The closing sweep: the shift list, the e2e with a real cashier, the docs'
-    status: 'pending'
+    status: 'done'
 ---
 # Till shifts: a float and a count
 
