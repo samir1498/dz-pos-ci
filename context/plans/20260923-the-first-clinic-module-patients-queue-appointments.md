@@ -271,19 +271,19 @@ in the waiting room, including placing a booked patient who arrived early.
 The queue needs its own order that the desk can edit, not arrival time
 alone.
 
-### The no-show and the confirmation call, being thought through
+### Samir, 19:34: the desk decides, the software does not enforce
 
-Samir, 19:32: a no-show only becomes clear at the end of the day, or when a
-call to the patient confirms they won't come. The desk also calls to confirm
-ahead of time, and that call needs a place in the book. The proposal below
-is the session's, waiting for Samir:
+"You are overcomplicating the cancellation versus no-show, just make the UI
+for it and the staff will handle it; trying to enforce it isn't good and
+may make bugs." So the book gives the desk plain actions and lets them
+choose: mark a call's outcome (confirmed, no answer), cancel, mark no-show,
+move, rebook. No rule decides which one applies.
 
-- The day before, a call list shows tomorrow's bookings. The desk records
-  the outcome of each call: confirmed, cancelled by the patient, or no
-  answer.
-- A patient who says they won't come is a cancellation by the patient, not
-  a no-show, and the slot frees at once.
-- A no-show is only a booking whose day has ended without an arrival. The
-  end-of-day offer marks them.
-- A no-show is never moved. Rebooking creates a new appointment, and the
-  missed one stays on the record. That removes the need for a lock.
+What this removes from the C5b build, done as part of C6b:
+
+- the lock that stops a no-show from being moved or cancelled;
+- the rule that a no-show may only be set once the start has passed, since
+  a call can tell the desk before the time that the patient won't come.
+
+A row still can't be both cancelled and a no-show at once. Setting one
+clears the other instead of refusing.
