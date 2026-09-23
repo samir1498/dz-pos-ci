@@ -36,6 +36,9 @@ tasks:
     status: 'done'
   - id: 'C7'
     desc: 'The shop screens on desktop and phone behind the same build switch'
+    status: 'done'
+  - id: 'C8'
+    desc: 'A refused write to the notes on a patient file leaves an audit row (Samir, 2026-09-23 19:25)'
     status: 'pending'
 ---
 # The first clinic module: patients, a waiting queue, an appointment book
@@ -329,3 +332,15 @@ the proposal is that it undoes the cancel, since the patient is there.
 Follow-ups: a real-browser test for the mouse drag (kanban Stjk7bMM), and
 the audit row for a refused notes write (Samir, 19:25), folded into the
 next clinic change.
+
+## C7 merged (PR 172)
+
+A clinic build ships no till on either app. The desktop needed nothing more
+after #169. The phone swaps its whole router root (`app/` or `app-clinic/`,
+from `DINAR_MOBILE_MODULES`), since Expo Router has no per-file ignore; a
+clinic phone lands on settings. The bundle-level proof waits on the phone's
+release build, which fails on main today (Babel 7/8, kanban SxChTM4z).
+
+C8 is the last task. Left for Samir: whether "arrived" on a
+cancelled booking undoes the cancel. Left to build: the audit row for a
+refused notes write.
