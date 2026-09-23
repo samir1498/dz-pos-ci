@@ -43,6 +43,13 @@ df -h /mnt/c        # this is the number that matters
 
 - Under 20 GB free on `/mnt/c`: clean before you build (`just disk`, then
   `just clean-targets`). Do not start a build "to see how far it gets".
+- The shared build folder has a size cap, enforced by `just claim` before
+  every cargo recipe: over 40 GB (`DZ_TARGET_CAP_GB`), it runs `cargo sweep`
+  for anything two days of builds did not touch, then empties the folder if
+  that was not enough. Install the sweeper once per machine with
+  `cargo install cargo-sweep --locked`; without it the cap still holds, by
+  emptying. Deleting inside WSL never shrinks the disk image on C:, so after
+  a big clean Samir runs `C:\Users\Anwender\compact-wsl.ps1` as admin.
 - Under 5 GB: stop and tell Samir. Nothing you delete inside the distro
   reaches Windows without an elevated compact he has to run himself
   (`C:\Users\Anwender\compact-wsl.ps1` on the Windows side).

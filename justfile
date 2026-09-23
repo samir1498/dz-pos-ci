@@ -34,10 +34,36 @@ export CARGO_BUILD_JOBS := env_var_or_default("CARGO_BUILD_JOBS", "4")
 # worktree's build replaced the rlib the doc-tests were about to link
 # ("extern location for dzpos_core does not exist", 2026-09-10). One cargo
 # invocation at a time across every checkout; the second one waits.
+#
+# The folder also has a size cap. On 2026-09-23 it had reached 93 GB with
+# nothing ever pruning it, and the WSL disk image keeps its high-water mark
+# on the Windows C: drive, which was down to 7 GB. At most once an hour, and
+# only while holding the build lock so no other checkout is mid-build, a
+# folder over DZ_TARGET_CAP_GB (default 40) is pruned: cargo-sweep drops
+# what no build touched in two days, and if that is missing or not enough
+# the folder is emptied and the next build is a cold one.
 claim:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "$CARGO_TARGET_DIR"
+    cap="${DZ_TARGET_CAP_GB:-40}"
+    stamp="$CARGO_TARGET_DIR/.size-checked"
+    if [ -z "$(find "$stamp" -mmin -60 2>/dev/null)" ]; then
+        touch "$stamp"
+        (
+            flock -n 9 || { echo "claim: another build holds the folder; size check skipped" >&2; exit 0; }
+            size=$(du -xs --block-size=1G "$CARGO_TARGET_DIR" | cut -f1)
+            if [ "$size" -gt "$cap" ] && command -v cargo-sweep >/dev/null; then
+                echo "claim: build folder is ${size}G, over the ${cap}G cap; sweeping what two days of builds did not touch" >&2
+                cargo sweep --time 2 "{{justfile_directory()}}" >&2 || true
+                size=$(du -xs --block-size=1G "$CARGO_TARGET_DIR" | cut -f1)
+            fi
+            if [ "$size" -gt "$cap" ]; then
+                echo "claim: build folder is ${size}G, over the ${cap}G cap; emptying it, the next build is cold" >&2
+                find "$CARGO_TARGET_DIR" -mindepth 1 -maxdepth 1 ! -name .lock ! -name .owner ! -name .size-checked -exec rm -rf {} +
+            fi
+        ) 9>"$CARGO_TARGET_DIR/.lock"
+    fi
     me="{{justfile_directory()}}"
     marker="$CARGO_TARGET_DIR/.owner"
     owner="$(cat "$marker" 2>/dev/null || true)"
@@ -522,7 +548,8 @@ disk:
         echo "Samir must run C:\\Users\\Anwender\\compact-wsl.ps1 as admin." >&2
         exit 1
     elif [ "${free:-0}" -lt 20 ]; then
-        echo "WARNING: ${free}G free on C:. Run 'just clean-targets' before any heavy build." >&2
+        echo "WARNING: ${free}G free on C:. Run 'just clean-targets' before any heavy build;" >&2
+        echo "if the shared folder above is most of it, 'just clean-targets shared=yes'." >&2
     else
         echo "OK: ${free}G free on C:."
     fi
