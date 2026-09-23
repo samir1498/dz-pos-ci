@@ -25,6 +25,9 @@ tasks:
   - id: 'C5'
     desc: 'The appointment book: one doctor, a fixed slot length, a refusal when two patients take the same slot'
     status: 'pending'
+  - id: 'C5b'
+    desc: 'Book tools for the desk: working hours, absence blocks that move what they hit, visit types with durations, next free slot, no-show mark, a printed day list with walk-ins'
+    status: 'pending'
   - id: 'C6'
     desc: 'Desktop screens for C3 to C5 behind a build switch, with the calendar component chosen before the book screen'
     status: 'pending'
@@ -178,3 +181,31 @@ calculations for the doctor. What those tools are comes from
 `context/research/20260923-how-a-cabinet-runs-its-appointment-book.md`
 (cabinet software and any Algerian rule on appointments), written before
 the book grows past C5; the calendar screen stays a basic one.
+
+### The book tools (C5b), from the research
+
+`context/research/20260923-how-a-cabinet-runs-its-appointment-book.md`
+compares WinMed, Doctolib and the others. The tools every product shares,
+in order of value:
+
+1. Weekly working hours: open and close ranges per weekday (a lunch break
+   is two ranges), and a whole day closed. Booking outside them is refused.
+2. Absence blocks: a period the doctor is away (a morning, a congress, a
+   holiday). Creating one lists every appointment it hits and offers to
+   move each to the next free slot or cancel it.
+3. Visit types with their own length (first consultation, follow-up,
+   certificate), replacing the single slot length as the booking's length;
+   the grid stays the setting.
+4. Next free slot: from a date and a visit type, the earliest start inside
+   working hours, outside blocks, not overlapping; "see again in 15 days"
+   is this search from today plus 15.
+5. A no-show mark on a past appointment, kept on the row.
+6. A printed day list holding both booked patients and the walk-in queue.
+
+Holidays: the fixed-date ones can be offered as closed days; the Hijri ones
+are confirmed only the evening before (loi 23-10), so the desk closes those
+days by hand with an absence block. Friday is the legal rest day for the
+private sector (loi 90-11 art. 33); Saturday is a working-hours choice.
+Left out of the first version: fill-rate caps, waiting list for a freed
+slot, per-patient no-show counts, SMS, recurring series, urgent slots (the
+walk-in queue covers those).
