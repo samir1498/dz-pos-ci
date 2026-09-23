@@ -15,13 +15,14 @@ use dzpos_clinic::services::patients::{self, Patient};
 use dzpos_clinic::services::queue::{self, QueuedPatient};
 use dzpos_kernel::error::CoreError;
 use dzpos_kernel::services::audit;
+use dzpos_kernel::services::permissions::Role;
 
 mod common;
 
 use common::{named, open_temp, second_shop, OWNER, SHOP};
 
 fn open(conn: &mut diesel::SqliteConnection, first: &str, last: &str) -> Patient {
-    patients::create(conn, SHOP, OWNER, named(first, last)).unwrap()
+    patients::create(conn, SHOP, OWNER, named(first, last), Role::Owner).unwrap()
 }
 
 fn names(found: &[QueuedPatient]) -> Vec<String> {
@@ -198,8 +199,14 @@ fn a_second_live_entry_the_same_day_is_refused_and_one_after_seen_or_gone_is_not
 fn another_shops_entry_and_patient_are_invisible() {
     let (_dir, mut conn) = open_temp();
     let theirs_shop = second_shop(&mut conn);
-    let their_patient =
-        patients::create(&mut conn, theirs_shop, 2, named("Amina", "Benali")).unwrap();
+    let their_patient = patients::create(
+        &mut conn,
+        theirs_shop,
+        2,
+        named("Amina", "Benali"),
+        Role::Owner,
+    )
+    .unwrap();
     let theirs = queue::add(&mut conn, theirs_shop, 2, &their_patient.id).unwrap();
     let id = theirs.entry.id.clone();
 

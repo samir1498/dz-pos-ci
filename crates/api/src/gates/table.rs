@@ -211,7 +211,7 @@ pub const ROUTE_GATES: &[Gate] = &[
         method: "GET",
         path: "/patients/{id}",
         permission: Some(Permission::ViewPatients),
-        why: "one patient's file, notes included; the same gate as the list it is opened from (clinic plan C3)",
+        why: "one patient's file; the same gate as the list it is opened from (clinic plan C3). Notes are a field-level rule on top, ViewPatientNotes, not a second row (C3b)",
     },
     #[cfg(feature = "clinic")]
     Gate {

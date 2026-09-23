@@ -15,6 +15,7 @@ use dzpos_clinic::audit_actions::{
 use dzpos_clinic::services::patients::{self, NewPatient, Sex};
 use dzpos_kernel::error::CoreError;
 use dzpos_kernel::services::audit;
+use dzpos_kernel::services::permissions::{Permission, Role};
 
 mod common;
 
@@ -37,8 +38,22 @@ fn field_of(err: CoreError) -> String {
 #[test]
 fn a_file_created_is_found_by_a_search_on_its_name() {
     let (_dir, mut conn) = open_temp();
-    let made = patients::create(&mut conn, SHOP, OWNER, named("Amina", "Benali")).unwrap();
-    patients::create(&mut conn, SHOP, OWNER, named("Karim", "Haddad")).unwrap();
+    let made = patients::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        named("Amina", "Benali"),
+        Role::Owner,
+    )
+    .unwrap();
+    patients::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        named("Karim", "Haddad"),
+        Role::Owner,
+    )
+    .unwrap();
 
     let found = patients::search(&mut conn, SHOP, Some("benal"), false).unwrap();
     assert_eq!(found, vec![made.clone()]);
@@ -68,7 +83,7 @@ fn a_file_is_found_by_its_number_however_the_digits_were_spaced() {
     let (_dir, mut conn) = open_temp();
     let mut p = named("Yacine", "Mansouri");
     p.phone = Some(" 0555 12-34.56 ".to_string());
-    let made = patients::create(&mut conn, SHOP, OWNER, p).unwrap();
+    let made = patients::create(&mut conn, SHOP, OWNER, p, Role::Owner).unwrap();
     // Stored as its digits alone.
     assert_eq!(made.phone.as_deref(), Some("0555123456"));
 
@@ -88,7 +103,14 @@ fn a_file_is_found_by_its_number_however_the_digits_were_spaced() {
 #[test]
 fn a_wildcard_typed_in_the_box_is_a_character_and_not_the_whole_list() {
     let (_dir, mut conn) = open_temp();
-    patients::create(&mut conn, SHOP, OWNER, named("Amina", "Benali")).unwrap();
+    patients::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        named("Amina", "Benali"),
+        Role::Owner,
+    )
+    .unwrap();
     assert!(patients::search(&mut conn, SHOP, Some("%"), false)
         .unwrap()
         .is_empty());
@@ -100,7 +122,14 @@ fn a_wildcard_typed_in_the_box_is_a_character_and_not_the_whole_list() {
 #[test]
 fn an_archived_file_leaves_the_search_unless_it_is_asked_for() {
     let (_dir, mut conn) = open_temp();
-    let made = patients::create(&mut conn, SHOP, OWNER, named("Amina", "Benali")).unwrap();
+    let made = patients::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        named("Amina", "Benali"),
+        Role::Owner,
+    )
+    .unwrap();
     let archived = patients::archive(&mut conn, SHOP, OWNER, &made.id).unwrap();
     assert!(archived.archived_at.is_some());
 
@@ -121,7 +150,14 @@ fn an_archived_file_leaves_the_search_unless_it_is_asked_for() {
 #[test]
 fn archiving_twice_is_a_conflict_and_writes_one_audit_row() {
     let (_dir, mut conn) = open_temp();
-    let made = patients::create(&mut conn, SHOP, OWNER, named("Amina", "Benali")).unwrap();
+    let made = patients::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        named("Amina", "Benali"),
+        Role::Owner,
+    )
+    .unwrap();
     let first = patients::archive(&mut conn, SHOP, OWNER, &made.id).unwrap();
 
     match patients::archive(&mut conn, SHOP, OWNER, &made.id) {
@@ -146,14 +182,22 @@ fn archiving_twice_is_a_conflict_and_writes_one_audit_row() {
 fn another_shops_file_is_invisible() {
     let (_dir, mut conn) = open_temp();
     let other = second_shop(&mut conn);
-    let theirs = patients::create(&mut conn, other, 2, named("Amina", "Benali")).unwrap();
+    let theirs =
+        patients::create(&mut conn, other, 2, named("Amina", "Benali"), Role::Owner).unwrap();
 
     assert!(patients::search(&mut conn, SHOP, Some("benali"), true)
         .unwrap()
         .is_empty());
     for result in [
         patients::get(&mut conn, SHOP, &theirs.id),
-        patients::update(&mut conn, SHOP, OWNER, &theirs.id, named("X", "Y")),
+        patients::update(
+            &mut conn,
+            SHOP,
+            OWNER,
+            &theirs.id,
+            named("X", "Y"),
+            Role::Owner,
+        ),
         patients::archive(&mut conn, SHOP, OWNER, &theirs.id),
     ] {
         match result {
@@ -175,8 +219,14 @@ fn two_ids_made_in_a_row_differ_and_sort_in_the_order_they_were_made() {
     // Many in a row, so several land inside the same millisecond: v7's own
     // counter is what has to keep those in order, not the clock.
     for n in 0..50 {
-        let made =
-            patients::create(&mut conn, SHOP, OWNER, named("P", &format!("{n:02}"))).unwrap();
+        let made = patients::create(
+            &mut conn,
+            SHOP,
+            OWNER,
+            named("P", &format!("{n:02}")),
+            Role::Owner,
+        )
+        .unwrap();
         assert_eq!(made.id.len(), 36, "{}", made.id);
         // Version 7, in the version nibble of the third group.
         assert_eq!(&made.id[14..15], "7", "{}", made.id);
@@ -196,7 +246,7 @@ fn an_update_rewrites_the_whole_file_and_a_blank_clears_a_column() {
     first.date_of_birth = NaiveDate::from_ymd_opt(1990, 5, 17);
     first.phone = Some("0555123456".to_string());
     first.notes = Some("allergique à la pénicilline".to_string());
-    let made = patients::create(&mut conn, SHOP, OWNER, first).unwrap();
+    let made = patients::create(&mut conn, SHOP, OWNER, first, Role::Owner).unwrap();
     assert_eq!(made.sex, Some(Sex::Female));
     assert_eq!(made.date_of_birth, NaiveDate::from_ymd_opt(1990, 5, 17));
     // Backdated by hand, so an update that forgot to stamp `updated_at`
@@ -222,6 +272,7 @@ fn an_update_rewrites_the_whole_file_and_a_blank_clears_a_column() {
             phone: Some("   ".to_string()),
             notes: None,
         },
+        Role::Owner,
     )
     .unwrap();
     assert_eq!(after.id, made.id);
@@ -238,7 +289,14 @@ fn an_update_rewrites_the_whole_file_and_a_blank_clears_a_column() {
 #[test]
 fn an_archived_file_may_still_be_corrected_and_stays_archived() {
     let (_dir, mut conn) = open_temp();
-    let made = patients::create(&mut conn, SHOP, OWNER, named("Amina", "Benali")).unwrap();
+    let made = patients::create(
+        &mut conn,
+        SHOP,
+        OWNER,
+        named("Amina", "Benali"),
+        Role::Owner,
+    )
+    .unwrap();
     let archived = patients::archive(&mut conn, SHOP, OWNER, &made.id).unwrap();
     let after = patients::update(
         &mut conn,
@@ -246,6 +304,7 @@ fn an_archived_file_may_still_be_corrected_and_stays_archived() {
         OWNER,
         &made.id,
         named("Amina", "Benali-Saidi"),
+        Role::Owner,
     )
     .unwrap();
     assert_eq!(after.last_name, "Benali-Saidi");
@@ -264,7 +323,7 @@ fn the_list_is_by_surname_then_first_name_whatever_the_creation_order() {
         ("Amina", "Benali"),
         ("Farid", "Haddad"),
     ] {
-        patients::create(&mut conn, SHOP, OWNER, named(first, last)).unwrap();
+        patients::create(&mut conn, SHOP, OWNER, named(first, last), Role::Owner).unwrap();
     }
     assert_eq!(
         names(&patients::search(&mut conn, SHOP, None, false).unwrap()),
@@ -282,8 +341,8 @@ fn every_write_leaves_an_audit_row_naming_the_patient_without_the_notes() {
     let (_dir, mut conn) = open_temp();
     let mut p = named("Amina", "Benali");
     p.notes = Some("diabète de type 2".to_string());
-    let made = patients::create(&mut conn, SHOP, OWNER, p.clone()).unwrap();
-    patients::update(&mut conn, SHOP, OWNER, &made.id, p).unwrap();
+    let made = patients::create(&mut conn, SHOP, OWNER, p.clone(), Role::Owner).unwrap();
+    patients::update(&mut conn, SHOP, OWNER, &made.id, p, Role::Owner).unwrap();
     patients::archive(&mut conn, SHOP, OWNER, &made.id).unwrap();
 
     for action in [
@@ -316,17 +375,17 @@ fn a_refused_file_writes_nothing() {
     let (_dir, mut conn) = open_temp();
     let blank_first = named("  ", "Benali");
     assert_eq!(
-        field_of(patients::create(&mut conn, SHOP, OWNER, blank_first).unwrap_err()),
+        field_of(patients::create(&mut conn, SHOP, OWNER, blank_first, Role::Owner).unwrap_err()),
         "first_name"
     );
     let blank_last = named("Amina", "");
     assert_eq!(
-        field_of(patients::create(&mut conn, SHOP, OWNER, blank_last).unwrap_err()),
+        field_of(patients::create(&mut conn, SHOP, OWNER, blank_last, Role::Owner).unwrap_err()),
         "last_name"
     );
     let long_name = named(&"a".repeat(201), "Benali");
     assert_eq!(
-        field_of(patients::create(&mut conn, SHOP, OWNER, long_name).unwrap_err()),
+        field_of(patients::create(&mut conn, SHOP, OWNER, long_name, Role::Owner).unwrap_err()),
         "first_name"
     );
 
@@ -340,7 +399,7 @@ fn a_refused_file_writes_nothing() {
         let mut p = named("Amina", "Benali");
         p.phone = Some(bad.to_string());
         assert_eq!(
-            field_of(patients::create(&mut conn, SHOP, OWNER, p).unwrap_err()),
+            field_of(patients::create(&mut conn, SHOP, OWNER, p, Role::Owner).unwrap_err()),
             "phone",
             "{bad}"
         );
@@ -349,34 +408,34 @@ fn a_refused_file_writes_nothing() {
     for good in ["1234", "+213555123456", "123456789012345"] {
         let mut p = named("Bord", good);
         p.phone = Some(good.to_string());
-        patients::create(&mut conn, SHOP, OWNER, p).unwrap();
+        patients::create(&mut conn, SHOP, OWNER, p, Role::Owner).unwrap();
     }
 
     let mut future = named("Amina", "Benali");
     future.date_of_birth = NaiveDate::from_ymd_opt(2999, 1, 1);
     assert_eq!(
-        field_of(patients::create(&mut conn, SHOP, OWNER, future).unwrap_err()),
+        field_of(patients::create(&mut conn, SHOP, OWNER, future, Role::Owner).unwrap_err()),
         "date_of_birth"
     );
     let mut ancient = named("Amina", "Benali");
     ancient.date_of_birth = NaiveDate::from_ymd_opt(1899, 12, 31);
     assert_eq!(
-        field_of(patients::create(&mut conn, SHOP, OWNER, ancient).unwrap_err()),
+        field_of(patients::create(&mut conn, SHOP, OWNER, ancient, Role::Owner).unwrap_err()),
         "date_of_birth"
     );
     let mut first_day = named("Doyenne", "Benali");
     first_day.date_of_birth = NaiveDate::from_ymd_opt(1900, 1, 1);
-    patients::create(&mut conn, SHOP, OWNER, first_day).unwrap();
+    patients::create(&mut conn, SHOP, OWNER, first_day, Role::Owner).unwrap();
 
     let mut long_notes = named("Amina", "Benali");
     long_notes.notes = Some("n".repeat(patients::MAX_NOTES_CHARS + 1));
     assert_eq!(
-        field_of(patients::create(&mut conn, SHOP, OWNER, long_notes).unwrap_err()),
+        field_of(patients::create(&mut conn, SHOP, OWNER, long_notes, Role::Owner).unwrap_err()),
         "notes"
     );
     let mut full_notes = named("Pleine", "Benali");
     full_notes.notes = Some("n".repeat(4000));
-    patients::create(&mut conn, SHOP, OWNER, full_notes).unwrap();
+    patients::create(&mut conn, SHOP, OWNER, full_notes, Role::Owner).unwrap();
 
     // Only the five accepted files above, and one audit row for each.
     assert_eq!(
@@ -398,4 +457,113 @@ fn an_id_nobody_made_is_not_found() {
         Err(CoreError::NotFoundText { entity, .. }) => assert_eq!(entity, "patient"),
         other => panic!("expected not found, got {other:?}"),
     }
+}
+
+fn permission_of(err: CoreError) -> Permission {
+    match err {
+        CoreError::Forbidden { permission } => permission,
+        other => panic!("expected forbidden, got {other:?}"),
+    }
+}
+
+/// C3b: `may_see_notes` answers exactly the doctor-only ruling, the same
+/// grid `permissions_service.rs` pins for `Permission::ViewPatientNotes`.
+#[test]
+fn may_see_notes_is_owner_only() {
+    assert!(patients::may_see_notes(Role::Owner));
+    assert!(!patients::may_see_notes(Role::Manager));
+    assert!(!patients::may_see_notes(Role::Cashier));
+}
+
+/// A manager or a cashier sending a `notes` value is refused, on a create
+/// and on an update alike, and nothing is written: the file this test opens
+/// with a manager's own attempt never lands.
+#[test]
+fn a_role_without_view_patient_notes_may_not_write_notes() {
+    let (_dir, mut conn) = open_temp();
+    for role in [Role::Manager, Role::Cashier] {
+        let mut fields = named("Amina", "Benali");
+        fields.notes = Some("diabète de type 2".to_string());
+        assert_eq!(
+            permission_of(patients::create(&mut conn, SHOP, OWNER, fields, role).unwrap_err()),
+            Permission::ViewPatientNotes,
+            "{role:?}"
+        );
+    }
+    assert!(patients::search(&mut conn, SHOP, None, true)
+        .unwrap()
+        .is_empty());
+
+    let mut opened = named("Amina", "Benali");
+    opened.notes = Some("real notes".to_string());
+    let made = patients::create(&mut conn, SHOP, OWNER, opened, Role::Owner).unwrap();
+
+    for role in [Role::Manager, Role::Cashier] {
+        let mut edit = named("Should", "NotLand");
+        edit.notes = Some("overwritten".to_string());
+        assert_eq!(
+            permission_of(
+                patients::update(&mut conn, SHOP, OWNER, &made.id, edit, role).unwrap_err()
+            ),
+            Permission::ViewPatientNotes,
+            "{role:?}"
+        );
+    }
+    let still = patients::get(&mut conn, SHOP, &made.id).unwrap();
+    assert_eq!(still.last_name, "Benali");
+    assert_eq!(still.notes.as_deref(), Some("real notes"));
+    assert_eq!(still.updated_at, made.updated_at);
+    // Refused before the transaction opens, so no attempt left a row: the
+    // one audit row for this file is still the create.
+    assert_eq!(
+        audit::by_action(&mut conn, SHOP, ACTION_PATIENT_UPDATE)
+            .unwrap()
+            .len(),
+        0
+    );
+}
+
+/// The whole-file rewrite clears a phone or an address left out; notes do
+/// not follow it for a caller who could not have read them to begin with.
+/// A receptionist's own correction cannot be the thing that erases what the
+/// doctor wrote, so the stored value is compared byte for byte.
+#[test]
+fn an_update_without_notes_from_a_role_without_view_patient_notes_keeps_them() {
+    let (_dir, mut conn) = open_temp();
+    let mut opened = named("Amina", "Benali");
+    opened.notes = Some("allergique à la pénicilline".to_string());
+    let made = patients::create(&mut conn, SHOP, OWNER, opened, Role::Owner).unwrap();
+
+    let mut phone_edit = named("Amina", "Benali");
+    phone_edit.phone = Some("0555999999".to_string());
+    // `phone_edit.notes` is `None`: a cashier's screen never carried a
+    // notes field to send one back.
+    let after =
+        patients::update(&mut conn, SHOP, OWNER, &made.id, phone_edit, Role::Cashier).unwrap();
+    assert_eq!(after.phone.as_deref(), Some("0555999999"));
+    assert_eq!(after.notes.as_deref(), Some("allergique à la pénicilline"));
+
+    let reread = patients::get(&mut conn, SHOP, &made.id).unwrap();
+    assert_eq!(reread.notes.as_deref(), Some("allergique à la pénicilline"));
+}
+
+/// A form that never showed a notes box still sends the field as an empty
+/// or a whitespace string, not as absent. A cashier sending one of those is
+/// not "sending notes" — `validate` would turn it into `None` anyway — so
+/// it is not refused, and the stored notes are kept exactly as they were.
+#[test]
+fn a_blank_notes_value_from_a_role_without_view_patient_notes_is_not_a_refusal() {
+    let (_dir, mut conn) = open_temp();
+    let mut opened = named("Amina", "Benali");
+    opened.notes = Some("allergique à la pénicilline".to_string());
+    let made = patients::create(&mut conn, SHOP, OWNER, opened, Role::Owner).unwrap();
+
+    let mut blank_edit = named("Amina", "Benali");
+    blank_edit.notes = Some("   ".to_string());
+    let after =
+        patients::update(&mut conn, SHOP, OWNER, &made.id, blank_edit, Role::Cashier).unwrap();
+    assert_eq!(after.notes.as_deref(), Some("allergique à la pénicilline"));
+
+    let reread = patients::get(&mut conn, SHOP, &made.id).unwrap();
+    assert_eq!(reread.notes.as_deref(), Some("allergique à la pénicilline"));
 }

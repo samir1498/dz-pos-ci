@@ -23,7 +23,13 @@ pub struct PatientDto {
     /// The digits as stored, a `+` in front at most: the service strips the
     /// spaces and dashes a person types between them.
     pub phone: Option<String>,
-    pub notes: Option<String>,
+    /// Doctor-only (Samir's ruling, 2026-09-23): present, `null` or a
+    /// string, for a caller who holds `ViewPatientNotes`; absent for
+    /// everyone else, so a receptionist's screen can tell "not mine to
+    /// read" from "the doctor left this file's notes empty".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub notes: Option<Option<String>>,
     /// Null while the file is live; the moment it left the search once it is
     /// archived.
     pub archived_at: Option<String>,
@@ -31,8 +37,11 @@ pub struct PatientDto {
     pub updated_at: String,
 }
 
-impl From<Patient> for PatientDto {
-    fn from(p: Patient) -> Self {
+impl PatientDto {
+    /// `sees_notes` is `dzpos_core::services::patients::may_see_notes(role)`,
+    /// asked once by the route and passed in here rather than re-decided:
+    /// this function translates, the service's `may_see_notes` decides.
+    pub fn from_patient(p: Patient, sees_notes: bool) -> Self {
         PatientDto {
             id: p.id,
             first_name: p.first_name,
@@ -40,7 +49,7 @@ impl From<Patient> for PatientDto {
             sex: p.sex.map(SexDto::from),
             date_of_birth: p.date_of_birth.map(|d| d.format(DATE_FORMAT).to_string()),
             phone: p.phone,
-            notes: p.notes,
+            notes: sees_notes.then_some(p.notes),
             archived_at: p
                 .archived_at
                 .map(|t| t.format(DATE_TIME_FORMAT).to_string()),

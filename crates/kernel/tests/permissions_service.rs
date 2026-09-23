@@ -84,6 +84,9 @@ fn the_cashier_list_is_exactly_selling_and_the_drawer_they_stand_at() {
     // `ViewPatients` and `EditPatients` joined on 2026-09-23 (C3 of the
     // clinic plan): a cabinet's cashier-level user is its receptionist, the
     // one who finds the patient who just walked in and opens their file.
+    // `ViewPatientNotes` (C3b, the same day) does not join them: the
+    // receptionist opens the file but not the notes inside it, so this
+    // closed set stays exactly the two.
     let cashier: HashSet<Permission> = [
         Permission::Sell,
         Permission::OpenAndCloseTill,
@@ -127,6 +130,13 @@ fn named_cases_a_human_would_check_by_eye() {
         assert!(can(role, Permission::ViewPatients), "{role:?}");
         assert!(can(role, Permission::EditPatients), "{role:?}");
     }
+
+    // Notes are the doctor's alone (2026-09-23 ruling): a manager runs the
+    // shop like an owner everywhere else, but not here, the same way it
+    // does not for `ManageUsers` and `SeeAuditLog`.
+    assert!(can(Role::Owner, Permission::ViewPatientNotes));
+    assert!(!can(Role::Manager, Permission::ViewPatientNotes));
+    assert!(!can(Role::Cashier, Permission::ViewPatientNotes));
 }
 
 #[test]

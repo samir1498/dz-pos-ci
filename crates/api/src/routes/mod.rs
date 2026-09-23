@@ -18,6 +18,13 @@
 //! reports which permissions a role holds by walking `Permission::ALL`, so
 //! a screen can grey a button out. It refuses nothing and blanks nothing,
 //! and the answer it builds is the same one the gates would give.
+//!
+//! `patients.rs` has the same field-level shape as `redact_cost` (a patient
+//! is readable by every role, but `notes` is not) and takes the other of
+//! the two ways to keep it to one place: `dzpos_core::services::patients::
+//! may_see_notes(role)` asks `can` and decides, and the handler only reads
+//! the `bool` it gets back. `Permission::` never appears in `patients.rs`
+//! itself, so it needs no place on `one_handler_decides.rs`'s list.
 
 // The clinic's appointment book (C5 of the clinic plan), on the same feature.
 #[cfg(feature = "clinic")]

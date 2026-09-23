@@ -153,10 +153,19 @@ pub enum Permission {
     /// decision in `can` below, on one row, without splitting a permission
     /// the routes already name.
     EditPatients,
+    /// Read or write a patient's `notes` field. Owner only (Samir's ruling,
+    /// 2026-09-23: "of course doctor only, no one else needs that info").
+    /// Its own variant rather than folded into `EditPatients`, because a
+    /// receptionist keeps `EditPatients` for the rest of the file (a phone
+    /// number, an address) while notes stay the doctor's alone; the same
+    /// shape `ViewPatients`/`EditPatients` already split read from write on.
+    /// `crates/clinic/src/services/patients.rs::may_see_notes` is the one
+    /// place this crate asks for it, so a route never restates the check.
+    ViewPatientNotes,
 }
 
 impl Permission {
-    pub const ALL: [Permission; 17] = [
+    pub const ALL: [Permission; 18] = [
         Permission::Sell,
         Permission::DiscountAboveThreshold,
         Permission::OverrideCreditBlock,
@@ -174,6 +183,7 @@ impl Permission {
         Permission::CloseAnotherPersonsTill,
         Permission::ViewPatients,
         Permission::EditPatients,
+        Permission::ViewPatientNotes,
     ];
 
     /// The stable key the UI translates and the wire carries (T2: 403 with
@@ -197,6 +207,7 @@ impl Permission {
             Permission::CloseAnotherPersonsTill => "close_another_persons_till",
             Permission::ViewPatients => "view_patients",
             Permission::EditPatients => "edit_patients",
+            Permission::ViewPatientNotes => "view_patient_notes",
         }
     }
 }
@@ -224,8 +235,8 @@ impl std::fmt::Display for Permission {
 /// question if Samir wants the fiscal setting owner-only.
 ///
 /// The match is on `permission` first and not on the `(role, permission)`
-/// pair, so an eighteenth `Permission` variant fails to compile here until it is
-/// placed, rather than silently defaulting through a wildcard.
+/// pair, so a nineteenth `Permission` variant fails to compile here until it
+/// is placed, rather than silently defaulting through a wildcard.
 pub const fn can(role: Role, permission: Permission) -> bool {
     match permission {
         // The two every role holds, and they are two rather than one on
@@ -248,7 +259,13 @@ pub const fn can(role: Role, permission: Permission) -> bool {
         | Permission::ExportAndImport
         | Permission::ChangePriceAtTheTill
         | Permission::CloseAnotherPersonsTill => matches!(role, Role::Owner | Role::Manager),
-        Permission::ManageUsers | Permission::SeeAuditLog => matches!(role, Role::Owner),
+        // The staff list and the audit log are the owner's alone (2026-09-11
+        // ruling); the notes field joins them on 2026-09-23 for the same
+        // shape of reason a log the people it watches can read is not a
+        // control: notes a receptionist can also read are not doctor-only.
+        Permission::ManageUsers | Permission::SeeAuditLog | Permission::ViewPatientNotes => {
+            matches!(role, Role::Owner)
+        }
     }
 }
 

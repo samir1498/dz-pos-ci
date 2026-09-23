@@ -10,11 +10,17 @@
 //! The notes do not: the audit log is the owner's to read, and a copy of
 //! every medical note in it would be a second place that text lives. The
 //! row says whether the file carries notes, not what they are.
+//!
+//! `notes` itself is doctor-only (C3b, Samir's ruling 2026-09-23):
+//! `may_see_notes` is where `create` and `update` ask, and the API's DTO
+//! layer asks the same function to decide what a read gets back, so the
+//! rule is answered once rather than in the handler.
 
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use dzpos_kernel::error::CoreError;
+use dzpos_kernel::services::permissions::{can, Permission, Role};
 use dzpos_kernel::services::{audit, bounded_field, clock};
 
 use crate::audit_actions::{ACTION_PATIENT_ARCHIVE, ACTION_PATIENT_CREATE, ACTION_PATIENT_UPDATE};
@@ -37,14 +43,43 @@ const PHONE_DIGITS: std::ops::RangeInclusive<usize> = 4..=15;
 /// the nineteenth century is refused rather than stored.
 const EARLIEST_BIRTH: (i32, u32, u32) = (1900, 1, 1);
 
+/// Whether `role` may read or write a patient's notes: the doctor only
+/// (Samir's ruling, 2026-09-23, C3b of the clinic plan). The one place this
+/// crate asks the kernel's permission table about notes, so `create`,
+/// `update` and the API's DTO layer never work the question out twice.
+pub fn may_see_notes(role: Role) -> bool {
+    can(role, Permission::ViewPatientNotes)
+}
+
+/// Whether `fields.notes` actually asks for a value once trimmed, the same
+/// rule `notes` below normalises by: a receptionist's form sending `""` or
+/// `"   "` for a box it never showed is not "sending notes", so `create`
+/// and `update` refuse a caller without `ViewPatientNotes` only when there
+/// is a real value in it, and not for a blank the write would have turned
+/// into `None` anyway.
+fn asks_to_write_notes(fields: &NewPatient) -> bool {
+    fields
+        .notes
+        .as_deref()
+        .is_some_and(|v| !v.trim().is_empty())
+}
+
 /// Opens a file. The id is a fresh UUID v7 made here, never by the file,
 /// and both stamps are the shop's clock.
+///
+/// A caller without `ViewPatientNotes` who sends a real `notes` value is
+/// refused before anything is validated or written; one who leaves it out,
+/// or sends a blank, opens a file with none, same as today.
 pub fn create(
     conn: &mut SqliteConnection,
     shop_id: i32,
     user_id: i32,
     fields: NewPatient,
+    role: Role,
 ) -> Result<Patient, CoreError> {
+    if asks_to_write_notes(&fields) && !may_see_notes(role) {
+        return Err(CoreError::forbidden(Permission::ViewPatientNotes));
+    }
     let clean = validate(fields)?;
     let now = clock::now();
     let row = PatientInsert {
@@ -80,25 +115,43 @@ pub fn create(
 /// Rewrites a file with the whole of what the caller sent. An archived file
 /// may still be corrected: a wrong date of birth is wrong whether or not the
 /// patient still comes.
+///
+/// A caller without `ViewPatientNotes` who sends a real `notes` value is
+/// refused before anything is written; one who leaves it out, or sends a
+/// blank, keeps the file's stored notes exactly as they were, rather than
+/// the whole-file rewrite clearing them the way an omitted phone number
+/// would. A receptionist correcting a phone number can never erase what
+/// the doctor wrote, whether their own form sent no `notes` field at all
+/// or an empty one.
 pub fn update(
     conn: &mut SqliteConnection,
     shop_id: i32,
     user_id: i32,
     id: &str,
     fields: NewPatient,
+    role: Role,
 ) -> Result<Patient, CoreError> {
+    if asks_to_write_notes(&fields) && !may_see_notes(role) {
+        return Err(CoreError::forbidden(Permission::ViewPatientNotes));
+    }
+    let sees_notes = may_see_notes(role);
     let clean = validate(fields)?;
-    let changes = PatientChanges {
-        first_name: clean.first_name,
-        last_name: clean.last_name,
-        sex: clean.sex,
-        date_of_birth: clean.date_of_birth,
-        phone: clean.phone,
-        notes: clean.notes,
-        updated_at: clock::now(),
-    };
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
+        let notes = if sees_notes {
+            clean.notes
+        } else {
+            before.notes.clone()
+        };
+        let changes = PatientChanges {
+            first_name: clean.first_name,
+            last_name: clean.last_name,
+            sex: clean.sex,
+            date_of_birth: clean.date_of_birth,
+            phone: clean.phone,
+            notes,
+            updated_at: clock::now(),
+        };
         let after = repo::update(conn, shop_id, id, &changes)?;
         audit::record(
             conn,

@@ -14,7 +14,14 @@ date_of_birth: string | null,
  * The digits as stored, a `+` in front at most: the service strips the
  * spaces and dashes a person types between them.
  */
-phone: string | null, notes: string | null, 
+phone: string | null, 
+/**
+ * Doctor-only (Samir's ruling, 2026-09-23): present, `null` or a
+ * string, for a caller who holds `ViewPatientNotes`; absent for
+ * everyone else, so a receptionist's screen can tell "not mine to
+ * read" from "the doctor left this file's notes empty".
+ */
+notes?: string | null, 
 /**
  * Null while the file is live; the moment it left the search once it is
  * archived.

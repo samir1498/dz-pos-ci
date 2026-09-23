@@ -34,6 +34,7 @@ export const permissionSchema = z.enum([
   "close_another_persons_till",
   "view_patients",
   "edit_patients",
+  "view_patient_notes",
 ]) satisfies z.ZodType<PermissionDto>;
 type _Permission = Assert<Matches<PermissionDto, typeof permissionSchema>>;
 

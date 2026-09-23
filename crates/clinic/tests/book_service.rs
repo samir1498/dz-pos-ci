@@ -22,6 +22,7 @@ use dzpos_clinic::services::appointments::{self, BookedPatient, NewAppointment};
 use dzpos_clinic::services::patients::{self, Patient};
 use dzpos_clinic::services::slot_length;
 use dzpos_kernel::error::CoreError;
+use dzpos_kernel::services::permissions::Role;
 use dzpos_kernel::services::{audit, clock};
 
 mod common;
@@ -29,7 +30,7 @@ mod common;
 use common::{named, open_temp, second_shop, OWNER, SHOP};
 
 fn open(conn: &mut SqliteConnection, first: &str, last: &str) -> Patient {
-    patients::create(conn, SHOP, OWNER, named(first, last)).unwrap()
+    patients::create(conn, SHOP, OWNER, named(first, last), Role::Owner).unwrap()
 }
 
 /// `days` after today on the shop's clock.
@@ -458,7 +459,14 @@ fn another_shops_appointments_and_patients_are_invisible() {
     let (_dir, mut conn) = open_temp();
     let theirs_shop = second_shop(&mut conn);
     let mine = open(&mut conn, "Amina", "Benali");
-    let theirs = patients::create(&mut conn, theirs_shop, 2, named("Karim", "Haddad")).unwrap();
+    let theirs = patients::create(
+        &mut conn,
+        theirs_shop,
+        2,
+        named("Karim", "Haddad"),
+        Role::Owner,
+    )
+    .unwrap();
     let day = day_ahead(1);
     let their_booking = book(&mut conn, theirs_shop, &theirs, at(day, 9, 0)).unwrap();
     let id = their_booking.appointment.id.clone();
