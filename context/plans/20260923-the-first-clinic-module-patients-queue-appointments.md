@@ -1,7 +1,7 @@
 ---
 title: 'The first clinic module: patients, a waiting queue, an appointment book'
 slug: 'the-first-clinic-module-patients-queue-appointments'
-status: 'active'
+status: 'done'
 category: 'feature'
 created: 20260923
 tldr: 'Phase B of the restructure loop. A crates/clinic beside crates/retail, switched on by a clinic cargo feature, holding three things in order: the patient file, a waiting-room queue in arrival order, and a plain appointment book for one doctor. No money, no printed paper, no fund as payer. Ids unique across machines from the first migration. Its job is to prove a second trade plugs in without touching the shop; the plug-point traits are drawn after it, from two real modules.'
@@ -39,7 +39,7 @@ tasks:
     status: 'done'
   - id: 'C8'
     desc: 'A refused write to the notes on a patient file leaves an audit row (Samir, 2026-09-23 19:25)'
-    status: 'pending'
+    status: 'done'
 ---
 # The first clinic module: patients, a waiting queue, an appointment book
 
@@ -344,3 +344,9 @@ release build, which fails on main today (Babel 7/8, kanban SxChTM4z).
 C8 is the last task. Left for Samir: whether "arrived" on a
 cancelled booking undoes the cancel. Left to build: the audit row for a
 refused notes write.
+
+## C8 merged (PR 173), the plan is done
+
+A refused write to a patient's notes leaves one audit row naming the user
+and the patient, never the text. Every task on this plan is merged. Still
+with Samir: whether "arrived" on a cancelled booking undoes the cancel.
