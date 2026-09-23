@@ -91,8 +91,8 @@ spot-reads the diff itself.
 
 ## Where to pick up
 
-Updated 2026-09-23 21:55. The clinic's server side and its first desktop
-screens are merged, each after the dz-review lenses:
+Updated 2026-09-23 23:15. The clinic module is merged through the
+check-in, each part after the dz-review lenses:
 
 - the crate (PR #163), the patient file (#164), the waiting queue (#165),
   the appointment book (#166)
@@ -100,24 +100,23 @@ screens are merged, each after the dz-review lenses:
 - the book tools: hours, blocks, visit types, next free slot, no-show and
   the day list (#168)
 - the patients, queue and settings screens behind `VITE_DINAR_MODULES`
-  (#169)
-- the book screen on FullCalendar's free plugins (#170)
+  (#169), the book screen on FullCalendar's free plugins (#170)
+- booked patients check in to the waiting room, the desk orders it by
+  drag and drop, confirmation calls, the end-of-day no-show checklist
+  (#171)
 
-Samir's rulings of the evening are on the clinic plan: FullCalendar free,
-a refused notes write goes to the audit log (not built yet), notes stay
-owner-only after the law check, the book and the waiting room are one
-list, and the desk decides (no no-show lock, drag-and-drop queue order,
-confirmation calls recorded, not enforced).
+Samir's rulings of the evening are on the clinic plan; the standing one is
+that the desk decides and the software does not enforce workflow.
 
-1. C6b, in flight in worktree `clinic-check-in`, branch
-   `feat/booked-patients-check-in`: removes the no-show lock, adds the
-   "arrived" check-in into the queue, desk-set queue order, the
-   confirmation-call outcome, the end-of-day no-show suggestion, and the
-   next-free minutes. Then the reach and tests lenses, PR, merge.
-2. The audit row for a refused notes write, folded into the next clinic
-   change.
-3. Then C7, the shop screens behind the same flag on desktop and phone.
-4. At the end of the loop, one review over everything merged, run on the
+Open for Samir: whether "arrived" on a cancelled booking undoes the
+cancel (refused for now).
+
+1. C7, in flight in worktree `shop-screens-switch`, branch
+   `feat/shop-screens-behind-the-switch`: the desktop leftovers and the
+   phone's till behind the same build switch. Then the lenses, PR, merge.
+2. The audit row for a refused notes write (Samir, 19:25), folded into the
+   next clinic change.
+3. At the end of the loop, one review over everything merged, run on the
    Fable model.
 
 ## The one thing that proves Phase A finished honestly
