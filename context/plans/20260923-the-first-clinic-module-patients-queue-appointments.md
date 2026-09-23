@@ -18,7 +18,7 @@ tasks:
     status: 'done'
   - id: 'C4'
     desc: 'The waiting queue: add a patient, call the next, mark seen, one day at a time'
-    status: 'pending'
+    status: 'done'
   - id: 'C5'
     desc: 'The appointment book: one doctor, a fixed slot length, a refusal when two patients take the same slot'
     status: 'pending'

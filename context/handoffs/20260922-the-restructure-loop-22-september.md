@@ -91,9 +91,15 @@ spot-reads the diff itself.
 
 ## Where to pick up
 
-1. C2 of the clinic plan in worktree `clinic-crate`, branch
-   `feat/a-clinic-crate-behind-a-switch`.
-2. Then C3 to C7 in order, one PR each.
+Updated 2026-09-23 15:20. Phase B: the clinic crate (PR #163), the patient
+file (PR #164) and the waiting queue (PR #165) are merged, each after the
+dz-review lenses. The three legal research pages are in
+`context/research/20260923-*` and their consequences are on the clinic
+plan. Open for Samir: notes doctor-only (recommended) via a third
+permission, before the screens.
+
+1. C5, the appointment book, in worktree `clinic-book`.
+2. Then C6 (screens, calendar build-vs-buy first) and C7.
 
 ## The one thing that proves Phase A finished honestly
 
