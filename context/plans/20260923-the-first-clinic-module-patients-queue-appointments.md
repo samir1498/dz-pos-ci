@@ -12,10 +12,10 @@ tasks:
     status: 'done'
   - id: 'C2'
     desc: 'crates/clinic exists behind a clinic feature; a clinic-only build (no retail) compiles and signs a user in'
-    status: 'pending'
+    status: 'done'
   - id: 'C3'
     desc: 'The patient file: table, service, audit actions, two permissions, api routes and gate rows behind the feature'
-    status: 'pending'
+    status: 'done'
   - id: 'C4'
     desc: 'The waiting queue: add a patient, call the next, mark seen, one day at a time'
     status: 'pending'
@@ -120,3 +120,10 @@ are shared. Size M.
 A build with `--features clinic` and no retail installs, creates a patient,
 queues and books them, and shows no shop screen or route; the default shop
 build is unchanged, proved by `just gates`.
+
+## Open for Samir
+
+Every role holds `ViewPatients` and `EditPatients`, so a receptionist reads
+the whole file including the free-text notes, which may carry medical
+history. A doctor-only notes tier is a third permission; say so before the
+queue and book screens are built on this one (PR #164).
