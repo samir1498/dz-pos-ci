@@ -113,6 +113,21 @@ check-no-retail: claim
     flock "$CARGO_TARGET_DIR/.lock" cargo clippy -p dzpos-api --no-default-features -- -D warnings
     flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --no-default-features
 
+# C2 of
+# `context/plans/20260923-the-first-clinic-module-patients-queue-appointments.md`:
+# the same proof as `check-no-retail` above, for the other side of the
+# switch. `dzpos-api --no-default-features --features clinic` builds, is
+# clippy-clean and tests green with `dzpos-clinic` in and no shop at all;
+# `--features clinic` on top of the default (both modules at once) only
+# needs to compile, since a shop build with the clinic switched on as well
+# is not this plan's claim. Never `--workspace`, for the reason
+# `check-no-retail` gives.
+check-clinic-only: claim
+    flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --no-default-features --features clinic
+    flock "$CARGO_TARGET_DIR/.lock" cargo clippy -p dzpos-api --no-default-features --features clinic -- -D warnings
+    flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --no-default-features --features clinic
+    flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --features clinic
+
 # the desktop's one eslint rule: no bare input, button, select, textarea or
 # table outside components/ui and the kit. The screens written before the kit
 # are exempted by name in apps/desktop/src/lint/allowlist.json, and the
@@ -183,7 +198,7 @@ theme:
     pnpm --filter @dzpos/design gen:theme
 
 # everything a PR needs, in order; stops at the first failure
-gates: fmt lint sizes no-inline-tests clippy check-no-retail types-check test build
+gates: fmt lint sizes no-inline-tests clippy check-no-retail check-clinic-only types-check test build
 
 # ---- dev ----
 

@@ -91,3 +91,17 @@ pub mod shop_counts {
     //! kernel-only build has no shop counts to add to either bundle.
     pub use dzpos_retail::shop_counts::*;
 }
+
+#[cfg(feature = "clinic")]
+pub mod clinic {
+    //! The second module (C2 of
+    //! `context/plans/20260923-the-first-clinic-module-patients-queue-appointments.md`),
+    //! a plain re-export the same shape as `shop_counts` above. C2 gives
+    //! `dzpos-clinic` nothing beyond its crate doc and one constant, so
+    //! there is nothing yet to merge into `models`, `services` or `error`
+    //! the way `retail` is merged into those above; C3 moves the patient
+    //! file's models and service in there instead of adding to this module,
+    //! the way `dzpos_retail::models` re-exports the kernel's own so a
+    //! caller never imports two modules for one domain.
+    pub use dzpos_clinic::*;
+}

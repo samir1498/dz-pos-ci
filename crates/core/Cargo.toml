@@ -18,6 +18,11 @@ dzpos-kernel = { path = "../kernel" }
 # one place that decides whether the shop half of the workspace compiles at
 # all.
 dzpos-retail = { path = "../retail", optional = true }
+# The second module (C2 of
+# `context/plans/20260923-the-first-clinic-module-patients-queue-appointments.md`),
+# optional the same way `dzpos-retail` is above: with the `clinic` feature
+# off, this crate is not even a dependency of the build.
+dzpos-clinic = { path = "../clinic", optional = true }
 
 # `64-column-tables`: `documents` passed 32 columns when the buyer block and
 # the balance triple landed (migration 4), and diesel's default table macro
@@ -98,6 +103,7 @@ unicode-bidi = "=0.3.18"
 [features]
 default = ["retail"]
 retail = ["dep:dzpos-retail"]
+clinic = ["dep:dzpos-clinic"]
 
 [dev-dependencies]
 tempfile = "3"

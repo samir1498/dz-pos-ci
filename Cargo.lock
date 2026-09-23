@@ -1335,6 +1335,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "dzpos-clinic"
+version = "0.1.0"
+dependencies = [
+ "dzpos-kernel",
+]
+
+[[package]]
 name = "dzpos-core"
 version = "0.1.0"
 dependencies = [
@@ -1346,6 +1353,7 @@ dependencies = [
  "chrono",
  "diesel",
  "diesel_migrations",
+ "dzpos-clinic",
  "dzpos-kernel",
  "dzpos-retail",
  "iana-time-zone",

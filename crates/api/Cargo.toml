@@ -43,6 +43,7 @@ mdns-sd = "0.11"
 [features]
 default = ["retail"]
 retail = ["dzpos-core/retail"]
+clinic = ["dzpos-core/clinic"]
 
 [dev-dependencies]
 # Test-only: one test plants a row the migration's CHECK refuses, which no

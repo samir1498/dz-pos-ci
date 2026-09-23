@@ -1,0 +1,17 @@
+[package]
+name = "dzpos-clinic"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# The second module
+# (`context/plans/20260923-the-first-clinic-module-patients-queue-appointments.md`):
+# the patient file, the waiting queue and the appointment book. C2 gives it
+# nothing clinic-specific yet, so the kernel is its only dependency; a
+# `ClinicError` shaped like `dzpos-retail`'s own (wrapping the kernel's
+# `CoreError`) waits for C3, the first slice that has something of its own
+# to raise.
+dzpos-kernel = { path = "../kernel" }
+
+[lints]
+workspace = true
