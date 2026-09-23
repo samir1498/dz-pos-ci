@@ -8,48 +8,24 @@ tldr: 'Where the crate split stands, what was decided today and by whom, what wa
 ---
 # The restructure loop, 22 September
 
-Paused for the day at 2026-09-22 17:00. This is the page to read first when
-the work resumes.
+Updated 2026-09-23 10:25. S2, S3 and S4 are merged: the crate split
+(`9cc5255`, PR #156) and the kernel no longer naming the shop (`5135814`,
+PR #158). The boundary walk's allow list is at its target of three rows,
+the money arithmetic and the permission list, each naming Samir's
+2026-09-22 ruling. Next is S5, the api's shop routes behind the retail
+feature, then S6 (tests move, and the Rust inline tests leave `src/`
+under Samir's 2026-09-23 no-inline-tests rule), then S7 (a build with no
+shop signs a user in).
 
-## Where the work is right now
+In parallel, on its own branch `chore/coverage-reaches-sonar`: TypeScript
+tests move out of `src/` into each package's `tests/`, a gate bans inline
+tests with a shrinking list for the Rust files still carrying one, and
+`just coverage` feeds Sonar, which read 0% because nothing generated the
+reports.
 
-Paused, nothing running, no agent alive, no worktree torn down. Main is at
-`615cffb`. The branch `feat/the-kernel-stops-naming-the-shop` is pushed and
-sits in the worktree `kernel-smaller` with a clean tree at `01410d8`, a
-work-in-progress commit whose body carries the plan for every unfinished
-piece. Read that commit message before anything else.
-
-S2 and S3 are merged as `9cc5255` (PR #156). `crates/kernel` and
-`crates/retail` exist, retail depends on the kernel, the kernel depends on
-nothing of retail's, and cargo enforces the line that a reading test used to.
-
-S4 is half done on the branch, two of its five pieces finished:
-
-- Done: the nine shop column types moved to retail and `Role` kept
-  (`b0eee52`); retail got its own error type for the six shop variants and
-  the kernel's manifest dropped `askama` and `rust_xlsxwriter`, which it
-  carried only to wrap their error types (`6a5fa47`); the printed word list
-  split into a shared key and a shop key (`5681189` plus two formatting
-  commits).
-- Done but not gated: the audit log's 24 shop action tags moved to
-  `crates/retail/src/audit_actions.rs`, deliberately outside `services/` so
-  the ring walk does not read it as a second audit service. `just test`
-  exited 0 on that tree; `just gates` has not run since. **Run the full
-  gates first thing, before touching anything else.**
-- Not started: the two raw counts in `backup.rs` and `support_bundle.rs`,
-  the discount threshold in `settings.rs`, and the regression test in
-  `crates/api/src/error.rs` that proves every error still maps to the same
-  status and body after the enum became two. The commit body works out the
-  shape for each, including that four thin wrappers are needed because the
-  kernel's `repos` module is `pub(crate)`.
-
-The allow list, which is S4's score, stands at seven rows on the branch and
-must reach three. The three that stay are `money/mod.rs`, `money/totals.rs`
-and `services/permissions.rs`, the ones Samir decided to keep. The four to
-remove are `services/audit.rs` (its constants moved but the row was left in
-place, because one discount tag is still in the kernel until the settings
-piece lands), `services/backup.rs` and `services/support_bundle.rs` (the raw
-counts) and `services/settings.rs` (the discount threshold).
+Samir's rulings on 2026-09-23: no full ports and adapters, only ports at
+the plug points after the doctor module (recorded on the split plan); no
+inline tests; compress tests when touched.
 
 ## Two agents froze today, and the cause is known
 
