@@ -21,6 +21,12 @@
 //! model, repo and service, and the slot length as a dated setting
 //! (`services::slot_length`). The same two permissions again.
 //!
+//! C5b is the book tools: working hours per weekday, absence blocks, visit
+//! types with their own length, the next free slot, a no-show mark and a
+//! day list of the book beside the walk-ins. The hours and the types are
+//! settings (`EditSettings`); the rest is the desk's (the same two
+//! permissions).
+//!
 //! Errors are the kernel's `CoreError`: nothing here has a failure of its
 //! own to name. A missing patient is `CoreError::NotFoundText`, the text-id
 //! twin of `NotFound`, so the API maps it with no third enum.

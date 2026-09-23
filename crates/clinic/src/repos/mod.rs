@@ -1,8 +1,11 @@
 //! The only modules that run diesel queries. Every query takes a `shop_id`
 //! (rule 3), the same as the kernel's and the shop's.
+pub mod absence_blocks;
 pub mod appointments;
 pub mod patients;
 pub mod queue;
+pub mod visit_types;
+pub mod working_hours;
 
 /// What was typed into a search box, as a LIKE pattern that matches it
 /// anywhere, with SQLite's two wildcards and the escape character escaped

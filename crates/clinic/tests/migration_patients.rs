@@ -16,7 +16,7 @@ use diesel_migrations::MigrationHarness;
 
 mod common;
 
-use common::open_temp;
+use common::{open_temp, revert_above};
 
 const ID: &str = "0199a0c1-0000-7000-8000-000000000001";
 
@@ -131,7 +131,7 @@ fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
 }
 
 /// Its down drops the table and both indexes and nothing else, and the up
-/// makes them again. The book (000021) and the queue (000020) sit on top and
+/// makes them again. The queue (000020) and everything after it sit on top and
 /// point at `patients`, so they go down first; each file holds its own.
 #[test]
 fn the_migration_reverts_and_reapplies() {
@@ -140,13 +140,9 @@ fn the_migration_reverts_and_reapplies() {
                    ('patients', 'idx_patients_shop_name', 'idx_patients_shop_phone')";
     assert_eq!(count(&mut conn, objects), 3);
 
-    for above in ["20260923000021", "20260923000020"] {
-        let reverted = conn
-            .revert_last_migration(dzpos_kernel::db::MIGRATIONS)
-            .unwrap();
-        assert_eq!(reverted.to_string(), above);
-        assert_eq!(count(&mut conn, objects), 3);
-    }
+    let above = revert_above(&mut conn, "20260923000019");
+    assert!(above.contains(&"20260923000020".to_string()), "{above:?}");
+    assert_eq!(count(&mut conn, objects), 3);
     let reverted = conn
         .revert_last_migration(dzpos_kernel::db::MIGRATIONS)
         .unwrap();

@@ -97,6 +97,28 @@ pub fn orphan_rows(conn: &mut SqliteConnection) -> i32 {
     count(conn, "SELECT COUNT(*) AS n FROM pragma_foreign_key_check")
 }
 
+/// Reverts every migration above `version`, top first, so a revert test
+/// names the migration it stops at rather than a count every new migration
+/// on top would have to move.
+pub fn revert_above(conn: &mut SqliteConnection, version: &str) {
+    use diesel_migrations::MigrationHarness;
+    loop {
+        let top = conn
+            .applied_migrations()
+            .unwrap()
+            .into_iter()
+            .map(|v| v.to_string())
+            .max()
+            .unwrap();
+        if top.as_str() <= version {
+            assert_eq!(top, version, "{version} is not applied");
+            return;
+        }
+        conn.revert_last_migration(dzpos_retail::db::MIGRATIONS)
+            .unwrap();
+    }
+}
+
 pub fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
     let row: Count = diesel::sql_query(sql).get_result(conn).unwrap();
     row.n

@@ -57,6 +57,7 @@ fn book(
             patient_id: patient.id.clone(),
             starts_at,
             note: None,
+            visit_type_id: None,
         },
     )
 }
@@ -571,6 +572,7 @@ fn a_note_is_trimmed_and_kept_and_a_blank_one_is_none() {
         patient_id: benali.id.clone(),
         starts_at: at(day, 9, 0),
         note: Some("  contrôle  ".to_string()),
+        visit_type_id: None,
     };
     let made = appointments::book(&mut conn, SHOP, OWNER, new.clone()).unwrap();
     assert_eq!(made.appointment.note.as_deref(), Some("contrôle"));
@@ -599,6 +601,7 @@ fn the_audit_names_the_user_who_booked() {
             patient_id: benali.id.clone(),
             starts_at: at(day, 9, 0),
             note: None,
+            visit_type_id: None,
         },
     )
     .unwrap();

@@ -45,7 +45,9 @@ fn every_row_is_filled_in_and_no_route_is_named_twice() {
                     || gate.path == "/patients/{id}"
                     || gate.path == "/queue"
                     || gate.path == "/appointments"
-                    || gate.path == "/appointments/{id}",
+                    || gate.path == "/appointments/{id}"
+                    || gate.path == "/appointments/next-free"
+                    || gate.path == "/day-list",
                 "{} is a read this table was not opened for; widen this allow-list deliberately \
                  and say why in ROUTE_GATES's own `why` (M4 T5 review, 2026-09-11: /dashboard, \
                  /dashboard/series, /purchases and /purchases/{{id}} joined the exports, the \
@@ -64,7 +66,9 @@ fn every_row_is_filled_in_and_no_route_is_named_twice() {
                  Clinic C4, same day: /queue joined them on the same permission, the day's \
                  waiting room being a list of patients by name. Clinic C5, same day: \
                  /appointments and /appointments/{{id}} joined them on it too, the book being \
-                 patients by name and hour.",
+                 patients by name and hour. Clinic C5b, same day: /day-list joined them on it \
+                 too, the book and the queue of one day read together, and \
+                 /appointments/next-free, which reads which slots are taken.",
                 gate.path
             );
         } else {

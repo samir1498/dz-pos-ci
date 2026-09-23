@@ -173,6 +173,28 @@ pub fn reschedule(
     one_row(changed, id)
 }
 
+/// Sets or clears the no-show mark of a live appointment.
+pub fn set_no_show(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    id: &str,
+    mark: Option<NaiveDateTime>,
+    at: NaiveDateTime,
+) -> Result<(), CoreError> {
+    let changed = diesel::update(
+        appointments::table
+            .filter(appointments::shop_id.eq(shop_id))
+            .filter(appointments::id.eq(id))
+            .filter(appointments::cancelled_at.is_null()),
+    )
+    .set((
+        appointments::no_show_at.eq(mark),
+        appointments::updated_at.eq(at),
+    ))
+    .execute(conn)?;
+    one_row(changed, id)
+}
+
 fn one_row(changed: usize, id: &str) -> Result<(), CoreError> {
     if changed == 1 {
         Ok(())

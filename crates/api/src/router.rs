@@ -161,10 +161,13 @@ pub fn router_with_origin(
     // C3 of `the-first-clinic-module-patients-queue-appointments`: the
     // clinic's own routes, gated whole on their own feature for the same
     // reason the shop's below are, and before them so each block's span in
-    // `route_gates.rs` is bounded by the next block's start. 13 of the calls
-    // below, eighteen method routes between them: the patient file's 3 calls
-    // (five routes), the waiting queue's 5 (six, C4) and the appointment
-    // book's 5 (seven, C5, the slot length's read and write among them).
+    // `route_gates.rs` is bounded by the next block's start. 23 of the calls
+    // below, thirty-one method routes between them: the patient file's 3
+    // calls (five routes), the waiting queue's 5 (six, C4), the appointment
+    // book's 5 (seven, C5, the slot length's read and write among them) and
+    // the book tools' 10 (thirteen, C5b: the day list, the absence blocks,
+    // the next free slot, the no-show mark, the working hours and the visit
+    // types).
     #[cfg(feature = "clinic")]
     let guarded = guarded
         .route(
@@ -181,9 +184,22 @@ pub fn router_with_origin(
         .route("/queue/{id}/call", post(routes::queue::call))
         .route("/queue/{id}/seen", post(routes::queue::seen))
         .route("/queue/{id}/left", post(routes::queue::left))
+        .route("/day-list", get(routes::book_tools::day_list))
+        .route(
+            "/absence-blocks",
+            get(routes::book_tools::absence_blocks).post(routes::book_tools::create_absence_block),
+        )
+        .route(
+            "/absence-blocks/{id}/remove",
+            post(routes::book_tools::remove_absence_block),
+        )
         .route(
             "/appointments",
             get(routes::appointments::list).post(routes::appointments::book),
+        )
+        .route(
+            "/appointments/next-free",
+            get(routes::book_tools::next_free),
         )
         .route("/appointments/{id}", get(routes::appointments::get_one))
         .route(
@@ -195,8 +211,32 @@ pub fn router_with_origin(
             post(routes::appointments::move_to),
         )
         .route(
+            "/appointments/{id}/no-show",
+            post(routes::appointments::mark_no_show),
+        )
+        .route(
+            "/appointments/{id}/no-show/clear",
+            post(routes::appointments::clear_no_show),
+        )
+        .route(
             "/settings/slot-minutes",
             get(routes::appointments::slot_minutes).put(routes::appointments::set_slot_minutes),
+        )
+        .route(
+            "/settings/working-hours",
+            get(routes::book_tools::working_hours).put(routes::book_tools::set_working_hours),
+        )
+        .route(
+            "/settings/visit-types",
+            get(routes::book_tools::visit_types).post(routes::book_tools::create_visit_type),
+        )
+        .route(
+            "/settings/visit-types/{id}",
+            put(routes::book_tools::update_visit_type),
+        )
+        .route(
+            "/settings/visit-types/{id}/remove",
+            post(routes::book_tools::remove_visit_type),
         );
 
     // S5 of `a-kernel-crate-and-retail-as-the-first-module`: the shop's own

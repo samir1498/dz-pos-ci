@@ -21,14 +21,18 @@ pub struct AppointmentDto {
     pub first_name: String,
     pub last_name: String,
     pub starts_at: String,
-    /// The slot length when it was booked or last moved, which may differ
-    /// from today's setting.
+    /// How long it runs: its visit type's length, or the slot length
+    /// without one, copied when it was booked and kept by a move, so it may
+    /// differ from today's setting and today's type.
     pub slot_minutes: i32,
     /// A short reason for the visit, never clinical notes.
     pub note: Option<String>,
     /// Null while the slot is held. The day and week lists carry live ones
     /// only; a cancel answers with the row stamped.
     pub cancelled_at: Option<String>,
+    /// When the desk marked the patient as not having come; null while
+    /// unmarked. Only ever on a past, live appointment.
+    pub no_show_at: Option<String>,
 }
 
 impl From<BookedPatient> for AppointmentDto {
@@ -44,6 +48,10 @@ impl From<BookedPatient> for AppointmentDto {
             cancelled_at: b
                 .appointment
                 .cancelled_at
+                .map(|t| t.format(DATE_TIME_FORMAT).to_string()),
+            no_show_at: b
+                .appointment
+                .no_show_at
                 .map(|t| t.format(DATE_TIME_FORMAT).to_string()),
         }
     }
@@ -61,7 +69,8 @@ pub struct AppointmentsDto {
     pub appointments: Vec<AppointmentDto>,
 }
 
-/// A booking. The slot length is the cabinet's setting, never the caller's.
+/// A booking. The length is the named visit type's, or the cabinet's slot
+/// length without one, never a number the caller sends.
 #[derive(Debug, Clone, Deserialize, TS)]
 #[ts(export_to = "AppointmentBookDto.ts")]
 #[serde(deny_unknown_fields)]
@@ -70,6 +79,10 @@ pub struct AppointmentBookDto {
     /// `YYYY-MM-DD HH:MM:SS` on the shop's clock, on the slot grid.
     pub starts_at: String,
     pub note: Option<String>,
+    /// A visit type of the cabinet; may be left out.
+    #[serde(default)]
+    #[ts(optional)]
+    pub visit_type_id: Option<String>,
 }
 
 /// Where an appointment moves to.

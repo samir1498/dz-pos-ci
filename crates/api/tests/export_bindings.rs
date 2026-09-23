@@ -19,6 +19,13 @@
 //! directory and diffs that against the committed one both ways, which is
 //! what makes a stale checkout fail.
 
+#[cfg(feature = "clinic")]
+use dzpos_api::dto::{
+    AbsenceBlockDto, AbsenceBlockWriteDto, AbsenceBlocksDto, AppointmentBookDto, AppointmentDto,
+    AppointmentMoveDto, AppointmentsDto, BlockMadeDto, DayListDto, FreeSlotDto, OpenRangeDto,
+    PatientDto, PatientWriteDto, QueueAddDto, QueueEntryDto, SexDto, SlotMinutesDto, VisitTypeDto,
+    VisitTypeWriteDto, VisitTypesDto, WorkingHoursDto, WorkingHoursWriteDto,
+};
 use dzpos_api::dto::{
     AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AuditEntryDto, AuditLogDto, AuditUserDto,
     AvoirLineDto, BackupDto, BackupsDto, BuildInfoDto, CancelDocumentDto, CashPositionDto,
@@ -41,11 +48,6 @@ use dzpos_api::dto::{
     StoreDto, SupplierAllocationDto, SupplierDebtKindDto, SupplierDto, SupplierEntryDto,
     SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto, TakingsDto, ThemeChoiceDto,
     ThemeDto, ThermalModeChoiceDto, ThermalModeDto, TillCountDto, TopProductDto, UnitDto, UserDto,
-};
-#[cfg(feature = "clinic")]
-use dzpos_api::dto::{
-    AppointmentBookDto, AppointmentDto, AppointmentMoveDto, AppointmentsDto, PatientDto,
-    PatientWriteDto, QueueAddDto, QueueEntryDto, SexDto, SlotMinutesDto,
 };
 use ts_rs::{Config, TS};
 
@@ -175,10 +177,10 @@ const FILES: [&str; 122] = [
 ];
 
 /// The clinic's DTOs (`src/dto/patients.rs`, `src/dto/queue.rs` since C4
-/// and `src/dto/appointments.rs` since C5), apart from `FILES` because they only compile with the `clinic`
+/// `src/dto/appointments.rs` since C5 and `src/dto/book_tools.rs` since C5b), apart from `FILES` because they only compile with the `clinic`
 /// feature: the list check below reads their names off the source text in
 /// every build, and the export writes them only when the feature is on.
-const CLINIC_FILES: [&str; 10] = [
+const CLINIC_FILES: [&str; 22] = [
     "PatientDto.ts",
     "PatientWriteDto.ts",
     "SexDto.ts",
@@ -189,6 +191,18 @@ const CLINIC_FILES: [&str; 10] = [
     "AppointmentBookDto.ts",
     "AppointmentMoveDto.ts",
     "SlotMinutesDto.ts",
+    "OpenRangeDto.ts",
+    "WorkingHoursDto.ts",
+    "WorkingHoursWriteDto.ts",
+    "AbsenceBlockDto.ts",
+    "AbsenceBlocksDto.ts",
+    "AbsenceBlockWriteDto.ts",
+    "BlockMadeDto.ts",
+    "VisitTypeDto.ts",
+    "VisitTypesDto.ts",
+    "VisitTypeWriteDto.ts",
+    "FreeSlotDto.ts",
+    "DayListDto.ts",
 ];
 
 /// Where the bindings are written. Never the committed directory by
@@ -237,7 +251,8 @@ const DTO_SOURCE: &str = concat!(
     include_str!("../src/dto/till.rs"),
     include_str!("../src/dto/patients.rs"),
     include_str!("../src/dto/queue.rs"),
-    include_str!("../src/dto/appointments.rs")
+    include_str!("../src/dto/appointments.rs"),
+    include_str!("../src/dto/book_tools.rs")
 );
 
 #[test]
@@ -409,6 +424,18 @@ fn export_bindings() {
         AppointmentBookDto::export_all(&cfg).unwrap();
         AppointmentMoveDto::export_all(&cfg).unwrap();
         SlotMinutesDto::export_all(&cfg).unwrap();
+        OpenRangeDto::export_all(&cfg).unwrap();
+        WorkingHoursDto::export_all(&cfg).unwrap();
+        WorkingHoursWriteDto::export_all(&cfg).unwrap();
+        AbsenceBlockDto::export_all(&cfg).unwrap();
+        AbsenceBlocksDto::export_all(&cfg).unwrap();
+        AbsenceBlockWriteDto::export_all(&cfg).unwrap();
+        BlockMadeDto::export_all(&cfg).unwrap();
+        VisitTypeDto::export_all(&cfg).unwrap();
+        VisitTypesDto::export_all(&cfg).unwrap();
+        VisitTypeWriteDto::export_all(&cfg).unwrap();
+        FreeSlotDto::export_all(&cfg).unwrap();
+        DayListDto::export_all(&cfg).unwrap();
         for name in CLINIC_FILES {
             assert!(dir.join(name).exists(), "{name} was not written");
         }

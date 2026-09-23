@@ -545,19 +545,25 @@ fn the_shops_own_gate_rows_and_routes_carry_the_retail_feature() {
 /// theirs, and neither module's count moved the other's (the retail test
 /// above still reads 43 and 60). C4's waiting queue added six rows and five
 /// calls to the same block, C5's appointment book six rows and five calls
-/// (its slot length's read is open, like `GET /settings`, and has no row).
+/// (its slot length's read is open, like `GET /settings`, and has no row),
+/// C5b's book tools ten rows and ten calls (the reads of the hours, the
+/// blocks and the visit types carry no name and have no row; the day list
+/// and the next free slot, a read of the book, do).
 #[test]
 fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
-    let gates_source = include_str!("../src/gates/table.rs");
-    let tagged_gates = gates_source
-        .matches("    #[cfg(feature = \"clinic\")]\n    Gate {")
-        .count();
+    // The clinic's rows live in their own file, built only with the feature
+    // (`gates/mod.rs`), and none is left behind in the shared one.
+    let clinic_source = include_str!("../src/gates/clinic.rs");
     assert_eq!(
-        tagged_gates, 17,
-        "17 of ROUTE_GATES' own rows are the clinic's: the patient file's list, create, read, \
-         update and archive, the queue's today, add, next, call, seen and left, and the book's \
-         list, book, read, cancel, move and slot length"
+        clinic_source.matches("    Gate {").count(),
+        27,
+        "27 rows are the clinic's: the patient file's list, create, read, \
+         update and archive, the queue's today, add, next, call, seen and left, the book's \
+         list, book, read, cancel, move and slot length, and the book tools' working hours \
+         and absence block create and remove, and the visit types' create, update and remove, \
+         the no-show mark and its clearing, the day list and the next free slot"
     );
+    assert!(!include_str!("../src/gates/table.rs").contains("feature = \"clinic\")]\n    Gate {"));
     // The rows are there exactly when the clinic is built in.
     let clinic_rows = |prefix: &str| {
         ROUTE_GATES
@@ -568,9 +574,19 @@ fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
     let built = cfg!(feature = "clinic");
     assert_eq!(clinic_rows("/patients"), if built { 5 } else { 0 });
     assert_eq!(clinic_rows("/queue"), if built { 6 } else { 0 });
-    assert_eq!(clinic_rows("/appointments"), if built { 5 } else { 0 });
+    assert_eq!(clinic_rows("/appointments"), if built { 8 } else { 0 });
     assert_eq!(
         clinic_rows("/settings/slot-minutes"),
+        if built { 1 } else { 0 }
+    );
+    assert_eq!(clinic_rows("/absence-blocks"), if built { 2 } else { 0 });
+    assert_eq!(clinic_rows("/day-list"), if built { 1 } else { 0 });
+    assert_eq!(
+        clinic_rows("/settings/visit-types"),
+        if built { 3 } else { 0 }
+    );
+    assert_eq!(
+        clinic_rows("/settings/working-hours"),
         if built { 1 } else { 0 }
     );
 
@@ -578,8 +594,9 @@ fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
     let block = &ROUTER_SOURCE[start..end];
     assert_eq!(
         block.matches(".route(").count(),
-        13,
-        "13 of router.rs' own .route(...) calls are the clinic's: 3 patient, 5 queue, 5 book"
+        23,
+        "23 of router.rs' own .route(...) calls are the clinic's: 3 patient, 5 queue, 5 book, \
+         10 book tools"
     );
     // No patient, queue or book route outside the block.
     for path in [
@@ -587,6 +604,10 @@ fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
         "\"/queue",
         "\"/appointments",
         "\"/settings/slot-minutes",
+        "\"/settings/working-hours",
+        "\"/absence-blocks",
+        "\"/settings/visit-types",
+        "\"/day-list",
     ] {
         assert!(
             !ROUTER_SOURCE[..start].contains(path),

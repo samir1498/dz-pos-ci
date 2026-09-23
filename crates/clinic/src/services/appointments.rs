@@ -15,7 +15,14 @@
 //! id the screen holds stays, the audit has one `appointment.move` row with
 //! the start before and after, and the book never shows a cancellation the
 //! patient did not ask for. It runs every check a booking runs, with the row
-//! itself left out of the overlap, and takes the slot length in force now.
+//! itself left out of the overlap, and keeps the length the appointment
+//! copied when it was booked (C5b): a visit type edited since, or a slot
+//! length changed since, does not stretch or shrink a booking by moving it.
+//!
+//! A past, live appointment the patient did not come to is marked with the
+//! moment (`mark_no_show`, C5b), kept on the row, and taken back with
+//! `clear_no_show`. A marked one is not moved or cancelled until then, so
+//! the mark is never left beside a new start or a cancellation.
 //!
 //! Validation (a 422) is a start the book could never hold: off the grid or
 //! in the past. Conflict (a 409) is a start somebody else holds, a cancelled
@@ -30,11 +37,12 @@ use dzpos_kernel::services::{audit, clock, optional_field};
 
 use crate::audit_actions::{
     ACTION_APPOINTMENT_BOOK, ACTION_APPOINTMENT_CANCEL, ACTION_APPOINTMENT_MOVE,
+    ACTION_APPOINTMENT_NO_SHOW, ACTION_APPOINTMENT_NO_SHOW_CLEAR,
 };
 use crate::models::appointment::AppointmentInsert;
 use crate::repos::appointments as repo;
 use crate::repos::patients as patient_repo;
-use crate::services::slot_length;
+use crate::services::{absence_blocks, slot_length, visit_types, working_hours};
 
 pub use crate::models::appointment::{Appointment, BookedPatient};
 
@@ -42,17 +50,20 @@ pub use crate::models::appointment::{Appointment, BookedPatient};
 /// start a live appointment can begin and still run into it.
 const LONGEST_STORED_SLOT_MINUTES: i64 = 240;
 
-/// What the desk asks for. The slot length is the setting's, never the
-/// caller's.
+/// What the desk asks for. The length is the named visit type's, or the
+/// slot-length setting's without one; never a number the caller sends.
 #[derive(Debug, Clone, Default)]
 pub struct NewAppointment {
     pub patient_id: String,
     pub starts_at: NaiveDateTime,
     pub note: Option<String>,
+    /// A visit type of this shop whose length the appointment copies.
+    pub visit_type_id: Option<String>,
 }
 
-/// Books a patient of this shop at `starts_at` for the slot length in force.
-/// Another shop's patient is not found; an archived file is refused.
+/// Books a patient of this shop at `starts_at`, for the named visit type's
+/// length or the slot length in force. Another shop's patient or visit type
+/// is not found; an archived file is refused.
 pub fn book(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -64,13 +75,17 @@ pub fn book(
     conn.transaction(|conn| {
         let patient_id = bookable_patient(conn, shop_id, &new.patient_id)?;
         let slot = current_slot(conn, shop_id)?;
-        check_slot(conn, shop_id, new.starts_at, slot, now, None)?;
+        let length = match new.visit_type_id.as_deref() {
+            Some(id) => visit_types::get(conn, shop_id, id)?.minutes,
+            None => slot,
+        };
+        check_slot(conn, shop_id, new.starts_at, slot, length, now, None)?;
         let row = AppointmentInsert {
             id: uuid::Uuid::now_v7().to_string(),
             shop_id,
             patient_id,
             starts_at: new.starts_at,
-            slot_minutes: slot,
+            slot_minutes: length,
             note,
             created_at: now,
             updated_at: now,
@@ -104,13 +119,15 @@ pub fn cancel(
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
         refuse_cancelled(&before.appointment)?;
+        refuse_no_show(&before.appointment)?;
         repo::cancel(conn, shop_id, id, now)?;
         written(conn, shop_id, user_id, &before, ACTION_APPOINTMENT_CANCEL)
     })
 }
 
 /// Moves a live appointment to `starts_at`, on the terms a new booking
-/// gets, as one update of the same row (see the module doc).
+/// gets, as one update of the same row (see the module doc). It keeps its
+/// own length.
 pub fn move_to(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -122,11 +139,65 @@ pub fn move_to(
     conn.transaction(|conn| {
         let before = repo::get(conn, shop_id, id)?;
         refuse_cancelled(&before.appointment)?;
+        refuse_no_show(&before.appointment)?;
         bookable_patient(conn, shop_id, &before.appointment.patient_id)?;
         let slot = current_slot(conn, shop_id)?;
-        check_slot(conn, shop_id, starts_at, slot, now, Some(id))?;
-        repo::reschedule(conn, shop_id, id, starts_at, slot, now)?;
+        let length = before.appointment.slot_minutes;
+        check_slot(conn, shop_id, starts_at, slot, length, now, Some(id))?;
+        repo::reschedule(conn, shop_id, id, starts_at, length, now)?;
         written(conn, shop_id, user_id, &before, ACTION_APPOINTMENT_MOVE)
+    })
+}
+
+/// Marks a live appointment whose start has passed as one the patient did
+/// not come to, stamped now (C5b). A future or cancelled one is refused,
+/// and so is one already marked.
+pub fn mark_no_show(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    id: &str,
+) -> Result<BookedPatient, CoreError> {
+    let now = clock::now();
+    conn.transaction(|conn| {
+        let before = repo::get(conn, shop_id, id)?;
+        refuse_cancelled(&before.appointment)?;
+        if before.appointment.starts_at > now {
+            return Err(CoreError::conflict(
+                "starts_at",
+                "this appointment has not started yet",
+            ));
+        }
+        refuse_no_show(&before.appointment)?;
+        repo::set_no_show(conn, shop_id, id, Some(now), now)?;
+        written(conn, shop_id, user_id, &before, ACTION_APPOINTMENT_NO_SHOW)
+    })
+}
+
+/// Takes a no-show mark back. One not marked is refused.
+pub fn clear_no_show(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    id: &str,
+) -> Result<BookedPatient, CoreError> {
+    let now = clock::now();
+    conn.transaction(|conn| {
+        let before = repo::get(conn, shop_id, id)?;
+        if before.appointment.no_show_at.is_none() {
+            return Err(CoreError::conflict(
+                "no_show_at",
+                "this appointment is not marked as missed",
+            ));
+        }
+        repo::set_no_show(conn, shop_id, id, None, now)?;
+        written(
+            conn,
+            shop_id,
+            user_id,
+            &before,
+            ACTION_APPOINTMENT_NO_SHOW_CLEAR,
+        )
     })
 }
 
@@ -138,6 +209,24 @@ pub fn get(
     id: &str,
 ) -> Result<BookedPatient, CoreError> {
     repo::get(conn, shop_id, id)
+}
+
+/// The live appointments sharing a minute with `[from, until)`, in time
+/// order, with each patient's names: what an absence block lands on. One
+/// that ends at `from` or starts at `until` only touches it.
+pub fn overlapping(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    from: NaiveDateTime,
+    until: NaiveDateTime,
+) -> Result<Vec<BookedPatient>, CoreError> {
+    let since = from
+        .checked_sub_signed(Duration::minutes(LONGEST_STORED_SLOT_MINUTES))
+        .ok_or_else(out_of_calendar)?;
+    Ok(repo::live_between(conn, shop_id, since, until)?
+        .into_iter()
+        .filter(|b| b.appointment.ends_at().is_none_or(|end| end > from))
+        .collect())
 }
 
 /// The live appointments starting on `day`, in time order, with each
@@ -215,24 +304,28 @@ fn current_slot(conn: &mut SqliteConnection, shop_id: i32) -> Result<i32, CoreEr
     })
 }
 
-/// The grid, the clock and the book, in that order: a start the book could
-/// never hold is refused before the table is read.
+/// The grid, the clock, the working hours, the absence blocks and the book,
+/// in that order: a start the book could never hold is refused before the
+/// book is read.
+/// `grid` is the slot-length setting every start sits on; `length` is how
+/// long this appointment runs.
 fn check_slot(
     conn: &mut SqliteConnection,
     shop_id: i32,
     starts_at: NaiveDateTime,
-    slot: i32,
+    grid: i32,
+    length: i32,
     now: NaiveDateTime,
     except: Option<&str>,
 ) -> Result<(), CoreError> {
     let minute_of_day = i64::from(starts_at.hour() * 60 + starts_at.minute());
     let on_grid = starts_at.second() == 0
         && starts_at.nanosecond() == 0
-        && minute_of_day % i64::from(slot) == 0;
+        && minute_of_day % i64::from(grid) == 0;
     if !on_grid {
         return Err(CoreError::validation(
             "starts_at",
-            &format!("an appointment starts on the {slot}-minute grid counted from midnight"),
+            &format!("an appointment starts on the {grid}-minute grid counted from midnight"),
         ));
     }
     if starts_at < now {
@@ -241,11 +334,34 @@ fn check_slot(
             "an appointment cannot be booked in the past",
         ));
     }
+    if let Some(week) = working_hours::week(conn, shop_id)? {
+        if !working_hours::holds(&week, starts_at, length) {
+            return Err(CoreError::validation(
+                "starts_at",
+                "this time is outside the cabinet's working hours",
+            ));
+        }
+    }
+    let until = starts_at
+        .checked_add_signed(Duration::minutes(i64::from(length)))
+        .ok_or_else(out_of_calendar)?;
+    if let Some(block) = absence_blocks::overlapping(conn, shop_id, starts_at, until)?.first() {
+        return Err(CoreError::conflict(
+            "starts_at",
+            &format!(
+                "the doctor is away from {} to {}{}",
+                block.starts_at.format("%Y-%m-%d %H:%M"),
+                block.ends_at.format("%Y-%m-%d %H:%M"),
+                block
+                    .label
+                    .as_deref()
+                    .map(|l| format!(" ({l})"))
+                    .unwrap_or_default()
+            ),
+        ));
+    }
     let from = starts_at
         .checked_sub_signed(Duration::minutes(LONGEST_STORED_SLOT_MINUTES))
-        .ok_or_else(out_of_calendar)?;
-    let until = starts_at
-        .checked_add_signed(Duration::minutes(i64::from(slot)))
         .ok_or_else(out_of_calendar)?;
     for held in repo::live_starting_between(conn, shop_id, from, until, except)? {
         if held.starts_at == starts_at {
@@ -276,6 +392,19 @@ fn refuse_cancelled(a: &Appointment) -> Result<(), CoreError> {
         Err(CoreError::conflict(
             "cancelled_at",
             "this appointment was cancelled",
+        ))
+    }
+}
+
+/// A missed appointment stays as it was: it is not moved, cancelled or
+/// marked again until the mark is taken back.
+fn refuse_no_show(a: &Appointment) -> Result<(), CoreError> {
+    if a.no_show_at.is_none() {
+        Ok(())
+    } else {
+        Err(CoreError::conflict(
+            "no_show_at",
+            "this appointment is marked as missed; take the mark back first",
         ))
     }
 }
@@ -319,6 +448,9 @@ fn as_json(a: &Appointment) -> String {
         "slot_minutes": a.slot_minutes,
         "cancelled_at": a
             .cancelled_at
+            .map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()),
+        "no_show_at": a
+            .no_show_at
             .map(|t| t.format("%Y-%m-%d %H:%M:%S").to_string()),
     })
     .to_string()

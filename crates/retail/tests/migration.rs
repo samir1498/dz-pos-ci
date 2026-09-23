@@ -18,7 +18,7 @@ mod common;
 
 use common::migrations::{
     count, insert_with, insert_with_all, on_delete_from_shops, open_at_migration,
-    open_before_migration, orphan_rows, probe, Name,
+    open_before_migration, orphan_rows, probe, revert_above, Name,
 };
 use common::open_temp;
 
@@ -35,6 +35,7 @@ fn migration_creates_every_table() {
     assert_eq!(
         names,
         vec![
+            "absence_blocks",
             "appointments",
             "audit_log",
             "cash_refunds",
@@ -68,9 +69,29 @@ fn migration_creates_every_table() {
             "supplier_allocations",
             "supplier_ledger",
             "suppliers",
-            "users"
+            "users",
+            "visit_types",
+            "working_hours"
         ]
     );
+}
+
+/// Every table the file holds, read off the file itself rather than a list
+/// here, so a new table cannot be left out of the checks below. The lists
+/// these checks used to carry had already missed `cash_refunds`.
+fn every_table(conn: &mut SqliteConnection) -> Vec<String> {
+    let rows: Vec<Name> = diesel::sql_query(
+        "SELECT name FROM pragma_table_list WHERE schema = 'main' AND type = 'table' \
+         AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__diesel%' ORDER BY name",
+    )
+    .load(conn)
+    .unwrap();
+    let names: Vec<String> = rows.into_iter().map(|r| r.name).collect();
+    assert!(
+        names.len() > 30,
+        "the table list read nothing like the file: {names:?}"
+    );
+    names
 }
 
 #[test]
@@ -78,40 +99,10 @@ fn every_table_carries_shop_id() {
     // Rule 3 in docs/architecture.md: `shop_id` from day one, on every table.
     // `shops` carries it as its own primary key.
     let (_dir, mut conn) = open_temp();
-    for table in [
-        "appointments",
-        "audit_log",
-        "categories",
-        "counters",
-        "customers",
-        "debt_allocations",
-        "debt_ledger",
-        "document_lines",
-        "document_tva",
-        "documents",
-        "expense_categories",
-        "expenses",
-        "jobs",
-        "paired_devices",
-        "pairing_tokens",
-        "patients",
-        "preferences",
-        "products",
-        "purchase_lines",
-        "purchase_receipt_lines",
-        "purchase_receipts",
-        "purchases",
-        "queue_entries",
-        "sale_idempotency_keys",
-        "sessions",
-        "settings",
-        "shifts",
-        "stock_movements",
-        "supplier_allocations",
-        "supplier_ledger",
-        "suppliers",
-        "users",
-    ] {
+    for table in every_table(&mut conn) {
+        if table == "shops" {
+            continue;
+        }
         let n = count(
             &mut conn,
             &format!(
@@ -166,41 +157,7 @@ fn every_table_is_strict() {
     // from pragma_table_list: grepping the CREATE text for the word matched
     // a comment and stayed green with STRICT removed.
     let (_dir, mut conn) = open_temp();
-    for table in [
-        "shops",
-        "settings",
-        "preferences",
-        "users",
-        "counters",
-        "categories",
-        "products",
-        "documents",
-        "document_lines",
-        "document_tva",
-        "stock_movements",
-        "audit_log",
-        "customers",
-        "debt_ledger",
-        "debt_allocations",
-        "suppliers",
-        "purchases",
-        "purchase_lines",
-        "purchase_receipts",
-        "purchase_receipt_lines",
-        "supplier_ledger",
-        "supplier_allocations",
-        "expense_categories",
-        "expenses",
-        "jobs",
-        "paired_devices",
-        "pairing_tokens",
-        "sale_idempotency_keys",
-        "sessions",
-        "shifts",
-        "patients",
-        "queue_entries",
-        "appointments",
-    ] {
+    for table in every_table(&mut conn) {
         let strict = count(
             &mut conn,
             &format!("SELECT strict AS n FROM pragma_table_list WHERE name = '{table}'"),
@@ -208,6 +165,7 @@ fn every_table_is_strict() {
         assert_eq!(strict, 1, "{table} is not STRICT");
     }
 }
+
 #[test]
 fn every_money_and_rate_column_refuses_a_real_a_text_and_a_negative() {
     // Rule 6: money is integer centimes. 19.99 was once read back as
@@ -2091,9 +2049,8 @@ fn the_migration_reverts_and_reapplies() {
         1
     );
 
-    // Eight migrations (21 down to 14) sit on the audit clock (13), which moves
-    // data and adds no table (the seventeenth's expense half is in
-    // `migration_shifts.rs`): nine turns, both directions read off one row.
+    // Everything down to the audit clock (13), which moves data and adds no
+    // table, goes down with it; both directions are read off one row.
     assert_eq!(
         diesel::sql_query(
             "INSERT INTO audit_log (shop_id, user_id, action, entity, created_at) \
@@ -2103,10 +2060,7 @@ fn the_migration_reverts_and_reapplies() {
         .unwrap(),
         1
     );
-    for _ in 0..9 {
-        conn.revert_last_migration(dzpos_retail::db::MIGRATIONS)
-            .unwrap();
-    }
+    revert_above(&mut conn, "20260911000012");
     assert_eq!(
         count(
             &mut conn,
@@ -2127,11 +2081,8 @@ fn the_migration_reverts_and_reapplies() {
         1,
         "the audit clock up.sql did not take the hour back"
     );
-    // Those eight (21 down to 14) and the audit clock (13) itself: all nine.
-    for _ in 0..9 {
-        conn.revert_last_migration(dzpos_retail::db::MIGRATIONS)
-            .unwrap();
-    }
+    // The same again, the audit clock (13) with them.
+    revert_above(&mut conn, "20260911000012");
 
     // The twelfth: the sessions table. It adds a table and two indexes and
     // nothing else, so its down drops all three and touches no user and no

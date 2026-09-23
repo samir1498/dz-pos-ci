@@ -19,7 +19,8 @@ pub struct Appointment {
     pub patient_id: String,
     /// The shop clock's local start, on a whole minute of the slot grid.
     pub starts_at: NaiveDateTime,
-    /// The slot length when it was booked or last moved, 1 to 240.
+    /// How long it runs, 1 to 240: its visit type's length, or the slot
+    /// length without one, copied when it was booked and kept by a move.
     pub slot_minutes: i32,
     /// A short reason for the visit; never clinical notes.
     pub note: Option<String>,
@@ -27,6 +28,9 @@ pub struct Appointment {
     pub cancelled_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    /// `None` unless the desk marked the patient as not having come; only
+    /// ever on a past, live appointment.
+    pub no_show_at: Option<NaiveDateTime>,
 }
 
 impl Appointment {

@@ -80,6 +80,9 @@ mod appointments;
 mod audit;
 mod auth;
 mod backups;
+// The book tools (C5b of the clinic plan), beside the book.
+#[cfg(feature = "clinic")]
+mod book_tools;
 // The wholly-retail DTO files (S5): each names only types `crates/retail`
 // owns, so the module has nothing to export once the feature is off.
 // `settings` stays unconditional: it is mostly kernel settings, with one
@@ -124,6 +127,8 @@ pub use appointments::*;
 pub use audit::*;
 pub use auth::*;
 pub use backups::*;
+#[cfg(feature = "clinic")]
+pub use book_tools::*;
 #[cfg(feature = "retail")]
 pub use categories::*;
 pub use common::*;

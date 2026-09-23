@@ -15,7 +15,7 @@ use diesel_migrations::MigrationHarness;
 
 mod common;
 
-use common::open_temp;
+use common::{open_temp, revert_above};
 
 const PATIENT: &str = "0199a0c1-0000-7000-8000-000000000001";
 const FIRST: &str = "'0199a0c1-0000-7000-8000-0000000a0001'";
@@ -175,9 +175,9 @@ fn count(conn: &mut SqliteConnection, sql: &str) -> i32 {
     diesel::sql_query(sql).get_result::<Count>(conn).unwrap().n
 }
 
-/// The top of the stack goes down and comes back up: the down drops the
-/// table and its index and nothing else (the patient it pointed at stays),
-/// and the up makes them again.
+/// With the book tools above it taken off, it goes down and comes back up:
+/// the down drops the table and its index and nothing else (the patient it
+/// pointed at stays), and the up makes them again.
 #[test]
 fn the_migration_reverts_and_reapplies() {
     let (_dir, mut conn) = open_temp();
@@ -186,6 +186,7 @@ fn the_migration_reverts_and_reapplies() {
                    ('appointments', 'idx_appointments_live')";
     assert_eq!(count(&mut conn, objects), 2);
 
+    revert_above(&mut conn, "20260923000021");
     let reverted = conn
         .revert_last_migration(dzpos_kernel::db::MIGRATIONS)
         .unwrap();

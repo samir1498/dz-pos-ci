@@ -42,3 +42,29 @@ pub const ACTION_APPOINTMENT_MOVE: &str = "appointment.move";
 /// The book's slot length changed. `entity_id` is the shop, the way the
 /// shop's own dated settings record theirs.
 pub const ACTION_SLOT_MINUTES_SET: &str = "slot_minutes.set";
+
+/// The cabinet's working week replaced. `entity_id` is the shop; `before`
+/// is the week it replaced (none the first time) and `after` the new one,
+/// each as seven lists of `[opens, closes]` minutes, Sunday first.
+pub const ACTION_WORKING_HOURS_SET: &str = "working_hours.set";
+
+/// An absence block made. `after` is the block as written, its id inside.
+pub const ACTION_ABSENCE_BLOCK_CREATE: &str = "absence_block.create";
+/// An absence block removed; the row is deleted and `before` is all that
+/// stays of it.
+pub const ACTION_ABSENCE_BLOCK_REMOVE: &str = "absence_block.remove";
+
+/// A visit type added to the settings. `after` is the type as written.
+pub const ACTION_VISIT_TYPE_CREATE: &str = "visit_type.create";
+/// A visit type renamed or its length changed. Bookings already made keep
+/// the length they copied.
+pub const ACTION_VISIT_TYPE_UPDATE: &str = "visit_type.update";
+/// A visit type removed; the row is deleted and `before` is what stays of
+/// it.
+pub const ACTION_VISIT_TYPE_REMOVE: &str = "visit_type.remove";
+
+/// A past appointment marked as one the patient did not come to. `before`
+/// and `after` are the row on either side.
+pub const ACTION_APPOINTMENT_NO_SHOW: &str = "appointment.no_show";
+/// A no-show mark taken back, the desk having marked the wrong patient.
+pub const ACTION_APPOINTMENT_NO_SHOW_CLEAR: &str = "appointment.no_show_clear";

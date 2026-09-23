@@ -1,12 +1,47 @@
 use super::Gate;
 use dzpos_core::services::permissions::Permission;
 
+#[cfg(feature = "clinic")]
+use super::clinic::CLINIC_GATES as CLINIC;
+#[cfg(not(feature = "clinic"))]
+const CLINIC: &[Gate] = &[];
+
 /// Every mutating route this API answers, and the reads the module doc names
 /// that carry the shop's lists out of it, with what each will want.
 ///
+/// The kernel's rows and the shop's, joined with the clinic's
+/// (`clinic.rs`, split out when C5b of the clinic plan took this file past
+/// its 600-line limit) into the one list every lookup walks.
+pub const ROUTE_GATES: &[Gate] = &JOINED;
+
+const JOINED: [Gate; SHARED.len() + CLINIC.len()] = join(SHARED, CLINIC);
+
+/// `a` then `b`, copied into one array at compile time. An index past
+/// either end fails the build, never a request.
+const fn join<const N: usize>(a: &[Gate], b: &[Gate]) -> [Gate; N] {
+    let blank = Gate {
+        method: "",
+        path: "",
+        permission: None,
+        why: "",
+    };
+    let mut out = [blank; N];
+    let mut i = 0;
+    while i < a.len() {
+        out[i] = a[i];
+        i += 1;
+    }
+    let mut j = 0;
+    while j < b.len() {
+        out[i + j] = b[j];
+        j += 1;
+    }
+    out
+}
+
 /// Sorted by path, which is how `lib.rs` lists its routes, so the two read
 /// side by side.
-pub const ROUTE_GATES: &[Gate] = &[
+const SHARED: &[Gate] = &[
     Gate {
         method: "GET",
         path: "/audit-log",
@@ -191,125 +226,6 @@ pub const ROUTE_GATES: &[Gate] = &[
         path: "/labels/sheet",
         permission: None,
         why: "a label prints a name, a price and a barcode a customer can already read off the shelf, and a cashier relabelling a shelf is who needs it (M3 carry-in, 2026-09-10)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "GET",
-        path: "/patients",
-        permission: Some(Permission::ViewPatients),
-        why: "the whole patient list, and a search over names and phone numbers: medical identity, not an ordinary shop list, so it is gated like the lists that carry a shop's data out (clinic plan C3)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/patients",
-        permission: Some(Permission::EditPatients),
-        why: "opening a patient's file is the desk's work; EditPatients is the clinic plan's one permission for writing a file (C3)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "GET",
-        path: "/patients/{id}",
-        permission: Some(Permission::ViewPatients),
-        why: "one patient's file; the same gate as the list it is opened from (clinic plan C3). Notes are a field-level rule on top, ViewPatientNotes, not a second row (C3b)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "PUT",
-        path: "/patients/{id}",
-        permission: Some(Permission::EditPatients),
-        why: "correcting a patient's file; the same permission that opened it (clinic plan C3)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/patients/{id}/archive",
-        permission: Some(Permission::EditPatients),
-        why: "archiving takes a file out of the search and deletes nothing, so it is a correction to the file and asks what an edit asks (clinic plan C3)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "GET",
-        path: "/queue",
-        permission: Some(Permission::ViewPatients),
-        why: "today's waiting room: who came in, when, and whether they have been seen, by name; it reads patients, so it asks what reading a patient's file asks (clinic plan C4, no permission of its own)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/queue",
-        permission: Some(Permission::EditPatients),
-        why: "adding an arrival to the day's queue is the desk's write on a patient; the file's write permission, reused rather than a queue one (clinic plan C4)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/queue/next",
-        permission: Some(Permission::EditPatients),
-        why: "calling in the next patient writes the entry's called_at; the same write permission as adding them (clinic plan C4)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/queue/{id}/call",
-        permission: Some(Permission::EditPatients),
-        why: "calling one patient in out of order; the same write as calling the next (clinic plan C4)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/queue/{id}/seen",
-        permission: Some(Permission::EditPatients),
-        why: "marking a called patient seen closes their entry; the same write permission (clinic plan C4)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/queue/{id}/left",
-        permission: Some(Permission::EditPatients),
-        why: "marking a patient gone unseen closes their entry the other way; the same write permission (clinic plan C4)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "GET",
-        path: "/appointments",
-        permission: Some(Permission::ViewPatients),
-        why: "a day or a week of the book: who is coming, when, by name; it reads patients, so it asks what reading a patient's file asks (clinic plan C5, no permission of its own)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/appointments",
-        permission: Some(Permission::EditPatients),
-        why: "booking a patient into a slot is the desk's write on a patient; the file's write permission, reused (clinic plan C5)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "GET",
-        path: "/appointments/{id}",
-        permission: Some(Permission::ViewPatients),
-        why: "one appointment with its patient's names, read the way the day's list is (clinic plan C5)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/appointments/{id}/cancel",
-        permission: Some(Permission::EditPatients),
-        why: "giving a slot back frees it for another patient; the same write as booking it (clinic plan C5)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "POST",
-        path: "/appointments/{id}/move",
-        permission: Some(Permission::EditPatients),
-        why: "moving an appointment takes a new slot on a booking's terms; the same write as booking (clinic plan C5)",
-    },
-    #[cfg(feature = "clinic")]
-    Gate {
-        method: "PUT",
-        path: "/settings/slot-minutes",
-        permission: Some(Permission::EditSettings),
-        why: "the slot length sets the grid every later booking sits on, a setting of the cabinet like the store block, so it asks what every other /settings write asks; its read stays open like GET /settings (clinic plan C5)",
     },
     #[cfg(feature = "retail")]
     Gate {

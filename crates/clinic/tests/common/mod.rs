@@ -42,3 +42,107 @@ pub fn named(first: &str, last: &str) -> NewPatient {
         ..NewPatient::default()
     }
 }
+
+/// Reverts every migration above `version`, top first, and returns their
+/// ids in the order they went. Each clinic migration test takes the ones
+/// stacked on its own off this way, so a new migration on top changes no
+/// test below it.
+pub fn revert_above(conn: &mut SqliteConnection, version: &str) -> Vec<String> {
+    use diesel_migrations::MigrationHarness;
+    let mut reverted = Vec::new();
+    loop {
+        let applied = conn
+            .applied_migrations()
+            .unwrap()
+            .into_iter()
+            .map(|v| v.to_string())
+            .max()
+            .unwrap();
+        if applied.as_str() <= version {
+            assert_eq!(applied, version, "{version} is not applied");
+            return reverted;
+        }
+        let gone = conn
+            .revert_last_migration(dzpos_kernel::db::MIGRATIONS)
+            .unwrap();
+        reverted.push(gone.to_string());
+    }
+}
+
+/// The helpers every book test shares: dates counted from the wall clock,
+/// since the book refuses the past on it, and the refusal shapes.
+pub mod book {
+    use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
+    use diesel::SqliteConnection;
+    use dzpos_clinic::services::appointments::{self, BookedPatient, NewAppointment};
+    use dzpos_clinic::services::patients::{self, Patient};
+    use dzpos_clinic::services::working_hours::OpenRange;
+    use dzpos_kernel::error::CoreError;
+    use dzpos_kernel::services::clock;
+    use dzpos_kernel::services::permissions::Role;
+
+    use super::{named, OWNER, SHOP};
+
+    pub fn open(conn: &mut SqliteConnection, first: &str, last: &str) -> Patient {
+        patients::create(conn, SHOP, OWNER, named(first, last), Role::Owner).unwrap()
+    }
+
+    /// `days` after today on the shop's clock.
+    pub fn day_ahead(days: i64) -> NaiveDate {
+        clock::now().date() + Duration::days(days)
+    }
+
+    /// The first `weekday` from tomorrow on, so never today.
+    pub fn next(weekday: Weekday) -> NaiveDate {
+        let mut day = day_ahead(1);
+        while day.weekday() != weekday {
+            day = day.succ_opt().unwrap();
+        }
+        day
+    }
+
+    pub fn at(day: NaiveDate, hh: u32, mm: u32) -> NaiveDateTime {
+        day.and_time(NaiveTime::from_hms_opt(hh, mm, 0).unwrap())
+    }
+
+    /// `HH:MM` to `HH:MM` as a range; `24:00` is 1440.
+    pub fn range(from: (i32, i32), to: (i32, i32)) -> OpenRange {
+        OpenRange {
+            opens_minute: from.0 * 60 + from.1,
+            closes_minute: to.0 * 60 + to.1,
+        }
+    }
+
+    pub fn book(
+        conn: &mut SqliteConnection,
+        patient: &Patient,
+        starts_at: NaiveDateTime,
+    ) -> Result<BookedPatient, CoreError> {
+        appointments::book(
+            conn,
+            SHOP,
+            OWNER,
+            NewAppointment {
+                patient_id: patient.id.clone(),
+                starts_at,
+                ..NewAppointment::default()
+            },
+        )
+    }
+
+    /// The field and message of a conflict; anything else fails the test.
+    pub fn conflict<T: std::fmt::Debug>(result: Result<T, CoreError>) -> (String, String) {
+        match result {
+            Err(CoreError::Conflict { field, message }) => (field, message),
+            other => panic!("expected a conflict, got {other:?}"),
+        }
+    }
+
+    /// The field and message of a validation error.
+    pub fn invalid<T: std::fmt::Debug>(result: Result<T, CoreError>) -> (String, String) {
+        match result {
+            Err(CoreError::Validation { field, message }) => (field, message),
+            other => panic!("expected a validation error, got {other:?}"),
+        }
+    }
+}

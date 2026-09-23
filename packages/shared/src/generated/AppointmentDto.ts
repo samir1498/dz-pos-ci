@@ -7,8 +7,9 @@
  */
 export type AppointmentDto = { id: string, patient_id: string, first_name: string, last_name: string, starts_at: string, 
 /**
- * The slot length when it was booked or last moved, which may differ
- * from today's setting.
+ * How long it runs: its visit type's length, or the slot length
+ * without one, copied when it was booked and kept by a move, so it may
+ * differ from today's setting and today's type.
  */
 slot_minutes: number, 
 /**
@@ -19,4 +20,9 @@ note: string | null,
  * Null while the slot is held. The day and week lists carry live ones
  * only; a cancel answers with the row stamped.
  */
-cancelled_at: string | null, };
+cancelled_at: string | null, 
+/**
+ * When the desk marked the patient as not having come; null while
+ * unmarked. Only ever on a past, live appointment.
+ */
+no_show_at: string | null, };

@@ -32,6 +32,9 @@ pub mod appointments;
 pub mod audit;
 pub mod auth;
 pub mod backups;
+// The book tools (C5b of the clinic plan), on the same feature.
+#[cfg(feature = "clinic")]
+pub mod book_tools;
 // The eleven wholly-retail route files (S5 of
 // `a-kernel-crate-and-retail-as-the-first-module`): every handler in each
 // goes through a `dzpos_core::services` module `crates/retail` owns, so the

@@ -89,6 +89,7 @@ pub async fn book(
         patient_id: dto.patient_id,
         starts_at: parse_starts_at(&dto.starts_at)?,
         note: dto.note,
+        visit_type_id: dto.visit_type_id,
     };
     let shop = state.shop_id;
     let user = who.id;
@@ -150,4 +151,32 @@ pub async fn set_slot_minutes(
         .blocking(move |c| slot_length::set_slot_minutes(c, shop, user, dto.slot_minutes))
         .await?;
     Ok(Json(SlotMinutesDto { slot_minutes }))
+}
+
+/// Marks a past appointment as missed.
+pub async fn mark_no_show(
+    State(state): State<AppState>,
+    who: CurrentUser,
+    Path(id): Path<String>,
+) -> Result<Json<AppointmentDto>, ApiError> {
+    let shop = state.shop_id;
+    let user = who.id;
+    let after = state
+        .blocking(move |c| service::mark_no_show(c, shop, user, &id))
+        .await?;
+    Ok(Json(AppointmentDto::from(after)))
+}
+
+/// Takes a no-show mark back.
+pub async fn clear_no_show(
+    State(state): State<AppState>,
+    who: CurrentUser,
+    Path(id): Path<String>,
+) -> Result<Json<AppointmentDto>, ApiError> {
+    let shop = state.shop_id;
+    let user = who.id;
+    let after = state
+        .blocking(move |c| service::clear_no_show(c, shop, user, &id))
+        .await?;
+    Ok(Json(AppointmentDto::from(after)))
 }
