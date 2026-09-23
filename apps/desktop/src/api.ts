@@ -143,6 +143,37 @@ export const patientsQueryKey: readonly string[] = ["patients"];
  * clock's today, never a day it picked itself. */
 export const queueQueryKey: readonly string[] = ["queue"];
 
+/** One day or one Sunday-to-Saturday week of the appointment book (C6). The
+ * range is part of the key: a day and the week holding it are two different
+ * answers, and moving between them must not read one out of the other's
+ * cache. */
+export function appointmentsQueryKey(
+  range: { day: string } | { week: string },
+): readonly string[] {
+  return "day" in range ? ["appointments", "day", range.day] : ["appointments", "week", range.week];
+}
+
+/** One day's appointments and walk-ins together, for the day-list panel and
+ * its print. Its own key rather than a slice of `appointmentsQueryKey`: it
+ * is a second call over a second shape (`DayListDto`), not the book's own
+ * read. */
+export function dayListQueryKey(day: string): readonly string[] {
+  return ["day-list", day];
+}
+
+/** The book's slot length in minutes. One key: every screen that reads it
+ * reads the whole cabinet's own setting. */
+export const slotMinutesQueryKey: readonly string[] = ["slot-minutes"];
+
+/** The cabinet's working week, Sunday first. */
+export const workingHoursQueryKey: readonly string[] = ["working-hours"];
+
+/** The absence blocks not yet over. */
+export const absenceBlocksQueryKey: readonly string[] = ["absence-blocks"];
+
+/** Every visit type of the cabinet, by name. */
+export const visitTypesQueryKey: readonly string[] = ["visit-types"];
+
 /** The shop's staff (M4 T8). The owner's own read: `crate::gates` names
  * `ManageUsers` on `GET /users`, so a cashier or a manager reading this key
  * gets the translated 403 rather than a list. */

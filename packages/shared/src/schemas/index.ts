@@ -106,3 +106,22 @@ export {
 export { userSchema } from "./user";
 export { patientSchema, patientWriteSchema, sexSchema } from "./patient";
 export { queueAddSchema, queueEntrySchema } from "./queue";
+export {
+  absenceBlockSchema,
+  absenceBlocksSchema,
+  absenceBlockWriteSchema,
+  appointmentBookSchema,
+  appointmentMoveSchema,
+  appointmentSchema,
+  appointmentsSchema,
+  blockMadeSchema,
+  dayListSchema,
+  freeSlotSchema,
+  openRangeSchema,
+  slotMinutesSchema,
+  visitTypeSchema,
+  visitTypesSchema,
+  visitTypeWriteSchema,
+  workingHoursSchema,
+  workingHoursWriteSchema,
+} from "./book";

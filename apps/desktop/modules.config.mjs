@@ -49,7 +49,7 @@ export const MODULE_ROUTES = {
     "settings.printing.tsx",
     "settings.data.tsx",
   ],
-  clinic: ["patients.tsx", "queue.tsx"],
+  clinic: ["patients.tsx", "queue.tsx", "book.tsx", "settings.book.tsx"],
 };
 
 /** Every route file no build ever drops: the shell, the redirect, the dev

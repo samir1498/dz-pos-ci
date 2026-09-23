@@ -29,6 +29,7 @@ import { ApiError, narrow, unwrap, unwrapFile, unwrapText, type Download } from 
 import { buildInfoSchema, clockSchema, healthSchema } from "./schemas/settings";
 
 import { auditClient } from "./client/audit";
+import { bookClient } from "./client/book";
 import { authClient } from "./client/auth";
 import { backupsClient } from "./client/backups";
 import { categoriesClient } from "./client/categories";
@@ -211,5 +212,6 @@ export function createClient(baseUrl: string, options: ClientOptions | typeof fe
     ...tillClient(transport),
     ...patientsClient(transport),
     ...queueClient(transport),
+    ...bookClient(transport),
   };
 }

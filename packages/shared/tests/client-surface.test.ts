@@ -20,6 +20,7 @@ import { describe, expect, test } from "vitest";
 import { createClient } from "../src/client";
 import type { Transport } from "../src/client";
 import { auditClient } from "../src/client/audit";
+import { bookClient } from "../src/client/book";
 import { authClient } from "../src/client/auth";
 import { backupsClient } from "../src/client/backups";
 import { categoriesClient } from "../src/client/categories";
@@ -121,6 +122,28 @@ const SURFACE: Readonly<Record<string, readonly string[]>> = {
     "markSeenInQueue",
     "markLeftInQueue",
   ],
+  book: [
+    "listAppointments",
+    "getAppointment",
+    "bookAppointment",
+    "cancelAppointment",
+    "moveAppointment",
+    "markAppointmentNoShow",
+    "clearAppointmentNoShow",
+    "getSlotMinutes",
+    "setSlotMinutes",
+    "getWorkingHours",
+    "setWorkingHours",
+    "listAbsenceBlocks",
+    "createAbsenceBlock",
+    "removeAbsenceBlock",
+    "listVisitTypes",
+    "createVisitType",
+    "updateVisitType",
+    "removeVisitType",
+    "nextFreeSlot",
+    "dayList",
+  ],
 };
 
 /** A transport that would fail loudly if a factory called it while being
@@ -159,6 +182,7 @@ const FACTORIES: Readonly<Record<string, () => object>> = {
   users: () => usersClient(unused),
   patients: () => patientsClient(unused),
   queue: () => queueClient(unused),
+  book: () => bookClient(unused),
 };
 
 function methodsOf(client: object): Record<string, unknown> {

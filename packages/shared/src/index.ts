@@ -130,6 +130,19 @@ export type { AppointmentDto } from "./generated/AppointmentDto";
 export type { AppointmentMoveDto } from "./generated/AppointmentMoveDto";
 export type { AppointmentsDto } from "./generated/AppointmentsDto";
 export type { SlotMinutesDto } from "./generated/SlotMinutesDto";
+// The book tools (C5b), types only for the same reason.
+export type { AbsenceBlockDto } from "./generated/AbsenceBlockDto";
+export type { AbsenceBlocksDto } from "./generated/AbsenceBlocksDto";
+export type { AbsenceBlockWriteDto } from "./generated/AbsenceBlockWriteDto";
+export type { BlockMadeDto } from "./generated/BlockMadeDto";
+export type { DayListDto } from "./generated/DayListDto";
+export type { FreeSlotDto } from "./generated/FreeSlotDto";
+export type { OpenRangeDto } from "./generated/OpenRangeDto";
+export type { VisitTypeDto } from "./generated/VisitTypeDto";
+export type { VisitTypesDto } from "./generated/VisitTypesDto";
+export type { VisitTypeWriteDto } from "./generated/VisitTypeWriteDto";
+export type { WorkingHoursDto } from "./generated/WorkingHoursDto";
+export type { WorkingHoursWriteDto } from "./generated/WorkingHoursWriteDto";
 
 export { ApiError, createClient } from "./client";
 // One zod schema per DTO, the check the client runs on every answer. They

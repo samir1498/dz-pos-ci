@@ -19,6 +19,7 @@
 
 import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
 import {
+  CalendarRange,
   Database,
   HardDriveDownload,
   Info,
@@ -94,6 +95,13 @@ export const SETTINGS_SECTIONS: readonly SectionItem[] = [
   // cabinet has neither, so its build never carries this route at all
   // (C6 review round, "shop-only panels behind a shared route file").
   { to: "/settings/data", label: "settings_nav_data", icon: Database, module: "retail" },
+  {
+    to: "/settings/book",
+    label: "settings_nav_book",
+    icon: CalendarRange,
+    permission: "edit_settings",
+    module: "clinic",
+  },
   { to: "/settings/about", label: "settings_nav_about", icon: Info },
 ];
 

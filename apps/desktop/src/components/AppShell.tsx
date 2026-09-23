@@ -42,7 +42,7 @@ import {
 import { Direction } from "radix-ui";
 import type { ComponentType, ReactNode } from "react";
 import type { PermissionDto } from "@dzpos/shared";
-import { CalendarClock, UsersRound } from "lucide-react";
+import { CalendarClock, CalendarRange, UsersRound } from "lucide-react";
 
 import { Icon } from "@/components/Icon";
 import { Wordmark } from "@/components/Wordmark";
@@ -203,6 +203,14 @@ export const NAV: readonly NavItem[] = [
     to: "/queue",
     label: "nav_queue",
     icon: CalendarClock,
+    section: "clinic",
+    permission: "view_patients",
+    module: "clinic",
+  },
+  {
+    to: "/book",
+    label: "nav_book",
+    icon: CalendarRange,
     section: "clinic",
     permission: "view_patients",
     module: "clinic",
