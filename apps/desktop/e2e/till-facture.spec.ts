@@ -15,6 +15,7 @@ import type { APIRequestContext, Page } from "@playwright/test";
 import { formatCentimes, stamp } from "@dzpos/shared";
 import { apiHeaders, apiUrl, printedNumber, seriesOf } from "./api";
 import { t } from "./messages";
+import { stubPrint } from "./print";
 
 
 
@@ -208,6 +209,7 @@ test("rings a facture up on credit, prints it, and leaves the ticket series wher
   page,
   request,
 }) => {
+  await stubPrint(page);
   await seedStoreBlock(request);
   await seedProduct(request, { name: BEAM, barcode: BEAM_BARCODE, price: BEAM_PRICE, rate: 0 });
   await seedCustomer(request);
@@ -269,9 +271,18 @@ test("rings a facture up on credit, prints it, and leaves the ticket series wher
   await expect(printed.getByText(CUSTOMER_NIS)).toBeVisible();
   await expect(printed.locator(".amount-net-to-pay")).toHaveText(formatCentimes(BEAM_PRICE));
 
-  // The half sheet is the same facture on smaller paper.
+  // The one Imprimer click above put this facture on paper: the frame's
+  // own print dialog ran, once, on the buyer's own sheet.
+  await expect(printed.locator("html")).toHaveAttribute("data-printed-count", "1");
+  await expect(printed.locator("html")).toHaveAttribute("data-printed", new RegExp(CUSTOMER));
+
+  // The half sheet is the same facture on smaller paper. Switching to it
+  // loads a fresh frame with nothing printed on it yet; that frame must
+  // stay unprinted, because a preview switch is not a second Imprimer
+  // click.
   await panel.getByRole("radio", { name: t("till_paper_a5"), exact: true }).click();
   await expect(printed.locator(".amount-net-to-pay")).toHaveText(formatCentimes(BEAM_PRICE));
+  await expect(printed.locator("html")).not.toHaveAttribute("data-printed-count");
 
   // A second basket, this time a ticket: its own series carried on from
   // where it was, untouched by the facture in between.

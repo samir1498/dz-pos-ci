@@ -18,6 +18,7 @@ import type { APIRequestContext, Page } from "@playwright/test";
 import { formatCentimes } from "@dzpos/shared";
 import { apiHeaders, apiUrl } from "./api";
 import { currentLang, t } from "./messages";
+import { stubPrint } from "./print";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 
@@ -147,6 +148,7 @@ test("sells two rates for cash, matches the fixture totals, reduces the stock an
   page,
   request,
 }) => {
+  await stubPrint(page);
   await useReelRegime(request);
   await seed(request, {
     name: COFFEE,
@@ -246,6 +248,13 @@ test("sells two rates for cash, matches the fixture totals, reduces the stock an
   await expect(ticket.locator(".amount-net-to-pay")).toHaveText(
     formatCentimes(expected.net_to_pay),
   );
+
+  // Imprimer does not stop at the preview: it opened the print dialog on
+  // the frame itself, exactly once, and it did so once that frame already
+  // held this sale's own lines, never on an empty or a stale one.
+  await expect(ticket.locator("html")).toHaveAttribute("data-printed-count", "1");
+  await expect(ticket.locator("html")).toHaveAttribute("data-printed", new RegExp(COFFEE));
+  await expect(ticket.locator("html")).toHaveAttribute("data-printed", new RegExp(TOMATO));
 
   // Stock left by exactly what was sold, not by a rounded unit.
   expect(await stockOf(request, COFFEE_BARCODE)).toBe(COFFEE_STOCK_MILLI - COFFEE_SOLD_MILLI);
