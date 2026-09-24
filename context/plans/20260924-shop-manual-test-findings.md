@@ -96,6 +96,9 @@ tasks:
   - id: 'T30'
     desc: 'Customers list: Épicerie Benali owing 1 457,80 of a 2 000 limit shows the status "À jour", which in French means paid up. Rename to what it measures (e.g. "Sous le plafond" / "Proche du plafond" / "Plafond dépassé"), and check the Arabic and English labels mean the same.'
     status: 'pending'
+  - id: 'T31'
+    desc: 'Audit journal is unreadable for a shopkeeper (Samir: "scary"). Needs its own plan: one plain sentence per row in the screen language ("Samir a forcé une vente à crédit de 915,60 pour Épicerie Benali, au-delà du plafond de 2 000,00"), the paper''s number (TK-2026-000003) and the customer''s name instead of "document #3" / "customer #1", action names translated instead of document.issue_override / sale.credit_blocked, no field_centimes keys, no empty "— → —" lines, and the raw diff behind a "détails" toggle for the owner. Also check: the override row carries warning=near_limit on a sale that went over the limit.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
