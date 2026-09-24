@@ -81,4 +81,4 @@ Leave the laptop alone. Ticks every ten minutes while builders run.
 
 ## Where it stands
 
-2026-09-24 18:50: loop file written, nothing started.
+2026-09-24 18:55: loop started. Builders on group 1 (printing, worktree `printing`, branch fix/imprimer-prints) and group 10 (small UI, worktree `small-ui`, branch fix/small-ui-findings, no cargo). Session B started in tmux dz:auto.
