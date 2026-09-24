@@ -63,3 +63,12 @@ to main; never write `context/progress/now.md`.
 ## Where it stands
 
 2026-09-24 18:50: loop file written, session not started.
+
+2026-09-24 19:10: started. Worktree `first-day` on `qa/first-day-e2e`:
+`apps/desktop/playwright.first-day.config.ts` (own database, no
+globalSetup so the test walks first setup, ports 4321/5176,
+`DZPOS_E2E_API_BIN` runs the copied API instead of cargo) and `just
+e2e-first-day`. One dz-builder writes `e2e/first-day/first-day.spec.ts`
+from the hand-test database's figures. Desktop walk ends at debt 1 819,85,
+supplier 23 836,00, drawer 6 288,00, stock Eau 69 / Café 116 / Sucre 49
+(the report's 67/116/48 include the phone sale after the close).
