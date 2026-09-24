@@ -51,6 +51,9 @@ tasks:
   - id: 'T15'
     desc: 'Wording: "float" (drawer cash) clashes with the never-a-float-for-money rule. Replace it with "opening cash" in docs/features.md (8), code and test comments (crates/api gates table, dto/till.rs, routes/till.rs, tests), keeping historical plan slugs as they are. UI and identifiers already say opening cash / opening_cash_centimes.'
     status: 'pending'
+  - id: 'T16'
+    desc: 'Till: "Aucun client ne correspond." shows under the customer search while the box is still empty (French, fresh shop with no customers). Same family as T7; the message should appear only after a search that found nothing. Also the open-till bar is a tall box with a lot of empty space above the till (feeds the T11 layout redesign).'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
