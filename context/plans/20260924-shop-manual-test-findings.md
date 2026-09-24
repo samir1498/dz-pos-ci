@@ -57,6 +57,9 @@ tasks:
   - id: 'T17'
     desc: 'Requirement for the T11 till redesign (Samir): the scan/search box holds focus by default so a scanner or the keyboard works at any moment without a click, the whole sale can be driven from the keyboard, and the on-screen numpad stays visible without scrolling. Catch to design around: permanent focus would steal keystrokes from the customer search, remise and amount fields, so focus returns to the scan box after each action (item added, sale taken, dialog closed, Escape) rather than being forced.'
     status: 'pending'
+  - id: 'T18'
+    desc: 'Till: with a full cart and cash chosen, Encaisser stays greyed while "Montant reçu" is empty and nothing says why, so Samir read it as "nothing happens". Either say what it waits for next to the button, or treat an empty box as the exact amount (common POS behaviour, no change due), which also saves typing on most sales. Decide in the T11 redesign.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
