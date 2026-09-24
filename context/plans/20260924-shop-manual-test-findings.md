@@ -93,6 +93,9 @@ tasks:
   - id: 'T29'
     desc: 'Till customer card: the "Client de passage" text beside a picked customer (Épicerie Benali) is the button that drops back to a walk-in sale, but it reads as a label saying this customer is a walk-in. Make it an explicit action ("Retirer le client" / an x) and show the debt after this sale (1 000 → 1 457,80) on the card before Encaisser, not only once the warning line is crossed.'
     status: 'pending'
+  - id: 'T30'
+    desc: 'Customers list: Épicerie Benali owing 1 457,80 of a 2 000 limit shows the status "À jour", which in French means paid up. Rename to what it measures (e.g. "Sous le plafond" / "Proche du plafond" / "Plafond dépassé"), and check the Arabic and English labels mean the same.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
