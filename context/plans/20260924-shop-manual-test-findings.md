@@ -168,6 +168,9 @@ tasks:
   - id: 'T54'
     desc: 'Phone pairing: a refused claim (the dev phone build lacked the launch token, 401 "this call did not show the launch token") shows as a flickering "Session expired, sign in again." The phone has no session yet, so that message is wrong twice over, and it flickers. Show one steady message that names the cause ("the till refused this phone: scan a fresh code" / "this phone build cannot reach the till") and stop re-rendering. Also check why it flickers (a retry or redirect loop on 401). Related: T53 (address in the QR); the launch token probably belongs in the QR too.'
     status: 'pending'
+  - id: 'T55'
+    desc: 'Ticket header prints the seller''s NIF, RC, NIS and AI (crates/retail/src/print/ticket.rs seller()), which Samir found heavy for a till receipt. No Algerian text gives a ticket de caisse a field list (research/legal-fiscal/2026-09-08-facture-and-ticket.md, "What the ticket must carry: Nothing"). Lumina''s five receipt templates print logo, name, address and phone only; its NIF appears only on invoice_thermal_80.html. Proposal: ticket = logo + name + address + phone, fiscal ids stay on the facture; optional setting "afficher les identifiants fiscaux sur le ticket", off by default. Needs a shop logo upload (Lumina has one, shop_logo).'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
