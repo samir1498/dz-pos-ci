@@ -30,6 +30,12 @@ tasks:
   - id: 'T8'
     desc: 'Wish (Samir): password and PIN fields get our own show/hide eye button. Browsers disagree today (Edge draws a native reveal, Chrome/Brave/Firefox draw none), so hide the native one (::-ms-reveal) and ship one eye everywhere, first setup and sign-in included.'
     status: 'pending'
+  - id: 'T9'
+    desc: 'Right after first setup the owner lands on the till with "Ouverture de la caisse" asking for the drawer float, in a shop with no products yet. Cause: routes/index.tsx:25 homeRoute sends every role to /till when retail is built, and routes/-till/session.tsx asks anyone without an open shift on each till mount. Owner (and manager) home should be the dashboard, or onboarding on an empty shop; the till prompt belongs to whoever sells.'
+    status: 'pending'
+  - id: 'T10'
+    desc: 'Wish (Samir): basic onboarding for a new shop, a spotlight tour plus a first-steps checklist (add products or import the sheet, add a cashier and PIN, pair a phone, open the till, ring a first sale). Needs its own plan. Check open source before building: driver.js (MIT, no deps), react-joyride, shepherd.js (its license needs a look for a commercial app).'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
