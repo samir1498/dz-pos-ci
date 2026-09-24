@@ -27,6 +27,9 @@ tasks:
   - id: 'T7'
     desc: 'Till (Arabic): "لا يوجد زبون مطابق" (no matching customer) shows under a customer who is already selected (till-credit-ar.png).'
     status: 'pending'
+  - id: 'T8'
+    desc: 'Wish (Samir): password and PIN fields get our own show/hide eye button. Browsers disagree today (Edge draws a native reveal, Chrome/Brave/Firefox draw none), so hide the native one (::-ms-reveal) and ship one eye everywhere, first setup and sign-in included.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
