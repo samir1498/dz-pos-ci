@@ -123,6 +123,9 @@ tasks:
   - id: 'T39'
     desc: 'Till redesign requirement (Samir): the cart in progress survives leaving the till (the facture refusal sends the cashier to Paramètres or Clients) and a reload, saved per till. Plus a sale history on the till holding both parked carts (not yet paid, Lumina F2/F3) and the last paid sales (reprint, open the paper, start an avoir; Lumina F9/F10 steps through recent sales), each marked by status. Shortcuts step back and forward through that history; stepping away parks the current cart automatically so nothing being filled is lost.'
     status: 'pending'
+  - id: 'T40'
+    desc: 'Decision (Samir, 2026-09-24) on T39: parked carts live in the shop''s SQLite, a new table per till and cashier (lines, customer, document kind, discount, updated_at), so they survive a reload, a crash and a reinstall and a manager can see them from another PC. Paid sales in the history are read from documents as today. Schema change: goes through the money builder with a migration and its revert. Also confirmed during the walk: the facture refusal''s link to Paramètres loses the cart today.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
