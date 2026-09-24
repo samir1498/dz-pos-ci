@@ -83,7 +83,7 @@ tasks:
     status: 'pending'
   - id: 'T26'
     desc: 'Reports site (not the app): the link preview image fails because Cloudflare Access guards /og/card.png too (a crawler gets the ObserveOne login page as HTML). Samir wants a generated OG image per page like the ObserveOne landing''s opengraph-image.tsx: satori + @resvg/resvg-js at build time, uploaded to the public Supabase bucket by deploy.sh, og:image pointing there (Docs.astro:53). Build it with the manual-test report section.'
-    status: 'pending'
+    status: 'done'
   - id: 'T27'
     desc: 'Onboarding input (T10): Samir, the developer, had to ask "how to sell" on the till. The first-sale path (tap tiles, received amount, take the sale, print) must be taught by the onboarding tour, not discovered.'
     status: 'pending'
