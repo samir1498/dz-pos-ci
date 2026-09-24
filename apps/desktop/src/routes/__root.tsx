@@ -13,6 +13,7 @@ import { AppShell } from "@/components/AppShell";
 import { FirstSetupScreen } from "@/components/FirstSetupScreen";
 import { FloatingControls } from "@/components/FloatingControls";
 import { LockScreen } from "@/components/LockScreen";
+import { ShopIdentityOnboarding } from "@/components/ShopIdentityOnboarding";
 import { SignInScreen } from "@/components/SignInScreen";
 import { useTranslation } from "@/i18n";
 import { useSession } from "@/lib/session";
@@ -21,7 +22,7 @@ export const Route = createRootRoute({ component: RootLayout });
 
 function RootLayout() {
   const { dir } = useTranslation();
-  const { status, locked } = useSession();
+  const { status, locked, freshOwner } = useSession();
   return (
     // The provider already writes `dir` on the document element; this repeats
     // it on the tree so a component reading its own inherited direction (and
@@ -36,6 +37,12 @@ function RootLayout() {
         <FirstSetupScreen />
       ) : status === "signed-out" ? (
         <SignInScreen />
+      ) : status === "signed-in" && freshOwner ? (
+        // T24/T38: the shop's own identity, asked once right after the
+        // owner claims the shop, skippable. Shown instead of the shell
+        // (never behind it) so the till's own opening popup does not fire
+        // underneath a screen the owner has not gotten past yet.
+        <ShopIdentityOnboarding />
       ) : (
         // The shell and the route inside it stay mounted whether or not the
         // till is locked: `LockScreen` below is an overlay on top of this,

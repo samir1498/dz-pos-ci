@@ -286,8 +286,8 @@ async fn a_payment_above_what_is_owed_says_what_is_owed() {
     assert_eq!(refused["error"]["code"], "validation");
     assert_eq!(refused["error"]["field"], "amount_centimes");
     assert_eq!(refused["error"]["outstanding_centimes"], 150_000);
-    // The payload gains no field: `party_side` is a facture's business.
-    assert_eq!(refused["error"]["party_side"], Value::Null);
+    // The payload gains no field: the party lists are a facture's business.
+    assert_eq!(refused["error"]["seller_missing_ids"], Value::Null);
 }
 
 #[tokio::test]

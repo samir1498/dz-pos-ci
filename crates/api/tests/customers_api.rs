@@ -794,8 +794,8 @@ async fn a_refusal_with_nothing_to_add_carries_no_figures_at_all() {
         "outstanding_centimes",
         "balance_after_centimes",
         "credit_limit_centimes",
-        "party_side",
-        "missing_ids",
+        "seller_missing_ids",
+        "buyer_missing_ids",
     ] {
         assert!(
             answer["error"].get(extra).is_none(),

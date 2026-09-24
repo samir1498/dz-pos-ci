@@ -39,6 +39,9 @@ pub const THERMAL_MODE: &str = "thermal_mode";
 /// The key the session idle time is stored under, in whole minutes.
 pub const SESSION_IDLE_MINUTES: &str = "session_idle_minutes";
 
+/// The key the ticket's fiscal-id line is stored under.
+pub const TICKET_FISCAL_IDS: &str = "ticket_fiscal_ids";
+
 /// How long a session survives with nothing happening on it, for a shop that
 /// has never set the figure. Fifteen minutes: a till in a shop with the door
 /// open is the thing being protected, and a cashier who has served nobody for
@@ -328,6 +331,35 @@ pub fn set_session_idle(
             before: Some(serde_json::json!({ "session_idle_minutes": before }).to_string()),
             after: Some(serde_json::json!({ "session_idle_minutes": minutes }).to_string()),
         },
+    )
+}
+
+/// Whether the ticket (not the facture, which always carries the full
+/// block) also prints the seller's NIF, RC, NIS and AI. Off for a shop that
+/// has never chosen: a till receipt carries nothing an Algerian text
+/// requires on it (research/legal-fiscal, "What the ticket must carry:
+/// Nothing"), and the four identifiers made the paper heavy for what it is.
+/// The facture is unaffected either way; it names the fuller block whatever
+/// this says.
+pub fn ticket_fiscal_ids(conn: &mut SqliteConnection, shop_id: i32) -> Result<bool, CoreError> {
+    Ok(repo::value(conn, shop_id, TICKET_FISCAL_IDS)?.as_deref() == Some("1"))
+}
+
+/// Records the shop's choice. No audit row, the same reason the theme has
+/// none: which lines a ticket's own copy prints is not something anybody
+/// has to answer for, unlike the idle time beside it.
+pub fn set_ticket_fiscal_ids(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    show: bool,
+    at: NaiveDateTime,
+) -> Result<(), CoreError> {
+    repo::put(
+        conn,
+        shop_id,
+        TICKET_FISCAL_IDS,
+        if show { "1" } else { "0" },
+        at,
     )
 }
 

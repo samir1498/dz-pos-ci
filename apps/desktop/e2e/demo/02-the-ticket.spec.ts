@@ -13,7 +13,7 @@ test("the ticket", async ({ page, request }, testInfo) => {
   await seedProduct(request, CIMENT);
   await seedCustomer(request, ROUIBA);
 
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
   await beat(page);
 

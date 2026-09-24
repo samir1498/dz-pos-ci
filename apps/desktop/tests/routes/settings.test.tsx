@@ -90,6 +90,7 @@ const seeded: SettingsDto = {
   print_lang: null,
   thermal_mode: "text",
   discount_threshold_bps: 0,
+  ticket_fiscal_ids: false,
 };
 
 /**
@@ -252,6 +253,13 @@ beforeEach(() => {
       // neither side knows cannot pass through it.
       const chosen = (["text", "raster"] as const).find((mode) => mode === asked);
       current = { ...current, thermal_mode: chosen ?? "text" };
+      return Promise.resolve(json(200, current));
+    }
+    if (init?.method === "PUT" && url.endsWith("/settings/ticket-fiscal-ids")) {
+      const body: unknown = JSON.parse(String(init.body));
+      if (typeof body !== "object" || body === null) throw new Error("no body");
+      const asked = "ticket_fiscal_ids" in body ? body.ticket_fiscal_ids : undefined;
+      current = { ...current, ticket_fiscal_ids: asked === true };
       return Promise.resolve(json(200, current));
     }
     if (init?.method === "POST" && url.endsWith("/settings/regime")) {
@@ -743,5 +751,19 @@ describe("the printing room", () => {
     await user.click(await screen.findByRole("option", { name: fr.thermal_mode_raster }));
     await waitFor(() => expect(picker).toHaveTextContent(fr.thermal_mode_raster));
     expect(screen.getByText(fr.thermal_mode_arabic_always_drawn)).toBeInTheDocument();
+  });
+
+  test("the ticket fiscal ids switch is off on a fresh shop and can be turned on (T55)", async () => {
+    const user = userEvent.setup();
+    mount("fr", "/settings/printing");
+    const toggle = await screen.findByRole("switch", {
+      name: fr.settings_ticket_fiscal_ids_toggle,
+    });
+    expect(toggle).not.toBeChecked();
+
+    await user.click(toggle);
+    await waitFor(() => expect(sent("PUT").url).toContain("/settings/ticket-fiscal-ids"));
+    expect(sent("PUT").body).toEqual({ ticket_fiscal_ids: true });
+    await waitFor(() => expect(toggle).toBeChecked());
   });
 });

@@ -269,3 +269,141 @@ describe("locked, the shell's queries stop asking the API on a window focus", ()
     expect(result.current.locked).toBe(false);
   });
 });
+
+// T24/T38: the shop's identity is asked once, right after the owner claims
+// the shop, and only then — an ordinary sign-in (the same owner back the
+// next morning) must not raise the onboarding step again.
+describe("the shop identity onboarding flag", () => {
+  test("claiming the shop as its first owner raises it", async () => {
+    fetchMock.mockImplementation((input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/health")) {
+        return Promise.resolve(json(200, { status: "ok", shop_id: 1, needs_first_setup: true }));
+      }
+      if (url.endsWith("/auth/first-setup")) {
+        return Promise.resolve(json(200, { me: OWNER, token: "owner-token", idle_minutes: 15 }));
+      }
+      return Promise.resolve(notFound());
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useSession(), { wrapper: wrapper(client) });
+    await waitFor(() => expect(result.current.status).toBe("needs-setup"));
+    expect(result.current.freshOwner).toBe(false);
+
+    await act(async () => {
+      await result.current.claimFirstOwner("Propriétaire", "developpement");
+    });
+    await waitFor(() => expect(result.current.status).toBe("signed-in"));
+    expect(result.current.freshOwner).toBe(true);
+
+    act(() => result.current.dismissOnboarding());
+    expect(result.current.freshOwner).toBe(false);
+  });
+
+  test("an ordinary sign-in never raises it", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useSession(), { wrapper: wrapper(client) });
+    await waitFor(() => expect(result.current.status).toBe("signed-out"));
+
+    fetchMock.mockImplementation((input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/auth/login")) {
+        return Promise.resolve(json(200, { me: OWNER, token: "owner-token", idle_minutes: 15 }));
+      }
+      return Promise.resolve(notFound());
+    });
+    await act(async () => {
+      await result.current.signInWithPassword("Propriétaire", "developpement");
+    });
+    await waitFor(() => expect(result.current.status).toBe("signed-in"));
+    expect(result.current.freshOwner).toBe(false);
+  });
+
+  test("signing out drops it — a later sign-in must not inherit it", async () => {
+    fetchMock.mockImplementation((input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/health")) {
+        return Promise.resolve(json(200, { status: "ok", shop_id: 1, needs_first_setup: true }));
+      }
+      if (url.endsWith("/auth/first-setup")) {
+        return Promise.resolve(json(200, { me: OWNER, token: "owner-token", idle_minutes: 15 }));
+      }
+      if (url.endsWith("/auth/logout")) return Promise.resolve(json(200, {}));
+      return Promise.resolve(notFound());
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useSession(), { wrapper: wrapper(client) });
+    await waitFor(() => expect(result.current.status).toBe("needs-setup"));
+
+    await act(async () => {
+      await result.current.claimFirstOwner("Propriétaire", "developpement");
+    });
+    await waitFor(() => expect(result.current.freshOwner).toBe(true));
+
+    await act(async () => {
+      await result.current.signOut();
+    });
+    await waitFor(() => expect(result.current.status).toBe("signed-out"));
+    expect(result.current.freshOwner).toBe(false);
+  });
+});
+
+// T28: a tab that loaded `GET /health` before the shop had an owner is stuck
+// on `needs-setup` forever today — nothing asks again until a reload. The
+// same visibility check the focus-revalidate effect above runs for a
+// signed-in tab must run here too, so looking at the tab again (not
+// reloading it) is what corrects it.
+describe("a tab stuck on needs-setup after the shop got an owner elsewhere (T28)", () => {
+  test("the tab becoming visible again re-checks health and drops out of needs-setup", async () => {
+    let needsSetup = true;
+    fetchMock.mockImplementation((input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/health")) {
+        return Promise.resolve(json(200, { status: "ok", shop_id: 1, needs_first_setup: needsSetup }));
+      }
+      if (url.endsWith("/auth/me")) {
+        return Promise.resolve(json(401, { error: { code: "session_required", message: "no" } }));
+      }
+      return Promise.resolve(notFound());
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useSession(), { wrapper: wrapper(client) });
+    await waitFor(() => expect(result.current.status).toBe("needs-setup"));
+
+    // The owner claimed the shop in a different tab or window; this one's
+    // own state has no way to know yet. A real browser fires
+    // "visibilitychange" on `document`, not `window` — the effect under
+    // test listens there for that reason.
+    needsSetup = false;
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await waitFor(() => expect(result.current.status).toBe("signed-out"));
+  });
+
+  test("a tab correctly signed in is left alone by the same check", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useSession(), { wrapper: wrapper(client) });
+    await waitFor(() => expect(result.current.status).toBe("signed-out"));
+
+    fetchMock.mockImplementation((input: unknown) => {
+      const url = String(input);
+      if (url.endsWith("/auth/login")) {
+        return Promise.resolve(json(200, { me: OWNER, token: "owner-token", idle_minutes: 15 }));
+      }
+      if (url.endsWith("/auth/me")) return Promise.resolve(json(200, OWNER));
+      return Promise.resolve(notFound());
+    });
+    await act(async () => {
+      await result.current.signInWithPassword("Propriétaire", "developpement");
+    });
+    await waitFor(() => expect(result.current.status).toBe("signed-in"));
+
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(result.current.status).toBe("signed-in");
+  });
+});

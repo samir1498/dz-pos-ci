@@ -109,5 +109,18 @@ export function settingsClient({ send }: Transport) {
       });
       return narrow(body, settingsSchema, "settings");
     },
+
+    /** Records whether the ticket also carries the seller's NIF, RC, NIS
+     * and AI (they print on the facture whatever this says). Answers the
+     * whole settings page, the way `setTheme` does. No `null` arm: a
+     * ticket is always one of the two shapes (T55). */
+    async setTicketFiscalIds(show: boolean): Promise<SettingsDto> {
+      const body = await send("/settings/ticket-fiscal-ids", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ticket_fiscal_ids: show }),
+      });
+      return narrow(body, settingsSchema, "settings");
+    },
   };
 }

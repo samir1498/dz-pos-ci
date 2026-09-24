@@ -32,14 +32,23 @@ const GS: u8 = 0x1d;
 const MAX_BAND_BYTES: usize = 60_000;
 
 /// ESC/POS bytes for the 80 mm ticket. Same refusal as the HTML renderer
-/// when an IFU document carries a TVA recap.
-pub fn render_ticket_escpos(doc: &Document, lang: Lang) -> Result<Vec<u8>, RetailError> {
+/// when an IFU document carries a TVA recap. `show_fiscal_ids` is
+/// `render_ticket`'s own flag, read the same way at the same moment.
+pub fn render_ticket_escpos(
+    doc: &Document,
+    lang: Lang,
+    show_fiscal_ids: bool,
+) -> Result<Vec<u8>, RetailError> {
     if doc.regime == Regime::Ifu && !doc.totals.tva_by_rate.is_empty() {
         return Err(RetailError::render(
             "an IFU document carries a TVA recap and has no printable form",
         ));
     }
-    Ok(encode(&ticket::items(&ticket::view(doc, lang))))
+    Ok(encode(&ticket::items(&ticket::view(
+        doc,
+        lang,
+        show_fiscal_ids,
+    ))))
 }
 
 /// The ticket down whichever path the shop's head is on.
@@ -55,10 +64,13 @@ pub fn render_ticket_escpos_in(
     doc: &Document,
     lang: Lang,
     mode: ThermalMode,
+    show_fiscal_ids: bool,
 ) -> Result<Vec<u8>, RetailError> {
     match mode.for_lang(lang) {
-        ThermalMode::Text => render_ticket_escpos(doc, lang),
-        ThermalMode::Raster => render_ticket_escpos_raster(doc, lang, raster::HEAD_WIDTH_DOTS),
+        ThermalMode::Text => render_ticket_escpos(doc, lang, show_fiscal_ids),
+        ThermalMode::Raster => {
+            render_ticket_escpos_raster(doc, lang, raster::HEAD_WIDTH_DOTS, show_fiscal_ids)
+        }
     }
 }
 
@@ -132,9 +144,10 @@ pub fn write_ticket_escpos_to_file(
     doc: &Document,
     lang: Lang,
     mode: ThermalMode,
+    show_fiscal_ids: bool,
     path: &std::path::Path,
 ) -> Result<(), RetailError> {
-    let bytes = render_ticket_escpos_in(doc, lang, mode)?;
+    let bytes = render_ticket_escpos_in(doc, lang, mode, show_fiscal_ids)?;
     std::fs::write(path, bytes)?;
     Ok(())
 }
@@ -151,10 +164,11 @@ pub fn send_ticket_escpos_tcp(
     doc: &Document,
     lang: Lang,
     mode: ThermalMode,
+    show_fiscal_ids: bool,
     addr: &str,
 ) -> Result<(), RetailError> {
     use std::io::Write as _;
-    let bytes = render_ticket_escpos_in(doc, lang, mode)?;
+    let bytes = render_ticket_escpos_in(doc, lang, mode, show_fiscal_ids)?;
     let mut stream = std::net::TcpStream::connect(addr)?;
     stream.write_all(&bytes)?;
     Ok(())
@@ -194,8 +208,9 @@ pub fn render_ticket_escpos_raster(
     doc: &Document,
     lang: Lang,
     width_dots: u32,
+    show_fiscal_ids: bool,
 ) -> Result<Vec<u8>, RetailError> {
-    encode_raster(&draw_ticket_raster(doc, lang, width_dots)?.bitmap)
+    encode_raster(&draw_ticket_raster(doc, lang, width_dots, show_fiscal_ids)?.bitmap)
 }
 
 /// A drawn bitmap as the bytes a head eats: reset, left margin, the `GS v 0`
@@ -218,13 +233,18 @@ pub fn draw_ticket_raster(
     doc: &Document,
     lang: Lang,
     width_dots: u32,
+    show_fiscal_ids: bool,
 ) -> Result<raster::Drawn, RetailError> {
     if doc.regime == Regime::Ifu && !doc.totals.tva_by_rate.is_empty() {
         return Err(RetailError::render(
             "an IFU document carries a TVA recap and has no printable form",
         ));
     }
-    raster::draw(&ticket::items(&ticket::view(doc, lang)), lang, width_dots)
+    raster::draw(
+        &ticket::items(&ticket::view(doc, lang, show_fiscal_ids)),
+        lang,
+        width_dots,
+    )
 }
 
 struct Buf {

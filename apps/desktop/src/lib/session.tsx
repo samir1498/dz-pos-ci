@@ -72,11 +72,17 @@ interface Ctx {
   readonly method: AuthMethod | null;
   readonly idleMinutes: number | null;
   readonly locked: boolean;
+  /** True from the moment `claimFirstOwner` succeeds until the shop's
+   *  identity onboarding step (T24/T38) is skipped or saved. Never
+   *  persisted (see `saveDevSession`): a dev reload must not re-show a
+   *  step the owner already got past. */
+  readonly freshOwner: boolean;
   readonly signInWithPin: (userId: number, pin: string) => Promise<void>;
   readonly signInWithPassword: (name: string, password: string) => Promise<void>;
   readonly claimFirstOwner: (name: string, password: string) => Promise<void>;
   readonly signOut: () => Promise<void>;
   readonly lockNow: () => void;
+  readonly dismissOnboarding: () => void;
 }
 
 const SessionContext = createContext<Ctx | null>(null);
@@ -129,6 +135,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [method, setMethod] = useState<AuthMethod | null>(null);
   const [idleMinutes, setIdleMinutes] = useState<number | null>(null);
   const [locked, setLocked] = useState(false);
+  const [freshOwner, setFreshOwner] = useState(false);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const forgetSession = useCallback(() => {
@@ -138,6 +145,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setMethod(null);
     setIdleMinutes(null);
     setLocked(false);
+    setFreshOwner(false);
     setStatus("signed-out");
     // Every screen's query answered against the person who just left;
     // holding them would show the next person a stale basket total or,
@@ -242,6 +250,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async (name: string, password: string) => {
       const session = await api.claimFirstOwner({ name, password });
       establish(session, "password");
+      // The shop has no identity yet (T24): the owner just typed a name and
+      // a password, nothing about the shop itself. `dismissOnboarding`
+      // clears this once the step is skipped or saved.
+      setFreshOwner(true);
     },
     [establish],
   );
@@ -256,6 +268,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const lockNow = useCallback(() => {
     setLocked(true);
+  }, []);
+
+  const dismissOnboarding = useCallback(() => {
+    setFreshOwner(false);
   }, []);
 
   // Revalidated on focus (the brief's own words): a window left in the
@@ -285,6 +301,40 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [status, forgetSession]);
+
+  // A tab opened before the shop had an owner reads `needs_first_setup:
+  // true` once, on mount, and nothing here asked again (T28: Samir saw the
+  // setup screen on a shop that already had one, until he refreshed). The
+  // same re-check the revalidate effect above runs for a signed-in tab runs
+  // here for one stuck on "needs-setup", so looking at the tab again is
+  // what fixes it, not a reload.
+  useEffect(() => {
+    if (status !== "needs-setup") return;
+    function recheck() {
+      api.health().then(
+        (health) => {
+          if (!health.needs_first_setup) setStatus("signed-out");
+        },
+        () => {
+          // A failed probe leaves the screen already shown alone.
+        },
+      );
+    }
+    function onVisibility() {
+      // Not `=== "visible"`: jsdom's own default is `"prerender"`, and the
+      // library's own `FocusManager` (the revalidate effect above rides on
+      // it too) reads anything but `"hidden"` as looked-at for the same
+      // reason a real browser tab restored from a background process can
+      // sit in states other than the plain `"visible"` one.
+      if (document.visibilityState !== "hidden") recheck();
+    }
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [status]);
 
   // While locked, tell TanStack Query the window is not focused, so no
   // screen under the overlay refetches when the OS hands this window focus
@@ -358,11 +408,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       method,
       idleMinutes,
       locked,
+      freshOwner,
       signInWithPin,
       signInWithPassword,
       claimFirstOwner,
       signOut,
       lockNow,
+      dismissOnboarding,
     }),
     [
       status,
@@ -370,11 +422,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       method,
       idleMinutes,
       locked,
+      freshOwner,
       signInWithPin,
       signInWithPassword,
       claimFirstOwner,
       signOut,
       lockNow,
+      dismissOnboarding,
     ],
   );
 

@@ -30,12 +30,15 @@ import { useTranslation, type Key } from "@/i18n";
 
 import { Choice, ChoiceGroup } from "./choice";
 
-/** A facture the party blocks refuse, as the server described it: which
- * half is short and of which identifiers. Both come off the wire; the screen
- * decides neither, the way it decides neither credit amount. */
+/** A facture the party blocks refuse, as the server described it: each
+ * side's own missing identifiers, empty when that side is not the problem.
+ * Both lists come off the wire; the screen decides neither, the way it
+ * decides neither credit amount (T37: both travel together now, so a
+ * cashier who fixes the shop's own settings sees the customer's fiche too
+ * on the very next try, never only on the one after). */
 export interface PartyRefusal {
-  readonly side: "seller" | "buyer";
-  readonly missing: readonly Key[];
+  readonly sellerMissing: readonly Key[];
+  readonly buyerMissing: readonly Key[];
 }
 
 /** The identifiers a facture can be short of, as their own labels. The
@@ -51,18 +54,27 @@ const PARTY_FIELD: Record<string, Key> = {
 
 /** The refusal, if this error is one and named a side and fields the screen
  * knows. */
-export function partyRefusal(error: unknown): PartyRefusal | null {
-  if (!(error instanceof ApiError) || error.code !== "party_ids") return null;
-  const { partySide, missingIds } = error;
-  if (partySide !== "seller" && partySide !== "buyer") return null;
-  if (missingIds === undefined || missingIds.length === 0) return null;
-  const missing: Key[] = [];
-  for (const field of missingIds) {
+/** The fields of one side's missing-identifiers list, translated, or `null`
+ * when the server named one this screen does not recognise: the refusal
+ * then falls back to its one line of text rather than showing a raw key. */
+function fields(ids: readonly string[] | undefined): Key[] | null {
+  if (ids === undefined) return null;
+  const keys: Key[] = [];
+  for (const field of ids) {
     const key = PARTY_FIELD[field];
     if (key === undefined) return null;
-    missing.push(key);
+    keys.push(key);
   }
-  return { side: partySide, missing };
+  return keys;
+}
+
+export function partyRefusal(error: unknown): PartyRefusal | null {
+  if (!(error instanceof ApiError) || error.code !== "party_ids") return null;
+  const sellerMissing = fields(error.sellerMissingIds);
+  const buyerMissing = fields(error.buyerMissingIds);
+  if (sellerMissing === null || buyerMissing === null) return null;
+  if (sellerMissing.length === 0 && buyerMissing.length === 0) return null;
+  return { sellerMissing, buyerMissing };
 }
 
 /** What the picked customer's own standing says, before this basket. Over
@@ -279,25 +291,78 @@ function CustomerPicker({
   );
 }
 
-/** The facture the party blocks refuse, with the side and the fields the
- * server named and a way to go and fill them in. Two screens own the two
- * halves, so the link goes to the one that can fix this refusal and not to
- * a generic "settings". */
-export function PartyIdsRefused({ refusal }: { refusal: PartyRefusal }) {
+/** One side of a party-ids refusal: whose fields they are, in plain words,
+ * the fields themselves, and a link to the one screen that can fix them.
+ * `whose` is said outright ("Les identifiants de votre magasin" /
+ * "Les identifiants du client Épicerie Benali") rather than left as
+ * jargon a cashier has to parse, and `name` puts the customer's own name on
+ * it when one is picked (T37). */
+function PartyBlockPanel({
+  whose,
+  missing,
+  to,
+  action,
+  testId,
+}: {
+  whose: string;
+  missing: readonly Key[];
+  to: "/settings/shop" | "/customers";
+  action: Key;
+  testId: string;
+}) {
   const { t } = useTranslation();
-  const seller = refusal.side === "seller";
+  if (missing.length === 0) return null;
   return (
-    <Card role="alert" data-testid="till-party-ids" className="gap-2 border-line-danger p-3">
-      <strong className="text-fg-danger">{t("error_party_ids")}</strong>
-      <p>{t(seller ? "till_party_ids_seller" : "till_party_ids_buyer")}</p>
-      <ul data-testid="till-party-ids-missing" className="list-disc ps-5">
-        {refusal.missing.map((field) => (
+    <div className="flex flex-col gap-1">
+      <p>{whose}</p>
+      <ul data-testid={testId} className="list-disc ps-5">
+        {missing.map((field) => (
           <li key={field}>{t(field)}</li>
         ))}
       </ul>
-      <Link to={seller ? "/settings" : "/customers"} className="underline">
-        {t(seller ? "till_party_ids_settings" : "till_party_ids_customer")}
+      <Link to={to} className="underline">
+        {t(action)}
       </Link>
+    </div>
+  );
+}
+
+/** The facture the party blocks refuse, both sides at once (T37): a shop
+ * whose own settings are short and a fiche that is also short used to be
+ * two refusals, one per attempt, because the seller was checked first and
+ * the buyer was never reached until it passed. Fixing either one now shows
+ * whatever is still short of the other on the very next try, and each side
+ * says in plain words whose identifiers they are and links to the one
+ * screen that can fix them. */
+export function PartyIdsRefused({
+  refusal,
+  customerName,
+}: {
+  refusal: PartyRefusal;
+  customerName: string | null;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Card role="alert" data-testid="till-party-ids" className="gap-3 border-line-danger p-3">
+      <strong className="text-fg-danger">{t("error_party_ids")}</strong>
+      <PartyBlockPanel
+        whose={t("till_party_ids_seller")}
+        missing={refusal.sellerMissing}
+        to="/settings/shop"
+        action="till_party_ids_settings"
+        testId="till-party-ids-seller-missing"
+      />
+      <PartyBlockPanel
+        whose={
+          customerName === null
+            ? t("till_party_ids_buyer")
+            : `${t("till_party_ids_buyer")} ${customerName}`
+        }
+        missing={refusal.buyerMissing}
+        to="/customers"
+        action="till_party_ids_customer"
+        testId="till-party-ids-buyer-missing"
+      />
     </Card>
   );
 }

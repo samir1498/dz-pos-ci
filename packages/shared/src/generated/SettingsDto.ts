@@ -48,4 +48,11 @@ thermal_mode: ThermalModeDto,
  * refuses a round number off. Retail-only (S5): a discount is given on
  * a sale, which does not exist without the feature.
  */
-discount_threshold_bps: number, };
+discount_threshold_bps: number, 
+/**
+ * Whether the ticket also carries the seller's NIF, RC, NIS and AI.
+ * Off on a shop that has never chosen: those four print on the
+ * facture regardless, and a till receipt is not the paper an
+ * Algerian text asks anything of (T55).
+ */
+ticket_fiscal_ids: boolean, };

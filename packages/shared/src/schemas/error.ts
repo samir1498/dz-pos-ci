@@ -20,8 +20,8 @@ export const apiErrorPayloadSchema = z.object({
   credit_limit_centimes: exactInteger.optional(),
   field: z.string().optional(),
   outstanding_centimes: exactInteger.optional(),
-  party_side: z.string().optional(),
-  missing_ids: z.array(z.string()).optional(),
+  seller_missing_ids: z.array(z.string()).optional(),
+  buyer_missing_ids: z.array(z.string()).optional(),
   retry_after_seconds: exactInteger.optional(),
   permission: permissionSchema.optional(),
 }) satisfies z.ZodType<ApiErrorPayloadDto>;

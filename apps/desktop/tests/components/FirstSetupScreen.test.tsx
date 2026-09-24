@@ -107,6 +107,24 @@ describe("FirstSetupScreen", () => {
     );
   });
 
+  test("shows no error under the name field before it is touched or submitted (T1)", async () => {
+    mount();
+    await screen.findByTestId("setup-screen");
+    // The bug: "Obligatoire." rendered under "Votre nom" the instant the
+    // screen opened, with nothing typed and nothing submitted yet.
+    expect(screen.queryByText("Obligatoire.")).toBeNull();
+    expect(screen.getByTestId("setup-name")).toHaveAttribute("aria-invalid", "false");
+  });
+
+  test("shows the error under the name field once it is blurred empty", async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByTestId("setup-screen");
+    await user.click(screen.getByTestId("setup-name"));
+    await user.tab();
+    expect(screen.getByText("Obligatoire.")).toBeInTheDocument();
+  });
+
   test("the submit stays enabled and an empty form is refused with an error", async () => {
     const user = userEvent.setup();
     mount();

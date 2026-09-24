@@ -1,35 +1,46 @@
-// The till is the home for a retail build; a build without retail has no
-// till to open on, so the home is the first screen the trades it does
-// carry offer (C6). The redirect runs before the route loads, which keeps
-// "Dinar" from flashing on every launch.
+// The till is where whoever sells opens; an owner or a manager (anyone who
+// can see the reports) opens on the dashboard instead (T9): a fresh shop
+// with no products yet used to greet every role, owner included, with
+// "Ouverture de la caisse" asking for a drawer float against a catalogue
+// nobody had rung a sale on. A cashier still opens straight on the till,
+// which is the one screen their day is spent on.
 //
-// `to` is a plain `string`, the way `AppShell`'s `NavItem.to` and
-// `settings.tsx`'s `SectionItem.to` already are: the home for a build
-// without `retail` is a path this file cannot know exists in the
-// registered route tree at all (`patients.tsx`/`queue.tsx` are excluded
-// from that tree the moment `clinic` is not in `VITE_DINAR_MODULES`), so a
-// literal here would refuse to compile the moment retail is left out.
+// The redirect reads `me` off the session, which is why it is this route's
+// own component and not a `beforeLoad`: `beforeLoad` fires before the
+// session has resolved, outside the React tree `useSession` reads, so it
+// cannot ask a permission at all. Nothing here renders anything a person
+// sees, the way the old `beforeLoad` redirect rendered nothing either:
+// `__root.tsx` mounts the shell (and this route inside it) only once
+// `status === "signed-in"`, and `me` is already populated by then
+// (`useHasPermission`'s own doc makes the same promise for every other
+// screen), so "Dinar" never flashes on the way past.
 
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { Navigate, createFileRoute } from "@tanstack/react-router";
 
 import { builtModules, type Module } from "@/lib/modules";
+import { hasPermission, useSession } from "@/lib/session";
 
-/** The one screen each trade opens on. Retail wins when both are built,
- *  the way the shop's own home always has: a cabinet with a shop side is
- *  still a shop first. */
+/** The one screen each trade opens on for whoever sells, when nothing sends
+ *  them to the dashboard instead. */
 const HOME: Readonly<Record<Module, string>> = {
   retail: "/till",
   clinic: "/queue",
 };
 
-export function homeRoute(modules: readonly Module[]): string {
-  if (modules.includes("retail")) return HOME.retail;
+/** `seesReports` is `hasPermission(me, "see_reports")` — the same
+ *  permission `AppShell.tsx`'s `NAV` gates the dashboard's own link on —
+ *  read here rather than `me.role`, which `role.test.ts` holds every file
+ *  under `src/` to never comparing. A build without retail has no
+ *  dashboard to send anyone to, so the question does not arise there. */
+export function homeRoute(modules: readonly Module[], seesReports: boolean): string {
+  if (modules.includes("retail")) return seesReports ? "/dashboard" : HOME.retail;
   const first = modules[0];
   return first === undefined ? HOME.retail : HOME[first];
 }
 
-export const Route = createFileRoute("/")({
-  beforeLoad: () => {
-    throw redirect({ to: homeRoute(builtModules()) });
-  },
-});
+export const Route = createFileRoute("/")({ component: Home });
+
+function Home() {
+  const { me } = useSession();
+  return <Navigate to={homeRoute(builtModules(), hasPermission(me, "see_reports"))} replace />;
+}

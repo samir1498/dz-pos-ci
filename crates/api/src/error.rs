@@ -123,9 +123,9 @@ struct Payload {
     /// working that out on the screen would be a second reading of décret
     /// 05-468 art. 3. Absent from every other error.
     #[serde(skip_serializing_if = "Option::is_none")]
-    party_side: Option<&'static str>,
+    seller_missing_ids: Option<Vec<&'static str>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    missing_ids: Option<Vec<&'static str>>,
+    buyer_missing_ids: Option<Vec<&'static str>>,
     /// How long a locked-out user has to wait, in seconds. The same
     /// exception, for the same reason: the sign-in screen counts it down and
     /// the wait is a figure the caller never sent. Absent from every other
@@ -151,8 +151,8 @@ struct Figures {
     credit_limit_centimes: Option<i64>,
     field: Option<String>,
     outstanding_centimes: Option<i64>,
-    party_side: Option<&'static str>,
-    missing_ids: Option<Vec<&'static str>>,
+    seller_missing_ids: Option<Vec<&'static str>>,
+    buyer_missing_ids: Option<Vec<&'static str>>,
     retry_after_seconds: Option<i64>,
     permission: Option<&'static str>,
 }
@@ -163,8 +163,8 @@ impl Figures {
         credit_limit_centimes: None,
         field: None,
         outstanding_centimes: None,
-        party_side: None,
-        missing_ids: None,
+        seller_missing_ids: None,
+        buyer_missing_ids: None,
         retry_after_seconds: None,
         permission: None,
     };
@@ -311,9 +311,9 @@ fn figures_of_core(e: &CoreError) -> Figures {
 /// would have taken the customer to and the limit it passed; a payment above
 /// the debt names what is actually owed, and the field it is about, so the
 /// form can say "you can take at most this much" without asking the balance
-/// again; a facture the party blocks refuse names the side that is short and
-/// the identifiers it is short of, because working that out on the screen
-/// would be a second reading of décret 05-468 art. 3. `Kernel` delegates to
+/// again; a facture the party blocks refuse names both blocks' own missing
+/// identifiers (T37), because working that out on the screen would be a
+/// second reading of décret 05-468 art. 3. `Kernel` delegates to
 /// `figures_of_core`, unchanged; every other variant carries none of these
 /// and the fields are absent from the body.
 #[cfg(feature = "retail")]
@@ -335,9 +335,12 @@ fn figures_of_retail(e: &RetailError) -> Figures {
             outstanding_centimes: Some(*outstanding_centimes),
             ..Figures::NONE
         },
-        RetailError::PartyIds { side, missing } => Figures {
-            party_side: Some(side.as_str()),
-            missing_ids: Some(missing.clone()),
+        RetailError::PartyIds {
+            seller_missing,
+            buyer_missing,
+        } => Figures {
+            seller_missing_ids: Some(seller_missing.clone()),
+            buyer_missing_ids: Some(buyer_missing.clone()),
             ..Figures::NONE
         },
         _ => Figures::NONE,
@@ -456,8 +459,8 @@ impl IntoResponse for ApiError {
             credit_limit_centimes,
             field,
             outstanding_centimes,
-            party_side,
-            missing_ids,
+            seller_missing_ids,
+            buyer_missing_ids,
             retry_after_seconds,
             permission,
         } = self.figures();
@@ -471,8 +474,8 @@ impl IntoResponse for ApiError {
                     credit_limit_centimes,
                     field,
                     outstanding_centimes,
-                    party_side,
-                    missing_ids,
+                    seller_missing_ids,
+                    buyer_missing_ids,
                     retry_after_seconds,
                     permission,
                 },

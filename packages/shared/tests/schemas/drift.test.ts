@@ -48,11 +48,11 @@ const wide = z.object({
 type _Wide = Assert<Covers<StoreDto, typeof wide>>;
 
 // The third direction, and the one neither check above can see. This schema
-// is short of `party_side`, which the Rust payload declares optional: an
-// answer without an optional key is still assignable, so `satisfies` takes it
-// and so does `Covers`. Only the key comparison refuses it, and it has to,
-// because z.object strips a figure it has no key for and the till's refusal
-// panel would then never show the field the server sent.
+// is short of `seller_missing_ids`, which the Rust payload declares
+// optional: an answer without an optional key is still assignable, so
+// `satisfies` takes it and so does `Covers`. Only the key comparison refuses
+// it, and it has to, because z.object strips a figure it has no key for and
+// the till's refusal panel would then never show the field the server sent.
 const missingOptional = z.object({
   code: z.string(),
   message: z.string(),
@@ -60,12 +60,12 @@ const missingOptional = z.object({
   credit_limit_centimes: z.int().optional(),
   field: z.string().optional(),
   outstanding_centimes: z.int().optional(),
-  missing_ids: z.array(z.string()).optional(),
+  buyer_missing_ids: z.array(z.string()).optional(),
   retry_after_seconds: z.int().optional(),
   permission: permissionSchema.optional(),
 }) satisfies z.ZodType<ApiErrorPayloadDto>;
 type _StillCovers = Assert<Covers<ApiErrorPayloadDto, typeof missingOptional>>;
-// @ts-expect-error party_side is a key of the payload and not of this schema
+// @ts-expect-error seller_missing_ids is a key of the payload and not of this schema
 type _MissingOptional = Assert<Matches<ApiErrorPayloadDto, typeof missingOptional>>;
 
 // The real schemas pass all three.
@@ -91,11 +91,11 @@ describe("the schema drift check", () => {
     // and the amount the till would have shown is gone from the answer.
     const refusal = {
       code: "party_ids",
-      message: "the buyer block of a facture is missing rc",
-      party_side: "buyer",
+      message: "a facture's party blocks are missing seller: rc; buyer: ",
+      seller_missing_ids: ["rc"],
     };
     const parsed = missingOptional.parse(refusal);
-    expect("party_side" in parsed).toBe(false);
-    expect(apiErrorPayloadSchema.parse(refusal)).toMatchObject({ party_side: "buyer" });
+    expect("seller_missing_ids" in parsed).toBe(false);
+    expect(apiErrorPayloadSchema.parse(refusal)).toMatchObject({ seller_missing_ids: ["rc"] });
   });
 });

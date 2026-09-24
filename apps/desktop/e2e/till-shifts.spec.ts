@@ -301,7 +301,9 @@ test("the manager reads the closed shifts back and the cashier is refused the li
 }) => {
   await signInAs(context.request, managerId, MANAGER_PIN);
   await page.goto("/");
-  await expect(page).toHaveURL(/\/till$/);
+  // A manager sees the reports, so "/" now lands on the dashboard (T9),
+  // not the till: this test never rings anything up, only reads a list.
+  await expect(page).toHaveURL(/\/dashboard$/);
   // The screen-first check, named as not being the defence: the entry a
   // manager sees is there, and the server behind it is what actually
   // decides (checked on the cashier below).

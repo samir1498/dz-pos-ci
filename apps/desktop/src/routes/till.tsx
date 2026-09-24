@@ -682,7 +682,7 @@ export function TillScreen() {
           pending={pay.isPending}
         />
 
-        {partyProblem !== null ? <PartyIdsRefused refusal={partyProblem} /> : null}
+        {partyProblem !== null ? <PartyIdsRefused refusal={partyProblem} customerName={customer?.name ?? null} /> : null}
 
         {serverError !== null ? (
           <p role="alert" className="text-fg-danger">

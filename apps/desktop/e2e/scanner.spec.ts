@@ -121,7 +121,7 @@ async function scan(
 }
 
 test.beforeEach(async ({ request, page }) => {
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
   await expect(searchBox(page)).toBeFocused();
   // Frozen from here: every gap this file measures is one it chose.

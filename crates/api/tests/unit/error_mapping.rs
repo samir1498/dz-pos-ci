@@ -18,8 +18,6 @@ use super::RetailError;
 use super::{ApiError, CoreError, Figures, StatusCode};
 use dzpos_core::db::DbError;
 #[cfg(feature = "retail")]
-use dzpos_core::error::PartySide;
-#[cfg(feature = "retail")]
 use dzpos_core::money::Money;
 use dzpos_core::money::MoneyError;
 use dzpos_core::services::permissions::Permission;
@@ -213,21 +211,21 @@ fn every_retail_error_variant_keeps_its_pre_split_status_code_and_figures() {
 
     assert_eq!(
         ApiError::Retail(RetailError::PartyIds {
-            side: PartySide::Seller,
-            missing: vec!["nif"],
+            seller_missing: vec!["nif"],
+            buyer_missing: vec!["rc"],
         })
         .parts(),
         (StatusCode::UNPROCESSABLE_ENTITY, "party_ids")
     );
     assert_eq!(
         ApiError::Retail(RetailError::PartyIds {
-            side: PartySide::Seller,
-            missing: vec!["nif"],
+            seller_missing: vec!["nif"],
+            buyer_missing: vec!["rc"],
         })
         .figures(),
         Figures {
-            party_side: Some("seller"),
-            missing_ids: Some(vec!["nif"]),
+            seller_missing_ids: Some(vec!["nif"]),
+            buyer_missing_ids: Some(vec!["rc"]),
             ..Figures::NONE
         }
     );

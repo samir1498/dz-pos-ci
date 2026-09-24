@@ -798,8 +798,8 @@ async fn a_facture_the_party_blocks_refuse_is_422_naming_the_side_and_the_fields
     let (status, body) = call(&app, "POST", "/sales", Some(facture.clone())).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(code(&body), "party_ids");
-    assert_eq!(body["error"]["party_side"], json!("seller"));
-    assert_eq!(body["error"]["missing_ids"], json!(["rc", "nis"]));
+    assert_eq!(body["error"]["seller_missing_ids"], json!(["rc", "nis"]));
+    assert_eq!(body["error"]["buyer_missing_ids"], json!([]));
 
     seller_ready(&app).await;
     let bare = party(&app, "Sarl Bendiba", "company", None, None, None).await;
@@ -818,8 +818,8 @@ async fn a_facture_the_party_blocks_refuse_is_422_naming_the_side_and_the_fields
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(code(&body), "party_ids");
-    assert_eq!(body["error"]["party_side"], json!("buyer"));
-    assert_eq!(body["error"]["missing_ids"], json!(["rc", "nis"]));
+    assert_eq!(body["error"]["seller_missing_ids"], json!([]));
+    assert_eq!(body["error"]["buyer_missing_ids"], json!(["rc", "nis"]));
 
     // A facture with nobody to make it out to is the customer field, not a
     // block that is short: there is no block at all.
@@ -891,8 +891,8 @@ async fn a_consumer_buying_on_a_facture_is_asked_for_an_address_and_not_for_an_r
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(code(&body), "party_ids");
-    assert_eq!(body["error"]["party_side"], json!("buyer"));
-    assert_eq!(body["error"]["missing_ids"], json!(["address"]));
+    assert_eq!(body["error"]["seller_missing_ids"], json!([]));
+    assert_eq!(body["error"]["buyer_missing_ids"], json!(["address"]));
 }
 
 #[tokio::test]

@@ -125,7 +125,7 @@ test("sells on credit, warns at the threshold, is refused past the limit, overri
   await seedProduct(request, { name: SMALL, barcode: SMALL_BARCODE, price: SMALL_PRICE });
   const customerId = await seedCustomer(request);
 
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
 
   // Nobody picked, so credit is not on offer at all.

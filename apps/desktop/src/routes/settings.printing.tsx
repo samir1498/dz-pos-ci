@@ -7,6 +7,7 @@ import { FactureLayoutPanel } from "@/components/settings/FactureLayoutPanel";
 import { PrintLanguagePanel } from "@/components/settings/PrintLanguagePanel";
 import { SettingsLoad } from "@/components/settings/SettingsLoad";
 import { ThermalModePanel } from "@/components/settings/ThermalModePanel";
+import { TicketFiscalIdsPanel } from "@/components/settings/TicketFiscalIdsPanel";
 
 export const Route = createFileRoute("/settings/printing")({ component: PrintingRoom });
 
@@ -18,6 +19,7 @@ export function PrintingRoom() {
           <FactureLayoutPanel settings={settings} />
           <PrintLanguagePanel settings={settings} />
           <ThermalModePanel settings={settings} />
+          <TicketFiscalIdsPanel settings={settings} />
         </div>
       )}
     </SettingsLoad>

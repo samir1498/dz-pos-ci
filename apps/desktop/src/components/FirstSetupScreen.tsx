@@ -22,8 +22,20 @@ export function FirstSetupScreen() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<Key | null>(null);
   const [pending, setPending] = useState(false);
+  // "Votre nom" is the only one of the three fields whose error is a plain
+  // "required" on an empty box: the password and confirm errors already
+  // gate themselves on a non-empty value (`password === "" ? null : ...`),
+  // so an untouched box shows nothing there. This one showed "Obligatoire."
+  // the instant the screen opened, before the owner had typed a letter,
+  // because nothing gated it the same way. `nameTouched` (a blur) or
+  // `submitted` (a submit attempt) is what a person did, not what the
+  // field holds, so the field is now silent until one of those happens.
+  const [nameTouched, setNameTouched] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
-  const nameError: Key | null = name.trim() === "" ? "validation_required" : null;
+  const nameShowError = nameTouched || submitted;
+  const nameError: Key | null =
+    nameShowError && name.trim() === "" ? "validation_required" : null;
   const passwordError: Key | null =
     password === "" ? null : password.length < 8 ? "validation_password_length" : null;
   const confirmError: Key | null =
@@ -32,6 +44,7 @@ export function FirstSetupScreen() {
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (pending) return;
+    setSubmitted(true);
     if (name.trim() === "" || password.length < 8 || confirm !== password) {
       if (name.trim() === "") setError("validation_required");
       else if (password.length < 8) setError("validation_password_length");
@@ -73,6 +86,7 @@ export function FirstSetupScreen() {
                   autoFocus
                   disabled={pending}
                   aria-invalid={nameError !== null}
+                  onBlur={() => setNameTouched(true)}
                   onChange={(event) => {
                     setName(event.target.value);
                     setError(null);

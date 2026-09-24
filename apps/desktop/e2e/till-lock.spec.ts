@@ -57,7 +57,7 @@ test("locking the till from the topbar keeps the cart, and unlocking gives it ba
   });
   expect(res.status()).toBe(201);
 
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
 
   const search = page.getByLabel(t("till_search"), { exact: true });
@@ -104,7 +104,7 @@ test("the covered till is unreachable: focus cannot land there, and F9 does not 
   });
   expect(res.status()).toBe(201);
 
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
 
   const search = page.getByLabel(t("till_search"), { exact: true });
@@ -173,7 +173,7 @@ test("the covered till is unreachable: focus cannot land there, and F9 does not 
 test("a session with no remembered method offers both unlock doors, and the PIN one really unlocks", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
 
   await page.getByTestId("user-menu-trigger").click();

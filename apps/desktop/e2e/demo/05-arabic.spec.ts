@@ -9,7 +9,7 @@ test("arabic", async ({ page, request }, testInfo) => {
   await reel(request);
   for (const p of [CAFE, PAIN]) await seedProduct(request, p);
 
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
   await beat(page, 2);
 

@@ -110,14 +110,15 @@ pub async fn ticket(
         print_lang: named,
     }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
-    let (found, lang) = state
+    let (found, lang, show_fiscal_ids) = state
         .blocking(move |c| -> Result<_, CoreError> {
             let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
             let lang = preferences::print_lang_for(c, shop, named, caller)?;
-            Ok((found, lang))
+            let show_fiscal_ids = preferences::ticket_fiscal_ids(c, shop)?;
+            Ok((found, lang, show_fiscal_ids))
         })
         .await?;
-    Ok(Html(render_ticket(&found, lang)?))
+    Ok(Html(render_ticket(&found, lang, show_fiscal_ids)?))
 }
 
 /// The same ticket as ESC/POS bytes for a thermal printer.
@@ -150,15 +151,16 @@ pub async fn ticket_escpos(
         print_lang: named,
     }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
-    let (found, lang, mode) = state
+    let (found, lang, mode, show_fiscal_ids) = state
         .blocking(move |c| -> Result<_, CoreError> {
             let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
             let lang = preferences::print_lang_for(c, shop, named, caller)?;
             let mode = preferences::thermal_mode_for(c, shop, lang)?;
-            Ok((found, lang, mode))
+            let show_fiscal_ids = preferences::ticket_fiscal_ids(c, shop)?;
+            Ok((found, lang, mode, show_fiscal_ids))
         })
         .await?;
-    let bytes = render_ticket_escpos_in(&found, lang, mode)?;
+    let bytes = render_ticket_escpos_in(&found, lang, mode, show_fiscal_ids)?;
     let mut res = axum::response::Response::new(axum::body::Body::from(bytes));
     res.headers_mut().insert(
         header::CONTENT_TYPE,
@@ -197,15 +199,16 @@ pub async fn print_ticket(
         print_lang: named,
     }) = query.map_err(|_| ApiError::BadRequest("lang must be fr, en or ar".into()))?;
     let shop = state.shop_id;
-    let (found, lang, mode) = state
+    let (found, lang, mode, show_fiscal_ids) = state
         .blocking(move |c| -> Result<_, CoreError> {
             let found = documents::get_of_kind(c, shop, id, DocumentKind::Ticket)?;
             let lang = preferences::print_lang_for(c, shop, named, caller)?;
             let mode = preferences::thermal_mode_for(c, shop, lang)?;
-            Ok((found, lang, mode))
+            let show_fiscal_ids = preferences::ticket_fiscal_ids(c, shop)?;
+            Ok((found, lang, mode, show_fiscal_ids))
         })
         .await?;
-    let bytes = render_ticket_escpos_in(&found, lang, mode)?;
+    let bytes = render_ticket_escpos_in(&found, lang, mode, show_fiscal_ids)?;
     let spool_dir = state
         .db_path()
         .parent()
@@ -229,7 +232,13 @@ pub async fn print_ticket(
                     // sender resolves it again through the same rule, so
                     // the file on disk and the bytes on the wire are the
                     // same bytes for the same document.
-                    let _ = dzpos_core::print::send_ticket_escpos_tcp(&found, lang, mode, &addr);
+                    let _ = dzpos_core::print::send_ticket_escpos_tcp(
+                        &found,
+                        lang,
+                        mode,
+                        show_fiscal_ids,
+                        &addr,
+                    );
                 }
             })
             .await;

@@ -60,17 +60,20 @@ pub struct ApiErrorPayloadDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub outstanding_centimes: Option<i64>,
-    /// Only on `party_ids`: which half of the facture is short (`seller` or
-    /// `buyer`) and which identifiers it is short of (`rc`, `nis`, `name`,
-    /// `address`). The till sends the cashier to the settings or to the
-    /// fiche on the side, and names the fields from the list; neither is
-    /// re-derived from the code (architecture.md rule 2).
+    /// Only on `party_ids`: which identifiers the seller's own block is
+    /// short of (`rc`, `nis`), empty when the seller is not the problem.
+    /// Both lists travel together (T37) so a screen can show what is wrong
+    /// with each side from one refusal rather than hearing about the buyer
+    /// only once the seller is fixed; neither is re-derived from the code
+    /// (architecture.md rule 2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub party_side: Option<String>,
+    pub seller_missing_ids: Option<Vec<String>>,
+    /// The customer fiche's own missing identifiers (`rc`, `nis`, `name`,
+    /// `address`), empty when the buyer is not the problem.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub missing_ids: Option<Vec<String>>,
+    pub buyer_missing_ids: Option<Vec<String>>,
     /// Only on `locked_out`: how long the user has to wait before the till
     /// will look at their PIN again. The sign-in screen counts it down.
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -119,6 +119,10 @@ async fn the_seeded_shop_reads_as_its_name_reel_and_nothing_planned() {
         // text. Arabic is drawn whatever this says, which is the core's
         // rule and not this route's.
         "thermal_mode": "text",
+        // Off on a shop that has never chosen: the four fiscal identifiers
+        // print on the facture regardless, and a till receipt is not the
+        // paper an Algerian text asks anything of (T55).
+        "ticket_fiscal_ids": false,
     });
     // Retail-only (S5 of `a-kernel-crate-and-retail-as-the-first-module`):
     // `SettingsDto::discount_threshold_bps` does not exist with the feature
@@ -770,4 +774,29 @@ async fn a_threshold_past_a_whole_basket_is_refused() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     assert_eq!(body["error"]["code"], "validation", "{body}");
+}
+
+/// T55: off on a fresh shop, and the owner's choice is kept and read back.
+#[tokio::test]
+async fn the_ticket_fiscal_ids_choice_is_kept_and_read_back() {
+    let h = harness();
+    let (_, before) = call(&h.app, "GET", "/settings", None).await;
+    assert_eq!(before["ticket_fiscal_ids"], json!(false), "{before}");
+
+    let (status, body) = call(
+        &h.app,
+        "PUT",
+        "/settings/ticket-fiscal-ids",
+        Some(json!({ "ticket_fiscal_ids": true })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["ticket_fiscal_ids"], json!(true), "{body}");
+
+    let (_, all) = call(&h.app, "GET", "/settings", None).await;
+    assert_eq!(
+        all["ticket_fiscal_ids"],
+        json!(true),
+        "the shop file lost the choice"
+    );
 }

@@ -142,6 +142,10 @@ pub fn router_with_origin(
             "/settings/thermal-mode",
             put(routes::settings::set_thermal_mode),
         )
+        .route(
+            "/settings/ticket-fiscal-ids",
+            put(routes::settings::set_ticket_fiscal_ids),
+        )
         .route("/support-bundle", get(routes::support::bundle))
         .route(
             "/users",

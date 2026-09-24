@@ -167,9 +167,10 @@ test("sells two rates for cash, matches the fixture totals, reduces the stock an
     stock: TOMATO_STOCK_MILLI,
   });
 
-  // The till is the home: "/" lands on it without a click.
-  await page.goto("/");
-  await expect(page).toHaveURL(/\/till$/);
+  // "/" no longer lands here for the owner (T9: an owner opens on the
+  // dashboard), so this spec, which rings a sale up, goes to the till by
+  // name; `signin.spec.ts` is what proves the home redirect itself.
+  await page.goto("/till");
 
   // A scanner types the barcode and sends Enter; one unit lands in the cart
   // and the box is empty for the next scan.
@@ -287,7 +288,7 @@ test("the pad counts the notes and F9 takes the sale", async ({ page, request })
     stock: SOAP_STOCK_MILLI,
   });
 
-  await page.goto("/");
+  await page.goto("/till");
   const search = page.getByLabel(t("till_search"), { exact: true });
   await search.fill(SOAP_BARCODE);
   await search.press("Enter");

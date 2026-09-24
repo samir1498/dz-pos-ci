@@ -11,7 +11,7 @@ use diesel::sqlite::SqliteConnection;
 use dzpos_kernel::services::permissions::Permission;
 use dzpos_kernel::services::users::{NewUser, Role};
 use dzpos_kernel::services::{audit, settings, shops, users};
-use dzpos_retail::error::{CoreError, PartySide, RetailError, RetailError::Kernel};
+use dzpos_retail::error::{CoreError, RetailError, RetailError::Kernel};
 use dzpos_retail::models::product::{NewProduct, Unit};
 use dzpos_retail::models::shop::StoreBlock;
 use dzpos_retail::models::stock::MovementKind;
@@ -2027,6 +2027,21 @@ fn a_facture_to_a_company_carrying_its_identifiers_is_issued_in_the_facture_seri
     );
 }
 
+/// Both sides' own missing identifiers (T37), out of a refusal that must be
+/// this variant. One place for the match rustfmt cannot keep on one line
+/// (`seller_missing, buyer_missing` is past its struct-pattern width), so
+/// the seven tests below read two short lines instead of an eight-line
+/// match each.
+fn party_ids_of(err: &RetailError) -> (Vec<&'static str>, Vec<&'static str>) {
+    match err {
+        RetailError::PartyIds {
+            seller_missing,
+            buyer_missing,
+        } => (seller_missing.clone(), buyer_missing.clone()),
+        other => panic!("{other:?}"),
+    }
+}
+
 #[test]
 fn a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number() {
     let (_dir, mut conn) = open_temp();
@@ -2048,13 +2063,9 @@ fn a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number() {
         facture(c, vec![line(p, 1_000)], PaymentMode::Cash),
     )
     .unwrap_err();
-    match err {
-        RetailError::PartyIds { side, ref missing } => {
-            assert_eq!(side, PartySide::Buyer);
-            assert_eq!(missing, &["nis"]);
-        }
-        other => panic!("{other:?}"),
-    }
+    let (seller_missing, buyer_missing) = party_ids_of(&err);
+    assert!(seller_missing.is_empty());
+    assert_eq!(buyer_missing, ["nis"]);
     assert_eq!(err.code(), "party_ids");
 
     // Nothing at all happened: no document, no stock movement, and above
@@ -2138,13 +2149,9 @@ fn a_facture_to_a_consumer_asks_for_a_name_and_an_address_and_nothing_else() {
         facture(no_address, vec![line(p, 1_000)], PaymentMode::Cash),
     )
     .unwrap_err();
-    match err {
-        RetailError::PartyIds { side, ref missing } => {
-            assert_eq!(side, PartySide::Buyer);
-            assert_eq!(missing, &["address"]);
-        }
-        other => panic!("{other:?}"),
-    }
+    let (seller_missing, buyer_missing) = party_ids_of(&err);
+    assert!(seller_missing.is_empty());
+    assert_eq!(buyer_missing, ["address"]);
     // The one facture that went through is still the only one, and the
     // refusal took no second number.
     assert_eq!(counter(&mut conn, "doc_facture:2026"), 2);
@@ -2177,13 +2184,9 @@ fn a_shop_whose_settings_carry_no_nis_cannot_issue_a_facture_at_all() {
         facture(c, vec![line(p, 1_000)], PaymentMode::Cash),
     )
     .unwrap_err();
-    match err {
-        RetailError::PartyIds { side, ref missing } => {
-            assert_eq!(side, PartySide::Seller);
-            assert_eq!(missing, &["nis"]);
-        }
-        other => panic!("{other:?}"),
-    }
+    let (seller_missing, buyer_missing) = party_ids_of(&err);
+    assert_eq!(seller_missing, ["nis"]);
+    assert!(buyer_missing.is_empty());
     assert_eq!(counter(&mut conn, "doc_facture:2026"), 1);
 
     // The same shop still rings up tickets: the identifiers are checked when
@@ -2321,13 +2324,9 @@ fn a_blank_identifier_is_as_missing_as_no_identifier_at_all() {
         facture(company, vec![line(p, 1_000)], PaymentMode::Cash),
     )
     .unwrap_err();
-    match err {
-        RetailError::PartyIds { side, ref missing } => {
-            assert_eq!(side, PartySide::Buyer);
-            assert_eq!(missing, &["rc", "nis"]);
-        }
-        other => panic!("{other:?}"),
-    }
+    let (seller_missing, buyer_missing) = party_ids_of(&err);
+    assert!(seller_missing.is_empty());
+    assert_eq!(buyer_missing, ["rc", "nis"]);
 
     // The buyer's side, a consumer: a name of spaces is no name, and the
     // address goes the same way (art. 3-2, last alinéa).
@@ -2348,16 +2347,12 @@ fn a_blank_identifier_is_as_missing_as_no_identifier_at_all() {
         facture(consumer, vec![line(p, 1_000)], PaymentMode::Cash),
     )
     .unwrap_err();
-    match err {
-        RetailError::PartyIds { side, ref missing } => {
-            assert_eq!(side, PartySide::Buyer);
-            assert_eq!(missing, &["name", "address"]);
-        }
-        other => panic!("{other:?}"),
-    }
+    let (seller_missing, buyer_missing) = party_ids_of(&err);
+    assert!(seller_missing.is_empty());
+    assert_eq!(buyer_missing, ["name", "address"]);
 
-    // The seller's side, and it is read first: a shop whose own RC is a
-    // space has nothing a cashier could fix on the customer's fiche.
+    // The seller's side this time, with a buyer that is fully in order: a
+    // shop whose own RC is a space has nothing a cashier could fix on it.
     let ready = party(
         &mut conn,
         "Entreprise Kaci",
@@ -2376,13 +2371,9 @@ fn a_blank_identifier_is_as_missing_as_no_identifier_at_all() {
         facture(ready, vec![line(p, 1_000)], PaymentMode::Cash),
     )
     .unwrap_err();
-    match err {
-        RetailError::PartyIds { side, ref missing } => {
-            assert_eq!(side, PartySide::Seller);
-            assert_eq!(missing, &["rc"]);
-        }
-        other => panic!("{other:?}"),
-    }
+    let (seller_missing, buyer_missing) = party_ids_of(&err);
+    assert_eq!(seller_missing, ["rc"]);
+    assert!(buyer_missing.is_empty());
 
     // Three refusals, no document, and the facture series still stands at
     // its first number.
@@ -2477,13 +2468,9 @@ fn an_override_the_party_ids_then_refuse_leaves_no_log_row_and_no_number() {
         },
     )
     .unwrap_err();
-    match err {
-        RetailError::PartyIds { side, ref missing } => {
-            assert_eq!(side, PartySide::Buyer);
-            assert_eq!(missing, &["nis"]);
-        }
-        other => panic!("{other:?}"),
-    }
+    let (seller_missing, buyer_missing) = party_ids_of(&err);
+    assert!(seller_missing.is_empty());
+    assert_eq!(buyer_missing, ["nis"]);
 
     assert!(
         !audit::list(&mut conn, SHOP)

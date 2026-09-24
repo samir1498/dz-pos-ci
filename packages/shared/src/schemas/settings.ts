@@ -112,6 +112,10 @@ export const settingsSchema = z.object({
    *  a shop that has never set one, which refuses a cashier every
    *  discount. */
   discount_threshold_bps: exactInteger,
+  /** Off on a shop that has never chosen: the four fiscal identifiers
+   *  print on the facture regardless, and the ticket carries the name,
+   *  address and phone only until this is turned on (T55). */
+  ticket_fiscal_ids: z.boolean(),
 }) satisfies z.ZodType<SettingsDto>;
 type _Settings = Assert<Matches<SettingsDto, typeof settingsSchema>>;
 

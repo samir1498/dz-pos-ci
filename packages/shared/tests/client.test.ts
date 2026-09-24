@@ -554,15 +554,15 @@ describe("sales", () => {
     await expect(api.getSaleFacture(7, "fr", "a4")).rejects.toMatchObject({ code: "not_found" });
   });
 
-  test("a facture the party blocks refuse carries the side and the missing ids", async () => {
+  test("a facture the party blocks refuse carries both sides' missing ids", async () => {
     const api = createClient(
       "http://127.0.0.1:4317",
       stub(422, {
         error: {
           code: "party_ids",
-          message: "the buyer block of a facture is missing rc, nis",
-          party_side: "buyer",
-          missing_ids: ["rc", "nis"],
+          message: "a facture's party blocks are missing seller: ; buyer: rc, nis",
+          seller_missing_ids: [],
+          buyer_missing_ids: ["rc", "nis"],
         },
       }),
     );
@@ -579,8 +579,8 @@ describe("sales", () => {
       }),
     ).rejects.toMatchObject({
       code: "party_ids",
-      partySide: "buyer",
-      missingIds: ["rc", "nis"],
+      sellerMissingIds: [],
+      buyerMissingIds: ["rc", "nis"],
     });
   });
 

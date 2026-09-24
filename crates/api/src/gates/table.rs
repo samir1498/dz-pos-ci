@@ -361,6 +361,12 @@ const SHARED: &[Gate] = &[
         permission: Some(Permission::EditSettings),
         why: "which wire the shop's thermal head is sent is the same class of decision as the facture layout and the print language beside it: it decides whether a customer is handed a printed ticket or a roll of boxes, and a cashier who flipped it would break every paper the shop prints until somebody found the setting (plan arabic-on-a-cheap-thermal-head, 2026-09-21)",
     },
+    Gate {
+        method: "PUT",
+        path: "/settings/ticket-fiscal-ids",
+        permission: Some(Permission::EditSettings),
+        why: "whether the till receipt also carries the shop's NIF, RC, NIS and AI is the same class of choice as the layout and the print language beside it, not the theme: it changes what every future customer is handed, so a cashier does not flip it mid-shift (plan shop-manual-test-findings T55, 2026-09-24)",
+    },
     #[cfg(feature = "retail")]
     Gate {
         method: "POST",

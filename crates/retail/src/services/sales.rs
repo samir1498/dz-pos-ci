@@ -15,11 +15,10 @@
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
-use crate::error::{CoreError, PartySide, RetailError};
+use crate::error::{CoreError, RetailError};
 use crate::models::debt::{DebtKind, NewDebtEntry};
 use crate::models::document::{
-    payment_mode_stored, BalanceTriple, Document, NewDocument, NewDocumentLine, PartyBlock,
-    PartyKind, SellerBlock,
+    payment_mode_stored, BalanceTriple, Document, NewDocument, NewDocumentLine, SellerBlock,
 };
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{compute_totals, Line, Money, PaymentMode, TotalsOptions};
@@ -27,7 +26,9 @@ use crate::repos::sale_idempotency as idempotency;
 use crate::services::pricing::{
     buyer_block, money_lines, price_lines, sum_line_totals, too_large, STAMP_ENABLED,
 };
-use crate::services::{customers, debt, discount_threshold, documents, proforma, shifts, stock};
+use crate::services::{
+    customers, debt, discount_threshold, documents, party_ids, proforma, shifts, stock,
+};
 use crate::{audit_actions, models::customer::ProvedCustomer};
 use dzpos_kernel::services::permissions::{self, Permission};
 use dzpos_kernel::services::{audit, clock, role_of, settings, shops};
@@ -363,7 +364,7 @@ fn issue_inner(
         // Still before `documents::issue`, so a facture the identifiers
         // refuse burns no number of either series (features.md, Numbering).
         if new.kind == SaleKind::Facture {
-            check_party_ids(&seller, buyer.as_ref())?;
+            party_ids::check(&seller, buyer.as_ref())?;
         }
 
         let document = documents::issue(
@@ -735,81 +736,6 @@ fn issue_inner(
     }
 
     issued
-}
-
-/// What a facture must carry before it may take a number
-/// (`a_shop_whose_settings_carry_no_nis_cannot_issue_a_facture_at_all`, décret 05-468 art. 3 and 4).
-///
-/// The seller answers with RC and NIS. NIF and AI print when the settings
-/// hold them and refuse nothing: they are on every facture in circulation,
-/// but a shop that has not been handed one yet still has a sale to ring up,
-/// and refusing it would stop the till over a number nobody typed in.
-///
-/// The buyer answers by the kind of party they are on the day. A company
-/// gives the same two identifiers; a consumer gives « ses nom, prénom(s) et
-/// adresse » and nothing more (art. 3-2, last alinéa), which is why the
-/// party kind is snapshotted onto the block rather than inferred from
-/// whether an RC happens to be filled in.
-///
-/// The seller is checked first: a shop whose own settings are short has no
-/// fiche the cashier could edit that would make the facture printable, so
-/// hearing about the buyer first would send them to the wrong screen.
-fn check_party_ids(seller: &SellerBlock, buyer: Option<&PartyBlock>) -> Result<(), RetailError> {
-    let mut missing = Vec::new();
-    if unset(seller.rc.as_deref()) {
-        missing.push("rc");
-    }
-    if unset(seller.nis.as_deref()) {
-        missing.push("nis");
-    }
-    if !missing.is_empty() {
-        return Err(RetailError::PartyIds {
-            side: PartySide::Seller,
-            missing,
-        });
-    }
-
-    // `issue` refuses a facture with no customer before any of this, so a
-    // block missing here is a fiche the document service could not read;
-    // the same refusal is the honest answer either way.
-    let Some(buyer) = buyer else {
-        return Err(RetailError::validation(
-            "customer_id",
-            "a facture is made out to a customer, so one has to be named",
-        ));
-    };
-    match buyer.party_kind {
-        PartyKind::Company => {
-            if unset(buyer.rc.as_deref()) {
-                missing.push("rc");
-            }
-            if unset(buyer.nis.as_deref()) {
-                missing.push("nis");
-            }
-        }
-        PartyKind::Consumer => {
-            if buyer.name.trim().is_empty() {
-                missing.push("name");
-            }
-            if unset(buyer.address.as_deref()) {
-                missing.push("address");
-            }
-        }
-    }
-    if !missing.is_empty() {
-        return Err(RetailError::PartyIds {
-            side: PartySide::Buyer,
-            missing,
-        });
-    }
-    Ok(())
-}
-
-/// An identifier a block does not really carry. A field of spaces is not an
-/// RC: the services store what was typed after a trim, and a row written
-/// before that rule existed could still hold one.
-fn unset(value: Option<&str>) -> bool {
-    !value.is_some_and(|v| !v.trim().is_empty())
 }
 
 /// What the sale is asking the customer's standing for: how it is being

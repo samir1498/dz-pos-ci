@@ -240,8 +240,9 @@ async fn both_escpos_routes_answer_the_wire_the_shop_stored() {
     let facture_text = render_facture_escpos_text(&facture, &input, Lang::Fr).unwrap();
     let facture_bands =
         render_facture_escpos(&facture, &input, Lang::Fr, ThermalMode::Raster).unwrap();
-    let ticket_text = render_ticket_escpos_in(&ticket, Lang::Fr, ThermalMode::Text).unwrap();
-    let ticket_bands = render_ticket_escpos_in(&ticket, Lang::Fr, ThermalMode::Raster).unwrap();
+    let ticket_text = render_ticket_escpos_in(&ticket, Lang::Fr, ThermalMode::Text, false).unwrap();
+    let ticket_bands =
+        render_ticket_escpos_in(&ticket, Lang::Fr, ThermalMode::Raster, false).unwrap();
     // The number is ASCII in either language and is on every facture
     // (décret 05-468 art. 3), so it is the one string that says "a head
     // reading this in text mode prints characters". Drawn, it is dots and

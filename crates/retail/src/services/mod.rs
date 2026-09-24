@@ -21,6 +21,7 @@ pub mod documents;
 pub mod expenses;
 pub mod export;
 pub mod import;
+pub(crate) mod party_ids;
 pub mod pricing;
 pub mod products;
 pub mod proforma;

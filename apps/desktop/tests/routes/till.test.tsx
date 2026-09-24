@@ -1205,15 +1205,15 @@ describe("the facture at the till", () => {
     expect(salePost()).toMatchObject({ kind: "ticket" });
   });
 
-  test("the refusal names the side, the identifiers and where to fill them in", async () => {
+  test("the refusal names the customer by name, the identifiers and where to fill them in", async () => {
     const user = userEvent.setup();
     saleAnswer = () =>
       json(422, {
         error: {
           code: "party_ids",
-          message: "the buyer block of a facture is missing rc, nis",
-          party_side: "buyer",
-          missing_ids: ["rc", "nis"],
+          message: "a facture's party blocks are missing seller: ; buyer: rc, nis",
+          seller_missing_ids: [],
+          buyer_missing_ids: ["rc", "nis"],
         },
       });
     mount();
@@ -1222,31 +1222,30 @@ describe("the facture at the till", () => {
     await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
     await user.click(screen.getByRole("button", { name: "Encaisser" }));
 
+    // Plain words and the picked customer's own name, not "the fiche"; the
+    // seller's list is absent whole since that side is fine, and the panel
+    // says the whole thing so no generic line repeats it.
     const panel = await screen.findByTestId("till-party-ids");
-    expect(within(panel).getByText("Il manque à la fiche du client :")).toBeInTheDocument();
-    const missing = within(panel).getByTestId("till-party-ids-missing");
-    expect(missing).toHaveTextContent("RC");
-    expect(missing).toHaveTextContent("NIS");
-    // The screen sends the cashier to the half it can fix, not to a
-    // generic settings page.
+    expect(within(panel).getByText("Les identifiants du client Entreprise Amrani")).toBeInTheDocument();
+    expect(within(panel).getByTestId("till-party-ids-buyer-missing")).toHaveTextContent("RC");
+    expect(within(panel).getByTestId("till-party-ids-buyer-missing")).toHaveTextContent("NIS");
     expect(within(panel).getByRole("link", { name: "Compléter la fiche du client" })).toHaveAttribute(
       "href",
       "/customers",
     );
-    // The panel says the whole thing, so the generic line is not repeated
-    // underneath it.
+    expect(within(panel).queryByTestId("till-party-ids-seller-missing")).toBeNull();
     expect(screen.queryByText("Identifiants manquants.")).toBeNull();
   });
 
-  test("a seller block that is short sends the cashier to the settings instead", async () => {
+  test("a short seller and a short buyer are both named at once, and the seller links to Paramètres > Magasin", async () => {
     const user = userEvent.setup();
     saleAnswer = () =>
       json(422, {
         error: {
           code: "party_ids",
-          message: "the seller block of a facture is missing nis",
-          party_side: "seller",
-          missing_ids: ["nis"],
+          message: "a facture's party blocks are missing seller: nis; buyer: rc",
+          seller_missing_ids: ["nis"],
+          buyer_missing_ids: ["rc"],
         },
       });
     mount();
@@ -1255,11 +1254,12 @@ describe("the facture at the till", () => {
     await user.type(screen.getByLabelText("Montant reçu (DA)"), "1500");
     await user.click(screen.getByRole("button", { name: "Encaisser" }));
 
+    // Both sides on the very first try, and straight to the identity form.
     const panel = await screen.findByTestId("till-party-ids");
-    expect(within(panel).getByText("Il manque au bloc du magasin :")).toBeInTheDocument();
-    expect(
-      within(panel).getByRole("link", { name: "Compléter les paramètres du magasin" }),
-    ).toHaveAttribute("href", "/settings");
+    expect(within(panel).getByText("Les identifiants de votre magasin")).toBeInTheDocument();
+    expect(within(panel).getByTestId("till-party-ids-seller-missing")).toHaveTextContent("NIS");
+    expect(within(panel).getByTestId("till-party-ids-buyer-missing")).toHaveTextContent("RC");
+    expect(within(panel).getByRole("link", { name: "Compléter les paramètres du magasin" })).toHaveAttribute("href", "/settings/shop");
   });
 
   test("the confirmation and the print panel are the facture's, on the sheet asked for", async () => {

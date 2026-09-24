@@ -17,13 +17,13 @@
     "crates/retail/src/services/debt.rs": 936,
     "crates/retail/src/services/import.rs": 793,
     "crates/retail/src/services/purchases.rs": 1021,
-    "crates/retail/src/services/sales.rs": 1060,
+    "crates/retail/src/services/sales.rs": 986,
     "crates/retail/src/services/seed.rs": 1127,
     "crates/retail/src/services/supplier_debt.rs": 821,
     "crates/retail/tests/avoir_service.rs": 1703,
     "crates/retail/tests/debt_service.rs": 2012,
     "crates/retail/tests/migration.rs": 4089,
     "crates/retail/tests/purchases_service.rs": 1413,
-    "crates/retail/tests/sales_service.rs": 2892
+    "crates/retail/tests/sales_service.rs": 2879
   }
 }

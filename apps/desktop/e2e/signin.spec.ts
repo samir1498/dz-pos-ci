@@ -77,6 +77,20 @@ test.describe("the password screen", () => {
   });
 });
 
+test.describe("where each role lands", () => {
+  // T9: an owner sees the reports, so signing in opens the dashboard, not
+  // the till with an empty catalogue asking to count a drawer nobody has
+  // sold out of yet. `till-cashier.spec.ts` proves the other half: a
+  // cashier still opens on the till.
+  test("the owner opens on the dashboard after signing in", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("signin-name").fill(OWNER_NAME);
+    await page.getByTestId("signin-password").fill(OWNER_PASSWORD);
+    await page.getByTestId("signin-submit").click();
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
+});
+
 test.describe("the locked-out wait", () => {
   // Not the real owner: three wrong PINs against the seeded row would lock
   // it out for real and poison every spec that signs in after this one in

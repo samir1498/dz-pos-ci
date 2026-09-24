@@ -303,6 +303,17 @@ pub struct ThermalModeChoiceDto {
     pub thermal_mode: ThermalModeDto,
 }
 
+/// Whether the shop is putting its NIF, RC, NIS and AI on the ticket too
+/// (they print on the facture whatever this says). No `null` arm, the same
+/// reason the thermal mode has none: the ticket is always one of the two
+/// shapes.
+#[derive(Debug, Clone, Copy, Deserialize, TS)]
+#[ts(export_to = "TicketFiscalIdsChoiceDto.ts")]
+#[serde(deny_unknown_fields)]
+pub struct TicketFiscalIdsChoiceDto {
+    pub ticket_fiscal_ids: bool,
+}
+
 /// What the settings screen reads: the store block, the régime in force
 /// and, when the owner has dated a change ahead, the one coming.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -338,6 +349,11 @@ pub struct SettingsDto {
     /// a sale, which does not exist without the feature.
     #[cfg(feature = "retail")]
     pub discount_threshold_bps: u32,
+    /// Whether the ticket also carries the seller's NIF, RC, NIS and AI.
+    /// Off on a shop that has never chosen: those four print on the
+    /// facture regardless, and a till receipt is not the paper an
+    /// Algerian text asks anything of (T55).
+    pub ticket_fiscal_ids: bool,
 }
 
 /// A régime change: the régime and the day it applies from. Appended to

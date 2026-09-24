@@ -25,31 +25,6 @@ use dzpos_kernel::money::Money;
 // CoreError` was written against that.
 pub use dzpos_kernel::error::CoreError;
 
-/// Which half of a facture a `PartyIds` refusal is about. The two blocks are
-/// filled in from two different screens, so the side is what tells the till
-/// whether to send the cashier to the settings or to the customer's fiche.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PartySide {
-    Seller,
-    Buyer,
-}
-
-impl PartySide {
-    /// The stable key the UI translates, the way an error code is.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            PartySide::Seller => "seller",
-            PartySide::Buyer => "buyer",
-        }
-    }
-}
-
-impl std::fmt::Display for PartySide {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum RetailError {
     /// Every failure this crate does not itself name: `NotFound`,
@@ -89,13 +64,20 @@ pub enum RetailError {
     /// asks of them (`a_company_buyer_without_a_nis_refuses_the_facture_and_burns_no_number`). Not a validation failure
     /// on a field the caller sent: the basket is well formed and what
     /// refuses the paper sits on the settings page or on the customer's
-    /// fiche. The side and the identifiers travel with the code because the
-    /// till has to say where to go and what is missing, and a screen may not
-    /// work either out from the rule (architecture.md rule 2).
-    #[error("the {side} block of a facture is missing {}", missing.join(", "))]
+    /// fiche. Both blocks are checked and both travel with the code in one
+    /// refusal (T37): a cashier who fixed the shop's own settings and tried
+    /// again used to hear about the customer's fiche only on the second
+    /// attempt, and a screen that had to ask twice could not say either
+    /// wrong for that. An empty list means that side is not the problem;
+    /// at least one of the two never is.
+    #[error(
+        "a facture's party blocks are missing seller: {}; buyer: {}",
+        seller_missing.join(", "),
+        buyer_missing.join(", ")
+    )]
     PartyIds {
-        side: PartySide,
-        missing: Vec<&'static str>,
+        seller_missing: Vec<&'static str>,
+        buyer_missing: Vec<&'static str>,
     },
     /// A ledger row handed to a repo with no moment on it. The column's
     /// default is SQLite's CURRENT_TIMESTAMP, which is UTC, while every

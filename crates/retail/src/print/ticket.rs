@@ -140,10 +140,26 @@ pub(crate) struct TicketView {
 
 /// The 80 mm ticket for `doc`, in `lang`, as one standalone HTML page.
 ///
+/// `show_fiscal_ids` is the shop's own choice
+/// (`preferences::ticket_fiscal_ids`), read by the caller at print time the
+/// same look-at-the-file `lang` already is (`print_lang_for`): off by
+/// default, a ticket prints the seller's name, address and phone and stops
+/// there, the four identifiers staying for the facture alone. Not baked
+/// into the document at issue time, because nothing about a sale changes
+/// when a shop flips this later — the same totals, the same seller — so a
+/// reprint honestly reads today's choice rather than the one in force the
+/// day it was rung up.
+///
 /// Pinned byte for byte by `fixtures/print/ticket_80mm/`, nine files: three
 /// languages under the réel paid in cash, the same three under the IFU, and
-/// the same three under the réel paid by card.
-pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, RetailError> {
+/// the same three under the réel paid by card. Every one of them has the
+/// four identifiers on (the historical default this flag now makes
+/// optional).
+pub fn render_ticket(
+    doc: &Document,
+    lang: Lang,
+    show_fiscal_ids: bool,
+) -> Result<String, RetailError> {
     // `an_ifu_ticket_names_no_tax_in_any_language` is a rule about the document, not a layout
     // the template applies on the way past. A stored IFU document that
     // carries a TVA recap contradicts the régime it was issued under (a
@@ -160,10 +176,12 @@ pub fn render_ticket(doc: &Document, lang: Lang) -> Result<String, RetailError> 
             "an IFU document carries a TVA recap and has no printable form",
         ));
     }
-    view(doc, lang).render().map_err(RetailError::from)
+    view(doc, lang, show_fiscal_ids)
+        .render()
+        .map_err(RetailError::from)
 }
 
-pub(crate) fn view(doc: &Document, lang: Lang) -> TicketView {
+pub(crate) fn view(doc: &Document, lang: Lang, show_fiscal_ids: bool) -> TicketView {
     let reel = doc.regime == Regime::Reel;
     let totals = &doc.totals;
     // Cash is the only mode that takes a note and gives coins back. A card
@@ -176,7 +194,7 @@ pub(crate) fn view(doc: &Document, lang: Lang) -> TicketView {
         dir: lang.dir(),
         arabic_unreviewed: lang == Lang::Ar,
         title: text(Key::Ticket, lang),
-        seller: seller(&doc.seller),
+        seller: seller(&doc.seller, show_fiscal_ids),
         number: number(doc),
         issued_at: doc.issued_at.format(STAMP_FORMAT).to_string(),
         lines: doc.lines.iter().map(|l| line(l, reel)).collect(),
@@ -243,26 +261,35 @@ fn balance(balance: BalanceTriple, lang: Lang) -> BalanceView {
     }
 }
 
-fn seller(seller: &SellerBlock) -> SellerView {
-    let ids = [
-        ("NIF", seller.nif.as_ref()),
-        ("RC", seller.rc.as_ref()),
-        ("NIS", seller.nis.as_ref()),
-        ("AI", seller.ai.as_ref()),
-    ];
+fn seller(seller: &SellerBlock, show_fiscal_ids: bool) -> SellerView {
+    // `[]` rather than skipping the field, so the template keeps its one
+    // `for` and the ticket answers "no identifiers on this copy" the same
+    // way it already answers "no identifiers stored" (an empty shop
+    // block): the row simply does not print, never a stray heading over
+    // nothing.
+    let ids = if show_fiscal_ids {
+        [
+            ("NIF", seller.nif.as_ref()),
+            ("RC", seller.rc.as_ref()),
+            ("NIS", seller.nis.as_ref()),
+            ("AI", seller.ai.as_ref()),
+        ]
+        .into_iter()
+        .filter_map(|(label, value)| {
+            value.map(|value| SellerId {
+                label,
+                value: value.clone(),
+            })
+        })
+        .collect()
+    } else {
+        Vec::new()
+    };
     SellerView {
         name: seller.name.clone(),
         address: seller.address.clone(),
         phone: seller.phone.clone(),
-        ids: ids
-            .into_iter()
-            .filter_map(|(label, value)| {
-                value.map(|value| SellerId {
-                    label,
-                    value: value.clone(),
-                })
-            })
-            .collect(),
+        ids,
     }
 }
 

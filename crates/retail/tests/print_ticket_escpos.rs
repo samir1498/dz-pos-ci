@@ -236,7 +236,7 @@ fn each_language_of(case: Case) {
     let doc = fixed_sale(case);
     let mut updated = Vec::new();
     for lang in Lang::ALL {
-        let bytes = render_ticket_escpos(&doc, lang).unwrap();
+        let bytes = render_ticket_escpos(&doc, lang, true).unwrap();
         let rendered = dump_ticket_escpos(&bytes);
         let expected = golden(lang, case, &rendered, &mut updated);
         assert_eq!(
@@ -306,7 +306,7 @@ fn a_credit_escpos_ticket_carries_the_three_rows_of_the_debt() {
     ] {
         let doc = fixed_sale(case);
         for lang in Lang::ALL {
-            let dump = dump_ticket_escpos(&render_ticket_escpos(&doc, lang).unwrap());
+            let dump = dump_ticket_escpos(&render_ticket_escpos(&doc, lang, true).unwrap());
             for row in [
                 text(Key::Balance, lang),
                 text(Key::OldBalance, lang),
@@ -335,7 +335,7 @@ fn a_credit_escpos_ticket_carries_the_three_rows_of_the_debt() {
 fn an_ifu_escpos_ticket_names_no_tax() {
     let doc = fixed_sale(Case::Ifu);
     for lang in Lang::ALL {
-        let dump = dump_ticket_escpos(&render_ticket_escpos(&doc, lang).unwrap());
+        let dump = dump_ticket_escpos(&render_ticket_escpos(&doc, lang, true).unwrap());
         for forbidden in ["TVA", "VAT", "ت.ق.م"] {
             assert!(!dump.contains(forbidden), "{forbidden} on {lang:?}");
         }
@@ -348,7 +348,7 @@ fn an_ifu_escpos_ticket_names_no_tax() {
 fn a_card_escpos_ticket_has_no_stamp_and_no_change() {
     let doc = fixed_sale(Case::Card);
     for lang in Lang::ALL {
-        let dump = dump_ticket_escpos(&render_ticket_escpos(&doc, lang).unwrap());
+        let dump = dump_ticket_escpos(&render_ticket_escpos(&doc, lang, true).unwrap());
         assert!(!dump.contains(text(Key::Stamp, lang)), "{lang:?}");
         assert!(!dump.contains(text(Key::Tendered, lang)), "{lang:?}");
         assert!(!dump.contains(text(Key::Change, lang)), "{lang:?}");
@@ -362,7 +362,7 @@ fn a_ticket_written_to_a_file_is_the_rendered_bytes() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ticket.bin");
     for lang in Lang::ALL {
-        write_ticket_escpos_to_file(&doc, lang, ThermalMode::Text, &path).unwrap();
+        write_ticket_escpos_to_file(&doc, lang, ThermalMode::Text, true, &path).unwrap();
         let on_disk = std::fs::read(&path).unwrap();
         // The writer resolves the mode the way the route does, so a shop on
         // the default text wire still gets a raster in Arabic and the file
@@ -370,7 +370,7 @@ fn a_ticket_written_to_a_file_is_the_rendered_bytes() {
         // be asserting the bug T3 removed.
         assert_eq!(
             on_disk,
-            render_ticket_escpos_in(&doc, lang, ThermalMode::Text).unwrap(),
+            render_ticket_escpos_in(&doc, lang, ThermalMode::Text, true).unwrap(),
             "{lang:?} file is not the rendered bytes"
         );
     }
@@ -381,7 +381,7 @@ fn a_ticket_sent_over_tcp_is_the_rendered_bytes() {
     use std::io::Read as _;
     let doc = fixed_sale(Case::Reel);
     let lang = Lang::Fr;
-    let expected = render_ticket_escpos(&doc, lang).unwrap();
+    let expected = render_ticket_escpos(&doc, lang, true).unwrap();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap().to_string();
     let received = std::thread::spawn(move || {
@@ -390,7 +390,7 @@ fn a_ticket_sent_over_tcp_is_the_rendered_bytes() {
         stream.read_to_end(&mut buf).unwrap();
         buf
     });
-    send_ticket_escpos_tcp(&doc, lang, ThermalMode::Text, &addr).unwrap();
+    send_ticket_escpos_tcp(&doc, lang, ThermalMode::Text, true, &addr).unwrap();
     assert_eq!(received.join().unwrap(), expected);
 }
 
@@ -404,12 +404,14 @@ fn a_refused_ticket_writes_no_file_and_opens_no_connection() {
     });
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("ticket.bin");
-    let err = write_ticket_escpos_to_file(&doc, Lang::Fr, ThermalMode::Text, &path).unwrap_err();
+    let err =
+        write_ticket_escpos_to_file(&doc, Lang::Fr, ThermalMode::Text, true, &path).unwrap_err();
     assert_eq!(err.code(), "print");
     assert!(!path.exists(), "a refused ticket left a file behind");
     // A closed port would fail with an io error; the render refusal must
     // come first, before any connection is attempted.
-    let err = send_ticket_escpos_tcp(&doc, Lang::Fr, ThermalMode::Text, "127.0.0.1:9").unwrap_err();
+    let err =
+        send_ticket_escpos_tcp(&doc, Lang::Fr, ThermalMode::Text, true, "127.0.0.1:9").unwrap_err();
     assert_eq!(err.code(), "print");
 }
 
@@ -422,7 +424,7 @@ fn an_ifu_document_with_a_tva_recap_is_refused_as_escpos_too() {
         amount: Money::centimes(5_566),
     });
     for lang in Lang::ALL {
-        let err = render_ticket_escpos(&doc, lang).unwrap_err();
+        let err = render_ticket_escpos(&doc, lang, true).unwrap_err();
         assert_eq!(err.code(), "print", "{lang:?}");
     }
 }
@@ -463,7 +465,7 @@ fn the_raster_draws_the_lines_the_text_path_prints() {
             let name = golden_name(lang, case);
             let golden = std::fs::read_to_string(goldens_dir().join(&name))
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
-            let drawn = draw_ticket_raster(&doc, lang, HEAD_WIDTH_DOTS).unwrap();
+            let drawn = draw_ticket_raster(&doc, lang, HEAD_WIDTH_DOTS, true).unwrap();
             let raster: Vec<String> = drawn
                 .lines
                 .iter()
@@ -489,7 +491,7 @@ fn no_raster_line_is_clipped_at_the_head_width() {
     for case in Case::ALL {
         let doc = fixed_sale(case);
         for lang in Lang::ALL {
-            let drawn = draw_ticket_raster(&doc, lang, HEAD_WIDTH_DOTS).unwrap();
+            let drawn = draw_ticket_raster(&doc, lang, HEAD_WIDTH_DOTS, true).unwrap();
             let name = golden_name(lang, case);
             assert!(!drawn.lines.is_empty(), "{name}: nothing was drawn");
             for line in &drawn.lines {
@@ -517,7 +519,7 @@ fn no_raster_line_is_clipped_at_the_head_width() {
 fn the_same_ticket_draws_on_a_384_dot_head() {
     let doc = fixed_sale(Case::Reel);
     for lang in Lang::ALL {
-        let drawn = draw_ticket_raster(&doc, lang, 384).unwrap();
+        let drawn = draw_ticket_raster(&doc, lang, 384, true).unwrap();
         assert_eq!(drawn.bitmap.width(), 384, "{lang:?}");
         assert_eq!(drawn.cell, 384 / 42, "{lang:?}");
         for line in &drawn.lines {
@@ -540,7 +542,7 @@ fn the_same_ticket_draws_on_a_384_dot_head() {
     // A head that is not a whole number of bytes wide, or too narrow to
     // carry 42 columns, is refused rather than drawn wrong.
     let refused = |width| {
-        draw_ticket_raster(&doc, Lang::Ar, width)
+        draw_ticket_raster(&doc, Lang::Ar, width, true)
             .err()
             .map(|err| err.code())
     };
@@ -557,7 +559,7 @@ fn the_same_ticket_draws_on_a_384_dot_head() {
 #[test]
 fn the_rule_line_measures_the_column_budget_it_was_built_from() {
     let doc = fixed_sale(Case::Reel);
-    let drawn = draw_ticket_raster(&doc, Lang::Fr, HEAD_WIDTH_DOTS).unwrap();
+    let drawn = draw_ticket_raster(&doc, Lang::Fr, HEAD_WIDTH_DOTS, true).unwrap();
     let budget = drawn.cell * 42;
     let rule = drawn
         .lines
@@ -593,7 +595,7 @@ fn the_rule_line_measures_the_column_budget_it_was_built_from() {
 #[test]
 fn the_raster_ticket_is_bands_of_dots_and_nothing_else() {
     let doc = fixed_sale(Case::Reel);
-    let bytes = render_ticket_escpos_raster(&doc, Lang::Ar, HEAD_WIDTH_DOTS).unwrap();
+    let bytes = render_ticket_escpos_raster(&doc, Lang::Ar, HEAD_WIDTH_DOTS, true).unwrap();
     let dump = dump_ticket_escpos(&bytes);
     assert!(dump.starts_with("<init>\n<align left>\n"), "{dump}");
     assert!(dump.ends_with("<cut>\n"), "{dump}");
@@ -610,7 +612,7 @@ fn the_raster_ticket_is_bands_of_dots_and_nothing_else() {
     assert!(!dump.contains("<codepage"), "{dump}");
     assert!(!dump.contains('ت'), "Arabic text on a raster wire: {dump}");
     // Each band under the 64 KB the command addresses.
-    let drawn = draw_ticket_raster(&doc, Lang::Ar, HEAD_WIDTH_DOTS).unwrap();
+    let drawn = draw_ticket_raster(&doc, Lang::Ar, HEAD_WIDTH_DOTS, true).unwrap();
     let rows: usize = bands
         .iter()
         .filter_map(|band| band.trim_end_matches('>').split('x').next_back())
@@ -636,7 +638,7 @@ fn the_arabic_raster_goldens_are_what_the_head_is_sent() {
     let mut updated = Vec::new();
     for case in Case::ALL {
         let doc = fixed_sale(case);
-        let bytes = render_ticket_escpos_raster(&doc, Lang::Ar, HEAD_WIDTH_DOTS).unwrap();
+        let bytes = render_ticket_escpos_raster(&doc, Lang::Ar, HEAD_WIDTH_DOTS, true).unwrap();
         let png = dump_ticket_escpos_png(&bytes).expect("the raster ticket carries no band");
         let name = format!("ar{}.png", case.suffix());
         let path = goldens_dir().join(&name);
@@ -657,7 +659,7 @@ fn the_arabic_raster_goldens_are_what_the_head_is_sent() {
     );
     // The text path carries no band at all, so nothing here can quietly
     // start writing a picture of a ticket that was sent as text.
-    let text = render_ticket_escpos(&fixed_sale(Case::Reel), Lang::Ar).unwrap();
+    let text = render_ticket_escpos(&fixed_sale(Case::Reel), Lang::Ar, true).unwrap();
     assert!(dump_ticket_escpos_png(&text).is_none());
 }
 
@@ -667,7 +669,7 @@ fn the_french_wire_is_one_byte_per_column_not_utf8() {
     // 0xC3 0xA9 that the first eyeball showed as "CafÃ©". The head eats one
     // byte per column (WIDTH = 42), so the wire must be ISO 8859-15.
     let doc = fixed_sale(Case::Reel);
-    let bytes = render_ticket_escpos(&doc, Lang::Fr).unwrap();
+    let bytes = render_ticket_escpos(&doc, Lang::Fr, true).unwrap();
     assert!(
         bytes.windows(2).any(|w| w == [0x43, 0x61]) && bytes.contains(&0xE9),
         "no single-byte é (0xE9) in the French wire"
@@ -694,7 +696,7 @@ fn the_arabic_wire_keeps_utf8_for_script_outside_the_table() {
     // Arabic "تذكرة" (Ticket) is outside 0xFF, so it is sent as UTF-8 and the
     // dump decodes it back; "?????" would be the old "?" fallback.
     let doc = fixed_sale(Case::Reel);
-    let bytes = render_ticket_escpos(&doc, Lang::Ar).unwrap();
+    let bytes = render_ticket_escpos(&doc, Lang::Ar, true).unwrap();
     let dump = dump_ticket_escpos(&bytes);
     assert!(dump.contains("تذكرة"), "Arabic Ticket title not in dump");
     assert!(
@@ -722,13 +724,15 @@ fn the_arabic_wire_keeps_utf8_for_script_outside_the_table() {
 fn arabic_answers_bands_under_either_preference_and_the_others_follow_it() {
     let doc = fixed_sale(Case::Reel);
     for stored in ThermalMode::ALL {
-        let ar = dump_ticket_escpos(&render_ticket_escpos_in(&doc, Lang::Ar, stored).unwrap());
+        let ar =
+            dump_ticket_escpos(&render_ticket_escpos_in(&doc, Lang::Ar, stored, true).unwrap());
         assert!(
             ar.contains("<raster 576x") && !ar.contains("<codepage"),
             "{stored:?}: Arabic went down the text path"
         );
         for lang in [Lang::Fr, Lang::En] {
-            let dump = dump_ticket_escpos(&render_ticket_escpos_in(&doc, lang, stored).unwrap());
+            let dump =
+                dump_ticket_escpos(&render_ticket_escpos_in(&doc, lang, stored, true).unwrap());
             match stored {
                 ThermalMode::Text => assert!(
                     dump.contains("<codepage 19>") && !dump.contains("<raster "),
@@ -753,8 +757,8 @@ fn the_text_mode_bytes_are_the_bytes_the_goldens_pin() {
         let doc = fixed_sale(case);
         for lang in [Lang::Fr, Lang::En] {
             assert_eq!(
-                render_ticket_escpos_in(&doc, lang, ThermalMode::Text).unwrap(),
-                render_ticket_escpos(&doc, lang).unwrap(),
+                render_ticket_escpos_in(&doc, lang, ThermalMode::Text, true).unwrap(),
+                render_ticket_escpos(&doc, lang, true).unwrap(),
                 "{lang:?} {:?}",
                 case.suffix()
             );
@@ -774,7 +778,7 @@ fn the_spool_file_and_the_socket_carry_the_same_bytes_in_either_mode() {
     for mode in ThermalMode::ALL {
         for lang in Lang::ALL {
             let path = dir.path().join("ticket.bin");
-            write_ticket_escpos_to_file(&doc, lang, mode, &path).unwrap();
+            write_ticket_escpos_to_file(&doc, lang, mode, true, &path).unwrap();
             let spooled = std::fs::read(&path).unwrap();
             let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
             let addr = listener.local_addr().unwrap().to_string();
@@ -784,7 +788,7 @@ fn the_spool_file_and_the_socket_carry_the_same_bytes_in_either_mode() {
                 stream.read_to_end(&mut buf).unwrap();
                 buf
             });
-            send_ticket_escpos_tcp(&doc, lang, mode, &addr).unwrap();
+            send_ticket_escpos_tcp(&doc, lang, mode, true, &addr).unwrap();
             assert_eq!(
                 received.join().unwrap(),
                 spooled,
@@ -792,7 +796,7 @@ fn the_spool_file_and_the_socket_carry_the_same_bytes_in_either_mode() {
             );
             assert_eq!(
                 spooled,
-                render_ticket_escpos_in(&doc, lang, mode).unwrap(),
+                render_ticket_escpos_in(&doc, lang, mode, true).unwrap(),
                 "{mode:?} {lang:?}: the spool file is not the rendered bytes"
             );
         }

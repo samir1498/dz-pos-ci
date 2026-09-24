@@ -20,7 +20,7 @@ use dzpos_core::services::{preferences, settings, shops};
 use crate::dto::DiscountThresholdChangeDto;
 use crate::dto::{
     parse_day, FactureLayoutChoiceDto, FactureLayoutDto, PrintLangChoiceDto, RegimeChangeDto,
-    SettingsDto, StoreDto, ThemeChoiceDto, ThermalModeChoiceDto,
+    SettingsDto, StoreDto, ThemeChoiceDto, ThermalModeChoiceDto, TicketFiscalIdsChoiceDto,
 };
 use crate::error::ApiError;
 use crate::session::CurrentUser;
@@ -50,6 +50,7 @@ fn read_all(
         #[cfg(feature = "retail")]
         discount_threshold_bps: discount_threshold::discount_threshold_as_of(conn, shop, at)?
             .as_u32(),
+        ticket_fiscal_ids: preferences::ticket_fiscal_ids(conn, shop)?,
     })
 }
 
@@ -170,6 +171,27 @@ pub async fn set_facture_layout(
     let all = state
         .blocking(move |c| {
             preferences::set_facture_layout(c, shop, chosen, now())?;
+            read_all(c, shop)
+        })
+        .await?;
+    Ok(Json(all))
+}
+
+/// Records whether the ticket also carries the seller's fiscal identifiers.
+///
+/// Answers the whole settings page for the reason `set_theme` does.
+///
+/// No `null` arm, the same as the thermal mode: a ticket is always one of
+/// the two shapes.
+pub async fn set_ticket_fiscal_ids(
+    State(state): State<AppState>,
+    body: Result<Json<TicketFiscalIdsChoiceDto>, JsonRejection>,
+) -> Result<Json<SettingsDto>, ApiError> {
+    let Json(dto) = body.map_err(ApiError::from)?;
+    let shop = state.shop_id;
+    let all = state
+        .blocking(move |c| {
+            preferences::set_ticket_fiscal_ids(c, shop, dto.ticket_fiscal_ids, now())?;
             read_all(c, shop)
         })
         .await?;

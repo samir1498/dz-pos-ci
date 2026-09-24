@@ -29,4 +29,5 @@ export const SETTINGS: SettingsDto = {
   print_lang: null,
   thermal_mode: "text",
   discount_threshold_bps: 0,
+  ticket_fiscal_ids: false,
 };

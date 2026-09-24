@@ -166,7 +166,11 @@ async fn a_ticket_is_the_html_the_core_renders_for_the_stored_document() {
         // connection: the route is a courier and this is the proof.
         let mut conn = dzpos_core::db::open(&path).unwrap();
         let stored = documents::get(&mut conn, SHOP, i32::try_from(id).unwrap()).unwrap();
-        assert_eq!(body, render_ticket(&stored, lang).unwrap(), "{lang:?}");
+        assert_eq!(
+            body,
+            render_ticket(&stored, lang, false).unwrap(),
+            "{lang:?}"
+        );
     }
 }
 
@@ -210,12 +214,12 @@ async fn the_ticket_follows_the_stored_print_language_over_the_callers_own() {
     let stored = documents::get(&mut conn, SHOP, i32::try_from(id).unwrap()).unwrap();
     assert_eq!(
         body,
-        render_ticket(&stored, Lang::Ar).unwrap(),
+        render_ticket(&stored, Lang::Ar, false).unwrap(),
         "the stored Arabic did not win over ?lang=fr"
     );
     assert_ne!(
         body,
-        render_ticket(&stored, Lang::Fr).unwrap(),
+        render_ticket(&stored, Lang::Fr, false).unwrap(),
         "the caller's own lang printed instead of the stored setting"
     );
 
@@ -230,7 +234,7 @@ async fn the_ticket_follows_the_stored_print_language_over_the_callers_own() {
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(
         body,
-        render_ticket(&stored, Lang::En).unwrap(),
+        render_ticket(&stored, Lang::En, false).unwrap(),
         "?print_lang= did not win over the stored Arabic"
     );
 }

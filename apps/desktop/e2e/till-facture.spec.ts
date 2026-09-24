@@ -215,7 +215,7 @@ test("rings a facture up on credit, prints it, and leaves the ticket series wher
   await seedCustomer(request);
   const ticketsBefore = await lastTicketNumber(request);
 
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
 
   // Nobody picked, so the facture is not on offer: it is made out to a
@@ -332,7 +332,7 @@ test("a facture paid in cash carries the TVA recap and the droit de timbre", asy
   });
   expect(created.status()).toBe(201);
 
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
   await pick(page, customer);
 

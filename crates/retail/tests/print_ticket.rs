@@ -486,7 +486,7 @@ fn each_language_of(case: Case) {
     let doc = fixed_sale(case);
     let mut updated = Vec::new();
     for lang in Lang::ALL {
-        let rendered = render_ticket(&doc, lang).unwrap();
+        let rendered = render_ticket(&doc, lang, true).unwrap();
         let expected = golden(lang, case, &rendered, &mut updated);
         assert_eq!(
             rendered,
@@ -550,7 +550,7 @@ fn a_ticket_that_closes_below_zero_names_the_customer_a_creditor() {
     );
 
     for lang in Lang::ALL {
-        let html = render_ticket(&held, lang).unwrap();
+        let html = render_ticket(&held, lang, true).unwrap();
         assert!(
             html.contains(text(Key::TotalCredit, lang)),
             "the {lang:?} ticket does not name the credit"
@@ -565,7 +565,7 @@ fn a_ticket_that_closes_below_zero_names_the_customer_a_creditor() {
             "the {lang:?} ticket prints a figure the document does not store"
         );
 
-        let debtor = render_ticket(&owed, lang).unwrap();
+        let debtor = render_ticket(&owed, lang, true).unwrap();
         assert!(
             debtor.contains(shop_text(ShopKey::TotalDebt, lang)),
             "the {lang:?} ticket stopped naming a debt a debt"
@@ -590,7 +590,7 @@ fn a_credit_ticket_says_credit_carries_no_cash_row_and_closes_on_the_debt() {
     assert_eq!(doc.change, None);
 
     for lang in Lang::ALL {
-        let html = render_ticket(&doc, lang).unwrap();
+        let html = render_ticket(&doc, lang, true).unwrap();
         assert!(html.contains(text(Key::Credit, lang)), "{lang:?}");
         for absent in ["stamp", "tendered", "change"] {
             assert!(
@@ -616,7 +616,7 @@ fn a_credit_ticket_says_credit_carries_no_cash_row_and_closes_on_the_debt() {
 
     // A ticket that names nobody prints none of it: three rows of zeroes
     // would tell a walk-in customer they owe nothing they never owed.
-    let anonymous = render_ticket(&fixed_sale(Case::Reel), Lang::Fr).unwrap();
+    let anonymous = render_ticket(&fixed_sale(Case::Reel), Lang::Fr, true).unwrap();
     for absent in ["old-balance", "this-document", "total-debt"] {
         assert!(
             amounts(&anonymous, absent).is_empty(),
@@ -634,7 +634,7 @@ fn a_card_ticket_carries_no_stamp_and_neither_half_of_the_change() {
     assert_eq!(card.change, None);
 
     for lang in Lang::ALL {
-        let html = render_ticket(&card, lang).unwrap();
+        let html = render_ticket(&card, lang, true).unwrap();
         for absent in ["stamp", "tendered", "change"] {
             assert!(
                 amounts(&html, absent).is_empty(),
@@ -649,7 +649,7 @@ fn a_card_ticket_carries_no_stamp_and_neither_half_of_the_change() {
         assert_eq!(amounts(&html, "tva").len(), 3, "{lang:?}");
     }
 
-    let cash = render_ticket(&fixed_sale(Case::Reel), Lang::Fr).unwrap();
+    let cash = render_ticket(&fixed_sale(Case::Reel), Lang::Fr, true).unwrap();
     for present in ["stamp", "tendered", "change"] {
         assert_eq!(
             amounts(&cash, present).len(),
@@ -667,7 +667,7 @@ fn a_card_ticket_carries_no_stamp_and_neither_half_of_the_change() {
 fn an_ifu_ticket_names_no_tax_in_any_language() {
     let doc = fixed_sale(Case::Ifu);
     for lang in Lang::ALL {
-        let html = render_ticket(&doc, lang).unwrap();
+        let html = render_ticket(&doc, lang, true).unwrap();
         for forbidden in ["TVA", "VAT", "ت.ق.م"] {
             assert!(
                 !html.contains(forbidden),
@@ -708,7 +708,7 @@ fn a_reel_ticket_carries_one_tva_row_per_rate() {
     let doc = fixed_sale(Case::Reel);
     assert_eq!(doc.totals.tva_by_rate.len(), 3, "0 %, 9 % and 19 %");
     for lang in Lang::ALL {
-        let html = render_ticket(&doc, lang).unwrap();
+        let html = render_ticket(&doc, lang, true).unwrap();
         assert_eq!(amounts(&html, "tva").len(), 3, "{lang:?}");
     }
 }
@@ -716,7 +716,7 @@ fn a_reel_ticket_carries_one_tva_row_per_rate() {
 #[test]
 fn the_arabic_ticket_reads_right_to_left_and_says_it_is_unreviewed() {
     let doc = fixed_sale(Case::Reel);
-    let ar = render_ticket(&doc, Lang::Ar).unwrap();
+    let ar = render_ticket(&doc, Lang::Ar, true).unwrap();
     assert!(ar.contains("dir=\"rtl\""), "the Arabic ticket is not RTL");
     assert!(ar.contains("lang=\"ar\""));
     assert!(
@@ -724,7 +724,7 @@ fn the_arabic_ticket_reads_right_to_left_and_says_it_is_unreviewed() {
         "the Arabic ticket does not disclose that its wording is unreviewed"
     );
     for other in [Lang::Fr, Lang::En] {
-        let html = render_ticket(&doc, other).unwrap();
+        let html = render_ticket(&doc, other, true).unwrap();
         assert!(html.contains("dir=\"ltr\""), "{other:?}");
         assert!(
             !html.contains("unreviewed by a native speaker"),
@@ -740,7 +740,7 @@ fn the_digits_are_western_in_every_language() {
     for case in Case::ALL {
         let doc = fixed_sale(case);
         for lang in Lang::ALL {
-            let html = render_ticket(&doc, lang).unwrap();
+            let html = render_ticket(&doc, lang, true).unwrap();
             assert!(
                 !html.chars().any(|c| ('\u{0660}'..='\u{0669}').contains(&c)),
                 "{lang:?} {case:?} carries Arabic-Indic digits"
@@ -768,7 +768,7 @@ fn an_ifu_document_carrying_a_tva_recap_is_refused_not_quietly_stripped() {
         amount: Money::centimes(5_566),
     });
     for lang in Lang::ALL {
-        let err = render_ticket(&doc, lang).unwrap_err();
+        let err = render_ticket(&doc, lang, true).unwrap_err();
         assert_eq!(err.code(), "print", "{lang:?}: {err:?}");
     }
 }
@@ -789,11 +789,11 @@ fn a_reel_document_prints_with_an_empty_recap_and_with_a_zero_rate_one() {
     }];
     for lang in Lang::ALL {
         assert_eq!(
-            amounts(&render_ticket(&empty, lang).unwrap(), "tva").len(),
+            amounts(&render_ticket(&empty, lang, true).unwrap(), "tva").len(),
             0
         );
         assert_eq!(
-            amounts(&render_ticket(&exempt, lang).unwrap(), "tva").len(),
+            amounts(&render_ticket(&exempt, lang, true).unwrap(), "tva").len(),
             1
         );
     }
@@ -808,10 +808,46 @@ fn the_ticket_number_is_the_series_prefix_the_year_and_six_digits() {
     let doc = fixed_sale(Case::Reel);
     for lang in Lang::ALL {
         assert!(
-            render_ticket(&doc, lang)
+            render_ticket(&doc, lang, true)
                 .unwrap()
                 .contains("TK-2026-000123"),
             "{lang:?}"
         );
     }
+}
+
+/// T55: `show_fiscal_ids` is the whole decision. On, the ticket carries the
+/// four identifiers the fixture's seller block stores (RC and NIF here;
+/// NIS and AI are `None` on this fixture and so absent either way, the
+/// same "only what was snapshotted" rule `seller()`'s own doc names). Off,
+/// none of the four print, and the name, address and phone the facture
+/// also carries are on the paper regardless — the flag decides the four
+/// identifiers alone, never the rest of the seller block.
+#[test]
+fn the_ticket_shows_the_seller_s_fiscal_ids_only_when_the_shop_turned_them_on() {
+    let doc = fixed_sale(Case::Reel);
+
+    let off = render_ticket(&doc, Lang::Fr, false).unwrap();
+    assert!(
+        !off.contains("16/00-1234567 B 25"),
+        "the RC printed with the setting off:\n{off}"
+    );
+    assert!(
+        !off.contains("000216001234567"),
+        "the NIF printed with the setting off:\n{off}"
+    );
+    assert!(
+        off.contains(&doc.seller.name),
+        "the name is gone too:\n{off}"
+    );
+
+    let on = render_ticket(&doc, Lang::Fr, true).unwrap();
+    assert!(
+        on.contains("16/00-1234567 B 25"),
+        "the RC did not print with the setting on:\n{on}"
+    );
+    assert!(
+        on.contains("000216001234567"),
+        "the NIF did not print with the setting on:\n{on}"
+    );
 }

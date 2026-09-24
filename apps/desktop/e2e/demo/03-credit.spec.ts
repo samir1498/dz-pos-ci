@@ -11,7 +11,7 @@ test("credit", async ({ page, request }, testInfo) => {
   for (const p of [CAFE, LAIT]) await seedProduct(request, p);
   await seedCustomer(request, MEZIANE);
 
-  await page.goto("/");
+  await page.goto("/till");
   await expect(page).toHaveURL(/\/till$/);
   await beat(page);
 

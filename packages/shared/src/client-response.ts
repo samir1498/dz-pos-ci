@@ -18,11 +18,13 @@ export class ApiError extends Error {
   readonly creditLimitCentimes?: number;
   readonly field?: string;
   readonly outstandingCentimes?: number;
-  /** Only on `party_ids`: which half of the facture is short and of which
-   * identifiers. The server decides both; a screen shows them and works out
-   * neither (architecture.md rule 2). */
-  readonly partySide?: string;
-  readonly missingIds?: readonly string[];
+  /** Only on `party_ids`: which identifiers each side is short of, an empty
+   * list when that side is not the problem. Both travel together (T37) so a
+   * screen can show what is wrong with each side from one refusal; the
+   * server decides both and a screen works out neither
+   * (architecture.md rule 2). */
+  readonly sellerMissingIds?: readonly string[];
+  readonly buyerMissingIds?: readonly string[];
   /** Only on `locked_out`: how long before the till will look at a PIN
    * again. The sign-in screen counts it down rather than working it out. */
   readonly retryAfterSeconds?: number;
@@ -40,8 +42,8 @@ export class ApiError extends Error {
       creditLimitCentimes?: number;
       field?: string;
       outstandingCentimes?: number;
-      partySide?: string;
-      missingIds?: readonly string[];
+      sellerMissingIds?: readonly string[];
+      buyerMissingIds?: readonly string[];
       retryAfterSeconds?: number;
       permission?: PermissionDto;
     },
@@ -54,8 +56,8 @@ export class ApiError extends Error {
     this.creditLimitCentimes = figures?.creditLimitCentimes;
     this.field = figures?.field;
     this.outstandingCentimes = figures?.outstandingCentimes;
-    this.partySide = figures?.partySide;
-    this.missingIds = figures?.missingIds;
+    this.sellerMissingIds = figures?.sellerMissingIds;
+    this.buyerMissingIds = figures?.buyerMissingIds;
     this.retryAfterSeconds = figures?.retryAfterSeconds;
     this.permission = figures?.permission;
   }
@@ -70,8 +72,8 @@ export function apiError(body: z.output<typeof apiErrorSchema>, status: number):
     creditLimitCentimes: body.error.credit_limit_centimes,
     field: body.error.field,
     outstandingCentimes: body.error.outstanding_centimes,
-    partySide: body.error.party_side,
-    missingIds: body.error.missing_ids,
+    sellerMissingIds: body.error.seller_missing_ids,
+    buyerMissingIds: body.error.buyer_missing_ids,
     retryAfterSeconds: body.error.retry_after_seconds,
     permission: body.error.permission,
   });
