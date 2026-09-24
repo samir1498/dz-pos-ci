@@ -78,6 +78,9 @@ tasks:
   - id: 'T24'
     desc: 'First setup asks only the owner''s name and password; the shop''s own identity (name, address, phone, NIF, RC, NIS, AI) is never asked, so the first ticket prints "Mon magasin" with no address or tax ids. Either ask it in setup or make it the first onboarding step (T10), and nag before the first facture, which legally needs it.'
     status: 'pending'
+  - id: 'T25'
+    desc: 'The till''s "Imprimer" never prints: it only sets receiptId (till.tsx:604) and Receipt (till.tsx:845) renders the ticket into a sandboxed iframe preview. No window.print, no printer call, in the browser or in Tauri; the only window.print in the app is the clinic day list (routes/-book/DayListPanel.tsx:72). A shop cannot hand a customer a paper ticket today. Needs a real print path (print the iframe, or a Tauri/ESC-POS route for an 80 mm thermal printer) and a manual check on a real printer.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
