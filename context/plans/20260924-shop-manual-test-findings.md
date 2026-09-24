@@ -147,6 +147,9 @@ tasks:
   - id: 'T47'
     desc: 'Wish (Samir): attach a photo or scan of the supplier''s paper (bon de livraison, facture) to a purchase while typing its number; viewable from the purchase and the supplier''s account. The paired phone takes the photo and sends it to the open purchase; the desktop also accepts a file. Store files in the shop data folder with a small attachments table (not SQLite BLOBs), compress to ~200-500 KB, include them in backup and restore (backup grows). Step 2, later: OCR (Tesseract, fr + ar) pre-fills the number and maybe the lines.'
     status: 'pending'
+  - id: 'T48'
+    desc: 'For the manual-test report section (Samir): mention the OCR of supplier papers (T47 step 2) and supplier-to-shop sync (idea 20260924-a-supplier-s-facture-arrives-already-filled-in) under "ideas for later", worded as ideas, not as built or planned features.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
