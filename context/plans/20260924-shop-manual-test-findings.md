@@ -129,6 +129,12 @@ tasks:
   - id: 'T41'
     desc: 'Decision (Samir, 2026-09-24) on never-paid carts (T39/T40): a parked cart reserves no stock; prices are re-read on resume and a changed price is shown on the line before payment; closing the till lists the unpaid carts with Resume / Discard each and never blocks the close; discarding a cart that holds items writes an audit row (ring-up-then-void is a known till fraud); nothing is deleted automatically, carts older than the day move to an "old carts" list a manager can clear.'
     status: 'pending'
+  - id: 'T42'
+    desc: 'Documents list: the type picker offers Tous / Ticket / Facture / Proforma but no Avoir, so a credit note is only findable under Tous. Add Avoir (and a "cancelled" status filter).'
+    status: 'pending'
+  - id: 'T43'
+    desc: 'Tables (Samir): the app''s own table (components/ui/table.tsx, a Column<T> list) has no sort, search, column filters, date range or pagination, so finding a paper or a customer is hard. Move the lists to TanStack Table (headless, shadcn data-table pattern, already in the TanStack family the app uses): sort by header click, a search box, filters by type/status/customer, a date range (with the T35 calendar), pagination or virtual scroll; documents, customers, products, audit journal first. Check whether sorting/filtering belongs in the API for large shops before doing it client-side.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
