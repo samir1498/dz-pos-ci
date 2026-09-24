@@ -114,6 +114,9 @@ tasks:
   - id: 'T36'
     desc: 'Later, own plan (Samir): automate what this manual walk does. (1) Today''s walk as a "first day of a shop" Playwright e2e (setup, products, open till, cash sale, credit sale, over-limit override, payment, facture, avoir, close). (2) Model-based fuzzing of the money rules: random sequences of sales/payments/avoirs/cancels checked against invariants (balance = ledger sum, gapless numbers, stock = movements); proptest-state-machine in Rust, fast-check model-based in TS. (3) An AI QA agent round: an agent drives the built app with Playwright under a shopkeeper persona, tries odd paths, and files findings into a plan like this one. gremlins.js monkey testing only if crashes show up. Check build-vs-buy before building any runner.'
     status: 'pending'
+  - id: 'T37'
+    desc: 'Facture refusal wording: "Il manque au bloc du magasin : RC, NIS" was read as the customer''s RC (which Samir had just filled on Épicerie Benali). Say whose it is in plain words ("Les identifiants de votre magasin", "Les identifiants du client Épicerie Benali"), list both sides at once instead of seller first then buyer on the next try (sales.rs check_party_ids returns after the seller), and link straight to the right form. Also the customer form should mark RC and NIS as required for a facture when the type is Entreprise.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
