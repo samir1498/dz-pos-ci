@@ -160,7 +160,7 @@ tasks:
     desc: 'Backups page: "Sauvegarder maintenant" works (484 ko, listed), but it never says where the file is, and there is no way to copy a backup onto a USB stick or download it. A copy on the same disk does not survive a dead disk or a stolen PC; add "Copier vers…" / download and show the folder.'
     status: 'pending'
   - id: 'T52'
-    desc: 'Restore confirmation (BackupsPanel.tsx, already a dialog with "Les changements faits depuis seront perdus", and a safety copy is kept and listed): make the loss concrete by naming what goes, e.g. "Depuis 16:13 : 1 produit ajouté, 2 ventes, 1 paiement", so the owner sees the cost before pressing Oui, restaurer.'
+    desc: 'Restore confirmation (BackupsPanel.tsx, already a dialog with "Les changements faits depuis seront perdus", and a safety copy is kept and listed): make the loss concrete by naming what goes, e.g. "Depuis 16:13 : 1 produit ajouté, 2 ventes, 1 paiement", so the owner sees the cost before pressing Oui, restaurer. Also the dialog line "Sauvegardes 2026-09-24 16:13" should read "Sauvegarde du 2026-09-24 16:13" (plural list label reused as the item label). Restore itself verified: the product added after the 16:13 backup is gone, sales and the closed till kept, safety copy listed.'
     status: 'pending'
 acceptance: []
 ---
