@@ -165,6 +165,9 @@ tasks:
   - id: 'T53'
     desc: 'Phone pairing: the phone gets the till''s address only at build time (EXPO_PUBLIC_API_URL / app.config extra.apiUrl, falling back to 127.0.0.1:4317, which is the phone itself), so pairing failed with "no answer from the till computer" until Expo was restarted with the Tailscale address. The pairing QR carries only the token. Put the till''s address in the QR (the payload already allows extra fields, lib/pairing.ts) and let the phone type it by hand as a fallback.'
     status: 'pending'
+  - id: 'T54'
+    desc: 'Phone pairing: a refused claim (the dev phone build lacked the launch token, 401 "this call did not show the launch token") shows as a flickering "Session expired, sign in again." The phone has no session yet, so that message is wrong twice over, and it flickers. Show one steady message that names the cause ("the till refused this phone: scan a fresh code" / "this phone build cannot reach the till") and stop re-rendering. Also check why it flickers (a retry or redirect loop on 401). Related: T53 (address in the QR); the launch token probably belongs in the QR too.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
