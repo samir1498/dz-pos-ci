@@ -9,3 +9,11 @@ minimumReleaseAgeExclude:
   - '@expo/router-server@57.0.10'
   - babel-preset-expo@57.0.12
   - expo@57.0.23
+# react-native-worklets' Babel plugin requires @babel/generator without
+# declaring it, so Node takes whichever copy pnpm hoisted. When that is
+# Babel 8 the plugin (built on Babel 7 types) crashes with "Cannot read
+# properties of undefined (reading 'length')" in check-mobile-bundle.
+packageExtensions:
+  react-native-worklets:
+    dependencies:
+      '@babel/generator': ^7.29.7
