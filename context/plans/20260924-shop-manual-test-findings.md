@@ -45,6 +45,9 @@ tasks:
   - id: 'T13'
     desc: 'Wish, low priority (Samir dislikes pack sizes typed into product names, though it is normal retail practice since each size is its own barcode/SKU): an optional "contenance" field (number + unit, e.g. 1,5 L, 250 g) appended to the displayed name and usable for a price per litre/kilo on shelf labels. Names stay as they are until then.'
     status: 'pending'
+  - id: 'T14'
+    desc: 'Money inputs type right-aligned (MoneyInput.tsx:86, text-end, used on 14 screens) while every other field types left, which Samir finds disorienting. Make money inputs start-aligned like the others; keep end alignment only in tables and totals where digits stack in a column. Keep dir="ltr" on the amount.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
