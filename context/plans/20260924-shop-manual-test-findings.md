@@ -117,6 +117,9 @@ tasks:
   - id: 'T37'
     desc: 'Facture refusal wording: "Il manque au bloc du magasin : RC, NIS" was read as the customer''s RC (which Samir had just filled on Épicerie Benali). Say whose it is in plain words ("Les identifiants de votre magasin", "Les identifiants du client Épicerie Benali"), list both sides at once instead of seller first then buyer on the next try (sales.rs check_party_ids returns after the seller), and link straight to the right form. Also the customer form should mark RC and NIS as required for a facture when the type is Entreprise.'
     status: 'pending'
+  - id: 'T38'
+    desc: 'Decision (Samir, 2026-09-24) on T24: the shop''s identity (name, address, phone, RC, NIF, NIS, AI) is an optional, skippable step of the onboarding (T10), not a required setup screen; the till keeps selling tickets without it, and the first facture attempt links straight to that step.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
