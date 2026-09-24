@@ -126,6 +126,9 @@ tasks:
   - id: 'T40'
     desc: 'Decision (Samir, 2026-09-24) on T39: parked carts live in the shop''s SQLite, a new table per till and cashier (lines, customer, document kind, discount, updated_at), so they survive a reload, a crash and a reinstall and a manager can see them from another PC. Paid sales in the history are read from documents as today. Schema change: goes through the money builder with a migration and its revert. Also confirmed during the walk: the facture refusal''s link to Paramètres loses the cart today.'
     status: 'pending'
+  - id: 'T41'
+    desc: 'Decision (Samir, 2026-09-24) on never-paid carts (T39/T40): a parked cart reserves no stock; prices are re-read on resume and a changed price is shown on the line before payment; closing the till lists the unpaid carts with Resume / Discard each and never blocks the close; discarding a cart that holds items writes an audit row (ring-up-then-void is a known till fraud); nothing is deleted automatically, carts older than the day move to an "old carts" list a manager can clear.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
