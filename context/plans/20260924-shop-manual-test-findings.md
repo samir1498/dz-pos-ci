@@ -36,6 +36,12 @@ tasks:
   - id: 'T10'
     desc: 'Wish (Samir): basic onboarding for a new shop, a spotlight tour plus a first-steps checklist (add products or import the sheet, add a cashier and PIN, pair a phone, open the till, ring a first sale). Needs its own plan. Check open source before building: driver.js (MIT, no deps), react-joyride, shepherd.js (its license needs a look for a commercial app).'
     status: 'pending'
+  - id: 'T11'
+    desc: 'Samir hates the till layout: the cart column stacks customer, document type, cart, discount, totals, payment, amount, numpad, Valider and Encaisser in one tall column, so on a 1080p screen the numpad and Encaisser sit below the fold and every sale needs scrolling. Needs a new till design with no scrolling (numpad and pay always visible), done as a design pass first (mockups on the reports site''s design section, which today holds only the logo page), not a patch.'
+    status: 'pending'
+  - id: 'T12'
+    desc: 'Later, outside this plan (Samir): merge the research and reports of ObserveOne and Dinar into one place, to clear old reports and duplicated unfinished ideas. Needs its own plan; the Dinar side today is ~/.dz-night/report (dinar-reports) plus context/research.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
