@@ -788,3 +788,13 @@ clean-targets shared="no":
     git worktree prune
     echo "host disk now:"
     df -h /mnt/c | tail -1
+
+# the phone half of the first day, on the Windows-side `dinar` emulator:
+# a fresh shop on a copied API (4417, .dev/qa.db), Metro on 8091, Expo Go
+# paired by a typed code, a PIN sign-in and a cash sale, then the shop
+# file must hold one paired device and one ticket of 925,60. No cargo:
+# DZPOS_API_BIN names the binary (default ~/.dz-night/bin/dzpos-api).
+#
+# pair Expo Go on the emulator and ring one sale, checked in the shop file
+qa-phone:
+    bash scripts/qa-phone.sh

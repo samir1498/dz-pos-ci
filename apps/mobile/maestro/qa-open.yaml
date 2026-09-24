@@ -1,0 +1,31 @@
+# demo-open.yaml on another Metro port: scripts/qa-phone.sh runs its own
+# Metro beside Samir's dev one (8081) and passes the port as PORT.
+appId: host.exp.exponent
+name: Open Dinar in Expo Go on the QA Metro port and wait on the pairing screen
+tags:
+  - demo
+
+---
+
+- launchApp:
+    appId: host.exp.exponent
+    stopApp: true
+- openLink: exp://localhost:${PORT}
+# The card hides the screen behind it from the accessibility tree too. Its
+# "Continue" opens the full developer menu, which the back key closes.
+- extendedWaitUntil:
+    visible: "Continue|Pair this phone"
+    timeout: 120000
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+      - extendedWaitUntil:
+          visible: "Reload"
+          timeout: 5000
+      - back
+- extendedWaitUntil:
+    visible: "Pair this phone"
+    timeout: 20000
+- waitForAnimationToEnd
