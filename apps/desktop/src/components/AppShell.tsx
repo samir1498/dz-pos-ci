@@ -1,6 +1,10 @@
 // The frame every screen renders inside: a sidebar of sections on the
-// reading side, a topbar carrying the page's name and the two switches, and
-// the screen itself in the rest.
+// reading side, a topbar carrying the page's name, and the screen itself in
+// the rest. The language and theme switches used to live in this topbar;
+// they are `FloatingControls` now (`routes/__root.tsx`), a fixed corner
+// reachable before a session exists too (first setup, sign-in), and the
+// topbar does not draw a second copy of either (T2/T3,
+// `context/plans/20260924-shop-manual-test-findings.md`).
 //
 // One `NAV` list drives both halves. The sidebar reads it for its items and
 // the topbar reads it for the title, so a route added in one place cannot
@@ -46,7 +50,6 @@ import { CalendarClock, CalendarRange, UsersRound } from "lucide-react";
 
 import { Icon } from "@/components/Icon";
 import { Wordmark } from "@/components/Wordmark";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { UserMenu } from "@/components/UserMenu";
 import { Toaster } from "@/components/ui/sonner";
 import {
@@ -66,7 +69,6 @@ import {
 } from "@/components/ui/sidebar";
 import { api, settingsQueryKey } from "@/api";
 import { useTranslation, type Key } from "@/i18n";
-import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { useShopToday } from "@/lib/clock";
 import { isModuleBuilt, type Module } from "@/lib/modules";
 import { hasPermission, useSession } from "@/lib/session";
@@ -367,8 +369,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             </h1>
             <div className="ms-auto flex items-center gap-3">
               <ShopDay />
-              <LanguageSwitcher />
-              <ThemeSwitcher />
               <UserMenu />
             </div>
           </header>

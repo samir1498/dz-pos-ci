@@ -13,6 +13,8 @@
   "lang_name_fr": "Français",
   "lang_name_en": "English",
   "lang_name_ar": "العربية",
+  "password_show": "إظهار كلمة المرور",
+  "password_hide": "إخفاء كلمة المرور",
   "percent_sign": "٪",
   "decimal_separator": ",",
   "nav_products": "المنتجات",

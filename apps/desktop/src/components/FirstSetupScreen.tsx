@@ -5,6 +5,7 @@
 import { useState, type FormEvent } from "react";
 
 import { FormField } from "@/components/FormField";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -85,10 +86,9 @@ export function FirstSetupScreen() {
               error={passwordError ? t(passwordError) : undefined}
             >
               {(field) => (
-                <Input
+                <PasswordInput
                   {...field}
                   data-testid="setup-password"
-                  type="password"
                   value={password}
                   autoComplete="new-password"
                   disabled={pending}
@@ -105,10 +105,9 @@ export function FirstSetupScreen() {
               error={confirmError ? t(confirmError) : undefined}
             >
               {(field) => (
-                <Input
+                <PasswordInput
                   {...field}
                   data-testid="setup-confirm"
-                  type="password"
                   value={confirm}
                   autoComplete="new-password"
                   disabled={pending}

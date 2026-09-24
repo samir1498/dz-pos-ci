@@ -1,5 +1,5 @@
-// The theme. The control is the same component the topbar carries, so the
-// two cannot drift.
+// The theme. The control is the same component the floating corner widget
+// carries (`FloatingControls.tsx`), so the two cannot drift.
 
 import { PanelHeading } from "@/components/settings/PanelHeading";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";

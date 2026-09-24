@@ -12,9 +12,9 @@ import { useState } from "react";
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
 import { Keypad, keyedDigits, type KeypadKey } from "@/components/Keypad";
+import { PasswordInput } from "@/components/PasswordInput";
 import { PinDots } from "@/components/PinBoxes";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useTranslation } from "@/i18n";
 import { useLoginAttempt } from "@/lib/useLoginAttempt";
 import { useSession, type AuthMethod } from "@/lib/session";
@@ -68,10 +68,9 @@ function PasswordUnlock({ name }: { name: string }) {
     >
       <FormField label={t("signin_password_password_label")}>
         {(field) => (
-          <Input
+          <PasswordInput
             {...field}
             data-testid="lock-password"
-            type="password"
             value={password}
             disabled={attempt.locked}
             autoComplete="current-password"

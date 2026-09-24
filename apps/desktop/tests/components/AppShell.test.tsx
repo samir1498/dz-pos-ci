@@ -257,11 +257,18 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.getByTestId("shell-shop")).toHaveTextContent(SHOP_NAME));
   });
 
-  test("carries both switches in the topbar", async () => {
+  /**
+   * The two switches moved out of the topbar into `FloatingControls`
+   * (`routes/__root.tsx`), a fixed corner reachable before a session
+   * exists too (T2/T3). This guards against either one drifting back in
+   * beside `FloatingControls`'s own copy, which would put the same choice
+   * on the screen twice.
+   */
+  test("no longer carries the language and theme switches itself", async () => {
     await mount("/till");
-    const topbar = screen.getByTestId("shell-topbar");
-    expect(topbar).toContainElement(screen.getByTestId("theme-switcher"));
-    expect(topbar).toContainElement(screen.getByTestId("language-switcher"));
+    await screen.findByTestId("shell-topbar");
+    expect(screen.queryByTestId("theme-switcher")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("language-switcher")).not.toBeInTheDocument();
   });
 
   test("says everything in the language that is on", async () => {

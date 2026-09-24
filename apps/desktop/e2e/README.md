@@ -348,7 +348,7 @@ here. These are all of them.
 | `safety-copies-table` | `BackupsPanel.tsx` | The copies a restore took of what it replaced, same columns as the list above, so only the table tells them apart. |
 | `backups-newest` | `BackupsPanel.tsx` | The date of the most recent copy, or the translated sentence for a shop that has none. |
 | `backup-restore-dialog` | `BackupsPanel.tsx` | The second ask before a restore. The spec finds it by role; the id is there for a screenshot to point at. |
-| `theme-switcher` | `ThemeSwitcher.tsx` | The select is rendered twice (topbar and settings panel) with the same translated label, so a label query matches two things. |
+| `theme-switcher` | `ThemeSwitcher.tsx` | The select is rendered twice (the floating corner widget, `FloatingControls.tsx`, and the settings panel) with the same translated label, so a label query matches two things. |
 | `stock-recount-day` | `StockRecountPanel.tsx` | A day, or the translated sentence for a shop that has never recounted. |
 | `stock-recount-checked` | `StockRecountPanel.tsx` | Absent until a run answers, so a test counts it; its text is a bare number. |
 | `stock-recount-clean` | `StockRecountPanel.tsx` | Absent until a run has happened, and the sentence it holds is translated. |
@@ -361,6 +361,7 @@ here. These are all of them.
 | `sidebar-trigger` | `sidebar.tsx` | The button that opens the sheet on a narrow window; its only text is off-screen and translated. |
 | `nav-<screen>` | `AppShell.tsx` | One per sidebar item (`nav-till`, `nav-products`, …). The link's text is translated and repeats the topbar's. |
 | `language-switcher` | `LanguageSwitcher.tsx` | The segmented control as a group; its three buttons name languages, not the group. |
+| `floating-controls` | `FloatingControls.tsx` | The fixed corner holding the language and theme switches; on screen before a session exists too (first setup, sign-in), not only inside the shell. |
 | `figure-<name>` | `dashboard.tsx` | One figure card (`figure-sales`, `figure-margin`, `figure-expenses`, `figure-cash`, `figure-customer-debt`, `figure-supplier-debt`, `figure-open-purchases`). Every card is built out of the same words, so a text query matches four of them. |
 | `figure-<name>-today` | `dashboard.tsx` | The day's amount on a card; an amount, so its text is a number in three locales. |
 | `figure-<name>-month` | `dashboard.tsx` | The month's amount on the same card, which is the same shape of number a row above. |

@@ -1,8 +1,8 @@
 // Tests may panic; the deny is for shipped code.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! Till shifts (features.md §1, the cash position): a drawer opened with a
-//! float, counted at close, and the difference between the two.
+//! Till shifts (features.md §1, the cash position): a drawer opened with
+//! opening cash, counted at close, and the difference between the two.
 //!
 //! Every expected figure below is written out by hand from the rule in
 //! `context/plans/20260921-till-shifts-a-float-and-a-count.md`:
@@ -18,8 +18,8 @@
 //! `CURRENT_TIMESTAMP` and holds the moment the row was inserted, so a window
 //! comparison written against that column instead of `issued_at` puts every
 //! sale here outside every shift and the expected figure collapses to the
-//! float. On a fixture dated today the two columns are an hour apart and the
-//! swap survives.
+//! opening cash. On a fixture dated today the two columns are an hour apart
+//! and the swap survives.
 
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
@@ -50,7 +50,8 @@ const SHOP: i32 = 1;
 /// that filter deleted.
 const OTHER_SHOP: i32 = 2;
 
-/// A shift opened and closed clean, at the two moments and the float named:
+/// A shift opened and closed clean, at the two moments and the opening cash
+/// named:
 /// `list`'s own fixture wants several of these and nothing about the reason
 /// each closed clean, so this is the shared shape rather than three open/close
 /// pairs written out by hand.
@@ -235,8 +236,9 @@ fn the_expected_figure_is_this_cashiers_own_cash_and_nothing_else() {
 
     let shift = shifts::open(&mut conn, SHOP, AMINA, opened_at_nine(500_000)).unwrap();
 
-    // Amina's own cash, inside her window. These four figures and the float
-    // are the only ones the expected figure is allowed to be made of.
+    // Amina's own cash, inside her window. These four figures and the
+    // opening cash are the only ones the expected figure is allowed to be
+    // made of.
     a_sale(&mut conn, AMINA, PaymentMode::Cash, 120_000, at(10, 0, 0));
     a_sale_with_stamp(
         &mut conn,
@@ -289,7 +291,7 @@ fn the_expected_figure_is_this_cashiers_own_cash_and_nothing_else() {
     )
     .unwrap();
 
-    // 500 000 float + 120 000 + 302 000 (300 000 and the 2 000 stamp the
+    // 500 000 opening cash + 120 000 + 302 000 (300 000 and the 2 000 stamp the
     // customer handed over with it) + 75 000 against the debt = 997 000.
     // Written out here; never asked of the code. A shop-wide sum over the
     // same window would have answered 1 280 000, which is the figure the
@@ -341,7 +343,7 @@ fn a_difference_with_no_reason_is_refused_before_anything_is_written() {
     let shift = shifts::open(&mut conn, SHOP, AMINA, opened_at_nine(100_000)).unwrap();
     a_sale(&mut conn, AMINA, PaymentMode::Cash, 50_000, at(10, 0, 0));
 
-    // 100 000 float + 50 000 = 150 000, by hand.
+    // 100 000 opening cash + 50 000 = 150 000, by hand.
     let refused = shifts::close(
         &mut conn,
         SHOP,
@@ -462,7 +464,7 @@ fn a_sale_at_the_moment_the_drawer_opened_is_counted_and_one_at_the_moment_it_cl
     // The column this reads is `issued_at`. `created_at` holds the moment the
     // INSERT ran, which is neither of these and is not even on the fixture's
     // day: a comparison written against it would put all four sales outside
-    // the shift and answer the float.
+    // the shift and answer the opening cash.
     assert_ne!(created_at_of(&mut conn, on_the_dot), at(9, 0, 0));
     assert_ne!(created_at_of(&mut conn, at_the_close), at(19, 0, 0));
 
@@ -642,7 +644,7 @@ fn a_float_or_a_count_below_nothing_is_refused_and_a_sum_past_the_range_is_an_er
         "a drawer counted below nothing came back as {counted_below:?}"
     );
 
-    // A float at the top of the range and one centime of takings. Checked
+    // Opening cash at the top of the range and one centime of takings. Checked
     // arithmetic answers an error; a bare `+` would have wrapped to a figure
     // the shop is owed money against.
     //
@@ -653,7 +655,7 @@ fn a_float_or_a_count_below_nothing_is_refused_and_a_sum_past_the_range_is_an_er
     let live = shifts::report(&mut conn, SHOP, shift.id);
     assert!(
         matches!(&live, Err(CoreError::Money(_))),
-        "a float at the top of the range plus takings came back as {live:?}"
+        "opening cash at the top of the range plus takings came back as {live:?}"
     );
     let counted = shifts::close(
         &mut conn,
@@ -1016,8 +1018,8 @@ fn a_till_opened_or_counted_later_than_now_is_refused() {
     );
 
     // Counted at the second it opened is not the future and is a real
-    // evening: a till opened by mistake and shut again holds its float and
-    // nothing else.
+    // evening: a till opened by mistake and shut again holds its opening
+    // cash and nothing else.
     let closed = shifts::close(
         &mut conn,
         SHOP,

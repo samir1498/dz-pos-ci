@@ -1,7 +1,7 @@
-//! The till's shifts: opening a drawer with a float, counting it at close,
-//! and reading either one back (features.md §1, the cash position; plan
-//! `till-shifts-a-float-and-a-count` T4). They translate; every rule lives
-//! in `dzpos_core::services::shifts`.
+//! The till's shifts: opening a drawer with its opening cash, counting it
+//! at close, and reading either one back (features.md §1, the cash
+//! position; plan `till-shifts-a-float-and-a-count` T4). They translate;
+//! every rule lives in `dzpos_core::services::shifts`.
 //!
 //! One file and never a folder. `crates/api/tests/one_handler_decides.rs`
 //! walks `src/routes` one directory deep and skips every `mod.rs`, which is

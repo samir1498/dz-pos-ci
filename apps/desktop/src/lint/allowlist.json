@@ -10,7 +10,7 @@
   "screens": [
     {
       "file": "src/components/ThemeSwitcher.tsx",
-      "screen": "the topbar's theme switch"
+      "screen": "the floating theme switch"
     },
     {
       "file": "src/lib/fields.tsx",

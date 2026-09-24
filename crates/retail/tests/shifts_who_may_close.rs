@@ -119,8 +119,8 @@ fn a_manager_counts_a_drawer_its_cashier_walked_away_from() {
     let close = closed.close.unwrap();
     assert_eq!(close.closed_by, LEILA);
     assert_eq!(closed.opened_by, KARIM);
-    // 1 500 counted against 2 000 expected, by hand: the float and nothing
-    // sold. Short by 500, and short reads negative.
+    // 1 500 counted against 2 000 expected, by hand: the opening cash and
+    // nothing sold. Short by 500, and short reads negative.
     assert_eq!(close.expected, Money::centimes(2_000));
     assert_eq!(close.difference().unwrap(), Money::centimes(-500));
 

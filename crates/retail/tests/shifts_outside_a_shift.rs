@@ -21,7 +21,7 @@ use common::shifts::{a_sale, at, day, AMINA};
 
 const SHOP: i32 = 1;
 
-/// The fixture day's drawer, opened at 09:00 with the float given.
+/// The fixture day's drawer, opened at 09:00 with the opening cash given.
 fn opened_at_nine(opening_cash: i64) -> NewShift {
     NewShift {
         opened_at: Some(at(9, 0, 0)),
@@ -125,7 +125,7 @@ fn a_sale_rung_after_the_evening_close_is_counted_at_the_next_mornings_drawer() 
     );
 
     // And it is not a term in the arithmetic: the expected figure is the
-    // float alone, because that sale fell outside this shift's own window.
+    // opening cash alone, because that sale fell outside this shift's own window.
     assert_eq!(report.expected, Money::centimes(500_000));
 }
 

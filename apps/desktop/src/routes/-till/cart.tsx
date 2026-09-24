@@ -208,7 +208,7 @@ export function Cart({
       money: true,
       cell: (row) => (
         <MoneyInput
-          className="w-20 px-2"
+          className="w-20 px-2 text-end"
           aria-label={`${t("field_line_discount")} ${row.line.product.name}`}
           value={row.line.discount}
           onChange={(centimes) => onLineDiscount(row.line.product.id, centimes)}

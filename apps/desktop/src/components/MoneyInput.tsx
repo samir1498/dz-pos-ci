@@ -17,6 +17,13 @@
 // right with Western digits on the Arabic screen too, and without it a minus
 // sign jumps to the far end of the number.
 //
+// The text itself starts on the reading side, like every other field: a
+// money box that alone typed from the far edge read as disorienting rather
+// than as a currency convention (T14). A caller inside a table or a totals
+// block, where the digits of several rows have to stack in one column, asks
+// for `text-end` itself through `className`; this file does not choose that
+// for every screen.
+//
 // Blank is `null`, not zero. "No amount given" and "zero dinars" are
 // different answers to "how much was the discount", and a field that turned
 // the first into the second would write a zero the shop never typed.
@@ -83,7 +90,7 @@ export function MoneyInput({
       aria-invalid={invalid}
       aria-describedby={describedBy}
       data-testid={testId}
-      className={cn("font-numeric tabular-nums text-end", className)}
+      className={cn("font-numeric tabular-nums", className)}
       value={text}
       onKeyDown={onKeyDown}
       onFocus={() => {

@@ -685,7 +685,7 @@ fn an_avoir_on_a_facture_naming_nobody_still_writes_the_cash_that_left() {
 /// and under `>=` alike, which is why both refunds here sit exactly on a
 /// bound.
 ///
-/// The figure, by hand: 10 000,00 float, plus the 5 000,00 ticket rung at
+/// The figure, by hand: 10 000,00 opening cash, plus the 5 000,00 ticket rung at
 /// 10:00 inside the window (a cash sale handed straight back stays in the
 /// takings of the day it was rung, which is what the head of this file is
 /// about), less the 3 000,00 handed back at 09:00:00 exactly. 1 000 000 +

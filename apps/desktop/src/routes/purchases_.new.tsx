@@ -230,7 +230,7 @@ function NewPurchaseScreen() {
       cell: (line) => (
         <MoneyInput
           aria-label={t("col_unit_cost")}
-          className="w-32"
+          className="w-32 text-end"
           value={line.unitCost}
           onChange={(centimes) => setLine(line.key, { unitCost: centimes })}
         />

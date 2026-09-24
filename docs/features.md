@@ -309,7 +309,7 @@ outgoing on the day the notes changed hands. The card figure has the same
 shape on the way in and none on the way out, because money paid to a
 supplier by card moves the bank account rather than the till. The figure is
 a net movement over the period and not the money in any drawer: it carries
-no opening float and no count at close, so it goes below zero on a day that
+no opening cash and no count at close, so it goes below zero on a day that
 paid out more than it took.
 
 **What a shift adds, and what it must not.** A cashier opens the till with
@@ -321,7 +321,7 @@ took. The dashboard reads no shift at all, which is what keeps a 15 000 DA
 handover to the owner from reading as the shop losing 3 000 on a day it took
 12 000.
 
-What the shop expects a cashier to be holding is their opening float, plus
+What the shop expects a cashier to be holding is their opening cash, plus
 their own cash sales at `net_to_pay`, plus the cash they were handed against
 a customer's debt, less the cash they themselves handed back over the
 counter on a reversal settled in notes (`services::shifts::close`). Every
@@ -1049,11 +1049,11 @@ stock recount, and undoing a document already handed to a customer),
 `export_and_import` (the four exports, the product template, both imports;
 a label needs nobody, since a name, a price and a barcode are already on the
 shelf), `change_price_at_the_till` (a line sold at a price that is not the
-product's own), `see_audit_log`, `open_and_close_till` (opening a till
-with a float and counting it at close; reading somebody's shift back is not
-this, it is `see_reports`, because the shift list is a report a manager runs
-the floor off and the audit log is the owner's alone), and
-`close_another_persons_till`.
+product's own), `see_audit_log`, `open_and_close_till` (opening a till with
+the drawer's opening cash and counting it at close; reading somebody's
+shift back is not this, it is `see_reports`, because the shift list is a
+report a manager runs the floor off and the audit log is the owner's
+alone), and `close_another_persons_till`.
 
 The last of those is the fine half of a pair, the shape
 `discount_above_threshold` and `change_price_at_the_till` already take under
@@ -1151,10 +1151,10 @@ changes, the discount threshold and the idle time, recount drifts, supplier
 and purchase corrections, every user operation, and lockouts, plus a refused
 credit sale, a refused discount, a refused typed-under price and a refused
 permission whichever way each was refused, and an export or a restore. A
-till adds three: `till.open`, opening a drawer with a float; `till.close`,
-counting and closing it, whose row carries the expected figure, the count,
-the difference, the reason given and the opener's id whenever somebody else
-did the counting; and `till.sale_outside_shift`, a
+till adds three: `till.open`, opening a drawer and recording its opening
+cash; `till.close`, counting and closing it, whose row carries the expected
+figure, the count, the difference, the reason given and the opener's id
+whenever somebody else did the counting; and `till.sale_outside_shift`, a
 sale that fell inside none of its ringer's own shifts, which is the whole of
 what marks such a sale, since nothing on the document says which shift it
 belongs to. Such a sale is accepted and tagged and never refused: a shop
@@ -1173,7 +1173,7 @@ and not a view of the audit log: it is gated on `see_reports` rather than on
 `see_audit_log`, so a manager who cannot read the owner's log can still see
 who is short. `GET /till/shifts` answers a day window and an optional
 `user_id`, both ends of the window optional and defaulting to today alone on
-the shop's clock; each row carries the opener, the opening float and, once
+the shop's clock; each row carries the opener, the opening cash and, once
 closed, the closer, the counted figure, the expected one and the difference,
 with the note beside them
 (`crates/api/src/gates/table.rs`, `apps/desktop/src/routes/till_.shifts.tsx`).

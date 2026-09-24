@@ -306,7 +306,7 @@ async fn a_drawer_that_does_not_match_and_carries_no_reason_is_refused_on_the_no
     assert_eq!(status, StatusCode::CREATED, "{opened}");
     let id = opened["id"].as_i64().unwrap();
 
-    // Nothing was sold, so the expected figure is the float. A count that is
+    // Nothing was sold, so the expected figure is the opening cash. A count that is
     // not 500 000 differs, and a difference needs a reason (ruling 4).
     let (status, refused) = call_as(
         &app,
@@ -360,7 +360,7 @@ async fn a_drawer_cannot_open_with_less_than_nothing_in_it() {
         "{refused}"
     );
 
-    // Zero is not less than nothing: an empty drawer is a real float and the
+    // Zero is not less than nothing: an empty drawer is real opening cash and the
     // refusal above must not swallow it.
     let (status, opened) = call_as(
         &app,
@@ -663,7 +663,7 @@ async fn a_cashier_opens_their_own_till_and_is_refused_another_cashiers_shift() 
     assert_eq!(closed["opened_by"], staff.second_cashier, "{closed}");
     assert_eq!(closed["closed_by"], staff.manager, "{closed}");
     assert_ne!(closed["opened_by"], closed["closed_by"], "{closed}");
-    // 700 000 float, nothing sold, 690 000 counted: short by 10 000, and
+    // 700 000 opening cash, nothing sold, 690 000 counted: short by 10 000, and
     // short reads negative.
     assert_eq!(closed["expected_at_close_centimes"], 700_000);
     assert_eq!(closed["difference_centimes"], -10_000);
@@ -948,7 +948,7 @@ async fn a_short_drawer_reads_the_same_in_the_list_as_on_its_own_and_user_id_nar
     .await;
     assert_eq!(status, StatusCode::CREATED, "{second}");
 
-    // Nothing was sold, so the drawer should hold its float; 98 000 is two
+    // Nothing was sold, so the drawer should hold its opening cash; 98 000 is two
     // thousand centimes short, and short is negative.
     let (status, closed) = call_as(
         &app,

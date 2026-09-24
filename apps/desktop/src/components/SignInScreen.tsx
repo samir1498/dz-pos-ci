@@ -28,13 +28,13 @@ import { api, staffQueryKey } from "@/api";
 import { FormField } from "@/components/FormField";
 import { Icon } from "@/components/Icon";
 import { Keypad, keyedDigits, type KeypadKey } from "@/components/Keypad";
+import { PasswordInput } from "@/components/PasswordInput";
 import { PinDots } from "@/components/PinBoxes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Wordmark } from "@/components/Wordmark";
 import { useTranslation } from "@/i18n";
-import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { errorKey } from "@/lib/fields";
 import { useLoginAttempt } from "@/lib/useLoginAttempt";
 import { useSession } from "@/lib/session";
@@ -189,10 +189,9 @@ function PasswordForm() {
       </FormField>
       <FormField label={t("signin_password_password_label")}>
         {(field) => (
-          <Input
+          <PasswordInput
             {...field}
             data-testid="signin-password"
-            type="password"
             value={password}
             disabled={attempt.locked}
             autoComplete="current-password"
@@ -244,10 +243,7 @@ export function SignInScreen() {
       data-testid="signin-screen"
       className="flex min-h-screen flex-col items-center justify-center bg-background p-4"
     >
-      <div className="w-full max-w-sm self-end sm:self-center">
-        <LanguageSwitcher className="ms-auto" />
-      </div>
-      <Card className="mt-4 w-full max-w-sm">
+      <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
           <Wordmark className="mb-2" />
           <CardTitle>{mode === "pin" ? t("signin_pin_title") : t("signin_password_title")}</CardTitle>
