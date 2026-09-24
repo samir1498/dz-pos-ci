@@ -66,6 +66,9 @@ tasks:
   - id: 'T20'
     desc: 'Wish (Samir): a keyboard-shortcut till like Lumina''s (every action on a function key, a Pay key that opens a focused payment step). The exact behaviour is being read out of Lumina''s source in ~/lumina (research running 2026-09-24); the result feeds the T11 redesign.'
     status: 'pending'
+  - id: 'T21'
+    desc: 'Shortcuts must be visible (Samir): every button with a key shows it on its face (e.g. "Encaisser F9"), and a "?" key or button opens a cheat sheet of all till keys. Today F9 works but nothing on screen says so. Part of T20 and the T11 redesign.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
