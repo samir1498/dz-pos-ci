@@ -105,6 +105,12 @@ tasks:
   - id: 'T33'
     desc: 'Design call for Samir: a 500,00 payment from Épicerie Benali settled TK 2 (457,80) and 42,20 of TK 3, and not the 1 000,00 opening debt from the paper notebook, which is older than both. By the spec (features.md:497) a payment settles issued documents oldest first and the opening balance is not a document, so the notebook debt is never paid down first. The balance itself is right (1 873,40). Decide whether the opening debt should count as the oldest paper. Also the payment panel names "Document 2 / Document 3" instead of TK-2026-000002 / TK-2026-000003.'
     status: 'pending'
+  - id: 'T34'
+    desc: 'Decision (Samir, 2026-09-24) on T33: the opening debt counts as the customer''s oldest item, so a payment settles it first, then documents oldest first. Changes features.md:497 and the allocation service; money path, needs the money builder and fixtures.'
+    status: 'pending'
+  - id: 'T35'
+    desc: 'Wish (Samir): the date field (components/ui/date-field.tsx, three boxes dd/mm/yyyy) gets an optional calendar button that opens a month picker, typing still works, plus presets on range pickers (today, this week, this month, last month) for statements, the audit journal and reports. No calendar or popover component exists yet; shadcn''s Calendar (react-day-picker) + Popover fit the current kit; the calendar must mirror in Arabic and start weeks on Saturday or Sunday per the shop''s locale.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
