@@ -54,6 +54,9 @@ tasks:
   - id: 'T16'
     desc: 'Till: "Aucun client ne correspond." shows under the customer search while the box is still empty (French, fresh shop with no customers). Same family as T7; the message should appear only after a search that found nothing. Also the open-till bar is a tall box with a lot of empty space above the till (feeds the T11 layout redesign).'
     status: 'pending'
+  - id: 'T17'
+    desc: 'Requirement for the T11 till redesign (Samir): the scan/search box holds focus by default so a scanner or the keyboard works at any moment without a click, the whole sale can be driven from the keyboard, and the on-screen numpad stays visible without scrolling. Catch to design around: permanent focus would steal keystrokes from the customer search, remise and amount fields, so focus returns to the scan box after each action (item added, sale taken, dialog closed, Escape) rather than being forced.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
