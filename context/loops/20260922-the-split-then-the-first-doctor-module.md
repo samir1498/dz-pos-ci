@@ -66,6 +66,15 @@ appointment book, joined to the shared tables by plain foreign keys to the
 staff list and the shop, logging to the audit trail without changing it. No
 money, no fiscal question, no prescription yet.
 
+## Where it stands, 2026-09-24 08:45
+
+Phase A (#155 to #162) and Phase B (#163 to #174) are merged, and the
+whole-loop review ran once on the stronger model: money clean, reach and
+tests findings fixed in #175. A clinic build of either app ships no till,
+and gates proves it on both (`check-clinic-bundle`, `check-mobile-bundle`).
+Phase C below has no tasks yet; it waits on a design pass with Samir.
+Open for Samir: whether "arrived" on a cancelled booking undoes the cancel.
+
 ## Phase C: the plug points
 
 Only after Phase B has a second real module to draw them from. Nothing in

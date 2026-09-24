@@ -91,38 +91,27 @@ spot-reads the diff itself.
 
 ## Where to pick up
 
-Updated 2026-09-23 23:15, amended 2026-09-24 00:35. The clinic module is merged through the
-check-in, each part after the dz-review lenses:
+Updated 2026-09-24 08:45. Phases A and B are merged, the clinic plan is
+closed, and the once-per-loop review is done:
 
-- the crate (PR #163), the patient file (#164), the waiting queue (#165),
-  the appointment book (#166)
-- notes that only the doctor can see (#167)
-- the book tools: hours, blocks, visit types, next free slot, no-show and
-  the day list (#168)
-- the patients, queue and settings screens behind `VITE_DINAR_MODULES`
-  (#169), the book screen on FullCalendar's free plugins (#170)
-- booked patients check in to the waiting room, the desk orders it by
-  drag and drop, confirmation calls, the end-of-day no-show checklist
-  (#171)
+- the split into kernel, retail, clinic, core and api crates (#155 to #162)
+- the clinic module: patient file with doctor-only notes, waiting queue,
+  appointment book and its tools, check-in, desk-ordered queue, calls,
+  end-of-day no-shows, the audit row for a refused notes write (#163 to
+  #173), the desktop and phone screens behind the build switch
+- the phone builds for release again, and gates proves its clinic build
+  carries no till (#174)
+- the whole-loop review: money clean; the reach and tests findings fixed
+  (#175), including the doctor's desktop app now building its clinic
+  server in
 
-Samir's rulings of the evening are on the clinic plan; the standing one is
-that the desk decides and the software does not enforce workflow.
-
-The shop's screens are behind the same switch on both apps (#172): a
-clinic build ships no till. Updated 2026-09-24 00:35.
-
-Open for Samir: whether "arrived" on a cancelled booking undoes the
-cancel (refused for now).
-
-1. C8, in flight in worktree `notes-refusal-audit`, branch
-   `feat/refused-notes-write-audit`: a refused write to a patient's notes
-   leaves an audit row (never the text). Then the lenses, PR, merge.
-2. The phone does not build for release on main (Babel 7/8 in
-   `@expo/ui`'s Worklets plugin, since PR #104; kanban SxChTM4z). Pin the
-   pair, then add an `expo export` step to gates so the clinic phone
-   bundle can be proved like the desktop's.
-3. At the end of the loop, one review over everything merged, run on the
-   Fable model.
+1. Phase C, the plug points, has no tasks. It is a design question for
+   Samir (a trait, a registry, or nothing yet) now that two real modules
+   exist.
+2. Open for Samir: whether "arrived" on a cancelled booking undoes the
+   cancel (refused for now).
+3. Follow-ups on the kanban: a real-browser test for the queue drag
+   (Stjk7bMM), a signed release of the doctor's desktop app (eCZ6Rzok).
 
 ## The one thing that proves Phase A finished honestly
 

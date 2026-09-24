@@ -1,8 +1,19 @@
 ---
 type: 'now'
-updated: '2026-09-21'
+updated: '2026-09-24'
 ---
 ## Active
+
+**2026-09-24 08:45: the first doctor module is merged and the loop's review is done.** The live loop is
+`context/loops/20260922-the-split-then-the-first-doctor-module.md`; its
+handoff `context/handoffs/20260922-the-restructure-loop-22-september.md`
+says where to pick up. Merged since the 22nd: the crate split (#155 to
+#162), the clinic module and its screens behind the build switch on both
+apps (#163 to #173), the phone's release build (#174) and the whole-loop
+review fixes (#175). Next is Phase C, the plug points, which needs a design
+pass with Samir first. Open for Samir: "arrived" on a cancelled booking.
+The entries below are older and kept as history.
+
 
 **2026-09-22 midday: the boundary is a rule, the cabinet day and the paper test are on paper, the module question has its own section on the site.** The live loop is
 `context/loops/20260922-the-line-drawn-and-the-clinic-day-written.md`.
