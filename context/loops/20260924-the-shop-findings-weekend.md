@@ -90,3 +90,5 @@ Leave the laptop alone. Ticks every ten minutes while builders run.
 2026-09-24 19:45: printing merged (#178, gates green): Imprimer opens the print dialog for ticket and facture. Follow-up T57 logged (avoir/proforma print button, thermal printer setting).
 
 2026-09-24 20:36: small UI merged (#177, gates green on rerun after a lint fix). First-day gates (B) rerunning on 846921b0.
+
+2026-09-24 21:20: B's first-day e2e green (gates + e2e-first-day on 846921b0), B merges #180. Queued for when a slot frees: B's qa/screenshot-artifacts (worktree shots, bed5e0c2) `just gates` + `just e2e`, don't commit the rewritten PNGs, reply exit lines to B. Mockup agent started on the till layout (worktree till-mockups). Tell B when the box is quiet enough for its ~5 min Arabic emulator run.
