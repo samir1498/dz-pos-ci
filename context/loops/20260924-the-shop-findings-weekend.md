@@ -88,3 +88,5 @@ Leave the laptop alone. Ticks every ten minutes while builders run.
 2026-09-24 19:28: gates queue once printing frees .cargo-target: (1) small UI #177 `just gates`; (2) B's qa/first-day-e2e (worktree first-day) `just gates` then `just e2e-first-day`, reply exit lines to session B. B's first-day spec has test.fail guards for T31 and T34: the branch merging second drops them.
 
 2026-09-24 19:45: printing merged (#178, gates green): Imprimer opens the print dialog for ticket and facture. Follow-up T57 logged (avoir/proforma print button, thermal printer setting).
+
+2026-09-24 20:36: small UI merged (#177, gates green on rerun after a lint fix). First-day gates (B) rerunning on 846921b0.
