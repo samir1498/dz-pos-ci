@@ -102,6 +102,9 @@ tasks:
   - id: 'T32'
     desc: 'Customers list: only the name text links to the account page (customers.tsx:74); clicking the row does nothing, so Samir thought "clicking Benali did nothing". The whole row should open the account (and the same on suppliers and products lists); the pencil stays for edit.'
     status: 'pending'
+  - id: 'T33'
+    desc: 'Design call for Samir: a 500,00 payment from Épicerie Benali settled TK 2 (457,80) and 42,20 of TK 3, and not the 1 000,00 opening debt from the paper notebook, which is older than both. By the spec (features.md:497) a payment settles issued documents oldest first and the opening balance is not a document, so the notebook debt is never paid down first. The balance itself is right (1 873,40). Decide whether the opening debt should count as the oldest paper. Also the payment panel names "Document 2 / Document 3" instead of TK-2026-000002 / TK-2026-000003.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
