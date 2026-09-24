@@ -153,6 +153,12 @@ tasks:
   - id: 'T49'
     desc: 'Supplier account (/suppliers/1): a payment row reads "Paiement / Commande 1 5 000,00" under Type, the order label and the amount run together with no separator, while the Note column stays empty. Put the order link in its own place ("pour la commande BA-…", with T45''s number) and leave the amount to the Crédit column. Also the green "Paiement enregistré" confirmation next to "Payer le fournisseur" sits higher than the buttons' centre line; align it with them (items-center) or move it under the balance.'
     status: 'pending'
+  - id: 'T50'
+    desc: 'Closing the till (count 6 288,00 = expected 6 288,00, stored right) lands straight on an "Ouverture de la caisse" dialog pre-filled with the counted amount. At the end of a day that is the wrong prompt: after a close, show the close summary (expected, counted, difference) and ask to open again only when the next sale is rung or the till page is next visited.'
+    status: 'pending'
+  - id: 'T51'
+    desc: 'Backups page: "Sauvegarder maintenant" works (484 ko, listed), but it never says where the file is, and there is no way to copy a backup onto a USB stick or download it. A copy on the same disk does not survive a dead disk or a stolen PC; add "Copier vers…" / download and show the folder.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
