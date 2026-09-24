@@ -72,3 +72,11 @@ e2e-first-day`. One dz-builder writes `e2e/first-day/first-day.spec.ts`
 from the hand-test database's figures. Desktop walk ends at debt 1 819,85,
 supplier 23 836,00, drawer 6 288,00, stock Eau 69 / Café 116 / Sucre 49
 (the report's 67/116/48 include the phone sale after the close).
+
+2026-09-24 19:58: first-day e2e committed on `qa/first-day-e2e`, green
+in fr and ar (T31, T34 as `test.fail` guards); gates queued with A, PR
+after. Reports site: per-page OG cards live (T26 done, dinar-reports
+ff224ad). Phone: `just qa-phone` merged (#179), green on the emulator:
+one paired device, one ticket 925,60. `cmd.exe` is not on this shell's
+PATH and `cmd.exe /c start` never returns through interop; the script
+handles both. Next: Maestro flow in Arabic, T4/T5, clips into the report.
