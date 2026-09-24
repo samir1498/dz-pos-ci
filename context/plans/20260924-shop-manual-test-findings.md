@@ -138,6 +138,9 @@ tasks:
   - id: 'T44'
     desc: 'New purchase form (/purchases/new) alignment: the "Fournisseur *" label and its select sit lower than the "N° du bon fournisseur" and "Échéance" fields beside them (the required asterisk shifts the row), so the three fields do not share a baseline; in the lines table the Quantité and Prix d''achat headers are not over their inputs, and "Prix d''achat" renders in the monospace number font while the other headers are sans. One field-row component with a fixed label height, headers aligned with their cells, one header font.'
     status: 'pending'
+  - id: 'T45'
+    desc: 'Purchases: "N° du bon fournisseur" (supplier_document_number, the number on the supplier''s own delivery note) reads like our order number, and our purchases have no number of their own (purchases has only an id), so a purchase cannot be named like a ticket. Give purchases a generated number (e.g. BA-2026-000001, gapless per year like the sales series) and relabel the field "N° sur le bon du fournisseur" with a hint; explain Échéance as "à payer avant le". Schema change: money builder.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
