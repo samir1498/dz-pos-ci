@@ -48,6 +48,9 @@ tasks:
   - id: 'T14'
     desc: 'Money inputs type right-aligned (MoneyInput.tsx:86, text-end, used on 14 screens) while every other field types left, which Samir finds disorienting. Make money inputs start-aligned like the others; keep end alignment only in tables and totals where digits stack in a column. Keep dir="ltr" on the amount.'
     status: 'pending'
+  - id: 'T15'
+    desc: 'Wording: "float" (drawer cash) clashes with the never-a-float-for-money rule. Replace it with "opening cash" in docs/features.md (8), code and test comments (crates/api gates table, dto/till.rs, routes/till.rs, tests), keeping historical plan slugs as they are. UI and identifiers already say opening cash / opening_cash_centimes.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
