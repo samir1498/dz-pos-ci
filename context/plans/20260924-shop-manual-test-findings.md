@@ -63,6 +63,9 @@ tasks:
   - id: 'T19'
     desc: 'Till: the numpad''s "Valider" key and the brass "Encaisser" button do the same thing (payment.tsx onEnter = till.tsx submit, also F9), so pressing Valider took the sale when Samir expected it to confirm the amount; the cart vanished and the column jumped to the "Ticket émis" box with a visible flicker. Sale itself was right (TK 1: net 570,90, tendered 1 000, change 429,10). Fix in the T11 redesign: one primary action with one name, and a success state that does not reflow or scroll the column.'
     status: 'pending'
+  - id: 'T20'
+    desc: 'Wish (Samir): a keyboard-shortcut till like Lumina''s (every action on a function key, a Pay key that opens a focused payment step). The exact behaviour is being read out of Lumina''s source in ~/lumina (research running 2026-09-24); the result feeds the T11 redesign.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
