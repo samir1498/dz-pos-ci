@@ -651,9 +651,10 @@ describe("the order form", () => {
     await waitFor(() => expect(total).toHaveTextContent("300,00"));
     await user.type(qty, "0");
     await waitFor(() => expect(total).toHaveTextContent("3 000,00"));
-    // Transport and extras in the sum are the shared fixture's cases
-    // (purchase_order_total_before_landing.json); this screen only shows it.
-  });
+    // Transport is part of it: 3 000,00 + 12,50.
+    await user.type(screen.getByLabelText(fr.field_transport), "12,50");
+    await waitFor(() => expect(total).toHaveTextContent("3 012,50"));
+  }, 15_000);
 
   test("the supplier's own number and the due day say what they are", async () => {
     mountForm();

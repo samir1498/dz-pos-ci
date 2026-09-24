@@ -8,10 +8,16 @@
 -- it. The two are set together or not at all.
 --
 -- Two columns added, no row moved, so the revert drops them.
+--
+-- The pairing CHECK is written with `IS NULL` on both sides of each branch
+-- and never leans on `IN` against a NULL: `NULL IN (...)` is NULL, a CHECK
+-- lets a NULL through, and a quantity with no unit would have been kept.
 ALTER TABLE products ADD COLUMN contenance_milli INTEGER
     CHECK (contenance_milli IS NULL
            OR (typeof(contenance_milli) = 'integer' AND contenance_milli > 0));
 
 ALTER TABLE products ADD COLUMN contenance_unit TEXT
     CHECK ((contenance_unit IS NULL AND contenance_milli IS NULL)
-           OR (contenance_unit IN ('g', 'kg', 'ml', 'l') AND contenance_milli IS NOT NULL));
+           OR (contenance_unit IS NOT NULL
+               AND contenance_milli IS NOT NULL
+               AND contenance_unit IN ('g', 'kg', 'ml', 'l')));
