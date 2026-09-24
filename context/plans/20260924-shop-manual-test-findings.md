@@ -144,6 +144,9 @@ tasks:
   - id: 'T46'
     desc: 'Purchase page (/purchases/1): shows no total, no amount paid and no amount still owed (the order came to 30 672,00 with 1 836,00 paid, visible only in the database); the supplier shows as "Ouvrir la fiche" instead of its name; the receipt is labelled with the raw series key "reception:2026 / 1". Also Samir typed 100 Café instead of 10 and nothing flagged it: the new-purchase form should show the running total before saving (and T45''s number) so a 10x slip is visible.'
     status: 'pending'
+  - id: 'T47'
+    desc: 'Wish (Samir): attach a photo or scan of the supplier''s paper (bon de livraison, facture) to a purchase while typing its number; viewable from the purchase and the supplier''s account. The paired phone takes the photo and sends it to the open purchase; the desktop also accepts a file. Store files in the shop data folder with a small attachments table (not SQLite BLOBs), compress to ~200-500 KB, include them in backup and restore (backup grows). Step 2, later: OCR (Tesseract, fr + ar) pre-fills the number and maybe the lines.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
