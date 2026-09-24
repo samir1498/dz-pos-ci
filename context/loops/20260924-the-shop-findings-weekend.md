@@ -82,3 +82,5 @@ Leave the laptop alone. Ticks every ten minutes while builders run.
 ## Where it stands
 
 2026-09-24 18:55: loop started. Builders on group 1 (printing, worktree `printing`, branch fix/imprimer-prints) and group 10 (small UI, worktree `small-ui`, branch fix/small-ui-findings, no cargo). Session B started in tmux dz:auto.
+
+2026-09-24 19:20: small UI PR #177 open, needs `just gates` before merge (cargo busy). It moved the theme and language switchers out of the top bar into one floating corner widget, so there is one of each: tell Samir. Group 3 builder (shop identity) running; group 5 (customers and debt, money builder) started.
