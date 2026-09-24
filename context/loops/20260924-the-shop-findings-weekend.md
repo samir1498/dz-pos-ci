@@ -102,3 +102,5 @@ Leave the laptop alone. Ticks every ten minutes while builders run.
 2026-09-24 21:55: customers and debt merged (#181, gates green on d11eb353). B's first-day spec has test.fail guards for T31 and T34: T34 is now fixed on main, so that guard will report 'unexpectedly passed' — tell B.
 
 2026-09-24 22:06: onboarding tour mockup ready for Samir: https://mockup-onboarding-tour.dz-pos-design.pages.dev/onboarding/ (PR #183, not to merge). Open there: tour vs checklist vs both (proposed both); where skip/resume state lives. driver.js 1.8.0 MIT, no RTL placement (bottom-only workaround). Purchases group (T13 T35 T44 T45 T46 T49) started with the money builder.
+
+2026-09-24 22:40: setup and shop identity merged (#185, gates green on e3d917bf after a clean rebuild; the first run had reused another worktree's kernel crate). The small UI change's floating switchers covered the purchase form's submit button and turned main's `just e2e` red: fix in #184 (switchers in the sidebar footer once signed in), gates and e2e running. Till non-layout group started. Logo upload and supplier paper (T56, T47) wait until purchases merges: both touch the schema.
