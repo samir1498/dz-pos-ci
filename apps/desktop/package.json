@@ -39,6 +39,7 @@
     "lucide-react": "1.43.0",
     "radix-ui": "1.6.7",
     "react": "^19.2.7",
+    "react-day-picker": "9.14.0",
     "react-dom": "^19.2.7",
     "react-qr-code": "^2.2.0",
     "recharts": "3.8.0",

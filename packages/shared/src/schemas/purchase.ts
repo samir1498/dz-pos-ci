@@ -41,6 +41,9 @@ export const purchaseSchema = z.object({
   id: z.number(),
   shop_id: z.number(),
   supplier_id: z.number(),
+  /** Our own number for the order, `BA-2026-000001`, spelled by the core. */
+  printed_number: z.string(),
+  number: exactInteger,
   /** The bound every stored printed field carries (`MAX_FIELD_CHARS` in the
    *  core). */
   supplier_document_number: z.string().max(200).nullable(),
@@ -86,6 +89,8 @@ export const purchaseReceiptSchema = z.object({
   id: z.number(),
   series: z.string(),
   number: exactInteger,
+  /** `BR-2026-000001`, spelled by the core. */
+  printed_number: z.string(),
   received_at: z.string(),
   user_id: z.number(),
   note: z.string().max(200).nullable(),
@@ -98,6 +103,13 @@ export const purchaseDetailSchema = z.object({
   purchase: purchaseSchema,
   lines: z.array(purchaseLineSchema),
   receipts: z.array(purchaseReceiptSchema),
+  /** The four figures of the order page, all the core's
+   *  (`services::purchase_account`). Owed goes below zero when a return
+   *  leaves the supplier holding credit. */
+  total_centimes: exactInteger,
+  received_centimes: exactInteger,
+  paid_centimes: exactInteger,
+  owed_centimes: exactInteger,
 }) satisfies z.ZodType<PurchaseDetailDto>;
 type _PurchaseDetail = Assert<Matches<PurchaseDetailDto, typeof purchaseDetailSchema>>;
 

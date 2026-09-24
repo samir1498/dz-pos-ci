@@ -42,9 +42,44 @@ pub struct Purchase {
     pub user_id: i32,
     pub note: Option<String>,
     pub created_at: NaiveDateTime,
+    /// The year the order's number counts in: the year of `purchase_date`.
+    pub series_year: i32,
+    /// The number inside that year, gapless per shop (migration 000029).
+    pub number: i64,
+}
+
+/// The printed form of a purchase's number, `BA-2026-000001`: "bon d'achat",
+/// our own number for an order, which the supplier's delivery-note number is
+/// not.
+pub const PURCHASE_PREFIX: &str = "BA";
+
+/// The printed form of a bon de réception's number, `BR-2026-000001`. The
+/// prefix is the one `DocumentKind::BonDeReception` prints, read from there so
+/// the two cannot drift; no document of that kind is ever issued, a delivery
+/// is a `purchase_receipts` row (features.md §1).
+pub fn receipt_prefix() -> &'static str {
+    super::sql_types::DocumentKind::BonDeReception.number_prefix()
+}
+
+/// The counter a purchase takes its number from in `year`. One series per
+/// year, so the first order of January is number 1 (`take_next` creates the
+/// row on first use).
+pub fn purchase_series(year: i32) -> String {
+    format!("purchase:{year}")
+}
+
+/// `{prefix}-{year}-{number:06}`, the shape every printed number has
+/// (`print::number_of`).
+pub fn printed_number(prefix: &str, year: i32, number: i64) -> String {
+    format!("{prefix}-{year}-{number:06}")
 }
 
 impl Purchase {
+    /// The number the shop quotes for this order, `BA-2026-000001`.
+    pub fn printed_number(&self) -> String {
+        printed_number(PURCHASE_PREFIX, self.series_year, self.number)
+    }
+
     /// What the goods cost to get here, as one amount. Migration 000008 keeps
     /// `transport_centimes` and `extra_costs_centimes` in two columns because
     /// they are two things the shop agreed once for the whole order, and the
@@ -125,6 +160,22 @@ pub struct PurchaseReceipt {
     pub created_at: NaiveDateTime,
 }
 
+impl PurchaseReceipt {
+    /// The number the shop quotes for this delivery, `BR-2026-000001`. The
+    /// year is the one in the series key (`reception:2026`), which is the one
+    /// the number came out of; a key that does not end in a year reads as 0
+    /// rather than failing the whole order's page.
+    pub fn printed_number(&self) -> String {
+        let year = self
+            .series
+            .rsplit(':')
+            .next()
+            .and_then(|y| y.parse::<i32>().ok())
+            .unwrap_or(0);
+        printed_number(receipt_prefix(), year, self.number)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewPurchaseReceipt {
     pub purchase_id: i32,
@@ -173,6 +224,8 @@ pub(crate) struct PurchaseRow {
     pub user_id: i32,
     pub note: Option<String>,
     pub created_at: NaiveDateTime,
+    pub series_year: i32,
+    pub number: i64,
 }
 
 #[derive(Debug, Insertable)]
@@ -188,6 +241,8 @@ pub(crate) struct PurchaseRowWrite {
     pub status: PurchaseStatus,
     pub user_id: i32,
     pub note: Option<String>,
+    pub series_year: i32,
+    pub number: i64,
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable)]
@@ -282,6 +337,8 @@ impl From<PurchaseRow> for Purchase {
             user_id: r.user_id,
             note: r.note,
             created_at: r.created_at,
+            series_year: r.series_year,
+            number: r.number,
         }
     }
 }

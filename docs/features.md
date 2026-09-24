@@ -48,6 +48,13 @@ the order.
 blank), category, unit of measure (piece, kg, litre, box), cost price,
 selling price, wholesale price (optional), quantity on hand, low-stock
 threshold, TVA rate (see open decision 3), active flag. Batches/lots: later.
+An optional pack size, the contenance (plan shop-manual-test-findings T13):
+a quantity in thousandths and one of `g`, `kg`, `ml`, `l`, both or neither
+(migration 000030). The screens show the name with it appended
+(`ProductDto.display_name`, `Huile 1,5 L`, spelled by the core); the stored
+name, the printed documents and the Excel export are unchanged. A price per
+litre or per kilo on the shelf label is not built: it needs a rounding rule
+of its own first.
 
 **Supplier.** Name (unique inside the shop), phone, address, RC, NIF, NIS, AI,
 notes, and an `active` flag the way a product has one. The opening debt is not
@@ -91,7 +98,41 @@ what it owes is a screen.
 
 **Purchase.** Supplier, supplier's document number, date, lines (product,
 quantity, unit cost), transport and extra costs, amount paid now, due date
-for the rest. The supplier has to be one the shop still buys from: a closed
+for the rest.
+
+A purchase has a number of its own, `BA-2026-000001` (plan
+shop-manual-test-findings T45, migration 000029): one uninterrupted series per
+shop and per year, the year being that of the day the order is dated, taken
+from the `purchase:<year>` counter inside the transaction that writes the
+order, the same `take_next` a ticket's number comes out of. Anything refused
+after the number is taken rolls the counter back with the order, so a refused
+order burns no number (`a_refused_purchase_burns_no_number`,
+`two_orders_take_the_number_after_the_last`,
+`the_purchase_series_restarts_at_one_in_the_new_year_and_the_old_one_keeps_counting`).
+The orders already on a file were numbered in id order inside their year.
+It is the shop's own reference and not a fiscal series: décret 05-468 art. 10
+asks an uninterrupted series of what the shop issues, and a purchase is not
+issued; gapless is kept because the shop reads it the same way. The
+supplier's own number is "N° sur le bon du fournisseur", the number printed
+on their paper, and a delivery reads `BR-2026-000001` off its
+`reception:<year>` counter.
+
+An order's page shows four figures, all derived and none stored
+(`services::purchase_account`): the total at the landed cost (each line's
+landed unit cost times what was ordered, rounded the way the delivery that
+finishes the line rounds it); what arrived, which is the ledger's rows citing
+the order (deliveries less returns); what payments placed on it (the
+allocations); and still owed, arrived less paid, which goes below zero when a
+return leaves the supplier holding credit and is then named as that credit
+(`an_order_page_reads_its_total_what_arrived_what_was_paid_and_what_is_owed`,
+`a_total_past_the_top_of_the_range_is_an_error_and_not_a_panic`). The
+new-purchase form shows the order's total before it is saved, so a slip of
+ten is seen: each line's value rounded once, plus transport and the other
+costs, from `purchaseOrderTotal` in the shared money code
+(`purchase_order_total_before_landing`). It is the figure before the landed
+cost is spread, so the saved total can read a few centimes under it, never
+above; the order's number is not shown before the save, because a number
+reserved for a form that is then abandoned would be a gap. The supplier has to be one the shop still buys from: a closed
 fiche refuses an order and goes on taking payments. A product is named once
 on an order, because the cost a delivery leaves on the product has to name
 one line. Transport and the other extra costs are two columns and one figure

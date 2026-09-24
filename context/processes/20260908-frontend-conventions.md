@@ -105,7 +105,7 @@ Two folders, one rule about which is which.
 
 | Folder | What lives there | Who wrote it |
 |---|---|---|
-| `src/components/ui/` | shadcn/ui, one file per component. `button`, `input`, `label`, `select`, `checkbox`, `switch`, `textarea`, `table`, `card`, `badge`, `dialog`, `sheet`, `dropdown-menu`, `tabs`, `separator`, `skeleton`, `scroll-area`, `sidebar`, `breadcrumb`, `tooltip`, `sonner`, `chart`, `date-field`, `input-otp`, `month-field`. The folder is the list; a count here drifts every time the CLI adds one. | The CLI, then corrected by hand. Re-add one with `pnpm dlx shadcn@latest add <name>` and redo the corrections below. |
+| `src/components/ui/` | shadcn/ui, one file per component. `button`, `input`, `label`, `select`, `checkbox`, `switch`, `textarea`, `table`, `card`, `badge`, `dialog`, `sheet`, `dropdown-menu`, `tabs`, `separator`, `skeleton`, `scroll-area`, `sidebar`, `breadcrumb`, `tooltip`, `sonner`, `chart`, `date-field`, `input-otp`, `month-field`, `popover`, `calendar` (react-day-picker 9, T35). The folder is the list; a count here drifts every time the CLI adds one. | The CLI, then corrected by hand. Re-add one with `pnpm dlx shadcn@latest add <name>` and redo the corrections below. |
 | `src/components/*.tsx` | Ours, on top of them: `AppShell`, `PageHeader`, `FormField`, `StatusPill`, `EmptyState`, `DataTable`, `MoneyInput`, `PayButton`, plus D2's `Money`, `Wordmark`, `Icon`, `ThemeSwitcher`. | Us. A screen imports from here first and reaches into `ui/` only for a control the kit has no opinion about. |
 
 `src/kit/KitPage.tsx` is every component in every state on one page, at

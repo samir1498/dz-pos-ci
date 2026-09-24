@@ -6,7 +6,16 @@ import type { PurchaseReceiptLineDto } from "./PurchaseReceiptLineDto";
  * not a document and takes no document number; the series is
  * `reception:<year>` and resets on 1 January like every other one.
  */
-export type PurchaseReceiptDto = { id: number, series: string, number: number, 
+export type PurchaseReceiptDto = { id: number, 
+/**
+ * The counter's name, `reception:2026`: a column, not something to show.
+ */
+series: string, number: number, 
+/**
+ * The number a shop quotes for the delivery, `BR-2026-000001`, spelled
+ * by the core; `series` above is the key it came out of.
+ */
+printed_number: string, 
 /**
  * `YYYY-MM-DD HH:MM:SS` on the shop's calendar.
  */

@@ -46,6 +46,7 @@ import { useTranslation, type Key } from "@/i18n";
 import { useShopToday } from "@/lib/clock";
 import { cleared, errorKey } from "@/lib/fields";
 import { PAYMENT_METHODS, PAYMENT_METHOD_KEY } from "@/lib/payment";
+import { RunningTotal } from "./-purchases/RunningTotal";
 
 export const Route = createFileRoute("/purchases_/new")({ component: NewPurchaseScreen });
 
@@ -200,7 +201,7 @@ function NewPurchaseScreen() {
           <SelectContent>
             {(products.data ?? []).map((p) => (
               <SelectItem key={p.id} value={String(p.id)}>
-                {p.name}
+                {p.display_name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -211,16 +212,21 @@ function NewPurchaseScreen() {
       id: "qty",
       header: t("col_qty"),
       numeric: true,
+      // The control sits at the end of its cell, under its end-aligned
+      // header: a block-level input left at the start read as belonging to
+      // the column before it (T44).
       cell: (line) => (
-        <Input
-          dir="ltr"
-          inputMode="decimal"
-          autoComplete="off"
-          aria-label={t("col_qty")}
-          className="w-24 text-end font-numeric tabular-nums"
-          value={line.qty}
-          onChange={(event) => setLine(line.key, { qty: event.target.value })}
-        />
+        <div className="flex justify-end">
+          <Input
+            dir="ltr"
+            inputMode="decimal"
+            autoComplete="off"
+            aria-label={t("col_qty")}
+            className="w-24 text-end font-numeric tabular-nums"
+            value={line.qty}
+            onChange={(event) => setLine(line.key, { qty: event.target.value })}
+          />
+        </div>
       ),
     },
     {
@@ -228,12 +234,14 @@ function NewPurchaseScreen() {
       header: t("col_unit_cost"),
       money: true,
       cell: (line) => (
-        <MoneyInput
-          aria-label={t("col_unit_cost")}
-          className="w-32 text-end"
-          value={line.unitCost}
-          onChange={(centimes) => setLine(line.key, { unitCost: centimes })}
-        />
+        <div className="flex justify-end">
+          <MoneyInput
+            aria-label={t("col_unit_cost")}
+            className="w-32 text-end"
+            value={line.unitCost}
+            onChange={(centimes) => setLine(line.key, { unitCost: centimes })}
+          />
+        </div>
       ),
     },
   ];
@@ -263,7 +271,7 @@ function NewPurchaseScreen() {
           <CardHeader>
             <h3 className="text-md font-semibold">{t("purchases_block_supplier")}</h3>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
+          <CardContent className="grid items-start gap-4 sm:grid-cols-3">
             <FormField label={t("col_supplier")} required>
               {(parts) => (
                 <Select value={supplierId} onValueChange={setSupplierId}>
@@ -283,7 +291,10 @@ function NewPurchaseScreen() {
                 </Select>
               )}
             </FormField>
-            <FormField label={t("col_supplier_document")}>
+            <FormField
+              label={t("col_supplier_document")}
+              hint={t("purchases_supplier_document_hint")}
+            >
               {(parts) => (
                 <Input
                   {...parts}
@@ -294,8 +305,16 @@ function NewPurchaseScreen() {
                 />
               )}
             </FormField>
-            <FormField label={t("field_due_date")}>
-              {(parts) => <DateField {...parts} value={dueDate} onChange={setDueDate} />}
+            <FormField label={t("field_due_date")} hint={t("purchases_due_hint")}>
+              {(parts) => (
+                <DateField
+                  {...parts}
+                  value={dueDate}
+                  onChange={setDueDate}
+                  today={today.today}
+                  presets={["today", "in_7_days", "in_30_days"]}
+                />
+              )}
             </FormField>
           </CardContent>
         </Card>
@@ -347,6 +366,12 @@ function NewPurchaseScreen() {
               </FormField>
             </div>
             <p className="text-sm text-muted-foreground">{t("purchases_landed_hint")}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent>
+            <RunningTotal lines={lines} transport={transport} extra={extra} />
           </CardContent>
         </Card>
 

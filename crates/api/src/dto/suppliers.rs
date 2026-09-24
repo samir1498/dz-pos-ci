@@ -171,16 +171,10 @@ impl From<NewSupplierDto> for NewSupplier {
 #[ts(export_to = "SupplierAllocationDto.ts")]
 pub struct SupplierAllocationDto {
     pub purchase_id: i32,
+    /// The order's own number, `BA-2026-000001` (T49), so the fiche names the
+    /// order the way the order page does rather than by its id.
+    pub purchase_number: String,
     pub amount_centimes: i64,
-}
-
-impl From<SupplierAllocation> for SupplierAllocationDto {
-    fn from(a: SupplierAllocation) -> Self {
-        SupplierAllocationDto {
-            purchase_id: a.purchase_id,
-            amount_centimes: a.amount.as_centimes(),
-        }
-    }
 }
 
 /// One movement of the supplier ledger, with the balance it left behind and,
@@ -195,6 +189,8 @@ pub struct SupplierEntryDto {
     /// The order the movement came from, when it came from one. An opening
     /// balance, a payment and a correction cite none.
     pub purchase_id: Option<i32>,
+    /// That order's number, `BA-2026-000001`, when there is one.
+    pub purchase_number: Option<String>,
     pub kind: SupplierDebtKindDto,
     /// What the movement added to what the shop owes; zero on a payment or a
     /// return.

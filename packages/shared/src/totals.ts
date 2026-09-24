@@ -259,3 +259,38 @@ export function computeTotals(lines: readonly TotalsLine[], opts: TotalsOptions)
     netToPay: totalTtc + due,
   };
 }
+
+/** One ordered line of a purchase, as the new-purchase form holds it. */
+export interface PurchaseDraftLine {
+  /** What the supplier charges for the unit, in centimes. */
+  readonly unitCost: number;
+  /** Thousandths of the unit: 1,5 kg is 1500. */
+  readonly qtyMilli: number;
+}
+
+/**
+ * What an order comes to before it is saved: every line's value, rounded once
+ * per line by `lineTotal` (the same half-away-from-zero rounding the core's
+ * `checked_mul_milli` gives the order's value), plus transport and the other
+ * costs. Shown on the new-purchase form so a slip of ten is seen before the
+ * order is written (plan shop-manual-test-findings T46).
+ *
+ * The figure before the landed cost is spread: the core floors each line's
+ * share per unit, so the saved order can come out a few centimes under this
+ * and never above (features.md §1). The saved figure is the server's.
+ * purchase_order_total_before_landing
+ */
+export function purchaseOrderTotal(
+  lines: readonly PurchaseDraftLine[],
+  transport: number,
+  extraCosts: number,
+): number {
+  if (transport < 0 || extraCosts < 0) throw new MoneyError("NegativeUnitPrice");
+  let total = exact(transport) + exact(extraCosts);
+  for (const line of lines) {
+    if (line.qtyMilli < 0) throw new MoneyError("NegativeQuantity");
+    if (line.unitCost < 0) throw new MoneyError("NegativeUnitPrice");
+    total += exact(lineTotal(line.unitCost, line.qtyMilli));
+  }
+  return safe(total);
+}

@@ -11,20 +11,70 @@
 // and nothing else. An incomplete or impossible date, 31 February
 // included, reports as `""`: every screen that used the native control
 // already treats that as "no date".
+//
+// Beside the boxes, a calendar button (T35): a month to pick a day from, and
+// a row of presets (Aujourd'hui, Hier) when the caller hands over the shop's
+// day. Typing still works and stays the fast way; the calendar is for the
+// day somebody knows by its place in the week rather than by its number.
+// The presets move from the shop's day, never the machine's, which is why
+// the caller passes it in rather than this file reading a clock.
+//
+// Weeks start on Saturday, in every language: the calendar is the shop's,
+// and an Algerian week runs Saturday to Friday on the calendars a shop has
+// on its wall. An assumption, one prop to change (`WEEK_STARTS_ON`).
 
 import { useEffect, useState } from "react";
+import { CalendarDays } from "lucide-react";
+import { arDZ, enUS, fr } from "react-day-picker/locale";
 
-import { useTranslation } from "@/i18n";
+import { Icon } from "@/components/Icon";
+import { useTranslation, type Key } from "@/i18n";
 import {
   clampDayToMonth,
   clampSegment,
   clampYear,
   parseIsoDate,
+  shiftIsoDate,
   toIsoDate,
 } from "@/lib/date-segments";
 import { cn } from "@/lib/utils";
 
+import { Button } from "./button";
+import { Calendar } from "./calendar";
 import { Input } from "./input";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
+
+/** Saturday, as react-day-picker counts the week (0 is Sunday). */
+const WEEK_STARTS_ON = 6;
+
+const LOCALES = { fr, en: enUS, ar: arDZ } as const;
+
+/** A day named by where it sits from the shop's today. */
+export type DatePreset = "today" | "yesterday" | "in_7_days" | "in_30_days";
+
+const PRESETS: Record<DatePreset, { key: Key; days: number }> = {
+  today: { key: "date_preset_today", days: 0 },
+  yesterday: { key: "date_preset_yesterday", days: -1 },
+  in_7_days: { key: "date_preset_in_7_days", days: 7 },
+  in_30_days: { key: "date_preset_in_30_days", days: 30 },
+};
+
+/** The calendar's own Date for an ISO day, at local midnight, which is what
+ *  react-day-picker builds its days as; `undefined` for no day. */
+function dayOf(iso: string): Date | undefined {
+  const { day, month, year } = parseIsoDate(iso);
+  if (toIsoDate(day, month, year) === "") return undefined;
+  return new Date(Number(year), Number(month) - 1, Number(day));
+}
+
+/** The ISO day the calendar handed back, read off its own local fields. */
+function isoOf(date: Date): string {
+  return toIsoDate(
+    String(date.getDate()),
+    String(date.getMonth() + 1),
+    String(date.getFullYear()).padStart(4, "0"),
+  );
+}
 
 export interface DateFieldProps {
   /** `YYYY-MM-DD`, or `""` for no date. */
@@ -42,6 +92,13 @@ export interface DateFieldProps {
    *  one `htmlFor`, and an `aria-label` on a box beats the label and hides
    *  it. */
   "aria-labelledby"?: string;
+  /** The shop's day, `YYYY-MM-DD` (`useShopToday`). The presets are shown
+   *  only when it is known, and the calendar opens on it when the field is
+   *  empty. */
+  today?: string;
+  /** Which presets the calendar offers. A due date looks forward, a
+   *  statement's range looks back. */
+  presets?: readonly DatePreset[];
 }
 
 export function DateField({
@@ -55,8 +112,11 @@ export function DateField({
   "aria-invalid": invalid,
   "aria-describedby": describedBy,
   "aria-labelledby": labelledBy,
+  today,
+  presets = ["today", "yesterday"],
 }: DateFieldProps) {
-  const { t } = useTranslation();
+  const { t, lang, dir } = useTranslation();
+  const [open, setOpen] = useState(false);
   const initial = parseIsoDate(value);
   const [day, setDay] = useState(initial.day);
   const [month, setMonth] = useState(initial.month);
@@ -138,6 +198,55 @@ export function DateField({
         value={year}
         onChange={(event) => commit(day, month, clampYear(event.target.value))}
       />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            disabled={disabled}
+            aria-label={t("date_open_calendar")}
+            data-testid={testId === undefined ? undefined : `${testId}-calendar`}
+          >
+            <Icon as={CalendarDays} size={18} />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2" align="start" dir={dir}>
+          {today === undefined ? null : (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {presets.map((preset) => (
+                <Button
+                  key={preset}
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => {
+                    const next = parseIsoDate(shiftIsoDate(today, PRESETS[preset].days));
+                    commit(next.day, next.month, next.year);
+                    setOpen(false);
+                  }}
+                >
+                  {t(PRESETS[preset].key)}
+                </Button>
+              ))}
+            </div>
+          )}
+          <Calendar
+            mode="single"
+            dir={dir}
+            locale={LOCALES[lang]}
+            weekStartsOn={WEEK_STARTS_ON}
+            selected={dayOf(value)}
+            defaultMonth={dayOf(value) ?? (today === undefined ? undefined : dayOf(today))}
+            onSelect={(picked) => {
+              if (picked === undefined) return;
+              const next = parseIsoDate(isoOf(picked));
+              commit(next.day, next.month, next.year);
+              setOpen(false);
+            }}
+          />
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

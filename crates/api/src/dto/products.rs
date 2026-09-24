@@ -36,6 +36,39 @@ impl From<UnitDto> for Unit {
     }
 }
 
+/// The unit a pack size is written in (T13). Mass and volume only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "ContenanceUnitDto.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum ContenanceUnitDto {
+    G,
+    Kg,
+    Ml,
+    L,
+}
+
+impl From<ContenanceUnit> for ContenanceUnitDto {
+    fn from(u: ContenanceUnit) -> Self {
+        match u {
+            ContenanceUnit::G => ContenanceUnitDto::G,
+            ContenanceUnit::Kg => ContenanceUnitDto::Kg,
+            ContenanceUnit::Ml => ContenanceUnitDto::Ml,
+            ContenanceUnit::L => ContenanceUnitDto::L,
+        }
+    }
+}
+
+impl From<ContenanceUnitDto> for ContenanceUnit {
+    fn from(u: ContenanceUnitDto) -> Self {
+        match u {
+            ContenanceUnitDto::G => ContenanceUnit::G,
+            ContenanceUnitDto::Kg => ContenanceUnit::Kg,
+            ContenanceUnitDto::Ml => ContenanceUnit::Ml,
+            ContenanceUnitDto::L => ContenanceUnit::L,
+        }
+    }
+}
+
 /// `cost_centimes` and `wholesale_centimes` are `Option`, not because either
 /// is ever absent in the row, but because `GET /products` and
 /// `GET /products/{id}` are open reads a cashier needs for the till (M4 T5
@@ -62,11 +95,23 @@ pub struct ProductDto {
     pub low_stock_at_milli: i64,
     pub rate_bps: u32,
     pub active: bool,
+    /// The pack size in thousandths of `contenance_unit` (T13), both null
+    /// when the shop gave none.
+    pub contenance_milli: Option<i64>,
+    pub contenance_unit: Option<ContenanceUnitDto>,
+    /// The name with the pack size after it, `Huile 1,5 L`, spelled by the
+    /// core. Every screen that names a product shows this; `name` is what the
+    /// fiche edits.
+    pub display_name: String,
 }
 
 impl From<Product> for ProductDto {
     fn from(p: Product) -> Self {
+        let display_name = p.display_name();
         ProductDto {
+            display_name,
+            contenance_milli: p.contenance.map(Contenance::qty_milli),
+            contenance_unit: p.contenance.map(|c| c.unit().into()),
             id: p.id,
             shop_id: p.shop_id,
             name: p.name,
@@ -108,6 +153,33 @@ pub struct NewProductDto {
     pub rate_bps: Option<u32>,
     #[serde(default = "yes")]
     pub active: bool,
+    /// The pack size, both or neither (T13). Optional on the wire, so a
+    /// caller that has no pack size to say (the import, a script) leaves
+    /// both out; the fiche sends both or nulls.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub contenance_milli: Option<i64>,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub contenance_unit: Option<ContenanceUnitDto>,
+}
+
+impl NewProductDto {
+    /// The pack size as the core takes it. One of the two without the other
+    /// is refused rather than read as none: the screen sent half a figure.
+    pub fn contenance(&self) -> Result<Option<Contenance>, ApiError> {
+        match (self.contenance_milli, self.contenance_unit) {
+            (None, None) => Ok(None),
+            (Some(qty), Some(unit)) => Ok(Some(
+                Contenance::new(within_js_safe_range("contenance_milli", qty)?, unit.into())
+                    .map_err(ApiError::from)?,
+            )),
+            _ => Err(ApiError::from(CoreError::validation(
+                "contenance_unit",
+                "a pack size carries a quantity and a unit together",
+            ))),
+        }
+    }
 }
 
 impl TryFrom<NewProductDto> for NewProduct {

@@ -32,6 +32,7 @@ import { useTranslation, type Key } from "@/i18n";
 import { errorKey, fieldErrorMessage } from "@/lib/fields";
 import { useHasPermission } from "@/lib/session";
 
+import { CONTENANCE_SYMBOL, CONTENANCE_UNITS, NO_CONTENANCE, readContenance } from "./contenance";
 import { NO_CATEGORY, UNITS, UNIT_KEY, rateOptions } from "./parts";
 
 const FALLBACK_RATE_BPS = 1900;
@@ -57,6 +58,10 @@ interface FormValues {
   readonly stock: string;
   readonly lowStock: string;
   readonly active: boolean;
+  /** The pack size, text like the other quantities (T13). */
+  readonly contenance: string;
+  /** One of `CONTENANCE_UNITS`, or `NO_CONTENANCE`. */
+  readonly contenanceUnit: string;
 }
 
 /**
@@ -128,6 +133,8 @@ export function ProductForm({
             stock: "",
             lowStock: "",
             active: true,
+            contenance: "",
+            contenanceUnit: NO_CONTENANCE,
           }
         : {
             name: initial.name,
@@ -141,6 +148,9 @@ export function ProductForm({
             stock: formatQty(initial.qty_on_hand_milli),
             lowStock: initial.low_stock_at_milli === 0 ? "" : formatQty(initial.low_stock_at_milli),
             active: initial.active,
+            contenance:
+              initial.contenance_milli === null ? "" : formatQty(initial.contenance_milli),
+            contenanceUnit: initial.contenance_unit ?? NO_CONTENANCE,
           };
 
   const form = useForm({
@@ -150,6 +160,7 @@ export function ProductForm({
       // fall back only for the blank case they allow.
       const stock = optional(value.stock, parseQtyToMilli) ?? 0;
       const lowStock = optional(value.lowStock, parseQtyToMilli) ?? 0;
+      const pack = readContenance(value.contenance, value.contenanceUnit);
       // The rejection is deliberately swallowed: onError has already turned
       // the server's code into a translated message on the form.
       await save
@@ -169,6 +180,8 @@ export function ProductForm({
           // this screen and the product has to carry the one it chose.
           rate_bps: Number(value.rate),
           active: value.active,
+          contenance_milli: pack.kind === "set" ? pack.milli : null,
+          contenance_unit: pack.kind === "set" ? pack.unit : null,
         })
         .catch(() => undefined);
     },
@@ -300,6 +313,60 @@ export function ProductForm({
           </FormField>
         )}
       </form.Field>
+
+      <div className="grid grid-cols-2 items-start gap-4">
+        <form.Field
+          name="contenance"
+          validators={{
+            onSubmit: ({ value, fieldApi }) =>
+              readContenance(value, fieldApi.form.getFieldValue("contenanceUnit")).kind ===
+              "incomplete"
+                ? "error_contenance_incomplete"
+                : undefined,
+          }}
+        >
+          {(field) => (
+            <FormField
+              label={t("field_contenance")}
+              hint={t("contenance_hint")}
+              error={fieldErrorMessage(field.state.meta.errors, t)}
+            >
+              {(parts) => (
+                <Input
+                  {...parts}
+                  dir="ltr"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  className="font-numeric tabular-nums"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+              )}
+            </FormField>
+          )}
+        </form.Field>
+        <form.Field name="contenanceUnit">
+          {(field) => (
+            <FormField label={t("field_contenance_unit")}>
+              {(parts) => (
+                <Select value={field.state.value} onValueChange={field.handleChange}>
+                  <SelectTrigger id={parts.id} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_CONTENANCE}>{t("contenance_unit_none")}</SelectItem>
+                    {CONTENANCE_UNITS.map((u) => (
+                      <SelectItem key={u} value={u}>
+                        {CONTENANCE_SYMBOL[u]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </FormField>
+          )}
+        </form.Field>
+      </div>
 
       <form.Field
         name="price"

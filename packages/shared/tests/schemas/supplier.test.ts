@@ -36,6 +36,7 @@ const payment: SupplierEntryDto = {
   id: 12,
   supplier_id: 7,
   purchase_id: null,
+  purchase_number: null,
   kind: "payment",
   debit_centimes: 0,
   credit_centimes: 100_000,
@@ -43,7 +44,7 @@ const payment: SupplierEntryDto = {
   payment_mode: "cash",
   user_id: 1,
   note: "acompte",
-  allocations: [{ purchase_id: 3, amount_centimes: 100_000 }],
+  allocations: [{ purchase_id: 3, purchase_number: "BA-2026-000003", amount_centimes: 100_000 }],
   created_at: "2026-09-10 09:00:00",
 };
 
@@ -95,13 +96,17 @@ describe("supplierSchema", () => {
 
 describe("supplierAllocationSchema", () => {
   test("takes what a payment placed on one order", () => {
-    const allocation = { purchase_id: 3, amount_centimes: 100_000 };
+    const allocation = { purchase_id: 3, purchase_number: "BA-2026-000003", amount_centimes: 100_000 };
     expect(supplierAllocationSchema.parse(allocation)).toEqual(allocation);
   });
 
   test("refuses a fractional centime on the amount", () => {
     expect(
-      supplierAllocationSchema.safeParse({ purchase_id: 3, amount_centimes: 100_000.5 }).success,
+      supplierAllocationSchema.safeParse({
+        purchase_id: 3,
+        purchase_number: "BA-2026-000003",
+        amount_centimes: 100_000.5,
+      }).success,
     ).toBe(false);
   });
 });

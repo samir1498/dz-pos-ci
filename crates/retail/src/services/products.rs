@@ -5,7 +5,7 @@ use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::{CoreError, RetailError};
-use crate::models::product::{NewProduct, Product, ProductRowWrite};
+use crate::models::product::{Contenance, NewProduct, Product, ProductRowWrite};
 use crate::models::stock::{Movement, MovementKind};
 use crate::money::{Bps, Money};
 use crate::repos::counters;
@@ -181,6 +181,41 @@ pub fn update(
             )?;
         }
         Ok(after)
+    })
+}
+
+/// `create` with the pack size (T13), in one transaction: the fiche and its
+/// contenance land together or not at all. Kept beside `create` rather than
+/// folded into `NewProduct`, so the callers that never name a pack size (the
+/// import, the seed) write the row the way they always have.
+pub fn create_with_contenance(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    new: NewProduct,
+    contenance: Option<Contenance>,
+) -> Result<Product, RetailError> {
+    conn.transaction(|conn| {
+        let made = create(conn, shop_id, user_id, new)?;
+        repo::set_contenance(conn, shop_id, made.id, contenance)?;
+        repo::get(conn, shop_id, made.id).map_err(RetailError::from)
+    })
+}
+
+/// `update` with the pack size, in one transaction. `None` clears it: the
+/// screen sends the whole fiche, so a pack size left out was taken out.
+pub fn update_with_contenance(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    user_id: i32,
+    id: i32,
+    new: NewProduct,
+    contenance: Option<Contenance>,
+) -> Result<Product, RetailError> {
+    conn.transaction(|conn| {
+        update(conn, shop_id, user_id, id, new)?;
+        repo::set_contenance(conn, shop_id, id, contenance)?;
+        repo::get(conn, shop_id, id).map_err(RetailError::from)
     })
 }
 

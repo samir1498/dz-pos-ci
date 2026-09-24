@@ -23,7 +23,7 @@ use dzpos_core::models::category::Category;
 #[cfg(feature = "retail")]
 use dzpos_core::models::document::{Document, DocumentKind, DocumentLine, DocumentStatus};
 #[cfg(feature = "retail")]
-use dzpos_core::models::product::{NewProduct, Product, Unit};
+use dzpos_core::models::product::{Contenance, ContenanceUnit, NewProduct, Product, Unit};
 use dzpos_core::models::shop::{Shop, StoreBlock};
 #[cfg(feature = "retail")]
 use dzpos_core::models::stock::Drift;
@@ -67,7 +67,7 @@ use dzpos_core::services::shifts::{NewShift, Shift, ShiftReport, TillCount};
 #[cfg(feature = "retail")]
 use dzpos_core::services::stock::{LastRecount, Report};
 #[cfg(feature = "retail")]
-use dzpos_core::services::supplier_debt::{SupplierAllocation, SupplierDebtKind};
+use dzpos_core::services::supplier_debt::SupplierDebtKind;
 #[cfg(feature = "retail")]
 use dzpos_core::services::suppliers::{NewSupplier, SupplierWithBalance};
 use dzpos_core::services::users::User;

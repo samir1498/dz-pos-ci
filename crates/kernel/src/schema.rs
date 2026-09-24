@@ -39,6 +39,9 @@ diesel::table! {
         active -> Bool,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        // Migration 000030: the pack size, thousandths of `contenance_unit`.
+        contenance_milli -> Nullable<BigInt>,
+        contenance_unit -> Nullable<Text>,
     }
 }
 
@@ -305,6 +308,10 @@ diesel::table! {
         user_id -> Integer,
         note -> Nullable<Text>,
         created_at -> Timestamp,
+        // Migration 000029: the year the order's number counts in, off
+        // `purchase_date`, and the number inside it (BA-2026-000001).
+        series_year -> Integer,
+        number -> BigInt,
     }
 }
 

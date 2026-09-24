@@ -365,3 +365,53 @@ fn format_centimes_matches_the_shared_formatter() {
         );
     }
 }
+
+#[derive(Deserialize)]
+struct DraftLine {
+    unit_cost: i64,
+    qty_milli: i64,
+}
+
+#[derive(Deserialize)]
+struct PurchaseTotalCase {
+    name: String,
+    lines: Vec<DraftLine>,
+    transport: i64,
+    extra_costs: i64,
+    expected: i64,
+}
+
+#[derive(Deserialize)]
+struct PurchaseTotalFixture {
+    name: String,
+    cases: Vec<PurchaseTotalCase>,
+}
+
+/// The new-purchase form's running total (`purchaseOrderTotal` in
+/// `packages/shared/src/totals.ts`) reads the same cases. The core's side of
+/// it is the primitive `services::purchase_landed::spread` values an order's
+/// lines with, `checked_mul_milli`, then checked addition: the two runners
+/// agree on the rounding, so the form and the saved order part only by the
+/// per-unit floor features.md §1 describes.
+#[test]
+fn purchase_order_total_before_landing_matches_the_form() {
+    let f: PurchaseTotalFixture =
+        serde_json::from_str(&fixture("purchase_order_total_before_landing")).unwrap();
+    assert_eq!(f.name, "purchase_order_total_before_landing");
+    assert!(f.cases.len() >= 5, "fixture lost its cases");
+    for c in &f.cases {
+        let mut total = Money::centimes(c.transport)
+            .checked_add(Money::centimes(c.extra_costs))
+            .unwrap();
+        for line in &c.lines {
+            total = total
+                .checked_add(
+                    Money::centimes(line.unit_cost)
+                        .checked_mul_milli(line.qty_milli)
+                        .unwrap(),
+                )
+                .unwrap();
+        }
+        assert_eq!(total, Money::centimes(c.expected), "{}", c.name);
+    }
+}

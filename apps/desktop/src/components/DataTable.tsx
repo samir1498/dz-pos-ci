@@ -103,7 +103,10 @@ export function DataTable<Row>({
         <TableHeader className="bg-muted">
           <TableRow>
             {columns.map((column) => (
-              <TableHead key={column.id} className={cn(align(column), face(column))}>
+              // The header takes the column's side and never its figure face:
+              // a heading is words, and "Prix d'achat" set in the digits' face
+              // read as a different kind of header from its neighbours (T44).
+              <TableHead key={column.id} className={align(column)}>
                 {column.header}
               </TableHead>
             ))}

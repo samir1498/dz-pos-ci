@@ -18,13 +18,14 @@ use axum::Json;
 use dzpos_core::db::Conn;
 use dzpos_core::error::{CoreError, RetailError};
 use dzpos_core::services::suppliers::NewSupplier;
-use dzpos_core::services::{clock, supplier_debt as debt, suppliers as service};
+use dzpos_core::services::{clock, purchases, supplier_debt as debt, suppliers as service};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 use crate::dto::{
     money_field, parse_day, AdjustmentDto, CloseSupplierDto, NewPaymentDto, NewSupplierDto,
-    SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto, SupplierWriteDto,
-    DATE_FORMAT, DATE_TIME_FORMAT,
+    SupplierAllocationDto, SupplierDto, SupplierEntryDto, SupplierLedgerDto, SupplierStatementDto,
+    SupplierWriteDto, DATE_FORMAT, DATE_TIME_FORMAT,
 };
 use crate::error::ApiError;
 use crate::session::CurrentUser;
@@ -227,9 +228,10 @@ pub async fn statement(
     let statement = state
         .blocking(move |c| {
             let ranged = debt::statement_between(c, answer, id, from, to)?;
+            let numbers = purchase_numbers(c, answer, id)?;
             let mut entries = Vec::with_capacity(ranged.entries.len());
             for line in ranged.entries {
-                entries.push(entry(c, answer, line)?);
+                entries.push(entry(c, answer, line, &numbers)?);
             }
             Ok::<_, CoreError>(SupplierStatementDto {
                 supplier_id: id,
@@ -249,9 +251,10 @@ pub async fn statement(
 /// left behind.
 fn envelope(conn: &mut Conn, shop: i32, supplier_id: i32) -> Result<SupplierLedgerDto, CoreError> {
     let statement = debt::statement(conn, shop, supplier_id)?;
+    let numbers = purchase_numbers(conn, shop, supplier_id)?;
     let mut entries = Vec::with_capacity(statement.lines.len());
     for line in statement.lines {
-        entries.push(entry(conn, shop, line)?);
+        entries.push(entry(conn, shop, line, &numbers)?);
     }
     Ok(SupplierLedgerDto {
         supplier_id,
@@ -267,6 +270,7 @@ fn entry(
     conn: &mut Conn,
     shop: i32,
     line: debt::LedgerLine,
+    numbers: &HashMap<i32, String>,
 ) -> Result<SupplierEntryDto, CoreError> {
     let allocations = if line.entry.kind == debt::SupplierDebtKind::Payment {
         debt::allocations_of_payment(conn, shop, line.entry.id)?
@@ -277,6 +281,10 @@ fn entry(
         id: line.entry.id,
         supplier_id: line.entry.supplier_id,
         purchase_id: line.entry.purchase_id,
+        purchase_number: line
+            .entry
+            .purchase_id
+            .and_then(|id| numbers.get(&id).cloned()),
         kind: line.entry.kind.into(),
         debit_centimes: line.entry.debit.as_centimes(),
         credit_centimes: line.entry.credit.as_centimes(),
@@ -284,9 +292,34 @@ fn entry(
         payment_mode: line.entry.payment_mode.map(Into::into),
         user_id: line.entry.user_id,
         note: line.entry.note,
-        allocations: allocations.into_iter().map(Into::into).collect(),
+        allocations: allocations
+            .into_iter()
+            .map(|a| SupplierAllocationDto {
+                purchase_id: a.purchase_id,
+                // Every allocation names one of this supplier's orders, so
+                // the map has it; the id is the honest fallback if not.
+                purchase_number: numbers
+                    .get(&a.purchase_id)
+                    .cloned()
+                    .unwrap_or_else(|| a.purchase_id.to_string()),
+                amount_centimes: a.amount.as_centimes(),
+            })
+            .collect(),
         created_at: line.entry.created_at.format(DATE_TIME_FORMAT).to_string(),
     })
+}
+
+/// Every order of this supplier by id, with the number the shop quotes for
+/// it (T49). One read per ledger rather than one per row.
+fn purchase_numbers(
+    conn: &mut Conn,
+    shop: i32,
+    supplier_id: i32,
+) -> Result<HashMap<i32, String>, CoreError> {
+    Ok(purchases::list(conn, shop, None, Some(supplier_id))?
+        .into_iter()
+        .map(|p| (p.id, p.printed_number()))
+        .collect())
 }
 
 /// `/suppliers/abc` leaves in the same envelope as every other refusal rather

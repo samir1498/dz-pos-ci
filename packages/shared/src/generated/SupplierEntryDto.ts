@@ -14,7 +14,11 @@ export type SupplierEntryDto = { id: number, supplier_id: number,
  * The order the movement came from, when it came from one. An opening
  * balance, a payment and a correction cite none.
  */
-purchase_id: number | null, kind: SupplierDebtKindDto, 
+purchase_id: number | null, 
+/**
+ * That order's number, `BA-2026-000001`, when there is one.
+ */
+purchase_number: string | null, kind: SupplierDebtKindDto, 
 /**
  * What the movement added to what the shop owes; zero on a payment or a
  * return.

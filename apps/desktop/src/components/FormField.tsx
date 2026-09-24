@@ -63,12 +63,16 @@ export function FormField({
     <div className={cn("flex flex-col gap-1.5 text-start", className)}>
       {/* The star sits beside the label, not inside it: a label's text is its
           name to a test and to a screen reader, and "Nom*" is not "Nom". */}
-      <div className="flex items-baseline gap-1">
+      {/* One label-row height, the star set solid, so a required field's star
+          cannot make its row taller than its neighbours' and push its
+          control below theirs (T44: "Fournisseur *" sat lower than the two
+          fields beside it). */}
+      <div className="flex min-h-4 items-center gap-1">
         <Label id={labelId} htmlFor={id}>
           {label}
         </Label>
         {required ? (
-          <span aria-hidden="true" className="text-fg-danger">
+          <span aria-hidden="true" className="leading-none text-fg-danger">
             *
           </span>
         ) : null}

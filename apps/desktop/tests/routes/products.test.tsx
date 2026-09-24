@@ -28,6 +28,9 @@ const product: ProductDto = {
   low_stock_at_milli: 10_000,
   rate_bps: 1900,
   active: true,
+  contenance_milli: null,
+  contenance_unit: null,
+  display_name: "Huile Elio 5L",
 };
 
 const general: CategoryDto = { id: 1, shop_id: 1, name: "Général", default_rate_bps: 1900 };
@@ -156,6 +159,7 @@ beforeEach(() => {
       const after: ProductDto = {
         ...before,
         name: typeof sent.name === "string" ? sent.name : before.name,
+        display_name: typeof sent.name === "string" ? sent.name : before.display_name,
         selling_centimes:
           typeof sent.selling_centimes === "number" ? sent.selling_centimes : before.selling_centimes,
         wholesale_centimes:
@@ -175,6 +179,7 @@ beforeEach(() => {
         ...product,
         id: rows.length + 2,
         name: typeof sent.name === "string" ? sent.name : product.name,
+        display_name: typeof sent.name === "string" ? sent.name : product.display_name,
         selling_centimes:
           typeof sent.selling_centimes === "number" ? sent.selling_centimes : 0,
       };
@@ -487,7 +492,14 @@ describe("the add form", () => {
 
 describe("the table", () => {
   test("shows the stored rate and marks a product that is not for sale", async () => {
-    rows = [product, { ...product, id: 2, name: "Ancien", rate_bps: 900, active: false }];
+    rows = [product, {
+        ...product,
+        id: 2,
+        name: "Ancien",
+        display_name: "Ancien",
+        rate_bps: 900,
+        active: false,
+      }];
     mount();
     const first = (await screen.findByText("Huile Elio 5L")).closest("tr");
     const second = screen.getByText("Ancien").closest("tr");
@@ -551,6 +563,10 @@ describe("the edit form", () => {
       low_stock_at_milli: 10_000,
       rate_bps: 900,
       active: false,
+      // No pack size on this fiche: the two travel as nulls, which the
+      // server reads as "none" (T13).
+      contenance_milli: null,
+      contenance_unit: null,
     });
     expect(posted()).toBe(false);
 
@@ -787,7 +803,13 @@ describe("the labels", () => {
   });
 
   test("the sheet is the ticked rows, and nothing is offered while none is ticked", async () => {
-    const second: ProductDto = { ...product, id: 2, name: "Semoule 5 kg", barcode: "2000010000024" };
+    const second: ProductDto = {
+      ...product,
+      id: 2,
+      name: "Semoule 5 kg",
+      display_name: "Semoule 5 kg",
+      barcode: "2000010000024",
+    };
     rows = [product, second];
     const user = userEvent.setup();
     mount();
@@ -819,6 +841,7 @@ describe("the filters", () => {
     ...product,
     id: 2,
     name: "Semoule 5 kg",
+    display_name: "Semoule 5 kg",
     barcode: "2000010000024",
     category_id: 2,
     qty_on_hand_milli: 2_000,
@@ -828,6 +851,7 @@ describe("the filters", () => {
     ...product,
     id: 3,
     name: "Sachets",
+    display_name: "Sachets",
     barcode: null,
     category_id: null,
   };
@@ -858,7 +882,7 @@ describe("the filters", () => {
 
   test("a catalogue typed in capitals still answers a search typed in small letters", async () => {
     const user = userEvent.setup();
-    rows = [{ ...product, name: "HUILE ELIO 5L" }];
+    rows = [{ ...product, name: "HUILE ELIO 5L", display_name: "HUILE ELIO 5L" }];
     mount();
     await screen.findByText("HUILE ELIO 5L");
     await user.type(screen.getByTestId("products-search"), "huile");

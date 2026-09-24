@@ -85,6 +85,7 @@ const ledger: SupplierLedgerDto = {
       id: 11,
       supplier_id: 3,
       purchase_id: null,
+      purchase_number: null,
       kind: "opening",
       debit_centimes: 150_000,
       credit_centimes: 0,
@@ -108,6 +109,7 @@ const afterPayment: SupplierLedgerDto = {
       id: 12,
       supplier_id: 3,
       purchase_id: null,
+      purchase_number: null,
       kind: "payment",
       debit_centimes: 0,
       credit_centimes: 100_000,
@@ -115,7 +117,7 @@ const afterPayment: SupplierLedgerDto = {
       payment_mode: "cash",
       user_id: 1,
       note: "acompte",
-      allocations: [{ purchase_id: 8, amount_centimes: 100_000 }],
+      allocations: [{ purchase_id: 8, purchase_number: "BA-2026-000008", amount_centimes: 100_000 }],
       created_at: "2026-09-12 16:30:00",
     },
     ...ledger.entries,
@@ -443,9 +445,17 @@ describe("the statement", () => {
     });
     expect(await screen.findByText(fr.suppliers_paid)).toBeInTheDocument();
     // What the payment settled comes from the server's answer, not from a
-    // figure the screen worked out.
+    // figure the screen worked out, and it names the order by its number in
+    // a place of its own (T49): the amount is the Crédit column's, so a
+    // payment that went to one order does not print it a second time.
     const settled = await screen.findByTestId("supplier-allocations");
-    expect(within(settled).getByText(ONE_THOUSAND)).toBeInTheDocument();
+    expect(within(settled).getByText(fr.suppliers_for_order)).toBeInTheDocument();
+    expect(within(settled).getByRole("link", { name: "BA-2026-000008" })).toHaveAttribute(
+      "href",
+      "/purchases/8",
+    );
+    expect(within(settled).queryByText(ONE_THOUSAND)).not.toBeInTheDocument();
+    expect(settled.closest("td")).not.toHaveTextContent(fr.debt_payment);
   });
 
   test("a payment above the debt says how much is actually owed", async () => {

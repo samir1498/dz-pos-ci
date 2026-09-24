@@ -51,8 +51,14 @@ pub struct PurchaseDto {
     pub id: i32,
     pub shop_id: i32,
     pub supplier_id: i32,
+    /// Our own number for the order, `BA-2026-000001`, spelled by the core
+    /// (T45): gapless inside the year the order is dated, the way a ticket's
+    /// is. A screen shows this and never builds it out of `number`.
+    pub printed_number: String,
+    /// The number inside its year, for sorting.
+    pub number: i64,
     /// The number written on the paper the supplier sent, when it carried
-    /// one.
+    /// one. Theirs, not ours: `printed_number` is ours.
     pub supplier_document_number: Option<String>,
     /// `YYYY-MM-DD` on the shop's calendar.
     pub purchase_date: String,
@@ -80,6 +86,8 @@ impl TryFrom<Purchase> for PurchaseDto {
             id: p.id,
             shop_id: p.shop_id,
             supplier_id: p.supplier_id,
+            printed_number: p.printed_number(),
+            number: p.number,
             supplier_document_number: p.supplier_document_number,
             purchase_date: p.purchase_date,
             due_date: p.due_date,
@@ -141,8 +149,12 @@ pub struct PurchaseReceiptLineDto {
 #[ts(export_to = "PurchaseReceiptDto.ts")]
 pub struct PurchaseReceiptDto {
     pub id: i32,
+    /// The counter's name, `reception:2026`: a column, not something to show.
     pub series: String,
     pub number: i64,
+    /// The number a shop quotes for the delivery, `BR-2026-000001`, spelled
+    /// by the core; `series` above is the key it came out of.
+    pub printed_number: String,
     /// `YYYY-MM-DD HH:MM:SS` on the shop's calendar.
     pub received_at: String,
     pub user_id: i32,
@@ -160,19 +172,36 @@ pub struct PurchaseDetailDto {
     pub purchase: PurchaseDto,
     pub lines: Vec<PurchaseLineDto>,
     pub receipts: Vec<PurchaseReceiptDto>,
+    /// What the whole order is worth at the cost it landed at
+    /// (`services::purchase_account`, T46).
+    pub total_centimes: i64,
+    /// What has arrived of it, less what went back: the ledger's rows citing
+    /// this order. Debt rises on receipt, so this is what the shop owes for.
+    pub received_centimes: i64,
+    /// What payments have placed on this order.
+    pub paid_centimes: i64,
+    /// `received - paid`, computed in the core. Below zero is credit the
+    /// supplier holds after a return.
+    pub owed_centimes: i64,
 }
 
 impl TryFrom<PurchaseView> for PurchaseDetailDto {
     type Error = ApiError;
 
     fn try_from(v: PurchaseView) -> Result<Self, ApiError> {
+        let account = v.account;
         Ok(PurchaseDetailDto {
+            total_centimes: account.total.as_centimes(),
+            received_centimes: account.received.as_centimes(),
+            paid_centimes: account.paid.as_centimes(),
+            owed_centimes: account.owed.as_centimes(),
             purchase: PurchaseDto::try_from(v.purchase)?,
             lines: v.lines.into_iter().map(PurchaseLineDto::from).collect(),
             receipts: v
                 .receipts
                 .into_iter()
                 .map(|r| PurchaseReceiptDto {
+                    printed_number: r.receipt.printed_number(),
                     id: r.receipt.id,
                     series: r.receipt.series,
                     number: r.receipt.number,

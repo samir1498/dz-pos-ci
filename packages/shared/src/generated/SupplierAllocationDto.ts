@@ -4,4 +4,9 @@
  * What one payment placed on one order. A payment is one movement and the
  * orders it settled are these, oldest first.
  */
-export type SupplierAllocationDto = { purchase_id: number, amount_centimes: number, };
+export type SupplierAllocationDto = { purchase_id: number, 
+/**
+ * The order's own number, `BA-2026-000001` (T49), so the fiche names the
+ * order the way the order page does rather than by its id.
+ */
+purchase_number: string, amount_centimes: number, };

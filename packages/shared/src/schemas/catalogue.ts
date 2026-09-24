@@ -4,6 +4,7 @@
 import { z } from "zod";
 
 import type { CategoryDto } from "../generated/CategoryDto";
+import type { ContenanceUnitDto } from "../generated/ContenanceUnitDto";
 import type { ProductDto } from "../generated/ProductDto";
 import type { UnitDto } from "../generated/UnitDto";
 import { exactInteger } from "./common";
@@ -11,6 +12,10 @@ import type { Assert, Matches } from "./drift";
 
 export const unitSchema = z.enum(["piece", "kg", "litre", "box"]) satisfies z.ZodType<UnitDto>;
 type _Unit = Assert<Matches<UnitDto, typeof unitSchema>>;
+
+/** The four units a pack size is written in (T13). */
+export const contenanceUnitSchema = z.enum(["g", "kg", "ml", "l"]) satisfies z.ZodType<ContenanceUnitDto>;
+type _ContenanceUnit = Assert<Matches<ContenanceUnitDto, typeof contenanceUnitSchema>>;
 
 export const categorySchema = z.object({
   id: z.number(),
@@ -42,5 +47,10 @@ export const productSchema = z.object({
   low_stock_at_milli: exactInteger,
   rate_bps: z.number(),
   active: z.boolean(),
+  /** The pack size (T13): thousandths of the unit, both null or both set. */
+  contenance_milli: exactInteger.positive().nullable(),
+  contenance_unit: contenanceUnitSchema.nullable(),
+  /** The name with the pack size after it, spelled by the core. */
+  display_name: z.string(),
 }) satisfies z.ZodType<ProductDto>;
 type _Product = Assert<Matches<ProductDto, typeof productSchema>>;

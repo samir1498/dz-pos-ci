@@ -76,11 +76,12 @@ pub async fn create(
     // A body that does not parse is the caller's mistake, not a server
     // fault, and it leaves in the same error shape as everything else.
     let Json(dto) = body.map_err(ApiError::from)?;
+    let contenance = dto.contenance()?;
     let new = NewProduct::try_from(dto)?;
     let shop = state.shop_id;
     let user = who.id;
     let made = state
-        .blocking(move |c| service::create(c, shop, user, new))
+        .blocking(move |c| service::create_with_contenance(c, shop, user, new, contenance))
         .await?;
     Ok((
         StatusCode::CREATED,
@@ -100,11 +101,12 @@ pub async fn update(
     let Path(id) =
         id.map_err(|_| ApiError::BadRequest("the id in the path is not a number".into()))?;
     let Json(dto) = body.map_err(ApiError::from)?;
+    let contenance = dto.contenance()?;
     let new = NewProduct::try_from(dto)?;
     let shop = state.shop_id;
     let user = who.id;
     let after = state
-        .blocking(move |c| service::update(c, shop, user, id, new))
+        .blocking(move |c| service::update_with_contenance(c, shop, user, id, new, contenance))
         .await?;
     Ok(Json(redact_cost(ProductDto::from(after), who.role)))
 }

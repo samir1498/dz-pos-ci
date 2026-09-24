@@ -4,6 +4,7 @@
 // adjustment dialog exist only to build the card it renders and are not used
 // anywhere else.
 
+import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Scale, Wallet } from "lucide-react";
 import { useState } from "react";
@@ -68,7 +69,9 @@ export function SupplierStatement({ supplier }: { supplier: SupplierDto }) {
           {supplier.active ? null : (
             <Badge variant="outline">{t("suppliers_inactive")}</Badge>
           )}
-          <div className="ms-auto flex flex-wrap gap-2">
+          {/* Centred on the buttons' line: the "Paiement enregistré" note the
+              pay dialog leaves beside them sat above their middle (T49). */}
+          <div className="ms-auto flex flex-wrap items-center gap-2">
             <PayDialog supplier={supplier} />
             <AdjustDialog supplier={supplier} />
           </div>
@@ -101,15 +104,14 @@ function LedgerTable({ ledger }: { ledger: SupplierLedgerDto }) {
         </span>
       ),
     },
+    { id: "kind", header: t("col_kind"), cell: (entry) => t(SUPPLIER_KIND_KEY[entry.kind]) },
     {
-      id: "kind",
-      header: t("col_kind"),
-      cell: (entry) => (
-        <div className="flex flex-col gap-1">
-          <span>{t(SUPPLIER_KIND_KEY[entry.kind])}</span>
-          <Settled entry={entry} />
-        </div>
-      ),
+      // The order a movement belongs to, in a column of its own and by the
+      // number the order page shows (T49). The amount is the Crédit
+      // column's, and the Type column says only what kind of movement it is.
+      id: "purchase",
+      header: t("col_purchase"),
+      cell: (entry) => <OrdersOf entry={entry} />,
     },
     {
       id: "debit",
@@ -148,21 +150,41 @@ function LedgerTable({ ledger }: { ledger: SupplierLedgerDto }) {
   );
 }
 
-/** Which orders a payment went to, under the kind it went as. Shown open
- *  rather than behind a toggle: which order the money settled is the question
- *  asked of a payment, and the server decided it. */
-function Settled({ entry }: { entry: SupplierEntryDto }) {
-  const { t } = useTranslation();
-  if (entry.allocations.length === 0) return null;
+/** A link to one order, by the number the shop quotes for it. */
+function OrderLink({ id, number }: { id: number; number: string }) {
   return (
-    <ul className="flex flex-col gap-0.5 text-sm text-muted-foreground" data-testid="supplier-allocations">
+    <Button asChild variant="link" size="sm" className="h-auto p-0">
+      <Link to="/purchases/$id" params={{ id: String(id) }}>
+        <span dir="ltr" className="font-numeric tabular-nums">
+          {number}
+        </span>
+      </Link>
+    </Button>
+  );
+}
+
+/**
+ * The orders a movement belongs to. A delivery or a return cites one; a
+ * payment names the orders the server settled with it, oldest first, shown
+ * open rather than behind a toggle because which order the money went to is
+ * the question asked of a payment. A payment spread over several orders says
+ * how much went to each, since the Crédit column holds only the sum; one
+ * spent on a single order does not repeat the Crédit figure.
+ */
+function OrdersOf({ entry }: { entry: SupplierEntryDto }) {
+  const { t } = useTranslation();
+  if (entry.allocations.length === 0) {
+    if (entry.purchase_id === null || entry.purchase_number === null) return null;
+    return <OrderLink id={entry.purchase_id} number={entry.purchase_number} />;
+  }
+  const split = entry.allocations.length > 1;
+  return (
+    <ul className="flex flex-col gap-0.5 text-sm" data-testid="supplier-allocations">
       {entry.allocations.map((allocation) => (
-        <li key={allocation.purchase_id} className="flex items-center gap-1.5">
-          <span>{t("col_purchase")}</span>
-          <span dir="ltr" className="font-numeric tabular-nums">
-            {allocation.purchase_id}
-          </span>
-          <Money centimes={allocation.amount_centimes} />
+        <li key={allocation.purchase_id} className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground">{t("suppliers_for_order")}</span>
+          <OrderLink id={allocation.purchase_id} number={allocation.purchase_number} />
+          {split ? <Money centimes={allocation.amount_centimes} /> : null}
         </li>
       ))}
     </ul>

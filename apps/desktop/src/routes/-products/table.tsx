@@ -55,7 +55,7 @@ export function ProductTable({
       header: t("col_name"),
       cell: (row) => (
         <span className="flex flex-wrap items-center gap-2">
-          <span className={row.active ? "" : "text-muted-foreground"}>{row.name}</span>
+          <span className={row.active ? "" : "text-muted-foreground"}>{row.display_name}</span>
           {row.active ? null : <Badge variant="outline">{t("products_inactive")}</Badge>}
         </span>
       ),

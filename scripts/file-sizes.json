@@ -7,7 +7,6 @@
   "over_the_limit": {
     "apps/desktop/src/components/ui/sidebar.tsx": 736,
     "apps/desktop/src/routes/dashboard.tsx": 658,
-    "apps/desktop/src/routes/purchases_.$id.tsx": 610,
     "apps/desktop/tests/routes/till.test.tsx": 1385,
     "apps/desktop/src/routes/till.tsx": 841,
     "crates/api/tests/sales_api.rs": 1591,
@@ -16,7 +15,7 @@
     "crates/retail/src/services/avoir.rs": 627,
     "crates/retail/src/services/debt.rs": 936,
     "crates/retail/src/services/import.rs": 793,
-    "crates/retail/src/services/purchases.rs": 1021,
+    "crates/retail/src/services/purchases.rs": 857,
     "crates/retail/src/services/sales.rs": 986,
     "crates/retail/src/services/seed.rs": 1127,
     "crates/retail/src/services/supplier_debt.rs": 821,

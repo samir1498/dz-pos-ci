@@ -24,6 +24,8 @@ fn order(transport: i64, extra_costs: i64) -> Purchase {
             .unwrap()
             .and_hms_opt(9, 0, 0)
             .unwrap(),
+        series_year: 2026,
+        number: 1,
     }
 }
 

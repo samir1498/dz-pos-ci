@@ -30,10 +30,10 @@ use dzpos_api::dto::{
 use dzpos_api::dto::{
     AdjustmentDto, ApiErrorDto, ApiErrorPayloadDto, AuditEntryDto, AuditLogDto, AuditUserDto,
     AvoirLineDto, BackupDto, BackupsDto, BuildInfoDto, CancelDocumentDto, CashPositionDto,
-    CategoryDto, ClaimFirstOwnerDto, ClockDto, CloseOrderDto, CloseSupplierDto, CustomerDto,
-    CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DashboardDto, DashboardFiguresDto,
-    DashboardSeriesDto, DashboardSeriesPointDto, DatedRegimeDto, DebtEntryDto, DebtKindDto,
-    DeviceTokenDto, DiscountThresholdChangeDto, DocumentKindDto, DocumentStatusDto,
+    CategoryDto, ClaimFirstOwnerDto, ClockDto, CloseOrderDto, CloseSupplierDto, ContenanceUnitDto,
+    CustomerDto, CustomerLedgerDto, CustomerPaymentsDto, CustomerWriteDto, DashboardDto,
+    DashboardFiguresDto, DashboardSeriesDto, DashboardSeriesPointDto, DatedRegimeDto, DebtEntryDto,
+    DebtKindDto, DeviceTokenDto, DiscountThresholdChangeDto, DocumentKindDto, DocumentStatusDto,
     ExpenseCategoryDto, ExpenseDto, ExpensesDto, FactureLayoutChoiceDto, FactureLayoutDto,
     HealthDto, ImportAppliedDto, ImportDryRunDto, ImportOutcomeDto, ImportRowDto, LabelSheetDto,
     LastStockRecountDto, LoginDto, LowStockDto, MeDto, NewAvoirDto, NewCustomerDto, NewExpenseDto,
@@ -61,6 +61,7 @@ const FILES: [&str; 123] = [
     "RoleDto.ts",
     "PermissionDto.ts",
     "UnitDto.ts",
+    "ContenanceUnitDto.ts",
     "ProductDto.ts",
     "NewProductDto.ts",
     "CategoryDto.ts",
@@ -304,6 +305,7 @@ fn export_bindings() {
     SessionDto::export_all(&cfg).unwrap();
     SessionIdleDto::export_all(&cfg).unwrap();
     UnitDto::export_all(&cfg).unwrap();
+    ContenanceUnitDto::export_all(&cfg).unwrap();
     ProductDto::export_all(&cfg).unwrap();
     NewProductDto::export_all(&cfg).unwrap();
     CategoryDto::export_all(&cfg).unwrap();

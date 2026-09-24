@@ -39,8 +39,14 @@ fn a_product(conn: &mut SqliteConnection) -> i32 {
     1
 }
 
+/// Every draft its own number, so two orders written in one test do not meet
+/// on the series' unique index; the numbering itself is the service's.
+static NEXT_NUMBER: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(1);
+
 fn draft(supplier_id: i32, day: &str) -> PurchaseRowWrite {
     PurchaseRowWrite {
+        series_year: day[..4].parse().unwrap(),
+        number: NEXT_NUMBER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         shop_id: SHOP,
         supplier_id,
         supplier_document_number: None,

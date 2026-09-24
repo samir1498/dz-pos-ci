@@ -16,6 +16,21 @@ pub fn insert(
     conn: &mut SqliteConnection,
     write: &PurchaseRowWrite,
 ) -> Result<Purchase, CoreError> {
+    // The file cannot hold `number >= 1` as a CHECK (migration 000029 says
+    // why), so the one door every purchase comes in by holds it, with the
+    // year the number counts in, which has to be the order's own.
+    if write.number < 1 {
+        return Err(CoreError::validation(
+            "number",
+            "a purchase is numbered from 1",
+        ));
+    }
+    if write.purchase_date.get(..4) != Some(write.series_year.to_string().as_str()) {
+        return Err(CoreError::validation(
+            "series_year",
+            "a purchase counts in the year it is dated",
+        ));
+    }
     let row: PurchaseRow = diesel::insert_into(purchases::table)
         .values(write)
         .returning(PurchaseRow::as_returning())

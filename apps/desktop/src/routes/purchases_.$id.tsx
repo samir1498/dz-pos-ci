@@ -18,7 +18,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Inbox } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { formatQty, parseQtyToMilli } from "@dzpos/shared";
 import type { NewReceiptDto, PurchaseDetailDto, PurchaseLineDto } from "@dzpos/shared";
 
@@ -51,7 +51,7 @@ import {
 import { useTranslation, type Key } from "@/i18n";
 import { errorKey } from "@/lib/fields";
 import { useHasPermission } from "@/lib/session";
-import { PurchaseStatusBadge } from "./purchases";
+import { PurchaseHead } from "./-purchases/PurchaseHead";
 
 export const Route = createFileRoute("/purchases_/$id")({ component: OnePurchaseRoute });
 
@@ -102,7 +102,7 @@ export function OnePurchase({ id }: { id: number }) {
         <PurchaseDetail
           detail={order.data}
           nameOf={(productId) =>
-            products.data?.find((p) => p.id === productId)?.name ?? String(productId)
+            products.data?.find((p) => p.id === productId)?.display_name ?? String(productId)
           }
         />
       ) : (
@@ -123,16 +123,6 @@ export function OnePurchase({ id }: { id: number }) {
         </p>
       ) : null}
     </section>
-  );
-}
-
-/** One fact of the order's head: what it is called and what it says. */
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd>{children}</dd>
-    </div>
   );
 }
 
@@ -158,7 +148,7 @@ function PurchaseDetail({
   return (
     <>
       <PageHeader
-        title={t("purchases_one")}
+        title={`${t("purchases_one")} ${purchase.printed_number}`}
         actions={
           <>
             {open ? (
@@ -207,34 +197,7 @@ function PurchaseDetail({
       />
 
       <div className="flex flex-col gap-6">
-        <Card>
-          <CardContent>
-            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Fact label={t("col_date")}>
-                <span dir="ltr" className="font-numeric tabular-nums">
-                  {purchase.purchase_date}
-                </span>
-              </Fact>
-              <Fact label={t("col_supplier")}>
-                <Button asChild variant="link" size="sm" className="h-auto p-0">
-                  <Link to="/suppliers/$id" params={{ id: String(purchase.supplier_id) }}>
-                    {t("purchases_supplier_fiche")}
-                  </Link>
-                </Button>
-              </Fact>
-              {/* A test id, because the state's own word and a column header of
-                  the lines table read the same in English ("Received"). */}
-              <Fact label={t("col_status")}>
-                <PurchaseStatusBadge status={purchase.status} data-testid="purchase-status" />
-              </Fact>
-              {seeCostAndMargin ? (
-                <Fact label={t("col_extra_costs")}>
-                  <Money centimes={purchase.extras_centimes} />
-                </Fact>
-              ) : null}
-            </dl>
-          </CardContent>
-        </Card>
+        <PurchaseHead detail={detail} seeCostAndMargin={seeCostAndMargin} />
 
         <LinesTable lines={lines} nameOf={nameOf} seeCostAndMargin={seeCostAndMargin} />
 
@@ -347,8 +310,11 @@ function ReceiptsList({
           <li key={receipt.id}>
             <Card>
               <CardContent className="flex flex-col gap-1">
-                <p dir="ltr" className="font-numeric tabular-nums text-sm text-muted-foreground">
-                  {receipt.series} / {receipt.number} · {receipt.received_at}
+                <p className="text-sm text-muted-foreground">
+                  {t("purchases_receipt_label")}{" "}
+                  <span dir="ltr" className="font-numeric tabular-nums">
+                    {receipt.printed_number} · {receipt.received_at}
+                  </span>
                 </p>
                 <ul className="flex flex-col gap-1">
                   {receipt.lines.map((line) => {

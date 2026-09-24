@@ -212,6 +212,8 @@ fn an_allocation_says_what_a_payment_settled_on_which_purchase() {
             status: crate::models::purchase::PurchaseStatus::Ordered,
             user_id: OWNER,
             note: None,
+            series_year: 2026,
+            number: 1,
         },
     )
     .unwrap()

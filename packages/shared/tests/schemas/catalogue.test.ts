@@ -23,6 +23,9 @@ const product: ProductDto = {
   low_stock_at_milli: 10_000,
   rate_bps: 1900,
   active: true,
+  contenance_milli: null,
+  contenance_unit: null,
+  display_name: "Huile Elio 5L",
 };
 
 const category: CategoryDto = { id: 1, shop_id: 1, name: "Épicerie", default_rate_bps: 1900 };

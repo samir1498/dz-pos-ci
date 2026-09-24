@@ -9,6 +9,7 @@ use crate::error::CoreError;
 use crate::money::{Bps, Money};
 use crate::schema::products;
 
+pub use super::contenance::{display_name, Contenance, ContenanceUnit};
 pub use super::sql_types::Unit;
 
 /// A product as the rest of the app sees it.
@@ -29,6 +30,8 @@ pub struct Product {
     pub active: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    /// The pack size, when the shop gave one (T13).
+    pub contenance: Option<Contenance>,
 }
 
 /// A product as a caller asks for it. `barcode` blank means "number it for
@@ -67,6 +70,8 @@ pub(crate) struct ProductRow {
     pub active: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub contenance_milli: Option<i64>,
+    pub contenance_unit: Option<String>,
 }
 
 // `treat_none_as_null`: diesel's changeset skips a `None` field by default,
@@ -90,6 +95,13 @@ pub(crate) struct ProductRowWrite {
     pub rate_bps: i32,
     pub active: bool,
     pub updated_at: NaiveDateTime,
+}
+
+impl Product {
+    /// The name with the pack size after it, `Huile 1,5 L`.
+    pub fn display_name(&self) -> String {
+        display_name(&self.name, self.contenance)
+    }
 }
 
 impl TryFrom<ProductRow> for Product {
@@ -119,6 +131,7 @@ impl TryFrom<ProductRow> for Product {
             active: r.active,
             created_at: r.created_at,
             updated_at: r.updated_at,
+            contenance: Contenance::from_columns(r.contenance_milli, r.contenance_unit.as_deref())?,
         })
     }
 }

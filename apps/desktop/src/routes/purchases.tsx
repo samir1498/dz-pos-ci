@@ -233,6 +233,17 @@ function PurchaseTable({
   // comes back untyped.
   const allColumns: Column<PurchaseDto>[] = [
     {
+      // Our own number, spelled by the core (T45); the supplier's paper
+      // number is the column further along.
+      id: "number",
+      header: t("col_purchase_number"),
+      cell: (p) => (
+        <span dir="ltr" className="font-numeric tabular-nums">
+          {p.printed_number}
+        </span>
+      ),
+    },
+    {
       id: "date",
       header: t("col_date"),
       // A day is read left to right with Western digits whatever the screen's

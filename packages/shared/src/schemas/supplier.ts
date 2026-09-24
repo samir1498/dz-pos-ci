@@ -49,6 +49,8 @@ type _Supplier = Assert<Matches<SupplierDto, typeof supplierSchema>>;
 
 export const supplierAllocationSchema = z.object({
   purchase_id: z.number(),
+  /** The order's own number, `BA-2026-000001`, spelled by the core. */
+  purchase_number: z.string(),
   amount_centimes: exactInteger,
 }) satisfies z.ZodType<SupplierAllocationDto>;
 type _SupplierAllocation = Assert<Matches<SupplierAllocationDto, typeof supplierAllocationSchema>>;
@@ -59,6 +61,7 @@ export const supplierEntrySchema = z.object({
   id: z.number(),
   supplier_id: z.number(),
   purchase_id: z.number().nullable(),
+  purchase_number: z.string().nullable(),
   kind: supplierDebtKindSchema,
   debit_centimes: exactInteger,
   credit_centimes: exactInteger,

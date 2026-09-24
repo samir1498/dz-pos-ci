@@ -8,8 +8,18 @@ import type { PurchaseStatusDto } from "./PurchaseStatusDto";
  */
 export type PurchaseDto = { id: number, shop_id: number, supplier_id: number, 
 /**
+ * Our own number for the order, `BA-2026-000001`, spelled by the core
+ * (T45): gapless inside the year the order is dated, the way a ticket's
+ * is. A screen shows this and never builds it out of `number`.
+ */
+printed_number: string, 
+/**
+ * The number inside its year, for sorting.
+ */
+number: number, 
+/**
  * The number written on the paper the supplier sent, when it carried
- * one.
+ * one. Theirs, not ours: `printed_number` is ours.
  */
 supplier_document_number: string | null, 
 /**

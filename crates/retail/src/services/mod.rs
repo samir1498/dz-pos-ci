@@ -25,6 +25,8 @@ pub(crate) mod party_ids;
 pub mod pricing;
 pub mod products;
 pub mod proforma;
+pub mod purchase_account;
+pub mod purchase_landed;
 pub mod purchases;
 pub mod sales;
 pub mod seed;

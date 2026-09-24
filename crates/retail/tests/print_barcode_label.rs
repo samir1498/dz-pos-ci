@@ -64,6 +64,7 @@ fn product(name: &str, barcode: &str, selling: i64) -> Product {
         active: true,
         created_at: at,
         updated_at: at,
+        contenance: None,
     }
 }
 

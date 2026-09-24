@@ -38,6 +38,7 @@ export type { StaffDto } from "./generated/StaffDto";
 export type { HealthDto } from "./generated/HealthDto";
 export type { NewProductDto } from "./generated/NewProductDto";
 export type { ProductDto } from "./generated/ProductDto";
+export type { ContenanceUnitDto } from "./generated/ContenanceUnitDto";
 export type { UnitDto } from "./generated/UnitDto";
 export type { StoreDto } from "./generated/StoreDto";
 export type { RegimeDto } from "./generated/RegimeDto";
@@ -178,10 +179,12 @@ export {
   computeTotals,
   lineTotal,
   pct,
+  purchaseOrderTotal,
   stamp,
 } from "./totals";
 export type {
   MoneyErrorVariant,
+  PurchaseDraftLine,
   Totals,
   TotalsLine,
   TotalsOptions,

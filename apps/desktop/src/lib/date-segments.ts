@@ -126,3 +126,37 @@ export function toIsoMonth(month: string, year: string): string {
   if (m < 1 || m > 12) return "";
   return `${year}-${pad2(month)}`;
 }
+
+/**
+ * `iso` moved by `days` whole days, either way, walked a day at a time over
+ * the same twelve numbers `toIsoDate` checks against, so no `Date` and no
+ * machine zone. The presets move a handful of days; `""` for anything that
+ * is not a date to begin with.
+ */
+export function shiftIsoDate(iso: string, days: number): string {
+  const parts = parseIsoDate(iso);
+  if (toIsoDate(parts.day, parts.month, parts.year) === "") return "";
+  let d = Number(parts.day);
+  let m = Number(parts.month);
+  let y = Number(parts.year);
+  const step = days < 0 ? -1 : 1;
+  for (let left = Math.abs(days); left > 0; left -= 1) {
+    d += step;
+    if (d > daysInMonth(m, y)) {
+      d = 1;
+      m += 1;
+      if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+    } else if (d < 1) {
+      m -= 1;
+      if (m < 1) {
+        m = 12;
+        y -= 1;
+      }
+      d = daysInMonth(m, y);
+    }
+  }
+  return toIsoDate(String(d), String(m), String(y).padStart(4, "0"));
+}

@@ -35,6 +35,9 @@ const product: ProductDto = {
   low_stock_at_milli: 10_000,
   rate_bps: 1900,
   active: true,
+  contenance_milli: null,
+  contenance_unit: null,
+  display_name: "Huile Elio 5L",
 };
 
 function stub(status: number, body: unknown): typeof fetch {

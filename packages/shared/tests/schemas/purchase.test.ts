@@ -21,6 +21,8 @@ const purchase: PurchaseDto = {
   id: 3,
   shop_id: 1,
   supplier_id: 7,
+  printed_number: "BA-2026-000003",
+  number: 3,
   supplier_document_number: "BL-77",
   purchase_date: "2026-09-10",
   due_date: "2026-10-10",
@@ -53,12 +55,17 @@ const detail: PurchaseDetailDto = {
       id: 2,
       series: "reception:2026",
       number: 1,
+      printed_number: "BR-2026-000001",
       received_at: "2026-09-10 09:05:00",
       user_id: 1,
       note: "quatre sacs",
       lines: [{ purchase_line_id: 11, qty_milli: 4_000 }],
     },
   ],
+  total_centimes: 262_500,
+  received_centimes: 78_750,
+  paid_centimes: 0,
+  owed_centimes: 78_750,
 };
 
 const order: NewPurchaseDto = {
@@ -122,6 +129,15 @@ describe("purchase", () => {
 describe("purchase detail", () => {
   test("the order, its lines and its deliveries", () => {
     expect(purchaseDetailSchema.parse(detail)).toEqual(detail);
+  });
+
+  test("a supplier holding credit after a return reads below zero on owed", () => {
+    const credit = { ...detail, owed_centimes: -5_000 };
+    expect(purchaseDetailSchema.parse(credit)).toEqual(credit);
+  });
+
+  test("a fractional centime on a figure of the page is refused", () => {
+    expect(purchaseDetailSchema.safeParse({ ...detail, paid_centimes: 0.5 }).success).toBe(false);
   });
 
   test("a receipt line of a fractional quantity is refused", () => {

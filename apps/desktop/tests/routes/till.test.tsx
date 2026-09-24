@@ -26,9 +26,8 @@ import { TillScreen } from "../../src/routes/till";
 // at 19 % sold by the piece and 200,00 DA at 9 % sold by the kilo. Selling
 // two of the first and 1,5 kg of the second is the basket that case pins.
 const coffee: ProductDto = {
-  id: 1,
-  shop_id: 1,
-  name: "Café Moulu 250g",
+  id: 1, shop_id: 1,
+  name: "Café Moulu 250g", display_name: "Café Moulu 250g",
   barcode: "6130002000017",
   category_id: 1,
   unit: "piece",
@@ -39,12 +38,13 @@ const coffee: ProductDto = {
   low_stock_at_milli: 2_000,
   rate_bps: 1900,
   active: true,
+  contenance_milli: null, contenance_unit: null,
 };
 
 const tomato: ProductDto = {
   ...coffee,
   id: 2,
-  name: "Tomate fraîche",
+  name: "Tomate fraîche", display_name: "Tomate fraîche",
   barcode: "6130002000024",
   category_id: 2,
   unit: "kg",
@@ -57,7 +57,7 @@ const tomato: ProductDto = {
 const crate: ProductDto = {
   ...coffee,
   id: 4,
-  name: "Pack eau 6x1,5L",
+  name: "Pack eau 6x1,5L", display_name: "Pack eau 6x1,5L",
   barcode: "6130002000048",
   category_id: 2,
   unit: "box",
@@ -69,7 +69,7 @@ const crate: ProductDto = {
 const salt: ProductDto = {
   ...coffee,
   id: 3,
-  name: "Sel de table",
+  name: "Sel de table", display_name: "Sel de table",
   barcode: "6130002000031",
   category_id: 2,
   selling_centimes: 5_000,

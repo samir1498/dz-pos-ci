@@ -757,7 +757,7 @@ function ProductTile({ product, onAdd }: { product: ProductDto; onAdd: () => voi
       className="h-auto flex-col items-start gap-2 p-3 text-start whitespace-normal"
       onClick={onAdd}
     >
-      <span className="font-medium">{product.name}</span>
+      <span className="font-medium">{product.display_name}</span>
       <span className="flex w-full items-center justify-between gap-2">
         <Money centimes={product.selling_centimes} />
         {out ? (

@@ -7,7 +7,7 @@ use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use diesel::sqlite::SqliteConnection;
 
 use crate::error::{CoreError, RetailError};
-use crate::models::product::{Product, ProductRow, ProductRowWrite};
+use crate::models::product::{Contenance, Product, ProductRow, ProductRowWrite};
 use crate::schema::products;
 
 /// A unique-index violation on `(shop_id, barcode)` is the only constraint
@@ -99,6 +99,33 @@ pub fn set_cost(
             .filter(products::id.eq(id)),
     )
     .set(products::cost_centimes.eq(cost.as_centimes()))
+    .execute(conn)?;
+    if changed == 0 {
+        return Err(CoreError::NotFound {
+            entity: "product",
+            id,
+        });
+    }
+    Ok(())
+}
+
+/// Writes the pack size, or clears it with `None`. The two columns go
+/// together, the way migration 000030's CHECK holds them.
+pub fn set_contenance(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    id: i32,
+    contenance: Option<Contenance>,
+) -> Result<(), CoreError> {
+    let changed = diesel::update(
+        products::table
+            .filter(products::shop_id.eq(shop_id))
+            .filter(products::id.eq(id)),
+    )
+    .set((
+        products::contenance_milli.eq(contenance.map(Contenance::qty_milli)),
+        products::contenance_unit.eq(contenance.map(|c| c.unit().as_str())),
+    ))
     .execute(conn)?;
     if changed == 0 {
         return Err(CoreError::NotFound {

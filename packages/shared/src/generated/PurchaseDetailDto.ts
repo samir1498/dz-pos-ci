@@ -9,4 +9,23 @@ import type { PurchaseReceiptDto } from "./PurchaseReceiptDto";
  * order answers this, so the screen never has a change without the state it
  * left behind.
  */
-export type PurchaseDetailDto = { purchase: PurchaseDto, lines: Array<PurchaseLineDto>, receipts: Array<PurchaseReceiptDto>, };
+export type PurchaseDetailDto = { purchase: PurchaseDto, lines: Array<PurchaseLineDto>, receipts: Array<PurchaseReceiptDto>, 
+/**
+ * What the whole order is worth at the cost it landed at
+ * (`services::purchase_account`, T46).
+ */
+total_centimes: number, 
+/**
+ * What has arrived of it, less what went back: the ledger's rows citing
+ * this order. Debt rises on receipt, so this is what the shop owes for.
+ */
+received_centimes: number, 
+/**
+ * What payments have placed on this order.
+ */
+paid_centimes: number, 
+/**
+ * `received - paid`, computed in the core. Below zero is credit the
+ * supplier holds after a return.
+ */
+owed_centimes: number, };

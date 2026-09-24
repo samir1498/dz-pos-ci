@@ -17,6 +17,7 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import { formatCentimes } from "@dzpos/shared";
 import type { ProductDto, PurchaseDetailDto, SupplierDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
@@ -94,6 +95,9 @@ const farine: ProductDto = {
   low_stock_at_milli: 0,
   rate_bps: 1900,
   active: true,
+  contenance_milli: null,
+  contenance_unit: null,
+  display_name: "Farine 5kg",
 };
 
 /** Ten ordered, four in, one already back, with 50 000 centimes of transport
@@ -108,6 +112,8 @@ const partly: PurchaseDetailDto = {
     id: 8,
     shop_id: 1,
     supplier_id: 3,
+    printed_number: "BA-2026-000008",
+    number: 8,
     supplier_document_number: "BL-77",
     purchase_date: "2026-09-10",
     due_date: null,
@@ -135,12 +141,20 @@ const partly: PurchaseDetailDto = {
       id: 2,
       series: "reception:2026",
       number: 1,
+      printed_number: "BR-2026-000001",
       received_at: "2026-09-10 09:05:00",
       user_id: 1,
       note: null,
       lines: [{ purchase_line_id: 11, qty_milli: 4_000 }],
     },
   ],
+  // Figures no screen could add up from the lines above (T46): the page
+  // prints what the server answered, and a page doing its own sums would
+  // read something else here.
+  total_centimes: 99_900,
+  received_centimes: 45_600,
+  paid_centimes: 12_300,
+  owed_centimes: 33_300,
 };
 
 function json(status: number, body: unknown): Response {
@@ -260,8 +274,9 @@ describe("the list of orders", () => {
     const table = await screen.findByRole("table", { name: fr.purchases_title });
     const row = within(table).getAllByRole("row")[1];
     const cells = within(row).getAllByRole("cell").map((cell) => cell.textContent);
-    // Six cells: the five columns and the one the row's own action sits in.
+    // Seven cells: the six columns and the one the row's own action sits in.
     expect(cells).toEqual([
+      "BA-2026-000008",
       "2026-09-10",
       "Sarl Amrani",
       "BL-77",
@@ -335,9 +350,51 @@ describe("one order", () => {
     expect(label.nextElementSibling).toHaveTextContent("625,00");
   });
 
-  test("the delivery notes are listed with the number they took", async () => {
+  test("the delivery notes are listed with the number they took, never the series key", async () => {
     mountOrder();
-    expect(await screen.findByText(/reception:2026 \/ 1/)).toBeInTheDocument();
+    expect(await screen.findByText(/BR-2026-000001/)).toBeInTheDocument();
+    expect(screen.queryByText(/reception:2026/)).not.toBeInTheDocument();
+  });
+
+  test("the page is titled with the order's own number", async () => {
+    mountOrder();
+    expect(
+      await screen.findByRole("heading", { name: `${fr.purchases_one} BA-2026-000008` }),
+    ).toBeInTheDocument();
+  });
+
+  test("the supplier is named, and the name is the link to its fiche", async () => {
+    mountOrder();
+    const link = await screen.findByRole("link", { name: "Sarl Amrani" });
+    expect(link).toHaveAttribute("href", "/suppliers/3");
+    expect(screen.queryByText(fr.purchases_supplier_fiche)).not.toBeInTheDocument();
+  });
+
+  test("the total, what arrived, what was paid and what is owed are the server's", async () => {
+    mountOrder();
+    const figures = await screen.findByTestId("purchase-figures");
+    const read = (label: string) => within(figures).getByText(label).nextElementSibling;
+    expect(read(fr.purchases_total)).toHaveTextContent("999,00");
+    expect(read(fr.purchases_received_value)).toHaveTextContent("456,00");
+    expect(read(fr.purchases_paid)).toHaveTextContent("123,00");
+    expect(read(fr.purchases_owed)).toHaveTextContent("333,00");
+  });
+
+  test("a supplier holding credit after a return is named as that credit, not a minus", async () => {
+    detail = { ...partly, owed_centimes: -5_000 };
+    mountOrder();
+    const figures = await screen.findByTestId("purchase-figures");
+    expect(within(figures).queryByText(fr.purchases_owed)).not.toBeInTheDocument();
+    const credit = within(figures).getByText(fr.purchases_credit_held).nextElementSibling;
+    expect(credit).toHaveTextContent("50,00");
+    expect(credit).not.toHaveTextContent("-");
+  });
+
+  test("a cashier sees none of the four figures", async () => {
+    me = ME_CASHIER;
+    mountOrder();
+    await screen.findByRole("table", { name: fr.purchases_lines });
+    expect(screen.queryByTestId("purchase-figures")).not.toBeInTheDocument();
   });
 
   test("a delivery posts to the receipts route with the quantity typed", async () => {
@@ -579,6 +636,31 @@ describe("the order form", () => {
     await user.click(screen.getByRole("button", { name: fr.purchases_save }));
     expect(await screen.findByRole("alert")).toHaveTextContent(fr.purchases_pick_supplier);
     expect(() => sent("POST")).toThrow();
+  });
+
+  test("the running total shows a slip of ten before the order is saved", async () => {
+    // 10 at 30,00 is 300,00; the same line typed as 100 is 3 000,00. Written
+    // by hand; `formatCentimes` only spells the figure the way <Money> does.
+    const user = userEvent.setup();
+    mountForm();
+    await pick(user, fr.col_product, "Farine 5kg");
+    const qty = screen.getByRole("textbox", { name: fr.col_qty });
+    await user.type(qty, "10");
+    await user.type(screen.getByRole("textbox", { name: fr.col_unit_cost }), "30,00");
+    const total = screen.getByTestId("purchase-running-total");
+    await waitFor(() => expect(total).toHaveTextContent(formatCentimes(30_000)));
+    await user.type(qty, "0");
+    await waitFor(() => expect(total).toHaveTextContent(formatCentimes(300_000)));
+    // Transport is part of it: 3 000,00 + 12,50.
+    await user.type(screen.getByLabelText(fr.field_transport), "12,50");
+    await waitFor(() => expect(total).toHaveTextContent(formatCentimes(301_250)));
+  });
+
+  test("the supplier's own number and the due day say what they are", async () => {
+    mountForm();
+    await screen.findByRole("combobox", { name: fr.col_supplier });
+    expect(screen.getByText(fr.purchases_supplier_document_hint)).toBeInTheDocument();
+    expect(screen.getByText(fr.purchases_due_hint)).toBeInTheDocument();
   });
 
   test("a second line is added and taken away again", async () => {
