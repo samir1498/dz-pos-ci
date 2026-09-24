@@ -86,3 +86,11 @@ green via A). Arabic: the desktop walk passes under ar; the phone flow in
 Arabic is drafted on `qa/phone-arabic` (worktree `phone-ar`, Expo Go app
 locale set to ar-DZ without root) and waits for A to say the box is quiet
 before the emulator starts again. `adb root` hangs this emulator: never.
+
+2026-09-24 22:30: #181 (opening debt paid first) made the first-day T34
+guard pass; `qa/first-day-t34` pins the new split instead (steps 1-10
+green). Both it and the screenshot branch (`qa/screenshot-artifacts`, T4
+and T5, landing crops regenerated) are blocked by a regression from #177
+on main: the fixed floating theme/language box covers the purchase form's
+submit button (purchases.spec.ts:134 and first-day step 11 time out).
+Sent to A to fix; rebase and rerun after.
