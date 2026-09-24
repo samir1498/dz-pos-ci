@@ -162,6 +162,9 @@ tasks:
   - id: 'T52'
     desc: 'Restore confirmation (BackupsPanel.tsx, already a dialog with "Les changements faits depuis seront perdus", and a safety copy is kept and listed): make the loss concrete by naming what goes, e.g. "Depuis 16:13 : 1 produit ajouté, 2 ventes, 1 paiement", so the owner sees the cost before pressing Oui, restaurer. Also the dialog line "Sauvegardes 2026-09-24 16:13" should read "Sauvegarde du 2026-09-24 16:13" (plural list label reused as the item label). Restore itself verified: the product added after the 16:13 backup is gone, sales and the closed till kept, safety copy listed.'
     status: 'pending'
+  - id: 'T53'
+    desc: 'Phone pairing: the phone gets the till''s address only at build time (EXPO_PUBLIC_API_URL / app.config extra.apiUrl, falling back to 127.0.0.1:4317, which is the phone itself), so pairing failed with "no answer from the till computer" until Expo was restarted with the Tailscale address. The pairing QR carries only the token. Put the till''s address in the QR (the payload already allows extra fields, lib/pairing.ts) and let the phone type it by hand as a fallback.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
