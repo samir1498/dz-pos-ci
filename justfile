@@ -500,6 +500,17 @@ e2e: claim
         pnpm desktop e2e --project "$project"
     done
 
+# the first day of a shop as one test, from first setup to a restored
+# backup (apps/desktop/e2e/first-day, its own config and database: the
+# main run's globalSetup would shut the first-setup door it walks through).
+e2e-first-day: claim
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for project in fr ar; do
+        echo "=== e2e-first-day: $project ==="
+        pnpm desktop exec playwright test -c playwright.first-day.config.ts --project "$project"
+    done
+
 # the demo footage: run the recording project (apps/desktop/e2e/demo, one
 # scene per spec, French, 1920x1080), then convert each clip to an mp4 the
 # Remotion project reads (webm seeks badly there). Clips are gitignored on

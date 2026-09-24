@@ -129,7 +129,7 @@ export default defineConfig({
       name: lang,
       // The demo folder performs rather than asserts (below); a language
       // run must never count one of its scenes as a passing test.
-      testIgnore: /\/demo\//,
+      testIgnore: /\/(demo|first-day)\//,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1280, height: 800 },
