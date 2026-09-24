@@ -177,6 +177,9 @@ tasks:
   - id: 'T57'
     desc: 'Follow-up from T25 (#178): avoir and proforma render in -documents/detail.tsx PrintPanel with no print button at all; add the same Imprimer. And the real thermal path (crates/retail/src/print/escpos.rs, POST /sales/{id}/print) only has the phone as caller, its TCP printer address is an unset env var (DZPOS_PRINTER_ADDR) and its result is discarded: a printer setting in Paramètres → Impression (address, test print) so Imprimer can go to the thermal printer instead of the browser dialog.'
     status: 'pending'
+  - id: 'T58'
+    desc: 'From the centimes review of #181: the share of a payment that settles the opening debt (or an upward correction) gets no debt_allocations row, so unallocated_credit (crates/retail/src/services/debt.rs) later counts it as free credit. Once a balance goes below zero (a downward correction, an avoir spill) and the customer buys on credit again, settle_from_credit links the new document to the old payment, and the statement shows that payment as paying a paper issued after it. Balance and every remaining_debt stay correct; only attribution is wrong. #181 widens a gap main already had for avoir spills. Fix is a shape change: a document-less allocation row for the opening share, or unallocated_credit skipping it (check the avoir-spill path, features.md 514-522). Test in crates/retail/tests/debt_service.rs: no allocation of a payment cites a document issued after it; and extend the debt_prop invariant to check payment attribution.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
