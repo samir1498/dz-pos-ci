@@ -87,6 +87,9 @@ tasks:
   - id: 'T27'
     desc: 'Onboarding input (T10): Samir, the developer, had to ask "how to sell" on the till. The first-sale path (tap tiles, received amount, take the sale, print) must be taught by the onboarding tour, not discovered.'
     status: 'pending'
+  - id: 'T28'
+    desc: 'After the 15-minute idle lock (preferences.rs:48 default), Samir briefly saw the first-setup screen instead of sign-in until he refreshed, on a shop that already has its owner. Cause not established: the screen is chosen once per page load (session.tsx:166-172, from GET /health needs_first_setup; the server computes it from users::shop_needs_first_setup), so a tab loaded before setup keeps showing setup until a reload. Check that first; also say "locked" rather than looking like a logout.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
