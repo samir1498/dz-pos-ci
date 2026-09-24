@@ -60,6 +60,9 @@ tasks:
   - id: 'T18'
     desc: 'Till: with a full cart and cash chosen, Encaisser stays greyed while "Montant reçu" is empty and nothing says why, so Samir read it as "nothing happens". Either say what it waits for next to the button, or treat an empty box as the exact amount (common POS behaviour, no change due), which also saves typing on most sales. Decide in the T11 redesign.'
     status: 'pending'
+  - id: 'T19'
+    desc: 'Till: the numpad''s "Valider" key and the brass "Encaisser" button do the same thing (payment.tsx onEnter = till.tsx submit, also F9), so pressing Valider took the sale when Samir expected it to confirm the amount; the cart vanished and the column jumped to the "Ticket émis" box with a visible flicker. Sale itself was right (TK 1: net 570,90, tendered 1 000, change 429,10). Fix in the T11 redesign: one primary action with one name, and a success state that does not reflow or scroll the column.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
