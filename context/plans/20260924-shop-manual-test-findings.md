@@ -171,6 +171,9 @@ tasks:
   - id: 'T55'
     desc: 'Ticket header prints the seller''s NIF, RC, NIS and AI (crates/retail/src/print/ticket.rs seller()), which Samir found heavy for a till receipt. No Algerian text gives a ticket de caisse a field list (research/legal-fiscal/2026-09-08-facture-and-ticket.md, "What the ticket must carry: Nothing"). Lumina''s five receipt templates print logo, name, address and phone only; its NIF appears only on invoice_thermal_80.html. Proposal: ticket = logo + name + address + phone, fiscal ids stay on the facture; optional setting "afficher les identifiants fiscaux sur le ticket", off by default. Needs a shop logo upload (Lumina has one, shop_logo).'
     status: 'pending'
+  - id: 'T56'
+    desc: 'Shop logo upload (Samir, 2026-09-24), for T55''s ticket header and the facture. Shares a design with T47''s supplier-paper attachments: files in the shop data folder plus a small table, included in backup and restore. Adds a column or table next to shops, so schema work (money builder per CLAUDE.md). The expensive half is printing a bitmap on the 80 mm thermal ticket (ESC/POS raster, dithered to 1-bit), not the upload itself.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
