@@ -508,6 +508,72 @@ async fn a_role_without_view_patient_notes_may_not_write_notes() {
     assert_eq!(still["updated_at"], updated_at_before);
 }
 
+/// An update's notes refusal names a file only once one has actually been
+/// looked up in this shop (whole-loop review, 2026-09-24): `update` used to
+/// write the refusal row before ever calling `repo::get`, so an id nobody
+/// made, or another shop's, still left a row naming it. A nonexistent id
+/// and another shop's id both answer not-found and leave nothing; a real
+/// one is refused and leaves exactly one row naming it.
+#[tokio::test]
+async fn an_updates_notes_refusal_only_names_a_file_this_shop_has() {
+    let h = harness();
+    common::sign_in_as(&h.path, SHOP, "manager", common::MANAGER_SESSION);
+
+    let theirs_app = common::signed_in_router(&h.path, 2, &token());
+    let (status, theirs) = call(&theirs_app, "POST", "/patients", Some(amina())).await;
+    assert_eq!(status, StatusCode::CREATED, "{theirs}");
+    let theirs_id = theirs["id"].as_str().unwrap().to_string();
+
+    for id in ["not-a-real-id", theirs_id.as_str()] {
+        let (status, body) = call_as(
+            &h.app,
+            Some(common::MANAGER_SESSION),
+            "PUT",
+            &format!("/patients/{id}"),
+            Some(amina_with_notes("x")),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{id}: {body}");
+    }
+
+    let (_, log) = call(
+        &h.app,
+        "GET",
+        "/audit-log?action=patient.notes_write_refused",
+        None,
+    )
+    .await;
+    assert_eq!(
+        log["rows"].as_array().unwrap().len(),
+        0,
+        "an id this shop never opened should leave no refusal row: {log}"
+    );
+
+    let (_, made) = call(&h.app, "POST", "/patients", Some(amina())).await;
+    let id = made["id"].as_str().unwrap().to_string();
+    let (status, body) = call_as(
+        &h.app,
+        Some(common::MANAGER_SESSION),
+        "PUT",
+        &format!("/patients/{id}"),
+        Some(amina_with_notes("y")),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+
+    let (_, log) = call(
+        &h.app,
+        "GET",
+        "/audit-log?action=patient.notes_write_refused",
+        None,
+    )
+    .await;
+    let rows = log["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{log}");
+    let after: Value = serde_json::from_str(rows[0]["after"].as_str().unwrap()).unwrap();
+    assert_eq!(after["patient_id"], id);
+}
+
 /// The owner is the one role `ViewPatientNotes` holds: notes travel on
 /// every read, a write sets them, and a blank clears them the way any other
 /// field on the file does.
@@ -544,15 +610,25 @@ async fn the_owner_reads_and_writes_notes() {
 async fn a_search_never_matches_the_notes_text_for_any_role() {
     let h = harness();
     common::sign_in_as(&h.path, SHOP, "cashier", common::CASHIER_SESSION);
-    call(
+    let (status, made) = call(
         &h.app,
         "POST",
         "/patients",
         Some(amina_with_notes("diabetes type 2")),
     )
     .await;
+    assert_eq!(status, StatusCode::CREATED, "{made}");
+    let id = made["id"].as_str().unwrap().to_string();
 
     for session in [common::OWNER_SESSION, common::CASHIER_SESSION] {
+        // The positive case first: a search by name still finds the file
+        // this fixture made, so a create that silently failed cannot pass
+        // the negative assertion below by leaving nothing to search at all.
+        let (_, found) = call_as(&h.app, Some(session), "GET", "/patients?q=benali", None).await;
+        let found_ids = ids(&found);
+        assert_eq!(found_ids.len(), 1, "{session}: {found_ids:?}");
+        assert_eq!(found_ids[0], id, "{session}");
+
         let (_, found) = call_as(&h.app, Some(session), "GET", "/patients?q=diabetes", None).await;
         assert_eq!(ids(&found), Vec::<String>::new(), "{session}");
     }

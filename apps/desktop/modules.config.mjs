@@ -127,3 +127,24 @@ export function routeIgnorePatternSource(active) {
   const escaped = excluded.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   return `^(${escaped.join("|")})$`;
 }
+
+/**
+ * The cargo-side arguments a Tauri run needs so the Rust binary it launches
+ * carries exactly `active`'s modules, no more (whole-loop review: an
+ * installed doctor's build had no clinic routes because nothing ever told
+ * cargo to build them). `dzpos-desktop`'s own `retail`/`clinic` features
+ * forward to `dzpos-api` and `dzpos-core` (`apps/desktop/src-tauri/Cargo.toml`),
+ * but the Tauri CLI's own `--features`/`-f` only *adds* to cargo's default
+ * set (`tauri build --help`: "list of features to activate"), so a
+ * clinic-alone build still needs `--no-default-features` or the shop's
+ * `retail` default rides along uninvited. `tauri dev`/`build` do not read
+ * either flag as their own -- the pair after `--` is what those commands
+ * pass straight through to the `cargo run`/`cargo build` underneath
+ * ("[ARGS]... Command line arguments passed to the runner").
+ *
+ * @param {readonly Module[]} active
+ * @returns {readonly string[]}
+ */
+export function cargoFeatureArgs(active) {
+  return ["--", "--no-default-features", "--features", active.join(",")];
+}

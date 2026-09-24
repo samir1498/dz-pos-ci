@@ -167,7 +167,13 @@ pub fn create(
 /// would. A receptionist correcting a phone number can never erase what
 /// the doctor wrote, whether their own form sent no `notes` field at all
 /// or an empty one. The refusal itself leaves one audit row (C8), naming
-/// this file's id.
+/// this file's id — but only once a file by that id has actually been
+/// looked up in this shop: a caller who sent an id nobody made, or another
+/// shop's, is answered not-found and leaves no row, the same as a plain
+/// update to that id would be. `repo::get` runs first for that reason, not
+/// only to read `before.notes` for the case below, and still outside the
+/// transaction the way `record_notes_refusal` itself is: a lookup is not a
+/// write, so nothing here needs rolling back.
 pub fn update(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -177,6 +183,7 @@ pub fn update(
     role: Role,
 ) -> Result<Patient, CoreError> {
     if asks_to_write_notes(&fields) && !may_see_notes(role) {
+        repo::get(conn, shop_id, id)?;
         record_notes_refusal(conn, shop_id, user_id, Some(id))?;
         return Err(CoreError::forbidden(Permission::ViewPatientNotes));
     }

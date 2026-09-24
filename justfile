@@ -110,7 +110,7 @@ clippy: claim desktop-dist
 # never the desktop crate that needs it.
 check-no-retail: claim
     flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --no-default-features
-    flock "$CARGO_TARGET_DIR/.lock" cargo clippy -p dzpos-api --no-default-features -- -D warnings
+    flock "$CARGO_TARGET_DIR/.lock" cargo clippy -p dzpos-api --no-default-features --all-targets -- -D warnings
     flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --no-default-features
 
 # C2 of
@@ -127,12 +127,38 @@ check-no-retail: claim
 # is the same proof with the service underneath the routes. Its clippy
 # takes `--all-targets` so the clinic's api tests are linted too: the
 # workspace clippy builds `dzpos-api` without the clinic and never sees them.
-check-clinic-only: claim
+#
+# The last two lines are the both-features table's own gate (whole-loop
+# review, 2026-09-24): the `cargo check` above only proves retail and
+# clinic compile together, never that `route_gates.rs`'s walk or the
+# gate table's own unit tests (`crates/api/src/gates/tests.rs`, hooked in
+# as `gates::tests` by `gates/mod.rs`) pass under that combination, which
+# `check-no-retail` and the four lines above only prove one feature at a
+# time. Two commands, not one: a single filter string applies to every
+# target `cargo test` selects, and `route_gates` names a test *file* while
+# `gates::tests` names a module path inside the lib, so one command with
+# both flags would either miss one or filter the other by an unrelated
+# substring.
+#
+# The last line is T2 of the same review: `dzpos-desktop`'s own
+# `retail`/`clinic` features (`apps/desktop/src-tauri/Cargo.toml`) forward
+# to `dzpos-api` and `dzpos-core`, so a clinic-only build of the desktop
+# crate itself has to compile too, or the switch those two features are
+# is untested past `cargo check -p dzpos-api` above. `desktop-dist` first,
+# the same reason `clippy` and `test` need it: `generate_context!()` embeds
+# `dist/index.html` at compile time, and gates already compiles this crate
+# today (the workspace `clippy`/`test` above build it with its retail
+# default), so this is one more feature combination on a crate already in
+# the build, not a new one.
+check-clinic-only: claim desktop-dist
     flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --no-default-features --features clinic
     flock "$CARGO_TARGET_DIR/.lock" cargo clippy -p dzpos-api --no-default-features --features clinic --all-targets -- -D warnings
     flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --no-default-features --features clinic
     flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-clinic
     flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-api --features clinic
+    flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --features clinic --test route_gates
+    flock "$CARGO_TARGET_DIR/.lock" cargo test -p dzpos-api --features clinic --lib gates::tests
+    flock "$CARGO_TARGET_DIR/.lock" cargo check -p dzpos-desktop --no-default-features --features clinic
 
 # The other half of check-clinic-only's proof, on the desktop (C6 of
 # `the-first-clinic-module-patients-queue-appointments`): a build with

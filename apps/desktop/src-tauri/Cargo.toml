@@ -4,9 +4,21 @@ version.workspace = true
 edition.workspace = true
 default-run = "dzpos-desktop"
 
+[features]
+# Whole-loop review, 2026-09-24 (T2): a `VITE_DINAR_MODULES=clinic` build's
+# screens hit 404s, because this crate's own Cargo.toml named neither
+# `dzpos-api` nor `dzpos-core`'s features and took each one's `retail`
+# default no matter what the frontend carried. `default-features = false`
+# on both below is what makes `retail` here an actual switch and not a
+# false floor under `--no-default-features --features clinic`
+# (`apps/desktop/scripts/tauri.mjs`, `modules.config.mjs::cargoFeatureArgs`)
+default = ["retail"]
+retail = ["dzpos-api/retail", "dzpos-core/retail"]
+clinic = ["dzpos-api/clinic", "dzpos-core/clinic"]
+
 [dependencies]
-dzpos-core = { path = "../../../crates/core" }
-dzpos-api = { path = "../../../crates/api" }
+dzpos-core = { path = "../../../crates/core", default-features = false }
+dzpos-api = { path = "../../../crates/api", default-features = false }
 axum = "0.8.9"
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

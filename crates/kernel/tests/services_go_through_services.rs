@@ -28,7 +28,7 @@
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Repos with no service of their own. Reaching one is not skipping a
 /// sibling, because there is no sibling: `counters` hands out the next
@@ -559,59 +559,53 @@ fn services_containing(marker: &str) -> Vec<String> {
         .collect()
 }
 
-/// The files a shop split would leave behind whole: no shop's own trade
-/// picks a different `users.rs`, `error.rs` or `money/totals.rs`, the way
-/// every trade would still need a facture reader picking a different
-/// `sales.rs`. Eleven services with no shop meaning, the money module
-/// (five files, none of them naming diesel or a table), the crate's one
-/// error enum, and the storage-side enums.
+/// Every `.rs` under `crates/kernel/src`, however deep (whole-loop review,
+/// 2026-09-24): a hand list here, `KERNEL_FILES`, used to name nineteen of
+/// them, chosen the day the crate split for the reasons still worth keeping
+/// below, and every file since added to the crate — `schema.rs` among
+/// them, `build_info.rs`, `db.rs`, `lang.rs`, `log.rs`, five of `models/`'s
+/// six files, two of `print/`'s three, and the whole of `repos/` — was
+/// never read at all. A shop word landing in any of those was invisible to
+/// this test by construction. The walk below reads every one instead, the
+/// same shape as `retail_source_files` above for the crate beside this one;
+/// what stays a choice is only which words are allowed to be there
+/// (`SHOP_WORDS_ALLOWED`), never which files are looked at.
 ///
-/// `schema.rs` is deliberately not here. Its own header says it is
-/// hand-written to match the migrations, one file for the one SQLite file a
-/// shop keeps; 21 of its 31 `table!` blocks are shop tables (`categories`
-/// opens it). That is not the kernel choosing to know about the shop, it is
-/// what a single migration list for both halves requires structurally, so a
-/// walk that failed on it would be asking the schema to be two files before
-/// anything has decided it should be.
+/// The eleven services, the five money files and the crate's one error enum
+/// carry no shop meaning: no shop's own trade picks a different `users.rs`,
+/// `error.rs` or `money/totals.rs`, the way every trade would still need a
+/// facture reader picking a different `sales.rs`.
 ///
-/// The print engine is mostly not here, since the kernel crate split (S3 of
-/// `a-kernel-crate-and-retail-as-the-first-module`): `mod.rs` and
-/// `escpos.rs`, two of the three files this list used to carry, each name
-/// `models::document::Document` on a code line (`mod.rs`'s own
-/// `pub fn number(doc: &Document)`), and `raster.rs` in turn reaches into
-/// `print/ticket.rs` for `Align`, `Item` and `WIDTH`, so neither of the two
-/// can live in a crate that depends on nothing; they moved to
-/// `dzpos-retail` whole rather than only their shop half, which is a
-/// bigger move than this list was written for and is reported as a
-/// deviation in the S3 commit rather than folded in quietly. `layout.rs`
-/// and `thermal.rs` name no model at all and hold `FactureLayout` and
-/// `ThermalMode`, which `services::preferences` (a kernel service) stores,
-/// so they moved to `dzpos_kernel::print` and drop off this list rather
-/// than joining it, since neither ever named the shop. `print/strings.rs`
-/// is the one of the original three that stayed: its only import is
-/// `crate::lang::Lang`, no shop type on a code line, and its row below is
-/// what pins the fourteen shop words S4 splits out.
-const KERNEL_FILES: [&str; 19] = [
-    "services/users.rs",
-    "services/sessions.rs",
-    "services/permissions.rs",
-    "services/audit.rs",
-    "services/settings.rs",
-    "services/preferences.rs",
-    "services/pairing.rs",
-    "services/backup.rs",
-    "services/support_bundle.rs",
-    "services/clock.rs",
-    "services/shops.rs",
-    "money/mod.rs",
-    "money/words.rs",
-    "money/totals.rs",
-    "money/format.rs",
-    "money/stamp.rs",
-    "error.rs",
-    "models/sql_types.rs",
-    "print/strings.rs",
-];
+/// The print engine is mostly gone from the crate outright, since the
+/// kernel crate split (S3 of `a-kernel-crate-and-retail-as-the-first-module`):
+/// `mod.rs` and `escpos.rs` each name `models::document::Document` on a code
+/// line (`mod.rs`'s own `pub fn number(doc: &Document)`), and `raster.rs`
+/// in turn reaches into `print/ticket.rs` for `Align`, `Item` and `WIDTH`,
+/// so neither of the two can live in a crate that depends on nothing; they
+/// moved to `dzpos-retail` whole rather than only their shop half, a bigger
+/// move than the S3 list was written for and reported as a deviation in
+/// that commit rather than folded in quietly. `layout.rs` and `thermal.rs`
+/// name no model at all and hold `FactureLayout` and `ThermalMode`, which
+/// `services::preferences` (a kernel service) stores, so they stayed in
+/// `dzpos_kernel::print`, and `print/strings.rs` beside them: its only
+/// import is `crate::lang::Lang`, no shop type on a code line, and its row
+/// below is what pins the fourteen shop words S4 split out.
+fn kernel_source_files() -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut folders = vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel/src")];
+    while let Some(folder) = folders.pop() {
+        for entry in fs::read_dir(&folder).expect("a folder under crates/kernel/src is readable") {
+            let path = entry.expect("a directory entry").path();
+            if path.is_dir() {
+                folders.push(path);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found
+}
 
 /// The word the shared kernel is not to name in its own code, chosen from
 /// `docs/features.md`'s domain nouns and given rather than derived: this
@@ -761,7 +755,43 @@ const SHOP_WORDS: [&str; 29] = [
 /// stale reason sitting above with nothing to catch it, so `assert_eq!`
 /// below is exact both ways, the way `no_service_reaches_a_repo_that_is_not_on_the_list`
 /// is for `REACHES_PAST_A_SIBLING`.
-const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 3] = [
+const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 4] = [
+    // Every `diesel::table!` name, hand-written to match the migrations
+    // (schema.rs's own header), one file for the one SQLite file a shop
+    // keeps: 21 of its 31 blocks are shop tables (`categories` opens it).
+    // That is not the kernel choosing to know about the shop, it is what a
+    // single migration list for both halves requires structurally, moved
+    // here from a hand-written exemption to the file list itself (the
+    // walk above used to skip this file rather than name what it finds)
+    // when this test started reading every kernel file instead of
+    // nineteen of them (whole-loop review, 2026-09-24).
+    (
+        "schema.rs",
+        &[
+            "avoir",
+            "barcode",
+            "categories",
+            "category",
+            "customer",
+            "customers",
+            "debt",
+            "discount",
+            "document",
+            "documents",
+            "expense",
+            "expenses",
+            "price",
+            "product",
+            "products",
+            "purchase",
+            "purchases",
+            "sale",
+            "shifts",
+            "stock",
+            "supplier",
+            "suppliers",
+        ],
+    ),
     // The MoneyError variants a line discount or a unit price can raise
     // (NegativeUnitPrice, NegativeDiscount, LineDiscountAboveLine,
     // GlobalDiscountAboveTotal). Samir, 2026-09-22: the money arithmetic is
@@ -794,11 +824,12 @@ const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 3] = [
 /// `code_of`'s comment strip, with a kernel file's own `#[cfg(test)]`
 /// module cut first and every string literal's content dropped after. Every
 /// kernel file this walk reads has at most one `#[cfg(test)] mod tests {`,
-/// opened once and running to the file's end (checked 2026-09-22), so
-/// cutting at the first occurrence is exact rather than a guess: a fixture
-/// a test builds for itself, such as a throwaway `let products = 3;`, is
-/// not the kernel naming the shop, it is a test naming what it is testing
-/// against.
+/// opened once and running to the file's end (checked 2026-09-24, against
+/// every file `kernel_source_files` now reads, not only the nineteen the
+/// walk used to), so cutting at the first occurrence is exact rather than a
+/// guess: a fixture a test builds for itself, such as a throwaway
+/// `let products = 3;`, is not the kernel naming the shop, it is a test
+/// naming what it is testing against.
 ///
 /// A string is walked a byte at a time with its own escape handled
 /// (`\"` does not close it), because `services/permissions.rs`'s
@@ -808,9 +839,9 @@ const SHOP_WORDS_ALLOWED: [(&str, &[&str]); 3] = [
 /// wrong reason: its real reason is the variant name beside it, which
 /// survives the strip because it is not inside quotes. No raw string
 /// (`r"…"`, `r#"…"#`) and no block comment (`/*…*/`) appears in any file
-/// this walk reads (checked 2026-09-23 the same way), so neither is
-/// handled; a file that grew one would need this taught to read it before
-/// its row above could be trusted again.
+/// this walk reads (checked 2026-09-24 the same way, same wider set), so
+/// neither is handled; a file that grew one would need this taught to read
+/// it before its row above could be trusted again.
 fn shop_facing_code_of(source: &str) -> String {
     let before_test_module = match source.find("#[cfg(test)]") {
         Some(at) => &source[..at],
@@ -931,12 +962,17 @@ fn the_shared_kernel_does_not_name_the_shop() {
     // `a-kernel-crate-and-retail-as-the-first-module`).
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../kernel/src");
     let mut found: Vec<(String, Vec<String>)> = Vec::new();
-    for rel in KERNEL_FILES {
-        let path = src.join(rel);
+    for path in kernel_source_files() {
+        let rel = path
+            .strip_prefix(&src)
+            .unwrap_or(&path)
+            .to_str()
+            .unwrap_or("a path")
+            .replace('\\', "/");
         let source = fs::read_to_string(&path).expect("a kernel file is readable");
         let words: Vec<String> = shop_words_named_in(&source).into_iter().collect();
         if !words.is_empty() {
-            found.push((rel.to_string(), words));
+            found.push((rel, words));
         }
     }
     found.sort();

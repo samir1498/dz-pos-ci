@@ -21,6 +21,8 @@
 //! way the two tests above do, so a row added to the table is a case added
 //! here rather than a sixty-sixth test written out by hand.
 
+use std::collections::BTreeSet;
+
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
@@ -286,6 +288,87 @@ fn closing_paren(source: &str, open: usize) -> Option<usize> {
     None
 }
 
+/// Every `(method, path)` `.route(...)` declares in `ROUTER_SOURCE[start..end]`,
+/// with no `cfg!` guard at all. `declared_routes` above answers "what does
+/// *this build's* router actually have", which is the wrong question for
+/// the two tests below: they read what one module's own `#[cfg]` block
+/// holds in the file text, true in every build whichever feature compiled
+/// it, retail alone, clinic alone or both.
+fn routes_in(start: usize, end: usize) -> BTreeSet<(String, String)> {
+    let mut found = BTreeSet::new();
+    let mut from = start;
+    while let Some(at) = ROUTER_SOURCE[from..end].find(".route(") {
+        let open = from + at + ".route(".len();
+        let Some(close) = closing_paren(ROUTER_SOURCE, open) else {
+            break;
+        };
+        let call = &ROUTER_SOURCE[open..close];
+        from = close;
+        let Some(p_start) = call.find('"') else {
+            continue;
+        };
+        let Some(p_end) = call[p_start + 1..].find('"') else {
+            continue;
+        };
+        let path = call[p_start + 1..p_start + 1 + p_end].to_owned();
+        if !path.starts_with('/') {
+            continue;
+        }
+        let handlers = &call[p_start + 1 + p_end..];
+        for (needle, method) in [("get(", "GET"), ("post(", "POST"), ("put(", "PUT")] {
+            if handlers.contains(needle) {
+                found.insert((method.to_owned(), path.clone()));
+            }
+        }
+    }
+    found
+}
+
+/// One `Gate { ... }` row read out of `gates/table.rs` or `gates/clinic.rs`
+/// as text, with whether it was immediately preceded by one of the two
+/// module `#[cfg]` attributes a row can carry.
+struct GateRow {
+    method: String,
+    path: String,
+    tagged_retail: bool,
+    tagged_clinic: bool,
+}
+
+/// The `field: "value"` pattern every `Gate` literal writes its `method`
+/// and `path` in.
+fn field_str(block: &str, field: &str) -> Option<String> {
+    let needle = format!("{field}: \"");
+    let at = block.find(&needle)? + needle.len();
+    let end = block[at..].find('"')? + at;
+    Some(block[at..end].to_owned())
+}
+
+/// Every `Gate { ... }` literal in `source`, in the order they are written.
+fn gate_rows_of(source: &str) -> Vec<GateRow> {
+    let mut rows = Vec::new();
+    let marker = "    Gate {";
+    let mut from = 0;
+    while let Some(at) = source[from..].find(marker) {
+        let start = from + at;
+        let tagged_retail = source[..start].ends_with("#[cfg(feature = \"retail\")]\n");
+        let tagged_clinic = source[..start].ends_with("#[cfg(feature = \"clinic\")]\n");
+        let Some(rel_close) = source[start..].find("\n    },") else {
+            break;
+        };
+        let block = &source[start..start + rel_close];
+        if let (Some(method), Some(path)) = (field_str(block, "method"), field_str(block, "path")) {
+            rows.push(GateRow {
+                method,
+                path,
+                tagged_retail,
+                tagged_clinic,
+            });
+        }
+        from = start + marker.len();
+    }
+    rows
+}
+
 /// The router declares routes at all, and enough of them that a parser that
 /// silently found nothing would fail here rather than passing every
 /// assertion below by vacuum.
@@ -515,114 +598,140 @@ async fn a_write_on_a_route_the_table_does_not_name_is_refused() {
 /// rows and routes sit behind `#[cfg(feature = "retail")]` in these same
 /// two files (this file's own header says why: a table assembled at
 /// startup, or a second router, is the runtime registry Samir ruled out).
-/// Red against the file this plan found: no row and no route carried the
-/// attribute at all, so both counts below were zero and this failed.
+///
+/// Whole-loop review, 2026-09-24: this used to assert two counts (43 rows,
+/// 60 route calls) lifted straight off the source text. A row that lost its
+/// `#[cfg(feature = "retail")]` while another row somewhere else gained one
+/// left the count unmoved and this test green. What it actually stands for
+/// is a structural rule, asserted here directly instead: every row
+/// `gates/table.rs` declares carries the retail tag exactly when its own
+/// `(method, path)` is one `router.rs`'s retail block declares, and never
+/// the clinic one, whichever feature this run was compiled with — the same
+/// text is read either way. Red on the file this plan found: no row and no
+/// route carried the attribute at all, so both sides below were empty and
+/// the two non-vacuous assertions caught it; red again on a retail row
+/// losing its cfg while its route stays in the block, which the per-row
+/// loop below catches directly.
 #[test]
 fn the_shops_own_gate_rows_and_routes_carry_the_retail_feature() {
-    let gates_source = include_str!("../src/gates/table.rs");
-    let tagged_gates = gates_source
-        .matches("    #[cfg(feature = \"retail\")]\n    Gate {")
-        .count();
-    assert_eq!(
-        tagged_gates, 43,
-        "43 of ROUTE_GATES' own rows are the shop's; the rest stand with the feature off"
+    let (retail_start, retail_end) = retail_block_span();
+    let retail_routes = routes_in(retail_start, retail_end);
+    assert!(
+        !retail_routes.is_empty(),
+        "router.rs's retail block declares no route; this test proves nothing"
     );
 
-    // The retail block is the one `#[cfg(feature = "retail")]` that guards a
-    // `let guarded = guarded` continuing the chain, not the one on the
-    // `DefaultBodyLimit` import beside it; it ends where the session layer
-    // that closes every guarded route, kernel or shop, begins.
-    let (start, end) = retail_block_span();
-    let retail_routes = ROUTER_SOURCE[start..end].matches(".route(").count();
-    assert_eq!(
-        retail_routes, 60,
-        "60 of router.rs' own .route(...) calls are the shop's; the rest stand with the feature off"
+    let table_rows = gate_rows_of(include_str!("../src/gates/table.rs"));
+    let tagged_count = table_rows.iter().filter(|r| r.tagged_retail).count();
+    assert!(
+        tagged_count > 0,
+        "no row in gates/table.rs carries #[cfg(feature = \"retail\")]; this test proves nothing"
     );
+
+    for row in &table_rows {
+        let in_retail_block = retail_routes.contains(&(row.method.clone(), row.path.clone()));
+        assert_eq!(
+            row.tagged_retail, in_retail_block,
+            "{} {} carries #[cfg(feature = \"retail\")]: {}, but its route is in router.rs's \
+             retail block: {}",
+            row.method, row.path, row.tagged_retail, in_retail_block
+        );
+        assert!(
+            !row.tagged_clinic,
+            "{} {} in gates/table.rs carries #[cfg(feature = \"clinic\")]; the clinic's rows \
+             live in gates/clinic.rs instead",
+            row.method, row.path
+        );
+    }
 }
 
 /// C3 of `the-first-clinic-module-patients-queue-appointments`: the clinic's
 /// rows and routes carry the clinic feature, the way the shop's carry
-/// theirs, and neither module's count moved the other's (the retail test
-/// above still reads 43 and 60). C4's waiting queue added six rows and five
-/// calls to the same block, C5's appointment book six rows and five calls
-/// (its slot length's read is open, like `GET /settings`, and has no row),
-/// C5b's book tools ten rows and ten calls (the reads of the hours, the
-/// blocks and the visit types carry no name and have no row; the day list
-/// and the next free slot, a read of the book, do). C6b's check-in added
-/// one row and one call, the queue's order one more of each, and the
-/// confirmation call two of each.
+/// theirs.
+///
+/// Whole-loop review, 2026-09-24: same rewrite as the retail test above, for
+/// the same reason. `gates/clinic.rs` carries no per-row `#[cfg]` — the
+/// whole file is gated once, in `gates/mod.rs` — so its structural rule is
+/// two set comparisons instead of a per-row tag: every row it declares
+/// names a route inside `router.rs`'s clinic block and nowhere outside it,
+/// and every row is present in the compiled `ROUTE_GATES` exactly when
+/// `cfg!(feature = "clinic")` is true, proving the feature actually removes
+/// them rather than only ever adding them. The clinic block also carries
+/// more routes than `clinic.rs` has rows for: the reads of the working
+/// hours, the absence blocks, the visit types and the slot length are open,
+/// like `GET /settings`, and have no row on purpose (the same reason
+/// `every_mutating_route_has_a_row_in_the_table` above only asks about
+/// writes) — so the two sets are checked one way, not for equality.
 #[test]
 fn the_clinics_own_gate_rows_and_routes_carry_the_clinic_feature() {
-    // The clinic's rows live in their own file, built only with the feature
-    // (`gates/mod.rs`), and none is left behind in the shared one.
     let clinic_source = include_str!("../src/gates/clinic.rs");
-    assert_eq!(
-        clinic_source.matches("    Gate {").count(),
-        31,
-        "31 rows are the clinic's: the patient file's list, create, read, \
-         update and archive, the queue's today, add, next, call, seen and left, the book's \
-         list, book, read, cancel, move and slot length, and the book tools' working hours \
-         and absence block create and remove, and the visit types' create, update and remove, \
-         the no-show mark and its clearing, the day list and the next free slot, and the \
-         check-in of a booked patient, the queue's order, and the confirmation call and its \
-         clearing"
-    );
-    assert!(!include_str!("../src/gates/table.rs").contains("feature = \"clinic\")]\n    Gate {"));
-    // The rows are there exactly when the clinic is built in.
-    let clinic_rows = |prefix: &str| {
-        ROUTE_GATES
-            .iter()
-            .filter(|g| g.path == prefix || g.path.starts_with(&format!("{prefix}/")))
-            .count()
-    };
-    let built = cfg!(feature = "clinic");
-    assert_eq!(clinic_rows("/patients"), if built { 5 } else { 0 });
-    assert_eq!(clinic_rows("/queue"), if built { 7 } else { 0 });
-    assert_eq!(clinic_rows("/appointments"), if built { 11 } else { 0 });
-    assert_eq!(
-        clinic_rows("/settings/slot-minutes"),
-        if built { 1 } else { 0 }
-    );
-    assert_eq!(clinic_rows("/absence-blocks"), if built { 2 } else { 0 });
-    assert_eq!(clinic_rows("/day-list"), if built { 1 } else { 0 });
-    assert_eq!(
-        clinic_rows("/settings/visit-types"),
-        if built { 3 } else { 0 }
-    );
-    assert_eq!(
-        clinic_rows("/settings/working-hours"),
-        if built { 1 } else { 0 }
+    let table_source = include_str!("../src/gates/table.rs");
+    assert!(
+        !table_source.contains("feature = \"clinic\")]\n    Gate {"),
+        "a row in gates/table.rs carries #[cfg(feature = \"clinic\")]; the clinic's rows live in \
+         gates/clinic.rs instead"
     );
 
-    let (start, end) = clinic_block_span();
-    let block = &ROUTER_SOURCE[start..end];
-    assert_eq!(
-        block.matches(".route(").count(),
-        27,
-        "27 of router.rs' own .route(...) calls are the clinic's: 3 patient, 5 queue, 5 book, \
-         10 book tools, 1 check-in, 1 queue order, 2 confirmation call"
+    let clinic_rows = gate_rows_of(clinic_source);
+    assert!(
+        !clinic_rows.is_empty(),
+        "gates/clinic.rs declares no row; this test proves nothing"
     );
-    // No patient, queue or book route outside the block.
-    for path in [
-        "\"/patients",
-        "\"/queue",
-        "\"/appointments",
-        "\"/settings/slot-minutes",
-        "\"/settings/working-hours",
-        "\"/absence-blocks",
-        "\"/settings/visit-types",
-        "\"/day-list",
-    ] {
+
+    let (clinic_start, clinic_end) = clinic_block_span();
+    let clinic_routes = routes_in(clinic_start, clinic_end);
+    assert!(
+        !clinic_routes.is_empty(),
+        "router.rs's clinic block declares no route; this test proves nothing"
+    );
+
+    let built = cfg!(feature = "clinic");
+    for row in &clinic_rows {
+        let key = (row.method.clone(), row.path.clone());
         assert!(
-            !ROUTER_SOURCE[..start].contains(path),
-            "{path} before the block"
+            clinic_routes.contains(&key),
+            "{} {} is a row in gates/clinic.rs naming a route router.rs's clinic block does not \
+             have",
+            row.method,
+            row.path
+        );
+        let present = ROUTE_GATES
+            .iter()
+            .any(|g| g.method == row.method.as_str() && g.path == row.path.as_str());
+        assert_eq!(
+            present, built,
+            "{} {} is a row in gates/clinic.rs; present in ROUTE_GATES: {present}, expected: {built}",
+            row.method, row.path
+        );
+        // Never named outside the block either, the way a route that moved
+        // there by mistake would be.
+        let quoted = format!("\"{}\"", row.path);
+        assert!(
+            !ROUTER_SOURCE[..clinic_start].contains(&quoted),
+            "{} appears in router.rs before the clinic block",
+            row.path
         );
         assert!(
-            !ROUTER_SOURCE[end..].contains(path),
-            "{path} after the block"
+            !ROUTER_SOURCE[clinic_end..].contains(&quoted),
+            "{} appears in router.rs after the clinic block",
+            row.path
         );
     }
+
+    // No table.rs row, shared or retail, claims a clinic-block route.
+    for row in gate_rows_of(table_source) {
+        assert!(
+            !clinic_routes.contains(&(row.method.clone(), row.path.clone())),
+            "{} {} is a row in gates/table.rs naming a route in router.rs's clinic block",
+            row.method,
+            row.path
+        );
+    }
+
     // And the two blocks do not overlap.
     let (retail_start, _) = retail_block_span();
-    assert!(end < retail_start, "the clinic block runs into the shop's");
+    assert!(
+        clinic_end < retail_start,
+        "the clinic block runs into the shop's"
+    );
 }

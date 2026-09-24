@@ -16,6 +16,7 @@ import {
   ALL_MODULES,
   MODULE_ROUTES,
   SHARED_ROUTES,
+  cargoFeatureArgs,
   excludedRouteFiles,
   resolveModules,
   routeIgnorePatternSource,
@@ -97,6 +98,31 @@ describe("excludedRouteFiles: the other trade's files, none of its own", () => {
 
   test("both trades built excludes nothing", () => {
     expect(excludedRouteFiles(["retail", "clinic"])).toEqual([]);
+  });
+});
+
+describe("cargoFeatureArgs: what a clinic build has to tell cargo (whole-loop review, T2)", () => {
+  test("carries --no-default-features, so a build with only clinic drops the shop's default", () => {
+    expect(cargoFeatureArgs(["clinic"])).toContain("--no-default-features");
+  });
+
+  test("clinic alone asks cargo for clinic and never for retail", () => {
+    const args = cargoFeatureArgs(["clinic"]);
+    const features = args[args.indexOf("--features") + 1];
+    expect(features).toBe("clinic");
+  });
+
+  test("both trades asks cargo for both, comma separated", () => {
+    const args = cargoFeatureArgs(["retail", "clinic"]);
+    const features = args[args.indexOf("--features") + 1];
+    expect(features).toBe("retail,clinic");
+  });
+
+  test("retail alone still asks explicitly, not left to cargo's own default", () => {
+    const args = cargoFeatureArgs(["retail"]);
+    expect(args).toContain("--no-default-features");
+    const features = args[args.indexOf("--features") + 1];
+    expect(features).toBe("retail");
   });
 });
 
