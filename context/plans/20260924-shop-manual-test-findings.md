@@ -69,6 +69,15 @@ tasks:
   - id: 'T21'
     desc: 'Shortcuts must be visible (Samir): every button with a key shows it on its face (e.g. "Encaisser F9"), and a "?" key or button opens a cheat sheet of all till keys. Today F9 works but nothing on screen says so. Part of T20 and the T11 redesign.'
     status: 'pending'
+  - id: 'T22'
+    desc: 'Ticket print: pressing Imprimer renders the ticket under "Détail du ticket" at the very bottom of the till column, below the numpad, so Samir thought nothing happened. Show it where the eye is (a dialog or the success panel) in the T11 redesign. The ticket content is right (TK-2026-000001, 570,90 net, 429,10 change).'
+    status: 'pending'
+  - id: 'T23'
+    desc: 'Ticket layout: the totals block''s amounts do not line up with the line amounts (510,00 sits left of 90,00/420,00), and "DA" gets its own column on totals and payment rows only. One right edge for every amount on the 80 mm ticket.'
+    status: 'pending'
+  - id: 'T24'
+    desc: 'First setup asks only the owner''s name and password; the shop''s own identity (name, address, phone, NIF, RC, NIS, AI) is never asked, so the first ticket prints "Mon magasin" with no address or tax ids. Either ask it in setup or make it the first onboarding step (T10), and nag before the first facture, which legally needs it.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
