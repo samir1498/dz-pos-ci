@@ -150,6 +150,9 @@ tasks:
   - id: 'T48'
     desc: 'For the manual-test report section (Samir): mention the OCR of supplier papers (T47 step 2) and supplier-to-shop sync (idea 20260924-a-supplier-s-facture-arrives-already-filled-in) under "ideas for later", worded as ideas, not as built or planned features.'
     status: 'pending'
+  - id: 'T49'
+    desc: 'Supplier account (/suppliers/1): a payment row reads "Paiement / Commande 1 5 000,00" under Type, the order label and the amount run together with no separator, while the Note column stays empty. Put the order link in its own place ("pour la commande BA-…", with T45''s number) and leave the amount to the Crédit column. The header shows "Dette" but no supplier name context under it; fine otherwise (balance 23 836,00 matches the database).'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
