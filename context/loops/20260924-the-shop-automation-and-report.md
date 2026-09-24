@@ -80,3 +80,9 @@ ff224ad). Phone: `just qa-phone` merged (#179), green on the emulator:
 one paired device, one ticket 925,60. `cmd.exe` is not on this shell's
 PATH and `cmd.exe /c start` never returns through interop; the script
 handles both. Next: Maestro flow in Arabic, T4/T5, clips into the report.
+
+2026-09-24 21:00: first-day e2e merged (#180, `just e2e-first-day`, gates
+green via A). Arabic: the desktop walk passes under ar; the phone flow in
+Arabic is drafted on `qa/phone-arabic` (worktree `phone-ar`, Expo Go app
+locale set to ar-DZ without root) and waits for A to say the box is quiet
+before the emulator starts again. `adb root` hangs this emulator: never.
