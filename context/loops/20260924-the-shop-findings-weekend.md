@@ -98,3 +98,5 @@ Leave the laptop alone. Ticks every ten minutes while builders run.
 2026-09-24 21:40: centimes lens on #181: one proven attribution defect (T58, totals right, statement links a later paper to an old payment after a negative balance). Merging #181 on green gates with T58 as follow-up; also for Samir: an opening balance typo fixed by an upward correction is paid after all papers. Gates queued: customers-debt rerun, then B's shots gates + full e2e.
 
 2026-09-24 21:47: till layout mockups ready for Samir: https://mockup-till-layout.dz-pos-design.pages.dev/till/ (PR #182, not to merge before his pick). Open choices there: F9 (today) vs Lumina's F1 one-key cash sale; T11 asked for the reports site's design section, mockups went to dz-pos-design per the skill. Onboarding tour mockup (T10, T27) started.
+
+2026-09-24 21:55: customers and debt merged (#181, gates green on d11eb353). B's first-day spec has test.fail guards for T31 and T34: T34 is now fixed on main, so that guard will report 'unexpectedly passed' — tell B.
