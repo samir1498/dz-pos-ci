@@ -120,6 +120,9 @@ tasks:
   - id: 'T38'
     desc: 'Decision (Samir, 2026-09-24) on T24: the shop''s identity (name, address, phone, RC, NIF, NIS, AI) is an optional, skippable step of the onboarding (T10), not a required setup screen; the till keeps selling tickets without it, and the first facture attempt links straight to that step.'
     status: 'pending'
+  - id: 'T39'
+    desc: 'Till redesign requirement (Samir): the cart in progress survives leaving the till (the facture refusal sends the cashier to Paramètres or Clients) and a reload, saved per till. Plus a sale history on the till holding both parked carts (not yet paid, Lumina F2/F3) and the last paid sales (reprint, open the paper, start an avoir; Lumina F9/F10 steps through recent sales), each marked by status. Shortcuts step back and forward through that history; stepping away parks the current cart automatically so nothing being filled is lost.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
