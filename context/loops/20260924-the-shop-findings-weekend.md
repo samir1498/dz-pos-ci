@@ -100,3 +100,5 @@ Leave the laptop alone. Ticks every ten minutes while builders run.
 2026-09-24 21:47: till layout mockups ready for Samir: https://mockup-till-layout.dz-pos-design.pages.dev/till/ (PR #182, not to merge before his pick). Open choices there: F9 (today) vs Lumina's F1 one-key cash sale; T11 asked for the reports site's design section, mockups went to dz-pos-design per the skill. Onboarding tour mockup (T10, T27) started.
 
 2026-09-24 21:55: customers and debt merged (#181, gates green on d11eb353). B's first-day spec has test.fail guards for T31 and T34: T34 is now fixed on main, so that guard will report 'unexpectedly passed' — tell B.
+
+2026-09-24 22:06: onboarding tour mockup ready for Samir: https://mockup-onboarding-tour.dz-pos-design.pages.dev/onboarding/ (PR #183, not to merge). Open there: tour vs checklist vs both (proposed both); where skip/resume state lives. driver.js 1.8.0 MIT, no RTL placement (bottom-only workaround). Purchases group (T13 T35 T44 T45 T46 T49) started with the money builder.
