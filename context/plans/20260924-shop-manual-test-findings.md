@@ -135,6 +135,9 @@ tasks:
   - id: 'T43'
     desc: 'Tables (Samir): the app''s own table (components/ui/table.tsx, a Column<T> list) has no sort, search, column filters, date range or pagination, so finding a paper or a customer is hard. Move the lists to TanStack Table (headless, shadcn data-table pattern, already in the TanStack family the app uses): sort by header click, a search box, filters by type/status/customer, a date range (with the T35 calendar), pagination or virtual scroll; documents, customers, products, audit journal first. Check whether sorting/filtering belongs in the API for large shops before doing it client-side.'
     status: 'pending'
+  - id: 'T44'
+    desc: 'New purchase form (/purchases/new) alignment: the "Fournisseur *" label and its select sit lower than the "N° du bon fournisseur" and "Échéance" fields beside them (the required asterisk shifts the row), so the three fields do not share a baseline; in the lines table the Quantité and Prix d''achat headers are not over their inputs, and "Prix d''achat" renders in the monospace number font while the other headers are sans. One field-row component with a fixed label height, headers aligned with their cells, one header font.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
