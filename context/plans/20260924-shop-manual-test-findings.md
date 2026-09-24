@@ -42,6 +42,9 @@ tasks:
   - id: 'T12'
     desc: 'Later, outside this plan (Samir): merge the research and reports of ObserveOne and Dinar into one place, to clear old reports and duplicated unfinished ideas. Needs its own plan; the Dinar side today is ~/.dz-night/report (dinar-reports) plus context/research.'
     status: 'pending'
+  - id: 'T13'
+    desc: 'Wish, low priority (Samir dislikes pack sizes typed into product names, though it is normal retail practice since each size is its own barcode/SKU): an optional "contenance" field (number + unit, e.g. 1,5 L, 250 g) appended to the displayed name and usable for a price per litre/kilo on shelf labels. Names stay as they are until then.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
