@@ -274,10 +274,14 @@ describe("DataTable", () => {
    * in the figure face lines up on the glyph width instead of the digit, and
    * the shop reads a column it cannot scan.
    */
-  test("a money column is end-aligned in the figure face", () => {
+  test("a money column is end-aligned; its cells take the figure face and its heading does not", () => {
+    // A heading is words (T44): set in the digits' face it read as a
+    // different kind of header from its neighbours.
     renderIn("fr", <DataTable columns={COLUMNS} rows={ROWS} rowKey={(row) => row.id} caption="Produits" />);
     const heading = screen.getByRole("columnheader", { name: "Total" });
-    expect(heading).toHaveClass("text-end", "font-numeric", "tabular-nums");
+    expect(heading).toHaveClass("text-end");
+    expect(heading).not.toHaveClass("font-numeric");
+    expect(screen.getByText("3 272,40").closest("td")).toHaveClass("text-end", "font-numeric", "tabular-nums");
   });
 
   test("the amounts are the ones the shared formatter spells", () => {

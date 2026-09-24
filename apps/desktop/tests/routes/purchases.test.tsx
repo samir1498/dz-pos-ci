@@ -17,7 +17,6 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { formatCentimes } from "@dzpos/shared";
 import type { ProductDto, PurchaseDetailDto, SupplierDto } from "@dzpos/shared";
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
@@ -640,7 +639,8 @@ describe("the order form", () => {
 
   test("the running total shows a slip of ten before the order is saved", async () => {
     // 10 at 30,00 is 300,00; the same line typed as 100 is 3 000,00. Written
-    // by hand; `formatCentimes` only spells the figure the way <Money> does.
+    // by hand. jest-dom folds the element's narrow no-break space into a
+    // plain one and leaves the expected string alone, so the plain space.
     const user = userEvent.setup();
     mountForm();
     await pick(user, fr.col_product, "Farine 5kg");
@@ -648,12 +648,11 @@ describe("the order form", () => {
     await user.type(qty, "10");
     await user.type(screen.getByRole("textbox", { name: fr.col_unit_cost }), "30,00");
     const total = screen.getByTestId("purchase-running-total");
-    await waitFor(() => expect(total).toHaveTextContent(formatCentimes(30_000)));
+    await waitFor(() => expect(total).toHaveTextContent("300,00"));
     await user.type(qty, "0");
-    await waitFor(() => expect(total).toHaveTextContent(formatCentimes(300_000)));
-    // Transport is part of it: 3 000,00 + 12,50.
-    await user.type(screen.getByLabelText(fr.field_transport), "12,50");
-    await waitFor(() => expect(total).toHaveTextContent(formatCentimes(301_250)));
+    await waitFor(() => expect(total).toHaveTextContent("3 000,00"));
+    // Transport and extras in the sum are the shared fixture's cases
+    // (purchase_order_total_before_landing.json); this screen only shows it.
   });
 
   test("the supplier's own number and the due day say what they are", async () => {
