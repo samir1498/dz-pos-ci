@@ -141,6 +141,9 @@ tasks:
   - id: 'T45'
     desc: 'Purchases: "N° du bon fournisseur" (supplier_document_number, the number on the supplier''s own delivery note) reads like our order number, and our purchases have no number of their own (purchases has only an id), so a purchase cannot be named like a ticket. Give purchases a generated number (e.g. BA-2026-000001, gapless per year like the sales series) and relabel the field "N° sur le bon du fournisseur" with a hint; explain Échéance as "à payer avant le". Schema change: money builder.'
     status: 'pending'
+  - id: 'T46'
+    desc: 'Purchase page (/purchases/1): shows no total, no amount paid and no amount still owed (the order came to 30 672,00 with 1 836,00 paid, visible only in the database); the supplier shows as "Ouvrir la fiche" instead of its name; the receipt is labelled with the raw series key "reception:2026 / 1". Also Samir typed 100 Café instead of 10 and nothing flagged it: the new-purchase form should show the running total before saving (and T45''s number) so a 10x slip is visible.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
