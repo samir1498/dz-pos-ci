@@ -80,7 +80,7 @@ tasks:
     status: 'pending'
   - id: 'T25'
     desc: 'The till''s "Imprimer" never prints: it only sets receiptId (till.tsx:604) and Receipt (till.tsx:845) renders the ticket into a sandboxed iframe preview. No window.print, no printer call, in the browser or in Tauri; the only window.print in the app is the clinic day list (routes/-book/DayListPanel.tsx:72). A shop cannot hand a customer a paper ticket today. Needs a real print path (print the iframe, or a Tauri/ESC-POS route for an 80 mm thermal printer) and a manual check on a real printer.'
-    status: 'pending'
+    status: 'done'
   - id: 'T26'
     desc: 'Reports site (not the app): the link preview image fails because Cloudflare Access guards /og/card.png too (a crawler gets the ObserveOne login page as HTML). Samir wants a generated OG image per page like the ObserveOne landing''s opengraph-image.tsx: satori + @resvg/resvg-js at build time, uploaded to the public Supabase bucket by deploy.sh, og:image pointing there (Docs.astro:53). Build it with the manual-test report section.'
     status: 'done'
@@ -173,6 +173,9 @@ tasks:
     status: 'pending'
   - id: 'T56'
     desc: 'Shop logo upload (Samir, 2026-09-24), for T55''s ticket header and the facture. Shares a design with T47''s supplier-paper attachments: files in the shop data folder plus a small table, included in backup and restore. Adds a column or table next to shops, so schema work (money builder per CLAUDE.md). The expensive half is printing a bitmap on the 80 mm thermal ticket (ESC/POS raster, dithered to 1-bit), not the upload itself.'
+    status: 'pending'
+  - id: 'T57'
+    desc: 'Follow-up from T25 (#178): avoir and proforma render in -documents/detail.tsx PrintPanel with no print button at all; add the same Imprimer. And the real thermal path (crates/retail/src/print/escpos.rs, POST /sales/{id}/print) only has the phone as caller, its TCP printer address is an unset env var (DZPOS_PRINTER_ADDR) and its result is discarded: a printer setting in Paramètres → Impression (address, test print) so Imprimer can go to the thermal printer instead of the browser dialog.'
     status: 'pending'
 acceptance: []
 ---

@@ -86,3 +86,5 @@ Leave the laptop alone. Ticks every ten minutes while builders run.
 2026-09-24 19:20: small UI PR #177 open, needs `just gates` before merge (cargo busy). It moved the theme and language switchers out of the top bar into one floating corner widget, so there is one of each: tell Samir. Group 3 builder (shop identity) running; group 5 (customers and debt, money builder) started.
 
 2026-09-24 19:28: gates queue once printing frees .cargo-target: (1) small UI #177 `just gates`; (2) B's qa/first-day-e2e (worktree first-day) `just gates` then `just e2e-first-day`, reply exit lines to session B. B's first-day spec has test.fail guards for T31 and T34: the branch merging second drops them.
+
+2026-09-24 19:45: printing merged (#178, gates green): Imprimer opens the print dialog for ticket and facture. Follow-up T57 logged (avoir/proforma print button, thermal printer setting).
