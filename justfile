@@ -184,6 +184,64 @@ check-clinic-bundle:
     fi
     echo "check-clinic-bundle: clinic-only carries only its own screens, the default build is unaffected"
 
+# The phone's half of the same proof (C7): `expo export --platform android`
+# with `DINAR_MOBILE_MODULES` unset and with it set to `clinic` must not
+# carry the same code. Unlike the desktop's routes, which the router
+# generator reads from a shared `src/routes` tree, Expo Router discovers
+# routes by directory (`app/` vs `app-clinic/`, see
+# `apps/mobile/modules.config.js`), and the clinic root has no clinic-only
+# screen yet (`MODULE_ROUTES.clinic` is empty) — there is no clinic
+# equivalent of the desktop's `patient-fiche` marker to grep for. So the
+# positive check that a broken build cannot pass vacuously is a string every
+# build carries regardless of module (`useCart outside CartProvider`, the
+# hook's own guard in `providers/CartProvider.tsx`, mounted above the router
+# in both roots), not a clinic-only screen.
+#
+# The negative check is `priceBasket`, `lib/basket.ts`'s pricer: nothing
+# under `app-clinic/` reaches `features/till/` or that function (only a
+# type-only import of `lib/basket`'s types reaches `CartProvider`, erased at
+# compile time), so a clinic build's module graph never touches it. Not a
+# translation key: `packages/shared/src/i18n/*/till.ts` is imported
+# unconditionally by every locale's `index.ts` (the same trap the
+# `check-clinic-bundle` comment above names for the desktop's locale
+# files), so every `till_*` string ships in both builds and would pass this
+# check by finding nothing either way. `grep -a`: `expo export` for Android
+# emits Hermes bytecode (`.hbc`), which `grep` without `-a` treats as binary
+# and never searches.
+#
+# Output goes under `apps/mobile/dist/`, already `dist/`-ignored at the
+# root, rather than a bare `mktemp -d` in `/tmp`: two `expo export` runs
+# land inside the worktree they were run from instead of a shared system
+# temp dir another checkout's build could also be writing to. `--clear`
+# on both: without it the second export can reuse the first's Metro
+# transform cache and a real difference in what got bundled would not show.
+check-mobile-bundle:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd apps/mobile
+    mkdir -p dist
+    retail_out="$(mktemp -d dist/check-retail.XXXXXX)"
+    clinic_out="$(mktemp -d dist/check-clinic.XXXXXX)"
+    trap 'rm -rf "$retail_out" "$clinic_out"' EXIT
+    env -u DINAR_MOBILE_MODULES pnpm exec expo export --platform android --output-dir "$retail_out" --clear >/dev/null
+    # As in check-clinic-bundle: the positive check runs first, so a build
+    # that lost the till entirely fails here instead of letting the
+    # negative check below pass by finding nothing at all.
+    if ! grep -aql "priceBasket" "$retail_out"/_expo/static/js/android/*.hbc 2>/dev/null; then
+        echo "check-mobile-bundle: the default build lost the till's basket code; the check below proves nothing" >&2
+        exit 1
+    fi
+    DINAR_MOBILE_MODULES=clinic pnpm exec expo export --platform android --output-dir "$clinic_out" --clear >/dev/null
+    if ! grep -aql "useCart outside CartProvider" "$clinic_out"/_expo/static/js/android/*.hbc 2>/dev/null; then
+        echo "check-mobile-bundle: the clinic build produced no usable bundle; the check below proves nothing" >&2
+        exit 1
+    fi
+    if grep -aql "priceBasket" "$clinic_out"/_expo/static/js/android/*.hbc 2>/dev/null; then
+        echo "check-mobile-bundle: a clinic-only build still carries the till's basket code" >&2
+        exit 1
+    fi
+    echo "check-mobile-bundle: clinic-only carries no till code, the default build is unaffected"
+
 # the desktop's one eslint rule: no bare input, button, select, textarea or
 # table outside components/ui and the kit. The screens written before the kit
 # are exempted by name in apps/desktop/src/lint/allowlist.json, and the
@@ -261,7 +319,7 @@ theme:
     pnpm --filter @dzpos/design gen:theme
 
 # everything a PR needs, in order; stops at the first failure
-gates: fmt lint sizes no-inline-tests clippy check-no-retail check-clinic-only types-check test build check-clinic-bundle
+gates: fmt lint sizes no-inline-tests clippy check-no-retail check-clinic-only types-check test build check-clinic-bundle check-mobile-bundle
 
 # ---- dev ----
 
