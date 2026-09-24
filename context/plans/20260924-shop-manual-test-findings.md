@@ -90,6 +90,9 @@ tasks:
   - id: 'T28'
     desc: 'After the 15-minute idle lock (preferences.rs:48 default), Samir briefly saw the first-setup screen instead of sign-in until he refreshed, on a shop that already has its owner. Cause not established: the screen is chosen once per page load (session.tsx:166-172, from GET /health needs_first_setup; the server computes it from users::shop_needs_first_setup), so a tab loaded before setup keeps showing setup until a reload. Check that first; also say "locked" rather than looking like a logout.'
     status: 'pending'
+  - id: 'T29'
+    desc: 'Till customer card: the "Client de passage" text beside a picked customer (Épicerie Benali) is the button that drops back to a walk-in sale, but it reads as a label saying this customer is a walk-in. Make it an explicit action ("Retirer le client" / an x) and show the debt after this sale (1 000 → 1 457,80) on the card before Encaisser, not only once the warning line is crossed.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
