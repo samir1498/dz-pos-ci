@@ -259,16 +259,10 @@ impl From<PaymentMethodDto> for PaymentMethod {
 #[ts(export_to = "PaymentAllocationDto.ts")]
 pub struct PaymentAllocationDto {
     pub document_id: i32,
+    /// The paper as the customer holds it, `TK-2026-000002`, built by the
+    /// core beside the templates that print it.
+    pub printed_number: String,
     pub amount_centimes: i64,
-}
-
-impl From<DebtAllocation> for PaymentAllocationDto {
-    fn from(a: DebtAllocation) -> Self {
-        PaymentAllocationDto {
-            document_id: a.document_id,
-            amount_centimes: a.amount.as_centimes(),
-        }
-    }
 }
 
 /// One payment, with what it settled and the balance it left behind. The
@@ -289,7 +283,12 @@ pub struct PaymentDto {
     /// The balance as of this payment: every older movement counted, no newer
     /// one. Computed in the core (services::debt).
     pub balance_after_centimes: i64,
+    /// Oldest document first.
     pub allocations: Vec<PaymentAllocationDto>,
+    /// What the payment settled that no document carries: the opening debt,
+    /// which a payment settles before any paper, and past the papers a
+    /// correction upwards. Computed in the core (services::debt).
+    pub without_document_centimes: i64,
     /// `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
     pub created_at: String,
 }
@@ -303,7 +302,23 @@ impl From<Payment> for PaymentDto {
             payment_mode: p.entry.payment_mode.map(Into::into),
             note: p.entry.note,
             balance_after_centimes: p.balance_after.as_centimes(),
-            allocations: p.allocations.into_iter().map(Into::into).collect(),
+            allocations: p
+                .allocations
+                .into_iter()
+                .map(|a| PaymentAllocationDto {
+                    // Every allocation's document is this shop's (the
+                    // allocation refuses one that is not), so the core named
+                    // it; the id is the fallback a screen can still show.
+                    printed_number: p
+                        .numbers
+                        .get(&a.document_id)
+                        .cloned()
+                        .unwrap_or_else(|| a.document_id.to_string()),
+                    document_id: a.document_id,
+                    amount_centimes: a.amount.as_centimes(),
+                })
+                .collect(),
+            without_document_centimes: p.without_document.as_centimes(),
             created_at: p.entry.created_at.format(DATE_TIME_FORMAT).to_string(),
         }
     }

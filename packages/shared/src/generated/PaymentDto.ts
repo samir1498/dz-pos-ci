@@ -22,7 +22,17 @@ payment_mode: PaymentMethodDto | null, note: string | null,
  * The balance as of this payment: every older movement counted, no newer
  * one. Computed in the core (services::debt).
  */
-balance_after_centimes: number, allocations: Array<PaymentAllocationDto>, 
+balance_after_centimes: number, 
+/**
+ * Oldest document first.
+ */
+allocations: Array<PaymentAllocationDto>, 
+/**
+ * What the payment settled that no document carries: the opening debt,
+ * which a payment settles before any paper, and past the papers a
+ * correction upwards. Computed in the core (services::debt).
+ */
+without_document_centimes: number, 
 /**
  * `YYYY-MM-DD HH:MM:SS`, the shape every stored timestamp holds.
  */

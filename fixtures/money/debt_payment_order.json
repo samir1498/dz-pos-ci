@@ -1,0 +1,126 @@
+{
+  "name": "debt_payment_order",
+  "rule": "docs/features.md §2, Payments, and the fiscal rules row Payment order: a payment settles the customer's opening debt first, because it is the oldest thing they owe, then the issued documents oldest first by issue day, and what is left after both stays on the balance (a correction upwards, which is debt no paper carries). A correction downwards takes the same road. Decided by Samir on 2026-09-24 (plan shop-manual-test-findings T33/T34). A design choice, not law.",
+  "note": "Amounts are integer centimes written by hand from the rule, never computed by the code under test. `documents` indexes the `sell` steps in the order they appear. `without_document` is what the payment settled that no document carries. The first case is Samir's walk of 2026-09-24: opening debt 1 000,00 from the paper notebook, TK 2 at 457,80, TK 3 at 915,60, a payment of 500,00.",
+  "cases": [
+    {
+      "name": "Samir's walk: 500,00 goes on the notebook debt and leaves both tickets whole",
+      "steps": [
+        { "open": 100000 },
+        { "sell": 45780, "day": 10 },
+        { "sell": 91560, "day": 11 },
+        { "pay": 50000, "day": 12, "without_document": 50000, "allocations": [] }
+      ],
+      "remaining": [45780, 91560],
+      "balance": 187340
+    },
+    {
+      "name": "a payment past the opening debt spills onto the oldest paper, then the next",
+      "steps": [
+        { "open": 100000 },
+        { "sell": 45780, "day": 10 },
+        { "sell": 91560, "day": 11 },
+        { "pay": 150000, "day": 12, "without_document": 100000, "allocations": [[0, 45780], [1, 4220]] }
+      ],
+      "remaining": [0, 87340],
+      "balance": 87340
+    },
+    {
+      "name": "exactly the opening debt touches no paper",
+      "steps": [
+        { "open": 100000 },
+        { "sell": 45780, "day": 10 },
+        { "pay": 100000, "day": 12, "without_document": 100000, "allocations": [] }
+      ],
+      "remaining": [45780],
+      "balance": 45780
+    },
+    {
+      "name": "the second payment finishes the opening debt and carries on to the oldest paper",
+      "steps": [
+        { "open": 100000 },
+        { "sell": 45780, "day": 10 },
+        { "sell": 91560, "day": 11 },
+        { "pay": 60000, "day": 12, "without_document": 60000, "allocations": [] },
+        { "pay": 60000, "day": 13, "without_document": 40000, "allocations": [[0, 20000]] }
+      ],
+      "remaining": [25780, 91560],
+      "balance": 117340
+    },
+    {
+      "name": "no opening debt: the papers oldest first, as before",
+      "steps": [
+        { "sell": 45780, "day": 10 },
+        { "sell": 91560, "day": 11 },
+        { "pay": 50000, "day": 12, "without_document": 0, "allocations": [[0, 45780], [1, 4220]] }
+      ],
+      "remaining": [0, 87340],
+      "balance": 87340
+    },
+    {
+      "name": "one centime of opening debt is settled before the paper's first centime",
+      "steps": [
+        { "open": 1 },
+        { "sell": 45780, "day": 10 },
+        { "pay": 2, "day": 12, "without_document": 1, "allocations": [[0, 1]] }
+      ],
+      "remaining": [45779],
+      "balance": 45779
+    },
+    {
+      "name": "a correction upwards is not the opening debt: it waits behind the papers",
+      "steps": [
+        { "open": 100000 },
+        { "sell": 45780, "day": 10 },
+        { "correct": 20000 },
+        { "pay": 110000, "day": 12, "without_document": 100000, "allocations": [[0, 10000]] }
+      ],
+      "remaining": [35780],
+      "balance": 55780
+    },
+    {
+      "name": "with a correction upwards on the ledger, the second payment still knows how much of the opening debt is left",
+      "steps": [
+        { "open": 100000 },
+        { "sell": 45780, "day": 10 },
+        { "correct": 20000 },
+        { "pay": 60000, "day": 12, "without_document": 60000, "allocations": [] },
+        { "pay": 60000, "day": 13, "without_document": 40000, "allocations": [[0, 20000]] }
+      ],
+      "remaining": [25780],
+      "balance": 45780
+    },
+    {
+      "name": "a correction upwards is settled once the opening debt and the papers are paid",
+      "steps": [
+        { "open": 100000 },
+        { "sell": 45780, "day": 10 },
+        { "correct": 20000 },
+        { "pay": 150000, "day": 12, "without_document": 104220, "allocations": [[0, 45780]] }
+      ],
+      "remaining": [0],
+      "balance": 15780
+    },
+    {
+      "name": "a correction downwards takes the opening debt first, the way a payment does",
+      "steps": [
+        { "open": 100000 },
+        { "sell": 45780, "day": 10 },
+        { "correct": -30000, "allocations": [] }
+      ],
+      "remaining": [45780],
+      "balance": 115780
+    },
+    {
+      "name": "a correction downwards past the opening debt reaches the oldest paper",
+      "steps": [
+        { "open": 30000 },
+        { "sell": 45780, "day": 10 },
+        { "sell": 91560, "day": 11 },
+        { "correct": -50000, "allocations": [[0, 20000]] }
+      ],
+      "remaining": [25780, 91560],
+      "balance": 117340
+    }
+  ]
+}

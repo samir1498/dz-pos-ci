@@ -31,8 +31,9 @@ use dzpos_retail::print::render_debt_slip;
 use dzpos_retail::print::strings::{shop_text, text, Key, ShopKey};
 use dzpos_retail::services::customers::{Customer, PartyKind};
 use dzpos_retail::services::debt::{
-    DebtEntry, DebtKind, DocumentRef, PaymentMethod, RecentStatement, StatementEntry,
+    DebtEntry, DebtKind, DocumentRef, PaymentMethod, StatementEntry,
 };
+use dzpos_retail::services::debt_statement::RecentStatement;
 use dzpos_retail::services::documents::DocumentKind;
 
 const SHOP: i32 = 1;

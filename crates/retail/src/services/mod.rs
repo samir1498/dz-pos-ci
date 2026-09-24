@@ -14,6 +14,8 @@ pub mod categories;
 pub mod customers;
 pub mod dashboard;
 pub mod debt;
+pub mod debt_order;
+pub mod debt_statement;
 pub mod discount_threshold;
 pub mod documents;
 pub mod expenses;

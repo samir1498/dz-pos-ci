@@ -12,7 +12,7 @@
 // shop that has stopped dealing with somebody clears the active box instead,
 // and the till's picker then leaves them out.
 
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import type { CustomerDto } from "@dzpos/shared";
 import { SquarePen, Users } from "lucide-react";
@@ -39,6 +39,7 @@ export const Route = createFileRoute("/customers")({ component: CustomersScreen 
 
 export function CustomersScreen() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   // One panel, two jobs: "new" is the blank fiche, a customer is that
   // customer's own.
@@ -169,6 +170,11 @@ export function CustomersScreen() {
           columns={columns}
           rows={customers.data}
           rowKey={(customer) => customer.id}
+          // The whole row opens the account, not only the name (T32); the
+          // pencil at its end stays the way to edit the fiche.
+          onRowOpen={(customer) =>
+            void navigate({ to: "/customers/$id", params: { id: String(customer.id) } })
+          }
           caption={t("customers_title")}
           // No action of its own: the one button that opens a blank fiche is
           // already in the header, a hand's width above, and a second copy of

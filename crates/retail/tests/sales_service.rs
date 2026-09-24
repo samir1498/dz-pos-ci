@@ -17,10 +17,10 @@ use dzpos_retail::models::shop::StoreBlock;
 use dzpos_retail::models::stock::MovementKind;
 use dzpos_retail::money::{Bps, Money, PaymentMode, Regime};
 use dzpos_retail::services::customers::{NewCustomer, PartyKind};
-use dzpos_retail::services::debt::DebtKind;
 use dzpos_retail::services::documents::{Document, DocumentKind};
 use dzpos_retail::services::sales::{self, NewSale, NewSaleLine, SaleKind};
 use dzpos_retail::services::{customers, debt, discount_threshold, documents, products, stock};
+use dzpos_retail::services::{debt::DebtKind, debt_statement};
 
 const SHOP: i32 = 1;
 const OWNER: i32 = 1;
@@ -882,7 +882,7 @@ fn the_debt_row_of_a_credit_sale_is_stamped_with_the_day_the_paper_was() {
     // Read the way the statement reads it: the movement is inside the day the
     // paper was issued on, which is the whole point of stamping it once.
     let day = midnight.date();
-    let statement = debt::statement_between(&mut conn, SHOP, c, day, day).unwrap();
+    let statement = debt_statement::statement_between(&mut conn, SHOP, c, day, day).unwrap();
     assert_eq!(
         statement.entries.len(),
         1,

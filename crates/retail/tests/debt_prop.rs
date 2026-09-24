@@ -17,6 +17,7 @@ use dzpos_retail::money::{Bps, Money, PaymentMode, Regime, Totals, TvaLine};
 use dzpos_retail::services::avoir::{self, AvoirLine};
 use dzpos_retail::services::customers::{self, PartyKind};
 use dzpos_retail::services::debt::{self, DebtKind, NewDebtEntry, PaymentMethod};
+use dzpos_retail::services::debt_order;
 use dzpos_retail::services::documents::{
     self, BalanceTriple, DocumentKind, DocumentStatus, NewDocument, NewDocumentLine, PartyBlock,
     SellerBlock,
@@ -58,11 +59,14 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(48))]
 
     #[test]
-    fn the_papers_never_ask_for_more_than_the_ledger_says_is_owed(steps in steps()) {
+    fn the_papers_never_ask_for_more_than_the_ledger_says_is_owed(
+        opening in prop_oneof![Just(0i64), (1i64..=20).prop_map(|d| d * 10_000)],
+        steps in steps(),
+    ) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("t.db");
         let mut conn = dzpos_retail::db::open(&path).unwrap();
-        let customer = a_customer(&mut conn);
+        let customer = a_customer(&mut conn, opening);
         let mut day = 1;
 
         for (n, step) in steps.iter().enumerate() {
@@ -89,7 +93,18 @@ proptest! {
                             .and_then(|d| d.and_hms_opt(16, 30, 0))
                             .unwrap(),
                     ) {
-                        Ok(_) => {}
+                        // Every centime of the payment is placed exactly once:
+                        // on a paper, or on debt no paper carries. None is
+                        // lost and none is made up on the way.
+                        Ok(paid) => {
+                            let mut placed = paid.without_document;
+                            for allocation in &paid.allocations {
+                                prop_assert!(allocation.amount > Money::ZERO);
+                                placed = placed.checked_add(allocation.amount).unwrap();
+                            }
+                            prop_assert_eq!(placed, Money::centimes(centimes), "step {}", n);
+                            prop_assert!(!paid.without_document.is_negative(), "step {}", n);
+                        }
                         // More than the customer owes is refused, and a
                         // refusal leaves the file exactly as it was.
                         Err(RetailError::PaymentAboveDebt { .. }) => {
@@ -261,10 +276,19 @@ fn issued_documents(conn: &mut SqliteConnection, customer: i32) -> Vec<(i32, i64
 
 mod common;
 
-/// The one customer these properties need. No identifiers: nothing here
-/// issues a facture.
-fn a_customer(conn: &mut SqliteConnection) -> i32 {
-    common::a_customer(conn, "Entreprise Benali")
+/// The one customer these properties need, carrying `opening` centimes of
+/// debt from before the app when it is above zero. No identifiers: nothing
+/// here issues a facture.
+fn a_customer(conn: &mut SqliteConnection, opening: i64) -> i32 {
+    customers::create(
+        conn,
+        SHOP,
+        OWNER,
+        common::a_fiche("Entreprise Benali"),
+        (opening > 0).then_some(Money::centimes(opening)),
+    )
+    .unwrap()
+    .id
 }
 
 /// A facture on credit and the ledger row beside it, written by hand rather
@@ -419,4 +443,252 @@ fn an_avoir(
         closing,
         avoir::issue(conn, SHOP, OWNER, facture.id, lines, None, Some(issued_at)).map(|a| a.id),
     ))
+}
+
+/// A document's id and what it still asks for, for the planner's properties.
+fn papers() -> impl Strategy<Value = Vec<(i32, Money)>> {
+    prop::collection::vec(0i64..=1_000_000, 0..=6).prop_map(|asks| {
+        asks.into_iter()
+            .zip(1..)
+            .map(|(a, id)| (id, Money::centimes(a)))
+            .collect()
+    })
+}
+
+proptest! {
+    /// The order itself, without a file: whatever the amount, the opening
+    /// debt and the papers, the plan places every centime exactly once, never
+    /// more on anything than it asks for, and fills the opening debt and then
+    /// each paper before it reaches the next.
+    #[test]
+    fn a_settlement_neither_loses_nor_invents_a_centime(
+        amount in 0i64..=10_000_000,
+        opening_left in 0i64..=2_000_000,
+        papers in papers(),
+    ) {
+        let amount = Money::centimes(amount);
+        let opening_left = Money::centimes(opening_left);
+        let plan = debt_order::plan(amount, opening_left, &papers).unwrap();
+
+        let mut total = plan.opening.checked_add(plan.beyond).unwrap();
+        for (_, take) in &plan.documents {
+            total = total.checked_add(*take).unwrap();
+        }
+        prop_assert_eq!(total, amount, "{:?}", plan);
+        prop_assert!(plan.opening <= opening_left);
+        prop_assert!(!plan.beyond.is_negative());
+
+        // The opening debt is filled before any paper sees a centime.
+        if !plan.documents.is_empty() {
+            prop_assert_eq!(plan.opening, opening_left);
+        }
+        // Each paper is taken to no more than it asks, in the order offered,
+        // and one is only reached once every paper before it is full.
+        let mut reached = 0;
+        for (i, (id, asks)) in papers.iter().enumerate() {
+            let take = plan
+                .documents
+                .iter()
+                .find(|(d, _)| d == id)
+                .map_or(Money::ZERO, |(_, t)| *t);
+            prop_assert!(take <= *asks);
+            if take > Money::ZERO {
+                let earlier_full = papers[reached..i].iter().all(|(earlier, earlier_asks)| {
+                    plan.documents
+                        .iter()
+                        .find(|(d, _)| d == earlier)
+                        .map_or(Money::ZERO, |(_, t)| *t)
+                        == *earlier_asks
+                });
+                prop_assert!(earlier_full, "paper {} was reached before an older one was full", id);
+                reached = i;
+            }
+        }
+        // Money is left over only when nothing was left to take it.
+        if plan.beyond > Money::ZERO {
+            prop_assert_eq!(plan.opening, opening_left);
+            for (id, asks) in &papers {
+                let take = plan
+                    .documents
+                    .iter()
+                    .find(|(d, _)| d == id)
+                    .map_or(Money::ZERO, |(_, t)| *t);
+                prop_assert_eq!(take, *asks);
+            }
+        }
+    }
+
+    /// What the opening debt is still owed never passes what it was, never
+    /// goes below zero, and never passes what the balance owes beyond the
+    /// papers and the corrections upwards.
+    #[test]
+    fn the_opening_debt_owed_stays_inside_what_was_opened_and_what_is_owed(
+        balance in -1_000_000i64..=5_000_000,
+        on_paper in 0i64..=2_000_000,
+        opening in 0i64..=2_000_000,
+        raised in 0i64..=1_000_000,
+    ) {
+        let left = debt_order::opening_outstanding(
+            Money::centimes(balance),
+            Money::centimes(on_paper),
+            Money::centimes(opening),
+            Money::centimes(raised),
+        )
+        .unwrap();
+        prop_assert!(!left.is_negative());
+        prop_assert!(left <= Money::centimes(opening));
+        prop_assert!(left.as_centimes() <= (balance - on_paper - raised).max(0));
+    }
+}
+
+/// The top of the range is an error and not a panic, on both functions.
+#[test]
+fn a_settlement_at_the_edge_of_the_range_is_refused_rather_than_wrapped() {
+    let overflow = debt_order::opening_outstanding(
+        Money::centimes(i64::MIN),
+        Money::centimes(1),
+        Money::centimes(1),
+        Money::ZERO,
+    );
+    assert!(matches!(overflow, Err(CoreError::Money(_))), "{overflow:?}");
+
+    // The largest amount there is, against papers that cannot take it all,
+    // still sums back to itself.
+    let plan = debt_order::plan(
+        Money::centimes(i64::MAX),
+        Money::centimes(i64::MAX - 1),
+        &[(1, Money::centimes(1)), (2, Money::centimes(i64::MAX))],
+    )
+    .unwrap();
+    assert_eq!(plan.opening, Money::centimes(i64::MAX - 1));
+    assert_eq!(plan.documents, [(1, Money::centimes(1))]);
+    assert_eq!(plan.beyond, Money::ZERO);
+
+    // A negative figure anywhere is refused: a negative remaining would turn
+    // a take into a gift.
+    for (amount, opening, asks) in [(-1, 0, 0), (1, -1, 0), (1, 0, -1)] {
+        assert!(debt_order::plan(
+            Money::centimes(amount),
+            Money::centimes(opening),
+            &[(1, Money::centimes(asks))],
+        )
+        .is_err());
+    }
+}
+
+/// `fixtures/money/debt_payment_order.json`, case by case (features.md §2,
+/// Payments; Samir's ruling on T33/T34, 2026-09-24): the opening debt first,
+/// then the papers oldest first, then what no paper carries. Every figure in
+/// the file was written by hand from the rule.
+#[test]
+fn debt_payment_order() {
+    let path = format!(
+        "{}/../../fixtures/money/debt_payment_order.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let fixture: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let cents = |v: &serde_json::Value| v.as_i64().unwrap();
+    for case in fixture["cases"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let mut conn = dzpos_retail::db::open(dir.path().join("t.db")).unwrap();
+        // The opening debt is the fiche's own, written when it is opened.
+        let opening = case["steps"][0].get("open").map_or(0, cents);
+        let customer = a_customer(&mut conn, opening);
+        let mut papers: Vec<i32> = Vec::new();
+        let expected_allocations = |step: &serde_json::Value, papers: &[i32]| {
+            step["allocations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|pair| {
+                    let index = usize::try_from(pair[0].as_u64().unwrap()).unwrap();
+                    (papers[index], Money::centimes(cents(&pair[1])))
+                })
+                .collect::<Vec<(i32, Money)>>()
+        };
+        for step in case["steps"].as_array().unwrap() {
+            if step.get("open").is_some() {
+                continue;
+            } else if let Some(net) = step.get("sell") {
+                let day = u32::try_from(step["day"].as_u64().unwrap()).unwrap();
+                papers.push(a_facture_on_credit(&mut conn, customer, cents(net), day));
+            } else if let Some(amount) = step.get("pay") {
+                let day = u32::try_from(step["day"].as_u64().unwrap()).unwrap();
+                let paid = debt::pay(
+                    &mut conn,
+                    SHOP,
+                    OWNER,
+                    customer,
+                    Money::centimes(cents(amount)),
+                    PaymentMethod::Cash,
+                    None,
+                    chrono::NaiveDate::from_ymd_opt(2026, 9, day)
+                        .and_then(|d| d.and_hms_opt(16, 30, 0))
+                        .unwrap(),
+                )
+                .unwrap();
+                assert_eq!(
+                    paid.allocations
+                        .iter()
+                        .map(|a| (a.document_id, a.amount))
+                        .collect::<Vec<(i32, Money)>>(),
+                    expected_allocations(step, &papers),
+                    "{name}: the payment settled the wrong papers"
+                );
+                assert_eq!(
+                    paid.without_document,
+                    Money::centimes(cents(&step["without_document"])),
+                    "{name}: what the payment settled on no paper"
+                );
+                // The same figure read back off the ledger, which is where
+                // the fiche's list of payments gets it.
+                let read_back = debt::payments(&mut conn, SHOP, customer).unwrap();
+                assert_eq!(read_back[0].without_document, paid.without_document);
+            } else if let Some(amount) = step.get("correct") {
+                let corrected = debt::adjust(
+                    &mut conn,
+                    SHOP,
+                    OWNER,
+                    customer,
+                    Money::centimes(cents(amount)),
+                    None,
+                )
+                .unwrap();
+                if step.get("allocations").is_some() {
+                    assert_eq!(
+                        corrected
+                            .allocations
+                            .iter()
+                            .map(|a| (a.document_id, a.amount))
+                            .collect::<Vec<(i32, Money)>>(),
+                        expected_allocations(step, &papers),
+                        "{name}: the correction settled the wrong papers"
+                    );
+                }
+            }
+        }
+        let remaining: Vec<i64> = papers
+            .iter()
+            .map(|id| {
+                documents::get(&mut conn, SHOP, *id)
+                    .unwrap()
+                    .balance
+                    .map_or(0, |b| b.remaining_debt.as_centimes())
+            })
+            .collect();
+        let expected: Vec<i64> = case["remaining"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(cents)
+            .collect();
+        assert_eq!(remaining, expected, "{name}: what the papers still ask for");
+        assert_eq!(
+            debt::balance(&mut conn, SHOP, customer).unwrap(),
+            Money::centimes(cents(&case["balance"])),
+            "{name}: the balance"
+        );
+    }
 }

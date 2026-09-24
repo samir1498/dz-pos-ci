@@ -7,7 +7,7 @@
 // that slides in from either page, so the fiche cannot read one way on the
 // list and another on the statement.
 
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FilePlus2, SquarePen, Truck } from "lucide-react";
 import { useState } from "react";
@@ -33,6 +33,7 @@ export const Route = createFileRoute("/suppliers")({ component: SuppliersScreen 
 
 export function SuppliersScreen() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   // One panel, two jobs: "new" is the blank fiche, a supplier is that
   // supplier's own.
@@ -135,6 +136,8 @@ export function SuppliersScreen() {
           columns={columns}
           rows={suppliers.data}
           rowKey={(s) => s.id}
+          // The whole row opens the account, as on the customers list (T32).
+          onRowOpen={(s) => void navigate({ to: "/suppliers/$id", params: { id: String(s.id) } })}
           empty={
             <EmptyState
               icon={Truck}

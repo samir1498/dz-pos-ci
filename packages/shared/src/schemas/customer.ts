@@ -75,6 +75,7 @@ type _CustomerLedger = Assert<Matches<CustomerLedgerDto, typeof customerLedgerSc
 
 export const paymentAllocationSchema = z.object({
   document_id: z.number(),
+  printed_number: z.string(),
   amount_centimes: exactInteger,
 }) satisfies z.ZodType<PaymentAllocationDto>;
 type _PaymentAllocation = Assert<Matches<PaymentAllocationDto, typeof paymentAllocationSchema>>;
@@ -87,6 +88,7 @@ export const paymentSchema = z.object({
   note: z.string().nullable(),
   balance_after_centimes: exactInteger,
   allocations: z.array(paymentAllocationSchema),
+  without_document_centimes: exactInteger,
   created_at: z.string(),
 }) satisfies z.ZodType<PaymentDto>;
 type _Payment = Assert<Matches<PaymentDto, typeof paymentSchema>>;

@@ -20,7 +20,8 @@ use crate::money::words::amount_in_words;
 use crate::money::Money;
 use crate::print::strings::{shop_text, text, Key, ShopKey};
 use crate::print::{number_of, Paper};
-use crate::services::debt::{DebtKind, RangedStatement, StatementEntry};
+use crate::services::debt::{DebtKind, StatementEntry};
+use crate::services::debt_statement::RangedStatement;
 
 /// A statement carries days and not minutes, like the facture: the day a
 /// movement landed is what a comptable reconciles against, and two payments
@@ -96,7 +97,7 @@ struct StatementView {
 /// The statement for `customer` over the range `statement` was read for, in
 /// `lang`, on `paper`, as one standalone HTML page.
 ///
-/// `statement` comes from `services::debt::statement_between`, which is what
+/// `statement` comes from `services::debt_statement::statement_between`, which is what
 /// makes the page a rendering rather than a second calculation: the entries
 /// arrive oldest first, each already carrying the balance as of itself.
 pub fn render_statement(

@@ -208,7 +208,8 @@ test("settles two credit sales oldest first, refuses more than is owed, and prin
       amount_centimes: number;
       payment_mode: string | null;
       note: string | null;
-      allocations: { document_id: number; amount_centimes: number }[];
+      allocations: { document_id: number; printed_number: string; amount_centimes: number }[];
+      without_document_centimes: number;
     }[];
   } = await paid.json();
   expect(payments.balance_centimes).toBe(BALANCE_AFTER);
@@ -218,9 +219,20 @@ test("settles two credit sales oldest first, refuses more than is owed, and prin
     payment_mode: "cash",
     note: "acompte e2e",
   });
+  // No opening debt here, so nothing goes on the balance without a paper,
+  // and each paper is named the way it is printed.
+  expect(payments.payments[0].without_document_centimes).toBe(0);
   expect(payments.payments[0].allocations).toEqual([
-    { document_id: first, amount_centimes: FIRST_SALE_CENTIMES },
-    { document_id: second, amount_centimes: PAYMENT_CENTIMES - FIRST_SALE_CENTIMES },
+    {
+      document_id: first,
+      printed_number: expect.stringMatching(/^(TK|FA)-\d{4}-\d{6}$/),
+      amount_centimes: FIRST_SALE_CENTIMES,
+    },
+    {
+      document_id: second,
+      printed_number: expect.stringMatching(/^(TK|FA)-\d{4}-\d{6}$/),
+      amount_centimes: PAYMENT_CENTIMES - FIRST_SALE_CENTIMES,
+    },
   ]);
   expect(await remainingDebt(request, first)).toBe(0);
   expect(await remainingDebt(request, second)).toBe(BALANCE_AFTER);

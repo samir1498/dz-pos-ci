@@ -494,18 +494,34 @@ can be taken without asking the balance a second time. It is not a document
 and takes no number; whether a payment on account needs a numbered receipt of
 its own is R8, and the `quittance` kind waits on that answer.
 
-A payment settles the customer's issued documents oldest first, oldest by
-the day the paper was issued and not by the row id, and stops where the money
-does. A cancelled document takes none of it: whatever its `remaining_debt`
-column still says, money handed over settles the paper that still stands.
-What no document can take stays on the balance as credit.
+A payment settles the customer's opening debt first, then their issued
+documents oldest first, oldest by the day the paper was issued and not by the
+row id, and stops where the money does. The opening debt goes first because it
+is the oldest thing the customer owes: the notebook the shop kept before the
+app (Samir, 2026-09-24, plan shop-manual-test-findings T33/T34). No column
+records what is left of it; it is read off the ledger and the papers each time:
+the balance, less what the papers still ask for, less the corrections upwards,
+never below zero and never above the opening rows
+(`services::debt_order::opening_outstanding`). A correction upwards is debt no
+paper carries either, and a payment reaches it only once the opening debt and
+every paper are paid. A cancelled document takes none of it: whatever its
+`remaining_debt` column still says, money handed over settles the paper that
+still stands. What nothing can take stays on the balance as credit. The fiche
+lists each payment in that order, the share on no paper first and then each
+paper by its printed number (`TK-2026-000002`). Pinned by `debt_payment_order`
+(`fixtures/money/debt_payment_order.json`).
 
 **Corrections.** A correction is an `adjustment` movement, optionally noted: a
 mistyped opening balance, a goodwill gesture, a rounding a comptable wants
 off the account. A correction of nothing is refused. Downwards it settles the
-customer's documents oldest first exactly as a payment does, because it is
-money off the papers; upwards it is debt no document carries, so there is
-nothing to place.
+opening debt first and then the customer's documents oldest first, exactly as
+a payment does, because it is money off what they owe; upwards it is debt no
+document carries, so there is nothing to place. What an avoir or a
+cancellation hands back past its own facture is not a correction: it was
+written against paper, so it spreads over the other papers oldest first and
+writes no allocation against the opening debt. What it still lowers on the
+balance reads afterwards as opening debt paid down, because the opening debt
+is read off the balance and nothing else could have taken it.
 
 **The till.** The till warns at the threshold and blocks at the limit
 (§1, credit at the till); blocking is overridable, and the audit log carries
@@ -598,8 +614,9 @@ written. A document that names no customer stores none of the three.
 
 `remaining_debt` is the one of the three that moves after the document is
 issued, and it moves for both of the things that lower what a customer owes:
-a payment, and a correction downwards. Both settle the customer's documents
-oldest first, so Σ `remaining_debt` over a customer's issued documents is
+a payment, and a correction downwards. Both settle the opening debt first and
+then the customer's documents oldest first, taking from the opening debt no
+more than the balance owes beyond the papers, so Σ `remaining_debt` over a customer's issued documents is
 never more than the ledger balance, and a document never goes on asking for
 an amount the ledger says is no longer owed.
 
@@ -784,6 +801,7 @@ first release.**
 | Cancellation | a document is annulled, never deleted: it keeps its number and its row and stores when, by whom and why. Only a ticket and a facture are annulled, and each once. A cash ticket or a cash facture owed nobody anything, so only the goods come back; a facture that put money on an account is undone by a whole avoir in the same transaction, and a credit ticket by a single `avoir` ledger row and no number out of the avoir series. An assumption on the ticket: décret 05-468 governs the facture and says nothing about reversing a till receipt, so undoing one without a numbered document is a reading to confirm with the comptable (R8) | `a_cash_ticket_is_cancelled_the_stock_comes_back_and_the_number_stays`, `a_facture_carrying_debt_is_cancelled_through_a_whole_avoir`, `a_credit_ticket_is_cancelled_by_a_ledger_row_and_not_by_an_avoir`, `only_a_ticket_and_a_facture_are_cancelled`, `a_facture_already_credited_in_full_is_cancelled_without_a_second_avoir` | décret 05-468 art. 10 for the kept number |
 | Cost of goods sold | what a unit cost the shop is what it cost when it left, written on the sale's stock movement, never the fiche's cost price, which is the last delivery's and moves with every purchase. An avoir and a cancellation put the goods back at the cost of the sale movement they reverse, read off the document being reversed, so a delivery in between does not move a margin already earned. The dashboard's margin reads one set of papers: still standing, a ticket, a facture or an avoir, and not a credit note written against a paper that was annulled, so a cancellation is felt exactly once. The revenue the margin is read against is the lines' HT less the remise given off the whole document: a remise is revenue never collected, so it comes off (ruling 2026-09-10). That reading is the assumption on this row and the one to put to the comptable: no text prescribes a stock valuation or a margin base for a shop keeping its own books, and a management figure read one way at the till and another way in the books is the failure to avoid | `an_avoir_returns_the_goods_at_the_cost_of_the_sale_it_reverses`, `a_cancelled_ticket_returns_the_goods_at_the_cost_of_the_sale`, `a_cancelled_facture_and_the_credit_note_it_issued_leave_together`, `a_partial_avoir_gives_back_its_share_of_the_remise_and_no_more`, `the_dashboard_folds_the_rows_that_belong_in_it_and_no_others` | assumption, confirm with the comptable (R8) |
 | Debt slip | the paper a customer is handed at the counter carries the balance and the last ten movements, no TVA recap and no droit de timbre, and says on its face in each language that it has no fiscal value. A design choice, not law: no text names such a document, and it is not one: it reports an account rather than a sale | `the_slip_says_on_its_face_that_it_proves_nothing`, `the_slip_prints_the_newest_ten_movements_and_a_balance_that_counts_them_all`, `the_slip_prints_the_identifiers_of_a_company_and_never_a_consumers` | design choice, not law |
+| Payment order | a payment, and a correction downwards, settle the customer's opening debt first, then their issued documents oldest first by issue day, then a correction upwards; what is left of the opening debt is read off the ledger (balance, less what the papers ask, less the corrections upwards, clamped to the opening rows) and never stored. An avoir's or a cancellation's spill past its own facture is placed on the other papers only; what it lowers on the balance beyond them then reads as opening debt paid down. Every centime of a payment lands on exactly one of the three. Decided by Samir on 2026-09-24 (T34); a design choice, not law | `debt_payment_order` (`fixtures/money/debt_payment_order.json`), `a_settlement_neither_loses_nor_invents_a_centime`, `the_opening_debt_owed_stays_inside_what_was_opened_and_what_is_owed`, `a_settlement_at_the_edge_of_the_range_is_refused_rather_than_wrapped`, `the_papers_never_ask_for_more_than_the_ledger_says_is_owed` | design choice, not law |
 
 ## 4. Printing (v1)
 

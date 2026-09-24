@@ -58,9 +58,16 @@ export type StatusKey =
   | "status_over_limit"
   | "status_no_credit"
   | "status_near_limit"
-  | "status_ok";
+  | "status_paid_up"
+  | "status_under_limit";
 
-export function statusKey(customer: CustomerDto): StatusKey {
+/**
+ * The tag for one customer, or none. After the three warnings (T30): a
+ * customer who owes nothing is "à jour", one who owes money under a limit
+ * is "sous le plafond", and one who owes money with no limit at all gets no
+ * tag, because the amount owed beside it already says everything there is.
+ */
+export function statusKey(customer: CustomerDto): StatusKey | null {
   const { balance_centimes, credit_limit_centimes, warn_threshold_centimes } = customer;
   if (credit_limit_centimes !== null && balance_centimes > credit_limit_centimes) {
     return "status_over_limit";
@@ -69,7 +76,9 @@ export function statusKey(customer: CustomerDto): StatusKey {
   if (warn_threshold_centimes !== null && balance_centimes >= warn_threshold_centimes) {
     return "status_near_limit";
   }
-  return "status_ok";
+  if (balance_centimes <= 0) return "status_paid_up";
+  if (credit_limit_centimes === null) return null;
+  return "status_under_limit";
 }
 
 /**
@@ -83,7 +92,8 @@ const TONE: Readonly<Record<StatusKey, string>> = {
   status_over_limit: "bg-danger-soft text-fg-danger",
   status_near_limit: "bg-warn-soft text-warn",
   status_no_credit: "bg-muted text-muted-foreground",
-  status_ok: "bg-primary-soft text-fg-success",
+  status_paid_up: "bg-primary-soft text-fg-success",
+  status_under_limit: "bg-primary-soft text-fg-success",
 };
 
 export function CustomerStatus({
@@ -95,6 +105,7 @@ export function CustomerStatus({
 }) {
   const { t } = useTranslation();
   const key = statusKey(customer);
+  if (key === null) return null;
   return (
     <Badge data-status={key} className={cn("border-transparent", TONE[key], className)}>
       {t(key)}

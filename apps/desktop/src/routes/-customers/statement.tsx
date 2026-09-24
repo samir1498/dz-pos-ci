@@ -372,21 +372,26 @@ function PaymentRow({ payment }: { payment: PaymentDto }) {
         <p className="text-sm text-muted-foreground">{payment.note}</p>
       )}
       <p className="text-sm">{t("customers_payment_settled")}</p>
-      {payment.allocations.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t("customers_payment_settled_none")}</p>
-      ) : (
-        <ul className="flex flex-col gap-1 text-sm">
-          {payment.allocations.map((allocation) => (
-            <li key={allocation.document_id} className="flex justify-between gap-3">
-              <span>
-                {t("col_document")}{" "}
-                <span className="font-numeric">{allocation.document_id}</span>
-              </span>
-              <Money centimes={allocation.amount_centimes} />
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* In the order the money went (features.md §2): the opening debt
+          first, then the papers oldest first, each named by the number the
+          customer holds (TK-2026-000002) rather than a row id. The share on
+          no paper is the core's figure, not a subtraction done here. */}
+      <ul className="flex flex-col gap-1 text-sm">
+        {payment.without_document_centimes > 0 ? (
+          <li className="flex justify-between gap-3" data-testid="payment-without-document">
+            <span>{t("customers_payment_without_document")}</span>
+            <Money centimes={payment.without_document_centimes} />
+          </li>
+        ) : null}
+        {payment.allocations.map((allocation) => (
+          <li key={allocation.document_id} className="flex justify-between gap-3">
+            <span dir="ltr" className="font-numeric">
+              {allocation.printed_number}
+            </span>
+            <Money centimes={allocation.amount_centimes} />
+          </li>
+        ))}
+      </ul>
     </article>
   );
 }

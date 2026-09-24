@@ -48,7 +48,7 @@ use dzpos_core::services::dashboard::{
     Dashboard, Figures, LowStock, Owed, Series, SeriesPoint, TopProduct,
 };
 #[cfg(feature = "retail")]
-use dzpos_core::services::debt::{DebtAllocation, DebtKind, LedgerLine, Payment, PaymentMethod};
+use dzpos_core::services::debt::{DebtKind, LedgerLine, Payment, PaymentMethod};
 #[cfg(feature = "retail")]
 use dzpos_core::services::expenses::{Expense, ExpenseCategory, NewExpense};
 #[cfg(feature = "retail")]

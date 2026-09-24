@@ -27,6 +27,7 @@ import type { CustomerDto, CustomerLedgerDto, CustomerPaymentsDto } from "@dzpos
 import { I18nProvider, type Lang } from "@/i18n";
 import fr from "@/i18n/fr.json";
 import ar from "@/i18n/ar.json";
+import en from "@/i18n/en.json";
 import { CustomersScreen } from "../../src/routes/customers";
 import { CustomerFiche } from "../../src/routes/customers_.$id";
 
@@ -233,9 +234,11 @@ const paid: CustomerPaymentsDto = {
       note: "acompte",
       balance_after_centimes: 50_000,
       allocations: [
-        { document_id: 8, amount_centimes: 60_000 },
-        { document_id: 9, amount_centimes: 40_000 },
+        { document_id: 8, printed_number: "TK-2026-000002", amount_centimes: 45_780 },
+        { document_id: 9, printed_number: "TK-2026-000003", amount_centimes: 4_220 },
       ],
+      // The opening debt was settled first (T34).
+      without_document_centimes: 50_000,
       created_at: "2026-09-12 16:30:00",
     },
   ],
@@ -417,6 +420,66 @@ describe("the list", () => {
       "href",
       "/customers/3",
     );
+  });
+
+  // T32: Samir clicked Benali's row, off the name, and nothing happened. The
+  // link stays for the keyboard; a click anywhere on the row opens the same
+  // page, and the pencil at its end still opens the edit panel instead.
+  test("a click anywhere on the row opens the account, the pencil still edits", async () => {
+    list = [benali];
+    mount();
+    const row = await screen.findByRole("row", { name: /Entreprise Benali/ });
+    await userEvent.click(within(row).getByText("1 500,00"));
+    await waitFor(() =>
+      expect(fetched().some((url) => url.endsWith("/customers/3"))).toBe(true),
+    );
+  });
+
+  test("the pencil on a row opens the edit panel and not the account", async () => {
+    list = [benali];
+    mount();
+    expect(await openThePanel("Entreprise Benali")).toBeInTheDocument();
+    expect(fetched().some((url) => url.endsWith("/customers/3"))).toBe(false);
+  });
+
+  // T30: the tag says where the balance stands. Nothing owed is "à jour";
+  // money owed under a limit is "sous le plafond"; money owed with no limit
+  // gets no tag at all, because the amount beside it already says it.
+  const paidUp = { ...benali, id: 31, name: "Salim Soldé", balance_centimes: 0 };
+  const underLimit = {
+    ...benali,
+    id: 32,
+    name: "Épicerie Benali",
+    balance_centimes: 145_780,
+    warn_threshold_centimes: null,
+  };
+  const noLimit = {
+    ...benali,
+    id: 33,
+    name: "Rachid Sans Plafond",
+    balance_centimes: 145_780,
+    credit_limit_centimes: null,
+    warn_threshold_centimes: null,
+  };
+
+  test.each([
+    ["fr", fr],
+    ["en", en],
+    ["ar", ar],
+  ] as const)("paid up, under the limit and no limit read as three states (%s)", async (lang, words) => {
+    list = [paidUp, underLimit, noLimit];
+    mount(lang);
+    const paid = await screen.findByRole("row", { name: /Salim Soldé/ });
+    expect(within(paid).getByText(words.status_paid_up)).toBeInTheDocument();
+
+    const under = screen.getByRole("row", { name: /Épicerie Benali/ });
+    expect(within(under).getByText(words.status_under_limit)).toBeInTheDocument();
+    expect(within(under).queryByText(words.status_paid_up)).not.toBeInTheDocument();
+
+    const none = screen.getByRole("row", { name: /Rachid Sans Plafond/ });
+    for (const key of ["status_paid_up", "status_under_limit", "status_near_limit"] as const) {
+      expect(within(none).queryByText(words[key])).not.toBeInTheDocument();
+    }
   });
 
   test("the search travels to the API and the list follows it", async () => {
@@ -790,10 +853,17 @@ describe("payments", () => {
 
     // The documents the money landed on are shown open: which facture a
     // payment settled is what a customer asks at the counter.
+    // In the order the money went: the opening debt, then each paper by the
+    // number the customer holds, never "Document 8" (T33).
     const paidRows = await screen.findAllByTestId("customer-payment");
-    expect(within(paidRows[0]).getByText("600,00")).toBeInTheDocument();
-    expect(within(paidRows[0]).getByText("400,00")).toBeInTheDocument();
+    const settled = within(paidRows[0]).getAllByRole("listitem");
+    expect(settled.map((li) => li.textContent)).toEqual([
+      `${fr.customers_payment_without_document}500,00`,
+      "TK-2026-000002457,80",
+      "TK-2026-00000342,20",
+    ]);
     expect(within(paidRows[0]).getByText("1 000,00")).toBeInTheDocument();
+    expect(within(paidRows[0]).queryByText(/Document \d/)).not.toBeInTheDocument();
     expect(await screen.findByRole("status")).toHaveTextContent(fr.customers_paid);
   });
 

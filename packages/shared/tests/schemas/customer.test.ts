@@ -58,7 +58,8 @@ const payment: PaymentDto = {
   payment_mode: "cash",
   note: null,
   balance_after_centimes: 200_000,
-  allocations: [{ document_id: 12, amount_centimes: 26_180 }],
+  allocations: [{ document_id: 12, printed_number: "TK-2026-000012", amount_centimes: 26_180 }],
+  without_document_centimes: 23_820,
   created_at: "2026-09-10 09:00:00",
 };
 
@@ -153,17 +154,23 @@ describe("customerLedgerSchema", () => {
 });
 
 describe("paymentAllocationSchema", () => {
-  test("takes the document a payment settled and by how much", () => {
-    const allocation = { document_id: 12, amount_centimes: 26_180 };
+  test("takes the document a payment settled, its printed number and by how much", () => {
+    const allocation = { document_id: 12, printed_number: "TK-2026-000012", amount_centimes: 26_180 };
     expect(paymentAllocationSchema.parse(allocation)).toEqual(allocation);
   });
 
-  test("refuses an allocation with no amount", () => {
-    expect(paymentAllocationSchema.safeParse({ document_id: 12 }).success).toBe(false);
+  test("refuses an allocation with no amount, or with no number to name the paper by", () => {
+    expect(
+      paymentAllocationSchema.safeParse({ document_id: 12, printed_number: "TK-2026-000012" })
+        .success,
+    ).toBe(false);
+    expect(
+      paymentAllocationSchema.safeParse({ document_id: 12, amount_centimes: 26_180 }).success,
+    ).toBe(false);
   });
 
   test("refuses an amount that came back with a fraction on it", () => {
-    const allocation = { document_id: 12, amount_centimes: 261.8 };
+    const allocation = { document_id: 12, printed_number: "TK-2026-000012", amount_centimes: 261.8 };
     expect(paymentAllocationSchema.safeParse(allocation).success).toBe(false);
   });
 });
@@ -180,7 +187,11 @@ describe("paymentSchema", () => {
   });
 
   test("refuses a fraction in the amount and in the balance it left", () => {
-    for (const column of ["amount_centimes", "balance_after_centimes"]) {
+    for (const column of [
+      "amount_centimes",
+      "balance_after_centimes",
+      "without_document_centimes",
+    ]) {
       expect(paymentSchema.safeParse({ ...payment, [column]: 500.5 }).success).toBe(false);
     }
   });

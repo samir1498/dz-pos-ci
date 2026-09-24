@@ -674,7 +674,8 @@ const payment: PaymentDto = {
   payment_mode: "cash",
   note: "acompte",
   balance_after_centimes: 80_000,
-  allocations: [{ document_id: 4, amount_centimes: 70_000 }],
+  allocations: [{ document_id: 4, printed_number: "FA-2026-000004", amount_centimes: 70_000 }],
+  without_document_centimes: 0,
   created_at: "2026-09-12 16:30:00",
 };
 

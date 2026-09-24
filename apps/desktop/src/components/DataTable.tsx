@@ -21,7 +21,7 @@
 // still exists and carries an off-screen label, because a header cell with no
 // accessible name is what makes a screen reader announce the column as blank.
 
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
 import {
   Table,
@@ -57,6 +57,7 @@ export function DataTable<Row>({
   caption,
   empty,
   actions,
+  onRowOpen,
   className,
   "data-testid": testId,
 }: {
@@ -71,6 +72,14 @@ export function DataTable<Row>({
   /** Shown in place of the body when there are no rows. */
   readonly empty?: ReactNode;
   readonly actions?: (row: Row) => ReactNode;
+  /**
+   * A click anywhere on the row opens it (T32: a shopkeeper clicks the row,
+   * not the name). A mouse convenience only: the keyboard reaches the same
+   * page through the link the screen keeps in a cell, so the row takes no
+   * tab stop of its own, and a click on that link, a button or a field in
+   * the row is theirs and not the row's.
+   */
+  readonly onRowOpen?: (row: Row) => void;
   readonly className?: string;
   readonly "data-testid"?: string;
 }) {
@@ -107,7 +116,19 @@ export function DataTable<Row>({
         </TableHeader>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={rowKey(row)} data-testid={rowTestId?.(row)}>
+            <TableRow
+              key={rowKey(row)}
+              data-testid={rowTestId?.(row)}
+              className={onRowOpen === undefined ? undefined : "cursor-pointer"}
+              onClick={
+                onRowOpen === undefined
+                  ? undefined
+                  : (event: MouseEvent<HTMLTableRowElement>) => {
+                      if (ownsTheClick(event.target)) return;
+                      onRowOpen(row);
+                    }
+              }
+            >
               {columns.map((column) => (
                 <TableCell key={column.id} className={cn(align(column), face(column))}>
                   {column.cell(row)}
@@ -123,5 +144,14 @@ export function DataTable<Row>({
         </TableBody>
       </Table>
     </div>
+  );
+}
+
+/** A click that landed on something that answers clicks itself: a link, a
+ *  button, a field. The row leaves those alone. */
+function ownsTheClick(target: EventTarget): boolean {
+  return (
+    target instanceof Element &&
+    target.closest("a, button, input, select, textarea, label, [role='button']") !== null
   );
 }

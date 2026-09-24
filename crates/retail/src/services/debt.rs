@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDateTime;
 use diesel::connection::Connection;
 use diesel::sqlite::SqliteConnection;
 
@@ -23,7 +23,7 @@ use crate::models::debt::{DebtAllocationRowWrite, DebtRowWrite};
 use crate::models::document::DocumentKind;
 use crate::repos::customers as customers_repo;
 use crate::repos::debt as repo;
-use crate::services::documents;
+use crate::services::{debt_order, documents};
 use crate::{audit_actions, money::Money};
 use dzpos_kernel::services::{audit, clock, optional_field};
 
@@ -136,144 +136,6 @@ pub struct StatementEntry {
     pub document: Option<DocumentRef>,
 }
 
-/// A customer's account over a range of days: what they owed on the morning
-/// of `from`, every movement between the two days, and what they owed on the
-/// evening of `to`.
-///
-/// The opening balance is the running balance of the newest movement before
-/// the range, and the closing balance is the newest one inside it, so neither
-/// is a second sum of the ledger: they are read off the same running column
-/// `statement` builds, and a page printing them can add nothing up.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RangedStatement {
-    pub from: NaiveDate,
-    pub to: NaiveDate,
-    pub opening: Money,
-    /// Oldest first, which is the order a statement is read in.
-    pub entries: Vec<StatementEntry>,
-    pub closing: Money,
-}
-
-/// The customer's account between two days, both included (features.md §2).
-///
-/// `to` is inclusive to the end of its day: a range asked for as one day is
-/// that day's movements, and a payment taken at 16:30 falls inside a range
-/// that ends on the day it was taken. The day a movement is compared by is
-/// the day on the shop's calendar, because every row is stamped by the shop's
-/// clock (`append_at`) and a document's `issued_at` is too.
-pub fn statement_between(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    customer_id: i32,
-    from: NaiveDate,
-    to: NaiveDate,
-) -> Result<RangedStatement, CoreError> {
-    if from > to {
-        return Err(CoreError::validation(
-            "to",
-            "a range ends on the day it starts or later",
-        ));
-    }
-    let whole = statement(conn, shop_id, customer_id)?;
-    let mut opening = Money::ZERO;
-    let mut inside = Vec::new();
-    // `statement` answers newest first; a statement is read the other way.
-    for line in whole.lines.into_iter().rev() {
-        let day = line.entry.created_at.date();
-        if day < from {
-            // The last one before the range is what the customer owed when it
-            // opened, so the column is followed rather than summed again.
-            opening = line.balance_after;
-        } else if day <= to {
-            inside.push(line);
-        }
-    }
-    let closing = inside
-        .last()
-        .map_or(opening, |line: &LedgerLine| line.balance_after);
-    let cited: Vec<i32> = inside
-        .iter()
-        .filter_map(|line| line.entry.document_id)
-        .collect();
-    let named = documents::kinds_and_numbers(conn, shop_id, &cited)?;
-    let entries = inside
-        .into_iter()
-        .map(|line| StatementEntry {
-            document: line.entry.document_id.and_then(|id| {
-                named
-                    .iter()
-                    .find(|(found, _, _, _)| *found == id)
-                    .map(|(_, kind, year, number)| DocumentRef {
-                        kind: *kind,
-                        year: *year,
-                        number: *number,
-                    })
-            }),
-            entry: line.entry,
-            balance_after: line.balance_after,
-        })
-        .collect();
-    Ok(RangedStatement {
-        from,
-        to,
-        opening,
-        entries,
-        closing,
-    })
-}
-
-/// What a customer owes now and the movements that are still worth showing
-/// them: the newest `limit` rows, each with the balance as of itself and the
-/// document it cites.
-///
-/// `balance` is the whole ledger's, never the sum of the rows carried here. A
-/// slip whose figure was the sum of the ten movements it printed would be
-/// wrong for every customer who has bought more than ten times, and wrong in
-/// the direction that says they owe less than they do.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RecentStatement {
-    pub balance: Money,
-    /// Newest first, which is the order a counter paper is read in.
-    pub entries: Vec<StatementEntry>,
-}
-
-/// The customer's account as a debt slip prints it (features.md §2). The same
-/// running column `statement` builds, cut to its newest `limit` rows and with
-/// each cited document named, so the slip adds nothing up on its way to paper.
-pub fn recent(
-    conn: &mut SqliteConnection,
-    shop_id: i32,
-    customer_id: i32,
-    limit: usize,
-) -> Result<RecentStatement, CoreError> {
-    let whole = statement(conn, shop_id, customer_id)?;
-    let balance = whole.balance;
-    let newest: Vec<LedgerLine> = whole.lines.into_iter().take(limit).collect();
-    let cited: Vec<i32> = newest
-        .iter()
-        .filter_map(|line| line.entry.document_id)
-        .collect();
-    let named = documents::kinds_and_numbers(conn, shop_id, &cited)?;
-    let entries = newest
-        .into_iter()
-        .map(|line| StatementEntry {
-            document: line.entry.document_id.and_then(|id| {
-                named
-                    .iter()
-                    .find(|(found, _, _, _)| *found == id)
-                    .map(|(_, kind, year, number)| DocumentRef {
-                        kind: *kind,
-                        year: *year,
-                        number: *number,
-                    })
-            }),
-            entry: line.entry,
-            balance_after: line.balance_after,
-        })
-        .collect();
-    Ok(RecentStatement { balance, entries })
-}
-
 /// What an adjustment left behind: the movement, what it took off the
 /// customer's documents, and the ledger as the same transaction read it once
 /// the movement had landed. The statement travels with the entry so that the
@@ -282,8 +144,9 @@ pub fn recent(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Adjusted {
     pub entry: DebtEntry,
-    /// Oldest document first, and empty on a correction that raises the debt:
-    /// money owed that no paper asks for settles nothing.
+    /// Oldest document first, and empty on a correction that raises the debt
+    /// (money owed that no paper asks for settles nothing) and on one the
+    /// opening debt took whole.
     pub allocations: Vec<DebtAllocation>,
     pub statement: Statement,
 }
@@ -297,8 +160,9 @@ pub struct Adjusted {
 /// somebody, not to stop correcting what they owe. The sale is what a closed
 /// fiche refuses (`services::sales`).
 ///
-/// A correction downwards settles the customer's documents oldest first,
-/// through the same allocation a payment goes through (features.md §3): the
+/// A correction downwards settles the opening debt first and then the
+/// customer's documents oldest first, through the same allocation a payment
+/// goes through (features.md §2 and §3): the
 /// ledger is what a customer owes, so a document that is no longer owed in
 /// full must not go on asking for the whole of it. A correction upwards
 /// settles nothing: it is debt no paper carries, like an opening balance.
@@ -344,11 +208,12 @@ pub fn adjust(
                 note,
             },
         )?;
-        // A correction downwards is money off the papers, oldest first, the
-        // same way a payment is. Upwards it is debt no document carries, so
-        // there is nothing to place.
+        // A correction downwards is money off what the customer owes, the
+        // opening debt first and then the papers oldest first, the same way a
+        // payment is. Upwards it is debt no document carries, so there is
+        // nothing to place.
         let allocations = if amount.is_negative() {
-            settle_oldest_first(conn, shop_id, customer_id, entry.id, credit)?
+            settle_opening_first(conn, shop_id, customer_id, entry.id, credit)?.0
         } else {
             Vec::new()
         };
@@ -394,10 +259,18 @@ pub fn adjust(
 pub struct Payment {
     pub entry: DebtEntry,
     /// Oldest document first, which is the order the money filled them in.
-    /// Empty when the customer owes on no document at all: an opening balance
-    /// and a correction cite none, and money against those settles the
-    /// balance without settling a piece of paper.
+    /// Empty when the money went on debt no document carries: the opening
+    /// debt, which a payment settles before any paper, and a correction
+    /// upwards, which it settles after all of them.
     pub allocations: Vec<DebtAllocation>,
+    /// What the payment settled that no document carries: its amount less
+    /// what it placed on paper. The opening debt first; a correction upwards
+    /// once the papers are paid.
+    pub without_document: Money,
+    /// The printed number of each document an allocation names,
+    /// `TK-2026-000002`, by document id: the screen names the paper the way
+    /// the customer holds it, not by a row id.
+    pub numbers: HashMap<i32, String>,
     pub balance_after: Money,
 }
 
@@ -416,10 +289,12 @@ pub struct Payment {
 /// somebody, not to stop collecting from them, and a customer who owed money
 /// on the day their fiche was closed still walks in with it.
 ///
-/// The documents are settled oldest first, each one taken to what is left on
-/// it and no further (features.md §2). What a payment cannot place on a
-/// document stays on the balance: an opening balance carries no document, and
-/// a payment against one is a real payment that settles no paper.
+/// The opening debt is settled first, because the notebook the shop kept
+/// before the app is the oldest thing the customer owes; then the documents
+/// oldest first, each one taken to what is left on it and no further
+/// (features.md §2; Samir's ruling of 2026-09-24). What neither takes stays
+/// on the balance: a correction upwards carries no document either, and a
+/// payment against one is a real payment that settles no paper.
 #[allow(clippy::too_many_arguments)]
 pub fn pay(
     conn: &mut SqliteConnection,
@@ -470,7 +345,9 @@ pub fn pay(
                 created_at: Some(at),
             },
         )?;
-        let allocations = settle_oldest_first(conn, shop_id, customer_id, entry.id, amount)?;
+        let (allocations, without_document) =
+            settle_opening_first(conn, shop_id, customer_id, entry.id, amount)?;
+        let numbers = numbers_of(conn, shop_id, &allocations)?;
         let after = repo::balance(conn, shop_id, customer_id)?;
         audit::record(
             conn,
@@ -491,6 +368,7 @@ pub fn pay(
                         "payment_mode": mode.as_str(),
                         "ledger_id": entry.id,
                         "allocations": allocated_json(&allocations),
+                        "without_document_centimes": without_document.as_centimes(),
                     })
                     .to_string(),
                 ),
@@ -499,9 +377,24 @@ pub fn pay(
         Ok(Payment {
             entry,
             allocations,
+            without_document,
+            numbers,
             balance_after: after,
         })
     })
+}
+
+/// The printed number of every document the allocations name, by id.
+fn numbers_of(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    allocations: &[DebtAllocation],
+) -> Result<HashMap<i32, String>, CoreError> {
+    let ids: Vec<i32> = allocations.iter().map(|a| a.document_id).collect();
+    Ok(documents::kinds_and_numbers(conn, shop_id, &ids)?
+        .into_iter()
+        .map(|(id, kind, year, number)| (id, crate::print::number_of(kind, year, number)))
+        .collect())
 }
 
 /// What the movement settled, document by document, as the log records it.
@@ -549,19 +442,23 @@ fn settle(
     payment_ledger_id: i32,
     targets: &[Target],
     amount: Money,
-) -> Result<Vec<DebtAllocation>, CoreError> {
-    let mut left = amount;
-    let mut written = Vec::new();
+    opening_left: Money,
+) -> Result<(debt_order::Plan, Vec<DebtAllocation>), CoreError> {
+    let asks: Vec<(i32, Money)> = targets
+        .iter()
+        .map(|t| (t.document_id, t.remaining))
+        .collect();
+    let plan = debt_order::plan(amount, opening_left, &asks)?;
+    let mut written = Vec::with_capacity(plan.documents.len());
     for target in targets {
-        if left == Money::ZERO {
-            break;
-        }
-        let take = left.min(target.remaining);
-        // An allocation of nothing settles nothing and would sit against the
-        // document forever.
-        if take == Money::ZERO {
+        let Some(take) = plan
+            .documents
+            .iter()
+            .find(|(id, _)| *id == target.document_id)
+            .map(|(_, take)| *take)
+        else {
             continue;
-        }
+        };
         let already = allocated_on(conn, shop_id, target.document_id)?;
         if already.checked_add(take)? > target.net_to_pay {
             return Err(CoreError::validation(
@@ -584,22 +481,18 @@ fn settle(
             target.document_id,
             target.remaining.checked_sub(take)?.as_centimes(),
         )?;
-        left = left.checked_sub(take)?;
     }
-    Ok(written)
+    Ok((plan, written))
 }
 
-/// Spreads `amount` over the customer's unpaid documents, oldest first, and
-/// writes back what is left on each. Runs inside the transaction of whichever
-/// movement is settling paper: a payment, or a correction downwards.
-pub fn settle_oldest_first(
+/// The customer's standing documents that still ask for something, oldest
+/// first by the day the paper was issued.
+fn unpaid_targets(
     conn: &mut SqliteConnection,
     shop_id: i32,
     customer_id: i32,
-    payment_ledger_id: i32,
-    amount: Money,
-) -> Result<Vec<DebtAllocation>, CoreError> {
-    let targets: Vec<Target> = documents::unpaid_of_customer(conn, shop_id, customer_id)?
+) -> Result<Vec<Target>, CoreError> {
+    Ok(documents::unpaid_of_customer(conn, shop_id, customer_id)?
         .into_iter()
         .map(
             |(document_id, remaining_centimes, net_to_pay_centimes)| Target {
@@ -608,8 +501,89 @@ pub fn settle_oldest_first(
                 net_to_pay: Money::centimes(net_to_pay_centimes),
             },
         )
-        .collect();
-    settle(conn, shop_id, payment_ledger_id, &targets, amount)
+        .collect())
+}
+
+/// Spreads `amount` over the customer's unpaid documents, oldest first, and
+/// writes back what is left on each. Runs inside the transaction of whichever
+/// movement is settling paper. What an avoir or a cancellation hands back
+/// past its own facture comes here: that money was written against paper, so
+/// it goes on paper and not on the opening debt (features.md §3).
+pub fn settle_oldest_first(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+    payment_ledger_id: i32,
+    amount: Money,
+) -> Result<Vec<DebtAllocation>, CoreError> {
+    let targets = unpaid_targets(conn, shop_id, customer_id)?;
+    let (_, written) = settle(
+        conn,
+        shop_id,
+        payment_ledger_id,
+        &targets,
+        amount,
+        Money::ZERO,
+    )?;
+    Ok(written)
+}
+
+/// Settles the opening debt first, then the customer's unpaid documents
+/// oldest first (features.md §2, Payments; Samir's ruling of 2026-09-24).
+/// What a payment and a correction downwards do. Runs inside the movement's
+/// transaction, after the movement itself has been appended.
+///
+/// Answers the allocations written, oldest document first, and what the
+/// movement settled that no document carries: the opening debt, and past the
+/// papers a correction upwards.
+pub fn settle_opening_first(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+    payment_ledger_id: i32,
+    amount: Money,
+) -> Result<(Vec<DebtAllocation>, Money), CoreError> {
+    let targets = unpaid_targets(conn, shop_id, customer_id)?;
+    let opening_left = opening_left(conn, shop_id, customer_id, &targets, amount)?;
+    let (plan, written) = settle(
+        conn,
+        shop_id,
+        payment_ledger_id,
+        &targets,
+        amount,
+        opening_left,
+    )?;
+    Ok((written, plan.opening.checked_add(plan.beyond)?))
+}
+
+/// What the opening debt is still owed before `settling` lands, read off the
+/// ledger and the papers (`debt_order::opening_outstanding`).
+///
+/// The movement being settled is already on the ledger by the time this runs,
+/// so it is added back: the question is what was owed before the money came
+/// in, and the papers have not been touched yet.
+fn opening_left(
+    conn: &mut SqliteConnection,
+    shop_id: i32,
+    customer_id: i32,
+    targets: &[Target],
+    settling: Money,
+) -> Result<Money, CoreError> {
+    let mut opening = Money::ZERO;
+    let mut raised = Money::ZERO;
+    for entry in repo::ledger(conn, shop_id, customer_id)? {
+        match entry.kind {
+            DebtKind::Opening => opening = opening.checked_add(entry.debit)?,
+            DebtKind::Adjustment => raised = raised.checked_add(entry.debit)?,
+            _ => {}
+        }
+    }
+    let mut on_paper = Money::ZERO;
+    for target in targets {
+        on_paper = on_paper.checked_add(target.remaining)?;
+    }
+    let before = repo::balance(conn, shop_id, customer_id)?.checked_add(settling)?;
+    debt_order::opening_outstanding(before, on_paper, opening, raised)
 }
 
 /// Places part of a credit movement on one named document and writes back
@@ -644,7 +618,7 @@ pub fn settle_document(
             "a document cannot be settled for more than it is still asking for",
         ));
     }
-    let written = settle(
+    let (_, written) = settle(
         conn,
         shop_id,
         payment_ledger_id,
@@ -654,6 +628,7 @@ pub fn settle_document(
             net_to_pay: document.totals.net_to_pay,
         }],
         amount,
+        Money::ZERO,
     )?;
     // One target and an amount it can take in full, so `settle` wrote
     // exactly one row.
@@ -730,8 +705,10 @@ pub fn settle_from_credit(
 ///
 /// An avoir past what its facture was still owed leaves credit here, and so
 /// does a correction downwards taken while nothing was outstanding. A payment
-/// can leave some too, when part of the balance came from an opening row that
-/// cites no document at all.
+/// leaves some whenever it settles the opening debt or a correction upwards,
+/// which cite no document at all. That share was spent on real debt, but no
+/// row says so; it is drawn on only once the balance is below zero, when the
+/// credit being drawn is the shop's to hand back whichever row it is read off.
 fn unallocated_credit(
     conn: &mut SqliteConnection,
     shop_id: i32,
@@ -782,7 +759,14 @@ pub fn payments(
             continue;
         }
         let allocations = repo::allocations_of_payment(conn, shop_id, line.entry.id)?;
+        let mut on_paper = Money::ZERO;
+        for allocation in &allocations {
+            on_paper = on_paper.checked_add(allocation.amount)?;
+        }
+        let numbers = numbers_of(conn, shop_id, &allocations)?;
         found.push(Payment {
+            without_document: line.entry.credit.checked_sub(on_paper)?,
+            numbers,
             entry: line.entry,
             allocations,
             // The balance as of the payment, which is what the movement left

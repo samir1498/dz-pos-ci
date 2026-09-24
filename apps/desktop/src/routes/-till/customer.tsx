@@ -251,7 +251,11 @@ function CustomerPicker({
           environment both do without. */}
       <div className="max-h-48 overflow-y-auto">
         <div role="group" aria-label={t("till_customer")} className="flex flex-col gap-1">
-          {offered.length === 0 ? (
+          {/* Only the answer to a search that found nobody. An empty box has
+              asked nothing yet, and a search whose one match is the customer
+              already picked found somebody: that fiche sits above the list,
+              not in it (T7). */}
+          {search.trim() !== "" && rows.every((c) => !c.active) ? (
             <p className="text-sm text-muted-foreground">{t("till_no_customer")}</p>
           ) : null}
           {offered.map((customer) => (

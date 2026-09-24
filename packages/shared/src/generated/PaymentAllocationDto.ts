@@ -4,4 +4,9 @@
  * What one payment placed on one document (features.md §2). A payment is one
  * movement and the documents it settled are these, oldest first.
  */
-export type PaymentAllocationDto = { document_id: number, amount_centimes: number, };
+export type PaymentAllocationDto = { document_id: number, 
+/**
+ * The paper as the customer holds it, `TK-2026-000002`, built by the
+ * core beside the templates that print it.
+ */
+printed_number: string, amount_centimes: number, };

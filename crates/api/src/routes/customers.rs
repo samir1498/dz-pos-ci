@@ -18,7 +18,7 @@ use dzpos_core::models::document::SellerBlock;
 use dzpos_core::print::debt_slip::MOVEMENTS;
 use dzpos_core::print::{render_debt_slip, render_statement, Paper};
 use dzpos_core::services::customers::NewCustomer;
-use dzpos_core::services::{clock, customers as service, debt, preferences, shops};
+use dzpos_core::services::{clock, customers as service, debt, debt_statement, preferences, shops};
 use serde::Deserialize;
 
 use crate::dto::{
@@ -241,7 +241,7 @@ pub async fn statement(
             // on the fiche today. The buyer block a facture snapshotted is
             // the other question, and the facture answers it.
             let customer = service::get(c, shop, id)?;
-            let statement = debt::statement_between(c, shop, id, from, to)?;
+            let statement = debt_statement::statement_between(c, shop, id, from, to)?;
             // The language the page is drawn in comes out of the same call:
             // the resolved language and the account it prints have to be
             // read together.
@@ -291,7 +291,7 @@ pub async fn debt_slip(
         .blocking(move |c| {
             let seller = SellerBlock::from(shops::get(c, shop)?);
             let customer = service::get(c, shop, id)?;
-            let slip = debt::recent(c, shop, id, MOVEMENTS)?;
+            let slip = debt_statement::recent(c, shop, id, MOVEMENTS)?;
             let lang = preferences::print_lang_for(c, shop, named, caller)?;
             render_debt_slip(&seller, &customer, &slip, at, lang)
         })

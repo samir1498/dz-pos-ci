@@ -25,7 +25,8 @@ use crate::money::words::amount_in_words;
 use crate::money::Money;
 use crate::print::number_of;
 use crate::print::strings::{shop_text, text, Key, ShopKey};
-use crate::services::debt::{DebtKind, RecentStatement, StatementEntry};
+use crate::services::debt::{DebtKind, StatementEntry};
+use crate::services::debt_statement::RecentStatement;
 
 /// The day and the minute the slip was printed. A balance is a figure as of a
 /// moment, and a counter paper that did not say which moment would be quoted
@@ -105,7 +106,7 @@ struct DebtSlipView {
 
 /// The 80 mm debt slip for `customer`, in `lang`, as one standalone HTML page.
 ///
-/// `slip` comes from `services::debt::recent`, which is what makes the page a
+/// `slip` comes from `services::debt_statement::recent`, which is what makes the page a
 /// rendering rather than a second calculation: the balance is the whole
 /// ledger's and each movement arrives carrying the balance as of itself.
 /// `seller` is the shop as `services::shops` holds it today, not a snapshot: a

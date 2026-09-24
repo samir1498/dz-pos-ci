@@ -952,40 +952,6 @@ fn a_payment_of_nothing_or_of_a_negative_is_refused() {
 }
 
 #[test]
-fn money_against_a_debt_no_document_carries_settles_the_balance_and_no_paper() {
-    let (_dir, mut conn) = open_temp();
-    // An opening balance is the debt the shop was carrying before it had the
-    // app: real money owed, and no document in the file to place it on.
-    let customer = customers::create(
-        &mut conn,
-        SHOP,
-        OWNER,
-        fiche("Entreprise Benali"),
-        Some(Money::centimes(80_000)),
-    )
-    .unwrap()
-    .id;
-
-    let paid = debt::pay(
-        &mut conn,
-        SHOP,
-        OWNER,
-        customer,
-        Money::centimes(30_000),
-        PaymentMethod::Cash,
-        None,
-        at(12),
-    )
-    .unwrap();
-
-    assert!(
-        paid.allocations.is_empty(),
-        "a payment invented a document to settle"
-    );
-    assert_eq!(paid.balance_after, Money::centimes(50_000));
-}
-
-#[test]
 fn a_document_already_settled_by_an_allocation_nobody_wrote_a_payment_for_refuses_the_money() {
     let (_dir, mut conn) = open_temp();
     let customer = a_customer(&mut conn, "Entreprise Benali");
@@ -1233,6 +1199,11 @@ fn the_payments_of_a_customer_read_back_newest_first_with_what_each_one_settled(
             .collect::<Vec<i32>>(),
         [first, second]
     );
+    // Named the way the customer holds the paper, not by a row id (T33).
+    let named = |id| payments[1].numbers.get(&id).map(String::as_str);
+    assert_eq!(named(first), Some("FA-2026-000001"));
+    assert_eq!(named(second), Some("FA-2026-000002"));
+    assert_eq!(payments[1].without_document, Money::ZERO);
 }
 
 #[test]
@@ -1267,7 +1238,7 @@ fn a_statement_opens_at_what_was_owed_before_the_range_and_closes_at_the_last_mo
     )
     .unwrap();
 
-    let range = debt::statement_between(
+    let range = dzpos_retail::services::debt_statement::statement_between(
         &mut conn,
         SHOP,
         customer,
@@ -1293,7 +1264,7 @@ fn a_statement_opens_at_what_was_owed_before_the_range_and_closes_at_the_last_mo
 
     // The same range widened to the sale picks up the document the movement
     // cites, under the kind and the number a customer quotes.
-    let wider = debt::statement_between(
+    let wider = dzpos_retail::services::debt_statement::statement_between(
         &mut conn,
         SHOP,
         customer,
@@ -1318,7 +1289,7 @@ fn a_range_that_ends_before_it_starts_is_refused() {
     let (_dir, mut conn) = open_temp();
     let customer = a_customer(&mut conn, "Entreprise Benali");
 
-    let refused = debt::statement_between(
+    let refused = dzpos_retail::services::debt_statement::statement_between(
         &mut conn,
         SHOP,
         customer,
@@ -1339,7 +1310,7 @@ fn a_range_with_nothing_in_it_closes_where_it_opened() {
     let customer = a_customer(&mut conn, "Entreprise Benali");
     an_opening_balance(&mut conn, customer, 150_000, 1);
 
-    let range = debt::statement_between(
+    let range = dzpos_retail::services::debt_statement::statement_between(
         &mut conn,
         SHOP,
         customer,
@@ -1411,7 +1382,7 @@ fn the_first_and_the_last_moment_of_a_range_are_inside_it() {
         .unwrap();
     }
 
-    let range = debt::statement_between(
+    let range = dzpos_retail::services::debt_statement::statement_between(
         &mut conn,
         SHOP,
         customer,
@@ -1912,7 +1883,7 @@ fn the_recent_movements_are_the_newest_ones_and_the_balance_counts_them_all() {
     )
     .unwrap();
 
-    let slip = debt::recent(&mut conn, SHOP, id, 10).unwrap();
+    let slip = dzpos_retail::services::debt_statement::recent(&mut conn, SHOP, id, 10).unwrap();
 
     assert_eq!(
         slip.balance,
