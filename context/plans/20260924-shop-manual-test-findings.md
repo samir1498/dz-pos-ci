@@ -99,6 +99,9 @@ tasks:
   - id: 'T31'
     desc: 'Audit journal is unreadable for a shopkeeper (Samir: "scary"). Needs its own plan: one plain sentence per row in the screen language ("Samir a forcé une vente à crédit de 915,60 pour Épicerie Benali, au-delà du plafond de 2 000,00"), the paper''s number (TK-2026-000003) and the customer''s name instead of "document #3" / "customer #1", action names translated instead of document.issue_override / sale.credit_blocked, no field_centimes keys, no empty "— → —" lines, and the raw diff behind a "détails" toggle for the owner. Also check: the override row carries warning=near_limit on a sale that went over the limit.'
     status: 'pending'
+  - id: 'T32'
+    desc: 'Customers list: only the name text links to the account page (customers.tsx:74); clicking the row does nothing, so Samir thought "clicking Benali did nothing". The whole row should open the account (and the same on suppliers and products lists); the pencil stays for edit.'
+    status: 'pending'
 acceptance: []
 ---
 # Shop manual test findings
